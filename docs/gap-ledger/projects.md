@@ -321,7 +321,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: AddTaskForm (POST /tasks, role-gated) is present; status/progress edit UI (PATCH /tasks/:id/status) is still missing. Backend endpoint exists per W0-10 note. NEEDS OWNER DECISION: implement the full PATCH task-status form as a separate sprint item. Flagged L-effort web+backend.)
+- [x] **Status** Closed by d51c94fbb (UAT B4, 2026-10-27): TaskStatusControl on projects/[id]/tasks; service-side ownership + transition pre-check; tests/uat-b4-task-status.test.ts, TaskStatusControl.test.tsx
 - **W0-10 note:** review found the W0 tick partly — AddTaskForm (POST /tasks, role-gated, backend exists) and empty-state copy done, but no status/progress edit UI: no PATCH call anywhere under projects/[id]/tasks although backend PATCH /tasks/:taskId and /status exist (fix step 2)
 - **First-pass claim:** Empty state tells end users “Use the API to create tasks.” (page.tsx:56) and the page offers no add/edit control, so a project team cannot build a WBS from the UI; /projects/wbs repeats the dependency (“Create tasks in a project to see the WBS”).
 - **Verified evidence:** tasks/page.tsx:56 message 'Use the API to create tasks.'; no add/edit control on the page; wbs/page.tsx:33 says 'Create tasks in a project to see the WBS.' Backend create-task endpoint cannot be verified (copy implies one exists).
@@ -757,7 +757,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-03  ·  MEDIUM  ·  confirmed  ·  theme API-CONTRACT (was OTHER)
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: URL uses r.projectId as schemeId with a code comment documenting the alias. Backend project-service is absent from the snapshot so an explicit schemeId field cannot be added. NEEDS OWNER DECISION: backend to return schemeId on FundReleaseSummary, then drop the comment.)
+- [x] **Status** Closed by 747356cca (UAT B4, 2026-10-27): FundReleaseSummary.schemeId from project-service; DisburseButton keyed by schemeId, fails closed without it; FundReleasesTable.test.tsx
 - **First-pass claim:** The URL uses schemeId but is fed r.projectId (FundReleasesTable.tsx:47; FundReleasesActions.tsx:9,27): the code’s own comment concedes “backend stores schemeId as projectId”, an id-naming trap for a mutation route.
 - **Verified evidence:** FundReleasesTable.tsx:47 passes r.projectId as prop schemeId; FundReleasesActions.tsx:9 documents 'backend stores schemeId as projectId' and :27 builds /projects/schemes/${schemeId}/fund-releases/... . Functionally consistent if the comment is true, but the API contract cannot be verified here and a wrong id would hit a mutation route.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`
@@ -1163,7 +1163,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-05  ·  LOW  ·  partly  ·  theme PII
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: loading.tsx already uses RouteSkeleton variant='detail'. Nodal officer display (public official name) needs a product/DPDP decision before masking. NEEDS OWNER DECISION: confirm whether public-office names are exempt from DPDP masking.)
+- [x] **Status** Closed per owner decision D4c #30 (2026-10-27): the nodal officer is a public-office holder in official capacity, so name, designation and official contact are shown to all staff and never a personal mobile (loading skeleton rebuilt in #1869)
 - **W0 note:** partly fixed by #1869 — loading.tsx rebuilt to header/4 stat/details/table shape; remaining: no recorded decision on nodal-officer visibility (page.tsx still prints scheme.nodalOfficer to all viewers).
 - **First-pass claim:** Nodal officer is a named person shown to all module users (DPDP low risk); loading is a single bare .skeleton block.
 - **Verified evidence:** page.tsx:96-97 shows scheme.nodalOfficer (a person name) to every viewer; no masking. It is an official's designation-level contact, low DPDP risk, so Masked/audit reveal is disproportionate. Loading is one `.skeleton` block (schemes/[id]/loading.tsx:1-7), true.
@@ -1320,7 +1320,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — cannot verify canonical URL prefix. NEEDS OWNER DECISION: confirm /api/v1/project/* vs /api/v1/projects/* in gateway config.)
+- [x] **Status** Closed per owner decision D4c #31 (2026-10-27): both /api/v1/project and /api/v1/projects are valid, the gateway maps both to project-service (registry.ts:43-44)
 - **First-pass claim:** Two API prefixes coexist for one module: typed loaders call /api/v1/project/* (singular: dashboard, projects, milestones, schemes, fund-releases; loaders.ts:3465-3527) while sub-resource loaders and mutations use /api/v1/projects/* and /api/proxy/v1/projects/* (plural; loaders.ts:5133-5284, new/CreateProjectForm.tsx:82). Backend routing cannot be checked because project-service is absent from the snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['/api/v1/project/*', '/api/v1/projects/*', '/api/proxy/v1/projects/*']`
 - **Question:** Does the gateway route both /project/* and /projects/* prefixes to project-service, or is only one canonical?
@@ -1331,7 +1331,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — disbursement unit/schema unverifiable. NEEDS OWNER DECISION.)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — disbursement unit/schema unverifiable. NEEDS OWNER DECISION.) [deferred post-UAT per owner decision D4c #32, 2026-10-27]
 - **First-pass claim:** Disbursement is an unformatted string with the ₹ unit only in the header and no paise/lakh formatting (BeneficiariesTable.tsx:13,27); raw beneficiary ids are the first column; no schema validates the response (loaders.ts:5150-5156). Backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/beneficiaries']`
 - **Question:** Does the response give disbursement as integer paise (or documented unit), a beneficiary name, and a schema-validated shape?
@@ -1342,7 +1342,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — date format and delayDays unverifiable. NEEDS OWNER DECISION.)
+- [x] **Status** Closed per owner decision D4c #33 (2026-10-27): accepted as built, ISO endDate and server-computed delayDays; revised deadline mirrors planned end until a forecast date is captured
 - **First-pass claim:** Deadlines are strings (not ISO dates) and delayDays a number computed elsewhere; sorting the deadline columns sorts text (DelayAnalysisTable.tsx:7-10). No response schema (loaders.ts:5200-5205); backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/delay-analysis']`
 - **Question:** Are planned/forecast deadlines ISO 8601 dates and delayDays computed server-side consistently?
@@ -1353,7 +1353,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — estimatedCost unit unverifiable. NEEDS OWNER DECISION: confirm paise vs crore.)
+- [x] **Status** Closed by 3a52fd98c (owner decision D4c #34, 2026-10-27): estimated cost stored as whole paise (migration 0027) and shown with the shared formatter
 - **First-pass claim:** Estimated cost is a free string in ₹ crore (DprTrackingTable.tsx:11,25) while project budgets are paise elsewhere and scheme lists are rupees; three units in one module. Backend not in snapshot to confirm.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/dprs']`
 - **Question:** In which unit is estimatedCost returned (paise, rupees or crore) and is it numeric?
@@ -1364,7 +1364,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — POST role-check/audit unverifiable. NEEDS OWNER DECISION.)
+- [x] **Status** Closed per owner decision D4c #35 (2026-10-27): creation requires project_manager/project_officer/super_admin, validated and audited (project/routes.ts:25-27, consumer.ts audit)
 - **First-pass claim:** Mutation goes straight from the browser to /api/proxy/v1/projects with no UI role gate; whether it is audited and role-checked cannot be verified because project-service is not in the snapshot (CreateProjectForm.tsx:82).
 - **Service:** `project-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/projects']`
 - **Question:** Does project creation require a role such as project_manager, validate input with zod and emit audit?
@@ -1375,7 +1375,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — WBS node projectId unverifiable. NEEDS OWNER DECISION.)
+- [x] **Status** Closed per owner decision D4c #36 (2026-10-27): each WBS node carries projectId and the tree links to the project (WbsTree.tsx, WbsTree.test.tsx)
 - **First-pass claim:** Portfolio-wide endpoint /api/v1/projects/wbs takes no project id while tasks are per project (/projects/{id}/tasks); the node → project relation is not shown, so a node cannot be traced to its project (WbsTree.tsx:27-56). Backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/wbs']`
 - **Question:** Does each WBS node include projectId/projectCode and does the endpoint accept a projectId filter?

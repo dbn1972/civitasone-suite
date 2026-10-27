@@ -13,6 +13,7 @@ import { fetchTenantPositions, requestSamplePdf } from "../_data/issuanceBuilder
 import {
   applyOutputTypeChange,
   mergeFieldsForDesign,
+  numberingAdvisories,
   numberingWarning,
   renewalGuidance,
   signatoryWarning,
@@ -20,14 +21,19 @@ import {
   validitySummary,
 } from "../_data/issuanceBuilderModel";
 
+import { useDesignerT } from "@/lib/designerText";
+
 interface Props {
   serviceName: string;
   pattern?: string;
   formFields?: FormFieldDefinition[];
   initial: IssuanceDesignState;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
-  onDesignPersisted?: (design: IssuanceDesignState) => void;
+  /** Should reject when the save fails so the footer can show "offline". */
+  onDesignPersisted?: (design: IssuanceDesignState) => void | Promise<void>;
   onDesignChange?: (design: IssuanceDesignState) => void;
+  /** Offices that offer this service (B1); more than one makes an Office segment advisable. */
+  offeringOfficeCount?: number;
 }
 
 export function OutputIssuanceBuilder({
@@ -38,7 +44,9 @@ export function OutputIssuanceBuilder({
   onSaveState,
   onDesignPersisted,
   onDesignChange,
+  offeringOfficeCount = 0,
 }: Props) {
+  const t = useDesignerT();
   const [design, setDesign] = useState(initial);
   const [tab, setTab] = useState(tabLabelForOutputType(initial.outputType));
   const [positions, setPositions] = useState<{ id: string; label: string }[]>([]);
@@ -64,20 +72,25 @@ export function OutputIssuanceBuilder({
   const patch = useCallback(
     (p: Partial<IssuanceDesignState> | ((d: IssuanceDesignState) => IssuanceDesignState)) => {
       setDesign((prev) => {
-        const next = typeof p === "function" ? p(prev) : { ...prev, ...p };
-        onDesignChange?.(next);
-        return next;
+        return typeof p === "function" ? p(prev) : { ...prev, ...p };
       });
     },
-    [onDesignChange],
+    [],
   );
+
+  // Told to the parent after commit, not from inside the state updater: a parent
+  // that keeps the live design in state (B7 gates Next on the signatory) must not
+  // be updated while this component renders.
+  useEffect(() => {
+    onDesignChange?.(design);
+  }, [design, onDesignChange]);
 
   const schedulePersist = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
-        onDesignPersisted?.(latest.current);
+        await onDesignPersisted?.(latest.current);
         onSaveState?.("saved");
       } catch {
         onSaveState?.("offline");
@@ -86,7 +99,12 @@ export function OutputIssuanceBuilder({
   }, [onDesignPersisted, onSaveState]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
+  // Only a real edit schedules a save: opening the page must not rewrite the
+  // stored validity / renewal of an existing service.
+  useEffect(() => {
+    if (design === initial) return;
+    schedulePersist();
+  }, [design, initial, schedulePersist]);
 
   const mergeFields = useMemo(
     () => mergeFieldsForDesign(formFields, design.outputType),
@@ -94,6 +112,9 @@ export function OutputIssuanceBuilder({
   );
 
   const numWarn = numberingWarning(design.numberingTokens);
+  const numAdvisories = numberingAdvisories(design.numberingTokens, design.numberingResetPolicy, {
+    multiOffice: offeringOfficeCount > 1,
+  });
   const sigWarn = signatoryWarning(design);
   const renewNote = renewalGuidance(design);
   const validityNote = validitySummary(design);
@@ -209,6 +230,9 @@ export function OutputIssuanceBuilder({
             tokens={design.numberingTokens}
             onChange={(numberingTokens) => patch({ numberingTokens })}
             warning={numWarn}
+            resetPolicy={design.numberingResetPolicy}
+            onResetPolicyChange={(numberingResetPolicy) => patch({ numberingResetPolicy })}
+            advisories={numAdvisories}
           />
         </Card>
       ) : null}
@@ -252,14 +276,21 @@ export function OutputIssuanceBuilder({
               style={{ width: "100%", maxWidth: 400 }}
             />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={design.digitalSignature}
-              onChange={(e) => patch({ digitalSignature: e.target.checked })}
-            />
-            Require digital signature at issue time
+          <label style={{ display: "block", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("sigMethodLabel")}</span>
+            <select
+              aria-label={t("sigMethodLabel")}
+              data-testid="signature-method"
+              value={design.signatureMethod}
+              onChange={(e) => patch({ signatureMethod: e.target.value as IssuanceDesignState["signatureMethod"] })}
+              style={{ width: "100%", maxWidth: 400 }}
+            >
+              <option value="none">{t("sigMethodNone")}</option>
+              <option value="dsc">{t("sigMethodDsc")}</option>
+              <option value="esign">{t("sigMethodEsign")}</option>
+            </select>
           </label>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--mut)" }}>{t("sigMethodNote")}</p>
           {sigWarn ? (
             <p data-testid="signatory-warning" style={{ marginTop: 12, fontSize: 13, color: "var(--warn)" }}>
               {sigWarn}

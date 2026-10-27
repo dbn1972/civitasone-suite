@@ -3481,6 +3481,27 @@ function filterByQuery<T>(rows: T[], q: string | undefined, match: (row: T, need
   return rows.filter((row) => match(row, needle));
 }
 
+/** D4c #18 (GAP-PROCUREMENT-INDENTS-01): true indent total + per-status counts (raw service statuses). */
+export type IndentSummaryCounts = { total: number; counts: Record<string, number> };
+
+export async function getProcurementIndentSummary(query?: { q?: string; status?: string }): Promise<LoaderResult<IndentSummaryCounts | null>> {
+  const params = new URLSearchParams();
+  if (query?.q?.trim()) params.set("q", query.q.trim());
+  if (query?.status) params.set("status", query.status);
+  const qs = params.toString();
+  return fetchJson<unknown, IndentSummaryCounts | null>(`/api/v1/procurement/indents/summary${qs ? `?${qs}` : ""}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.indents.summary",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d || typeof d.total !== "number" || !Number.isFinite(d.total) || !isRecord(d.counts)) return null;
+      const counts: Record<string, number> = {};
+      for (const [k, v] of Object.entries(d.counts)) if (typeof v === "number" && Number.isFinite(v)) counts[k] = v;
+      return { total: d.total, counts };
+    },
+  });
+}
+
 export async function getProcurementIndents(query?: ProcurementListQuery): Promise<LoaderResult<IndentSummary[]>> {
   const path = buildListPath("/api/v1/procurement/indents", query);
   const result = await fetchJson<unknown, IndentSummary[]>(path, [], {
@@ -3584,6 +3605,29 @@ export async function getProcurementGRNs(query?: ProcurementListQuery): Promise<
       || row.poRef.toLowerCase().includes(needle)
       || row.vendor.toLowerCase().includes(needle)),
   };
+}
+
+/** GAP-PROCUREMENT-GRN-02: true status counts over every GRN matching the filter (not one page). */
+export type GrnSummaryCounts = { total: number; accepted: number; awaitingInspection: number; rejected: number };
+
+export async function getProcurementGRNSummary(query?: { q?: string; vendorId?: string }): Promise<LoaderResult<GrnSummaryCounts | null>> {
+  const params = new URLSearchParams();
+  if (query?.q?.trim()) params.set("q", query.q.trim());
+  if (query?.vendorId) params.set("vendorId", query.vendorId);
+  const qs = params.toString();
+  return fetchJson<unknown, GrnSummaryCounts | null>(`/api/v1/procurement/grns/summary${qs ? `?${qs}` : ""}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.grns.summary",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d) return null;
+      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const total = n(d.total), accepted = n(d.accepted), awaitingInspection = n(d.awaitingInspection), rejected = n(d.rejected);
+      return total === null || accepted === null || awaitingInspection === null || rejected === null
+        ? null
+        : { total, accepted, awaitingInspection, rejected };
+    },
+  });
 }
 
 export async function getProcurementGRNById(id: string): Promise<LoaderResult<GRNDetail | null>> {
@@ -3796,8 +3840,17 @@ export type EmdBgEntry = {
   status: string;
 };
 
-export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
-  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/emd", [], {
+/** GAP-PROCUREMENT-VENDORS-DETAIL-04: optional `vendorId` restricts the register to one vendor, server-side. */
+function securityListPath(base: string, query?: { vendorId?: string; limit?: number }): string {
+  const params = new URLSearchParams();
+  if (query?.limit != null) params.set("limit", String(query.limit));
+  if (query?.vendorId) params.set("vendorId", query.vendorId);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export async function getProcurementEMD(query?: { vendorId?: string; limit?: number }): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/emd", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.emd_bg",
     mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
@@ -3805,11 +3858,65 @@ export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
 }
 
 /** Performance security (bank guarantees) — same register the EMD & BG page renders alongside EMD entries. */
-export async function getProcurementPBG(): Promise<LoaderResult<EmdBgEntry[]>> {
-  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/pbg", [], {
+export async function getProcurementPBG(query?: { vendorId?: string; limit?: number }): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/pbg", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.pbg",
     mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+  });
+}
+
+/**
+ * GAP-PROCUREMENT-VENDORS-DETAIL-04: one EMD or bank guarantee held for a vendor,
+ * read from the raw register payload (emdNo/pbgNo, instrument, amountMinor,
+ * status, validUntil), restricted to that vendor SERVER-side.
+ */
+export type VendorSecurityRow = {
+  id: string;
+  kind: "EMD" | "PBG";
+  ref: string;
+  instrument: string;
+  amountMinor: string;
+  status: string;
+  validUntil?: string;
+};
+
+function mapVendorSecurities(kind: "EMD" | "PBG") {
+  return (payload: unknown): VendorSecurityRow[] | null => {
+    const rows = getArrayPayload(payload);
+    if (!rows) return null;
+    const out: VendorSecurityRow[] = [];
+    for (const r of rows) {
+      if (!isRecord(r)) continue;
+      const id = toText(r.id);
+      if (!id) continue;
+      out.push({
+        id,
+        kind,
+        ref: toText(kind === "EMD" ? r.emdNo : r.pbgNo) ?? id,
+        instrument: toText(r.instrument) ?? "—",
+        amountMinor: toText(r.amountMinor) ?? "",
+        status: toText(r.status) ?? "—",
+        ...(toText(r.validUntil) ? { validUntil: toText(r.validUntil) as string } : {}),
+      });
+    }
+    return out;
+  };
+}
+
+export async function getVendorEmd(vendorId: string, limit = 50): Promise<LoaderResult<VendorSecurityRow[]>> {
+  return fetchJson<unknown, VendorSecurityRow[]>(securityListPath("/api/v1/procurement/emd", { vendorId, limit }), [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.vendor.emd",
+    mapResponse: mapVendorSecurities("EMD"),
+  });
+}
+
+export async function getVendorPbg(vendorId: string, limit = 50): Promise<LoaderResult<VendorSecurityRow[]>> {
+  return fetchJson<unknown, VendorSecurityRow[]>(securityListPath("/api/v1/procurement/pbg", { vendorId, limit }), [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.vendor.pbg",
+    mapResponse: mapVendorSecurities("PBG"),
   });
 }
 
@@ -4761,10 +4868,13 @@ export type CitizenNotice = {
   published: string;
   expiry: string;
   type: string;
+  /** draft | published | withdrawn (citizens only ever receive published). */
+  status: string;
 };
 
-export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>> {
-  return fetchJson<unknown, CitizenNotice[]>("/api/v1/citizen/notices", [], {
+/** `includeAll` (officers only) asks the service for drafts and withdrawn notices too; the service ignores it for citizens. */
+export async function getCitizenNotices(includeAll = false): Promise<LoaderResult<CitizenNotice[]>> {
+  return fetchJson<unknown, CitizenNotice[]>(includeAll ? "/api/v1/citizen/notices?status=all" : "/api/v1/citizen/notices", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.notices",
     responseSchema: CitizenNoticeListSchema,
@@ -7481,7 +7591,8 @@ export type ProjectDprRow = {
   projectTitle: string;
   submittedBy: string;
   submittedDate: string;
-  estimatedCost: string;
+  /** Whole paise as a string (D4c #34); null = no estimate recorded. */
+  estimatedCostMinor: string | null;
   status: string;
   reviewingAuthority: string;
 };

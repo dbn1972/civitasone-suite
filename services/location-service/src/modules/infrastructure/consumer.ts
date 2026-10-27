@@ -10,7 +10,7 @@ export const INFRA_CREATE = "location.infrastructure.create";
 
 type CreatePayload = {
   id: string; tenantId: string; name: string; type: string; lat: number; lng: number;
-  capacity?: string | null; conditionScore?: number | null;
+  capacity?: string | null; conditionScore?: number | null; assetId?: string | null;
 };
 
 /**
@@ -31,6 +31,7 @@ export function registerInfrastructureConsumers(queue: Queue): void {
         lng: String(p.lng),
         capacity: p.capacity ?? null,
         conditionScore: p.conditionScore ?? null,
+        assetId: p.assetId ?? null,
         status: "active",
         createdBy: msg.actorId,
         version: 1,

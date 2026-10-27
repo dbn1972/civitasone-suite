@@ -30,6 +30,7 @@ const CENTRALLY_DEBARRED = randomUUID();
 function poBody(vendorId: string) {
   return {
     vendorId, indentRef: `procurement_indent:${randomUUID()}`,
+    gemOrderRef: "GEM/TEST/BASIS", // D4c #28: no empanelment record -> needs a GeM/tender basis
     items: [{ itemCode: "IC-1", description: "Widget", quantity: 1, unit: "nos", unitPriceMinor: 100 }],
   };
 }

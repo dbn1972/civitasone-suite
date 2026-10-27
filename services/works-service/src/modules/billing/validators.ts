@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zNonNegMoneyMinor, zPositiveMoneyMinor } from "../../shared/validators.js";
+import { DEDUCTION_HEADS } from "./domain.js";
 
 // Column capacities in schema.ts: quantity numeric(18,4) (< 1e14), the optional dimension values numeric(12,4)
 // (|v| <= 99999999.9999). A value beyond them used to pass validation and fail inside the consumer after the 202.
@@ -46,6 +47,32 @@ export const createBillSchema = z.object({
   // can still make it negative, see billing-domain.test.ts).
   grossAmountMinor: zPositiveMoneyMinor,
   deductionsMinor: zNonNegMoneyMinor.optional(),
+  // D4c #37: the statutory deduction lines (fixed heads, each at most once). The maker may adjust any amount from the
+  // computed default; when lines are sent they ARE the bill's deductions (a deductionsMinor that disagrees is refused).
+  recoveries: z.array(z.object({
+    recoveryType: z.enum(DEDUCTION_HEADS),
+    amountMinor: zNonNegMoneyMinor,
+    remarks: z.string().trim().max(2048).optional(),
+  })).max(DEDUCTION_HEADS.length)
+    .refine((rows) => new Set(rows.map((r) => r.recoveryType)).size === rows.length, { message: "each deduction head may appear only once" })
+    .optional(),
+});
+
+export const setDeductionRatesSchema = z.object({
+  // Omitted/null = the tenant-wide default; a uuid = that executing division's own rates.
+  divisionId: z.string().uuid().nullish(),
+  rates: z.array(z.object({
+    head: z.enum(DEDUCTION_HEADS),
+    rateBps: z.number().int().min(0).max(10000),
+  })).min(1).max(DEDUCTION_HEADS.length)
+    .refine((rows) => new Set(rows.map((r) => r.head)).size === rows.length, { message: "each deduction head may appear only once" }),
+});
+
+export const deductionScopeQuerySchema = z.object({ divisionId: z.string().uuid().optional() });
+
+export const deductionPreviewQuerySchema = z.object({
+  workId: z.string().uuid(),
+  grossAmountMinor: zPositiveMoneyMinor,
 });
 
 export const finalizeBillSchema = z.object({

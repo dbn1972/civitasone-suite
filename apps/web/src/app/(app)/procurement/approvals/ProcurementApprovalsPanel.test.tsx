@@ -467,3 +467,51 @@ describe("ProcurementApprovalsPanel — paging through the workflow queue (GAP-P
     }
   });
 });
+
+// ── D4c #17: the stat tiles come from the same queue the table renders ─────────
+describe("ProcurementApprovalsPanel — stat tiles are derived from the workflow queue (D4c #17)", () => {
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    mockError = null;
+    rawPayload = [
+      { id: "t1", instanceId: "i1", name: "Approve indent", status: "pending", roleRef: "procurement_admin", refType: "procurement_indent", refId: "ind-1" },
+      { id: "t2", instanceId: "i2", name: "Approve PO", status: "pending", roleRef: null, refType: "procurement_po", refId: "po-1" },
+      { id: "t3", instanceId: "i3", name: "Approve amendment", status: "pending", roleRef: "finance_admin", refType: "procurement_po_amendment", refId: "am-1" },
+    ];
+  });
+  const tile = (container: HTMLElement, label: string) =>
+    Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === label)!.closest(".stat");
+
+  it("counts the pending tasks, the ones this viewer can decide, and the indent / PO split", () => {
+    const { container } = render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    expect(tile(container, "Pending approvals")).toHaveTextContent("3");
+    // t1 (role match) + t2 (no roleRef) are actionable; t3 is assigned to finance_admin.
+    expect(tile(container, "Awaiting your decision")).toHaveTextContent("2");
+    expect(tile(container, "Indents")).toHaveTextContent("1");
+    expect(tile(container, "Purchase orders")).toHaveTextContent("2");
+  });
+
+  it("the tiles always agree with the rows in the table", () => {
+    const { container } = render(<ProcurementApprovalsPanel viewerRoles={["super_admin"]} />);
+    expect(tile(container, "Pending approvals")).toHaveTextContent("3");
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
+    expect(tile(container, "Awaiting your decision")).toHaveTextContent("3");
+  });
+
+  it("shows '—' (not 0) when the queue failed to load, and a genuine empty queue shows 0", () => {
+    mockError = "boom";
+    rawPayload = [];
+    const failed = render(<ProcurementApprovalsPanel viewerRoles={[]} />);
+    expect(tile(failed.container, "Pending approvals")).toHaveTextContent("—");
+    failed.unmount();
+    mockError = null;
+    const empty = render(<ProcurementApprovalsPanel viewerRoles={[]} />);
+    expect(tile(empty.container, "Pending approvals")).toHaveTextContent("0");
+  });
+
+  it("marks the counts with '+' when more pages of tasks are waiting", () => {
+    rawPayload = { data: [{ id: "t1", instanceId: "i1", name: "Approve PO", status: "pending", roleRef: null, refType: "procurement_po", refId: "po-1" }], pagination: { hasMore: true } };
+    const { container } = render(<ProcurementApprovalsPanel viewerRoles={[]} />);
+    expect(tile(container, "Pending approvals")).toHaveTextContent("1+");
+  });
+});

@@ -793,7 +793,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (NEEDS OWNER DECISION: statutory recovery heads SD/TDS/labour cess breakdown needs product confirmation and a data-model decision; GAP-WORKS-BILLING-BILLS-NEW-03; re-checked in the W2 works rescan, nothing built)
+- [~] **Status** (partly built by 4f03cdd52 per owner decision D4c #37, 2026-10-27: five fixed heads, per-division rates, maker adjusts, checker sees computed vs charged, lines sum to deductions; still open: rate editing is API-only (PUT /v1/works/billing/deduction-rates), there is no works-admin screen, and the built-in rates are placeholders pending owner confirmation)
 - **W2 works rescan note (cluster 01):** OWNER QUESTION (GAP-WORKS-BILLING-BILLS-NEW-03): which statutory recovery heads apply (security deposit, income tax/TDS, labour cess, GST TDS: codes and labels), are they fixed or tenant-configured, and is each head an entered amount or computed from a rate (percent of gross, of net, or of measured value)? Note for the schema decision: works.bill_recoveries (recovery_type, amount_minor, remarks, RLS, audit columns) already exists but nothing reads or writes it; the bill create command, consumer and read model would need per-head lines whose sum equals deductionsMinor. Nothing was built: heads and rates are policy values that are not in the repository or tenant configuration.
 - **W2 works part 2 note (#2047):** statutory recovery heads (security deposit, TDS, labour cess) need a product decision and a schema change. INTERIM, owner decision.
 - **W2 works note (#2039):** statutory recovery heads need a product decision and a schema change.
@@ -2331,7 +2331,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [~] **Status** (NEEDS OWNER DECISION: timeline state-mapping conflict — code shows Created=done/DAO=current for a draft, but acceptance criteria says Created=current; owner must confirm intended UX before acceptance tests can be written; GAP-WORKS-PROPOSALS-DETAIL-02)
+- [x] **Status** Closed per owner decision D4c #38 (2026-10-27): keep the current timeline (Proposal Created done, DAO Finalized current for a draft); the acceptance wording is amended to match, no code change
 - **W2 works part 2 note (#2047):** status-to-step mapping for a draft is still the owner's call (see the reopen note above). INTERIM, owner decision.
 - **First-pass claim:** Timeline promises "Submitted", "TS Eligible" and "AA Issued" steps that the backend never sets (list page comment, proposals/page.tsx:6-17), so a draft shows "Submitted" as the current step, and after DAO finalisation "TS Eligible" as current with no path to advance it (page.tsx:117-153).
 - **Verified evidence:** page.tsx:117 PROPOSAL_STATUSES=[draft,submitted,dao_finalized,ts_eligible,aa_issued]; buildTimelineSteps 119-153. For status 'draft' (idx 0) the 'Submitted' step is 'current' (:135); for 'dao_finalized' (idx 2) 'TS Eligible' is 'current' (:146) and AA Issued upcoming. proposals/page.tsx:6-17 comment states the backend only ever writes draft and dao_finalized (backend source absent, cannot re-verify). 'Create AA' link (page.tsx:314) exists but does not advance this status.
@@ -2507,7 +2507,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [~] **Status** (NEEDS OWNER DECISION: location field label and master data for location picker; GAP-WORKS-PROPOSALS-NEW-04)
+- [~] **Status** (NEEDS OWNER DECISION: location field label and master data for location picker; GAP-WORKS-PROPOSALS-NEW-04) [partly built by 31fc27889 per owner decision D4c #39, 2026-10-27: label is now Tehsil / Block (en+hi); LGD district/block picker still open: location-service masters are role-gated to location roles and expose no admin-level filter, so works users cannot read them]
 - **W2 works part 2 note (#2047):** Taluka/Tehsil label and location masters need a product decision. INTERIM, owner decision.
 - **W2 works note (#2039):** needs a product decision (Taluka/Tehsil label, location masters).
 - **First-pass claim:** Location is three free-text fields (District, Taluka, Village) — "Taluka" is not an Odisha administrative term (tehsil/block) and values are not validated against a master; no latitude/longitude or executing division/office field although the list shows Office (ProposalsTable.tsx:14).
@@ -2905,7 +2905,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme MASTERDATA (was STATUS)
 
-- [~] **Status** (NEEDS OWNER DECISION: tenderTypeId column needed in pre_tenders before type master can be wired end-to-end; GAP-WORKS-TENDERS-NEW-03)
+- [x] **Status** Closed by 9018e1708 (owner decision D4c #40, 2026-10-27): nullable tender_type_id on pre-tenders, form sends it, text code kept for old records
 - **W2 works part 2 note (#2047):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. INTERIM, owner decision.
 - **W2 works note (#2039):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. Select is master-driven and the list resolves names. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Type select loads tender-types master and list resolves names; form still sends tenderType code/name not tenderTypeId, and category remains free text.
@@ -3215,7 +3215,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-WORKID-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: should close be refused when issues are open or progress < 100%; GAP-WORKS-EXECUTION-WORKID-07)
+- [x] **Status** Closed by eb9e84696 (owner decision D4c #41, 2026-10-27): completion closure refused with open issues / progress below 100%; early close needs a reason and the DAO; idempotent close unchanged
 - **W2 works part 2 note (#2048):** done: close is now idempotent (route 409 ALREADY_CLOSED + consumer dead-letter) and the physical-complete certificate key is tenant-checked. Still open: refusing a close while issues are open or progress is below 100% is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — close restricted to dao/do/admin and checks closureEligibility (agreement, physical completion, splits) sync with audit; does not check open issues or 100% progress; no explicit idempotency guard.
 - **First-pass claim:** works-service absent from snapshot — server checks for completion/closure preconditions and audit are undeterminable.
@@ -3251,7 +3251,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: virus scan and EXIF stripping are platform-level decisions; GAP-WORKS-EXECUTION-PHOTOS-NEW-05)
+- [~] **Status** (NEEDS OWNER DECISION: virus scan and EXIF stripping are platform-level decisions; GAP-WORKS-EXECUTION-PHOTOS-NEW-05) [deferred post-UAT per owner decision D4c #42, 2026-10-27]
 - **W2 works part 2 note (#2048):** done: fileKey must be this tenant's upload (route 422 INVALID_FILE_KEY), unknown work is 404, presign already enforces extension allow-list and size cap (admin-service uploads/routes.ts). Still open: virus scan and EXIF stripping are platform features. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — GPS range-validated server-side and audit written; fileKey only length-checked, no tenant-prefix verification; presign content-type/size, virus scan and EXIF handling not evidenced.
 - **First-pass claim:** Presign endpoint behaviour, virus scan, EXIF handling and audit of the photo registration are undeterminable — works-service absent and FileUpload internals not traced.
@@ -3264,7 +3264,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: server-side uniqueness per scope/month for progress deltas is a product rule; GAP-WORKS-EXECUTION-RECORD-PROGRESS-06)
+- [x] **Status** Closed by 3b5e6c76d (owner decision D4c #43, 2026-10-27): unique (scope, month) for ordinary entries; corrections are negative entries with a stored reason
 - **W2 works part 2 note (#2048):** the web form now warns on a second entry for the same scope/month; whether the server should refuse it (deltas are insert-only) is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Cumulative<=target enforced sync and in consumer, negative delta needs reason, audit written; no one-entry-per-scope-per-month uniqueness (insert-only deltas).
 - **First-pass claim:** Server rules (uniqueness per scope-month, cumulative cap, audit) undeterminable — works-service absent.
@@ -3334,7 +3334,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: estimated-cost cap and duplicate detection for proposals need product rules; GAP-WORKS-PROPOSALS-NEW-06)
+- [x] **Status** Closed by b7de6b503 (owner decision D4c #44, 2026-10-27): no hard cost cap; likely duplicate (title, location, category, financial year) is warned about, never blocked
 - **W2 works part 2 note (#2047):** estimated-cost cap and duplicate detection need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** cost cap and duplicate detection need a product rule.
 - **W0 note:** partly fixed by #1867 — description max 2048, category enum, uuid fields and audit present; no estimated-cost cap and no duplicate detection.
@@ -3371,7 +3371,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-DETAIL-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: deviation percent computation and award-outcome follow-up from 202 queue need product rules; GAP-WORKS-TENDERS-DETAIL-08)
+- [x] **Status** Closed by 162a11573 (owner decision D4c #45, 2026-10-27): signed deviation % computed server-side; Award pending shown until the queued award arrives, then confirmed
 - **W2 works part 2 note (#2047):** deviation percent and the award outcome (still queued, 202) need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** role gates and maker-checker exist; deviation percent is not computed in works-service and the award outcome is still queued (202). Needs a product rule.
 - **W0 note:** partly fixed by #1944 — Award/finalize role-gated with maker-checker and ordered statuses (draft, dao_finalized); deviation percent is not computed anywhere in works-service, enums undocumented; award outcome still queued.

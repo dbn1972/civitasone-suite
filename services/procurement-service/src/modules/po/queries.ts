@@ -2,6 +2,21 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PoRow } from "./schema.js";
 
+const PO_REF_UUID = /^(?:procurement_po:)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/**
+ * D4c #25 (GAP-PROCUREMENT-CONTRACTS-NEW-06): resolve a PO reference as a
+ * contract quotes it - a PO uuid, the composite `procurement_po:<uuid>`, or the
+ * PO number (exact match) - to the real, tenant-scoped PO. null = no such PO.
+ */
+export async function resolvePoRef(tenantId: string, ref: string): Promise<{ id: string; poNo: string; status: string } | null> {
+  const trimmed = ref.trim();
+  if (!trimmed) return null;
+  const m = PO_REF_UUID.exec(trimmed);
+  const po = m ? await repo.findPoById(m[1]!.toLowerCase(), tenantId) : await repo.findPoByNo(trimmed, tenantId);
+  return po ? { id: po.id, poNo: po.poNo, status: po.status } : null;
+}
+
 export async function getPo(id: string, tenantId: string): Promise<Record<string, unknown> | null> {
   const po = await cache.getOrLoad<PoRow | null>(
     cache.makeKey(tenantId, "po", id),

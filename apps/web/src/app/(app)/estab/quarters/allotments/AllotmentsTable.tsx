@@ -17,6 +17,10 @@ export type AllotmentRow = {
   appliedAt: string;
   status: string;
   version: number;
+  /** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: the last lifecycle command the server refused (code only). */
+  lastCommandErrorCode?: string | null;
+  lastCommandErrorCommand?: string | null;
+  lastCommandErrorAt?: string | null;
 } & Record<string, unknown>;
 
 // GAP-ESTAB-QUARTERS-ALLOTMENTS-05: status filter segments (key -> i18n label key).

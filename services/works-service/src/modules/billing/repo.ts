@@ -1,6 +1,7 @@
-import { eq, and, desc, count } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
-import { measurementBooks, bills, measurements, accountCompilations } from "./schema.js";
+import { eq, and, desc, count, or, isNull } from "drizzle-orm";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import { measurementBooks, bills, measurements, accountCompilations, billRecoveries, deductionRates } from "./schema.js";
+import { resolveRates, type DeductionRates } from "./domain.js";
 import { workProposals } from "../proposal/schema.js";
 import { awards } from "../tender/schema.js";
 
@@ -210,4 +211,26 @@ export async function listAccountCompilations(tenantId: string, month: number, y
       )
       .orderBy(desc(accountCompilations.year), desc(accountCompilations.month));
   });
+}
+
+/** The rate rows that can apply to a division: its own plus the tenant-wide default (division_id NULL). */
+export async function loadDeductionRateRows(tx: ScopedTx, tenantId: string, divisionId: string | null) {
+  return tx.select({ divisionId: deductionRates.divisionId, head: deductionRates.head, rateBps: deductionRates.rateBps })
+    .from(deductionRates)
+    .where(and(
+      eq(deductionRates.tenantId, tenantId),
+      divisionId ? or(isNull(deductionRates.divisionId), eq(deductionRates.divisionId, divisionId)) : isNull(deductionRates.divisionId),
+    ));
+}
+
+/** D4c #37: the rate of every fixed head for a division (own row > tenant default > built-in). */
+export async function getEffectiveDeductionRates(tenantId: string, divisionId: string | null): Promise<DeductionRates> {
+  return scopedRead(async (tx) => resolveRates(await loadDeductionRateRows(tx, tenantId, divisionId), divisionId));
+}
+
+/** D4c #37: the deduction lines of a bill (computed vs charged), for the checker. */
+export async function listRecoveriesForBill(tenantId: string, billId: string) {
+  return scopedRead(async (tx) => tx.select().from(billRecoveries)
+    .where(and(eq(billRecoveries.tenantId, tenantId), eq(billRecoveries.billId, billId)))
+    .orderBy(billRecoveries.createdAt, billRecoveries.recoveryType));
 }

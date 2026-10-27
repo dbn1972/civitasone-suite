@@ -33,6 +33,24 @@ export function isEmpanelmentLapsed(
   return !rows.some((r) => r.status === "active" && (r.validUntil == null || r.validUntil >= today));
 }
 
+/**
+ * D4c #28 (GAP-PROCUREMENT-ORDERS-NEW-06): a vendor with NO empanelment record
+ * may be ordered from only when the order is linked to an awarded tender that
+ * this vendor won, or carries a GeM order reference. A vendor WITH records is
+ * unaffected here (lapsed ones are handled by assertEmpanelmentCurrent).
+ */
+export function assertNonEmpanelledOrderBasis(
+  rows: ReadonlyArray<unknown>,
+  basis: { tenderAwardedToVendor: boolean; gemOrderRef?: string | null | undefined },
+): void {
+  if (rows.length > 0) return;
+  if (basis.tenderAwardedToVendor || (basis.gemOrderRef ?? "").trim() !== "") return;
+  throw new DomainError(
+    "VENDOR_NOT_EMPANELLED",
+    "the vendor has no empanelment record; link an awarded tender won by this vendor or give a GeM order reference",
+  );
+}
+
 export function assertEmpanelmentCurrent(
   rows: ReadonlyArray<{ status: string; validUntil: string | null }>,
   today: string,

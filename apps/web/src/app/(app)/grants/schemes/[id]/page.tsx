@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill, RefreshErrorState, ProgressBar } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate, formatPercent, percentOfMinor } from "@/lib/formatters";
@@ -12,6 +13,22 @@ import { CloseSchemeButton } from "./CloseSchemeButton";
 export default async function SchemeDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { data: scheme, source, status } = await getSchemeById(params.id);
+  const t = await getTranslations("grantsB4Scheme");
+  // GAP-GRANTS-SCHEMES-NEW-03: stored sector codes -> localised labels.
+  const sectorLabel = (sector: string): string => {
+    switch (sector) {
+      case "agriculture": return t("sectorAgriculture");
+      case "education": return t("sectorEducation");
+      case "health": return t("sectorHealth");
+      case "rural_development": return t("sectorRuralDevelopment");
+      case "urban_development": return t("sectorUrbanDevelopment");
+      case "social_welfare": return t("sectorSocialWelfare");
+      case "skill_development": return t("sectorSkillDevelopment");
+      case "culture_sports": return t("sectorCultureSports");
+      case "other": return t("sectorOther");
+      default: return sector.replace(/_/g, " ");
+    }
+  };
 
   // GAP-GRANTS-SCHEMES-DETAIL-03: a network/5xx failure must show a retry state,
   // NOT "Page not found". notFound() is reserved for a genuine 404 from the API.
@@ -145,6 +162,19 @@ export default async function SchemeDetailPage(props: { params: Promise<{ id: st
             <div>
               <dt className="lab">Sanction Ref</dt>
               <dd>{scheme.sanctionRef}</dd>
+            </div>
+          )}
+          {/* GAP-GRANTS-SCHEMES-NEW-03: what the clerk entered on the create form. */}
+          {scheme.sector && (
+            <div>
+              <dt className="lab">{t("sectorLabel")}</dt>
+              <dd>{sectorLabel(scheme.sector)}</dd>
+            </div>
+          )}
+          {scheme.description && (
+            <div>
+              <dt className="lab">{t("descriptionLabel")}</dt>
+              <dd style={{ gridColumn: "1 / -1", whiteSpace: "pre-wrap" }}>{scheme.description}</dd>
             </div>
           )}
         </dl>

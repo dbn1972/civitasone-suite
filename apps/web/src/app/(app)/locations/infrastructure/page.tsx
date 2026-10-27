@@ -1,13 +1,21 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getLocationInfrastructureTyped } from "../_data";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getAssetLinkOptions, getLocationInfrastructureTyped } from "../_data";
+import { INFRASTRUCTURE_MANAGE_ROLES } from "../_roles";
+import { InfrastructureCreateForm } from "./InfrastructureActions";
 import { InfrastructureTable } from "../_tables";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const result = await getLocationInfrastructureTyped();
+  const canManage = getSessionRoles().some((r) => INFRASTRUCTURE_MANAGE_ROLES.includes(r));
+  const [result, assets] = await Promise.all([
+    getLocationInfrastructureTyped(),
+    // Only managers get the form; if the asset register cannot be read the link picker is simply left out.
+    canManage ? getAssetLinkOptions() : Promise.resolve(null),
+  ]);
   const t = await getTranslations("locationsOps");
   return (
     <div className="page-main">
@@ -23,6 +31,7 @@ export default async function Page() {
       ) : (
         <>
           <DataSourceBadge source="api" />
+          {canManage ? <InfrastructureCreateForm assetOptions={assets && assets.source !== "error" ? assets.data : []} /> : null}
           <InfrastructureTable rows={result.data} />
         </>
       )}

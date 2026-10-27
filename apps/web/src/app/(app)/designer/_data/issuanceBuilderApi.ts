@@ -11,9 +11,12 @@ export interface IssuanceOutputConfig {
   templateBody: string;
   numberingFormat: string;
   numberingTokens: IssuanceDesignState["numberingTokens"];
+  numberingResetPolicy?: IssuanceDesignState["numberingResetPolicy"];
   signatoryDesignationId: string;
   signatoryLabel: string;
+  /** Kept in step with signatureMethod for readers of older drafts. */
   digitalSignature: boolean;
+  signatureMethod?: string;
   validityMode: string;
   validityYears: number;
   validityFixedDate: string;
@@ -23,6 +26,10 @@ export interface IssuanceOutputConfig {
   qrVerifyEnabled: boolean;
 }
 
+function isSignatureMethod(v: unknown): v is IssuanceDesignState["signatureMethod"] {
+  return v === "none" || v === "dsc" || v === "esign";
+}
+
 export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputConfig {
   return {
     kind: "issuance",
@@ -30,9 +37,11 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
     templateBody: design.templateBody,
     numberingFormat: formatNumberingPreview(design.numberingTokens),
     numberingTokens: design.numberingTokens,
+    numberingResetPolicy: design.numberingResetPolicy,
     signatoryDesignationId: design.signatoryDesignationId,
     signatoryLabel: design.signatoryLabel,
-    digitalSignature: design.digitalSignature,
+    digitalSignature: design.signatureMethod !== "none",
+    signatureMethod: design.signatureMethod,
     validityMode: design.validityMode,
     validityYears: design.validityYears,
     validityFixedDate: design.validityFixedDate,
@@ -40,6 +49,57 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
     renewalWindowDays: design.renewalWindowDays,
     orientation: design.orientation,
     qrVerifyEnabled: design.qrVerifyEnabled,
+  };
+}
+
+/** The FN-15 runtime policy the catalogue stores and the renewal engine reads. */
+export interface DerivedRenewalPolicy {
+  renewable: boolean;
+  renewalWindowDays: number;
+  validityMode: "none" | "duration" | "fixed_date";
+  validityYears?: number;
+  validityFixedDate?: string;
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B7-01: B7 has ONE validity editor (the Output tab). The
+ * runtime renewalPolicy is derived from it on every save, so the two stored
+ * copies cannot disagree. Values are clamped to what the catalogue API accepts.
+ */
+export function renewalPolicyFromDesign(design: IssuanceDesignState): DerivedRenewalPolicy {
+  const mode = design.validityMode;
+  const out: DerivedRenewalPolicy = {
+    // Nothing that never expires can be renewed.
+    renewable: mode === "none" ? false : design.renewable,
+    renewalWindowDays: Math.min(3650, Math.max(0, Math.trunc(design.renewalWindowDays) || 0)),
+    validityMode: mode,
+  };
+  if (mode === "duration") {
+    out.validityYears = Math.min(99, Math.max(1, Math.trunc(design.validityYears) || 1));
+  }
+  if (mode === "fixed_date" && /^\d{4}-\d{2}-\d{2}$/.test(design.validityFixedDate)) {
+    out.validityFixedDate = design.validityFixedDate;
+  }
+  return out;
+}
+
+/**
+ * The stored runtime policy is what citizens\' licences actually follow, so when
+ * one exists it wins over the copy inside outputs. Returns the design unchanged
+ * when nothing is stored.
+ */
+export function withStoredRenewalPolicy(
+  design: IssuanceDesignState,
+  stored: DerivedRenewalPolicy | null | undefined,
+): IssuanceDesignState {
+  if (!stored) return design;
+  return {
+    ...design,
+    validityMode: stored.validityMode,
+    validityYears: stored.validityYears ?? design.validityYears,
+    validityFixedDate: stored.validityFixedDate ?? "",
+    renewable: stored.renewable,
+    renewalWindowDays: stored.renewalWindowDays,
   };
 }
 
@@ -61,9 +121,11 @@ export function issuanceOutputToUi(
     outputType: (cfg.outputType as IssuanceDesignState["outputType"]) ?? base.outputType,
     templateBody: cfg.templateBody ?? base.templateBody,
     numberingTokens: cfg.numberingTokens ?? base.numberingTokens,
+    numberingResetPolicy: cfg.numberingResetPolicy ?? "",
     signatoryDesignationId: cfg.signatoryDesignationId ?? "",
     signatoryLabel: cfg.signatoryLabel ?? "",
-    digitalSignature: cfg.digitalSignature ?? false,
+    // An old draft stored only the boolean: true meant a DSC.
+    signatureMethod: isSignatureMethod(cfg.signatureMethod) ? cfg.signatureMethod : cfg.digitalSignature ? "dsc" : "none",
     validityMode: (cfg.validityMode as IssuanceDesignState["validityMode"]) ?? base.validityMode,
     validityYears: cfg.validityYears ?? base.validityYears,
     validityFixedDate: cfg.validityFixedDate ?? "",

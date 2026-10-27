@@ -10,7 +10,8 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
-import { assertEmpanelmentCurrent, DomainError } from "../vendor/domain.js";
+import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
+import * as tenderRepo from "../tender/repo.js";
 
 // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
 const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
@@ -27,7 +28,7 @@ const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
  *  - GAP-PROCUREMENT-EMPANELMENT-05 / ORDERS-NEW-06: reject a vendor whose
  *    empanelment has lapsed. Applied to both POST aliases.
  */
-async function assertVendorEligible(tenantId: string, vendorId: string): Promise<void> {
+async function assertVendorEligible(tenantId: string, vendorId: string, basis: { tenderId?: string | undefined; gemOrderRef?: string | undefined } = {}): Promise<void> {
   const vendor = await vendorRepo.findVendorById(vendorId, tenantId);
   const blacklisted =
     Boolean(await blacklistRepo.findActive(tenantId, vendorId))
@@ -38,7 +39,15 @@ async function assertVendorEligible(tenantId: string, vendorId: string): Promise
   }
   const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10); // IST calendar day
   try {
-    assertEmpanelmentCurrent(await vendorRepo.findEmpanelmentsByVendor(vendorId, tenantId), today);
+    const emp = await vendorRepo.findEmpanelmentsByVendor(vendorId, tenantId);
+    assertEmpanelmentCurrent(emp, today);
+    // D4c #28: a vendor with no empanelment record needs an awarded-tender / GeM basis.
+    assertNonEmpanelledOrderBasis(emp, {
+      tenderAwardedToVendor: emp.length === 0 && basis.tenderId
+        ? await tenderRepo.isTenderAwardedToVendor(tenantId, basis.tenderId, vendorId)
+        : false,
+      gemOrderRef: basis.gemOrderRef,
+    });
   } catch (err) {
     if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
     throw err;
@@ -79,7 +88,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
-    await assertVendorEligible(ctx.tenantId, body.vendorId);
+    await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 
@@ -108,6 +117,18 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createGemOrder(ctx, body));
   });
 
+  // D4c #25: resolve a PO reference for contract-service (service-to-service,
+  // x-internal) so a contract can only quote a PO that exists. Registered before
+  // /pos/:id so "resolve" is not read as an id. Tenant-scoped.
+  app.get("/v1/procurement/pos/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { ref } = z.object({ ref: z.string().trim().min(1).max(200) }).parse(req.query);
+    const po = await queries.resolvePoRef(ctx.tenantId, ref);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    return reply.send({ data: po });
+  });
+
   app.get("/v1/procurement/pos/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -123,7 +144,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
-    await assertVendorEligible(ctx.tenantId, body.vendorId);
+    await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 

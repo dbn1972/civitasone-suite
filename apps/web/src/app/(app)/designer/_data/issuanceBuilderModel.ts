@@ -5,6 +5,7 @@ import {
   defaultTemplateBodyForOutputType,
   formatNumberingPreview,
   type IssuanceDesignState,
+  type NumberingResetPolicy,
   type NumberingToken,
   type OutputType,
   type ValidityMode,
@@ -103,6 +104,40 @@ export function numberingWarning(tokens: NumberingToken[]): string | null {
   return null;
 }
 
+/**
+ * GAP-DESIGNER-DETAIL-B7-03: non-blocking advisories about collision / restart
+ * risk. The blocking check stays in numberingWarning().
+ */
+export function numberingAdvisories(
+  tokens: NumberingToken[],
+  resetPolicy: NumberingResetPolicy | "",
+  opts: { multiOffice?: boolean } = {},
+): string[] {
+  const out: string[] = [];
+  const has = (k: NumberingToken["kind"]) => tokens.some((t) => t.kind === k);
+  if (tokens.filter((t) => t.kind === "seq").length > 1) {
+    out.push("Use only one Sequence segment — two running counters in one number make it hard to audit.");
+  }
+  if (opts.multiOffice && !has("office")) {
+    out.push("This service is offered by several offices; add an Office segment so offices cannot issue the same number.");
+  }
+  if (!resetPolicy) {
+    if (has("seq")) out.push("Choose when the sequence restarts so numbers stay unique across years.");
+  } else {
+    const hasYear = has("year") || has("fy");
+    if (resetPolicy === "never" && hasYear) {
+      out.push("The sequence never restarts but the number carries a year — the counter will keep climbing across years.");
+    }
+    if (resetPolicy === "financial_year" && !has("fy")) {
+      out.push("The sequence restarts each financial year; add an FY segment so numbers from different years cannot clash.");
+    }
+    if (resetPolicy === "calendar_year" && !has("year")) {
+      out.push("The sequence restarts each calendar year; add a Year segment so numbers from different years cannot clash.");
+    }
+  }
+  return out;
+}
+
 export function validitySummary(design: Pick<
   IssuanceDesignState,
   "validityMode" | "validityYears" | "validityFixedDate" | "renewable" | "renewalWindowDays" | "outputType"
@@ -137,8 +172,20 @@ export function renewalGuidance(
   return "Renewal uses a lighter follow-on flow (FN-15) once published — this flag only marks the service as renewable.";
 }
 
+/**
+ * D4c #7: a signatory is statute-related, so it blocks Next. A receipt names no
+ * authority and never blocks. A typed label counts, because a tenant with no
+ * loaded positions can still only supply a label.
+ */
+export function isSignatoryBlocking(
+  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "signatoryLabel">,
+): boolean {
+  if (design.outputType === "receipt") return false;
+  return !design.signatoryDesignationId && !design.signatoryLabel.trim();
+}
+
 export function signatoryWarning(
-  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "digitalSignature">,
+  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "signatureMethod">,
 ): string | null {
   if (design.outputType === "receipt") return null;
   if (!design.signatoryDesignationId) {
@@ -146,8 +193,11 @@ export function signatoryWarning(
       ? "Pick who closes the case — their designation appears on the closure note."
       : "Pick a signatory designation before publish — certificates need a named authority.";
   }
-  if (design.digitalSignature) {
-    return "Digital signature will be required at issue time (DSC / eSign when the tenant has it configured).";
+  if (design.signatureMethod === "dsc") {
+    return "A DSC token signature will be required at issue time (when the tenant has a DSC configured).";
+  }
+  if (design.signatureMethod === "esign") {
+    return "An Aadhaar eSign will be required at issue time (when the tenant has eSign configured).";
   }
   return null;
 }
@@ -169,7 +219,9 @@ export function applyOutputTypeChange(
       : design.validityMode,
     renewable: nextType === "licence" ? true : isClosure || nextType === "receipt" ? false : design.renewable,
     qrVerifyEnabled: !isClosure && nextType !== "receipt",
-    digitalSignature: isClosure ? design.digitalSignature : design.digitalSignature || nextType !== "receipt",
+    signatureMethod: isClosure || design.signatureMethod !== "none"
+      ? design.signatureMethod
+      : nextType !== "receipt" ? "dsc" : "none",
   };
 }
 

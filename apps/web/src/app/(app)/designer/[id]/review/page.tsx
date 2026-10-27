@@ -6,12 +6,15 @@ import { useEffect, useCallback, useState } from "react";
 import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
+import { DesignIssuesList } from "../../_components/DesignIssuesList";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
 import {
   fetchPublishedByKey,
   publishDefinition,
   rejectDefinition,
 } from "../../_data/designerReviewApi";
+import { fetchHoaDescriptions } from "../../_data/feeBuilderApi";
+import { documentsReviewSummary } from "../../_data/documentBuilderModel";
 import { publishSummary } from "../../_data/versionDiffModel";
 import { useDesignerSession } from "../../_data/useDesignerSession";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
@@ -38,6 +41,16 @@ export default function DesignerReviewPage() {
     [],
   );
   const a11yBlocksPublish = (a11yErrorCount ?? 0) > 0;
+
+  // GAP-DESIGNER-DETAIL-B5-04: let the checker see the head description, not only its code.
+  const [hoaDescriptions, setHoaDescriptions] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    fetchHoaDescriptions()
+      .then((d) => { if (live) setHoaDescriptions(d); })
+      .catch(() => { /* code-only summary is still correct */ });
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     if (!wizard.def?.serviceKey) return;
@@ -70,7 +83,7 @@ export default function DesignerReviewPage() {
         >
           <h4 style={{ margin: "0 0 6px", fontSize: 14 }}>{block.shortLabel} — {block.label}</h4>
           <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            {blockSummary(def, block.id)}
+            {blockSummary(def, block.id, hoaDescriptions)}
           </p>
         </section>
       ))}
@@ -142,6 +155,11 @@ export default function DesignerReviewPage() {
           <AccessibilityPreview definitionId={params.id} onResult={onA11yResult} />
         </div>
 
+        {/* D4c #7: all warnings are listed here so none is missed before the decision. */}
+        <div style={{ marginTop: 24 }}>
+          <DesignIssuesList issues={wizard.issues} />
+        </div>
+
         <div style={{ marginTop: 24 }}>{readOnlySummary(wizard.def)}</div>
 
         {!wizard.meta.submittedBy ? (
@@ -197,7 +215,7 @@ export default function DesignerReviewPage() {
               {" "}Citizens will see this service once published.
             </p>
             <ul style={{ margin: "8px 0 0", paddingInlineStart: 18, fontSize: 13 }}>
-              {publishSummary(wizard.def).map((line) => (
+              {publishSummary(wizard.def, hoaDescriptions).map((line) => (
                 <li key={line} style={{ marginBottom: 2 }}>{line}</li>
               ))}
             </ul>
@@ -227,7 +245,11 @@ export default function DesignerReviewPage() {
   );
 }
 
-function blockSummary(def: ServiceDefinitionDto, blockId: string): string {
+function blockSummary(
+  def: ServiceDefinitionDto,
+  blockId: string,
+  hoaDescriptions: Record<string, string> = {},
+): string {
   switch (blockId) {
     case "b1":
       return `${def.name} · ${def.channels.join(", ")} · SLA ${def.slaDays ?? "—"} days`;
@@ -240,16 +262,12 @@ function blockSummary(def: ServiceDefinitionDto, blockId: string): string {
       return def.workflowDefinitionId ? "Approval chain configured" : "No workflow linked";
     case "b5":
       return def.feeScheduleId
-        ? `${def.feeModel ?? "fee"} model · HOA ${def.hoaCode ?? "—"}`
+        ? `${def.feeModel ?? "fee"} model · HOA ${def.hoaCode ?? "—"}${
+            def.hoaCode && hoaDescriptions[def.hoaCode] ? ` — ${hoaDescriptions[def.hoaCode]}` : ""
+          }`
         : "No fee schedule";
-    case "b6": {
-      const docs = (def.requiredDocuments ?? []) as Array<Record<string, unknown>>;
-      const count = docs.length;
-      const mandatory = docs.filter((d) => d.mandatory);
-      return mandatory.length > 0
-        ? `${count} document requirement(s) · ${mandatory.length} mandatory`
-        : `${count} document requirement(s)`;
-    }
+    case "b6":
+      return documentsReviewSummary((def.requiredDocuments ?? []) as Array<Record<string, unknown>>);
     case "b7":
       return def.issuanceType ?? "Output template configured";
     case "b8":

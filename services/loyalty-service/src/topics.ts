@@ -9,6 +9,8 @@ export const COMMANDS = {
   accruePoints: "loyalty.points.accrue",
   redeemPoints: "loyalty.points.redeem",
   voidRedemption: "loyalty.redemption.void",
+  fulfilRedemption: "loyalty.redemption.fulfil",
+  rejectRedemption: "loyalty.redemption.reject",
   evaluateTier: "loyalty.tier.evaluate",
 } as const;
 

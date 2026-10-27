@@ -86,6 +86,7 @@ export function registerProgressConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; projectId: string; dprNo: string;
       dprDate: string; content?: Record<string, unknown>; submittedBy: string;
+      estimatedCostMinor?: number;
     };
 
     // DPR immutability: no duplicate for same project + date
@@ -101,6 +102,7 @@ export function registerProgressConsumers(queue: Queue): void {
         id: p.id, projectId: p.projectId, tenantId: p.tenantId,
         dprNo: p.dprNo, dprDate: p.dprDate,
         content: p.content ?? {}, submittedBy: p.submittedBy,
+        estimatedCostMinor: p.estimatedCostMinor === undefined ? null : BigInt(p.estimatedCostMinor),
         submittedAt: new Date(),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

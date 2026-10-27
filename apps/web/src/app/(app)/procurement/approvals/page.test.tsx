@@ -25,57 +25,48 @@ function mockApprovals(result: { data: unknown; source: "api" | "error" }) {
 }
 
 const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-const nextWeek = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
-describe("ApprovalsPage stats (GAP-PROCUREMENT-APPROVALS-02/03/04)", () => {
+// D4c #17 (owner decision 2026-10-27): the workflow queue is the single source of
+// truth for action AND the stat tiles (they live in ProcurementApprovalsPanel and are
+// tested there). This server page now only renders the read-only register as a
+// secondary list, so it must not present competing figures of its own.
+describe("ApprovalsPage register is secondary and read-only (D4c #17)", () => {
   beforeEach(() => fetchJsonMock.mockReset());
 
-  it("GAP-APPROVALS-04: counts overdue by date (dueAt), not by substring-matching the display string", async () => {
+  it("renders the panel (queue + figures) and no register-derived stat tiles", async () => {
     mockApprovals({
-      data: [
-        // dueDisplay deliberately localised/odd so a substring match would miss it;
-        // dueAt is yesterday => overdue.
-        { id: "a1", referenceId: "IND-1", owner: "Dept A", dueDisplay: "कल", dueAt: yesterday },
-        { id: "a2", referenceId: "PO-1", owner: "Dept B", dueDisplay: "next week", dueAt: nextWeek },
-      ],
+      data: [{ id: "a1", referenceId: "IND-1", owner: "Dept A", dueDisplay: "—", dueAt: yesterday }],
       source: "api",
     });
-    render(await ApprovalsPage());
-    // Exactly one overdue (the yesterday one).
-    expect(screen.getByText("Due today or overdue").closest(".stat")).toHaveTextContent("1");
+    const { container } = render(await ApprovalsPage());
+    expect(screen.getByTestId("panel")).toBeInTheDocument();
+    expect(container.querySelectorAll(".stat")).toHaveLength(0);
+    for (const gone of ["Pending Approvals", "Due today or overdue", "Unique Owners", "With a due date", "Action Required"]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
   });
 
-  it("GAP-APPROVALS-03: shows '—' for every stat when the load errored", async () => {
+  it("the queue comes first and the register is labelled read-only / reference only", async () => {
+    mockApprovals({ data: [{ id: "a1", referenceId: "IND-1", owner: "Dept A", dueDisplay: "—" }], source: "api" });
+    render(await ApprovalsPage());
+    const panel = screen.getByTestId("panel");
+    const register = screen.getByText(/Register of pending indents and draft POs \(read-only\)/);
+    expect(panel.compareDocumentPosition(register) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/decided in the workflow queue above, never from this list/)).toBeInTheDocument();
+  });
+
+  it("a failed register load shows an error state (not 'No pending approvals') without hiding the queue", async () => {
     mockApprovals({ data: [], source: "error" });
     render(await ApprovalsPage());
-    expect(screen.getByText("Pending Approvals").closest(".stat")).toHaveTextContent("—");
-    expect(screen.getByText("Due today or overdue").closest(".stat")).toHaveTextContent("—");
-    expect(screen.getByText("Unique Owners").closest(".stat")).toHaveTextContent("—");
-    expect(screen.getByText("With a due date").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByTestId("panel")).toBeInTheDocument();
+    expect(screen.queryByText("No pending approvals")).toBeNull();
   });
 
   it("GAP-APPROVALS-02: a valid empty list renders the EmptyState, not an ErrorState", async () => {
-    // mapApprovals now returns [] (source 'api') for a genuinely empty list.
+    // mapApprovals returns [] (source 'api') for a genuinely empty list.
     mockApprovals({ data: [], source: "api" });
     render(await ApprovalsPage());
     expect(screen.getByText("No pending approvals")).toBeInTheDocument();
-    expect(screen.getByText("Pending Approvals").closest(".stat")).toHaveTextContent("0");
-  });
-
-  it("GAP-APPROVALS-02: no two stat cards report the same number (no duplicate 'Action Required')", async () => {
-    mockApprovals({
-      data: [
-        { id: "a1", referenceId: "IND-1", owner: "Dept A", dueDisplay: "—" },
-        { id: "a2", referenceId: "PO-1", owner: "Dept A", dueDisplay: "—", dueAt: yesterday },
-      ],
-      source: "api",
-    });
-    render(await ApprovalsPage());
-    // Pending=2, Overdue=1, UniqueOwners=1, WithDueDate=1 — the labels are
-    // distinct and "Action Required" (the old duplicate) is gone.
-    expect(screen.queryByText("Action Required")).toBeNull();
-    expect(screen.getByText("Pending Approvals").closest(".stat")).toHaveTextContent("2");
-    expect(screen.getByText("With a due date").closest(".stat")).toHaveTextContent("1");
   });
 
   it("GAP-APPROVALS-04: the raw internal Approval ID column is dropped", async () => {

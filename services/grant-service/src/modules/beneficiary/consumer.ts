@@ -6,6 +6,15 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 export function registerBeneficiaryConsumers(queue: Queue): void {
+  // GAP-GRANTS-LIST-03: audit trail of an audited PII reveal (never carries the value).
+  queue.subscribe(COMMANDS.beneficiaryPiiReveal, async (msg) => {
+    const p = msg.payload as { tenantId: string; beneficiaryId: string; field: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await audit(tx, msg, "pii_reveal", "grant_beneficiary", p.beneficiaryId, { field: p.field, reason: p.reason });
+    });
+  });
+
   queue.subscribe(COMMANDS.beneficiaryCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name: string; type: string;
@@ -99,10 +108,10 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, detail?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "grant", action, resourceType, resourceId, outcome: "success", ...(detail ? { detail } : {}) },
   });
 }

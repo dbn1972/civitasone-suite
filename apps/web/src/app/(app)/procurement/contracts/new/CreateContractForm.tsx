@@ -15,6 +15,7 @@ const VENDOR_SEARCH_LIMIT = 25;
 export function CreateContractForm() {
   const router = useRouter();
   const t = useTranslations("procurement.vendorPicker");
+  const tc = useTranslations("procurement.contractForm");
   // GAP-PROCUREMENT-CONTRACTS-NEW-05: the vendor is chosen through a SERVER-SIDE
   // search combobox (?q=), not a `<select>` filled from one capped page, so a
   // vendor master of any size is reachable. No vendor is pre-selected
@@ -35,7 +36,7 @@ export function CreateContractForm() {
   const [poRef, setPoRef] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<{ vendor?: string; expiry?: string; value?: string; contractNo?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ vendor?: string; expiry?: string; value?: string; contractNo?: string; poRef?: string }>({});
 
   const searchVendors = useCallback(async (q: string, signal: AbortSignal): Promise<RemoteOption[]> => {
     const qs = new URLSearchParams({ limit: String(VENDOR_SEARCH_LIMIT) });
@@ -97,6 +98,19 @@ export function CreateContractForm() {
           setFieldErrors({ contractNo: "A contract with this number already exists." });
           setStatus("error");
           setMessage("Please correct the highlighted fields.");
+          return;
+        }
+        // D4c #25: the PO reference is checked against procurement-service.
+        const code = await res.json().then((j: { code?: unknown }) => (typeof j?.code === "string" ? j.code : undefined)).catch(() => undefined);
+        if (res.status === 422 && code === "PO_NOT_FOUND") {
+          setFieldErrors({ poRef: tc("poNotFound") });
+          setStatus("error");
+          setMessage("Please correct the highlighted fields.");
+          return;
+        }
+        if (res.status === 503 && code === "PO_VALIDATION_UNAVAILABLE") {
+          setStatus("error");
+          setMessage(tc("poUnavailable"));
           return;
         }
         const human = toHumanError("save", { area: "contract" });
@@ -179,7 +193,8 @@ export function CreateContractForm() {
         </div>
         <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-po">PO reference</label>
-          <input id="c-po" className="inp" value={poRef} onChange={(e) => setPoRef(e.target.value)} style={{ minHeight: 44 }} />
+          <input id="c-po" className="inp" value={poRef} onChange={(e) => setPoRef(e.target.value)} aria-invalid={fieldErrors.poRef ? true : undefined} aria-describedby={fieldErrors.poRef ? "c-po-err" : undefined} style={{ minHeight: 44 }} />
+          {fieldErrors.poRef ? <span id="c-po-err" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.poRef}</span> : null}
         </div>
         <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-start">Start date *</label>

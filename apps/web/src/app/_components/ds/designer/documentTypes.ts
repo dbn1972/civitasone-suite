@@ -17,6 +17,41 @@ export interface RequiredDocumentUi {
   maxSizeMb: number;
   mandatory: boolean;
   verifiedAtLane: string;
+  /** D4c #8: id of the DPDP-classified catalogue category; "" / absent = Other (free text). */
+  categoryId?: string;
+}
+
+export type DocumentSensitivity = "sensitive" | "personal" | "standard";
+
+export type DocumentRetention = { kind: "years"; years: number } | { kind: "after_verification" };
+
+export interface DocumentCategory {
+  id: string;
+  /** The one docType every document of this category shares. */
+  docType: string;
+  labels: { en: string; hi: string };
+  sensitivity: DocumentSensitivity;
+  retention: DocumentRetention;
+  /** false until the Data Protection Officer signs the entry off. */
+  dpoConfirmed: boolean;
+}
+
+/**
+ * Owner decision D4c #8 (GAP-DESIGNER-DETAIL-B6-03): the Data Protection Officer
+ * supplies the official catalogue of document types with sensitivity and
+ * retention. Until then this is a DRAFT STARTER LIST, every entry flagged
+ * "DPO to confirm" in the editor. Replace it with the DPO list (or an endpoint)
+ * and set dpoConfirmed once signed off.
+ */
+export const DOCUMENT_CATEGORIES: readonly DocumentCategory[] = [
+  { id: "aadhaar_copy", docType: "aadhaar_copy", labels: { en: "Aadhaar copy", hi: "आधार की प्रति" }, sensitivity: "sensitive", retention: { kind: "after_verification" }, dpoConfirmed: false },
+  { id: "income_certificate", docType: "income_certificate", labels: { en: "Income certificate", hi: "आय प्रमाणपत्र" }, sensitivity: "personal", retention: { kind: "years", years: 7 }, dpoConfirmed: false },
+  { id: "caste_certificate", docType: "caste_certificate", labels: { en: "Caste certificate", hi: "जाति प्रमाणपत्र" }, sensitivity: "sensitive", retention: { kind: "years", years: 7 }, dpoConfirmed: false },
+  { id: "residence_certificate", docType: "residence_certificate", labels: { en: "Residence certificate", hi: "निवास प्रमाणपत्र" }, sensitivity: "personal", retention: { kind: "years", years: 7 }, dpoConfirmed: false },
+];
+
+export function documentCategoryById(id: string | null | undefined): DocumentCategory | null {
+  return DOCUMENT_CATEGORIES.find((c) => c.id === id) ?? null;
 }
 
 export interface DocumentsDesignState {
@@ -51,5 +86,6 @@ export function newDocumentRow(): RequiredDocumentUi {
     maxSizeMb: 5,
     mandatory: true,
     verifiedAtLane: "",
+    categoryId: "",
   };
 }

@@ -57,3 +57,37 @@ export async function auditRead(
     throw new HttpError(503, "AUDIT_UNAVAILABLE", "This read could not be recorded, so nothing was returned. Try again shortly.");
   }
 }
+
+/**
+ * GAP-PROCUREMENT-VENDORS-02: audit-before-reveal for a vendor's masked PII.
+ *
+ * Publishes one `vendor_pii_revealed` audit event naming the actor (envelope),
+ * the vendor, the field and the stated reason. NEVER the revealed value.
+ * FAIL CLOSED: if the publish throws, this throws a fixed 503 and the caller must
+ * not release the clear value, so there is no reveal without a trail.
+ */
+export async function auditPiiReveal(
+  ctx: Pick<RequestContext, "tenantId" | "actorId" | "correlationId">,
+  event: { vendorId: string; field: string; reason: string },
+): Promise<void> {
+  try {
+    await queue.publish(AUDIT_TOPIC, {
+      messageId: randomUUID(),
+      type: AUDIT_TOPIC,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "procurement",
+        action: "vendor_pii_revealed",
+        resourceType: "vendor",
+        resourceId: event.vendorId,
+        outcome: "success",
+        details: { field: event.field, reason: event.reason },
+      },
+    });
+  } catch {
+    throw new HttpError(503, "AUDIT_UNAVAILABLE", "This reveal could not be recorded, so nothing was returned. Try again shortly.");
+  }
+}

@@ -83,6 +83,7 @@ export default function DesignerTestPage() {
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${wizard.prev}`)}
       canRunTest={wizard.canRunTest}
+      runTestBlockedBy={wizard.runTestBlockedBy}
       canSubmit={wizard.canSubmit}
       onRunTest={() => void runTest()}
       onSubmit={() => void wizard.onSubmit()}

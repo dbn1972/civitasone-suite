@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard, StatusPill } from "@/app/_components/ds";
@@ -25,7 +26,7 @@ type QuotationRow = {
   method: string | null;
   quotedAmountMinor: string | null;
   quotedPercentage: string | null;
-  deviationPercent: number | null;
+  deviationPercent: string | number | null;
   status: string;
   submittedAt: string | null;
   awardId: string | null;
@@ -41,6 +42,15 @@ type TenderListItem = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** D4c #45: the server sends the signed deviation as "12.00" / "-3.25"; show an explicit + for above the estimate. */
+function formatDeviation(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const text = String(value);
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return "—";
+  const n = Number(text);
+  return `${n > 0 ? "+" : ""}${text}%`;
+}
 
 function pickData<T>(payload: unknown): T[] {
   if (payload && typeof payload === "object" && "data" in payload) {
@@ -58,6 +68,7 @@ export default async function TenderDetailPage(
   }
 ) {
   const params = await props.params;
+  const tTender = await getTranslations("works.tenderDetail");
   const [quotationsResult, tenderByIdResult] = await Promise.all([
     fetchJson<unknown, QuotationRow[]>(
       `/api/v1/works/tenders/${params.id}/quotations`,
@@ -156,7 +167,7 @@ export default async function TenderDetailPage(
     // GAP-WORKS-TENDERS-DETAIL-04: null amount stays "" so DataTable renders
     // "—" (not a fabricated ₹0.00).
     quotedAmountMinor: q.quotedAmountMinor ?? "",
-    deviationPercent: q.deviationPercent == null ? "—" : String(q.deviationPercent),
+    deviationPercent: formatDeviation(q.deviationPercent),
     status: String(q.status ?? "—"),
     submittedAt: formatIndianDate(q.submittedAt),
   }));
@@ -238,6 +249,7 @@ export default async function TenderDetailPage(
             emptyTitle="No quotations yet"
             emptyMessage="Quotations will appear once the tender is open for bidding."
           />
+          <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 16px 12px" }}>{tTender("deviationNote")}</p>
         </Card>
         </div>
       )}

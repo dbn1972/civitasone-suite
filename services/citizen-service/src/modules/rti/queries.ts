@@ -22,16 +22,16 @@ function normalizeRtiDates<T extends RtiRow>(rti: T): T {
   };
 }
 
-export async function getRti(tenantId: string, id: string): Promise<(RtiRow & { responses: Awaited<ReturnType<typeof repo.listResponses>>; appeals: Awaited<ReturnType<typeof repo.listAppeals>>; isOverdue: boolean; statusLabel: string }) | null> {
+export async function getRti(tenantId: string, id: string): Promise<(RtiRow & { responses: Awaited<ReturnType<typeof repo.listResponses>>; appeals: Awaited<ReturnType<typeof repo.listAppeals>>; transfers: Awaited<ReturnType<typeof repo.listTransfers>>; isOverdue: boolean; statusLabel: string }) | null> {
   const rti = await cache.getOrLoad<RtiRow | null>(
     cache.makeKey(tenantId, "rti", id),
     () => repo.findRtiById(id),
   );
   if (!rti || rti.tenantId !== tenantId) return null;
-  const [responses, appeals] = await Promise.all([repo.listResponses(id), repo.listAppeals(id)]);
+  const [responses, appeals, transfers] = await Promise.all([repo.listResponses(id), repo.listAppeals(id), repo.listTransfers(id)]);
   const isOverdue = isRtiOverdue(rti);
   // P1-3: surface the mapped status label without breaking the raw `status` field.
-  return { ...normalizeRtiDates(rti), responses, appeals, isOverdue, statusLabel: mapRtiStatus(rti.status) };
+  return { ...normalizeRtiDates(rti), responses, appeals, transfers, isOverdue, statusLabel: mapRtiStatus(rti.status) };
 }
 
 /** RTI Act 2005 §7: 30-day deadline — flag overdue if deadline has passed and no response given */

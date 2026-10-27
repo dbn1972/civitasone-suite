@@ -67,7 +67,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-GEOFENCES-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 12cf99f32 (UAT B4, 2026-10-27): register has an add-geofence form and per-row activate/deactivate for the roles the service allows (POST/PUT /v1/geofences), 202 shown as received then Done when visible, copy no longer says read-only; the register already sorts/filters/paginates (15 per page). Tests: GeofenceActions.test.tsx, page.manage.test.tsx.
 - **W2 note:** copy says read-only and pagination/filter exist; a create/edit UI is a feature build (backend has POST/PUT /v1/geofences) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
@@ -160,7 +160,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 13a32fc65 (UAT B4, 2026-10-27): register has an add-asset form for the roles the service allows (POST /v1/locations/infrastructure; the service has no edit or archive endpoint, so none is offered and the copy says so); the register already sorts/filters/paginates. Tests: InfrastructureActions.test.tsx.
 - **W2 note:** copy says read-only; a create UI is a feature build (backend has POST /v1/locations/infrastructure) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
@@ -210,7 +210,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-06  ·  LOW  ·  confirmed  ·  theme DEADROUTE
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by d955c80cc (UAT B4, 2026-10-27): infrastructure assets carry an optional assetId (migration 0027, POST/list/get) and the register links the name to /assets/<id> when present, plain text when not; the add form has an optional asset picker. Tests: services/location-service/tests/infrastructure-asset-link.test.ts, InfrastructureActions.test.tsx.
 - **W2 note:** the infrastructure API carries no asset-service id, so rows cannot link to /assets/:id; monitoring markers now open the register - NEEDS OWNER DECISION
 - **First-pass claim:** Infrastructure rows carry no link to the Assets module although Map Monitoring links infrastructure markers to /assets/:refId (maps/_components/MonitoringMap.tsx recordHref).
 - **Verified evidence:** MonitoringMap.tsx:52-53 links infrastructure markers to /assets/<refId>; the infrastructure list uses ModuleListTable rows with no href (ModuleListTable.tsx:48-56) and mapRows keeps only the row id, which may not equal the assets refId. app/(app)/assets/[id] exists. Whether infrastructure id equals asset id is cannot-verify without location-service.
@@ -251,7 +251,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by d982da37a (UAT B4, 2026-10-27): register has an assign form (office and unit chosen by name, level, primary) and a per-row revoke for the roles the service allows (POST/DELETE /v1/jurisdictions), 202 reported as received, copy no longer says read-only; the register already sorts/filters/paginates. Tests: JurisdictionActions.test.tsx.
 - **W2 note:** copy says read-only; assign/revoke UI is a feature build (backend has POST/DELETE /v1/jurisdictions) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
@@ -285,7 +285,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by caf37b7f4 (UAT B4, 2026-10-27): jurisdiction table now shows Level, Office, Unit, Parent unit and LGD code; parent and LGD code are resolved from the administrative hierarchy (/v1/hierarchy: parentId, lgdCode), so no jurisdiction API change was needed; hub copy ('Which offices cover which administrative units') makes no boundary claim. Tests: _data.test.ts, _tables.test.tsx.
 - **W2 note:** Level, resolved Office/Unit names and Primary shown, hub copy fixed; parent and LGD code are not on the jurisdiction API and there is no offices list endpoint - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — typed mapper with Level/Office/Unit columns added; no parent or LGD code column and hub note unchanged
 - **First-pass claim:** The hub describes 'Administrative jurisdiction boundaries' (locations/page.tsx:12) but the table shows no boundary, level, parent or LGD code, only whichever of code/updatedAt the mapper picks as Meta.
@@ -571,7 +571,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 87553bf6b (UAT B4, 2026-10-27): archive refuses with 409 IN_USE while hrms reports current employees at the location and fails closed (503 REFERENCES_UNVERIFIABLE) when it cannot check; asset-service locationId is its own functional-location master so assets are not a reference. Tests: location-archive-edit-real-db.test.ts, hrms-client.test.ts, LocationsListTable.test.tsx.
 - **W2 note:** archive already 409s on active children, takes a reason and audits (location-archive-edit-real-db.test.ts); blocking on linked assets/employees is a cross-service check - NEEDS OWNER DECISION
 - **First-pass claim:** If mounted, archive is a one-step PATCH with reason (LocationActions.tsx:115-122) and no check that active records (assets, employees) reference the office; audit on create/archive and the location-service contract are undeterminable (service absent from snapshot).
 - **Service:** `location-service`  ·  **Endpoint(s):** `['POST /api/v1/locations', 'PATCH /api/v1/locations/:id/archive']`
@@ -594,7 +594,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-MAPS-MONITORING-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 83b66e56e (UAT B4, 2026-10-27): GET /v1/locations/cadastral/parcels/:id added and a parcel detail page at /locations/parcels/[id]; the monitoring map links parcel markers there (infrastructure/geofence markers already open their registers). Tests: services/location-service/tests/cadastral-parcel-detail.test.ts, parcels/[id]/page.test.tsx, MonitoringMap.test.tsx.
 - **W2 note:** infrastructure/geofence markers open their registers; parcel markers have no page so the link is hidden - parcel detail page is a feature build
 - **First-pass claim:** 'Open record' links are unreliable: geofence goes to /locations?geofence=<id> and land_parcel to /locations/list?ref=<id> (MonitoringMap.tsx:52-58), but neither the hub nor the list page reads those query params; only infrastructure has a real target (/assets/:refId) and that route's acceptance of an infrastructure refId is undeterminable.
 - **Service:** `location-service`  ·  **Endpoint(s):** `['GET /api/v1/locations/map-markers', 'GET /assets/:refId (asset route)']`
@@ -606,7 +606,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-MAPS-MONITORING-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 1070cb08b (UAT B4, 2026-10-27): map-markers honours date (records that existed on that IST day; status and position stay current, stated in meta and on the page, because the service keeps no history) and bbox is now sent from the visible map area ('Only this map area'); truncation notice already in place. Tests: services/location-service/tests/map-markers-as-of.test.ts, MonitoringMap.test.tsx, CivitasMap.test.tsx.
 - **W2 note:** truncated flag + notice done and parcel filter value fixed; as-of date is disabled (service keeps no history) and viewport bbox needs iframe bounds - NEEDS OWNER DECISION
 - **First-pass claim:** Header comment documents the API filters as domain, status and bbox (MonitoringMap.tsx:6), but the page sends domain, status and date and never bbox (MonitoringMap.tsx:95-97): 'As of date' may be silently ignored and every marker is fetched unbounded; the map caps display at 200 markers (CivitasMap.tsx:20). map-markers contract undeterminable (location-service absent).
 - **Service:** `location-service`  ·  **Endpoint(s):** `['GET /api/v1/locations/map-markers?domain&status&date|bbox']`

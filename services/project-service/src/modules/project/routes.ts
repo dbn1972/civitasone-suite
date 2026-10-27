@@ -16,6 +16,7 @@ import {
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import * as queries from "./queries.js";
+import { assertTaskTransitionAllowed, DomainError } from "./domain.js";
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
 const READER_ROLES = [...PROJ_ROLES, "audit_officer", "finance_officer"];
@@ -81,6 +82,18 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROJ_ROLES);
     const { id, taskId } = taskParam.parse(req.params);
     const body = updateTaskStatusBody.parse(req.body);
+    // GAP-PROJECTS-DETAIL-TASKS-01: refuse synchronously what the consumer would
+    // only reject later: a task that is not in THIS project (ownership) or an
+    // illegal status transition, so the UI gets a clear 404/422 instead of a
+    // silent 202 that never applies.
+    const task = await repo.findTaskById(taskId, ctx.tenantId);
+    if (!task || task.projectId !== id) throw new HttpError(404, "NOT_FOUND", "task not found");
+    try {
+      assertTaskTransitionAllowed(task.status ?? "pending", body.status);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(422, "INVALID_TRANSITION", err.message);
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateTaskStatus(ctx, id, taskId, body));
   });
 

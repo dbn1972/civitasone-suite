@@ -8,10 +8,13 @@ import {
   applyOutputTypeChange,
   buildSandboxPreview,
   filterMergeFields,
+  isSignatoryBlocking,
   mergeFieldsForDesign,
+  numberingAdvisories,
   numberingWarning,
   renderMergedTemplate,
   renewalGuidance,
+  signatoryWarning,
   validitySummary,
 } from "./issuanceBuilderModel";
 
@@ -100,5 +103,57 @@ describe("issuanceBuilderModel", () => {
     design.renewalWindowDays = 45;
     expect(validitySummary(design)).toMatch(/45 days/i);
     expect(renewalGuidance(design)).toMatch(/FN-15/i);
+  });
+});
+
+// GAP-DESIGNER-DETAIL-B7-03
+describe("numberingAdvisories", () => {
+  const seq = { kind: "seq" as const, seqWidth: 5 };
+  it("warns on more than one Sequence segment", () => {
+    expect(numberingAdvisories([seq, seq], "financial_year").join(" ")).toMatch(/one Sequence/i);
+  });
+  it("asks for a restart policy when none is chosen", () => {
+    expect(numberingAdvisories([{ kind: "prefix", value: "TL" }, seq], "").join(" ")).toMatch(/when the sequence restarts/i);
+  });
+  it("warns when the policy never restarts but the number carries a year", () => {
+    expect(numberingAdvisories([{ kind: "year" }, seq], "never").join(" ")).toMatch(/never restarts/i);
+    expect(numberingAdvisories([{ kind: "fy" }, seq], "never").join(" ")).toMatch(/never restarts/i);
+  });
+  it("warns when the policy and year segment disagree", () => {
+    expect(numberingAdvisories([{ kind: "year" }, seq], "financial_year").join(" ")).toMatch(/FY segment/);
+    expect(numberingAdvisories([{ kind: "fy" }, seq], "calendar_year").join(" ")).toMatch(/Year segment/);
+  });
+  it("warns for a multi-office service without an Office segment", () => {
+    expect(numberingAdvisories([seq], "never", { multiOffice: true }).join(" ")).toMatch(/Office segment/);
+    expect(numberingAdvisories([{ kind: "office", value: "HO" }, seq], "never", { multiOffice: true }).join(" ")).not.toMatch(/Office segment/);
+  });
+  it("is quiet for a coherent scheme", () => {
+    expect(numberingAdvisories([{ kind: "prefix", value: "TL" }, { kind: "fy" }, seq], "financial_year")).toEqual([]);
+  });
+});
+
+describe("isSignatoryBlocking (D4c #7 — the signatory is statute-related, so it blocks Next)", () => {
+  it("blocks a certificate with no designation and no label", () => {
+    expect(isSignatoryBlocking({ outputType: "certificate", signatoryDesignationId: "", signatoryLabel: "" })).toBe(true);
+  });
+  it("clears with a designation or a typed label, and never blocks a receipt", () => {
+    expect(isSignatoryBlocking({ outputType: "certificate", signatoryDesignationId: "p1", signatoryLabel: "" })).toBe(false);
+    expect(isSignatoryBlocking({ outputType: "licence", signatoryDesignationId: "", signatoryLabel: "Licensing Officer" })).toBe(false);
+    expect(isSignatoryBlocking({ outputType: "receipt", signatoryDesignationId: "", signatoryLabel: "" })).toBe(false);
+  });
+});
+
+describe("signatoryWarning follows the chosen signature method (D4c #9)", () => {
+  const base = { outputType: "certificate" as const, signatoryDesignationId: "p1" };
+  it("names the method that will be required at issue time", () => {
+    expect(signatoryWarning({ ...base, signatureMethod: "dsc" })).toMatch(/DSC token/);
+    expect(signatoryWarning({ ...base, signatureMethod: "esign" })).toMatch(/Aadhaar eSign/);
+    expect(signatoryWarning({ ...base, signatureMethod: "none" })).toBeNull();
+  });
+  it("switching to a licence keeps a chosen method, and a receipt may stay unsigned", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), signatureMethod: "esign" as const };
+    expect(applyOutputTypeChange(d, "licence").signatureMethod).toBe("esign");
+    expect(applyOutputTypeChange({ ...d, signatureMethod: "none" }, "receipt").signatureMethod).toBe("none");
+    expect(applyOutputTypeChange({ ...d, signatureMethod: "none" }, "licence").signatureMethod).toBe("dsc");
   });
 });

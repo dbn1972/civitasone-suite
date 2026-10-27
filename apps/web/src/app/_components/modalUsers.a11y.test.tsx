@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import { useState, type ReactNode } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { ApproveApplicationDialog } from "../(app)/grants/applications/[id]/ApproveApplicationDialog";
 import { ScoreApplicationDialog } from "../(app)/grants/applications/[id]/ScoreApplicationDialog";
 import { CloseOpportunityDialog } from "./crm/CloseOpportunityDialog";
@@ -100,10 +102,13 @@ describe("SF-19 ported Modal users: focus trap, inert background, Escape, focus 
   });
 
   it("ScoreApplicationDialog", () => {
+    // GAP-GRANTS-APPLICATIONS-DETAIL-05: the reviewer picker is translated client-side.
     render(
-      <Host>
-        {(open, close) => <ScoreApplicationDialog open={open} onCancel={close} onSubmit={vi.fn()} />}
-      </Host>,
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <Host>
+          {(open, close) => <ScoreApplicationDialog open={open} onCancel={close} onSubmit={vi.fn()} />}
+        </Host>
+      </NextIntlClientProvider>,
     );
     const trigger = openFromTrigger();
     assertDialogContract("alertdialog", trigger);

@@ -3,8 +3,8 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getProposal, listProposals, countProposals, searchProposals, resolveProposals } from "./repo.js";
-import { canDaoFinalize, validateCoa } from "./domain.js";
+import { getProposal, listProposals, countProposals, searchProposals, resolveProposals, findLikelyDuplicates } from "./repo.js";
+import { canDaoFinalize, validateCoa, financialYearOf } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const pickerSearchSchema = z.object({
@@ -73,6 +73,16 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     // more existed. countProposals returns the tenant-scoped total.
     const total = await countProposals(ctx.tenantId);
     return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
+  });
+
+  // D4c #44: warn (never block) about a likely duplicate - same title, location, category, financial year.
+  app.get("/v1/works/proposals/duplicate-check", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const probe = v.duplicateCheckQuerySchema.parse(req.query);
+    const now = new Date();
+    const duplicates = await findLikelyDuplicates(ctx.tenantId, probe, now);
+    return reply.send({ data: { duplicates, financialYear: financialYearOf(now).label } });
   });
 
   // Get proposal by id

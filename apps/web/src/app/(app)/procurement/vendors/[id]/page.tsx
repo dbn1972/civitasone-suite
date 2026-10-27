@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
-import { getProcurementVendorById, getProcurementPOs } from "../../../../_data/loaders";
+import { maskPan, maskPhone, maskEmail } from "../../../../_components/ds/Masked";
+import { getProcurementVendorById, getProcurementPOs, getProcurementGRNs, getVendorEmd, getVendorPbg } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { VendorActions } from "./VendorActions";
 import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
+import { VendorGrnsTable, VendorSecuritiesTable } from "./VendorHistoryTables";
+import { GRN_STATUS_LABELS } from "../../grn/statusLabels";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
-import { getSessionRoles, hasAnyRole, PROCUREMENT_APPROVER_ROLES, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 
 const EMPANELMENT_LABELS: Record<string, string> = {
   empanelled: "Empanelled",
@@ -39,6 +42,14 @@ function daysUntil(isoDate: string, today: string): number {
 }
 const EXPIRY_WARN_DAYS = 30;
 
+// GAP-PROCUREMENT-VENDORS-02: audited reveal of masked vendor PII. The roles
+// mirror procurement-service's REVEALABLE_VENDOR_FIELDS (the server is the
+// authority and re-checks): contact channels for procurement staff, the PAN for
+// admins and auditors only.
+const VENDOR_REVEAL_PATH = "v1/procurement/pii/reveal";
+const VENDOR_PAN_REVEAL_ROLES = ["procurement_admin", "super_admin", "audit_officer"];
+const GRN_HISTORY_LIMIT = 50;
+
 export default async function VendorDetailPage(
   props: { params: Promise<{ id: string }>; searchParams?: Promise<{ registered?: string }> }
 ) {
@@ -48,9 +59,12 @@ export default async function VendorDetailPage(
   // GAP-PROCUREMENT-VENDORS-DETAIL-04: the vendor's own purchase orders, fetched
   // alongside the profile. Each section reports its own failure - an error is
   // never rendered as "no orders".
-  const [{ data: vendor, source }, orders] = await Promise.all([
+  const [{ data: vendor, source }, orders, grns, emd, pbg] = await Promise.all([
     getProcurementVendorById(params.id),
     getProcurementPOs({ vendorId: params.id, limit: 50 }),
+    getProcurementGRNs({ vendorId: params.id, limit: GRN_HISTORY_LIMIT }),
+    getVendorEmd(params.id),
+    getVendorPbg(params.id),
   ]);
 
   if (!vendor) {
@@ -69,16 +83,24 @@ export default async function VendorDetailPage(
   }
 
   // GAP-...-DETAIL-01: DPDP / financial-data. PAN, email, phone and the bank
-  // account number are masked for everyone by default (safe default: the raw
-  // value never reaches the client payload). An audited, role-gated reveal is
-  // a backend follow-up (POST /vendors/:id/reveal — see HUMAN REVIEW): until
-  // that audited endpoint exists we FAIL CLOSED and show no reveal control, so
-  // no unaudited clear value is ever emitted. GSTIN and IFSC stay visible —
-  // they are public business identifiers, not personal/financial secrets.
-  const canReveal = hasAnyRole(getSessionRoles(), PROCUREMENT_APPROVER_ROLES);
-  // Reserved for the future audited-reveal wiring; referenced to avoid an
-  // unused-var lint while the control itself is intentionally not rendered yet.
-  void canReveal;
+  // account number are masked for everyone by default (the raw value never
+  // reaches the client payload). GAP-PROCUREMENT-VENDORS-02: a viewer holding a
+  // reveal role gets a "Reveal" control that asks for a reason and calls the
+  // server's audited POST /v1/procurement/pii/reveal; the clear value only
+  // exists after the server has written its audit event. The bank account stays
+  // write-only (no reveal). GSTIN and IFSC stay visible - public business
+  // identifiers, not personal/financial secrets.
+  const roles = getSessionRoles();
+  const canRevealContact = hasAnyRole(roles, PROCUREMENT_WRITE_ROLES);
+  const canRevealPan = hasAnyRole(roles, VENDOR_PAN_REVEAL_ROLES);
+  const revealCfg = (field: string, label: string, canReveal: boolean) => ({
+    canReveal,
+    resourceType: "vendor" as const,
+    resourceId: vendor.id,
+    field,
+    label,
+    revealPath: VENDOR_REVEAL_PATH,
+  });
   // GAP-PROCUREMENT-VENDORS-DETAIL-02: lifecycle actions for procurement writers only.
   const canManage = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
   const today = todayIST();
@@ -93,6 +115,14 @@ export default async function VendorDetailPage(
         actions={
           <>
             <StatusPill status={vendor.empanelmentStatus} label={EMPANELMENT_LABELS[vendor.empanelmentStatus] ?? vendor.empanelmentStatus} />
+            {/* D4c #23: the single vendor rating scale is the scorecard score out of 100 with its band. */}
+            {vendor.performanceScore != null ? (
+              <span className="pill info" title={t("performanceScoreHint")}>
+                {t("performanceScore", { score: vendor.performanceScore, band: vendor.performanceBand ?? "—" })}
+              </span>
+            ) : (
+              <span className="pill" title={t("performanceScoreHint")}>{t("notScoredYet")}</span>
+            )}
             {vendor.rating !== undefined && (
               <span className="pill info" title="Buyer rating (1–5). The scorecard shows a separate performance score out of 100.">Buyer rating {vendor.rating}/5<span aria-hidden="true"> ★</span><span className="sr-only"> buyer rating out of 5</span></span>
             )}
@@ -160,7 +190,7 @@ export default async function VendorDetailPage(
           {vendor.panNo && (
             <div className="field">
               <span className="label">PAN</span>
-              <Masked value={vendor.panNo} kind="pan" className="mono" ariaLabel="PAN, masked" />
+              <Masked value={maskPan(vendor.panNo)} kind="pan" className="mono" ariaLabel="PAN, masked" onReveal={revealCfg("pan", t("labelPan"), canRevealPan)} />
             </div>
           )}
           {vendor.contactPerson && (
@@ -172,13 +202,13 @@ export default async function VendorDetailPage(
           {vendor.email && (
             <div className="field">
               <span className="label">Email</span>
-              <Masked value={vendor.email} kind="email" className="mono" ariaLabel="Email, masked" />
+              <Masked value={maskEmail(vendor.email)} kind="email" className="mono" ariaLabel="Email, masked" onReveal={revealCfg("email", t("labelEmail"), canRevealContact)} />
             </div>
           )}
           {vendor.phone && (
             <div className="field">
               <span className="label">Phone</span>
-              <Masked value={vendor.phone} kind="phone" className="mono" ariaLabel="Phone, masked" />
+              <Masked value={maskPhone(vendor.phone)} kind="phone" className="mono" ariaLabel="Phone, masked" onReveal={revealCfg("phone", t("labelPhone"), canRevealContact)} />
             </div>
           )}
           {vendor.kycStatus && (
@@ -202,9 +232,8 @@ export default async function VendorDetailPage(
         </div>
       </Card>
 
-      {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: orders history. GRNs, contracts and EMD/BG
-          are still reached from their own registers (they need a vendor filter
-          on their list endpoints). */}
+      {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: orders, GRN and EMD/BG history, each filtered by vendor on the
+          server and each reporting its own failure - an error is never rendered as "none". */}
       <Card title={t("ordersTitle")} padding>
         {orders.source === "error" ? (
           <ErrorState error={toHumanError("load", { area: "vendor orders" })} backHref={`/procurement/vendors/${vendor.id}`} />
@@ -218,6 +247,52 @@ export default async function VendorDetailPage(
               orderDateDisplay: po.orderDate ? formatIndianDate(po.orderDate) : "—",
               status: po.status,
               amountDisplay: formatMoney(po.amount),
+            }))}
+          />
+        )}
+      </Card>
+
+      <Card title={t("grnsTitle")} padding>
+        {grns.source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor goods receipts" })} backHref={`/procurement/vendors/${vendor.id}`} />
+        ) : grns.data.length === 0 ? (
+          <EmptyState icon="📦" title={t("noGrns")} message={t("noGrnsHint")} />
+        ) : (
+          <>
+            <VendorGrnsTable
+              rows={grns.data.map((g) => ({
+                id: g.id,
+                grnNo: g.grnNo,
+                receivedDisplay: g.receivedDate ? formatIndianDate(g.receivedDate) : "—",
+                status: g.status,
+                statusLabel: GRN_STATUS_LABELS[g.status] ?? g.status.replace(/_/g, " "),
+              }))}
+            />
+            {grns.data.length >= GRN_HISTORY_LIMIT ? (
+              <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "10px 0 0" }}>
+                {t("grnsShowingFirst", { count: GRN_HISTORY_LIMIT })}{" "}
+                <Link href="/procurement/grn">{t("viewAllGrns")}</Link>
+              </p>
+            ) : null}
+          </>
+        )}
+      </Card>
+
+      <Card title={t("securitiesTitle")} padding>
+        {emd.source === "error" || pbg.source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor EMD and bank guarantees" })} backHref={`/procurement/vendors/${vendor.id}`} />
+        ) : emd.data.length + pbg.data.length === 0 ? (
+          <EmptyState icon="🛡️" title={t("noSecurities")} message={t("noSecuritiesHint")} />
+        ) : (
+          <VendorSecuritiesTable
+            rows={[...emd.data, ...pbg.data].map((r) => ({
+              id: `${r.kind}-${r.id}`,
+              kind: r.kind,
+              ref: r.ref,
+              instrument: r.instrument,
+              amountDisplay: formatMoney(r.amountMinor),
+              validUntilDisplay: r.validUntil ? formatIndianDate(r.validUntil) : "—",
+              status: r.status,
             }))}
           />
         )}

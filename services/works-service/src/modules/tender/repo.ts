@@ -2,6 +2,7 @@ import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards, preTenders } from "./schema.js";
+import { tenderTypes } from "../masters/schema.js";
 
 /** GAP-WORKS-TENDERS-NEW-06: a pre-tender reference number is unique per tenant. */
 export async function preTenderReferenceExists(tenantId: string, referenceNumber: string): Promise<boolean> {
@@ -188,5 +189,49 @@ export async function countTenders(tenantId: string): Promise<number> {
       .from(tenders)
       .where(eq(tenders.tenantId, tenantId));
     return Number(rows[0]?.value ?? 0);
+  });
+}
+
+/** D4c #40: an ACTIVE tender-type master of this tenant (uncached: validation must see a just-deactivated type). */
+export async function getActiveTenderType(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(tenderTypes)
+      .where(and(eq(tenderTypes.tenantId, tenantId), eq(tenderTypes.id, id), eq(tenderTypes.active, true)))
+      .limit(1);
+    return rows[0] ?? null;
+  });
+}
+
+/**
+ * D4c #45: the work a tender (or pre-tender) is for and that work's estimated cost - the figure every quotation's
+ * deviation is measured against. Null when the tender does not exist; `estimateMinor` is null when the work carries no
+ * positive estimate.
+ */
+export async function getTenderEstimate(tenantId: string, tenderId: string): Promise<{ workId: string; estimateMinor: bigint | null } | null> {
+  return scopedRead(async (tx) => {
+    const pre = await tx.select({ workId: preTenders.workId }).from(preTenders)
+      .where(and(eq(preTenders.tenantId, tenantId), eq(preTenders.id, tenderId))).limit(1);
+    let workId = pre[0]?.workId;
+    if (!workId) {
+      const t = await tx.select({ workId: tenders.workId }).from(tenders)
+        .where(and(eq(tenders.tenantId, tenantId), eq(tenders.id, tenderId))).limit(1);
+      workId = t[0]?.workId;
+    }
+    if (!workId) return null;
+    const work = await tx.select({ cost: workProposals.estimatedCostMinor }).from(workProposals)
+      .where(and(eq(workProposals.tenantId, tenantId), eq(workProposals.id, workId))).limit(1);
+    const cost = work[0]?.cost ?? null;
+    return { workId, estimateMinor: cost !== null && cost > 0n ? cost : null };
+  });
+}
+
+/** D4c #45: the newest award of a work - how a client learns the outcome of the queued award command. */
+export async function getAwardForWork(tenantId: string, workId: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(awards)
+      .where(and(eq(awards.tenantId, tenantId), eq(awards.workId, workId)))
+      .orderBy(desc(awards.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
   });
 }

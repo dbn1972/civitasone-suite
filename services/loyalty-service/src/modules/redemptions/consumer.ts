@@ -125,4 +125,62 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
     }
     if (applied) log.info({ id: p.id }, "redemption voided");
   });
+
+  // GAP-LOYALTY-REDEMPTIONS-02: pending -> fulfilled. markProcessed + guarded
+  // write (status, version, SoD) + audit in ONE txn.
+  queue.subscribe(COMMANDS.fulfilRedemption, async (msg) => {
+    const p = msg.payload as { id: string; version: number };
+    let applied = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      applied = await repo.fulfilRedemption(tx, p.id, msg.tenantId, msg.actorId, p.version);
+      if (!applied) return;
+      await writeAudit(tx, ctxOf(msg), {
+        action: "redemption.fulfil",
+        resourceType: "loyalty_redemption",
+        resourceId: p.id,
+        details: {},
+      });
+    });
+    if (applied) log.info({ id: p.id }, "redemption fulfilled");
+    else log.warn({ id: p.id }, "fulfil not applied (state, version or SoD guard)");
+  });
+
+  // pending -> rejected, held points restored to the enrolment in the same txn.
+  queue.subscribe(COMMANDS.rejectRedemption, async (msg) => {
+    const p = msg.payload as { id: string; reason: string; version: number };
+    let enrolmentId: string | null = null;
+    let applied = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rejected = await repo.rejectRedemption(tx, p.id, msg.tenantId, p.reason, msg.actorId, p.version);
+      if (!rejected) return;
+      applied = true;
+      enrolmentId = rejected.enrolmentId;
+      if (rejected.enrolmentId) {
+        const enrolment = await enrolmentRepo.findByIdTx(tx, rejected.enrolmentId, msg.tenantId);
+        if (enrolment) {
+          const restored = await enrolmentRepo.adjustBalance(
+            tx,
+            rejected.enrolmentId,
+            msg.tenantId,
+            rejected.points,
+            BigInt(0),
+            enrolment.version,
+          );
+          enrolmentRepo.assertBalanceAdjusted(restored, rejected.enrolmentId, "rejectRedemption");
+        }
+      }
+      await writeAudit(tx, ctxOf(msg), {
+        action: "redemption.reject",
+        resourceType: "loyalty_redemption",
+        resourceId: p.id,
+        details: { reason: p.reason },
+      });
+    });
+    if (applied && enrolmentId) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "enrolment", enrolmentId));
+    }
+    if (applied) log.info({ id: p.id }, "redemption rejected");
+  });
 }

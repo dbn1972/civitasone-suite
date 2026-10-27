@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The action dialogs inside the page are translated client-side (grantsB4Review).
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -29,6 +36,9 @@ vi.mock("@/lib/auth/roleGuard", () => ({
   hasAnyRole: (sessionRoles: string[], allowed: string[]) => allowed.some((r) => sessionRoles.includes(r)),
 }));
 
+const resolveUsersMock = vi.fn<(ids: Iterable<string>) => Promise<Map<string, string>>>(async () => new Map());
+vi.mock("@/lib/directory/resolveUsers", () => ({ resolveUsers: (ids: Iterable<string>) => resolveUsersMock(ids) }));
+
 import ApplicationDetailPage from "./page";
 
 const APP = {
@@ -57,6 +67,8 @@ describe("ApplicationDetailPage", () => {
     getApplicationByIdMock.mockReset();
     getSchemeByIdMock.mockReset();
     getGranteeByIdMock.mockReset();
+    resolveUsersMock.mockReset();
+    resolveUsersMock.mockResolvedValue(new Map());
     rolesMock.mockReturnValue(["grant_admin"]);
     userIdMock.mockReturnValue("officer-1");
     getApplicationByIdMock.mockResolvedValue({ data: APP, source: "api" });
@@ -133,4 +145,34 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText("Submitted By")).toBeInTheDocument();
   });
 
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-05: reviewers are shown by name, never as a raw ref or uuid.
+  describe("reviewer names", () => {
+    const REV = "22222222-2222-4222-8222-222222222222";
+    const ASSIGNED = "33333333-3333-4333-8333-333333333333";
+
+    it("resolves the evaluation reviewer and the assigned reviewer to directory names", async () => {
+      getApplicationByIdMock.mockResolvedValue({
+        data: { ...APP, assignedReviewerRef: `identity_user:${ASSIGNED}`, scoredReviewerRef: `identity_user:${REV}`, reviewerRef: `identity_user:${REV}` },
+        source: "api",
+      });
+      resolveUsersMock.mockResolvedValue(new Map([[REV, "Meera Kulkarni"], [ASSIGNED, "Anil Rao"]]));
+      render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+      expect(screen.getByText("Meera Kulkarni")).toBeInTheDocument();
+      expect(screen.getByText("Anil Rao")).toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(REV))).not.toBeInTheDocument();
+      expect(resolveUsersMock).toHaveBeenCalledWith(expect.arrayContaining([REV, ASSIGNED]));
+    });
+
+    it("never prints a user id the directory could not resolve", async () => {
+      getApplicationByIdMock.mockResolvedValue({
+        data: { ...APP, scoredReviewerRef: `identity_user:${REV}`, reviewerRef: `identity_user:${REV}` },
+        source: "api",
+      });
+      resolveUsersMock.mockResolvedValue(new Map());
+      render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+      expect(screen.getByText("Name not available")).toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(REV))).not.toBeInTheDocument();
+    });
+  });
 });

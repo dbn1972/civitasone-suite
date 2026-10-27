@@ -343,7 +343,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-APPLICATIONS-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme WIRING (was CONFIRM)
 
-- [~] **Status** (NEEDS OWNER DECISION: reviewer picker requires a user-search endpoint from grant-service; safe interim is free-text ref with the existing hint label)
+- [x] **Status** Closed by 20a96f618 (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — scores/recommendation now shown, but reviewer is still a free-text ref in Assign and Score dialogs (no picker) and the page shows the raw ref, not the reviewer's name
 - **First-pass claim:** Reviewer is a free-text "reference/ID" typed twice — on assign and again on score (ApplicationActions.tsx:100-110; ScoreApplicationDialog.tsx:75-82) — instead of a picker; scores are submitted but the page never displays technical/financial scores or the recommendation afterwards (page.tsx:77-127).
 - **Verified evidence:** Reviewer ref is a free-text field in both ApplicationActions.tsx (assign ConfirmDialog with reasonLabel 'Reviewer reference') and ScoreApplicationDialog.tsx (reviewerRef input) - confirmed. Detail page (page.tsx:77-127) does not display scores, reviewer or recommendation - confirmed, though GrantApplicationDetail (_data.ts) has no such fields so the API/loader would need extending (cannot verify the payload). Theme CONFIRM is wrong.
@@ -714,7 +714,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-INSTALLMENTS-03  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [~] **Status** (NEEDS OWNER DECISION: grantStatus field absent from GrantInstallmentSummary type; sequence check done (GAP-GRANTS-INSTALLMENTS-01/02), suspended-grant guard needs backend to add grantStatus to the installments list endpoint)
+- [x] **Status** Closed by 1cc2e44dc (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — out-of-sequence block and grantee name in dialog done, but no client check of grant status (suspended grant row still releasable) and dialog does not show the masked payee account
 - **First-pass claim:** Release is offered for every row with status "pending" (InstallmentsTable.tsx:69) irrespective of grant status (suspended/cancelled), installment sequence (#3 can be released before #2) or outstanding UC, and the dialog does not show the payee account; the irreversible transfer is one reason-string away.
 - **Verified evidence:** Confirmed: Release shown for every status==="pending" row (InstallmentsTable.tsx:69) with no client check of grant status, sequence, or UC. Correction: the dialog does name the payee (grantee name, lines 76-77) but not the account; reason is mandatory (requireReason, line 82) and a ConfirmDialog already exists via ActionButton. Maker!=checker is not applicable client-side (single-step release); server-side rules not verifiable. Whether GrantInstallmentSummary carries grant status cannot be seen (types package absent).
@@ -820,7 +820,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-LIST-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [~] **Status** (NEEDS OWNER DECISION: static masking done for non-privileged roles; audited reveal button needs a /grants/pii/reveal endpoint and DPO decision — MaskedReveal component exists but the grants reveal path is not wired)
+- [x] **Status** Closed by bc6dc9f04 (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — non-privileged roles see a masked grantee name, but privileged reveal writes no audit event
 - **First-pass claim:** Individual (natural-person) grantees are listed by name to every module user with no role gate (GrantsTable.tsx:21); DPDP purpose limitation not shown.
 - **Verified evidence:** GrantsTable.tsx:21 renders granteeName for every row with no role check; the grants tree only has ModuleGate in layout.tsx (tenant enablement). Whether a grantee is a natural person cannot be seen (GrantSummary type absent) and no purpose-limitation notice exists. No shared <Masked> component exists in app/_components/ds (Masked only appears as local usage in admin/integrations and hr/employees/new Step4). There is no CSV export on this page, so the export-gating part of the fix does not apply here.
@@ -1314,7 +1314,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-SCHEMES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [~] **Status** (NEEDS OWNER DECISION: sector/description fields removed from create form in W0; backend confirmation needed whether grant-service stores and returns them before re-adding)
+- [x] **Status** Closed by d9f3f7afe (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — sector/description inputs were removed from the create form rather than being persisted and shown on the scheme detail page
 - **First-pass claim:** Sector and Description are collected and posted (CreateSchemeForm.tsx:65,68) but never read back: the scheme mapper and detail page ignore them (_data.ts:230-249; schemes/[id]/page.tsx:8-11 SECTOR_LABELS unused).
 - **Verified evidence:** CreateSchemeForm.tsx:65,68 send sector and description. mapSchemeSummaries and mapSchemeDetail (_data.ts:81-110, 230-249) contain no sector/description (grep finds none), and SECTOR_LABELS in schemes/[id]/page.tsx:8-11 is unused. Whether the API persists them cannot be verified.

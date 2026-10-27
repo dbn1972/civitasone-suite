@@ -134,7 +134,7 @@ describe("POST routes — accepted (202)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/pos", headers: auth,
       payload: {
-        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001",
+        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001", gemOrderRef: "GEM/TEST/BASIS",
         items: [{ itemCode: "IT001", description: "Monitor", quantity: 5, unitPriceMinor: 200000 }],
       },
     });
@@ -293,7 +293,7 @@ describe("POST :id action routes — fake UUID", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/emd/${FAKE_UUID}/forfeit`, headers: auth,
-      payload: {},
+      payload: { forfeitureOrderNo: "FO/2026/1" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -303,7 +303,7 @@ describe("POST :id action routes — fake UUID", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/emd/${FAKE_UUID}/refund`, headers: auth,
-      payload: {},
+      payload: { paymentRef: "UTR2026102700001" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -313,7 +313,7 @@ describe("POST :id action routes — fake UUID", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/pbg/${FAKE_UUID}/forfeit`, headers: auth,
-      payload: {},
+      payload: { forfeitureOrderNo: "FO/2026/2" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -323,7 +323,7 @@ describe("POST :id action routes — fake UUID", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/pbg/${FAKE_UUID}/release`, headers: auth,
-      payload: {},
+      payload: { paymentRef: "PFMS-0001" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -1316,7 +1316,7 @@ describe("Security routes — forfeit/refund/release with reason", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/emd/${FAKE_UUID}/forfeit`, headers: auth,
-      payload: { reason: "vendor default" },
+      payload: { reason: "vendor default", forfeitureOrderNo: "FO/2026/3" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -1326,7 +1326,7 @@ describe("Security routes — forfeit/refund/release with reason", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/emd/${FAKE_UUID}/refund`, headers: auth,
-      payload: { reason: "tender cancelled" },
+      payload: { reason: "tender cancelled", paymentRef: "UTR2026102700002" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -1336,7 +1336,7 @@ describe("Security routes — forfeit/refund/release with reason", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/pbg/${FAKE_UUID}/forfeit`, headers: auth,
-      payload: { reason: "performance failure" },
+      payload: { reason: "performance failure", forfeitureOrderNo: "FO/2026/4" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);
@@ -1346,7 +1346,7 @@ describe("Security routes — forfeit/refund/release with reason", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/procurement/pbg/${FAKE_UUID}/release`, headers: auth,
-      payload: { reason: "warranty period ended" },
+      payload: { reason: "warranty period ended", paymentRef: "PFMS-0002" },
     });
     await app.close();
     expect([202, 404]).toContain(res.statusCode);

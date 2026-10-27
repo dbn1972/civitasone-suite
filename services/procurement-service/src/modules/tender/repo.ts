@@ -21,6 +21,28 @@ export async function findTenderByIdTx(tx: Writer, id: string, tenantId: string)
   return rows[0] ?? null;
 }
 
+/**
+ * D4c #28: true when `tenderId` is an AWARDED tender of this tenant whose winner
+ * is `vendorId`. Tenant-scoped; a foreign / unknown / un-awarded tender is false.
+ */
+export async function isTenderAwardedToVendor(tenantId: string, tenderId: string, vendorId: string): Promise<boolean> {
+  const rows = await db.transaction((tx) => tx.select({ id: procurementTenders.id }).from(procurementTenders)
+    .where(and(
+      eq(procurementTenders.id, tenderId), eq(procurementTenders.tenantId, tenantId),
+      eq(procurementTenders.status, "awarded"), eq(procurementTenders.awardedVendorId, vendorId),
+    )).limit(1));
+  return rows.length > 0;
+}
+
+export async function isTenderAwardedToVendorTx(tx: Writer, tenantId: string, tenderId: string, vendorId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: procurementTenders.id }).from(procurementTenders)
+    .where(and(
+      eq(procurementTenders.id, tenderId), eq(procurementTenders.tenantId, tenantId),
+      eq(procurementTenders.status, "awarded"), eq(procurementTenders.awardedVendorId, vendorId),
+    )).limit(1);
+  return rows.length > 0;
+}
+
 export async function listTendersByTenant(tenantId: string, limit: number, offset: number): Promise<TenderRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

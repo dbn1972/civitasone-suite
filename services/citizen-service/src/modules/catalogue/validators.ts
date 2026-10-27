@@ -14,6 +14,8 @@ const requiredDocSchema = z.object({
   formats:   z.array(z.enum(["pdf", "jpg", "png"])).max(5).optional(),
   maxSizeMb: z.number().min(1).max(50).optional(),
   verifiedAtLane: safeText({ max: 64 }).optional(),
+  // D4c #8: DPDP-classified catalogue category (the web designer owns the list).
+  categoryId: safeText({ max: 64 }).optional(),
 });
 
 const statutoryRefSchema = z.object({

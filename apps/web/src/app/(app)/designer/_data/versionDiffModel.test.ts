@@ -5,6 +5,7 @@ import {
   buildVersionDiffRows,
   extractFeeFromMinor,
   feeSummaryForPublish,
+  publishSummary,
 } from "./versionDiffModel";
 
 const current: ServiceDefinitionDto = {
@@ -75,6 +76,14 @@ describe("versionDiffModel", () => {
     expect(feeSummaryForPublish(current)).toMatch(/flat fee/);
     expect(feeSummaryForPublish(current)).toMatch(/₹750\.00/);
     expect(feeSummaryForPublish(current)).toMatch(/HOA 4201/);
+  });
+
+  // GAP-DESIGNER-DETAIL-B5-04
+  it("shows the head description beside its code when known", () => {
+    expect(feeSummaryForPublish(current, { "4201": "Trade licence fees" })).toMatch(
+      /HOA 4201 — Trade licence fees/,
+    );
+    expect(publishSummary(current, { "4201": "Trade licence fees" })[0]).toMatch(/Trade licence fees/);
   });
 });
 

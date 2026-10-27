@@ -35,6 +35,7 @@ export function InstallmentsTable({
 }) {
   const router = useRouter();
   const tm = useTranslations("pqbMoney");
+  const t = useTranslations("grantsB4Installments");
   const [statusFilter, setStatusFilter] = useState("");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<GrantInstallmentSummary[]>(
     "grants.installments",
@@ -67,7 +68,7 @@ export function InstallmentsTable({
 
   const columns: Col[] = [
     { key: "grantNo", label: "Grant No" },
-    { key: "granteeName", label: "Grantee" },
+    { key: "granteeName", label: "Grantee", render: (row) => row.granteeName ?? t("dash") },
     { key: "installmentNo", label: "Installment #", align: "right" },
     { key: "amount", label: "Amount", align: "right", render: (row) => formatMoney(row.amount) },
     { key: "scheduledDate", label: "Scheduled Date", render: (row) => formatIndianDate(row.scheduledDate) },
@@ -85,12 +86,25 @@ export function InstallmentsTable({
         // GAP-GRANTS-INSTALLMENTS-01: only maker roles see the Release control.
         if (!canRelease) return <span aria-hidden="true">—</span>;
         if (row.status !== "pending") return <span aria-hidden="true">—</span>;
+        // GAP-GRANTS-INSTALLMENTS-03: grant-service reports the grant's release eligibility;
+        // a suspended / cancelled / completed grant never offers Release (the consumer also refuses).
+        if (row.grantStatus && row.grantStatus !== "active") {
+          const statusLabel =
+            row.grantStatus === "suspended" ? t("grantStatusSuspended")
+            : row.grantStatus === "cancelled" ? t("grantStatusCancelled")
+            : t("grantStatusCompleted");
+          return (
+            <span className="muted" title={t("blockedGrantStatus", { status: statusLabel })}>
+              {t("blockedLabel")}
+            </span>
+          );
+        }
         // GAP-GRANTS-INSTALLMENTS-03: out-of-sequence installments are not releasable.
         const isLowestPending = lowestPendingByGrant.get(row.grantId) === row.installmentNo;
         if (!isLowestPending) {
           return (
-            <span className="muted" title="Release earlier installments of this grant first.">
-              Blocked
+            <span className="muted" title={t("blockedSequence")}>
+              {t("blockedLabel")}
             </span>
           );
         }
@@ -102,9 +116,15 @@ export function InstallmentsTable({
             confirmDescription={
               <>
                 This initiates disbursement of <strong>{formatMoney(row.amount)}</strong> to{" "}
-                <strong>{row.granteeName}</strong> (mode: PFMS) and cannot be undone. The payee
+                <strong>{row.granteeName ?? t("granteeUnresolved")}</strong> (mode: PFMS) and cannot be undone. The payee
                 account is resolved server-side from the grantee&rsquo;s registered bank account; a
-                reason is recorded in the audit trail.
+                reason is recorded in the audit trail.{" "}
+                {/* GAP-GRANTS-INSTALLMENTS-03: show where the money goes (masked). */}
+                <strong>
+                  {row.payeeAccountLast4
+                    ? t("payeeAccount", { last4: row.payeeAccountLast4, ifsc: row.payeeIfsc ?? t("dash") })
+                    : t("payeeNoAccount")}
+                </strong>
               </>
             }
             confirmLabel="Release funds"

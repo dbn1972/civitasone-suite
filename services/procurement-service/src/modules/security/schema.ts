@@ -15,6 +15,9 @@ export const procurementEmd = securitySchema.table("procurement_emd", {
   instrument:    varchar("instrument", { length: 24 }).notNull().default("bank_guarantee"),
   status:        varchar("status", { length: 16 }).notNull().default("collected"),
   forfeitReason: text("forfeit_reason"),
+  // D4c #26: treasury/PFMS payment reference on refund; forfeiture order no on forfeit (free text).
+  paymentRef:         text("payment_ref"),
+  forfeitureOrderNo:  text("forfeiture_order_no"),
   collectedAt:   timestamp("collected_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt:    timestamp("resolved_at", { withTimezone: true }),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -38,6 +41,9 @@ export const procurementPbg = securitySchema.table("procurement_pbg", {
   validUntil:    date("valid_until"),
   status:        varchar("status", { length: 16 }).notNull().default("active"),
   forfeitReason: text("forfeit_reason"),
+  // D4c #26: treasury/PFMS payment reference on release; forfeiture order no on forfeit (free text).
+  paymentRef:         text("payment_ref"),
+  forfeitureOrderNo:  text("forfeiture_order_no"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt:    timestamp("resolved_at", { withTimezone: true }),

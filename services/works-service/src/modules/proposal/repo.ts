@@ -1,8 +1,9 @@
-import { eq, and, sql, gte, lte, desc, inArray, or, ilike } from "drizzle-orm";
+import { eq, and, sql, gte, lt, lte, desc, inArray, or, ilike } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead, db } from "../../shared/db.js";
 import { workProposals, workSplits, workCoaMappings, workOfficeMappings } from "./schema.js";
 import type { ReportFilters } from "../reporting/validators.js";
+import { financialYearOf, normalizeForDuplicate } from "./domain.js";
 
 function proposalConditions(tenantId: string, filters?: Pick<ReportFilters, "fromDate" | "toDate" | "divisionId">) {
   const conditions = [eq(workProposals.tenantId, tenantId)];
@@ -205,4 +206,39 @@ export async function updateProposal(
       .where(and(eq(workProposals.id, id), eq(workProposals.tenantId, tenantId)));
   });
   await cache.invalidate(`works:${tenantId}:proposal:${id}`);
+}
+
+export interface DuplicateProbe {
+  description: string;
+  category: string;
+  district?: string | undefined;
+  taluka?: string | undefined;
+  village?: string | undefined;
+}
+
+/**
+ * D4c #44: proposals of this tenant that look like the one being entered: same title, category and location, created
+ * in the same financial year as `now` (the new proposal's own financial year). A warning aid only; never blocks.
+ * Text is compared without case or repeated spaces; a missing location part counts as empty on both sides.
+ */
+export async function findLikelyDuplicates(tenantId: string, probe: DuplicateProbe, now: Date = new Date()) {
+  const fy = financialYearOf(now);
+  const norm = (col: unknown) => sql`lower(regexp_replace(btrim(coalesce(${col}, '')), '\\s+', ' ', 'g'))`;
+  return scopedRead(async (tx) => {
+    return tx
+      .select({ id: workProposals.id, workNumber: workProposals.workNumber, status: workProposals.status, createdAt: workProposals.createdAt })
+      .from(workProposals)
+      .where(and(
+        eq(workProposals.tenantId, tenantId),
+        eq(workProposals.category, probe.category),
+        gte(workProposals.createdAt, fy.start),
+        lt(workProposals.createdAt, fy.end),
+        sql`${norm(workProposals.description)} = ${normalizeForDuplicate(probe.description)}`,
+        sql`${norm(workProposals.district)} = ${normalizeForDuplicate(probe.district)}`,
+        sql`${norm(workProposals.taluka)} = ${normalizeForDuplicate(probe.taluka)}`,
+        sql`${norm(workProposals.village)} = ${normalizeForDuplicate(probe.village)}`,
+      ))
+      .orderBy(desc(workProposals.createdAt))
+      .limit(5);
+  });
 }

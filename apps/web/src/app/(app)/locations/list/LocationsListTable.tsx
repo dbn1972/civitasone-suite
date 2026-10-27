@@ -31,6 +31,8 @@ function RowArchive({ row }: { row: Row }) {
       const code = await res.clone().json().then((b: { code?: string }) => b.code ?? null).catch(() => null);
       if (code === "HAS_ACTIVE_CHILDREN") throw new Error(t("errHasActiveChildren"));
       if (code === "ALREADY_ARCHIVED") throw new Error(t("errAlreadyArchived"));
+      if (code === "IN_USE") throw new Error(t("errInUse"));
+      if (code === "REFERENCES_UNVERIFIABLE") throw new Error(t("errInUseUnverifiable"));
       throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
     router.refresh();

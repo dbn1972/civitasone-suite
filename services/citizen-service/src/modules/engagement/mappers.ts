@@ -13,6 +13,8 @@ export interface CitizenAlertDto {
 }
 export interface CitizenNoticeDto {
   id: string; noticeNo: string; subject: string; department: string; published: string; expiry: string; type: string;
+  /** Stored lifecycle status (draft | published | withdrawn) so officers can act on a row; citizens only ever receive "published". */
+  status: string;
 }
 export interface CitizenSurveyDto {
   id: string; surveyName: string; responses: number; completion: string; period: string; status: string;
@@ -43,6 +45,7 @@ export function toNoticeDto(row: CitizenNoticeRow): CitizenNoticeDto {
     id: row.id, noticeNo: row.noticeNo, subject: row.subject, department: row.department,
     published: iso(row.publishedAt), expiry: iso(row.expiresAt),
     type: NOTICE_TYPE_LABELS[row.noticeType] ?? row.noticeType,
+    status: row.status,
   };
 }
 

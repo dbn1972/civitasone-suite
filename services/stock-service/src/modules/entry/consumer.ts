@@ -21,7 +21,7 @@ export function registerEntryConsumers(queue: Queue): void {
       id: string; tenantId: string;
       entryType: "receipt" | "issue" | "transfer" | "adjustment";
       refDoc?: string; refNo?: string; postingDate: string;
-      fromWarehouseId?: string; toWarehouseId?: string; notes?: string;
+      fromWarehouseId?: string; toWarehouseId?: string; notes?: string; reason?: string;
       items: Array<{ itemId: string; qty: number; rateMinor: number; currency?: string }>;
     };
 
@@ -48,7 +48,7 @@ export function registerEntryConsumers(queue: Queue): void {
         refDoc: p.refDoc ?? null, refNo: p.refNo ?? null,
         postingDate: p.postingDate,
         fromWarehouseId: p.fromWarehouseId ?? null, toWarehouseId: p.toWarehouseId ?? null,
-        notes: p.notes ?? null, status: "posted",
+        notes: p.notes ?? null, reason: p.reason ?? null, status: "posted",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
 
@@ -132,7 +132,7 @@ export function registerEntryConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { entryId: p.id, entryType: p.entryType },
       });
-      await audit(tx, msg, "create", "stock_entry", p.id);
+      await audit(tx, msg, "create", "stock_entry", p.id, p.reason);
     });
 
     await cache.invalidateResource(msg.tenantId, "valuation");
@@ -223,10 +223,10 @@ export function registerEntryConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: EnqueueTx, msg: CommandEnvelope, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: EnqueueTx, msg: CommandEnvelope, action: string, resourceType: string, resourceId: string, reason?: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "stock", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "stock", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }

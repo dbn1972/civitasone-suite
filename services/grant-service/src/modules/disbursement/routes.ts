@@ -1,6 +1,6 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { GrantReleaseListSchema } from "@civitasone/schemas/web";
+import { GrantReleaseListSchema, GrantInstallmentSummaryListSchema } from "@civitasone/schemas/web";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -61,12 +61,12 @@ export async function disbursementRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { appId } = appIdQuery.parse(req.query);
-    if (appId) {
-      const installments = await queries.getInstallmentsByApplication(ctx.tenantId, appId);
-      return reply.send({ data: installments });
-    }
-    const installments = await queries.listAllInstallments(ctx.tenantId, 200);
-    return reply.send({ data: installments ?? [] });
+    // GAP-GRANTS-INSTALLMENTS-03: the list is the GrantInstallmentSummary read-model (was raw DB rows).
+    const rows = appId
+      ? await queries.getInstallmentsByApplication(ctx.tenantId, appId)
+      : (await queries.listAllInstallments(ctx.tenantId, 200)) ?? [];
+    const summaries = await queries.projectInstallmentSummaries(ctx.tenantId, rows);
+    return reply.send({ data: GrantInstallmentSummaryListSchema.parse(summaries) });
   });
 
   app.get("/v1/grants/releases", async (req, reply) => {

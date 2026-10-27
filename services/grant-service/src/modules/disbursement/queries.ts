@@ -2,10 +2,61 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as applicationRepo from "../application/repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
+import * as schemeRepo from "../scheme/repo.js";
+import { mapInstallmentStatus } from "../application/queries.js";
+import { effectiveGrantStatus } from "./domain.js";
+import type { InstallmentRow } from "./schema.js";
 
 function toDateOnly(value: Date | string | null | undefined): string {
   if (!value) return new Date().toISOString().slice(0, 10);
   return new Date(value as string).toISOString().slice(0, 10);
+}
+
+/**
+ * GAP-GRANTS-INSTALLMENTS-03: the installments read-model (GrantInstallmentSummary on the web).
+ * Projects raw installment rows to the wire shape - grant number, grantee, paise amount, and the
+ * two facts the release control needs: `grantStatus` (application + scheme state, see
+ * effectiveGrantStatus) and the payee's MASKED account (last 4 digits + IFSC; the full number is
+ * never stored here). Three batch queries regardless of row count (application, scheme,
+ * beneficiary) plus one for bank accounts - no N+1.
+ */
+export async function projectInstallmentSummaries(tenantId: string, rows: InstallmentRow[]) {
+  const applicationIds = [...new Set(rows.map((r) => r.applicationId))];
+  const applications = await applicationRepo.findApplicationsByIds(applicationIds, tenantId);
+  const applicationById = new Map(applications.map((a) => [a.id, a]));
+
+  const [schemes, beneficiaries] = await Promise.all([
+    schemeRepo.findSchemesByIds([...new Set(applications.map((a) => a.schemeId))], tenantId),
+    beneficiaryRepo.findBeneficiariesByIds([...new Set(applications.map((a) => a.beneficiaryId))], tenantId),
+  ]);
+  const schemeById = new Map(schemes.map((s) => [s.id, s]));
+  const beneficiaryById = new Map(beneficiaries.map((b) => [b.id, b]));
+  const bankByBeneficiary = await beneficiaryRepo.findLatestActiveBankAccounts([...beneficiaryById.keys()], tenantId);
+
+  return rows
+    .map((row) => {
+      const application = applicationById.get(row.applicationId) ?? null;
+      const scheme = application ? schemeById.get(application.schemeId) ?? null : null;
+      const beneficiary = application ? beneficiaryById.get(application.beneficiaryId) ?? null : null;
+      const bank = beneficiary ? bankByBeneficiary.get(beneficiary.id) ?? null : null;
+      const status = mapInstallmentStatus(row.status);
+      return {
+        id: row.id,
+        grantId: row.applicationId,
+        grantNo: application?.grantNo ?? row.applicationId,
+        granteeName: beneficiary?.name ?? null,
+        installmentNo: row.installmentNo,
+        // Minor units (paise) on the wire, like /releases: the web formats with formatMoney(minor).
+        amount: Number(row.amountMinor),
+        scheduledDate: toDateOnly(row.dueDate ?? row.createdAt),
+        ...(row.status === "disbursed" ? { releasedDate: toDateOnly(row.updatedAt) } : {}),
+        status,
+        grantStatus: application ? effectiveGrantStatus(application.status, scheme?.status) : ("active" as const),
+        payeeAccountLast4: bank ? bank.accountNoMasked.slice(-4) : null,
+        payeeIfsc: bank ? bank.bankIfsc : null,
+      };
+    })
+    .sort((a, b) => a.grantNo.localeCompare(b.grantNo) || a.installmentNo - b.installmentNo);
 }
 
 export async function getInstallmentsByApplication(tenantId: string, appId: string) {

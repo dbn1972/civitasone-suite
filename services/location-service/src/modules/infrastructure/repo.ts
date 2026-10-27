@@ -12,6 +12,7 @@ function toView(r: InfrastructureAssetRow): InfrastructureAssetView {
     lng: Number(r.lng),
     capacity: r.capacity,
     conditionScore: r.conditionScore,
+    assetId: r.assetId,
     status: r.status,
     version: r.version,
   };

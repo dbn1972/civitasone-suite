@@ -17,6 +17,9 @@ export function toView(r: RedemptionRow) {
     redeemedAt: r.redeemedAt.toISOString(),
     voidedAt: r.voidedAt?.toISOString() ?? null,
     voidReason: r.voidReason,
+    fulfilledAt: r.fulfilledAt?.toISOString() ?? null,
+    rejectedAt: r.rejectedAt?.toISOString() ?? null,
+    rejectReason: r.rejectReason,
     version: r.version,
     createdAt: r.createdAt.toISOString(),
   };
@@ -97,4 +100,80 @@ export async function voidRedemption(
     )
     .returning({ id: redemptions.id });
   return result.length > 0;
+}
+
+/** Transaction-scoped read (consumers must not open a nested scopedRead). */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<RedemptionRow | null> {
+  const rows = await tx
+    .select()
+    .from(redemptions)
+    .where(and(eq(redemptions.id, id), eq(redemptions.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * pending -> fulfilled. Guarded on status, optimistic version and
+ * segregation of duties: the officer who raised the redemption
+ * (created_by) can never be the one who fulfils it.
+ */
+export async function fulfilRedemption(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  actorId: string,
+  currentVersion: number,
+): Promise<boolean> {
+  const result = await tx
+    .update(redemptions)
+    .set({
+      status: "fulfilled",
+      fulfilledAt: new Date(),
+      fulfilledBy: actorId,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${redemptions.version} + 1`,
+    })
+    .where(
+      and(
+        eq(redemptions.id, id),
+        eq(redemptions.tenantId, tenantId),
+        eq(redemptions.version, currentVersion),
+        eq(redemptions.status, "pending"),
+        sql`${redemptions.createdBy} <> ${actorId}`,
+      ),
+    )
+    .returning({ id: redemptions.id });
+  return result.length > 0;
+}
+
+/** pending -> rejected (reason recorded). Returns the held points to restore, or null when not applied. */
+export async function rejectRedemption(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  reason: string,
+  actorId: string,
+  currentVersion: number,
+): Promise<{ enrolmentId: string | null; points: bigint } | null> {
+  const result = await tx
+    .update(redemptions)
+    .set({
+      status: "rejected",
+      rejectedAt: new Date(),
+      rejectReason: reason,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${redemptions.version} + 1`,
+    })
+    .where(
+      and(
+        eq(redemptions.id, id),
+        eq(redemptions.tenantId, tenantId),
+        eq(redemptions.version, currentVersion),
+        eq(redemptions.status, "pending"),
+      ),
+    )
+    .returning({ enrolmentId: redemptions.enrolmentId, points: redemptions.points });
+  return result[0] ?? null;
 }

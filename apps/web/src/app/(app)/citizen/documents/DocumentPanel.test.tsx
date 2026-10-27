@@ -132,6 +132,43 @@ describe("DocumentPanel", () => {
     expect(body.storageKey).toBe("citizen-documents/t/a/obj.pdf");
   });
 
+  // GAP-CITIZEN-DOCUMENTS-05 — per-row upload / re-upload from the checklist
+  it("uploads straight from a checklist row with that row's docType and refreshes the checklist", async () => {
+    const { fetchMock } = renderPanel(true);
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: "svc-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Load checklist" }));
+    const rowInput = (await screen.findByLabelText("Upload file for Identity proof")) as HTMLInputElement;
+    fireEvent.change(rowInput, { target: { files: [new File(["pdf-bytes"], "aadhaar.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(screen.getByText(/Submitted — verification: Pending\./)).toBeInTheDocument());
+    const uploadCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/documents/upload"));
+    expect(JSON.parse((uploadCall![1] as RequestInit).body as string).docType).toBe("id_proof");
+    // checklist was re-fetched after the upload (initial load + refresh)
+    await waitFor(() => expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes("/checklist")).length).toBe(2));
+  });
+
+  it("offers Re-upload for a provided row and no upload control for a verified row", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("digilocker-status")) return Promise.resolve(new Response(JSON.stringify({ configured: false }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({
+        source: "service_defaults", complete: false,
+        items: [
+          { docType: "id_proof", label: "Identity proof", mandatory: true, provided: true, verified: false },
+          { docType: "addr_proof", label: "Address proof", mandatory: true, provided: true, verified: true },
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }));
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <DocumentPanel services={SERVICES} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: "svc-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Load checklist" }));
+    expect(await screen.findByLabelText("Re-upload file for Identity proof")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/file for Address proof/)).not.toBeInTheDocument();
+  });
+
   // GAP-CITIZEN-DOCUMENTS-02 — configured => POST /authorize then redirect to authorizeUrl.
   it("redirects the browser to the provider authorizeUrl when DigiLocker is configured", async () => {
     const assign = vi.fn();

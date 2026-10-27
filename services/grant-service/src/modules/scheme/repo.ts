@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { grantSchemes, grantEligibilityCriteria, type SchemeRow, type SchemeInsert, type CriterionRow, type CriterionInsert } from "./schema.js";
@@ -11,6 +11,14 @@ export async function findSchemeById(id: string, tenantId: string): Promise<Sche
       .where(and(eq(grantSchemes.id, id), eq(grantSchemes.tenantId, tenantId))).limit(1);
     return rows[0] ?? null;
   }));
+}
+
+/** Batch loader (one query) for the installment read-model: schemes by id, tenant-scoped. */
+export async function findSchemesByIds(ids: string[], tenantId: string): Promise<SchemeRow[]> {
+  if (ids.length === 0) return [];
+  return runWithTenant(tenantId, () => scopedRead(async (tx) =>
+    tx.select().from(grantSchemes)
+      .where(and(inArray(grantSchemes.id, ids), eq(grantSchemes.tenantId, tenantId)))));
 }
 
 export async function findSchemeByIdTx(tx: Writer, id: string, tenantId: string): Promise<SchemeRow | null> {

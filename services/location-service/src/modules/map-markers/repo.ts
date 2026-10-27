@@ -37,20 +37,26 @@ async function geofenceExists(): Promise<boolean> {
  */
 export async function markers(
   tenantId: string,
-  filter: { domain?: string | undefined; status?: string | undefined; bbox?: [number, number, number, number] | undefined },
+  filter: {
+    domain?: string | undefined;
+    status?: string | undefined;
+    bbox?: [number, number, number, number] | undefined;
+    /** Only records created at or before this instant (the "as of" view). */
+    createdBefore?: Date | undefined;
+  },
   limit: number,
 ): Promise<Marker[]> {
   const branches: SQL[] = [
-    sql`SELECT id::text AS id, 'infrastructure' AS domain, id::text AS ref_id, lat::float8 AS lat, lng::float8 AS lng, name AS label, status
+    sql`SELECT id::text AS id, 'infrastructure' AS domain, id::text AS ref_id, lat::float8 AS lat, lng::float8 AS lng, name AS label, status, created_at
         FROM location.infrastructure_assets WHERE tenant_id = ${tenantId}`,
-    sql`SELECT id::text AS id, 'parcel' AS domain, id::text AS ref_id, ST_Y(ST_Centroid(geom))::float8 AS lat, ST_X(ST_Centroid(geom))::float8 AS lng, parcel_no AS label, status
+    sql`SELECT id::text AS id, 'parcel' AS domain, id::text AS ref_id, ST_Y(ST_Centroid(geom))::float8 AS lat, ST_X(ST_Centroid(geom))::float8 AS lng, parcel_no AS label, status, created_at
         FROM location.cadastral_parcels WHERE tenant_id = ${tenantId} AND geom IS NOT NULL`,
-    sql`SELECT id::text AS id, domain, ref_id, lat::float8 AS lat, lng::float8 AS lng, label, status
+    sql`SELECT id::text AS id, domain, ref_id, lat::float8 AS lat, lng::float8 AS lng, label, status, created_at
         FROM location.geo_points WHERE tenant_id = ${tenantId}`,
   ];
   if (await geofenceExists()) {
     branches.push(sql`SELECT id::text AS id, 'geofence' AS domain, id::text AS ref_id, center_lat::float8 AS lat, center_lng::float8 AS lng, name AS label,
-        CASE WHEN active THEN 'active' ELSE 'inactive' END AS status
+        CASE WHEN active THEN 'active' ELSE 'inactive' END AS status, created_at
         FROM geofence.geofences WHERE tenant_id = ${tenantId}`);
   }
 
@@ -62,6 +68,7 @@ export async function markers(
     const [minLng, minLat, maxLng, maxLat] = filter.bbox;
     conds.push(sql`m.lng BETWEEN ${minLng} AND ${maxLng} AND m.lat BETWEEN ${minLat} AND ${maxLat}`);
   }
+  if (filter.createdBefore) conds.push(sql`m.created_at <= ${filter.createdBefore.toISOString()}::timestamptz`);
   const where = conds.length ? sql` WHERE ${sql.join(conds, sql` AND `)}` : sql``;
 
   const rows = await scopedRead((tx) => tx.execute(sql`

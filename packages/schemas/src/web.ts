@@ -90,6 +90,9 @@ export const vendorSummarySchema = z.object({
   name: z.string(),
   category: z.string(),
   ratingDisplay: z.string(),
+  // D4c #22: scorecard score out of 100 + band; null when the vendor is not scored yet.
+  performanceScore: z.number().int().min(0).max(100).nullable().optional(),
+  performanceBand: z.enum(["A", "B", "C", "D"]).nullable().optional(),
   gstin: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),
@@ -1754,6 +1757,7 @@ export const FundReleaseSummarySchema = z.object({
   id: z.string(),
   releaseNo: z.string(),
   projectId: z.string(),
+  schemeId: z.string().optional(),
   projectName: z.string(),
   amount: z.number(),
   releaseDate: z.string(),
@@ -1833,6 +1837,9 @@ export const GrantSummarySchema = z.object({
   grantor: z.string().optional(),
   granteeId: z.string().optional(),
   granteeName: z.string().optional(),
+  /** GAP-GRANTS-LIST-03: beneficiary type and whether granteeName is the server-masked form (natural persons). */
+  granteeType: z.string().optional(),
+  granteeNameMasked: z.boolean().optional(),
   totalAmount: z.number(),
   disbursedAmount: z.number().default(0),
   pendingAmount: z.number().default(0),
@@ -1894,12 +1901,19 @@ export const GrantInstallmentSummarySchema = z.object({
   id: z.string(),
   grantId: z.string(),
   grantNo: z.string(),
-  granteeName: z.string(),
+  /** null when the grantee could not be resolved (never a placeholder string). */
+  granteeName: z.string().nullable(),
   installmentNo: z.number(),
+  /** Minor units (paise). */
   amount: z.number(),
   scheduledDate: z.string(),
   releasedDate: z.string().optional(),
   status: z.enum(["pending", "released", "utilized"]),
+  /** GAP-GRANTS-INSTALLMENTS-03: release eligibility of the grant (application + scheme). Absent on older services. */
+  grantStatus: z.enum(["active", "completed", "suspended", "cancelled"]).optional(),
+  /** GAP-GRANTS-INSTALLMENTS-03: last 4 digits of the payee's registered account; null when none is registered. */
+  payeeAccountLast4: z.string().nullable().optional(),
+  payeeIfsc: z.string().nullable().optional(),
 });
 export const GrantInstallmentSummaryListSchema = z.array(GrantInstallmentSummarySchema);
 
@@ -3530,6 +3544,7 @@ export const CitizenNoticeSchema = z.object({
   published: z.string(),
   expiry: z.string(),
   type: z.string(),
+  status: z.string(),
 });
 export const CitizenSurveySchema = z.object({
   id: z.string(),

@@ -5,4 +5,5 @@ export type {
   MapLayer,
   MapLayerSourceType,
   CivitasMapProps,
+  MapView,
 } from "./CivitasMap";

@@ -137,11 +137,22 @@ describe("VendorsTable", () => {
     fetchSpy.mockRestore();
   });
 
-  it("VENDORS-05: the table's rating column says it is the buyer rating out of 5", () => {
-    const rows = [vendor({ name: "Rated", rating: 4 })];
+  // D4c #22 (owner decision 2026-10-27) supersedes the earlier out-of-5 labelling:
+  // one scale everywhere - the scorecard score out of 100 with its band.
+  it("D4c #22: the rating column is the scorecard score out of 100 with its band", () => {
+    const rows = [vendor({ name: "Scored", performanceScore: 86, performanceBand: "A", rating: 4 })];
     seeded(rows);
     render(<VendorsTable vendors={rows as never} source="api" />);
-    expect(screen.getByText("Buyer rating (/5)")).toBeInTheDocument();
-    expect(screen.getByText("4/5")).toBeInTheDocument();
+    expect(screen.getByText("Score (/100)")).toBeInTheDocument();
+    expect(screen.getByText("86/100 · Band A")).toBeInTheDocument();
+    expect(screen.queryByText("4/5")).toBeNull();
+  });
+
+  it("D4c #22: an unscored vendor reads 'Not scored', not 0/100", () => {
+    const rows = [vendor({ name: "Fresh" })];
+    seeded(rows);
+    render(<VendorsTable vendors={rows as never} source="api" />);
+    expect(screen.getByText("Not scored")).toBeInTheDocument();
+    expect(screen.queryByText(/\/100 ·/)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CollectEmdBody, ResolveEmdBody, CollectPbgBody, ResolvePbgBody } from "./validators.js";
+import type { CollectEmdBody, RefundEmdBody, ForfeitEmdBody, CollectPbgBody, ReleasePbgBody, ForfeitPbgBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -16,21 +16,21 @@ export async function collectEmd(ctx: RequestContext, body: CollectEmdBody): Pro
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function forfeitEmd(ctx: RequestContext, id: string, body: ResolveEmdBody): Promise<Accepted> {
+export async function forfeitEmd(ctx: RequestContext, id: string, body: ForfeitEmdBody): Promise<Accepted> {
   await queue.publish(COMMANDS.emdForfeit, {
     messageId: randomUUID(), type: COMMANDS.emdForfeit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null },
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null, forfeitureOrderNo: body.forfeitureOrderNo },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "emd", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function refundEmd(ctx: RequestContext, id: string, body: ResolveEmdBody): Promise<Accepted> {
+export async function refundEmd(ctx: RequestContext, id: string, body: RefundEmdBody): Promise<Accepted> {
   await queue.publish(COMMANDS.emdRefund, {
     messageId: randomUUID(), type: COMMANDS.emdRefund,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null },
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null, paymentRef: body.paymentRef },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "emd", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -46,21 +46,21 @@ export async function collectPbg(ctx: RequestContext, body: CollectPbgBody): Pro
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function forfeitPbg(ctx: RequestContext, id: string, body: ResolvePbgBody): Promise<Accepted> {
+export async function forfeitPbg(ctx: RequestContext, id: string, body: ForfeitPbgBody): Promise<Accepted> {
   await queue.publish(COMMANDS.pbgForfeit, {
     messageId: randomUUID(), type: COMMANDS.pbgForfeit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null },
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null, forfeitureOrderNo: body.forfeitureOrderNo },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "pbg", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function releasePbg(ctx: RequestContext, id: string, body: ResolvePbgBody): Promise<Accepted> {
+export async function releasePbg(ctx: RequestContext, id: string, body: ReleasePbgBody): Promise<Accepted> {
   await queue.publish(COMMANDS.pbgRelease, {
     messageId: randomUUID(), type: COMMANDS.pbgRelease,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null },
+    payload: { id, tenantId: ctx.tenantId, reason: body.reason ?? null, paymentRef: body.paymentRef },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "pbg", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

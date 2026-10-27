@@ -10,8 +10,10 @@ import { awards } from "../tender/schema.js";
 import { workProposals, workSplits } from "../proposal/schema.js";
 import {
   closureEligibility, parentSplitConsistency, validateProgressNotExceedTarget, canApplyProgressDelta,
+  closureBlockers, CLOSURE_BLOCKER_TEXT, progressPeriodTaken,
 } from "./domain.js";
 import { eq, and } from "drizzle-orm";
+import { loadClosureFacts } from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -143,6 +145,15 @@ export function registerExecutionConsumers(q: Queue): void {
       const prior = priorRows.reduce((sum, r) => sum + Number(r.currentAchievement ?? 0), 0);
       const cumulative = prior + current;
 
+      // D4c #43: one ordinary entry per scope per month; a correction (negative, with a reason) is a separate entry.
+      // The scope row is locked above, so two racing entries cannot both pass; the partial unique index is the backstop.
+      const entryKind = current < 0 ? "correction" : "progress";
+      if (entryKind === "progress" && progressPeriodTaken(
+        priorRows.map((r) => ({ month: r.month, year: r.year, entryKind: r.entryKind })), p.month as number, p.year as number,
+      )) {
+        throw new NonRetryableError("DUPLICATE_PROGRESS_PERIOD: this scope already has an entry for that month; record a negative correction with a reason instead");
+      }
+
       const target = scope?.targetValue != null ? Number(scope.targetValue) : null;
       if (target != null && !validateProgressNotExceedTarget(cumulative, target)) {
         // Code-review fix (works-cross-entity-integrity #2, HIGH): previously
@@ -166,6 +177,8 @@ export function registerExecutionConsumers(q: Queue): void {
         priorAchievement: String(prior),
         currentAchievement: String(current),
         percentage,
+        entryKind,
+        correctionReason: entryKind === "correction" ? (correctionReason ?? null) : null,
       });
 
       await enqueue(tx, {
@@ -293,6 +306,18 @@ export function registerExecutionConsumers(q: Queue): void {
       // closure, or a parent still has open splits.
       if (eligibility === null || (eligibility !== closureType && !preAgreementClose)) return;
       if (!parentSplitConsistency("", splitRows.map((sp) => ({ id: sp.id, status: sp.status })), closureType)) return;
+
+      // D4c #41: not while issues are open or progress is below 100%, unless it is dropped/closed (foreclosed) with a
+      // DAO reason. Thrown (not a silent return) so a refused close is visible in the dead-letter queue.
+      const blockers = closureBlockers(await loadClosureFacts(tx, msg.tenantId, workId));
+      if (blockers.length > 0) {
+        if (closureType === "completion") {
+          throw new NonRetryableError(`CLOSURE_BLOCKED: cannot close as completed while ${blockers.map((b) => CLOSURE_BLOCKER_TEXT[b]).join(" and ")}`);
+        }
+        if (!String(p.remarks ?? "").trim()) {
+          throw new NonRetryableError("CLOSURE_REASON_REQUIRED: closing with open issues or progress below 100% needs a DAO reason");
+        }
+      }
 
       await tx.insert(workClosures).values({
         id: p.id as string,

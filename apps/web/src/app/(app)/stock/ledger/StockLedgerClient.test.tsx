@@ -4,7 +4,7 @@
  * GAP-STOCK-LEDGER-07: referenceNo column rendered.
  */
 import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/test-utils/intl-render";
 import { StockLedgerClient } from "./StockLedgerClient";
 
 const BASE = {

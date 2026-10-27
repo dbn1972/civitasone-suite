@@ -62,6 +62,13 @@ export async function findTaskByIdTx(tx: Writer, id: string, tenantId: string): 
   return rows[0] ?? null;
 }
 
+export async function findTaskById(id: string, tenantId: string): Promise<typeof projectTasks.$inferSelect | null> {
+  // db.transaction() so wrapWithTenantGuc injects app.tenant_id before the read.
+  const rows = await db.transaction((tx) => tx.select().from(projectTasks)
+    .where(and(eq(projectTasks.id, id), eq(projectTasks.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function updateTaskTx(tx: Writer, id: string, patch: Partial<TaskInsert>): Promise<void> {
   await tx.update(projectTasks).set({ ...patch, updatedAt: new Date() }).where(eq(projectTasks.id, id));
 }

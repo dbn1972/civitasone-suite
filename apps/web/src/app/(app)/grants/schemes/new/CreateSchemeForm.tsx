@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
@@ -13,6 +14,21 @@ type FormStatus = "idle" | "submitting" | "error";
 // GAP-GRANTS-SCHEMES-NEW-05: scheme code format. Uppercase alphanumerics plus
 // hyphens, 3–31 chars, matching the grant-service code constraint (max 32).
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{2,30}$/;
+
+// GAP-GRANTS-SCHEMES-NEW-03: closed sector list; mirrors grant-service SCHEME_SECTORS
+// (value) and the grantsB4Scheme message keys (label).
+const SECTOR_OPTIONS = [
+  { value: "agriculture", key: "sectorAgriculture" },
+  { value: "education", key: "sectorEducation" },
+  { value: "health", key: "sectorHealth" },
+  { value: "rural_development", key: "sectorRuralDevelopment" },
+  { value: "urban_development", key: "sectorUrbanDevelopment" },
+  { value: "social_welfare", key: "sectorSocialWelfare" },
+  { value: "skill_development", key: "sectorSkillDevelopment" },
+  { value: "culture_sports", key: "sectorCultureSports" },
+  { value: "other", key: "sectorOther" },
+] as const;
+const DESCRIPTION_MAX = 2000;
 
 // GAP-GRANTS-SCHEMES-NEW-02: reporting cadence options the grant-service
 // compliance monitor understands (Quarterly=90, Half-yearly=180, Annual=365);
@@ -26,10 +42,13 @@ const REPORTING_OPTIONS = [
 
 export function CreateSchemeForm() {
   const router = useRouter();
+  const t = useTranslations("grantsB4Scheme");
 
   const [schemeName, setSchemeName] = useState("");
   const [schemeCode, setSchemeCode] = useState("");
   const [sanctionRef, setSanctionRef] = useState("");
+  const [sector, setSector] = useState("");
+  const [description, setDescription] = useState("");
   const [totalBudgetRupees, setTotalBudgetRupees] = useState("");
   const [minAmountRupees, setMinAmountRupees] = useState("");
   const [maxAmountRupees, setMaxAmountRupees] = useState("");
@@ -88,6 +107,8 @@ export function CreateSchemeForm() {
       return showError("Maximum grant per application cannot exceed the total budget.");
     }
 
+    if (description.trim().length > DESCRIPTION_MAX) return showError(t("descriptionTooLong"));
+
     if (openAt && closeAt && closeAt < openAt) {
       return showError("The closing date must be on or after the opening date.");
     }
@@ -118,6 +139,9 @@ export function CreateSchemeForm() {
       reportingFrequencyDays,
     };
     if (sanctionRef.trim()) body.sanctionRef = sanctionRef.trim();
+    // GAP-GRANTS-SCHEMES-NEW-03: grant-service now persists and returns both.
+    if (sector) body.sector = sector;
+    if (description.trim()) body.description = description.trim();
     if (openAt) body.openAt = new Date(`${openAt}T00:00:00.000Z`).toISOString();
     if (closeAt) body.closeAt = new Date(`${closeAt}T00:00:00.000Z`).toISOString();
 
@@ -214,6 +238,50 @@ export function CreateSchemeForm() {
             style={{ minHeight: 44 }}
             placeholder="e.g. F.No.1-2/2026-GRANTS"
           />
+        </div>
+
+        <div className="field" style={panelField}>
+          <label className="label" htmlFor="schemeSector">
+            {t("sectorLabel")}
+          </label>
+          <select
+            id="schemeSector"
+            className="inp"
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            style={{ minHeight: 44 }}
+          >
+            <option value="">{t("sectorPlaceholder")}</option>
+            {SECTOR_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {t(o.key)}
+              </option>
+            ))}
+          </select>
+          {formError.fieldError("sector") && (
+            <span style={errorStyle}>{formError.fieldError("sector")}</span>
+          )}
+        </div>
+
+        <div className="field" style={{ ...panelField, gridColumn: "1 / -1" }}>
+          <label className="label" htmlFor="schemeDescription">
+            {t("descriptionLabel")}
+          </label>
+          <textarea
+            id="schemeDescription"
+            className="inp"
+            rows={3}
+            maxLength={DESCRIPTION_MAX}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-describedby="description-hint"
+          />
+          <span id="description-hint" style={hintStyle}>
+            {t("descriptionHint")}
+          </span>
+          {formError.fieldError("description") && (
+            <span style={errorStyle}>{formError.fieldError("description")}</span>
+          )}
         </div>
 
         <div className="field" style={panelField}>

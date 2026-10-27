@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as docsRepo from "./docs-repo.js";
 import type { TenderRow } from "./schema.js";
+import { isBidderIdentitySealed } from "./domain.js";
 
 const TENDER_STATUSES = [
   "draft", "published", "technical_evaluation", "financial_evaluation",
@@ -42,10 +43,38 @@ export async function listTenders(tenantId: string, limit: number, offset: numbe
   }));
 }
 
-export async function getTenderDetail(id: string, tenantId: string) {
+/**
+ * D4c #20: before opening, a bid is shown as "Bidder N" (N follows submission
+ * order) and its vendor id is replaced by the bid id, so neither the name nor a
+ * resolvable vendor id leaves the API. `reveal` is only true for the bid-opening
+ * committee (audited in the route) or once bids are opened.
+ */
+function sealBidIdentity<T extends { id: string; vendorId: string; vendorName: string; createdAt: Date }>(
+  bids: T[], reveal: boolean,
+): Array<T & { shownVendorId: string; shownVendorName: string }> {
+  const ordered = [...bids].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const seq = new Map(ordered.map((b, i) => [b.id, i + 1]));
+  return bids.map((b) => ({
+    ...b,
+    shownVendorId: reveal ? b.vendorId : b.id,
+    shownVendorName: reveal ? b.vendorName : `Bidder ${seq.get(b.id)}`,
+  }));
+}
+
+export type BidderVisibility = { sealed: boolean; reveal: boolean };
+
+/** Whether bidder identities are sealed for this tender and whether this caller may see through it. */
+export function bidderVisibility(tenderStatus: string, bidStatuses: string[], isCommittee: boolean): BidderVisibility {
+  const sealed = isBidderIdentitySealed(tenderStatus, bidStatuses);
+  return { sealed, reveal: !sealed || isCommittee };
+}
+
+export async function getTenderDetail(id: string, tenantId: string, opts: { isCommittee?: boolean } = {}) {
   const row = await repo.findTenderById(id);
   if (!row || row.tenantId !== tenantId) return null;
-  const bids = await repo.findBidsByTender(id);
+  const rawBids = await repo.findBidsByTender(id);
+  const visibility = bidderVisibility(row.status, rawBids.map((b) => b.status), opts.isCommittee === true);
+  const bids = sealBidIdentity(rawBids, visibility.reveal);
   // GAP-PROCUREMENT-TENDERS-DETAIL-05: load this tender's documents so the
   // detail page can show a document count and a NIT-present/missing cue, and
   // so Publish can be gated when no NIT has been attached. Read-only; failures
@@ -53,6 +82,9 @@ export async function getTenderDetail(id: string, tenantId: string) {
   const docs = await docsRepo.listDocsByTender(id, tenantId).catch(() => []);
   const hasNit = docs.some((d) => d.docType === "nit" && d.isCurrent);
   return {
+    // D4c #20: true when a committee caller was shown identities that are still sealed
+    // (the route audits that view and strips this flag).
+    sealedIdentitiesShown: visibility.sealed && visibility.reveal && rawBids.length > 0,
     id: row.id,
     tenderNo: row.tenderNo,
     title: row.title,
@@ -96,8 +128,8 @@ export async function getTenderDetail(id: string, tenantId: string) {
       // (POST .../technical-evaluation takes { results: [{ bidId, ... }] }) —
       // previously omitted, so there was no way to address an individual bid.
       bidId: b.id,
-      vendorId: b.vendorId,
-      vendorName: b.vendorName,
+      vendorId: b.shownVendorId,
+      vendorName: b.shownVendorName,
       // SEALING GUARD: financial value only surfaced once the envelope is opened.
       bidAmount: b.financialOpened ? Number(b.bidAmount) / 100 : undefined,
       technicalScore: b.technicalScore ?? undefined,
@@ -224,13 +256,16 @@ export async function listPreBidConferenceAggregates(tenantId: string, limit: nu
  * financialAmount is WITHHELD (null) until the bid's financial envelope is
  * opened (sealed=false) — proving the core integrity property at the read layer.
  */
-export async function getEvaluationView(tenderId: string, tenantId: string) {
+export async function getEvaluationView(tenderId: string, tenantId: string, opts: { isCommittee?: boolean } = {}) {
   const tender = await repo.findTenderById(tenderId);
   if (!tender || tender.tenantId !== tenantId) return null;
-  const bids = await repo.findBidsByTender(tenderId);
+  const rawBids = await repo.findBidsByTender(tenderId);
+  const visibility = bidderVisibility(tender.status, rawBids.map((b) => b.status), opts.isCommittee === true);
+  const bids = sealBidIdentity(rawBids, visibility.reveal);
   const revealed = await repo.getRevealedFinancials(tenderId, tenantId);
   const revealedByBid = new Map(revealed.map((r) => [r.bidId, r.amountMinor]));
   return {
+    sealedIdentitiesShown: visibility.sealed && visibility.reveal && rawBids.length > 0,
     tenderId,
     tenderNo: tender.tenderNo,
     status: tender.status,
@@ -239,8 +274,8 @@ export async function getEvaluationView(tenderId: string, tenantId: string) {
       return {
         bidId: b.id,
         bidNo: b.bidNo ?? undefined,
-        vendorId: b.vendorId,
-        vendorName: b.vendorName,
+        vendorId: b.shownVendorId,
+        vendorName: b.shownVendorName,
         technicalScore: b.technicalScore ?? undefined,
         technicalQualified: b.technicalQualified ?? undefined,
         financialSealed: amt === undefined,

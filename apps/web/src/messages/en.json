@@ -1095,7 +1095,8 @@
     "colCategory": "Category",
     "colPublished": "Published",
     "colAudience": "Target Audience",
-    "colStatus": "Status"
+    "colStatus": "Status",
+    "colActions": "Actions"
   },
   "citizenAppeals": {
     "pageTitle": "Appeals & Revision",
@@ -1314,7 +1315,11 @@
     "statusVerified": "Verified",
     "statusProvided": "Provided (pending)",
     "statusMissing": "Missing",
-    "required": "required"
+    "required": "required",
+    "uploadRow": "Upload",
+    "reupload": "Re-upload",
+    "uploadRowAria": "Upload file for {doc}",
+    "reuploadAria": "Re-upload file for {doc}"
   },
   "citizenEligibility": {
     "pageTitle": "Eligibility & Entitlement",
@@ -1410,7 +1415,11 @@
     "filterStatusAria": "Filter notices by status",
     "filterActive": "Active",
     "filterExpired": "Expired",
-    "filterAll": "All"
+    "filterAll": "All",
+    "colActions": "Actions",
+    "statusDraft": "Draft",
+    "statusWithdrawn": "Withdrawn",
+    "filterDrafts": "Drafts"
   },
   "citizenPayments": {
     "pageTitle": "Fees & Payments",
@@ -1623,7 +1632,9 @@
     "noDeadline": "No deadline on record",
     "disposed": "Disposed — clock stopped",
     "overdueBreach": "Overdue by {count, plural, one {# day} other {# days}} (statutory breach)",
-    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining"
+    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining",
+    "transfersTitle": "Transfers",
+    "transferLine": "Transferred from {from} to {to}"
   },
   "citizenServices": {
     "applicationSteps": "Application steps",
@@ -6015,6 +6026,13 @@
         "serverVendorMissing": "One of the selected vendors could not be found. Search again and re-select it."
       },
       "vendors": {
+        "performanceScore": "Score (/100)",
+        "performanceScoreCell": "{score}/100 · Band {band}",
+        "notScored": "Not scored",
+        "pagerLabel": "Vendor pages",
+        "prev": "← Previous",
+        "next": "Next →",
+        "page": "Page {page}",
         "showingOfTotal": "Showing {shown} of {total} vendors. Search the full directory to find the others.",
         "searchAll": "Search all vendors by name…",
         "searchAllLabel": "Search the full vendor directory",
@@ -6022,6 +6040,21 @@
         "searchFailed": "Couldn’t search the vendor directory.",
         "retry": "Try again",
         "buyerRating": "Buyer rating (/5)"
+      },
+      "grn": {
+        "searchLabel": "Search goods receipt notes",
+        "searchPlaceholder": "GRN number or vendor name",
+        "search": "Search",
+        "clearSearch": "Clear search",
+        "matchCount": "{count, plural, one {# GRN matches} other {# GRNs match}}",
+        "noMatchTitle": "No GRNs match your search",
+        "noMatchMessage": "Check the GRN number or vendor name, or clear the search to see every GRN.",
+        "noPageTitle": "No GRNs on this page",
+        "noPageMessage": "There are no more GRNs after the previous page. Go back to the previous page.",
+        "pagerLabel": "GRN pages",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {n}"
       },
       "vendorActions": {
         "blacklistedNote": "This vendor is blacklisted. Reinstate it from the vendor blacklist register.",
@@ -6048,6 +6081,9 @@
         }
       },
       "vendorDetail": {
+        "performanceScore": "Performance score {score}/100 · Band {band}",
+        "notScoredYet": "Not scored yet",
+        "performanceScoreHint": "Performance score out of 100 from the vendor scorecard (delivery, quality, SLA). The buyer rating, where recorded, is a separate 1–5 feedback score.",
         "validTill": "Empanelment valid till",
         "expired": "Expired",
         "expiresIn": "Expires in {days, plural, one {# day} other {# days}}",
@@ -6057,7 +6093,24 @@
         "colPo": "PO",
         "colDate": "Order date",
         "colStatus": "Status",
-        "colAmount": "Amount"
+        "colAmount": "Amount",
+        "grnsTitle": "Goods receipts",
+        "noGrns": "No goods receipts",
+        "noGrnsHint": "GRNs recorded against this vendor will appear here.",
+        "colGrn": "GRN",
+        "colReceived": "Received",
+        "grnsShowingFirst": "Showing the first {count} GRNs. Open the GRN register for the rest.",
+        "viewAllGrns": "Open the GRN register",
+        "securitiesTitle": "EMD and bank guarantees",
+        "noSecurities": "No EMD or bank guarantees",
+        "noSecuritiesHint": "Earnest money and performance guarantees held for this vendor will appear here.",
+        "colType": "Type",
+        "colRef": "Reference",
+        "colInstrument": "Instrument",
+        "colValidUntil": "Valid until",
+        "labelPan": "vendor PAN",
+        "labelEmail": "vendor email",
+        "labelPhone": "vendor phone"
       },
       "vendorNew": {
         "duplicatePan": "A vendor with this PAN is already registered.",
@@ -6104,9 +6157,19 @@
       "reconcileOpen": "On-time {onTime} + late {late} of {total} orders; {open} not yet delivered.",
       "reconcileMismatch": "On-time {onTime} + late {late} do not add up to the {total} orders recorded."
     },
+    "contractForm": {
+      "poNotFound": "This PO reference does not match any purchase order. Check the PO number, or leave it blank.",
+      "poUnavailable": "The PO reference could not be verified right now. Please try again in a moment."
+    },
     "poForm": {
+      "vendorNotEmpanelled": "This vendor has no empanelment record. Link the awarded tender this vendor won, or enter a GeM order reference, then submit again.",
+      "basisTitle": "Basis for ordering from a vendor with no empanelment record",
+      "tenderLabel": "Awarded tender",
+      "tenderNone": "No tender linked",
+      "gemRefLabel": "GeM order reference",
+      "tendersFailed": "Couldn’t load awarded tenders. You can still enter a GeM order reference.",
       "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
-      "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."
+      "created": "PO created as a draft and sent to the workflow inbox for approval. Once an approver other than its creator approves it, it can be dispatched."
     },
     "gfr": {
       "band": {
@@ -6154,6 +6217,14 @@
         "trailUnavailable": "The approval trail could not be loaded just now, so it is not shown. This does not mean the indent has no decisions. Please try again shortly."
       },
       "approvals": {
+        "statPending": "Pending approvals",
+        "statActionable": "Awaiting your decision",
+        "statIndents": "Indents",
+        "statOrders": "Purchase orders",
+        "statsHintMore": "Counts cover the tasks loaded so far; more are waiting.",
+        "queueIntro": "This workflow queue is the single source for approvals: the figures and the Approve / Reject actions all come from it.",
+        "registerTitle": "Register of pending indents and draft POs (read-only)",
+        "registerNote": "For reference only. Items here are decided in the workflow queue above, never from this list, so its count can differ from the queue.",
         "value": "Value",
         "requestedBy": "Requested by",
         "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
@@ -10800,6 +10871,8 @@
     "confirmDescription": "This will archive \"{name}\". Archived locations are hidden from active operations and cannot be selected for new records.",
     "confirmLabel": "Archive location",
     "errHasActiveChildren": "This location still has active sub-locations. Archive those first.",
+    "errInUse": "Employees are still posted at this location. Move them to another location first, then archive it.",
+    "errInUseUnverifiable": "We could not check whether employees are still posted here, so the location was not archived. Try again in a moment.",
     "errAlreadyArchived": "This location is already archived."
   },
   "tenantLifecycle": {
@@ -16403,12 +16476,57 @@
       "workPlaceholder": "Search by work number…",
       "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
+    "proposalDuplicate": {
+      "warning": "A similar proposal (same title, place and category) already exists in {fy}. You can still create this one, but check it is not a duplicate:"
+    },
+    "tenderAward": {
+      "pendingLabel": "Award pending.",
+      "pendingHint": "The award was received and is being recorded. This page updates when it is ready.",
+      "confirmed": "Award recorded."
+    },
+    "tenderDetail": {
+      "deviationNote": "Deviation % = (quoted amount − estimate) ÷ estimate × 100. Plus means above the estimate, minus means below it."
+    },
+    "location": {
+      "tehsilBlock": "Tehsil / Block"
+    },
+    "executionClose": {
+      "blocked": "This work cannot be closed as completed while it has open issues or progress is below 100%. Close the issues and record the remaining progress, or close it as Dropped with a reason.",
+      "reasonRequired": "This work has open issues or progress below 100%. Give a reason to close it early.",
+      "daoRequired": "Closing a work early, with open issues or progress below 100%, needs approval. The DAO must approve this closure.",
+      "reasonLabelClosed": "Reason (needed when issues are open or progress is below 100%)"
+    },
+    "billDeductions": {
+      "title": "Deductions by bill",
+      "bill": "Bill {billNo}",
+      "loading": "Loading deduction lines…",
+      "loadError": "Couldn’t load the deduction lines. Try again.",
+      "empty": "This bill has no statutory deduction lines.",
+      "colHead": "Deduction",
+      "colRate": "Rate",
+      "colComputed": "Computed",
+      "colCharged": "Charged",
+      "colNote": "Note",
+      "adjusted": "Adjusted by maker"
+    },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",
       "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first.",
       "belowAvailable": "This gross is less than the value still billable against this measurement book ({available}).",
-      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number."
+      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number.",
+      "deductionsHeading": "Statutory deductions",
+      "deductionsHint": "Computed from the gross at your division's default rates. You may adjust any amount; the checker will see both figures.",
+      "deductionHeads": {
+        "security_deposit": "Security deposit",
+        "income_tax_tds": "Income-tax TDS",
+        "gst_tds": "GST TDS",
+        "labour_cess": "Labour cess",
+        "retention": "Retention"
+      },
+      "rateNote": "{rate}% of gross",
+      "adjusted": "Adjusted from the computed {computed}",
+      "lineInvalid": "Enter a valid amount for {head} (up to two decimals)."
     },
     "hub": {
       "title": "Works & Billing",
@@ -16473,7 +16591,11 @@
       "attachmentLabel": "Attach a photo or document",
       "attachmentRemove": "Remove",
       "photoPreviewAlt": "Preview of {name}",
-      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
+      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Only one entry per month is allowed: to fix a figure, enter a negative amount with a reason as a correction.",
+      "duplicatePeriodBlocked": "This scope already has an entry for that month, and only one entry per month is allowed. To fix a figure, enter a negative amount with a reason as a correction.",
+      "correctionReasonLabel": "Reason for the correction",
+      "correctionReasonPlaceholder": "Why is this figure being corrected?",
+      "correctionReasonRequired": "Enter the reason for the correction: a negative amount is recorded as a correction."
     },
     "reports": {
       "chipFrom": "From {date}",
@@ -16565,14 +16687,19 @@
     "statusAlert": "Alert",
     "statusMaintenance": "Maintenance",
     "asOfLabel": "As of date",
-    "asOfUnavailable": "A historical (as-of) view is not available yet.",
-    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest."
+    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest.",
+    "asOfNote": "Shows the records that existed on this date. Status and position are today's: changes are not kept as history.",
+    "asOfClear": "Show today",
+    "asOfActive": "Showing records that existed on {date}. Their status and position are as of today.",
+    "areaLimit": "Only this map area",
+    "areaClear": "Show everywhere",
+    "areaActive": "Showing only the markers inside the map area you chose."
   },
   "locationsOps": {
     "backLabel": "Locations",
     "infra": {
       "pageTitle": "Infrastructure",
-      "pageSubtitle": "Roads, bridges, buildings and other infrastructure assets. This register is read-only: there is no in-app editor.",
+      "pageSubtitle": "Roads, bridges, buildings and other infrastructure assets. Administrators can add assets here; existing assets cannot be edited or removed from this page.",
       "area": "infrastructure assets",
       "cardTitle": "Infrastructure assets",
       "emptyTitle": "No assets",
@@ -16581,11 +16708,36 @@
       "colName": "Name",
       "colType": "Type",
       "colCondition": "Condition",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "manageTitle": "Add an infrastructure asset",
+      "nameLabel": "Name",
+      "typeLabel": "Type",
+      "types": {
+        "road": "Road",
+        "bridge": "Bridge",
+        "building": "Building",
+        "water_supply": "Water supply",
+        "drainage": "Drainage",
+        "power_line": "Power line",
+        "telecom_tower": "Telecom tower",
+        "park": "Park"
+      },
+      "latLabel": "Latitude",
+      "lngLabel": "Longitude",
+      "capacityLabel": "Capacity (optional)",
+      "conditionLabel": "Condition (optional)",
+      "conditionUnknown": "Not assessed",
+      "submit": "Add asset",
+      "saving": "Saving…",
+      "errName": "Enter a name for the asset.",
+      "errLat": "Enter a latitude between -90 and 90.",
+      "errLng": "Enter a longitude between -180 and 180.",
+      "assetLabel": "Linked asset record (optional)",
+      "assetNone": "Not linked"
     },
     "geofences": {
       "pageTitle": "Geofences",
-      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. This register is read-only: there is no in-app editor.",
+      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. Location administrators can add geofences and switch them on or off.",
       "area": "geofences",
       "cardTitle": "Geofences",
       "emptyTitle": "No geofences",
@@ -16596,11 +16748,34 @@
       "colShape": "Shape",
       "colRadius": "Radius",
       "colStatus": "Status",
-      "colCenter": "Centre"
+      "colCenter": "Centre",
+      "manageTitle": "Add a geofence",
+      "nameLabel": "Name",
+      "typeLabel": "Type",
+      "types": {
+        "office": "Office",
+        "site": "Site",
+        "zone": "Zone"
+      },
+      "latLabel": "Centre latitude",
+      "lngLabel": "Centre longitude",
+      "radiusLabel": "Radius (metres)",
+      "submit": "Add geofence",
+      "saving": "Saving…",
+      "errName": "Enter a name for the geofence.",
+      "errLat": "Enter a latitude between -90 and 90.",
+      "errLng": "Enter a longitude between -180 and 180.",
+      "errRadius": "Enter the radius as a whole number of metres, more than 0.",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "activateTitle": "Activate this geofence?",
+      "activateDescription": "{name} will be used again for site and attendance checks. This is recorded in the audit log.",
+      "deactivateTitle": "Deactivate this geofence?",
+      "deactivateDescription": "{name} will no longer be used for site and attendance checks. You can activate it again later. This is recorded in the audit log."
     },
     "jurisdictions": {
       "pageTitle": "Jurisdictions",
-      "pageSubtitle": "Which offices cover which administrative units. This register is read-only: there is no in-app editor.",
+      "pageSubtitle": "Which offices cover which administrative units. Location administrators can assign and revoke jurisdictions here.",
       "area": "jurisdictions",
       "cardTitle": "Jurisdictions",
       "emptyTitle": "No jurisdictions",
@@ -16612,8 +16787,70 @@
       "colPrimary": "Primary",
       "yes": "Yes",
       "no": "No",
-      "unresolved": "Not available"
+      "unresolved": "Not available",
+      "manageTitle": "Assign a jurisdiction",
+      "officeLabel": "Office",
+      "unitLabel": "Administrative unit",
+      "levelLabel": "Level",
+      "choose": "Choose…",
+      "levels": {
+        "state": "State",
+        "district": "District",
+        "block": "Block",
+        "gp": "Gram Panchayat",
+        "ward": "Ward",
+        "zone": "Zone"
+      },
+      "primaryLabel": "This is the office's primary jurisdiction",
+      "submit": "Assign jurisdiction",
+      "saving": "Saving…",
+      "errOffice": "Choose an office.",
+      "errUnit": "Choose an administrative unit.",
+      "noOptions": "There are no offices or administrative units to choose from yet. Add them first, then assign a jurisdiction here.",
+      "optionsFailed": "The offices and administrative units could not be loaded, so jurisdictions cannot be assigned right now. Refresh to try again.",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke this jurisdiction?",
+      "revokeDescription": "{office} will no longer cover {unit}. This is recorded in the audit log.",
+      "colParent": "Parent unit",
+      "colLgd": "LGD code"
     }
+  },
+  "locationsParcel": {
+    "pageTitle": "Land parcel",
+    "title": "Parcel {parcelNo}",
+    "subtitle": "{village}, {district}",
+    "backLabel": "Map monitoring",
+    "area": "land parcel",
+    "historyArea": "parcel history",
+    "detailsTitle": "Parcel details",
+    "parcelNo": "Parcel number",
+    "village": "Village",
+    "district": "District",
+    "areaUnit": "m²",
+    "landUseLabel": "Land use",
+    "ownershipLabel": "Ownership",
+    "boundaryLabel": "Recorded boundary",
+    "boundaryPoints": "{count, plural, one {# point} other {# points}}",
+    "landUse": {
+      "agricultural": "Agricultural",
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "industrial": "Industrial",
+      "forest": "Forest",
+      "wetland": "Wetland",
+      "barren": "Barren"
+    },
+    "ownership": {
+      "private": "Private",
+      "government": "Government",
+      "community": "Community",
+      "temple_trust": "Temple trust"
+    },
+    "historyTitle": "History",
+    "historyEmptyTitle": "No history",
+    "historyEmptyMessage": "No changes have been recorded for this parcel yet.",
+    "colEvent": "Event",
+    "colWhen": "When"
   },
   "fieldHub": {
     "title": "Field Operations",
@@ -17033,6 +17270,11 @@
     "allotScopeNote": "The tiles above count only the rows shown.",
     "allotApplied": "Done — the allotment has been updated.",
     "allotNotApplied": "Not applied yet — the server may have rejected this action (for example, you cannot allot your own application). Check the current status and try again.",
+    "allotLastRefused": "The last action was refused ({when}): {reason}",
+    "allotRefuseMakerChecker": "You cannot allot a quarter you applied for (maker-checker policy). Another officer must allot it.",
+    "allotRefuseInvalidTransition": "The allotment is not in a state that allows this action. Refresh to see its current status.",
+    "allotRefuseVersionConflict": "Someone else changed this allotment first. Refresh and try again.",
+    "allotRefuseGeneric": "The server refused this action. Check the current status and try again.",
     "dfaLinkFileLabel": "Link to an eOffice file (optional)",
     "dfaLinkFilePlaceholder": "Search by file number or subject…",
     "dfaRefreshing": "Refreshing…",
@@ -17491,5 +17733,96 @@
     "emptyTitle": "No visits yet",
     "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
     "emptyMessage": "Check in on a field task to record GPS and outcomes here."
+  },
+  "stockEntryNew": {
+    "subtitle": "Record a receipt, issue, transfer or adjustment in the stock ledger.",
+    "entryTypeTransfer": "Transfer",
+    "entryTypeTransferHelp": "Move stock from one warehouse to another.",
+    "fromWarehouse": "From warehouse",
+    "toWarehouse": "To warehouse",
+    "warehouse": "Warehouse",
+    "selectWarehouse": "Select a warehouse",
+    "notSpecified": "Not specified",
+    "warehousesLoadFailed": "Couldn't load the warehouse list.",
+    "retry": "Retry",
+    "errFromWarehouse": "Pick the warehouse the stock leaves.",
+    "errToWarehouse": "Pick the warehouse the stock goes to.",
+    "errToSameAsFrom": "Destination must differ from the source warehouse.",
+    "errReasonMax": "Reason must be 500 characters or fewer.",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "e.g. cycle-count variance, damaged stock",
+    "reasonHint": "Recorded in the audit trail for this entry."
+  },
+  "stockLedger": {
+    "unknownItem": "Unknown item"
+  },
+  "citizenEngagementActions": {
+    "newAlert": "New alert",
+    "newAlertTitle": "New public alert",
+    "newNotice": "New notice",
+    "newNoticeTitle": "New public notice",
+    "draftNote": "Saved as a draft. A different officer must publish it before citizens can see it.",
+    "saveDraft": "Save draft",
+    "fieldTitle": "Title",
+    "fieldBody": "Details",
+    "fieldCategory": "Category",
+    "fieldAudience": "Target audience",
+    "fieldExpires": "Expires (optional)",
+    "fieldSubject": "Subject",
+    "fieldDepartment": "Department",
+    "fieldNoticeNo": "Notice number (optional, auto-numbered if blank)",
+    "fieldType": "Type",
+    "type_general": "General",
+    "type_statutory": "Statutory",
+    "type_public_hearing": "Public hearing",
+    "type_tender": "Tender",
+    "nounAlert": "alert",
+    "nounNotice": "notice",
+    "publish": "Publish",
+    "withdraw": "Withdraw",
+    "publishTitle": "Publish this {noun}?",
+    "publishDescription": "Citizens will see this {noun} immediately. You cannot publish a draft you created yourself.",
+    "withdrawTitle": "Withdraw this {noun}?",
+    "withdrawDescription": "Citizens will no longer see this {noun}. The withdrawal is recorded in the audit trail."
+  },
+  "grantsB4Scheme": {
+    "sectorLabel": "Sector",
+    "sectorPlaceholder": "Select a sector (optional)",
+    "sectorAgriculture": "Agriculture",
+    "sectorEducation": "Education",
+    "sectorHealth": "Health",
+    "sectorRuralDevelopment": "Rural development",
+    "sectorUrbanDevelopment": "Urban development",
+    "sectorSocialWelfare": "Social welfare",
+    "sectorSkillDevelopment": "Skill development",
+    "sectorCultureSports": "Culture and sports",
+    "sectorOther": "Other",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Optional. Up to 2000 characters. Shown on the scheme detail page.",
+    "descriptionTooLong": "The description must be 2000 characters or fewer."
+  },
+  "grantsB4Installments": {
+    "blockedLabel": "Blocked",
+    "blockedSequence": "Release earlier installments of this grant first.",
+    "blockedGrantStatus": "This grant is {status}; installments cannot be released.",
+    "grantStatusSuspended": "suspended",
+    "grantStatusCancelled": "cancelled",
+    "grantStatusCompleted": "completed",
+    "payeeAccount": "Payee account: ending {last4}, IFSC {ifsc}.",
+    "payeeNoAccount": "No bank account is registered for this grantee. Check the grantee record before releasing funds.",
+    "granteeUnresolved": "the grantee",
+    "dash": "—"
+  },
+  "grantsB4Review": {
+    "reviewerLabel": "Reviewer",
+    "reviewerPlaceholder": "Search for a reviewer by name",
+    "reviewerRequired": "Choose the reviewer from the list.",
+    "assignTitle": "Assign reviewer",
+    "assignDescription": "Search the tenant user directory and choose who will review this application. The reviewer cannot be the person who submitted it.",
+    "assignConfirm": "Assign",
+    "assigning": "Assigning…",
+    "cancel": "Cancel",
+    "assignedReviewer": "Assigned reviewer",
+    "reviewerUnresolved": "Name not available"
   }
 }

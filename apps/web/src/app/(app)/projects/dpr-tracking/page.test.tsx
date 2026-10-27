@@ -30,7 +30,7 @@ describe("DprTrackingPage (GAP-PROJECTS-DPR-TRACKING-01)", () => {
 
   it("labels the returned-count tile 'Returned for revision' (matching the status pill) and counts the real 'revision' status", async () => {
     mock([
-      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCost: "—", status: "revision", reviewingAuthority: "PMU" },
+      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCostMinor: null, status: "revision", reviewingAuthority: "PMU" },
     ]);
     render(await DprTrackingPage());
     expect(tile("Returned for revision")).toContain("1");
@@ -40,8 +40,8 @@ describe("DprTrackingPage (GAP-PROJECTS-DPR-TRACKING-01)", () => {
 
   it("counts submitted + under_review DPRs under 'Under Review'", async () => {
     mock([
-      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCost: "—", status: "submitted", reviewingAuthority: "PMU" },
-      { id: "d2", dprNo: "D2", projectId: "p2", projectTitle: "B", submittedBy: "u", submittedDate: "2026-01-02", estimatedCost: "—", status: "under_review", reviewingAuthority: "PMU" },
+      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCostMinor: null, status: "submitted", reviewingAuthority: "PMU" },
+      { id: "d2", dprNo: "D2", projectId: "p2", projectTitle: "B", submittedBy: "u", submittedDate: "2026-01-02", estimatedCostMinor: null, status: "under_review", reviewingAuthority: "PMU" },
     ]);
     render(await DprTrackingPage());
     expect(tile("Under Review")).toContain("2");

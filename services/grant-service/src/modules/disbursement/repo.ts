@@ -86,6 +86,25 @@ export async function sumDisbursedForApplication(tx: Writer, applicationId: stri
   return doQuery(tx);
 }
 
+/**
+ * GAP-GRANTS-INSTALLMENTS-03: tranches must be released in order. Returns the lowest-numbered
+ * installment of the application with a LOWER number than `installmentNo` that has not yet
+ * been disbursed (still `pending`), or null when the sequence is clear. Runs in the caller's
+ * transaction so it is consistent with the release decision.
+ */
+export async function findEarlierPendingInstallmentTx(tx: Writer, applicationId: string, tenantId: string, installmentNo: number): Promise<InstallmentRow | null> {
+  const rows = await (tx as typeof db).select().from(grantInstallments)
+    .where(and(
+      eq(grantInstallments.applicationId, applicationId),
+      eq(grantInstallments.tenantId, tenantId),
+      eq(grantInstallments.status, "pending"),
+      sql`${grantInstallments.installmentNo} < ${installmentNo}`,
+    ))
+    .orderBy(grantInstallments.installmentNo)
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertInstallment(tx: Writer, row: InstallmentInsert): Promise<void> {
   await tx.insert(grantInstallments).values(row);
 }

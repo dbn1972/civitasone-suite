@@ -4,6 +4,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import { resolvePoRef, ProcurementUnavailableError } from "../../shared/procurement-client.js";
 import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
@@ -52,6 +53,23 @@ export async function createContract(ctx: RequestContext, body: CreateContractBo
   const existing = await repo.findContractByTenantAndNo(ctx.tenantId, body.contractNo);
   if (existing) {
     throw new HttpError(409, "DUPLICATE_NUMBER", "a contract with this number already exists");
+  }
+  // D4c #25 (GAP-PROCUREMENT-CONTRACTS-NEW-06): a quoted purchase-order reference must
+  // be a real PO in this tenant (needed for three-way match and audit). Checked with
+  // procurement-service; if it cannot be asked, fail closed (retryable) rather than
+  // accept an unverified reference.
+  const poRef = body.poRef?.trim();
+  if (poRef) {
+    let po;
+    try {
+      po = await resolvePoRef(ctx.tenantId, poRef, ctx.correlationId);
+    } catch (err) {
+      if (err instanceof ProcurementUnavailableError) {
+        throw new HttpError(503, "PO_VALIDATION_UNAVAILABLE", "the purchase order could not be verified right now; try again shortly");
+      }
+      throw err;
+    }
+    if (!po) throw new HttpError(422, "PO_NOT_FOUND", "the purchase order reference does not match any purchase order");
   }
   const id = randomUUID();
   await queue.publish(COMMANDS.contractCreate, {

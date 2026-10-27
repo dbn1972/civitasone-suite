@@ -102,3 +102,19 @@ export async function listIndents(tenantId: string, limit = 50, offset = 0, depa
   );
   return withRequestedBy(tenantId, result ?? []);
 }
+
+export type IndentSummaryCounts = { total: number; counts: Record<string, number> };
+
+/**
+ * D4c #18 (GAP-PROCUREMENT-INDENTS-01): true per-status counts over the whole
+ * tenant (narrowed by `q`), plus `total` = the rows the list would page over
+ * for the given `status` filter (all statuses when none).
+ */
+export async function indentSummaryCounts(tenantId: string, status?: string, q?: string): Promise<IndentSummaryCounts> {
+  const rows = await repo.countIndentsByStatus(tenantId, q);
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.status] = r.n;
+  const wanted = repo.parseStatusFilter(status);
+  const total = rows.filter((r) => wanted.length === 0 || wanted.includes(r.status)).reduce((a, r) => a + r.n, 0);
+  return { total, counts };
+}

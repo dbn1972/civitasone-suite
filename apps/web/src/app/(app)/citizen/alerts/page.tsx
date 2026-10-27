@@ -3,10 +3,13 @@ import { PageHeader, StatGrid, StatCard, RefreshErrorState } from "../../../_com
 import { getCitizenAlerts } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, CITIZEN_OFFICER_ROLES } from "@/lib/auth/roleGuard";
 import { AlertsTable } from "./AlertsTable";
 
 export default async function AlertsPage() {
   const t = await getTranslations("citizenAlerts");
+  // GAP-CITIZEN-ALERTS-05: the service is the authority (officer-tier roles); this only decides whether to show the controls.
+  const canAuthor = getSessionRoles().some((r) => CITIZEN_OFFICER_ROLES.includes(r));
   const result = await getCitizenAlerts();
   const { data: alerts, source } = result;
 
@@ -52,7 +55,7 @@ export default async function AlertsPage() {
           </div>
         </div>
       ) : (
-        <AlertsTable alerts={alerts} source={source} />
+        <AlertsTable alerts={alerts} source={source} canAuthor={canAuthor} />
       )}
     </>
   );

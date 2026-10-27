@@ -1214,7 +1214,12 @@ export type VendorDetail = {
   panNo?: string;
   category: string;
   empanelmentStatus: "empanelled" | "provisional" | "blacklisted" | "not_empanelled";
+  /** Buyer feedback rating (1-5). Distinct from the scorecard score below; always labelled as such. */
   rating?: number;
+  /** D4c #22/#23: the single vendor rating scale - scorecard score out of 100 (absent/null = not scored yet). */
+  performanceScore?: number | null;
+  /** D4c #22/#23: scorecard band for performanceScore. */
+  performanceBand?: "A" | "B" | "C" | "D" | null;
   contactPerson?: string;
   email?: string;
   phone?: string;
@@ -1660,7 +1665,10 @@ export type MilestoneSummary = {
 export type FundReleaseSummary = {
   id: string;
   releaseNo: string;
+  /** Historical alias: carries the scheme id (kept for existing consumers). */
   projectId: string;
+  /** GAP-PROJECTS-FUND-RELEASES-03: the explicit scheme id; mutation routes use this. */
+  schemeId?: string;
   projectName: string;
   amount: number;
   releaseDate: string;
@@ -1748,6 +1756,10 @@ export type GrantSummary = {
   grantor?: string;
   granteeId?: string;
   granteeName?: string;
+  /** GAP-GRANTS-LIST-03: beneficiary type; absent on older services. */
+  granteeType?: string;
+  /** GAP-GRANTS-LIST-03: true when granteeName is the server-masked form of a natural person's name. */
+  granteeNameMasked?: boolean;
   totalAmount: number;
   disbursedAmount: number;
   pendingAmount: number;
@@ -1810,12 +1822,19 @@ export type GrantInstallmentSummary = {
   id: string;
   grantId: string;
   grantNo: string;
-  granteeName: string;
+  /** null when the grantee could not be resolved. */
+  granteeName: string | null;
   installmentNo: number;
+  /** Minor units (paise). */
   amount: number;
   scheduledDate: string;
   releasedDate?: string;
   status: "pending" | "released" | "utilized";
+  /** GAP-GRANTS-INSTALLMENTS-03: release eligibility of the grant; only "active" grants may be released. */
+  grantStatus?: "active" | "completed" | "suspended" | "cancelled";
+  /** GAP-GRANTS-INSTALLMENTS-03: last 4 digits of the payee account (null = none registered). */
+  payeeAccountLast4?: string | null;
+  payeeIfsc?: string | null;
 };
 
 export type GrantRelease = {

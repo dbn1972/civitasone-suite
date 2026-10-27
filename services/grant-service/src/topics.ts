@@ -27,6 +27,8 @@ export const COMMANDS = {
   beneficiaryCreate:      "grant.beneficiary.create",
   beneficiaryLinkBank:    "grant.beneficiary.link_bank",
   beneficiarySeedAadhaar: "grant.beneficiary.seed_aadhaar",
+  /** GAP-GRANTS-LIST-03: audit record for an audited reveal of a grantee's clear PII. */
+  beneficiaryPiiReveal:   "grant.beneficiary.pii_reveal",
 } as const;
 
 export const EVENTS = {

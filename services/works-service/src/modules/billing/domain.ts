@@ -209,3 +209,60 @@ export function isValidNextStep(currentStatus: string, nextStatus: string, seque
   const nextIdx = sequence.indexOf(nextStatus);
   return nextIdx === currentIdx + 1;
 }
+
+/**
+ * D4c #37 (GAP-WORKS-BILLING-BILLS-NEW-03): the FIXED statutory deduction heads on a contractor bill. The set is not
+ * configurable; only the default rate of each head is (per executing division, see works.deduction_rates).
+ */
+export const DEDUCTION_HEADS = ["security_deposit", "income_tax_tds", "gst_tds", "labour_cess", "retention"] as const;
+export type DeductionHead = (typeof DEDUCTION_HEADS)[number];
+export type DeductionRates = Record<DeductionHead, number>;
+
+/**
+ * Rates (basis points of the bill gross) used when neither the division nor the tenant has set one. They are only a
+ * starting point: every one is editable per department by the works admin, and the maker can still adjust each amount.
+ */
+export const BUILT_IN_RATE_BPS: DeductionRates = {
+  security_deposit: 500,
+  income_tax_tds: 200,
+  gst_tds: 200,
+  labour_cess: 100,
+  retention: 0,
+};
+
+export function isDeductionHead(v: unknown): v is DeductionHead {
+  return typeof v === "string" && (DEDUCTION_HEADS as readonly string[]).includes(v);
+}
+
+export interface DeductionRateRow {
+  divisionId: string | null;
+  head: string;
+  rateBps: number;
+}
+
+/** Per head: the division's own row, else the tenant-wide default row, else the built-in default. */
+export function resolveRates(rows: DeductionRateRow[], divisionId: string | null): DeductionRates {
+  const out = { ...BUILT_IN_RATE_BPS };
+  for (const head of DEDUCTION_HEADS) {
+    const tenantWide = rows.find((r) => r.divisionId === null && r.head === head);
+    const own = divisionId === null ? undefined : rows.find((r) => r.divisionId === divisionId && r.head === head);
+    const chosen = own ?? tenantWide;
+    if (chosen) out[head] = chosen.rateBps;
+  }
+  return out;
+}
+
+export interface DeductionLine {
+  head: DeductionHead;
+  rateBps: number;
+  amountMinor: bigint;
+}
+
+/** gross x rate, in exact paise (bigint), rounded half-up; one line per fixed head in the fixed order. */
+export function computeDeductionLines(grossMinor: bigint, rates: DeductionRates): DeductionLine[] {
+  return DEDUCTION_HEADS.map((head) => ({
+    head,
+    rateBps: rates[head],
+    amountMinor: (grossMinor * BigInt(rates[head]) + 5000n) / 10000n,
+  }));
+}

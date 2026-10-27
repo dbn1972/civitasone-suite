@@ -71,6 +71,11 @@ export const estabQuarterAllotments = quartersSchema.table("estab_quarter_allotm
   handoverNotes:    text("handover_notes"),
   cancelledAt:      timestamp("cancelled_at", { withTimezone: true }),
   cancelReason:     text("cancel_reason"),
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01 (migration 0058): the last lifecycle command the
+  // consumer refused (code only; cleared by the next applied transition).
+  lastCommandErrorCode:    varchar("last_command_error_code", { length: 48 }),
+  lastCommandErrorCommand: varchar("last_command_error_command", { length: 24 }),
+  lastCommandErrorAt:      timestamp("last_command_error_at", { withTimezone: true }),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

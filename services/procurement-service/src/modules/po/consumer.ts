@@ -7,7 +7,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
-import { isEmpanelmentLapsed } from "../vendor/domain.js";
+import { isEmpanelmentLapsed, assertNonEmpanelledOrderBasis, DomainError as VendorDomainError } from "../vendor/domain.js";
+import * as tenderRepo from "../tender/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import * as indentRepo from "../indent/repo.js";
 import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
@@ -121,6 +122,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; rateContractRef?: string; deliveryDate?: string;
+      tenderId?: string; gemOrderRef?: string;
       items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
@@ -191,12 +193,25 @@ export function registerPoConsumers(queue: Queue): void {
 
       // GAP-PROCUREMENT-EMPANELMENT-05 - lapsed empanelment re-checked in-txn
       // (the route pre-check is not atomic with this write).
-      if (isEmpanelmentLapsed(
-        await vendorRepo.findEmpanelmentsByVendorTx(tx, p.vendorId, p.tenantId),
-        new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10),
-      )) {
+      const empRows = await vendorRepo.findEmpanelmentsByVendorTx(tx, p.vendorId, p.tenantId);
+      if (isEmpanelmentLapsed(empRows, new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10))) {
         await audit(tx, msg, "rejected_empanelment_expired", "po", p.id);
         return;
+      }
+      // D4c #28: no empanelment record -> only with an awarded-tender / GeM basis.
+      try {
+        assertNonEmpanelledOrderBasis(empRows, {
+          tenderAwardedToVendor: empRows.length === 0 && p.tenderId
+            ? await tenderRepo.isTenderAwardedToVendorTx(tx, p.tenantId, p.tenderId, p.vendorId)
+            : false,
+          gemOrderRef: p.gemOrderRef,
+        });
+      } catch (err) {
+        if (err instanceof VendorDomainError) {
+          await audit(tx, msg, "rejected_vendor_not_empanelled", "po", p.id);
+          return;
+        }
+        throw err;
       }
 
       // CRITICAL FIX: reserve indent budget atomically BEFORE allocating a PO
@@ -225,6 +240,7 @@ export function registerPoConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
         indentRef: p.indentRef, sanctionRef: p.sanctionRef ?? null,
         rateContractRef: p.rateContractRef ?? null, gemOrderNo: null,
+        tenderId: p.tenderId ?? null, gemOrderRef: p.gemOrderRef?.trim() || null,
         orderType: (p as { orderType?: string }).orderType ?? "supply",
         totalMinor, currency: "INR", status: "draft",
         deliveryDate: p.deliveryDate ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,

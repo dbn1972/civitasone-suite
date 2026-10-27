@@ -69,6 +69,19 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(list);
   });
 
+  // D4c #18 (GAP-PROCUREMENT-INDENTS-01): true total + per-status counts for the
+  // list page (same shape idea as vendors/summary). Registered before :id so
+  // "summary" is not read as an id.
+  app.get("/v1/procurement/indents/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const statusRaw = typeof (req.query as Record<string, unknown>).status === "string"
+      ? ((req.query as Record<string, string>).status)
+      : undefined;
+    const { q: search } = searchQuerySchema.parse(req.query);
+    return reply.send({ data: await queries.indentSummaryCounts(ctx.tenantId, statusRaw, search) });
+  });
+
   app.get("/v1/procurement/indents/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

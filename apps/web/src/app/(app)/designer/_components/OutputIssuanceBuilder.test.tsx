@@ -97,4 +97,55 @@ describe("OutputIssuanceBuilder", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Certificate" }));
     expect(screen.getByTestId("preview-signatory")).toHaveTextContent("Licensing Officer");
   });
+
+  // GAP-DESIGNER-DETAIL-B7-01
+  it("shows offline when the persist callback rejects", async () => {
+    vi.useFakeTimers();
+    const onSaveState = vi.fn();
+    const onDesignPersisted = vi.fn().mockRejectedValue(new Error("PATCH failed"));
+    render(
+      <OutputIssuanceBuilder
+        serviceName="Trade Licence"
+        pattern="certificate"
+        initial={emptyIssuanceDesign("certificate")}
+        onSaveState={onSaveState}
+        onDesignPersisted={onDesignPersisted}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("output-type"), { target: { value: "licence" } });
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(onDesignPersisted).toHaveBeenCalled();
+    expect(onSaveState).toHaveBeenLastCalledWith("offline");
+    expect(onSaveState).not.toHaveBeenCalledWith("saved");
+  });
+
+  it("does not write anything just because the page was opened", async () => {
+    vi.useFakeTimers();
+    const onDesignPersisted = vi.fn().mockResolvedValue(undefined);
+    const initial = emptyIssuanceDesign("certificate");
+    const { rerender } = render(
+      <OutputIssuanceBuilder serviceName="x" pattern="certificate" initial={initial} onDesignPersisted={onDesignPersisted} />,
+    );
+    rerender(
+      <OutputIssuanceBuilder serviceName="x" pattern="certificate" initial={initial} onDesignPersisted={async (d) => onDesignPersisted(d)} />,
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(onDesignPersisted).not.toHaveBeenCalled();
+  });
+
+  it("offers a signature method select (none, DSC token, Aadhaar eSign) and saves the choice (D4c #9)", async () => {
+    const onChange = vi.fn();
+    render(
+      <OutputIssuanceBuilder serviceName="Trade Licence" initial={emptyIssuanceDesign("certificate")} onDesignChange={onChange} />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Signatory" }));
+    const select = (await screen.findByTestId("signature-method")) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["none", "dsc", "esign"]);
+    expect(select.value).toBe("dsc");
+    fireEvent.change(select, { target: { value: "esign" } });
+    expect(onChange.mock.calls.at(-1)![0]).toMatchObject({ signatureMethod: "esign" });
+    fireEvent.change(screen.getByTestId("signatory-select"), { target: { value: "pos-1" } });
+    expect(screen.getByTestId("signatory-warning").textContent).toMatch(/Aadhaar eSign/);
+  });
 });
+
