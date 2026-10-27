@@ -56,6 +56,10 @@ export type LoyaltyProgramRow = {
 const enrolmentApi = z.object({
   id: z.string(),
   programId: z.string().nullable().optional(),
+  // D4c #14/#15: the service sends only a shortened `profileRef`. A legacy `profileId` is still accepted
+  // from older service builds but is shortened at once and NEVER kept on the row (so it can never reach
+  // the browser, the table, or the offline cache).
+  profileRef: z.string().nullable().optional(),
   profileId: z.string().nullable().optional(),
   status: z.string(),
   tier: z.string().nullable().optional(),
@@ -67,7 +71,8 @@ const enrolmentApi = z.object({
 
 export type LoyaltyMemberRow = {
   id: string;
-  profileId: string | null;
+  /** Shortened member reference (personal data: the full profile id is revealed only by an audited request). */
+  profileRef: string | null;
   programId: string | null;
   status: string;
   tier: string;
@@ -185,7 +190,7 @@ export function getLoyaltyPrograms(
 function mapEnrolment(e: z.infer<typeof enrolmentApi>): LoyaltyMemberRow {
   return {
     id: e.id,
-    profileId: e.profileId ?? null,
+    profileRef: e.profileRef ?? (e.profileId ? e.profileId.slice(0, 8) : null),
     programId: e.programId ?? null,
     status: e.status,
     tier: e.tier ?? "base",

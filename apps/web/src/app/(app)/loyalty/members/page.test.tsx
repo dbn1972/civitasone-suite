@@ -4,7 +4,14 @@
  * correctly passes limit/offset so the server returns the right page.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
@@ -21,7 +28,7 @@ const mockedHook = vi.mocked(useSeededResource);
 function makeRows(n: number): LoyaltyMemberRow[] {
   return Array.from({ length: n }, (_, i) => ({
     id: `enr-${i}`,
-    profileId: `ab12cd34-0000-4000-8000-0000000000${String(i).padStart(2, "0")}`,
+    profileRef: "ab12cd34",
     programId: `pr-0000-${i}`,
     status: "active",
     tier: "base",

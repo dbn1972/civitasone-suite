@@ -2669,6 +2669,13 @@
     "revealReasonLabel": "Reason (recorded in the audit log)",
     "revealError": "Couldn't reveal the account number. Please try again."
   },
+  "loyaltyMembers": {
+    "reveal": "Reveal",
+    "revealing": "Revealing…",
+    "hide": "Hide",
+    "revealAria": "Reveal full member ID for {ref} (this is recorded in the audit log)",
+    "revealFailed": "The full ID could not be shown. Try again."
+  },
   "domainsNew": {
     "subtitle": "Add a government domain (.gov.in / .nic.in). You will be given a DNS record to publish so ownership can be verified.",
     "verificationMethod": "Verification method",
