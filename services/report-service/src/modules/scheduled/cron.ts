@@ -22,7 +22,7 @@ import { queue } from "../../shared/infra.js";
 import { scheduledReports } from "./schema.js";
 import { computeNextRunAt, GENERATION_TIMEOUT_MS, MAX_DELIVERY_RETRIES } from "./domain.js";
 import type { ScheduledReportCadence } from "./schema.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { withScheduledJobMetrics } from "@civitasone/observability";
 

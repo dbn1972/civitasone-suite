@@ -9,8 +9,6 @@ import {
   addMonths,
   computeSuperannuationDue,
   computeProbationDue,
-  DEFAULT_SUPERANNUATION_AGE,
-  DEFAULT_PROBATION_MONTHS,
 } from "../src/modules/scheduler/engine.js";
 
 describe("scheduler/engine — daysBetween()", () => {

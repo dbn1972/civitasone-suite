@@ -3,7 +3,7 @@
  * Packs #20, #46.
  */
 import { describe, it, expect } from "vitest";
-import { detectGpsSpoofing, detectBuddyPunch, detectImpossibleTime, detectGhostEmployee, detectDuplicateBankAccount, detectSalaryAnomaly, detectMondayFridayPattern, detectSandwichAvoidance, detectApproverCollusion, predictAttritionRisk, generateRecommendations } from "../src/modules/ai-fraud/detection-engine.js";
+import { detectGpsSpoofing, detectBuddyPunch, detectGhostEmployee, detectDuplicateBankAccount, detectMondayFridayPattern, predictAttritionRisk, generateRecommendations } from "../src/modules/ai-fraud/detection-engine.js";
 import { superannuationDate, daysBetween, addMonths, computeSuperannuationDue, computeProbationDue } from "../src/modules/scheduler/engine.js";
 
 // ─── GPS Spoofing ────────────────────────────────────────────────────────────

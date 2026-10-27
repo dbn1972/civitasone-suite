@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Loader2,
   Cloud,
-  HardDrive,
   Eye,
   EyeOff,
 } from 'lucide-react';

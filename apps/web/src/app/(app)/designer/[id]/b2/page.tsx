@@ -33,7 +33,7 @@ export default function DesignerB2Page() {
           status: def.status,
           serviceKey: def.serviceKey,
         });
-        let design = emptyFormDesign();
+        let design: ReturnType<typeof emptyFormDesign>;
         try {
           design = await loadFormDesign(def.serviceKey, def.name);
         } catch {

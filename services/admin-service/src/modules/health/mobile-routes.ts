@@ -20,7 +20,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
+import { listEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
 import * as repo from "./mobile-repo.js";
 import * as commands from "./mobile-commands.js";
 import {

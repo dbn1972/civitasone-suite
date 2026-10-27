@@ -227,8 +227,6 @@ function findCriticalPathTasks(
     const task = taskMap.get(taskId);
     if (!task) continue;
 
-    const taskStart = (finishTimes.get(taskId) ?? 0) - (finishTimes.get(taskId) ?? 0) +
-      ((finishTimes.get(taskId) ?? 0) - (taskMap.get(taskId)?.baselineDurationMs ?? 0));
 
     // Find which dependency finishes latest (determines this task's start)
     let maxDepFinish = 0;

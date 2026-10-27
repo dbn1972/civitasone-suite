@@ -1,11 +1,10 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
-import { hrmsHolidays } from "../holidays/schema.js";
 const log = pino({ name: "hrms-f3-geo-attendance" });
 
 /**

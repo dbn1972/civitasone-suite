@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { motion } from 'motion/react';
 import { ScrollToTop } from './components/ScrollToTop';
@@ -35,7 +35,6 @@ import { HRMSPayroll } from './pages/hrms/HRMSPayroll';
 import { LeaveApply } from './pages/hrms/LeaveApply';
 import { MyLeaves } from './pages/hrms/MyLeaves';
 import { LeaveApprovals } from './pages/hrms/LeaveApprovals';
-import { ProcurementOrders } from './pages/procurement/ProcurementOrders';
 import { ProcurementVendors } from './pages/procurement/ProcurementVendors';
 import { ProcurementApprovals } from './pages/procurement/ProcurementApprovals';
 import { PurchaseOrderList } from './pages/procurement/PurchaseOrderList';

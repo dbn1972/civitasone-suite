@@ -291,3 +291,23 @@ describe("POST /v1/workflow/external-tasks/:id/extend-lock", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+// ── CodeQL js/incomplete-sanitization (#10): topics are bound as parameters, not a hand-escaped literal ──
+
+describe("fetch-and-lock topic handling (no hand-built array literal)", () => {
+  it.each(["trailing\\", "quo\"te", "brace}{,x", "back\\\"mix"])(
+    "topic %j is matched literally and never produces a malformed-array 500",
+    async (topic) => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/workflow/external-tasks/fetch-and-lock",
+        headers: { authorization: `Bearer ${makeToken(["workflow_worker"])}` },
+        payload: { workerId: "worker-1", topics: [topic], maxTasks: 5, lockDurationMs: 60000 },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toHaveLength(0);
+    },
+  );
+});

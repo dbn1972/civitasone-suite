@@ -25,9 +25,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import {
-  findTemplateById,
   findTemplateByIdTx,
-  findInstanceById,
   findInstanceByIdTx,
   insertTemplate,
   updateTemplate,
@@ -37,7 +35,6 @@ import {
 import {
   validateUniqueQuestionIds,
   computeChecklistScores,
-  DomainError,
   type ChecklistSection,
   type ResponseEntry,
 } from "./domain.js";

@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsLeaveConversions } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -18,7 +18,7 @@ const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 export async function leaveConversionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/leave/conversions", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const body = z.object({
+    z.object({
       employeeId: z.string().uuid(),
       fromAllocId: z.string().uuid(),
       toAllocId: z.string().uuid(),

@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";

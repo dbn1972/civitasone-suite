@@ -37,7 +37,7 @@ export function registerDeliveryStatusConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // Update matching communication record by delivery_id or correlation_id
-        const result = await tx.execute(sql`
+        await tx.execute(sql`
           UPDATE crm.communications
           SET status = 'delivered'
           WHERE (delivery_id = ${deliveryId} OR id = ${msg.correlationId})

@@ -45,7 +45,7 @@ describe("shared/context — resolveContext edge cases", () => {
 
 describe("shared/context — requirePermissionKey", () => {
   it("rejects when permission check fails", async () => {
-    const { requirePermissionKey, HttpError } = await import("../src/shared/context.js");
+    const { requirePermissionKey } = await import("../src/shared/context.js");
     const ctx = {
       actorId: "a1", tenantId: "t1", roles: ["employee"],
       correlationId: "c1", actorType: "user" as const,

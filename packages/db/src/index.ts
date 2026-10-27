@@ -6,7 +6,6 @@
  * Services import from here to build their own schemas — never share tables.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { createSqlClient } from "./pool.js";
 
 /** Call once at service startup. Pass your service's schema. */

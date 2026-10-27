@@ -1,5 +1,5 @@
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { sewerageApplications, sewerageConnections, type ApplicationRow, type ApplicationInsert, type ConnectionRow, type ConnectionInsert } from "./schema.js";
 
 export function appToView(r: ApplicationRow) {

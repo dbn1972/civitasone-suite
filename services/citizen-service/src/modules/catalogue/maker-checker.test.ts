@@ -4,7 +4,7 @@
  * and rejector must differ from the submitter (MAKER_CHECKER error), plus requires
  * ADMIN_ROLES. This test pins the logic so it cannot regress.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // We test the maker-checker check itself rather than going through Fastify,
 // since the repo/queue/cache mocking for a full integration test is heavy and

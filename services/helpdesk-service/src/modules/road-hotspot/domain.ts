@@ -104,8 +104,6 @@ export function calculateRiskScore(
 // ── Hotspot creation threshold ────────────────────────────────────────────────
 
 const THRESHOLD_COUNT = 3;
-const THRESHOLD_RADIUS_M = 500;
-const THRESHOLD_DAYS = 30;
 
 /**
  * Determine whether a cluster of complaints warrants a new hotspot:

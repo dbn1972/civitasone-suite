@@ -2,7 +2,7 @@
  * visits/repo.ts — Database operations for visit logs.
  */
 import { eq, and, sql, desc, gte, lt, type SQL } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { visits, type VisitRow, type VisitInsert } from "./schema.js";
 
 /** Coordinates are shown rounded to this many decimals (about 110 m): owner decision #35. */

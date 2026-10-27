@@ -1,12 +1,10 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsContractConfig } from "./schema.js";
-import { DomainError, daysUntilExpiry } from "./domain.js";
-import * as repo from "./repo.js";
 const log = pino({ name: "hrms-f3-contracts" });
 
 /**
@@ -33,7 +31,6 @@ export function registerF3_contracts_Consumers(queue: Queue): void {
     if (!ops.has(op)) return;
     const body = p.body ?? {};
     const params = p.params ?? {};
-    const id = (p.id as string) || (params.id as string);
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;

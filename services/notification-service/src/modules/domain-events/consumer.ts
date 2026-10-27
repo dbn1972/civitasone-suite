@@ -14,7 +14,7 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
-import { getTemplateForEvent, interpolate } from "./templates.js";
+import { getTemplateForEvent } from "./templates.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { resolveDelegationRecipients, type DelegationEventPayload, type PlannedSend } from "./delegation-notice.js";
 

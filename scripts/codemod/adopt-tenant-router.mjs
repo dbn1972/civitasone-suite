@@ -51,7 +51,7 @@
 // Pure Node ESM, no external dependencies — mirrors scripts/ci/tenant-router-guard.mjs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -241,12 +241,16 @@ function main() {
   }
 
   const dbFile = resolveDbFile(service);
-  if (!existsSync(dbFile)) {
-    console.error(`adopt-tenant-router: file not found: ${relative(REPO_ROOT, dbFile).split(sep).join("/")}`);
-    process.exit(1);
+  let source;
+  try {
+    source = readFileSync(dbFile, "utf8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") {
+      console.error(`adopt-tenant-router: file not found: ${relative(REPO_ROOT, dbFile).split(sep).join("/")}`);
+      process.exit(1);
+    }
+    throw err;
   }
-
-  const source = readFileSync(dbFile, "utf8");
   const relPath = relative(REPO_ROOT, dbFile).split(sep).join("/");
 
   if (isAlreadyCompliant(source)) {

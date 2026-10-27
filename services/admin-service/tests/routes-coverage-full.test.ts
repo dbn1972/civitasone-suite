@@ -4,7 +4,7 @@
  * Covers ALL routes across all modules, auth 403, validation 400, domain logic,
  * and happy-path assertions. Uses buildApp + inject.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";

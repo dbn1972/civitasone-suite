@@ -187,7 +187,7 @@ function scanFile(filePath) {
     for (const pattern of SECRET_PATTERNS) {
       const matches = line.match(pattern.regex);
       if (matches) {
-        for (const match of matches) {
+        for (let i = 0; i < matches.length; i++) {
           // Apply exclusion heuristics
           if (isTestSecretPattern(line, filePath)) continue;
 

@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { SessionSummaryListSchema } from "@civitasone/schemas/web";

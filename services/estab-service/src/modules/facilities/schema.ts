@@ -1,5 +1,12 @@
 import {
-  pgSchema, uuid, text, varchar, integer, bigint, char, boolean, timestamp,
+  pgSchema,
+  uuid,
+  text,
+  varchar,
+  integer,
+  bigint,
+  char,
+  timestamp,
 } from "drizzle-orm/pg-core";
 
 export const facilitiesSchema = pgSchema("facilities");

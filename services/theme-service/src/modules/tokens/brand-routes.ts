@@ -11,6 +11,7 @@ import { BRAND_RESOURCE, DEFAULTS } from "./brand-defaults.js";
 import { upsertBrandBody, applyPresetBody } from "./validators.js";
 import * as brandRepo from "./brand-repo.js";
 import * as commands from "./commands.js";
+import { sanitizeCss } from "./css-sanitize.js";
 
 const ADMIN_ROLES = ["theme_admin", "super_admin"];
 
@@ -38,22 +39,6 @@ function buildCssVars(config: BrandConfigRow | typeof DEFAULTS & { tenantId?: st
   if (custom) {
     css += "\n" + sanitizeCss(custom);
   }
-  return css;
-}
-
-/**
- * Sanitize user-supplied CSS to prevent injection attacks.
- * Removes dangerous constructs: @import, url(), expression(), javascript:, behavior, -moz-binding.
- */
-function sanitizeCss(raw: string): string {
-  let css = raw;
-  css = css.replace(/expression\s*\([^)]*\)/gi, "/* [sanitized] */");
-  css = css.replace(/@import\b[^;]*/gi, "/* [sanitized] */");
-  css = css.replace(/url\s*\([^)]*\)/gi, "/* [sanitized] */");
-  css = css.replace(/javascript\s*:/gi, "/* [sanitized] */");
-  css = css.replace(/behavior\s*:/gi, "/* [sanitized] */");
-  css = css.replace(/-moz-binding\s*:/gi, "/* [sanitized] */");
-  css = css.replace(/<!--|-->/g, "");
   return css;
 }
 

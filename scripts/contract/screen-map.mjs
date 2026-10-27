@@ -223,11 +223,15 @@ function getServiceTables(routeName) {
 
 function pathToPattern(path) {
   // Convert Fastify :param and Next.js ${var} template style to regex segments
+  // Swap the wildcard constructs for sentinels, escape EVERY remaining regex
+  // metacharacter (incl. backslash and '.'), then expand the sentinels.
   return path
-    .replace(/\$\{[^}]+\}/g, ':param')   // template literals
-    .replace(/:[\w]+/g, '[^/]+')           // :param → regex
-    .replace(/\*/g, '.*')
-    .replace(/\//g, '\\/');
+    .replace(/\$\{[^}]+\}/g, '\u0000P\u0000')   // template literals
+    .replace(/:[\w]+/g, '\u0000P\u0000')           // :param
+    .replace(/\*/g, '\u0000S\u0000')
+    .replace(/[.+?^${}()|[\]\\/]/g, '\\$&')
+    .replace(/\u0000P\u0000/g, '[^/]+')
+    .replace(/\u0000S\u0000/g, '.*');
 }
 
 function pathMatches(candidatePath, registeredPath) {

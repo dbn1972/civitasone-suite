@@ -50,14 +50,15 @@ export async function fetchAndLock(
   // worker_id stored in assignee_id as text (cast to uuid only if it's a valid
   // uuid; otherwise we store the workerId hash as a deterministic uuid).
   const workerUuid = toWorkerUuid(workerId);
-  // Format topics as a Postgres array literal for ANY() comparison
-  const topicsLiteral = `{${topics.map((t) => `"${t.replace(/"/g, '\\"')}"`).join(",")}}`;
+  // Each topic is bound as its own parameter inside ARRAY[...]: no hand-built array literal, so no
+  // quoting/backslash escaping to get wrong (a topic ending in a backslash used to break the literal).
+  const topicsArray = sql`ARRAY[${sql.join(topics.map((t) => sql`${t}`), sql`, `)}]::text[]`;
   const rows = (await scopedExecute(sql`
     WITH locked AS (
       SELECT id FROM workflow.tasks
       WHERE tenant_id = ${tenantId}
         AND status = 'pending'
-        AND node_key = ANY(${topicsLiteral}::text[])
+        AND node_key = ANY(${topicsArray})
         AND (assignee_id IS NULL OR fire_at < NOW())
       ORDER BY created_at ASC
       LIMIT ${maxTasks}

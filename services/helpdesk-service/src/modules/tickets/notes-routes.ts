@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];

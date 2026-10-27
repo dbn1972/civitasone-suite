@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { categories, type CategoryRow, type CategoryInsert, type CategoryView } from "./schema.js";

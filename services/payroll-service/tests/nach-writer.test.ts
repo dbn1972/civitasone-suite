@@ -2,7 +2,7 @@
  * Unit tests for NACH ACH-CR file writer.
  * Validates fixed-width formatting, record lengths, amounts, and CRLF line endings.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { generateNachFile, type NachFileInput, type NachFileOutput } from "../src/modules/bank-transfer/nach-writer.js";
 import { computeBatchHash, type NachBeneficiary } from "../src/modules/bank-transfer/domain.js";
 import type { SponsorBankConfigRow } from "../src/modules/sponsor-config/schema.js";

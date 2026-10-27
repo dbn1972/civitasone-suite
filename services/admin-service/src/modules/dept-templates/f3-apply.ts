@@ -29,10 +29,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
-import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
+import { parseOrThrow } from "../../shared/envelope.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
@@ -44,7 +44,6 @@ import {
 } from "./domain.js";
 import type { DepartmentTemplateRow, DepartmentInstantiationRow } from "./schema.js";
 
-const TEMPLATE_ROLES = [...TENANT_ADMIN_ROLES];
 const RESOURCE = "department_template";
 
 const limitSchema = z.coerce.number().int().min(1).max(200);
@@ -70,12 +69,6 @@ const instantiateBody = z.object({
   idempotencyKey: z.string().min(8).max(120).regex(/^[A-Za-z0-9._:-]+$/, "invalid idempotency key"),
 });
 
-const listQuery = z.object({
-  limit: limitSchema,
-  page: pageSchema,
-  status: z.enum(["active", "archived"]).optional(),
-});
-const instListQuery = z.object({ limit: limitSchema, page: pageSchema });
 const idParam = z.object({ id: z.string().uuid() });
 
 const MAX_CONFIG_KEYS = 200;
@@ -83,21 +76,6 @@ const MAX_CONFIG_KEYS = 200;
 function iso(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : String(value);
-}
-
-function serializeTemplate(row: DepartmentTemplateRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    sourceDepartmentId: row.sourceDepartmentId,
-    config: row.config,
-    droppedRefs: row.droppedRefs,
-    status: row.status,
-    createdAt: iso(row.createdAt),
-    updatedAt: iso(row.updatedAt),
-    version: row.version,
-  };
 }
 
 function serializeInstantiation(row: DepartmentInstantiationRow): Record<string, unknown> {
@@ -129,7 +107,7 @@ export async function apply_dept_templates_0(ctx: any, req: { body: unknown; par
     const { config, droppedRefs } = sanitizeTemplateConfig(body.config, ctx.tenantId);
     assertConfigNotEmpty(config);
 
-    const created = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const clash = await repo.findTemplateByCodeTx(w, ctx.tenantId, body.code);
       if (clash) throw new HttpError(409, "TEMPLATE_EXISTS", `a template with code '${body.code}' already exists`);
@@ -218,7 +196,7 @@ export async function apply_dept_templates_2(ctx: any, req: { body: unknown; par
       throw new HttpError(400, "EMPTY_PATCH", "provide at least one of: name, status");
     }
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const template = await repo.findTemplateTx(w, ctx.tenantId, id);
       if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");

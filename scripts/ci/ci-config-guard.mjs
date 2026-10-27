@@ -35,7 +35,7 @@
  * Exit: 0 clean, 1 on any violation.
  */
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
+import { join, resolve } from "node:path";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const BOOTSTRAP_DIR = join(REPO_ROOT, "infra", "db", "bootstrap");

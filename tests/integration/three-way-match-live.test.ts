@@ -70,7 +70,6 @@ describe.skipIf(!localstackUp)("Three-Way Match Live SQS Integration", () => {
 
   it("publishes procurement.grn.accepted and receives three_way_match.passed via live SQS", async () => {
     const correlationId = `three-way-${Date.now()}`;
-    const messageId = randomUUID();
 
     // Set up subscriber to capture the three_way_match.passed event
     const matchReceived = new Promise<CommandEnvelope>((resolve, reject) => {

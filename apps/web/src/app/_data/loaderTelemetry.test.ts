@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { recordLoaderFallback, getLoaderFallbackEvents, type LoaderFallbackEvent } from "./loaderTelemetry";
 
 describe("loaderTelemetry", () => {

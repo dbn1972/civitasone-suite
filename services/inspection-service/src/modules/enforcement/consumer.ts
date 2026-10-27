@@ -29,9 +29,7 @@ import {
   insertPenaltyOrder,
   updatePenaltyOrder,
   insertProsecutionReferral,
-  findShowCauseById,
   findShowCauseByIdTx,
-  findPenaltyOrderById,
   findPenaltyOrderByIdTx,
 } from "./repo.js";
 import type {

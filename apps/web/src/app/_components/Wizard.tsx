@@ -18,7 +18,6 @@ interface WizardProps {
 export function Wizard({ steps, onComplete }: WizardProps) {
   const [current, setCurrent] = useState(0);
 
-  const canNext = current < steps.length - 1;
   const canPrev = current > 0;
   const isLast = current === steps.length - 1;
 

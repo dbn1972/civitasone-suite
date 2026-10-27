@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { createInstanceBody, instancesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -124,6 +125,8 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });

@@ -23,9 +23,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { loadTypeResolver } from "../employee/engagement-policy.js";
 import { computeStipend } from "./domain.js";
@@ -110,7 +108,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     if (body.monthlyStipendMinor !== undefined) patch.monthlyStipendMinor = BigInt(body.monthlyStipendMinor);
     if (body.trainingEnd !== undefined) patch.trainingEnd = body.trainingEnd;
     if (body.status !== undefined) patch.status = body.status;
-    await publishF3Write(ctx, "apprentice_stipend_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apprentice_stipend_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: body.status ?? a.status }) as any;
   });
 
@@ -147,7 +145,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     }
 
     const stipendId = randomUUID();
-    await publishF3Write(ctx, "apprentice_stipend_routes__2", stipendId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apprentice_stipend_routes__2", stipendId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: stipendId, apprenticeshipId: id, month: body.month, status: "submitted" }));
   });
 
@@ -186,13 +184,13 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { stipendId } = stipendParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "verified") throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', not verified`);
     if (s.verifiedBy && s.verifiedBy === ctx.actorId) {
       throw new HttpError(409, "SOD_VIOLATION", "approver must differ from the verifier (two-person control)");
     }
-    const a = await mustApprenticeship(ctx.tenantId, s.apprenticeshipId);
+    await mustApprenticeship(ctx.tenantId, s.apprenticeshipId);
     // Compute against the values SNAPSHOTTED on the run at submit (not the live
     // master), so the amount agreed for the period is what gets approved.
     const stipend = computeStipend({
@@ -200,7 +198,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
       workingDays: s.workingDays, daysPresent: s.daysPresent,
       napsReimbPctBps: s.napsReimbPctBps, napsReimbCapMinor: s.napsReimbCapMinor,
     });
-    await publishF3Write(ctx, "apprentice_stipend_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apprentice_stipend_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({
       id: stipendId, status: "approved", month: s.month,
       grossStipendMinor: stipend.grossStipendMinor, napsReimbMinor: stipend.napsReimbMinor,
@@ -212,7 +210,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { stipendId } = stipendParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "submitted" && s.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', cannot reject`);

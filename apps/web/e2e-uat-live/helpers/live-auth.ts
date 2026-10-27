@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { request as httpsRequest } from "node:https";
 import type { BrowserContext, Page } from "@playwright/test";
 
 /**
@@ -82,39 +84,70 @@ export async function liveLogin(
   });
 }
 
+// The nip.io host terminates TLS with a self-signed nginx cert. Rather than
+// disabling certificate validation process-wide, the token call below pins
+// that cert as a trusted CA: point LIVE_TLS_CA_FILE at the PEM of the
+// deployment's cert (or its CA). Without it the platform trust store applies.
+function liveTlsCa(): Buffer | undefined {
+  const file = process.env.LIVE_TLS_CA_FILE;
+  return file ? readFileSync(file) : undefined;
+}
+
+function postForm(
+  url: string,
+  form: URLSearchParams,
+): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const payload = form.toString();
+    const req = httpsRequest(
+      url,
+      {
+        method: "POST",
+        ca: liveTlsCa(),
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "content-length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            text: Buffer.concat(chunks).toString("utf8"),
+          }),
+        );
+      },
+    );
+    req.on("error", reject);
+    req.end(payload);
+  });
+}
+
 /**
  * Fetches an access token directly via the Resource Owner Password Credentials
  * grant against the live Keycloak instance. Useful for API-level assertions
  * that don't need a full browser login flow.
  */
-// The nip.io host terminates TLS with a self-signed nginx cert (same as the
-// browser context's ignoreHTTPSErrors). Node's global fetch doesn't have an
-// equivalent per-call option, so the environment-level opt-out is required
-// for these direct API calls made from the test/helper process itself.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
 export async function getLiveAccessToken(
   user: DemoUser = PRIYA,
 ): Promise<string> {
-  const res = await fetch(
+  const res = await postForm(
     `${LIVE_BASE_URL}/auth/realms/civitasone/protocol/openid-connect/token`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "password",
-        client_id: "civitasone-web",
-        username: user.username,
-        password: user.password,
-      }),
-    },
+    new URLSearchParams({
+      grant_type: "password",
+      client_id: "civitasone-web",
+      username: user.username,
+      password: user.password,
+    }),
   );
-  if (!res.ok) {
+  if (res.status < 200 || res.status >= 300) {
     throw new Error(
-      `[live-auth] token request failed: ${res.status} ${await res.text()}`,
+      `[live-auth] token request failed: ${res.status} ${res.text}`,
     );
   }
-  const body = (await res.json()) as { access_token: string };
+  const body = JSON.parse(res.text) as { access_token: string };
   return body.access_token;
 }
 

@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { scopedRead } from "../../shared/db.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -246,6 +247,8 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
 
   // Error handler scoped to this plugin
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
       return reply.code(400).send({

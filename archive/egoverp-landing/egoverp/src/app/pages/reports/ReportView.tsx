@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Card, Button, Badge, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
+import { Card, Button, Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
 import {
   ArrowLeft,
   Edit,
@@ -17,7 +17,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { motion } from 'motion/react';
 
 interface ReportData {
   id: string;
@@ -63,7 +62,7 @@ const VARIANCE_BREAKDOWN = [
 ];
 
 export function ReportView() {
-  const { id } = useParams();
+  useParams();
   const navigate = useNavigate();
   const [report] = useState<ReportData>(SAMPLE_REPORT);
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');

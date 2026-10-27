@@ -21,7 +21,7 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.5, 4.5_
  */
 import { and, asc, eq, ne } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { agendaItems, type AgendaItemRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";

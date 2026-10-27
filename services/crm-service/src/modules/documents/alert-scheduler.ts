@@ -19,7 +19,7 @@ import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
-import { db, sqlClient } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { scannerSqlClient } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";

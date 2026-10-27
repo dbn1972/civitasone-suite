@@ -38,7 +38,6 @@ import { predictChurn } from "./adapter.js";
 import {
   classifyRiskLevel,
   fallbackChurnScore,
-  extractFeatures,
   computeRevenueForecast,
   computeCohortAnalysis,
   type SubscriptionFeatures,

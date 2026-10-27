@@ -1,7 +1,7 @@
 /**
  * Persona E2E: Auditor + Legal Officer
  */
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
 import { loginAs } from "./helpers/auth.js";
 import { assertPageLoaded, assertHasData } from "./helpers/assertions.js";
 

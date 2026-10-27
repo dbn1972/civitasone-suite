@@ -64,16 +64,6 @@ const piiStringArb: fc.Arbitrary<string> = fc.oneof(
   ifscArb,
 );
 
-/** Roles that are authorized to view PII */
-const authorizedRoles = [
-  "procurement_officer",
-  "procurement_admin",
-  "finance_officer",
-  "tenant_admin",
-  "super_admin",
-  "audit_officer",
-] as const;
-
 /** Roles that are NOT authorized to view PII */
 const unauthorizedRoles = [
   "employee",

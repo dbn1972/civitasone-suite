@@ -21,7 +21,7 @@ const TENANT = randomUUID();
 
 // ─── PERSONAS ────────────────────────────────────────────────────────────
 const PRIYA  = { id: randomUUID(), roles: ["hr_admin", "super_admin"] };     // HR Director
-const SURESH = { id: randomUUID(), roles: ["payroll_admin"] };               // Payroll Officer
+               // Payroll Officer
 const DEEPAK = { id: randomUUID(), roles: ["manager"] };                     // Eng Manager
 const MEERA  = { id: randomUUID(), roles: ["employee"] };                    // Employee
 const ARJUN  = { id: randomUUID(), roles: ["employee"] };                    // New hire (post-recruitment)

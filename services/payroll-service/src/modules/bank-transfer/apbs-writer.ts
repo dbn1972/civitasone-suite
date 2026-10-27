@@ -28,7 +28,6 @@ export interface ApbsFileInput {
   batchNumber: number;
 }
 
-const RECORD_WIDTH = 160;
 const CRLF = "\r\n";
 
 /**

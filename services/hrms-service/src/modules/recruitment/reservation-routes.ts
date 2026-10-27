@@ -18,7 +18,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   RESERVATION_CATEGORIES, HORIZONTAL_CATEGORIES, validateHorizontal, validateRoster, validateLocationRosters, unmappedCategories,
   allocateShortlist, allocateByLocation, type Roster, type Candidate,
@@ -59,7 +58,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     if (existing && existing.status === "approved") throw new HttpError(409, "APPROVED", "an approved roster cannot be changed");
 
     try {
-      await publishF3Write(ctx, "recruitment_reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {
       // Two concurrent first-time sets on the same new job collide on UNIQUE(tenant,job).
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");

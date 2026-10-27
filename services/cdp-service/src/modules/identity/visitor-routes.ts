@@ -19,12 +19,8 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import { hashIdentifier } from "./domain.js";
 import * as visitorRepo from "./visitor-repo.js";
 import * as identityRepo from "./repo.js";
-import * as deviceRepo from "./device-repo.js";
-import * as nameKeyRepo from "./name-key-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
-import * as eventsRepo from "../events/repo.js";
 import {
-  ANONYMOUS_PROFILE_TYPE,
   validateStitch,
   planStitch,
   resolveKnownProfile,

@@ -8,7 +8,7 @@
  * them on RequestContext, and the ABAC engine (EPIC-2) fences by them.
  */
 import { and, eq } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { offices, positions, postings } from "./org-schema.js";
 import { jurisdictions } from "../jurisdiction/schema.js";
 

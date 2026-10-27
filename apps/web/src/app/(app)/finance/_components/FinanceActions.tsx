@@ -36,17 +36,6 @@ function financeActionError(area: string): string {
   return `${human.what} ${human.next}`;
 }
 
-async function postJson(url: string, body: unknown, area = "request"): Promise<void> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!(res.ok || res.status === 202)) {
-    throw new Error(financeActionError(area));
-  }
-}
-
 async function patchJson(url: string, body: unknown, area = "request"): Promise<void> {
   const res = await fetch(url, {
     method: "PATCH",

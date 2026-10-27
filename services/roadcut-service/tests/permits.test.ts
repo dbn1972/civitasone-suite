@@ -19,7 +19,7 @@ import { registerApplicationConsumers } from "../src/modules/applications/consum
 import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
 import * as appRepo from "../src/modules/applications/repo.js";
 import * as permitRepo from "../src/modules/permits/repo.js";
-import { hdr, drainQueue, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, ACTOR_A } from "./support.js";
+import { hdr, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 

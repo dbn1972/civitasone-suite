@@ -67,7 +67,6 @@ export function parseNachReturnFile(content: string): NachReturnRecord[] {
 
   // Validate that we have at least one control record at the end
   const lastLine = lines[lines.length - 1]!;
-  const secondLastLine = lines.length > 2 ? lines[lines.length - 2]! : null;
 
   const lastType = lastLine.slice(0, 2);
   if (lastType !== "03" && lastType !== "04") {

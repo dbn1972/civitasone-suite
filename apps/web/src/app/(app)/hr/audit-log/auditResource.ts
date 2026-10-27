@@ -19,6 +19,7 @@ export const HR_AUDIT_SERVICES = ["hrms", "payroll"] as const;
  */
 export const HR_AUDIT_RESOURCE_TYPES = [
   "ai_prediction",
+  "ai_recommendation", // hrms ai-fraud f3-consumer audit.event.record (#2323)
   "announcement",
   "apar",
   "application",

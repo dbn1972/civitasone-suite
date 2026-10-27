@@ -16,8 +16,6 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { HttpError } from "../src/shared/context.js";
 import {
-  VOTE_POSITIONS,
-  MAJORITY_RULES,
   computeTally,
   isTallyConsistent,
   assertTallyConsistent,

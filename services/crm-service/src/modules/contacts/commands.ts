@@ -5,7 +5,6 @@ import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateContactBody, UpdateContactBody, MergeContactsBody, BulkImportBody, CreateAccountBody, UpdateAccountBody } from "./validators.js";
 import type { ContactView } from "./schema.js";
-import * as repo from "./repo.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 

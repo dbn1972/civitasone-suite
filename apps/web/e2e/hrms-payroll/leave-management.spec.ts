@@ -11,7 +11,6 @@
  */
 import { test, expect } from '@playwright/test';
 import { setupHrmsPage, mockLeaveContext } from './helpers';
-import * as fixtures from './fixtures';
 
 test.describe('Leave Management', () => {
   test.beforeEach(async ({ page }) => {

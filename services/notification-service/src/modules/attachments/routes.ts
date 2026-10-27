@@ -38,9 +38,6 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, UPLOAD_ROLES);
 
-    // Parse multipart — expect raw body with file data
-    // In production this uses @fastify/multipart; here we accept raw buffer from content-type
-    const contentType = req.headers["content-type"] ?? "";
     const contentLength = Number(req.headers["content-length"] ?? 0);
 
     const maxSize = getMaxFileSize();

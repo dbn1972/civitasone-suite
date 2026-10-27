@@ -33,12 +33,11 @@ import {
   insertComplianceNotice,
   updateFindingState,
   nextFindingSequence,
-  findFindingById,
   findFindingByIdTx,
   softDeleteFinding,
 } from "./repo.js";
-import { findInspectionById, findInspectionByIdTx } from "../execution/repo.js";
-import { findProvisionById, findProvisionByIdTx } from "../universe/repo.js";
+import { findInspectionByIdTx } from "../execution/repo.js";
+import { findProvisionByIdTx } from "../universe/repo.js";
 import type {
   FindingCreatePayload,
   ComplianceNoticeCreatePayload,

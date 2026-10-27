@@ -26,6 +26,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { deviceAuth } from "../device-registry/device-auth.js";
+import { deviceRouteRateLimit } from "../device-registry/device-route-rate-limit.js";
 import {
   createTemplateBody,
   updateTemplateBody,
@@ -201,7 +202,7 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
    *
    * Requirement 5.2: priority-ordered job delivery to printer devices.
    */
-  app.get("/v1/visitor/badges/jobs/poll", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.get("/v1/visitor/badges/jobs/poll", { preHandler: [deviceAuth], config: { rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
 
     const job = await getNextJobForDevice(deviceCtx.tenantId, deviceCtx.deviceId);
@@ -217,7 +218,7 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
    * POST /v1/visitor/badges/jobs/:jobId/acknowledge — Printer confirms success.
    * Route → publishPrintJobAcknowledge → 202.
    */
-  app.post("/v1/visitor/badges/jobs/:jobId/acknowledge", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/badges/jobs/:jobId/acknowledge", { preHandler: [deviceAuth], config: { rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const { jobId } = jobIdParams.parse(req.params);
 
@@ -240,7 +241,7 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
    * POST /v1/visitor/badges/jobs/:jobId/fail — Printer reports failure.
    * Route → zod validate → publishPrintJobFail → 202.
    */
-  app.post("/v1/visitor/badges/jobs/:jobId/fail", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/badges/jobs/:jobId/fail", { preHandler: [deviceAuth], config: { rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const { jobId } = jobIdParams.parse(req.params);
     const body = failJobBody.parse(req.body);

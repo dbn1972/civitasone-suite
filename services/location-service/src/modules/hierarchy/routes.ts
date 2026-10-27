@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createUnitBody, updateUnitBody, bulkSyncBody, idParam, hierarchyTreeSchema, unitViewSchema } from "./validators.js";
+import { createUnitBody, updateUnitBody, bulkSyncBody, idParam, hierarchyTreeSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { resolveActivePosting, toOrgClaims } from "./posting-resolver.js";

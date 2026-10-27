@@ -70,7 +70,7 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   applies the requester's slot under rescheduleInterview's version guard,
  *   and needs to report VERSION_CONFLICT synchronously for the same reason
  *   as interview-comms-routes.ts above.
- * - manpower-planning/routes.ts:176 — `db.transaction(...)` for
+ * - manpower-planning/routes.ts:173 — `db.transaction(...)` for
  *   PUT .../roster. Not a version-guard case like the three above: this is a
  *   plain delete+insert (replaceRoster) with nothing to guard, but the route
  *   immediately reads the roster back (repo.listRoster) to answer the
@@ -164,7 +164,7 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/interview-recording-routes.ts:73",
   "recruitment/interview-recording-routes.ts:74",
   "recruitment/interview-response-routes.ts:103",
-  "manpower-planning/routes.ts:176",
+  "manpower-planning/routes.ts:173",
   "integration/routes.ts:75",
   "integration/routes.ts:92",
   "recruitment/screening-routes.ts:110",

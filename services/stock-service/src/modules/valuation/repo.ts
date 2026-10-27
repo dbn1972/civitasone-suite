@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { stockValuationRates, type ValuationRateRow } from "./schema.js";
 
 export async function findValuationRate(tenantId: string, itemId: string, warehouseId: string): Promise<ValuationRateRow | null> {

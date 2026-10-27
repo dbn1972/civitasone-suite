@@ -24,7 +24,6 @@
  * 500, not the RLS-GUC defect this test targets.)
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";

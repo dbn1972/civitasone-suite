@@ -11,10 +11,7 @@ import {
   Clock,
   AlertTriangle,
   DollarSign,
-  Calendar,
-  Building2,
   CreditCard,
-  ArrowRight,
   MoreVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -127,7 +124,7 @@ const SAMPLE_PAYMENTS: Payment[] = [
 ];
 
 export function FinancePayments() {
-  const [payments, setPayments] = useState<Payment[]>(SAMPLE_PAYMENTS);
+  const [payments] = useState<Payment[]>(SAMPLE_PAYMENTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());

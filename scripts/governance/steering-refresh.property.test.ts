@@ -101,28 +101,6 @@ interface SyntheticDocument {
   text: string;
 }
 
-/** Generates one synthetic document with 0-6 sections, covering a mix of
- * classifications (including "no Stale_Content at all" and "every section
- * is Stale_Content" as reachable cases via fc.oneof/fc.constantFrom). */
-const arbSyntheticDocument: fc.Arbitrary<SyntheticDocument> = fc
-  .tuple(
-    arbDocumentName,
-    fc.array(
-      fc.tuple(fc.constantFrom(...ALL_CLASSIFICATIONS), arbHeadingText, arbBodyText),
-      { minLength: 0, maxLength: 6 }
-    )
-  )
-  .map(([document, entries]) => {
-    const sections: ClassifiedSection[] = [];
-    let cursor = 1;
-    entries.forEach(([classification, headingText, bodyText], idx) => {
-      const section = buildSection(document, classification, `${headingText} d${idx}`, bodyText, cursor);
-      sections.push(section);
-      cursor = section.lineEnd + 1;
-    });
-    return { document, sections, text: renderDocumentText(sections) };
-  });
-
 /** Generates a *set* of synthetic documents (1-4 of them, distinct names),
  * covering both the "single document" and "multiple documents" edge cases
  * called out by the task. */

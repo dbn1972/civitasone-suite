@@ -13,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
 import { checkMandatoryConditions } from "./activation-domain.js";
 import { validateManagerAssignment, type ManagerGraph } from "./manager-domain.js";
@@ -45,7 +45,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     );
     if (!existsRows[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "employee_agent1_gap_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ data: { id, fitnessStatus: body.fitnessStatus } }) as any;
   });
 
@@ -105,7 +105,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // All conditions met — activate
-    await publishF3Write(ctx, "employee_agent1_gap_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "employee_agent1_gap_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // "active" was retired by migration 0025_employee_status_contract.sql in
     // favor of "confirmed" — the consumer now writes "confirmed" (see
     // f3-consumer.ts's employee_agent1_gap_routes__1), so echo the same value
@@ -153,7 +153,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     // (employee_agent1_gap_routes__2) actually writes. revertToStatus is
     // already known and validated at this point, so report it directly --
     // same fix already applied to 0175/0180 above.
-    await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ data: { id, status: body.revertToStatus } }) as any;
   });
 
@@ -203,7 +203,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     // never saw the manager ids they had just assigned. The consumer
     // (employee_agent1_gap_routes__3) returns { id: targetId, ...body } --
     // mirror that with the already zod-validated `body` here.
-    await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ data: { id, ...body } }) as any;
   });
 

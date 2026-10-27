@@ -4,7 +4,7 @@
  * Defines tenant-configurable routing rules for ticket assignment.
  * Strategies: round_robin, weighted, skill_based, least_busy.
  */
-import { pgSchema, uuid, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const helpdeskSchema = pgSchema("helpdesk");
 

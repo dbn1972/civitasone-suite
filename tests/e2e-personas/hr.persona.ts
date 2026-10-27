@@ -3,7 +3,7 @@
  *
  * Journey: HR hub → employees list → leave applications → attendance → estab hub
  */
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
 import { loginAs } from "./helpers/auth.js";
 import { assertPageLoaded, assertHasData } from "./helpers/assertions.js";
 

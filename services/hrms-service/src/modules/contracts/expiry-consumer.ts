@@ -1,5 +1,5 @@
 import { pino } from "pino";
-import { NonRetryableError, type Queue } from "@civitasone/queue";
+import { type Queue } from "@civitasone/queue";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, SYSTEM_ACTOR_ID } from "../../shared/outbox.js";
@@ -7,11 +7,10 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { hrmsContracts, hrmsContractNotifications } from "./schema.js";
 import { detectMilestones, daysUntilExpiry } from "./domain.js";
 import { getContractConfig, getSentMilestones, getPendingRenewalForContract } from "./repo.js";
-import { eq, and, inArray, lte, gte, sql } from "drizzle-orm";
+import { eq, and, inArray, lte } from "drizzle-orm";
 
 const log = pino({ name: "contract-expiry-consumer" });
 const NOTIFICATION_SEND = "notification.send";
-const AUDIT = "audit.event.record";
 const DEFAULT_MILESTONES = [90, 60, 30, 15, 7];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

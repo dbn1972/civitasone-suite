@@ -27,9 +27,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
 import type { DeputationRow } from "./schema.js";
 import { queue } from "../../shared/infra.js";
@@ -93,12 +92,12 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     const termsError = mergedTermsError(null, payTermsColumns(payTermsSchema.parse(body)));
     if (termsError) throw new HttpError(422, termsError, `deputation pay terms incomplete: ${termsError}`);
 
-    const emp = await mustEmployee(ctx.tenantId, id);
+    await mustEmployee(ctx.tenantId, id);
     const existing = await repo.findActiveByEmployee(ctx.tenantId, id);
     if (existing) throw new HttpError(409, "ALREADY_DEPUTED", "employee already has an active deputation");
 
     const depId = randomUUID();
-    await publishF3Write(ctx, "deputation_routes__0", depId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "deputation_routes__0", depId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send(jsonSafe({
       id: depId, employeeId: id, status: "active",
@@ -150,7 +149,7 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     // the source instead of asking the consumer to recover intent it was never
     // given.
     const op = newStatus === "repatriated" ? "deputation_routes__1" : "deputation_routes__2";
-    await publishF3Write(ctx, op, randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, op, randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send(jsonSafe({
       id: depId, employeeId: dep.employeeId, status: newStatus, effectiveDate,

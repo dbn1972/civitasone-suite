@@ -5,7 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getMyProfile } from "@/app/_data/loaders";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
 import { formatMoney, formatIndianDate, formatPeriod } from "@/lib/formatters";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_HR_READER_ROLES } from "@/lib/auth/workRoles";
 import { reimbursementCategoryKey } from "@/lib/payroll/reimbursementCategories";
 import { CreateReimbursementForm, type ClaimSubject } from "./CreateReimbursementForm";

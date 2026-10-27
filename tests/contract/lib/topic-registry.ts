@@ -14,7 +14,7 @@
  * to and *actually* enqueues, so a declaration that does not match the code is
  * caught (phantom declaration / undeclared consumption).
  */
-import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 

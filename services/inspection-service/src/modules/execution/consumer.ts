@@ -30,7 +30,6 @@ import {
 import {
   updateInspectionState,
   insertHistory,
-  findInspectionById,
   findInspectionByIdTx,
 } from "./repo.js";
 import type {

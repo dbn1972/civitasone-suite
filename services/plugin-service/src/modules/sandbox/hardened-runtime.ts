@@ -15,10 +15,9 @@
  * stripped-down context where dangerous APIs simply don't exist.
  */
 import { Worker } from "node:worker_threads";
-import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 
-const log = pino({ name: "plugin-sandbox" });
+pino({ name: "plugin-sandbox" });
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.PLUGIN_TIMEOUT_MS ?? 5000);
 const DEFAULT_MEMORY_MB = Number(process.env.PLUGIN_MEMORY_MB ?? 64);

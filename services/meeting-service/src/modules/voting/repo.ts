@@ -29,7 +29,7 @@
  * _Requirements: 11.1, 11.3, 11.4_
  */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { votes, recusals } from "./schema.js";
 import { resolutions } from "../decision/schema.js";

@@ -18,8 +18,10 @@ import {
   dailyAccruals, computeDeferredBalance, computeTotalDays, isFullyRecognized,
 } from "../src/modules/revenue/domain.js";
 import {
-  classifyRiskLevel, fallbackChurnScore, computeRevenueForcast,
-  type SubscriptionFeatures, type MrrDataPoint,
+  classifyRiskLevel,
+  fallbackChurnScore,
+  type SubscriptionFeatures,
+  type MrrDataPoint,
 } from "../src/modules/churn/domain.js";
 
 // ═══════════════════════════════════════════════

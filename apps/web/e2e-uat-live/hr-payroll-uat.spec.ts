@@ -1,8 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { liveLogin, getLiveAccessToken, LIVE_BASE_URL, GATEWAY_URL, PRIYA, SUPER_ADMIN } from "./helpers/live-auth";
-// Importing live-auth sets NODE_TLS_REJECT_UNAUTHORIZED=0 for this process,
-// required since the nip.io host uses a self-signed nginx cert and Node's
-// fetch (used directly below) has no per-call TLS override.
+// live-auth pins the nip.io host's self-signed cert via LIVE_TLS_CA_FILE for
+// the token call; certificate validation is never disabled.
 
 /**
  * Live UAT smoke suite for the CivitasOne deployment at

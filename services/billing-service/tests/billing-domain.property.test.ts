@@ -35,11 +35,6 @@ const positivePaiseArb: fc.Arbitrary<bigint> = fc.bigInt({
 /** Number of days in a billing period: 1 to 366 (covers leap year) */
 const totalDaysArb: fc.Arbitrary<number> = fc.integer({ min: 1, max: 366 });
 
-/** Days remaining in a billing cycle (0 to totalDays) */
-function daysRemainingArb(totalDays: number): fc.Arbitrary<number> {
-  return fc.integer({ min: 0, max: totalDays });
-}
-
 /** Plan price in paise: 0 to 100 crore */
 const planPaiseArb: fc.Arbitrary<bigint> = fc.bigInt({
   min: 0n,
@@ -47,7 +42,7 @@ const planPaiseArb: fc.Arbitrary<bigint> = fc.bigInt({
 });
 
 /** Positive plan price in paise: 1 to 100 crore */
-const positivePlanPaiseArb: fc.Arbitrary<bigint> = fc.bigInt({
+fc.bigInt({
   min: 1n,
   max: 1_000_000_000n,
 });

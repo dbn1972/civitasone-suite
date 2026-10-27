@@ -947,6 +947,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -2881,6 +2884,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -3505,6 +3511,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/render':
         specifier: workspace:*
         version: link:../../packages/render
@@ -5380,6 +5389,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -5456,6 +5468,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

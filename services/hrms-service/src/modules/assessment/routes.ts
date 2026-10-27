@@ -4,16 +4,20 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS, COMMANDS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveOwnEmployeeIdIfNonHr } from "../../shared/self-scope.js";
 import {
-  gradeAttempt, decidePass, canAttempt, issueCertificate, evaluateCertificateStatus,
-  visibleAssessmentsForRoles, projectCertificateVerification, toLearnerSafeQuestion,
-  type GradableQuestion, type Qtype,
+  gradeAttempt,
+  decidePass,
+  canAttempt,
+  evaluateCertificateStatus,
+  visibleAssessmentsForRoles,
+  projectCertificateVerification,
+  toLearnerSafeQuestion,
+  type GradableQuestion,
+  type Qtype,
 } from "./domain.js";
 import {
   createBankBody, createQuestionBody, createAssessmentBody,
@@ -37,7 +41,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/assessment/question-banks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = createBankBody.parse(req.body);
+    createBankBody.parse(req.body);
     const id = randomUUID();
     await publishF3Write(ctx, "assessment_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "active" }) as any;
@@ -60,14 +64,14 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = createQuestionBody.parse(req.body);
+    createQuestionBody.parse(req.body);
     const bank = await repo.getBank(ctx.tenantId, id);
     if (!bank) throw new HttpError(404, "NOT_FOUND", "question bank not found");
     if (bank.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "question-bank change requires a checker different from the bank creator");
     }
     const qid = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__1", qid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__1", qid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send({ id: qid }) as any;
   });
 
@@ -123,7 +127,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (a.status !== "draft") {
       throw new HttpError(409, "INVALID_STATE", "passing score can only be changed while draft");
     }
-    await publishF3Write(ctx, "assessment_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // `body.passingScore` is exactly what the consumer will persist.
     return reply.send({ id, passingScore: body.passingScore });
   });
@@ -237,7 +241,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     // previously did) meant this variable was dead and the id this handler
     // returned only happened to line up with the inserted row by coincidence
     // of both reading off the placeholder's `id` field.
-    await publishF3Write(ctx, "assessment_routes__7", attemptId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__7", attemptId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // publishF3Write only ever resolves the { id, status, correlationId }
     // placeholder (see shared/f3-publish.ts) — it never carries `attemptNo`,
     // so `attempt.attemptNo` was always `undefined`, and `attempt.status`
@@ -281,7 +285,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (effectiveEmployeeId !== attempt.employeeId) throw new HttpError(403, "FORBIDDEN", "cannot submit another employee's attempt");
     const a = await repo.getAssessment(ctx.tenantId, attempt.assessmentId);
     if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
-    const bank = await repo.getBank(ctx.tenantId, a.bankId);
+    await repo.getBank(ctx.tenantId, a.bankId);
     const qrows = await repo.listQuestions(ctx.tenantId, a.bankId);
 
     const gradable: GradableQuestion[] = qrows.map((q) => ({
@@ -306,7 +310,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     // callers can read it back via GET /v1/hrms/attempts/:id once the write
     // has landed, which already returns `certificate` from
     // repo.getCertificateByAttempt.
-    await publishF3Write(ctx, "assessment_routes__8", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__8", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "graded", score: graded.score, passed });
   });
 

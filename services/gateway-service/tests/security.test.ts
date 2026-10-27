@@ -33,7 +33,7 @@ afterEach(() => {
 describe("FIX-00: x-internal auth bypass", () => {
   it("strips x-internal from external requests — bypass header never reaches upstream", async () => {
     const app = await buildApp();
-    const res = await app.inject({
+    await app.inject({
       method: "GET",
       url: "/api/v1/finance/bills",
       headers: {

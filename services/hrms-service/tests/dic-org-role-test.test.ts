@@ -18,17 +18,6 @@ const TENANT = randomUUID(); // Digital India Corporation tenant
 // Synthetic Indian Employees — Digital India Corporation
 // ═══════════════════════════════════════════════════════════════════════
 
-const ORG = {
-  name: "Digital India Corporation",
-  tenantId: TENANT,
-  departments: {
-    engineering: randomUUID(),
-    hr: randomUUID(),
-    finance: randomUUID(),
-    admin: randomUUID(),
-  },
-};
-
 const EMPLOYEES = {
   // CEO / Super Admin
   rajeshSharma: { id: randomUUID(), name: "Rajesh Sharma", designation: "CEO", dept: "admin", roles: ["super_admin", "tenant_admin"] },

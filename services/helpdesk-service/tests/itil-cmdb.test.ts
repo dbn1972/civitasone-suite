@@ -8,7 +8,7 @@
  * - CMDB asset linkage
  * - Graceful degradation when asset-service is unavailable
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -16,7 +16,6 @@ import { sqlClient } from "../src/shared/db.js";
 import {
   isValidTransition,
   getInitialStatus,
-  getStatusesForType,
   getValidNextStatuses,
   isValidStatusForType,
   validateTypeFields,

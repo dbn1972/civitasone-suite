@@ -16,13 +16,12 @@
  *   GET     (list / one)              → masked reads (secrets NEVER returned)
  */
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
-import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { z } from "zod";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import {
-  ConfigError,
   assertApproverDistinct,
   assertPending,
   assertVersionMatch,
@@ -33,7 +32,6 @@ import {
   maskLast4,
 } from "./domain.js";
 import {
-  PROVIDERS,
   ENV_SCOPES,
   REGISTRY,
   isProvider,
@@ -44,7 +42,6 @@ import {
 import type { IntegrationSettingRow, IntegrationChangeRow } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-const ROLES = [...TENANT_ADMIN_ROLES];
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -56,7 +53,6 @@ const putBody = z.object({
   expectedVersion: z.coerce.number().int().min(1).optional(),
 });
 const rejectBody = z.object({ reason: z.string().min(3).max(1000) });
-const listChangesQuery = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 
 function parseTarget(params: unknown): { provider: Provider; env: EnvScope } {
   const p = params as { provider?: string; env?: string };
@@ -67,50 +63,6 @@ function parseTarget(params: unknown): { provider: Provider; env: EnvScope } {
     throw new HttpError(400, "INVALID_ENV_SCOPE", `env must be one of: ${ENV_SCOPES.join(", ")}`);
   }
   return { provider: p.provider, env: p.env };
-}
-
-/** Serialize a live setting for the API — secrets are NEVER included. */
-function serializeSetting(provider: Provider, env: EnvScope, row: IntegrationSettingRow | undefined): Record<string, unknown> {
-  const def = REGISTRY[provider];
-  return {
-    provider,
-    envScope: env,
-    category: def.category,
-    label: def.label,
-    secretFields: def.secretFields,
-    enabled: row?.enabled ?? false,
-    endpointUrl: row?.endpointUrl ?? "",
-    config: row?.config ?? {},
-    hasSecret: Boolean(row?.secretCiphertext),
-    secretMasked: maskLast4(row?.secretLast4),
-    status: row?.status ?? "unconfigured",
-    lastTestedAt: row?.lastTestedAt?.toISOString?.() ?? null,
-    lastError: row?.lastError ?? null,
-    version: row?.version ?? 0,
-    updatedAt: row?.updatedAt?.toISOString?.() ?? null,
-    updatedBy: row?.updatedBy ?? null,
-  };
-}
-
-function serializeChange(row: IntegrationChangeRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    provider: row.provider,
-    envScope: row.envScope,
-    enabled: row.enabled,
-    endpointUrl: row.endpointUrl,
-    config: row.config,
-    secretChanged: row.secretChanged,
-    secretMasked: maskLast4(row.secretLast4),
-    note: row.note,
-    status: row.status,
-    proposedBy: row.proposedBy,
-    approvedBy: row.approvedBy,
-    approvedAt: row.approvedAt?.toISOString?.() ?? null,
-    rejectedReason: row.rejectedReason,
-    baseVersion: row.baseVersion,
-    createdAt: row.createdAt?.toISOString?.() ?? null,
-  };
 }
 
 async function audit(tx: Tx, ctx: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
@@ -132,7 +84,7 @@ export async function apply_integration_settings_0(ctx: any, req: { body: unknow
     const { ciphertext } = sealSecrets(secrets);
     const last4 = primaryLast4(provider, secrets);
 
-    const change = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const live = await repo.findSettingTx(tx as repo.Writer, ctx.tenantId, provider, env);
       if (live) assertVersionMatch(body.expectedVersion, live.version);
       const row = await repo.insertChange(tx as repo.Writer, {
@@ -161,7 +113,7 @@ export async function apply_integration_settings_1(ctx: any, req: { body: unknow
   // post:"/v1/admin/integrations/:provider/:env/approve"
     const { provider, env } = parseTarget(req.params);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const change = await repo.findLatestPendingTx(tx as repo.Writer, ctx.tenantId, provider, env);
       if (!change) throw new HttpError(404, "NO_PENDING_CHANGE", "no pending change to approve");
       assertPending(change.status);

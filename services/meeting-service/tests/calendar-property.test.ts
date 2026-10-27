@@ -59,17 +59,6 @@ const arbBooking: fc.Arbitrary<RoomBookingLike> = fc
     status,
   }));
 
-/** Generate a confirmed booking for a specific room (to test same-room conflicts). */
-function arbConfirmedBookingForRoom(roomId: string): fc.Arbitrary<RoomBookingLike> {
-  return fc.tuple(arbBookingId, arbInterval).map(([id, interval]) => ({
-    id,
-    roomId,
-    startAt: interval.start,
-    endAt: interval.end,
-    status: "confirmed",
-  }));
-}
-
 // ─── Property tests ───────────────────────────────────────────────────────────
 
 describe("P28: No double-booking — property-based tests", () => {

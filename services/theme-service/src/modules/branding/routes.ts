@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { upsertBrandingBody, idParam, brandingListSchema, brandingViewSchema } from "./validators.js";
+import { upsertBrandingBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 

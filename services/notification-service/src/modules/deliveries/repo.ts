@@ -1,6 +1,6 @@
 import { eq, and, lte, desc, ne } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
-import { db, scopedRead, readScoped } from "../../shared/db.js";
+import { db, readScoped } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { notificationDeliveries, type DeliveryInsert, type RetryPayload } from "./schema.js";
 

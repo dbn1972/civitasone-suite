@@ -12,7 +12,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { resolveDeptScope } from "./dept-scope.js";
 
@@ -50,13 +49,6 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
-// Map route mode -> DB CHECK domain.
-const MODE_DB: Record<string, string> = { in_person: "in_person", video: "video", phone: "telephonic" };
-// Map scorecard recommendation -> DB recommendation CHECK domain (subset).
-const RECO_DB: Record<string, string | null> = {
-  strong_hire: "strong_hire", hire: "hire", no_hire: "no_hire", strong_no_hire: "no_hire",
-};
-
 export async function interviewRoutes(app: FastifyInstance): Promise<void> {
   // Schedule interview
   app.post("/v1/hrms/interviews", async (req, reply) => {
@@ -93,7 +85,7 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "recruitment_interview_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_interview_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({ id, status: "scheduled", message: "interview scheduled" }) as any;
   });
@@ -158,7 +150,7 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
       submittedBy: ctx.actorId,
       submittedAt: new Date().toISOString(),
     };
-    await publishF3Write(ctx, "recruitment_interview_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_interview_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ id, status: "completed", message: "scorecard submitted" }) as any;
   });

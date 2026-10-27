@@ -3,7 +3,7 @@
  * Covers secret splitting/sealing, masking, maker-checker + version guards,
  * and per-provider schema validation.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 
 process.env.CONFIG_ENC_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 

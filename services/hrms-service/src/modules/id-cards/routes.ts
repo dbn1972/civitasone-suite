@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool, sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { queue } from "../../shared/infra.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";

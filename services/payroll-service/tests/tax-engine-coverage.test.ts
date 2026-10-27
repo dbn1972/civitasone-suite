@@ -3,9 +3,17 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  computeTax, monthlyTdsMinor, hraExemptionMinor, annualTaxFromTaxableMinor,
-  monthlyTdsFromTaxableMinor, trueUpTdsMinor, fyStartYearForMonth,
-  getTaxConfig, slabsFor, stdDeduction, isTaxConfigLoaded, UnconfiguredFyError,
+  computeTax,
+  monthlyTdsMinor,
+  hraExemptionMinor,
+  annualTaxFromTaxableMinor,
+  trueUpTdsMinor,
+  fyStartYearForMonth,
+  getTaxConfig,
+  slabsFor,
+  stdDeduction,
+  isTaxConfigLoaded,
+  UnconfiguredFyError,
 } from "../src/modules/tax/engine.js";
 
 describe("tax/engine — config registry", () => {

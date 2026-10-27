@@ -17,6 +17,20 @@ import * as repo from "./repo.js";
 const EXPORT_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_admin"];
 const READER_ROLES = EXPORT_ROLES;
 const EXPORT_DIR = process.env.EXPORT_DIR ?? "/tmp/audit-exports";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ARTIFACT_FORMATS: ReadonlySet<string> = new Set(["json", "csv"]);
+
+/**
+ * Resolve an export artifact path under EXPORT_DIR. Tenant and export id must be UUIDs and the format a known
+ * extension, and the resolved path must stay inside EXPORT_DIR, so no path segment can traverse out of it
+ * (CodeQL js/path-injection).
+ */
+export function exportArtifactPath(tenantId: string, exportId: string, format: string): string | null {
+  if (!UUID_RE.test(tenantId) || !UUID_RE.test(exportId) || !ARTIFACT_FORMATS.has(format)) return null;
+  const base = path.resolve(EXPORT_DIR);
+  const file = path.resolve(base, tenantId, `${exportId}.${format}`);
+  return file.startsWith(base + path.sep) ? file : null;
+}
 
 function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>) {
   const ready = r.status === "completed" && !!r.signedUrl;
@@ -106,8 +120,8 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
       throw new HttpError(410, "EXPIRED", "export retention window elapsed");
     }
-    const file = path.join(EXPORT_DIR, ctx.tenantId, `${id}.${row.format}`);
-    const buf = await readFile(file).catch(() => null);
+    const file = exportArtifactPath(ctx.tenantId, id, row.format);
+    const buf = file ? await readFile(file).catch(() => null) : null;
     if (!buf) throw new HttpError(404, "NOT_FOUND", "artifact missing");
     // Q34: single-use. Redeemed only once every other check has passed and the
     // artifact is in hand, so a refused or failed attempt does not burn the token;
@@ -145,8 +159,8 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     if (!row.contentSha256 || !row.signature) {
       throw new HttpError(409, "NOT_SIGNED", "export has no integrity signature");
     }
-    const file = path.join(EXPORT_DIR, ctx.tenantId, `${id}.${row.format}`);
-    const buf = await readFile(file).catch(() => null);
+    const file = exportArtifactPath(ctx.tenantId, id, row.format);
+    const buf = file ? await readFile(file).catch(() => null) : null;
     if (!buf) {
       return reply.send({ data: { id, verified: false, contentMatch: false, signatureMatch: false, reason: "artifact missing" } });
     }

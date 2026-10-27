@@ -2,7 +2,7 @@
  * CLOS2-S6-13: bill date is the IST calendar date, not the UTC date. A bill
  * generated 00:00-05:30 IST must carry that IST day.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -95,18 +95,6 @@ function createMockQueue() {
     start: vi.fn(),
     stop: vi.fn(),
   } as any;
-}
-
-function buildMsg(overrides: Partial<any> = {}) {
-  return {
-    messageId: "msg-billing-001",
-    tenantId: "tenant-1",
-    actorId: "actor-1",
-    correlationId: "corr-1",
-    occurredAt: new Date().toISOString(),
-    payload: { assessmentId: "assessment-1" },
-    ...overrides,
-  };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

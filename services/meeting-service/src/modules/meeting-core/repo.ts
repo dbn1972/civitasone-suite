@@ -27,7 +27,7 @@
  * _Requirements: 1.1, 1.7_
  */
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
   meetings,

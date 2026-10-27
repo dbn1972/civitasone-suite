@@ -8,7 +8,7 @@
  * All money is stored as bigint paise. Every table is tenant-scoped with
  * optimistic locking via `version`.
  */
-import { pgSchema, uuid, varchar, integer, bigint, timestamp, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("inventory");
 

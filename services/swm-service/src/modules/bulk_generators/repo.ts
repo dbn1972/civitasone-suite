@@ -1,5 +1,5 @@
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { swmBulkGenerators, type BulkGeneratorRow, type BulkGeneratorInsert } from "./schema.js";
 
 export function toView(r: BulkGeneratorRow) {

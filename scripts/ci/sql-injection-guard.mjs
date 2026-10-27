@@ -148,7 +148,7 @@ function scanFile(filePath) {
       pattern.regex.lastIndex = 0;
       const matches = line.match(pattern.regex);
       if (matches) {
-        for (const match of matches) {
+        for (let i = 0; i < matches.length; i++) {
           // Double-check: skip if line has a whitelist comment
           if (line.includes("// sql-injection-safe")) continue;
 

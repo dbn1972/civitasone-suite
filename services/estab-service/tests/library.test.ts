@@ -20,7 +20,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabLibraryBooks, estabIssues } from "../src/modules/facilities/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerFacilitiesConsumers } from "../src/modules/facilities/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import { drainOrFail } from "../../../vitest.drain";

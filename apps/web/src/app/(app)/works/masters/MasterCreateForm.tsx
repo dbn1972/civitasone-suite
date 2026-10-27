@@ -215,7 +215,7 @@ export function MasterCreateForm({
    */
   createLocked?: boolean;
 }) {
-  const router = useRouter();
+  useRouter();
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const t = useTranslations("works.masters");

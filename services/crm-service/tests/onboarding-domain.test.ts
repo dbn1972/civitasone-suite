@@ -4,10 +4,17 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  canTransition, isTerminalStage, allowedNextStages, canKycTransition,
-  requiresKycVerification, isKycSatisfied, isKycGateSatisfied,
-  requiresCancellationReason, isValidCancellationReason,
-  INITIAL_STAGE, INITIAL_KYC_STATUS, CANCELLATION_REASON_MIN_LENGTH,
+  canTransition,
+  isTerminalStage,
+  canKycTransition,
+  requiresKycVerification,
+  isKycSatisfied,
+  isKycGateSatisfied,
+  requiresCancellationReason,
+  isValidCancellationReason,
+  INITIAL_STAGE,
+  INITIAL_KYC_STATUS,
+  CANCELLATION_REASON_MIN_LENGTH,
 } from "../src/modules/onboarding/domain.js";
 
 describe("onboarding stage transitions", () => {

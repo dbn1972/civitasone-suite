@@ -11,7 +11,7 @@ import {
   weightedAvgRate, assertSufficientStock, valuationMinor,
   isLowStock, suggestedReorderQty, type BalanceState,
 } from "../src/modules/movements/domain.js";
-import { createItemBody, updateItemBody, createReservationBody, idParam } from "../src/modules/items/validators.js";
+import { createItemBody, updateItemBody, createReservationBody } from "../src/modules/items/validators.js";
 
 // ═══ Movements Domain ═══
 

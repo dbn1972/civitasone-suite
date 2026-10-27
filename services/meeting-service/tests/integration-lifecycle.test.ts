@@ -25,7 +25,6 @@ import type { CommandEnvelope } from "@civitasone/queue";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { cache } from "../src/shared/infra.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { registerMeetingCoreConsumers } from "../src/modules/meeting-core/consumer.js";
 import { registerAgendaConsumers } from "../src/modules/agenda/consumer.js";
@@ -124,14 +123,6 @@ async function readMeeting(id: string) {
     sql`SELECT * FROM meeting.meetings WHERE id = ${id} AND tenant_id = ${TENANT}`,
   );
   return (rows as any)[0] ?? null;
-}
-
-/** Count state transitions for a meeting */
-async function countTransitions(meetingId: string): Promise<number> {
-  const rows = await tenantQuery((sql) =>
-    sql`SELECT count(*)::int AS n FROM meeting.meeting_state_transitions WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT}`,
-  );
-  return (rows as any)[0].n;
 }
 
 /** Get all state transitions for a meeting */

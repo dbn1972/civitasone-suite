@@ -6,6 +6,7 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { verifyTrackedLink } from "./domain.js";
 
 // 1x1 transparent GIF pixel (43 bytes)
 const TRANSPARENT_GIF = Buffer.from(
@@ -66,7 +67,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
   // GET /t/click/:deliveryId — click tracking redirect
   app.get("/t/click/:deliveryId", async (req, reply) => {
     const params = req.params as { deliveryId?: string };
-    const query = req.query as { url?: string };
+    const query = req.query as { url?: string; sig?: string };
 
     const deliveryId = params.deliveryId;
     const targetUrl = query.url;
@@ -75,18 +76,23 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "MISSING_URL", message: "url query parameter is required" });
     }
 
-    if (deliveryId) {
-      // Fire-and-forget: enqueue click event
-      await queue.publish(COMMANDS.recordClick, {
-        messageId: randomUUID(),
-        type: COMMANDS.recordClick,
-        tenantId: "system",
-        actorId: "tracking",
-        correlationId: deliveryId,
-        schemaVersion: "1.0",
-        payload: { tenantId: "system", deliveryId, linkUrl: targetUrl },
-      }).catch(() => { /* tracking failure is non-critical */ });
+    // Only redirect to a destination this service signed into the outgoing email: an unsigned or forged
+    // ?url= would make this public endpoint an open redirector (and let anyone forge click events).
+    const secret = process.env.NOTIFICATION_TRACKING_SECRET ?? "";
+    if (!deliveryId || !verifyTrackedLink(secret, deliveryId, targetUrl, query.sig)) {
+      return reply.code(400).send({ code: "INVALID_LINK", message: "tracking link is invalid" });
     }
+
+    // Fire-and-forget: enqueue click event
+    await queue.publish(COMMANDS.recordClick, {
+      messageId: randomUUID(),
+      type: COMMANDS.recordClick,
+      tenantId: "system",
+      actorId: "tracking",
+      correlationId: deliveryId,
+      schemaVersion: "1.0",
+      payload: { tenantId: "system", deliveryId, linkUrl: targetUrl },
+    }).catch(() => { /* tracking failure is non-critical */ });
 
     return reply.redirect(302, targetUrl);
   });

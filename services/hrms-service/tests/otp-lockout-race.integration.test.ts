@@ -55,7 +55,6 @@ import { eq } from "drizzle-orm";
 import { MAX_ATTEMPTS } from "../src/modules/recruitment/otp-verify.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const HR_TENANT = "bbbbbbbb-0ace-4000-8000-0000000000ac";
 const HR_USER = "bbbbbbbb-7777-4000-8000-0000000000ac";
 
 process.env.FEATURE_OTP_VERIFICATION_ENABLED = "true";

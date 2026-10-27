@@ -45,8 +45,6 @@ import {
   type Source,
 } from "@/lib/notifications/campaigns";
 
-const inputStyle = { padding: 8, minHeight: 38, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
-
 type ListSource = Source | "loading";
 type StatusFilter = "all" | CampaignStatus;
 
@@ -224,7 +222,7 @@ function CreateCampaignDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const templateId = useId();
+  useId();
   const consentNoteId = useId();
 
   const [name, setName] = useState("");

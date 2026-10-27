@@ -42,7 +42,7 @@ import { registerVendorBlacklistConsumers } from "../src/modules/vendor-blacklis
 import { vendorBlacklist } from "../src/modules/vendor-blacklist/schema.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
 import * as repo from "../src/modules/vendor-blacklist/repo.js";
-import { COMMANDS, EVENTS } from "../src/topics.js";
+import { COMMANDS } from "../src/topics.js";
 
 const TENANT_A = "7b7b7b7b-3002-4000-8000-0000000000f1";
 const TENANT_B = "7b7b7b7b-3002-4000-8000-0000000000f2";

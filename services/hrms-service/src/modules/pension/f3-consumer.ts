@@ -1,9 +1,9 @@
 import { parseMinor } from "@civitasone/schemas/money";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { computePension, summariseNonQualifying, type PensionResult, type ServiceBookEvent } from "./engine.js";
@@ -31,7 +31,6 @@ export function registerF3_pension_Consumers(queue: Queue): void {
       "pension_routes__0",
     ]);
     if (!ops.has(op)) return;
-    const body = p.body ?? {};
     const params = p.params ?? {};
     const id = (p.id as string) || (params.id as string);
     try {

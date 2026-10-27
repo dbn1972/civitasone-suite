@@ -219,7 +219,7 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
   it("access ledger is append-only (UPDATE/DELETE rejected)", async () => {
     const mq = q(); await mq.start();
     const principal = randomUUID();
-    const id = await seed(mq, T1, { principalId: principal, categories: ["address"] });
+    await seed(mq, T1, { principalId: principal, categories: ["address"] });
     await mq.stop();
     const rows = await repo.listLedgerByPrincipal(T1, principal);
     expect(rows.length).toBeGreaterThanOrEqual(1);

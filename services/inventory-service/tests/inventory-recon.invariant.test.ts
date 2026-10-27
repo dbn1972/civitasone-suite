@@ -22,7 +22,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { items } from "../src/modules/items/schema.js";
 import { stores } from "../src/modules/stores/schema.js";

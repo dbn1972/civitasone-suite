@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEP_TYPES, MAX_LAG_MS, MIN_LAG_MS, MAX_DEPS_PER_TASK } from "./domain.js";
+import { MAX_LAG_MS, MIN_LAG_MS } from "./domain.js";
 
 export const createDependencyBody = z.object({
   fromTaskId: z.string().uuid(),

@@ -16,7 +16,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   normalizeEmail, mobileDedupKey, CATEGORIES, lockedFieldsIn, consentSatisfied, profileCompleteness,
 } from "./candidate.js";
@@ -80,7 +79,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     }
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_candidate_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_candidate_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" }) as any;
@@ -149,7 +148,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const locked = lockedFieldsIn(c.status, requested);
     if (locked.length > 0) throw new HttpError(409, "FIELDS_LOCKED", `these fields are locked after submission: ${locked.join(", ")}`);
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId, ...pick(body) };
-    await publishF3Write(ctx, "recruitment_candidate_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_candidate_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: c.status }) as any;
   });
 
@@ -157,7 +156,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       qualification: z.string().min(1).max(120), subject: z.string().max(200).optional(),
       institution: z.string().max(200).optional(), boardUniversity: z.string().max(200).optional(),
       yearOfPassing: z.coerce.number().int().min(1900).max(2100).optional(),
@@ -174,7 +173,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       employer: z.string().min(1).max(200), roleTitle: z.string().max(200).optional(),
       fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       noticePeriodDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -211,7 +210,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     if (submissionRequiresVerification(otpVerificationEnabled(process.env), c.emailVerified)) {
       throw new HttpError(422, "EMAIL_NOT_VERIFIED", "email must be verified (OTP) before the profile can be submitted");
     }
-    await publishF3Write(ctx, "recruitment_candidate_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_candidate_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "submitted", consentVersion: body.consentVersion }) as any;
   });
 
@@ -229,7 +228,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const c = await mustCand(ctx.tenantId, id);
+    await mustCand(ctx.tenantId, id);
     await publishF3Write(ctx, "recruitment_candidate_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, dataRequestRecorded: true }) as any;
   });

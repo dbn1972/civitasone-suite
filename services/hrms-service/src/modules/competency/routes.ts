@@ -4,7 +4,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { canReadEmployeeRecord } from "../../shared/self-scope.js";
@@ -78,7 +77,7 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/competency/frameworks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = createFrameworkBody.parse(req.body);
+    createFrameworkBody.parse(req.body);
     const id = randomUUID();
     await publishF3Write(ctx, "competency_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "active" }) as any;
@@ -94,10 +93,9 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = createCompetencyBody.parse(req.body);
+    createCompetencyBody.parse(req.body);
     const fw = await repo.getFramework(ctx.tenantId, id);
     if (!fw) throw new HttpError(404, "NOT_FOUND", "framework not found");
-    const cid = randomUUID();
     const row = await publishF3Write(ctx, "competency_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: row.id, code: row.code }) as any;
   });

@@ -8,7 +8,6 @@ import { describe, it, expect } from "vitest";
 import {
   CAPA_STATES,
   CAPA_TYPES,
-  CAPA_TRANSITIONS,
   assertValidCapaTransition,
   validateEffectivenessEvidence,
   isOverdue,

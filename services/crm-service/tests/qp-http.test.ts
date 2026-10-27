@@ -103,7 +103,7 @@ describe("QP-002 price-book resolution", () => {
     await drainQueue();
 
     // Add an item to the high-priority book.
-    const prod = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PB-SKU", name: "PB Product", priceMinor: "500000" } });
+    await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PB-SKU", name: "PB Product", priceMinor: "500000" } });
     await drainQueue();
     const prodRow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = 'PB-SKU' AND tenant_id = ${TENANT}`);
     const productId = prodRow[0]!.id;
@@ -213,7 +213,7 @@ describe("QP-004 quotation discount-approval send-gate (server-derived)", () => 
 describe("QP-003 line items (paise) + QP-005 convert-to-order", () => {
   it("persists relational line items as paise and rejects a non-active product", async () => {
     const app = await buildApp();
-    const prod = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "LI-SKU", name: "Line Product", priceMinor: "250000", enabled: true } });
+    await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "LI-SKU", name: "Line Product", priceMinor: "250000", enabled: true } });
     await drainQueue();
     const prodRow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = 'LI-SKU' AND tenant_id = ${TENANT}`);
     const productId = prodRow[0]!.id;
@@ -234,7 +234,7 @@ describe("QP-003 line items (paise) + QP-005 convert-to-order", () => {
     expect(rows[0]!.unitPriceMinor).toBe("250000");
 
     // A disabled product cannot be quoted.
-    const off = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "OFF-SKU", name: "Off", enabled: false } });
+    await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "OFF-SKU", name: "Off", enabled: false } });
     await drainQueue();
     const offRow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = 'OFF-SKU' AND tenant_id = ${TENANT}`);
     const badQuote = await app.inject({

@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, readScoped } from "../../shared/db.js";
 import { policies, policyVersions, policyAcknowledgments } from "./schema.js";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];

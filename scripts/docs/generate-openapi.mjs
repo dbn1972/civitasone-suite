@@ -139,7 +139,7 @@ function indent(str, level) {
 function yamlValue(val) {
   if (typeof val === "string") {
     if (val.includes(":") || val.includes("#") || val.includes("{")) {
-      return `"${val.replace(/"/g, '\\"')}"`;
+      return `"${val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     }
     return val;
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
-import { readFile, writeFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
@@ -474,8 +474,9 @@ describe("DB-backed audit ledger", () => {
     expect(sidecar.contentSha256).toBe(row!.contentSha256);
 
     // Tamper the WORM artifact on disk → integrity check must FAIL.
-    await writeFile(file, buf.toString("utf8") + "\n/* tampered */", "utf8");
-    const tampered = await readFile(file);
+    // (In memory: verifyArtifact takes the bytes, so there is no need to rewrite a file under the
+    // predictable shared /tmp EXPORT_DIR -- CodeQL js/insecure-temporary-file #953.)
+    const tampered = Buffer.from(buf.toString("utf8") + "\n/* tampered */", "utf8");
     const bad = verifyArtifact(
       tampered,
       { contentSha256: row!.contentSha256!, signature: row!.signature! },

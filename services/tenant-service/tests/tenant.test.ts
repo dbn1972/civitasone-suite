@@ -7,7 +7,7 @@
  *
  * Integration tests against a real Fastify app + DB run in CI (supertest + testcontainers).
  */
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { canTransition, assertTransition } from "../src/modules/tenant/domain.js";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";

@@ -39,15 +39,11 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
+import { scopedRead } from "../../shared/db.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./doc-repo.js";
 import {
   DOCUMENT_CATEGORIES,
-  classifyExpiry,
-  daysUntil,
   evaluateCompliance,
   assertExpiryPresentWhenRequired,
   assertExpiryAfterIssue,
@@ -59,8 +55,6 @@ import type { DocumentTypeRow, DocumentRequirementRow, DocumentRow } from "./doc
 
 const DOC_ROLES = [...TENANT_ADMIN_ROLES, "hr_admin", "hr_officer", "officer", "manager"];
 const ADMIN_ONLY = [...TENANT_ADMIN_ROLES];
-const RESOURCE_TYPE = "document_type";
-const RESOURCE_DOC = "document";
 
 const limitSchema = z.coerce.number().int().min(1).max(200);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
@@ -181,10 +175,6 @@ function serializeDocument(row: DocumentRow): Record<string, unknown> {
   };
 }
 
-function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
-  return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
-}
-
 export async function documentGovernanceRoutes(app: FastifyInstance): Promise<void> {
   // ── document types ────────────────────────────────────────────────────────
   app.post("/v1/admin/document-types", async (req, reply) => {
@@ -206,7 +196,6 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -270,7 +259,6 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    const saved = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -309,7 +297,6 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 

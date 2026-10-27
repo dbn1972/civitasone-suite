@@ -15,7 +15,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { offerFunnel, acceptanceRatePct, pendingAgeing, declineBreakdown, type OfferStat } from "./offer-analytics-domain.js";
 import * as offerRepo from "./offer-repo.js";
 import * as analyticsRepo from "./offer-analytics-repo.js";
@@ -50,7 +49,7 @@ export async function offerExtraRoutes(app: FastifyInstance): Promise<void> {
     if (!current) throw new HttpError(409, "NO_JOINING_DATE", "the offer has no joining date to extend");
     if (body.requestedJoiningDate <= current) throw new HttpError(422, "NOT_LATER", "the requested joining date must be later than the current one");
 
-    await publishF3Write(ctx, "recruitment_offer_extra_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_extra_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ offerId, joiningExtensionStatus: "requested", requestedJoiningDate: body.requestedJoiningDate }) as any;
   });
 

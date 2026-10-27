@@ -5,7 +5,7 @@
  * app.tenant_id from AsyncLocalStorage before the query.
  */
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import {
   roadHotspots,
   roadHotspotLinks,

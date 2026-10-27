@@ -31,10 +31,7 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
   sanitizeTemplateConfig,
@@ -46,7 +43,6 @@ import {
 import type { DepartmentTemplateRow, DepartmentInstantiationRow } from "./schema.js";
 
 const TEMPLATE_ROLES = [...TENANT_ADMIN_ROLES];
-const RESOURCE = "department_template";
 
 const limitSchema = z.coerce.number().int().min(1).max(200);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
@@ -115,10 +111,6 @@ function serializeInstantiation(row: DepartmentInstantiationRow): Record<string,
   };
 }
 
-function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
-  return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
-}
-
 export async function departmentTemplateRoutes(app: FastifyInstance): Promise<void> {
   // ── clone a department config into a template ─────────────────────────────
   app.post("/v1/admin/department-templates", async (req, reply) => {
@@ -130,7 +122,7 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     }
 
     const foreignRefs = findForeignTenantRefs(body.config, ctx.tenantId);
-    const { config, droppedRefs } = sanitizeTemplateConfig(body.config, ctx.tenantId);
+    const { config } = sanitizeTemplateConfig(body.config, ctx.tenantId);
     assertConfigNotEmpty(config);
 
     // Synchronous pre-check lifted from apply_dept_templates_0 (f3-apply.ts):
@@ -208,7 +200,6 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -249,7 +240,6 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 

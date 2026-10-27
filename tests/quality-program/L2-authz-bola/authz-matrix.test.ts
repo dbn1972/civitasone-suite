@@ -125,7 +125,7 @@ describe("L2 — Mass Assignment Protection", () => {
   it("POST /api/v1/finance/bills: injected tenantId in body is ignored", async () => {
     const token = makeToken(["finance_officer"]);
     const attackTenant = "99999999-9999-4000-8000-999999999999";
-    const { status, body } = await apiCall("POST", "/api/v1/finance/bills", token, {
+    const { status } = await apiCall("POST", "/api/v1/finance/bills", token, {
       billNo: "MASS-ASSIGN-TEST-001",
       vendorId: "aaaaaaaa-0000-4000-8000-000000000001",
       headId: "bbbbbbbb-0000-4000-8000-000000000001",

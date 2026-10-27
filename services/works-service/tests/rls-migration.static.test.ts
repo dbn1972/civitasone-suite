@@ -37,7 +37,7 @@ describe("works RLS migration coverage", () => {
       let coveredInline = false;
       if (!coveredIn0010 && ownFile !== "0010_rls_tenant_isolation.sql") {
         const ownSql = readFileSync(join(migDir, ownFile), "utf8");
-        const escaped = t.replace(/\./g, "\\.");
+        const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // full regexp-escape (js/incomplete-sanitization)
         coveredInline =
           new RegExp(`ALTER TABLE ${escaped} FORCE ROW LEVEL SECURITY`).test(ownSql) &&
           new RegExp(`CREATE POLICY \\w+ ON ${escaped}`).test(ownSql);

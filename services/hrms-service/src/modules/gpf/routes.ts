@@ -16,7 +16,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import type { GpfAccountRow } from "./schema.js";
@@ -78,7 +78,7 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
 
     const acctId = randomUUID();
     const opening = BigInt(body.openingBalanceMinor);
-    await publishF3Write(ctx, "gpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "gpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, gpfNumber: body.gpfNumber, openingBalanceMinor: opening })) as any;
   });
 

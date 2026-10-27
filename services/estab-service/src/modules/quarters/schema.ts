@@ -12,7 +12,16 @@
  * All money as bigint paise. Optimistic locking via `version`.
  */
 import {
-  pgSchema, uuid, text, varchar, integer, bigint, char, boolean, date, timestamp, numeric,
+  pgSchema,
+  uuid,
+  text,
+  varchar,
+  integer,
+  bigint,
+  char,
+  date,
+  timestamp,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 export const quartersSchema = pgSchema("quarters");

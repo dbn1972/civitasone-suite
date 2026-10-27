@@ -18,7 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployeeHolds } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 
@@ -109,7 +109,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "SOD_VIOLATION", "approver must not be the same person who requested the hold");
     }
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ data: { id: holdId, status: "active" } }) as any;
   });
@@ -119,7 +119,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { holdId } = holdIdParam.parse(req.params);
-    const body = z.object({
+    z.object({
       reason: z.string().min(1).max(2000).optional(),
     }).parse(req.body ?? {});
 
@@ -143,7 +143,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', not 'pending'`);
     }
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ data: { id: holdId, status: "rejected" } }) as any;
   });
@@ -153,7 +153,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { holdId } = holdIdParam.parse(req.params);
-    const body = z.object({
+    z.object({
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
@@ -178,7 +178,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', must be 'active' or 'approved' to release`);
     }
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ data: { id: holdId, status: "released" } }) as any;
   });

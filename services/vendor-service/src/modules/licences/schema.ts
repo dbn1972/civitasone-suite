@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, text, boolean } from "drizzle-orm/pg-core";
 
 export const vendorSchema = pgSchema("vendor");
 

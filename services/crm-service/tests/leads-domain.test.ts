@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { computeLeadScore, type ScoringRule } from "../src/modules/leads/scoring.js";
 import { computeCompleteness, resolveWeights, DEFAULT_FIELD_WEIGHTS } from "../src/modules/leads/completeness.js";
-import { computeQualification, scoreAnswer, outcomeFromScore, OUTCOME_THRESHOLDS } from "../src/modules/leads/qualification-domain.js";
+import { computeQualification, outcomeFromScore } from "../src/modules/leads/qualification-domain.js";
 import { validateRequiredFields, isMissing } from "../src/modules/leads/field-rules-domain.js";
 
 // ─── Lead Scoring ────────────────────────────────────────────────────────────

@@ -8,12 +8,9 @@ import {
   Download,
   Upload,
   Star,
-  TrendingUp,
-  TrendingDown,
   MapPin,
   Phone,
   Mail,
-  Calendar,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -159,7 +156,7 @@ const SAMPLE_VENDORS: Vendor[] = [
 ];
 
 export function ProcurementVendors() {
-  const [vendors, setVendors] = useState<Vendor[]>(SAMPLE_VENDORS);
+  const [vendors] = useState<Vendor[]>(SAMPLE_VENDORS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');

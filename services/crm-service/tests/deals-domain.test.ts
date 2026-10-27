@@ -3,10 +3,10 @@
  * Pack #11. Source: modules/deals/*-domain.ts
  */
 import { describe, it, expect } from "vitest";
-import { canTransition as canQuoteTransition, isTerminalStatus, sumLineItems, isExpired, isValidRejectReason, REJECT_REASON_MIN_LENGTH } from "../src/modules/deals/quotation-domain.js";
-import { canTransition as canBidTransition, isTerminalStage, isValidLossReason, LOSS_REASON_MIN_LENGTH } from "../src/modules/deals/tender-domain.js";
+import { canTransition as canQuoteTransition, isTerminalStatus, sumLineItems, isExpired, isValidRejectReason } from "../src/modules/deals/quotation-domain.js";
+import { canTransition as canBidTransition, isTerminalStage } from "../src/modules/deals/tender-domain.js";
 import { isPresent, missingMandatoryFields } from "../src/modules/deals/stage-gate.js";
-import { weightedForecast, weightedForecastByStage } from "../src/modules/deals/forecast.js";
+import { weightedForecast } from "../src/modules/deals/forecast.js";
 import { daysInStage, evaluateAgeing } from "../src/modules/deals/stage-ageing.js";
 import { breachesThreshold, initialStatus, effectiveDiscountBps } from "../src/modules/deals/quotation-approval-domain.js";
 

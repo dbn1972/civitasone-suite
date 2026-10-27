@@ -6,10 +6,10 @@
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { estabFileRecord, estabRecordRequisition } from "../src/modules/records/schema.js";
+import { estabRecordRequisition } from "../src/modules/records/schema.js";
 import {
   upsertRecord, transferToRecordRoom, insertRequisition,
   markRecordIssued, markRecordReturned, findRecord,
@@ -19,7 +19,6 @@ import {
 const TENANT_A = "71111111-aaaa-4000-8000-0000000000a1";
 const TENANT_B = "71111111-aaaa-4000-8000-0000000000b2";
 const FILE_A   = "71111111-bbbb-4000-8000-0000000000f1";
-const FILE_B   = "71111111-bbbb-4000-8000-0000000000f2";
 const ACTOR    = "00000000-ffff-4000-8000-0000000000c3";
 
 // Test-harness fix: bare db.delete()/db.execute() outside db.transaction() run

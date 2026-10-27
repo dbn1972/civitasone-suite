@@ -22,7 +22,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { rtiApplications, rtiAppeals } from "../src/modules/rti/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerRtiConsumers } from "../src/modules/rti/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
-import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { uploadFileBody, updateFileTagsBody, moveFileBody } from "./validators.js";

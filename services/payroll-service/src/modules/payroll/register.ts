@@ -119,7 +119,7 @@ export async function resolveRegisterDepartments(
   employees: Array<Pick<PayrollInputEmployee, "id" | "departmentId">>,
   context: { runId?: string } = {},
 ): Promise<Map<string, RegisterDepartment>> {
-  let summaries = new Map<string, { departmentName: string }>();
+  let summaries: Map<string, { departmentName: string }>;
   try {
     summaries = await fetchEmployeeSummaries(tenantId);
   } catch {

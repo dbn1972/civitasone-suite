@@ -24,7 +24,6 @@ export interface NachFileOutput {
   batchHash: bigint;
 }
 
-const RECORD_WIDTH = 160;
 const CRLF = "\r\n";
 
 /**

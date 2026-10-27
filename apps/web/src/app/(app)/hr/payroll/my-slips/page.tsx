@@ -4,7 +4,7 @@ import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState } from "../.
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getMySlips } from "../../../../_data/loaders";
-import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_EMPLOYEE_ROLES } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
 import type { SalarySlipSummary } from "@civitasone/types";

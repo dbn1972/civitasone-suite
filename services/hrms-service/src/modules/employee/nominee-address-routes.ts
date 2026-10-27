@@ -12,7 +12,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -24,7 +24,7 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       name: z.string().min(1).max(200),
       relationship: z.string().min(1).max(64),
       dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -51,7 +51,7 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       addressType: z.enum(["permanent", "correspondence", "present", "hometown"]),
       line1: z.string().min(1).max(500),
       line2: z.string().max(500).optional(),

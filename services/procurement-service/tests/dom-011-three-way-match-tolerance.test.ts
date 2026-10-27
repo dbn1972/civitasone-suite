@@ -18,13 +18,12 @@ import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { registerThreeWayMatchConsumers, resolveThreeWayMatchToleranceConfig } from "../src/modules/three-way-match/consumer.js";
-import { threeWayMatch, threeWayMatchConfig } from "../src/modules/three-way-match/schema.js";
+import { threeWayMatch } from "../src/modules/three-way-match/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { procurementGrns, procurementGrnItems } from "../src/modules/grn/schema.js";
 import { COMMANDS } from "../src/topics.js";
 import { DEFAULT_TOLERANCE_CONFIG, evaluateMatch, resolveToleranceConfig, type ToleranceConfigRow } from "../src/modules/three-way-match/domain.js";
 
-const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 const TENANT_DEFAULT = "8d008011-aaaa-4000-8000-000000000001"; // no override -> platform default applies
 const TENANT_OVERRIDE = "8d008011-aaaa-4000-8000-000000000002"; // has its own override row
 const ACTOR = randomUUID();

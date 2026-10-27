@@ -7,7 +7,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";

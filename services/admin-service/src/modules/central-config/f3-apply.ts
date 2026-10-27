@@ -14,13 +14,12 @@
  *   reject   → config_change_requests(status=rejected)
  */
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
-import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { z } from "zod";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import {
-  ConfigError,
   assertApproverDistinct,
   assertPending,
   nextVersion,
@@ -31,7 +30,6 @@ import {
 import type { ConfigEntryRow, ConfigChangeRow, ConfigVersionRow } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-const CONFIG_ROLES = [...TENANT_ADMIN_ROLES];
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -43,61 +41,8 @@ const proposeBody = z.object({
   owner: z.string().max(160).default(""),
   note: z.string().max(1000).optional(),
 });
-const keyParam = z.object({ key: z.string().min(1).max(160) });
 const idParam = z.object({ id: z.string().uuid() });
 const rejectBody = z.object({ reason: z.string().min(3).max(1000) });
-const listChangesQuery = z.object({
-  status: z.enum(["pending", "approved", "rejected"]).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-});
-const listQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) });
-
-function serializeEntry(row: ConfigEntryRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    key: row.key,
-    value: displayValue(row.value, row.encrypted),
-    sensitive: row.sensitive,
-    encrypted: row.encrypted,
-    description: row.description,
-    owner: row.owner,
-    version: row.version,
-    updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt),
-    updatedBy: row.updatedBy,
-  };
-}
-
-function serializeChange(row: ConfigChangeRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    key: row.key,
-    proposedValue: displayValue(row.proposedValue, row.encrypted),
-    sensitive: row.sensitive,
-    encrypted: row.encrypted,
-    description: row.description,
-    owner: row.owner,
-    note: row.note,
-    status: row.status,
-    proposedBy: row.proposedBy,
-    approvedBy: row.approvedBy,
-    approvedAt: row.approvedAt?.toISOString?.() ?? null,
-    rejectedReason: row.rejectedReason,
-    baseVersion: row.baseVersion,
-    createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
-  };
-}
-
-function serializeVersion(row: ConfigVersionRow): Record<string, unknown> {
-  return {
-    version: row.version,
-    value: displayValue(row.value, row.encrypted),
-    sensitive: row.sensitive,
-    encrypted: row.encrypted,
-    note: row.note,
-    approvedBy: row.approvedBy,
-    approvedAt: row.approvedAt?.toISOString?.() ?? String(row.approvedAt),
-  };
-}
 
 async function audit(tx: Tx, ctx: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
@@ -112,7 +57,7 @@ export async function apply_central_config_0(ctx: any, req: { body: unknown; par
     const body = proposeBody.parse(req.body);
     const { stored, encrypted } = sealForStorage(body.value, body.sensitive, configKey());
 
-    const change = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const existing = await repo.findEntryByKeyTx(tx as repo.Writer, ctx.tenantId, body.key);
       const row = await repo.insertChange(tx as repo.Writer, {
         tenantId: ctx.tenantId,
@@ -140,7 +85,7 @@ export async function apply_central_config_1(ctx: any, req: { body: unknown; par
   // post:"/v1/admin/central-config/changes/:id/approve"
     const { id } = idParam.parse(req.params);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const change = await repo.findChangeByIdTx(tx as repo.Writer, id, ctx.tenantId);
       if (!change) throw new HttpError(404, "NOT_FOUND", "change request not found");
       assertPending(change.status);

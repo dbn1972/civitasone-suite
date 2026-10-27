@@ -23,7 +23,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import {
   hrmsRosters, hrmsRosterPoints, hrmsSanctionedPosts,
   type RosterRow, type SanctionedPostRow,
