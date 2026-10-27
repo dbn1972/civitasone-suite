@@ -134,6 +134,11 @@ describe("POST /notifications/channels/:id/test-send", () => {
     const r = await app.inject({ method: "POST", url: `/notifications/channels/${CH_SMS}/test-send`, headers: bearer(["tenant_admin"], A), payload: {} });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("TEST_SEND_UNSUPPORTED");
+    // F10 (UAT B4): the decline is a plain sentence for the admin, not a jargon string.
+    const msg = String(r.json().message);
+    expect(msg).toMatch(/mobile number/i);
+    expect(msg).toMatch(/SMS/);
+    expect(msg).not.toMatch(/422|unsupported|device is on file/i);
   });
 
   it("a redelivered command (same messageId) sends and audits only once", async () => {
