@@ -594,7 +594,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-MAPS-MONITORING-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 83b66e56e (UAT B4, 2026-10-27): GET /v1/locations/cadastral/parcels/:id added and a parcel detail page at /locations/parcels/[id]; the monitoring map links parcel markers there (infrastructure/geofence markers already open their registers). Tests: services/location-service/tests/cadastral-parcel-detail.test.ts, parcels/[id]/page.test.tsx, MonitoringMap.test.tsx.
 - **W2 note:** infrastructure/geofence markers open their registers; parcel markers have no page so the link is hidden - parcel detail page is a feature build
 - **First-pass claim:** 'Open record' links are unreliable: geofence goes to /locations?geofence=<id> and land_parcel to /locations/list?ref=<id> (MonitoringMap.tsx:52-58), but neither the hub nor the list page reads those query params; only infrastructure has a real target (/assets/:refId) and that route's acceptance of an infrastructure refId is undeterminable.
 - **Service:** `location-service`  ·  **Endpoint(s):** `['GET /api/v1/locations/map-markers', 'GET /assets/:refId (asset route)']`
