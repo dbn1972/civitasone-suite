@@ -3,7 +3,7 @@
 import type React from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { maskLast4 } from "@/app/_components/ds";
-import { formatIndianDate, formatDateTimeIST } from "@/lib/formatters";
+import { formatIndianDate, formatDateTimeIST, formatMoneyCompact } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { DprActions } from "./DprActions";
 
@@ -16,7 +16,8 @@ export type DprRow = {
   projectTitle: string;
   submittedBy: string;
   submittedDate: string;
-  estimatedCost: string;
+  /** Whole paise as a string (bigint-safe); null = no estimate recorded. */
+  estimatedCostMinor?: string | null;
   status: string;
   reviewingAuthority: string;
 } & Record<string, unknown>;
@@ -58,7 +59,8 @@ const COLUMNS: {
   // reveal would need a backend lookup/endpoint — HUMAN REVIEW.)
   { key: "submittedBy", label: "Submitted By", csvExclude: true, render: (r) => maskLast4(String(r.submittedBy)) },
   { key: "submittedDate", label: "Submitted Date", render: (r) => formatIndianDate(r.submittedDate) },
-  { key: "estimatedCost", label: "Estimated Cost (₹ Cr)" },
+  // D4c #34: whole paise from the server, shown in rupees, lakh or crore by the shared formatter.
+  { key: "estimatedCostMinor", label: "Estimated Cost", cellType: "amount", render: (r) => formatMoneyCompact(r.estimatedCostMinor) },
   // GAP-PROJECTS-DPR-TRACKING-01: render the status with a DPR-scoped tone +
   // label so 'revision' reads "Returned for revision" (warn), not the neutral
   // info fallback, and the word matches the tile.

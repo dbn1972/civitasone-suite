@@ -45,6 +45,8 @@ export const projectDprs = progressSchema.table("project_dprs", {
   status:       varchar("status", { length: 24 }).notNull().default("submitted"),
   content:      jsonb("content").$type<Record<string, unknown>>().notNull().default({}),
   submittedBy:  uuid("submitted_by").notNull(),
+  // D4c #34: whole paise; NULL = no estimate recorded (migration 0027).
+  estimatedCostMinor: bigint("estimated_cost_minor", { mode: "bigint" }),
   submittedAt:  timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   // GAP-PROJECTS-DPR-TRACKING-01: review trail for the submit→review→approve|
   // return workflow (migration 0024). NULL until the DPR is first acted on.
