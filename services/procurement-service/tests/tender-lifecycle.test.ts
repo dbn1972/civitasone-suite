@@ -27,7 +27,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
 } from "../src/modules/tender/schema.js";
-import { procurementVendors } from "../src/modules/vendor/schema.js";
+import { procurementVendors, procurementEmpanelment } from "../src/modules/vendor/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
@@ -116,6 +116,7 @@ async function wipeTenant(t: string) {
     await tx.delete(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenantId, t));
     await tx.delete(procurementTenderBids).where(eq(procurementTenderBids.tenantId, t));
     await tx.delete(procurementTenders).where(eq(procurementTenders.tenantId, t));
+    await tx.delete(procurementEmpanelment).where(eq(procurementEmpanelment.tenantId, t));
     await tx.delete(procurementVendors).where(eq(procurementVendors.tenantId, t));
     await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, t));
   }));
@@ -164,8 +165,11 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
   const bidBlack = randomUUID();
   // Bid closing far in the future so late-bid guard never trips.
   const closeDate = "2999-12-31";
+  // Real approved indent behind the tender, so the award-emitted PO can reserve budget.
+  const AWARD_INDENT = randomUUID();
 
   it("create → tender persisted as draft", async () => {
+    await seedApprovedIndent(AWARD_INDENT, 35_000_000n);
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     registerPoConsumers(q);
@@ -175,7 +179,7 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     await q.publish(COMMANDS.tenderCreate, msg(COMMANDS.tenderCreate, {
       id: tenderId, tenantId: TENANT, title: "Supply of Laptops",
       type: "open", estimatedMinor: 40_000_000, emdAmountMinor: 0,
-      bidClosingDate: closeDate,
+      bidClosingDate: closeDate, indentRef: `procurement_indent:${AWARD_INDENT}`,
     }));
     await drain(q);
 
@@ -406,6 +410,29 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     expect(events).toContain(COMMANDS.poCreate);
   });
 
+  it("D4c #28 award to PO: the award-emitted po.create is accepted for a winner with NO empanelment row (PO row exists, linked to the tender)", async () => {
+    const [cmd] = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, COMMANDS.poCreate)))
+    )));
+    const payload = cmd?.payload as Record<string, unknown>;
+    expect(payload.vendorId).toBe(V_L1);
+    const originalFetch = global.fetch;
+    global.fetch = (async () => ({ ok: true, status: 200, json: async () => ({ available: "999999999999" }) }) as unknown as Response) as typeof fetch;
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerPoConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, payload, AWARDER));
+    await drainOrFail(q);
+    await q.stop();
+    global.fetch = originalFetch;
+    const pos = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementPos).where(eq(procurementPos.id, payload.id as string))
+    ));
+    expect(pos).toHaveLength(1);
+    expect(pos[0]?.tenderId).toBe(tenderId);
+  });
+
   it("idempotency: re-delivering the award command does not double-award (no extra outbox po.create)", async () => {
     const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(outboxMessages)
@@ -440,6 +467,13 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
 
   beforeAll(async () => {
     await seedVendor(vendorId);
+    // D4c #28: a direct PO needs an empanelled vendor (or a tender / GeM basis).
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(procurementEmpanelment).values({
+        vendorId, tenantId: TENANT, category: "goods", empanelDate: "2026-01-01",
+        validUntil: "2099-12-31", status: "active", createdBy: CREATOR, updatedBy: CREATOR,
+      });
+    }));
     await seedApprovedIndent(FINANCE_TEST_INDENT, 35_000_000n);
   });
 
@@ -457,7 +491,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
-      id: SANCTIONED_PO, tenantId: TENANT, poNo: "AUTO", vendorId, gemOrderRef: "GEM/TEST/BASIS",
+      id: SANCTIONED_PO, tenantId: TENANT, poNo: "AUTO", vendorId,
       indentRef: `procurement_indent:${FINANCE_TEST_INDENT}`, sanctionRef: "finance_sanction:abc-123",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
@@ -495,7 +529,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
-      id: REJECTED_PO, tenantId: TENANT, poNo: "AUTO", vendorId, gemOrderRef: "GEM/TEST/BASIS",
+      id: REJECTED_PO, tenantId: TENANT, poNo: "AUTO", vendorId,
       indentRef: "tender:finance-test-2", sanctionRef: "finance_sanction:def-456",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
