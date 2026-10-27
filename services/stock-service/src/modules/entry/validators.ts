@@ -15,6 +15,8 @@ export const createEntryBody = z.object({
   fromWarehouseId: z.string().uuid().optional(),
   toWarehouseId:   z.string().uuid().optional(),
   notes:           z.string().optional(),
+  // GAP-STOCK-LEDGER-NEW-04: structured audit reason (kept optional: receipts and legacy callers send none).
+  reason:          z.string().trim().min(1).max(500).optional(),
   items:           z.array(entryItemSchema).min(1),
 }).superRefine((b, ctx) => {
   // GAP-STOCK-LEDGER-NEW-01: a transfer moves stock between two warehouses; without both ids the

@@ -117,3 +117,35 @@ describe("GAP-STOCK-LEDGER-NEW-01: transfer entries", () => {
     expect(screen.queryByPlaceholderText(/uuid/i)).toBeNull();
   });
 });
+
+describe("GAP-STOCK-LEDGER-NEW-04: structured reason", () => {
+  async function submitAdjustment(reason: string) {
+    const m = installFetch();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText("Entry type"), { target: { value: "adjustment" } });
+    if (reason) fireEvent.change(screen.getByLabelText("Reason"), { target: { value: reason } });
+    fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEM_ID } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "shelf B3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+    await waitFor(() => expect(posted(m)).toHaveLength(1));
+    return JSON.parse((posted(m)[0]![1] as RequestInit).body as string);
+  }
+
+  it("sends the reason as its own field and leaves notes untouched", async () => {
+    const body = await submitAdjustment("  Damaged in flood ");
+    expect(body.reason).toBe("Damaged in flood");
+    expect(body.notes).toBe("shelf B3");
+  });
+
+  it("omits reason when blank", async () => {
+    const body = await submitAdjustment("");
+    expect("reason" in body).toBe(false);
+  });
+
+  it("does not offer a reason box for receipts", () => {
+    installFetch();
+    render(<Page />);
+    expect(screen.queryByLabelText("Reason")).toBeNull();
+  });
+});

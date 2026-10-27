@@ -65,6 +65,8 @@ const INITIAL_HEADER = {
   fromWarehouseId: "",
   toWarehouseId: "",
   refNo: "",
+  /** GAP-STOCK-LEDGER-NEW-04: structured audit reason, sent as its own field. */
+  reason: "",
   notes: "",
 };
 
@@ -102,6 +104,7 @@ function validateHeader(
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.postingDate)) errors.postingDate = "Pick a posting date.";
+  if (form.reason.length > 500) errors.reason = t("errReasonMax");
   if (form.postingDate > todayIST()) errors.postingDate = "Posting date cannot be in the future.";
   if (form.entryType === "transfer") {
     if (!form.fromWarehouseId) errors.fromWarehouseId = t("errFromWarehouse");
@@ -193,6 +196,8 @@ export default function NewStockEntryPage() {
   // issue leaves one warehouse; receipt / adjustment land in one; transfer needs both.
   const showFromWarehouse = header.entryType === "issue" || isTransfer;
   const showToWarehouse = header.entryType !== "issue";
+  // GAP-STOCK-LEDGER-NEW-04: stock-reducing / corrective entries carry a reason for the audit trail.
+  const showReason = header.entryType === "issue" || header.entryType === "adjustment";
 
   // Fetch on-hand qty when an item is selected and entry type is "issue".
   const fetchOnHand = useCallback(async (itemId: string) => {
@@ -252,6 +257,7 @@ export default function NewStockEntryPage() {
           ...(showFromWarehouse && header.fromWarehouseId ? { fromWarehouseId: header.fromWarehouseId } : {}),
           ...(showToWarehouse && header.toWarehouseId ? { toWarehouseId: header.toWarehouseId } : {}),
           ...(header.refNo.trim() ? { refNo: header.refNo.trim() } : {}),
+          ...(showReason && header.reason.trim() ? { reason: header.reason.trim() } : {}),
           ...(header.notes.trim() ? { notes: header.notes.trim() } : {}),
           items,
         }),
@@ -473,6 +479,21 @@ export default function NewStockEntryPage() {
                 style={inputStyle} placeholder="e.g. GRN-2026-0042"
               />
             </div>
+
+            {/* ── GAP-STOCK-LEDGER-NEW-04: Reason (own audit field, not folded into notes) ── */}
+            {showReason && (
+              <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                <label className="l" htmlFor="entry-reason">{t("reasonLabel")}</label>
+                <input
+                  id="entry-reason" value={header.reason} maxLength={500}
+                  onChange={(e) => setHeader({ ...header, reason: e.target.value })}
+                  style={inputStyle} placeholder={t("reasonPlaceholder")}
+                  {...ariaFor("reason", "entry-reason-err")}
+                />
+                <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("reasonHint")}</span>
+                {fieldErr("reason", "entry-reason-err")}
+              </div>
+            )}
 
             {/* ── Notes ── */}
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>

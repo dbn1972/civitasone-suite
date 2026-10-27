@@ -17466,6 +17466,10 @@
     "retry": "Retry",
     "errFromWarehouse": "Pick the warehouse the stock leaves.",
     "errToWarehouse": "Pick the warehouse the stock goes to.",
-    "errToSameAsFrom": "Destination must differ from the source warehouse."
+    "errToSameAsFrom": "Destination must differ from the source warehouse.",
+    "errReasonMax": "Reason must be 500 characters or fewer.",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "e.g. cycle-count variance, damaged stock",
+    "reasonHint": "Recorded in the audit trail for this entry."
   }
 }

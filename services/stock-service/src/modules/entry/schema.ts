@@ -14,6 +14,7 @@ export const stockEntries = entrySchema.table("stock_entries", {
   fromWarehouseId:  uuid("from_warehouse_id"),
   toWarehouseId:    uuid("to_warehouse_id"),
   notes:            text("notes"),
+  reason:           text("reason"),
   status:           varchar("status", { length: 16 }).notNull().default("draft"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
