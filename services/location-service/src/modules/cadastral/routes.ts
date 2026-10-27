@@ -7,6 +7,9 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 import * as repo from "./repo.js";
 import { CADASTRAL_CREATE, SURVEY_SCHEDULE, DISPUTE_CREATE } from "./consumer.js";
 
+// Read roles of the monitoring map: they all get an "Open record" link on a parcel marker, so they must be
+// able to open the parcel (read-only, tenant-scoped).
+const PARCEL_READ = ["super_admin", "location_admin", "revenue_officer", "survey_officer", "gis_admin", "location_user", "project_admin"];
 const ADMIN = ["super_admin", "location_admin", "revenue_officer", "survey_officer"];
 
 export async function cadastralRoutes(app: FastifyInstance): Promise<void> {
@@ -39,7 +42,7 @@ export async function cadastralRoutes(app: FastifyInstance): Promise<void> {
   // GAP-LOCATIONS-MAPS-MONITORING-01: one parcel by id (the monitoring map's "Open record" target). The
   // repo already had findParcel; only the route was missing. Tenant-scoped; another tenant's id is a 404.
   app.get("/v1/locations/cadastral/parcels/:id", async (req, reply) => {
-    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const ctx = resolveContext(req); requireRole(ctx, PARCEL_READ);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const parcel = await repo.findParcel(id, ctx.tenantId);
     if (!parcel) throw new HttpError(404, "NOT_FOUND", "parcel not found");

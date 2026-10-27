@@ -61,6 +61,15 @@ describePostGIS("parcel detail by id", () => {
     expect((await get(`/v1/locations/cadastral/parcels/${id}`, TENANT_B)).statusCode).toBe(404);
   });
 
+  it("the map read roles (gis_admin, location_user, project_admin) can open the parcel", async () => {
+    for (const role of ["gis_admin", "location_user", "project_admin"]) {
+      const r = await get(`/v1/locations/cadastral/parcels/${id}`, TENANT_A, [role]);
+      expect(r.statusCode, role).toBe(200);
+      expect(r.json().data.id).toBe(id);
+    }
+    expect((await get(`/v1/locations/cadastral/parcels/${id}`, TENANT_B, ["gis_admin"])).statusCode).toBe(404);
+  });
+
   it("400 for a non-UUID id; 403 without a cadastral role", async () => {
     expect((await get("/v1/locations/cadastral/parcels/not-a-uuid", TENANT_A)).statusCode).toBe(400);
     expect((await get(`/v1/locations/cadastral/parcels/${id}`, TENANT_A, ["employee"])).statusCode).toBe(403);
