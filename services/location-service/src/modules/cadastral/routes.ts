@@ -49,8 +49,10 @@ export async function cadastralRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: parcel });
   });
 
+  // Read-only and tenant-scoped like the parcel itself: the parcel page always loads it, so the map read
+  // roles that can open the parcel must also see its history.
   app.get("/v1/locations/cadastral/parcels/:id/history", async (req, reply) => {
-    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const ctx = resolveContext(req); requireRole(ctx, PARCEL_READ);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const data = await repo.parcelHistory(id, ctx.tenantId);
     return reply.send({ data });
