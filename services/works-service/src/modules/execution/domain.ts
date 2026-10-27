@@ -92,6 +92,18 @@ export function parentSplitConsistency(
 }
 
 /**
+ * D4c #43 (GAP-WORKS-EXECUTION-RECORD-PROGRESS-06): one ordinary progress entry per scope per month. A negative entry
+ * with a reason is a correction and is allowed alongside it. `entryKind` absent on a row means an ordinary entry.
+ */
+export function progressPeriodTaken(
+  existing: Array<{ month: number; year: number; entryKind?: string | null }>,
+  month: number,
+  year: number,
+): boolean {
+  return existing.some((r) => r.month === month && r.year === year && (r.entryKind ?? "progress") !== "correction");
+}
+
+/**
  * D4c #41 (GAP-WORKS-EXECUTION-WORKID-07): what stands between a work and being closed. A work may not be closed while
  * an issue is open or any scope with a target is below it (physical progress under 100%), unless it is closed as
  * dropped/closed (foreclosed) with a DAO reason. `target` null/0 means the scope carries no measurable target.

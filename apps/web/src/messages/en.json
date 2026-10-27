@@ -16507,7 +16507,11 @@
       "attachmentLabel": "Attach a photo or document",
       "attachmentRemove": "Remove",
       "photoPreviewAlt": "Preview of {name}",
-      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
+      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Only one entry per month is allowed: to fix a figure, enter a negative amount with a reason as a correction.",
+      "duplicatePeriodBlocked": "This scope already has an entry for that month, and only one entry per month is allowed. To fix a figure, enter a negative amount with a reason as a correction.",
+      "correctionReasonLabel": "Reason for the correction",
+      "correctionReasonPlaceholder": "Why is this figure being corrected?",
+      "correctionReasonRequired": "Enter the reason for the correction: a negative amount is recorded as a correction."
     },
     "reports": {
       "chipFrom": "From {date}",

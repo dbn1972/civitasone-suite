@@ -13,7 +13,7 @@ import { getAward, finalizedAgreementByWorkIds } from "../tender/repo.js";
 import { listSplits, getWorkHeaders, getProposal } from "../proposal/repo.js";
 import {
   canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget,
-  closureEligibility, parentSplitConsistency, isTenantUploadKey, closureBlockers, CLOSURE_BLOCKER_TEXT,
+  closureEligibility, parentSplitConsistency, isTenantUploadKey, closureBlockers, CLOSURE_BLOCKER_TEXT, progressPeriodTaken,
 } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 import { hasAnyRole } from "@civitasone/auth";
@@ -152,8 +152,18 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     // the consumer keeps its own check as defense in depth.
     const scope = await getWorkScope(ctx.tenantId, body.workScopeId);
     if (!scope) throw new HttpError(404, "NOT_FOUND", "work scope not found");
+    const priorRows = await listScopeProgress(ctx.tenantId, body.workScopeId);
+    // D4c #43: one ordinary entry per scope per month; a correction is a negative entry with a reason.
+    if (body.currentAchievement >= 0 && progressPeriodTaken(
+      priorRows.map((r) => ({ month: r.month, year: r.year, entryKind: r.entryKind })), body.month, body.year,
+    )) {
+      throw new HttpError(
+        409,
+        "DUPLICATE_PROGRESS_PERIOD",
+        "This scope already has an entry for that month. To fix a figure, record a correction: a negative amount with a reason.",
+      );
+    }
     if (scope.targetValue != null) {
-      const priorRows = await listScopeProgress(ctx.tenantId, body.workScopeId);
       const prior = priorRows.reduce((sum, r) => sum + Number(r.currentAchievement ?? 0), 0);
       const cumulative = prior + body.currentAchievement;
       const target = Number(scope.targetValue);

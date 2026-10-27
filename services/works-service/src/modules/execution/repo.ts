@@ -88,6 +88,8 @@ export async function listExecutionProgress(
         priorAchievement: scopeProgress.priorAchievement,
         currentAchievement: scopeProgress.currentAchievement,
         percentage: scopeProgress.percentage,
+        entryKind: scopeProgress.entryKind,
+        correctionReason: scopeProgress.correctionReason,
         version: scopeProgress.version,
       })
       .from(scopeProgress)
