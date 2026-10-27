@@ -89,7 +89,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: PII field classification pending; role gate and shortened profileId already in place from #1924)
+- [x] **Status** Closed by e8a7008cd (service) and dccf96f6d (web) (owner decision D4c #14, 2026-10-27): profile id treated as personal data - shortened, loyalty-role only, full id via audited reveal; names, if ever needed, come via CDP masking rules.
 - **W0 note:** partly fixed by #1924 — layout now role-gates /loyalty/* (LOYALTY_READ_ROLES -> PermissionDenied) and the loader is zod-parsed; no <Masked> component / PII masking (member ref is shown shortened only).
 - **First-pass claim:** Points transactions ("Points earning transactions and bonus rules", loyalty/page.tsx:8) have no loader at all; only /enrolments is called. Identified person rows are shown without masking (DPDP).
 - **Verified evidence:** True: only getLoyaltyAccruals -> /api/v1/loyalty/enrolments exists (_data.ts:91); there is no points-transaction loader and loyalty/page.tsx:8 promises 'Points earning transactions and bonus rules'. Not verifiable: whether enrolment rows carry personal data - the table (ModuleListTable.tsx:48-55) prints only id[0..8], name/label, sublabel, status, meta, and loyalty-service is not in the snapshot. Route protection is only ModuleGate moduleKey='loyalty' (loyalty/layout.tsx) - no role check. No masking component (<Masked>) exists in app/_components.
