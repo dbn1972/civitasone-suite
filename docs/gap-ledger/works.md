@@ -793,7 +793,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** Closed by 4f03cdd52 (owner decision D4c #37, 2026-10-27): five fixed heads, per-division rates, maker adjusts, checker sees computed vs charged, lines sum to deductions
+- [~] **Status** (partly built by 4f03cdd52 per owner decision D4c #37, 2026-10-27: five fixed heads, per-division rates, maker adjusts, checker sees computed vs charged, lines sum to deductions; still open: rate editing is API-only (PUT /v1/works/billing/deduction-rates), there is no works-admin screen, and the built-in rates are placeholders pending owner confirmation)
 - **W2 works rescan note (cluster 01):** OWNER QUESTION (GAP-WORKS-BILLING-BILLS-NEW-03): which statutory recovery heads apply (security deposit, income tax/TDS, labour cess, GST TDS: codes and labels), are they fixed or tenant-configured, and is each head an entered amount or computed from a rate (percent of gross, of net, or of measured value)? Note for the schema decision: works.bill_recoveries (recovery_type, amount_minor, remarks, RLS, audit columns) already exists but nothing reads or writes it; the bill create command, consumer and read model would need per-head lines whose sum equals deductionsMinor. Nothing was built: heads and rates are policy values that are not in the repository or tenant configuration.
 - **W2 works part 2 note (#2047):** statutory recovery heads (security deposit, TDS, labour cess) need a product decision and a schema change. INTERIM, owner decision.
 - **W2 works note (#2039):** statutory recovery heads need a product decision and a schema change.
