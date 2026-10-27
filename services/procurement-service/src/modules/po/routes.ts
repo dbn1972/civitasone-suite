@@ -28,7 +28,7 @@ const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
  *  - GAP-PROCUREMENT-EMPANELMENT-05 / ORDERS-NEW-06: reject a vendor whose
  *    empanelment has lapsed. Applied to both POST aliases.
  */
-async function assertVendorEligible(tenantId: string, vendorId: string, basis: { tenderId?: string; gemOrderRef?: string } = {}): Promise<void> {
+async function assertVendorEligible(tenantId: string, vendorId: string, basis: { tenderId?: string | undefined; gemOrderRef?: string | undefined } = {}): Promise<void> {
   const vendor = await vendorRepo.findVendorById(vendorId, tenantId);
   const blacklisted =
     Boolean(await blacklistRepo.findActive(tenantId, vendorId))

@@ -41,7 +41,7 @@ export function isEmpanelmentLapsed(
  */
 export function assertNonEmpanelledOrderBasis(
   rows: ReadonlyArray<unknown>,
-  basis: { tenderAwardedToVendor: boolean; gemOrderRef?: string | null },
+  basis: { tenderAwardedToVendor: boolean; gemOrderRef?: string | null | undefined },
 ): void {
   if (rows.length > 0) return;
   if (basis.tenderAwardedToVendor || (basis.gemOrderRef ?? "").trim() !== "") return;
