@@ -184,6 +184,8 @@ vi.mock("../src/modules/project/repo.js", () => ({
   // DOM-001: delay-forecast/repo.ts now loads a project's real tasks
   // through this, instead of a hardcoded task-1..task-7 stub.
   listTasksByProject: async () => mockState.queryResult,
+  // GAP-PROJECTS-DETAIL-TASKS-01: the status route now checks task ownership + transition.
+  findTaskById: async (id: string) => ({ id, projectId: PROJECT_ID, status: "pending" }),
 }));
 
 vi.mock("../src/modules/scheme/commands.js", () => ({
