@@ -102,7 +102,7 @@ function CitizenUploadPreview({
       <div style={{ padding: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <div
-            lang={locale}
+            lang={preview.labelLocale}
             style={{ fontWeight: 650, fontSize: 14, color: preview.emptyName ? "var(--mut)" : "var(--ink)" }}
           >
             {preview.label}
@@ -127,7 +127,7 @@ function CitizenUploadPreview({
           )}
         </div>
         {preview.secondaryLabel ? (
-          <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>
+          <div lang={preview.secondaryLocale ?? undefined} style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>
             {preview.secondaryLabel}
           </div>
         ) : null}

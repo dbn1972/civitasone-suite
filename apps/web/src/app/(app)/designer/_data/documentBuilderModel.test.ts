@@ -176,5 +176,15 @@ describe("configured document locales", () => {
     const p = buildCitizenUploadPreview(doc({ en: "Rent", or: "ଭଡ଼ା" }), "or", ["en", "or"]);
     expect(p.label).toBe("ଭଡ଼ା");
     expect(p.secondaryLabel).toBe("Rent");
+    expect(p.labelLocale).toBe("or");
+    expect(p.secondaryLocale).toBe("en");
+  });
+
+  it("reports the fallback locale as the language of the label when the selected locale is empty", () => {
+    const p = buildCitizenUploadPreview(doc({ en: "Rent", or: "" }), "or", ["en", "or"]);
+    expect(p.label).toBe("Rent");
+    expect(p.labelLocale).toBe("en");
+    expect(p.secondaryLabel).toBeNull();
+    expect(p.secondaryLocale).toBeNull();
   });
 });

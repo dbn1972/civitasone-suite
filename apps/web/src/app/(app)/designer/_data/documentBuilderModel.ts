@@ -42,6 +42,10 @@ export function resolveDocumentLocales(configured: readonly string[] | null | un
 export interface CitizenUploadPreviewModel {
   label: string;
   secondaryLabel: string | null;
+  /** Locale that supplied `label` (the fallback locale when the selected one is empty); for lang= (WCAG 3.1.2). */
+  labelLocale: LocaleKey;
+  /** Locale that supplied `secondaryLabel`, or null when there is none. */
+  secondaryLocale: LocaleKey | null;
   mandatory: boolean;
   formatsLabel: string;
   maxSizeLabel: string;
@@ -191,13 +195,13 @@ export function buildCitizenUploadPreview(
 ): CitizenUploadPreviewModel {
   const primary = (doc.labels[locale] ?? "").trim();
   // First other configured locale (English first) that has a name filled in.
-  const fallback =
-    ["en", ...locales]
-      .filter((c) => c !== locale)
-      .map((c) => (doc.labels[c] ?? "").trim())
-      .find(Boolean) ?? "";
+  const fallbackLocale =
+    ["en", ...locales].find((c) => c !== locale && (doc.labels[c] ?? "").trim()) ?? null;
+  const fallback = fallbackLocale ? (doc.labels[fallbackLocale] ?? "").trim() : "";
   const label = primary || fallback || "Untitled document";
   const secondaryLabel = primary && fallback && primary !== fallback ? fallback : null;
+  const secondaryLocale = secondaryLabel ? fallbackLocale : null;
+  const labelLocale: LocaleKey = primary ? locale : (fallbackLocale ?? locale);
   const formatsArray = doc.formats.map((f) => f.toUpperCase());
   // GAP-DESIGNER-DETAIL-B6-05: use natural-language format label for the citizen preview.
   const formatsLabel = formatsArray.length <= 1
@@ -208,6 +212,8 @@ export function buildCitizenUploadPreview(
   return {
     label,
     secondaryLabel,
+    labelLocale,
+    secondaryLocale,
     mandatory: doc.mandatory,
     formatsLabel,
     maxSizeLabel: `Max ${doc.maxSizeMb} MB`,
