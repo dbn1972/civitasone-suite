@@ -1314,7 +1314,11 @@
     "statusVerified": "Verified",
     "statusProvided": "Provided (pending)",
     "statusMissing": "Missing",
-    "required": "required"
+    "required": "required",
+    "uploadRow": "Upload",
+    "reupload": "Re-upload",
+    "uploadRowAria": "Upload file for {doc}",
+    "reuploadAria": "Re-upload file for {doc}"
   },
   "citizenEligibility": {
     "pageTitle": "Eligibility & Entitlement",

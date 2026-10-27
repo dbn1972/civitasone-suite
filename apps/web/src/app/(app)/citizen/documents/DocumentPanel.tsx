@@ -91,31 +91,53 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
     return (await res.json()) as T;
   }
 
-  async function upload() {
+  async function uploadFor(forDocType: string, forFile: File | null): Promise<boolean> {
     setBusy(true); setError(""); setUploaded(null);
     try {
       // GAP-CITIZEN-DOCUMENTS-01: real presign → PUT to storage → record key.
-      if (!file) { setError(t("fileRequired")); return; }
+      if (!forFile) { setError(t("fileRequired")); return false; }
       const presign = await post<{ uploadUrl: string; key: string; method: string; headers?: Record<string, string> }>(
         "/v1/citizen/documents/presign",
-        { filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size },
+        { filename: forFile.name, contentType: forFile.type || "application/octet-stream", sizeBytes: forFile.size },
       );
-      const put = await fetch(presign.uploadUrl, { method: "PUT", headers: presign.headers ?? {}, body: file });
-      if (!put.ok) { setError(t("uploadFailed")); return; }
+      const put = await fetch(presign.uploadUrl, { method: "PUT", headers: presign.headers ?? {}, body: forFile });
+      if (!put.ok) { setError(t("uploadFailed")); return false; }
       setUploaded(await post<Uploaded>("/v1/citizen/documents/upload", {
-        applicationId: applicationId || undefined, serviceId, docType, storageKey: presign.key,
+        applicationId: applicationId || undefined, serviceId, docType: forDocType, storageKey: presign.key,
       }));
-    } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
+      return true;
+    } catch (caught) { setError(formError.fromException("save", caught).message); return false; } finally { setBusy(false); }
+  }
+
+  async function upload() {
+    await uploadFor(docType, file);
+  }
+
+  async function fetchChecklist(): Promise<void> {
+    const qs = new URLSearchParams({ serviceId, ...(applicationId ? { applicationId } : {}) });
+    const res = await fetch(`/api/proxy/v1/citizen/documents/checklist?${qs.toString()}`);
+    if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "load"));
+    setChecklist((await res.json()) as Checklist);
+  }
+
+  /**
+   * GAP-CITIZEN-DOCUMENTS-05: per-row (re-)upload from the checklist. The row
+   * supplies the docType, the picked file goes through the same presign → PUT →
+   * record path, and the checklist is refreshed so the row flips to "provided".
+   */
+  async function uploadForRow(item: ChecklistItem, rowFile: File | null) {
+    if (!rowFile) return;
+    setDocType(item.docType);
+    const ok = await uploadFor(item.docType, rowFile);
+    if (!ok) return;
+    try { await fetchChecklist(); } catch (caught) { setError(formError.fromException("load", caught).message); }
   }
 
   async function loadChecklist(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError(""); setChecklist(null);
     try {
-      const qs = new URLSearchParams({ serviceId, ...(applicationId ? { applicationId } : {}) });
-      const res = await fetch(`/api/proxy/v1/citizen/documents/checklist?${qs.toString()}`);
-      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "load"));
-      setChecklist((await res.json()) as Checklist);
+      await fetchChecklist();
     } catch (caught) { setError(formError.fromException("load", caught).message); } finally { setBusy(false); }
   }
 
@@ -211,11 +233,25 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
               </div>
               <ul style={{ fontSize: 13, listStyle: "none", padding: 0 }}>
                 {checklist.items.map((i) => (
-                  <li key={i.docType} style={{ padding: "4px 0" }}>
+                  <li key={i.docType} style={{ padding: "4px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ color: i.verified ? "var(--good)" : i.provided ? "var(--warn)" : "var(--bad)" }}>
                       {i.verified ? `✔ ${t("statusVerified")}` : i.provided ? `• ${t("statusProvided")}` : `✗ ${t("statusMissing")}`}
-                    </span>{" "}
-                    {i.label ?? humanizeStatus(i.docType)}{i.mandatory ? ` (${t("required")})` : ""}
+                    </span>
+                    <span>{i.label ?? humanizeStatus(i.docType)}{i.mandatory ? ` (${t("required")})` : ""}</span>
+                    {/* GAP-CITIZEN-DOCUMENTS-05: verified documents are final — no re-upload. */}
+                    {i.verified ? null : (
+                      <label className="btn" style={{ minHeight: 44, display: "inline-flex", alignItems: "center", cursor: busy ? "not-allowed" : "pointer", marginInlineStart: "auto" }}>
+                        {i.provided ? t("reupload") : t("uploadRow")}
+                        <input
+                          type="file"
+                          disabled={busy || !serviceId}
+                          aria-label={t(i.provided ? "reuploadAria" : "uploadRowAria", { doc: i.label ?? humanizeStatus(i.docType) })}
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                          style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden" }}
+                          onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; void uploadForRow(i, f); }}
+                        />
+                      </label>
+                    )}
                   </li>
                 ))}
               </ul>

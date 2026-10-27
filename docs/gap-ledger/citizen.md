@@ -546,7 +546,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-05  ·  MEDIUM  ·  confirmed  ·  theme MISSINGACTION (was OTHER)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — real file upload endpoint required; JSON-only POST today DocumentPanel.tsx:37)
+- [x] **Status** Closed (UAT B4, 2026-10-27): real presign/PUT/record upload already existed (DOCUMENTS-01); each checklist row now has Upload / Re-upload (hidden once verified) using that row's docType, and the checklist refreshes after success.
 - **First-pass claim:** Checklist rows have no per-item upload/re-upload action; 'missing' items are text only (DocumentPanel.tsx:92-102).
 - **Verified evidence:** Checklist <li> rows (DocumentPanel.tsx:89-96) render status text + label only; no button. Upload requires the separate form above with hand-typed docType. Upload endpoint posts JSON only ({applicationId, serviceId, docType}, :37) - no file is actually attached (existing FileUpload.tsx in ds not used), so real upload capability cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`
