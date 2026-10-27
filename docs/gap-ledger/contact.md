@@ -95,7 +95,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** INTERIM — mailbox provisioning and routing/ticketing is an ops/infrastructure question outside the codebase. NEEDS OWNER DECISION: verify hello@, security@ routing and SLA with ops.
+- [~] **Status** INTERIM — mailbox provisioning and routing/ticketing is an ops/infrastructure question outside the codebase. NEEDS OWNER DECISION: verify hello@, security@ routing and SLA with ops. [ops check before UAT per owner decision D4c #4, 2026-10-27: ops sends a test mail to hello@ and security@ and confirms both are live and monitored; publish a 2-working-day reply time for hello@ and same-day acknowledgement for security@. No code change; stays open until ops confirms.]
 - **First-pass claim:** No backend or form endpoint exists for contact; email routing and any ticketing behind hello@/security@ are outside the codebase: undeterminable.
 - **Service:** `(none)`  ·  **Endpoint(s):** `['(none) mailto:hello@ / security@']`
 - **Question:** Are hello@ and security@ mailboxes provisioned with routing/ticketing and a monitored SLA?
