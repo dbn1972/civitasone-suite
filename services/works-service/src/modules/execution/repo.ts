@@ -1,5 +1,6 @@
 import { eq, and, desc, gte, lte, inArray, sql } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import type { ClosureFacts } from "./domain.js";
 import { workScopes, scopeProgress, workIssues, workClosures, physicalCompletions } from "./schema.js";
 import { workProposals } from "../proposal/schema.js";
 import type { ReportFilters } from "../reporting/validators.js";
@@ -192,4 +193,28 @@ export async function countClosures(
     const rows = await tx.select().from(workClosures).where(and(...closureConditions));
     return rows.length;
   });
+}
+
+/**
+ * D4c #41: the facts the close guard reads - how many issues are open and, per scope with a target, how much has been
+ * achieved so far (sum of the recorded monthly entries, corrections included). Same transaction as the caller's.
+ */
+export async function loadClosureFacts(tx: ScopedTx, tenantId: string, workId: string): Promise<ClosureFacts> {
+  const open = await tx.select({ id: workIssues.id }).from(workIssues)
+    .where(and(eq(workIssues.tenantId, tenantId), eq(workIssues.workId, workId), eq(workIssues.status, "open")));
+  const scopes = await tx.select({ id: workScopes.id, target: workScopes.targetValue }).from(workScopes)
+    .where(and(eq(workScopes.tenantId, tenantId), eq(workScopes.workId, workId)));
+  const progress = scopes.length === 0 ? [] : await tx
+    .select({ workScopeId: scopeProgress.workScopeId, current: scopeProgress.currentAchievement }).from(scopeProgress)
+    .where(and(eq(scopeProgress.tenantId, tenantId), inArray(scopeProgress.workScopeId, scopes.map((s) => s.id))));
+  const achieved = new Map<string, number>();
+  for (const p of progress) achieved.set(p.workScopeId, (achieved.get(p.workScopeId) ?? 0) + Number(p.current ?? 0));
+  return {
+    openIssues: open.length,
+    scopes: scopes.map((s) => ({ target: s.target === null ? null : Number(s.target), achieved: achieved.get(s.id) ?? 0 })),
+  };
+}
+
+export async function getClosureFacts(tenantId: string, workId: string): Promise<ClosureFacts> {
+  return scopedRead((tx) => loadClosureFacts(tx, tenantId, workId));
 }

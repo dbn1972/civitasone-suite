@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@/test-utils/intl-render";
 import type { ReactElement } from "react";
 import { ToastProvider } from "@/app/_components/ds/Toast";
 

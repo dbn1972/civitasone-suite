@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog, useToast, Card, Button, AcceptedNotice } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
@@ -19,6 +20,7 @@ type ClosureType = "closed" | "dropped" | "completion";
 export function ExecutionActions({ workId, canManage = true, openIssues = null }: ExecutionActionsProps) {
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
+  const tClose = useTranslations("works.executionClose");
 
   // ── Physical Completion Certificate ────────────────────────────────────────
   const [completionDate, setCompletionDate] = useState("");
@@ -73,6 +75,17 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
         body: JSON.stringify({ workId, closureType, ...(closureReason.trim() ? { remarks: closureReason.trim() } : {}) }),
       });
       if (!res.ok) {
+        // D4c #41: the close guard's refusals have specific, actionable meanings; everything else keeps the generic copy.
+        const env = (await res.clone().json().catch(() => ({}))) as { code?: string; error?: { code?: string } };
+        const code = env.code ?? env.error?.code;
+        const specific = code === "CLOSURE_BLOCKED" ? tClose("blocked")
+          : code === "CLOSURE_REASON_REQUIRED" ? tClose("reasonRequired")
+          : code === "DAO_APPROVAL_REQUIRED" ? tClose("daoRequired")
+          : null;
+        if (specific) {
+          setClosureError(specific);
+          return;
+        }
         const resolved = await closureFormError.fromResponse(res, "save");
         setClosureError(resolved.message);
         return;
@@ -207,10 +220,10 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
               Close Work
             </Button>
           </div>
-          {closureType === "dropped" && (
+          {(closureType === "dropped" || closureType === "closed") && (
             <div>
               <label htmlFor="execution-closure-reason" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
-                Reason for dropping (required)
+                {closureType === "dropped" ? "Reason for dropping (required)" : tClose("reasonLabelClosed")}
               </label>
               <textarea
                 id="execution-closure-reason"

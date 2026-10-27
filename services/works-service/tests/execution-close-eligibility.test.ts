@@ -19,6 +19,8 @@ import { TENANT_A, WORK_ID, bearerToken, jwtPayload } from "./fixtures/works-fix
 const getAward = vi.fn();
 const hasPhysicalCompletion = vi.fn();
 const listSplits = vi.fn();
+// D4c #41: the close guard also reads open issues / progress; nothing blocks by default here.
+const getClosureFacts = vi.fn(async () => ({ openIssues: 0, scopes: [] as Array<{ target: number | null; achieved: number }> }));
 // closeWorkCommand resolves to an Accepted shape ({id, status, correlationId})
 // — sendAccepted (packages/schemas/src/validate.ts) zod-validates against
 // exactly that before replying, so the mock must match it or every "happy
@@ -31,7 +33,7 @@ vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
 });
 vi.mock("../src/modules/execution/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/execution/repo.js")>();
-  return { ...orig, hasPhysicalCompletion };
+  return { ...orig, hasPhysicalCompletion, getClosureFacts };
 });
 vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/proposal/repo.js")>();

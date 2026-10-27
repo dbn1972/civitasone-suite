@@ -16406,7 +16406,13 @@
     "location": {
       "tehsilBlock": "Tehsil / Block"
     },
-    "billDeductions": {
+"executionClose": {
+      "blocked": "This work cannot be closed as completed while it has open issues or progress is below 100%. Close the issues and record the remaining progress, or close it as Dropped with a reason.",
+      "reasonRequired": "This work has open issues or progress below 100%. Give a reason to close it early.",
+      "daoRequired": "Closing a work early, with open issues or progress below 100%, needs approval. The DAO must approve this closure.",
+      "reasonLabelClosed": "Reason (needed when issues are open or progress is below 100%)"
+    },
+        "billDeductions": {
       "title": "Deductions by bill",
       "bill": "Bill {billNo}",
       "loading": "Loading deduction lines…",

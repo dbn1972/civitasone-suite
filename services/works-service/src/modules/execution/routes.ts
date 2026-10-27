@@ -7,15 +7,16 @@ import * as commands from "./commands.js";
 import {
   listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures, countClosures,
   getWorkScope, listScopeProgress, hasPhysicalCompletion, hasWorkClosure,
-  countExecutionProgress, countAllIssues,
+  countExecutionProgress, countAllIssues, getClosureFacts,
 } from "./repo.js";
 import { getAward, finalizedAgreementByWorkIds } from "../tender/repo.js";
 import { listSplits, getWorkHeaders, getProposal } from "../proposal/repo.js";
 import {
   canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget,
-  closureEligibility, parentSplitConsistency, isTenantUploadKey,
+  closureEligibility, parentSplitConsistency, isTenantUploadKey, closureBlockers, CLOSURE_BLOCKER_TEXT,
 } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
+import { hasAnyRole } from "@civitasone/auth";
 import { z } from "zod";
 
 // Progress register query: pagination plus an optional single-work filter
@@ -251,6 +252,21 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     }
     if (!parentSplitConsistency("", splits.map((s) => ({ id: s.id, status: s.status })), body.closureType)) {
       throw new HttpError(409, "SPLITS_NOT_CLOSED", "All splits must be closed before the parent work can be closed");
+    }
+
+    // D4c #41: a work is not closed while issues are open or physical progress is below 100%, unless it is dropped /
+    // closed (foreclosed) with a DAO reason and the DAO's approval. The consumer re-checks in its transaction.
+    const blockers = closureBlockers(await getClosureFacts(ctx.tenantId, body.workId));
+    if (blockers.length > 0) {
+      if (body.closureType === "completion") {
+        throw new HttpError(422, "CLOSURE_BLOCKED", `The work cannot be closed as completed: ${blockers.map((b) => CLOSURE_BLOCKER_TEXT[b]).join(" and ")}`);
+      }
+      if (!(body.remarks ?? "").trim()) {
+        throw new HttpError(422, "CLOSURE_REASON_REQUIRED", `A reason is required to close this work: ${blockers.map((b) => CLOSURE_BLOCKER_TEXT[b]).join(" and ")}`);
+      }
+      if (!hasAnyRole(ctx, ["dao", "super_admin"])) {
+        throw new HttpError(403, "DAO_APPROVAL_REQUIRED", "Closing a work with open issues or progress below 100% needs the DAO's approval");
+      }
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeWorkCommand(ctx, body));

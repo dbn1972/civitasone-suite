@@ -90,3 +90,26 @@ export function parentSplitConsistency(
 
   return true;
 }
+
+/**
+ * D4c #41 (GAP-WORKS-EXECUTION-WORKID-07): what stands between a work and being closed. A work may not be closed while
+ * an issue is open or any scope with a target is below it (physical progress under 100%), unless it is closed as
+ * dropped/closed (foreclosed) with a DAO reason. `target` null/0 means the scope carries no measurable target.
+ */
+export interface ClosureFacts {
+  openIssues: number;
+  scopes: Array<{ target: number | null; achieved: number }>;
+}
+export type ClosureBlocker = "OPEN_ISSUES" | "PROGRESS_BELOW_100";
+
+export function closureBlockers(facts: ClosureFacts): ClosureBlocker[] {
+  const out: ClosureBlocker[] = [];
+  if (facts.openIssues > 0) out.push("OPEN_ISSUES");
+  if (facts.scopes.some((s) => s.target !== null && s.target > 0 && s.achieved < s.target)) out.push("PROGRESS_BELOW_100");
+  return out;
+}
+
+export const CLOSURE_BLOCKER_TEXT: Record<ClosureBlocker, string> = {
+  OPEN_ISSUES: "the work still has open issues",
+  PROGRESS_BELOW_100: "physical progress is below 100%",
+};

@@ -10,8 +10,10 @@ import { awards } from "../tender/schema.js";
 import { workProposals, workSplits } from "../proposal/schema.js";
 import {
   closureEligibility, parentSplitConsistency, validateProgressNotExceedTarget, canApplyProgressDelta,
+  closureBlockers, CLOSURE_BLOCKER_TEXT,
 } from "./domain.js";
 import { eq, and } from "drizzle-orm";
+import { loadClosureFacts } from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -293,6 +295,18 @@ export function registerExecutionConsumers(q: Queue): void {
       // closure, or a parent still has open splits.
       if (eligibility === null || (eligibility !== closureType && !preAgreementClose)) return;
       if (!parentSplitConsistency("", splitRows.map((sp) => ({ id: sp.id, status: sp.status })), closureType)) return;
+
+      // D4c #41: not while issues are open or progress is below 100%, unless it is dropped/closed (foreclosed) with a
+      // DAO reason. Thrown (not a silent return) so a refused close is visible in the dead-letter queue.
+      const blockers = closureBlockers(await loadClosureFacts(tx, msg.tenantId, workId));
+      if (blockers.length > 0) {
+        if (closureType === "completion") {
+          throw new NonRetryableError(`CLOSURE_BLOCKED: cannot close as completed while ${blockers.map((b) => CLOSURE_BLOCKER_TEXT[b]).join(" and ")}`);
+        }
+        if (!String(p.remarks ?? "").trim()) {
+          throw new NonRetryableError("CLOSURE_REASON_REQUIRED: closing with open issues or progress below 100% needs a DAO reason");
+        }
+      }
 
       await tx.insert(workClosures).values({
         id: p.id as string,
