@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import { hashIdentifier } from "./domain.js";
+import { assertNoAadhaarLike } from "../../shared/pii.js";
 import * as visitorRepo from "./visitor-repo.js";
 import * as identityRepo from "./repo.js";
 import * as deviceRepo from "./device-repo.js";
@@ -75,6 +76,8 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = trackBody.parse(req.body);
+    // D4c #1: refuse at ingest; a new visitor shell stores these attributes.
+    assertNoAadhaarLike(body.attributes);
 
     const visitorKeyHash = hashIdentifier(VISITOR_IDENTIFIER_TYPE, body.visitorKey);
     const existing = await visitorRepo.findByHash(visitorKeyHash, ctx.tenantId);

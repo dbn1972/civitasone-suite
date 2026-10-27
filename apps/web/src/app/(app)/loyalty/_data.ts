@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatShortId } from "@/lib/formatters";
 
 /** The envelope every loyalty-service list route returns: { data: [...], meta }. */
 function listEnvelope<T extends z.ZodTypeAny>(item: T) {
@@ -190,7 +191,7 @@ export function getLoyaltyPrograms(
 function mapEnrolment(e: z.infer<typeof enrolmentApi>): LoyaltyMemberRow {
   return {
     id: e.id,
-    profileRef: e.profileRef ?? (e.profileId ? e.profileId.slice(0, 8) : null),
+    profileRef: e.profileRef ?? (e.profileId ? formatShortId(e.profileId) : null),
     programId: e.programId ?? null,
     status: e.status,
     tier: e.tier ?? "base",

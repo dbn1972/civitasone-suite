@@ -12,14 +12,14 @@ const TENANT = crypto.randomUUID();
 const USER = crypto.randomUUID();
 const PROFILE_ID = crypto.randomUUID();
 
-const H = vi.hoisted(() => ({ publishMock: vi.fn() }));
+const H = vi.hoisted(() => ({ publishMock: vi.fn(), enqueueMock: vi.fn() }));
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
   scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
   sqlClient: { end: async () => {} },
 }));
-vi.mock("../src/shared/outbox.js", () => ({ enqueue: vi.fn() }));
+vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqueueMock(...a) }));
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
   queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
@@ -105,6 +105,60 @@ describe("ingest refuses Aadhaar-like values (422, nothing published)", () => {
     expect(r.json().data.rejected[0].index).toBe(1);
     expect(JSON.stringify(r.json())).not.toContain("234567890123");
     expect(H.publishMock).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+// Round 2 (PR #2339 review): the remaining paths that store caller-supplied attributes.
+describe("other attribute-storing paths refuse Aadhaar-like values (422, nothing written)", () => {
+  const expectRefused = (r: { statusCode: number; json: () => unknown }) => {
+    expect(r.statusCode).toBe(422);
+    expect(JSON.stringify(r.json())).toContain("AADHAAR_NOT_ACCEPTED");
+    expect(JSON.stringify(r.json())).not.toContain("234567890123");
+    expect(H.publishMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+  };
+
+  it("POST /v1/cdp/resolve (createIfMissing) refuses a 12-digit attribute", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/resolve", headers: auth(),
+      payload: { identifiers: [{ type: "email", value: "a@example.test" }], attributes: { idNo: "234567890123" }, createIfMissing: true },
+    });
+    expectRefused(r);
+    await app.close();
+  });
+
+  it("POST /v1/cdp/identity/anonymous-visitors refuses an aadhaar-named attribute", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/identity/anonymous-visitors", headers: auth(),
+      payload: { visitorKey: "cookie-abcdef-123", attributes: { aadhaar: "234567890123" } },
+    });
+    expectRefused(r);
+    await app.close();
+  });
+
+  it("POST /v1/cdp/profiles/:id/apply-template refuses a candidate value", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/apply-template`, headers: auth(["cdp_admin"]),
+      payload: {
+        templateId: crypto.randomUUID(), version: 1,
+        candidates: [{ attribute: "name", value: "Raj", source: "crm", observedAt: "2025-06-01T10:00:00.000Z" }, { attribute: "note", value: "2345 6789 0123", source: "crm", observedAt: "2025-06-01T10:00:00.000Z" }],
+      },
+    });
+    expectRefused(r);
+    await app.close();
+  });
+
+  it("POST /v1/cdp/profiles/:id/apply-template refuses an aadhaar-named candidate attribute", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/apply-template`, headers: auth(["cdp_admin"]),
+      payload: { templateId: crypto.randomUUID(), version: 1, candidates: [{ attribute: "aadhaarNo", value: "xxxx", source: "crm", observedAt: "2025-06-01T10:00:00.000Z" }] },
+    });
+    expectRefused(r);
     await app.close();
   });
 });
