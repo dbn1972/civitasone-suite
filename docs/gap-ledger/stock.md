@@ -198,7 +198,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-01  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [~] **Status** (W2 stock: partial; 202→'submitted'/201→'created' distinction fixed; list revalidation within 60s cache still applies for the 201 sync path — acknowledged limitation of async queue)
+- [x] **Status** Closed by 457b4ad2a (UAT B4, 2026-10-27): role-guarded revalidateStockViews() Server Action purges the /stock Data Cache before landing on the list
 - **W0 note:** partly fixed by #1916 — 202 vs 200/201 messages are distinct, but the list is still revalidated on a 60 s cache (getStockItems revalidateSeconds:60) so a 201 create is not shown immediately
 - **First-pass claim:** Create returns 200/202 (queue path) and the page immediately says 'Stock item created.' then redirects to /stock/list after 700 ms (page.tsx:108-114); the list loader revalidates for 60 s (loaders.ts:3891-3897) and the consumer applies the write asynchronously, so the new SKU commonly is not on the list the clerk lands on.
 - **Verified evidence:** submit() (page.tsx:107-114) treats res.ok||202 as success, sets 'Stock item created.', router.refresh(), pushes /stock/list after 700 ms. list loader getStockItems revalidates 60 s (loaders.ts:3891-3897). The stale-list part is verifiable; that the server applies the write asynchronously (queue consumer) cannot be verified - stock-service is not in the snapshot, though the code comment/202 handling implies it.
