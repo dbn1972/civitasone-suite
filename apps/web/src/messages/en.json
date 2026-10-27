@@ -17452,5 +17452,21 @@
     "emptyTitle": "No visits yet",
     "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
     "emptyMessage": "Check in on a field task to record GPS and outcomes here."
+  },
+  "grantsB4Scheme": {
+      "sectorLabel": "Sector",
+      "sectorPlaceholder": "Select a sector (optional)",
+      "sectorAgriculture": "Agriculture",
+      "sectorEducation": "Education",
+      "sectorHealth": "Health",
+      "sectorRuralDevelopment": "Rural development",
+      "sectorUrbanDevelopment": "Urban development",
+      "sectorSocialWelfare": "Social welfare",
+      "sectorSkillDevelopment": "Skill development",
+      "sectorCultureSports": "Culture and sports",
+      "sectorOther": "Other",
+      "descriptionLabel": "Description",
+      "descriptionHint": "Optional. Up to 2000 characters. Shown on the scheme detail page.",
+      "descriptionTooLong": "The description must be 2000 characters or fewer."
   }
 }

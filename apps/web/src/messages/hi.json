@@ -17379,5 +17379,21 @@
     "emptyTitle": "अभी तक कोई विज़िट नहीं",
     "emptyMessageRange": "व्यापक तिथि सीमा आज़माएँ, या सभी विज़िट देखने के लिए तिथियाँ हटाएँ।",
     "emptyMessage": "यहाँ GPS और परिणाम दर्ज करने के लिए किसी फ़ील्ड कार्य पर चेक-इन करें।"
+  },
+  "grantsB4Scheme": {
+      "sectorLabel": "क्षेत्र",
+      "sectorPlaceholder": "क्षेत्र चुनें (वैकल्पिक)",
+      "sectorAgriculture": "कृषि",
+      "sectorEducation": "शिक्षा",
+      "sectorHealth": "स्वास्थ्य",
+      "sectorRuralDevelopment": "ग्रामीण विकास",
+      "sectorUrbanDevelopment": "शहरी विकास",
+      "sectorSocialWelfare": "समाज कल्याण",
+      "sectorSkillDevelopment": "कौशल विकास",
+      "sectorCultureSports": "संस्कृति और खेल",
+      "sectorOther": "अन्य",
+      "descriptionLabel": "विवरण",
+      "descriptionHint": "वैकल्पिक। अधिकतम 2000 अक्षर। योजना के विवरण पृष्ठ पर दिखाया जाता है।",
+      "descriptionTooLong": "विवरण 2000 अक्षरों या उससे कम का होना चाहिए।"
   }
 }

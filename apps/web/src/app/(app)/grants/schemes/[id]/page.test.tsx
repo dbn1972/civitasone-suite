@@ -120,4 +120,21 @@ describe("SchemeDetailPage", () => {
     render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getAllByText(/25\.0%/).length).toBeGreaterThan(0);
   });
+
+  // GAP-GRANTS-SCHEMES-NEW-03: the persisted sector and description are shown back.
+  it("shows the sector and description entered on the create form", async () => {
+    getSchemeByIdMock.mockResolvedValue({
+      data: { ...OPEN_SCHEME, sector: "rural_development", description: "Block-level infrastructure grants" },
+      source: "api",
+    });
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
+    expect(screen.getByText("Sector")).toBeInTheDocument();
+    expect(screen.getByText("Rural development")).toBeInTheDocument();
+    expect(screen.getByText("Block-level infrastructure grants")).toBeInTheDocument();
+  });
+
+  it("omits the sector and description rows when none were stored", async () => {
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
+    expect(screen.queryByText("Sector")).not.toBeInTheDocument();
+  });
 });

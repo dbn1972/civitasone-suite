@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** GAP-GRANTS-SCHEMES-NEW-03: closed sector list; mirrors CHECK chk_grant_schemes_sector (migration 0017). */
+export const SCHEME_SECTORS = [
+  "agriculture", "education", "health", "rural_development", "urban_development",
+  "social_welfare", "skill_development", "culture_sports", "other",
+] as const;
+
 export const createSchemeBody = z.object({
   code:                   z.string().min(1).max(32),
   name:                   z.string().min(3).max(256),
@@ -12,6 +18,8 @@ export const createSchemeBody = z.object({
   closeAt:                z.string().datetime().optional(),
   /** Quarterly = 90, Half-yearly = 180, Annual = 365. Required for compliance monitoring. */
   reportingFrequencyDays: z.number().int().positive().optional(),
+  sector:                 z.enum(SCHEME_SECTORS).optional(),
+  description:            z.string().trim().max(2000).optional(),
 });
 export type CreateSchemeBody = z.infer<typeof createSchemeBody>;
 
@@ -23,6 +31,8 @@ export const updateSchemeBody = z.object({
   openAt:                 z.string().datetime().optional(),
   closeAt:                z.string().datetime().optional(),
   reportingFrequencyDays: z.number().int().positive().optional(),
+  sector:                 z.enum(SCHEME_SECTORS).optional(),
+  description:            z.string().trim().max(2000).optional(),
 }).refine(
   (body) => Object.keys(body).length > 0,
   { message: "at least one field must be provided to update" }

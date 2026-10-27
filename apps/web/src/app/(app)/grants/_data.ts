@@ -308,6 +308,9 @@ export type GrantSchemeDetail = {
   closeAt?: string | null;
   reportingFrequencyDays?: number | null;
   sanctionRef?: string | null;
+  /** GAP-GRANTS-SCHEMES-NEW-03: persisted by grant-service (migration 0017). */
+  sector?: string | null;
+  description?: string | null;
   tenantId?: string;
 };
 
@@ -359,6 +362,8 @@ function mapSchemeDetail(payload: unknown): GrantSchemeDetail | null {
     closeAt: toText(payload.closeAt ?? payload.close_at),
     reportingFrequencyDays: payload.reportingFrequencyDays != null ? toNumber(payload.reportingFrequencyDays) : null,
     sanctionRef: toText(payload.sanctionRef ?? payload.sanction_ref),
+    sector: toText(payload.sector),
+    description: toText(payload.description),
     tenantId: toText(payload.tenantId ?? payload.tenant_id) ?? undefined,
   };
 }
