@@ -25,7 +25,7 @@ describe("DataExportClient module dropdown (F7)", () => {
   it("says so, and disables the export, when no module can be exported", () => {
     openModulePicker([]);
     expect(screen.getByText("No module can be exported yet.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /^Export|Request export|Export data/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /^(Export|Request export|Export data)/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("tells a failed list load apart from an empty list", () => {
