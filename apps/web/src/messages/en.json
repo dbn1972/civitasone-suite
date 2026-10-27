@@ -16406,6 +16406,14 @@
     "proposalDuplicate": {
       "warning": "A similar proposal (same title, place and category) already exists in {fy}. You can still create this one, but check it is not a duplicate:"
     },
+    "tenderAward": {
+      "pendingLabel": "Award pending.",
+      "pendingHint": "The award was received and is being recorded. This page updates when it is ready.",
+      "confirmed": "Award recorded."
+    },
+    "tenderDetail": {
+      "deviationNote": "Deviation % = (quoted amount − estimate) ÷ estimate × 100. Plus means above the estimate, minus means below it."
+    },
     "location": {
       "tehsilBlock": "Tehsil / Block"
     },

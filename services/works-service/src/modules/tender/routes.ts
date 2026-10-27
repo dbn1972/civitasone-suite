@@ -4,9 +4,9 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists, preTenderReferenceExists, getActiveTenderType } from "./repo.js";
+import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists, preTenderReferenceExists, getActiveTenderType, getTenderEstimate, getAwardForWork } from "./repo.js";
 import { hasFinalizedTsForWork } from "../approval/repo.js";
-import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation, isSelfApprovalAward } from "./domain.js";
+import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation, isSelfApprovalAward, quotationDeviation } from "./domain.js";
 import { findContractorById, findContractorByName } from "../contractor/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -50,20 +50,56 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const id = v.idParamSchema.parse({ id: tenderId }).id;
     const rows = await listQuotations(ctx.tenantId, id);
     const showDetails = canViewBidDetails(ctx.roles);
+    // D4c #45: deviation % is measured against the work's estimate and, like the bid itself, is not shown to
+    // viewers; the quotation the award went to is marked so the page can show the award outcome.
+    const tenderInfo = await getTenderEstimate(ctx.tenantId, id);
+    const estimateMinor = tenderInfo?.estimateMinor ?? null;
+    const award = tenderInfo ? await getAwardForWork(ctx.tenantId, tenderInfo.workId) : null;
+    const awardedTo = (q: { contractorId: string | null; contractorName: string }) =>
+      !!award && (award.contractorId && q.contractorId
+        ? award.contractorId === q.contractorId
+        : award.contractorName.trim().toLowerCase() === q.contractorName.trim().toLowerCase());
     const data = rows.map((q) => {
       const normalized = {
         ...q,
         quotedAmountMinor: q.quotedAmountMinor ?? null,
       };
+      const deviation = showDetails ? quotationDeviation(normalized, estimateMinor) : null;
+      const awardId = awardedTo(q) ? award!.id : null;
       const redacted = redactQuotation(normalized, showDetails);
       return {
         ...redacted,
         quotedAmountMinor: redacted.quotedAmountMinor != null
           ? redacted.quotedAmountMinor.toString()
           : null,
+        deviationPercent: deviation,
+        awardId,
       };
     });
-    return reply.send({ data });
+    return reply.send({ data, meta: { estimateMinor: estimateMinor === null ? null : estimateMinor.toString() } });
+  });
+
+  // D4c #45: the award of this tender's work, or {data:null} while the queued award has not arrived. The FE shows
+  // "Award pending" and polls this until the result is there (the POST only returns 202).
+  app.get("/v1/works/tenders/:tenderId/award", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { tenderId } = req.params as { tenderId: string };
+    const id = v.idParamSchema.parse({ id: tenderId }).id;
+    const tenderInfo = await getTenderEstimate(ctx.tenantId, id);
+    if (!tenderInfo) throw new HttpError(404, "NOT_FOUND", "tender not found");
+    const award = await getAwardForWork(ctx.tenantId, tenderInfo.workId);
+    if (!award) return reply.send({ data: null });
+    return reply.send({
+      data: {
+        id: award.id,
+        workId: award.workId,
+        contractorName: award.contractorName,
+        agreementNumber: award.agreementNumber,
+        acceptedAmountMinor: award.acceptedAmountMinor?.toString() ?? null,
+        status: award.status,
+      },
+    });
   });
 
   // GAP-WORKS-TENDERS-DETAIL-02: single award read, so the FE detail page can
