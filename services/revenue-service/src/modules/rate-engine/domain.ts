@@ -311,6 +311,22 @@ export function applyRounding(amount: bigint, mode: RoundingMode): bigint {
 /**
  * Assert maker-checker: the checker must be a different user than the maker.
  */
+/**
+ * Owner decision F2 (2026-10-27): the ONLY roles that may approve or reject a
+ * rate-configuration proposal. Separation from the proposer is enforced
+ * separately by assertMakerChecker. An absent roles list fails closed.
+ */
+export const RATE_CONFIG_APPROVER_ROLES = ["revenue_admin", "finance_admin"] as const;
+
+export function assertRateConfigApprover(actorRoles: readonly string[] | undefined): void {
+  if (!(actorRoles ?? []).some((r) => (RATE_CONFIG_APPROVER_ROLES as readonly string[]).includes(r))) {
+    throw new DomainError(
+      "APPROVER_ROLE_REQUIRED",
+      "Only a revenue_admin or finance_admin may approve or reject a rate-configuration change",
+    );
+  }
+}
+
 export function assertMakerChecker(makerUserId: string, checkerUserId: string): void {
   if (makerUserId === checkerUserId) {
     throw new DomainError(

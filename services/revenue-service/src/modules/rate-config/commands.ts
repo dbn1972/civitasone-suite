@@ -11,5 +11,6 @@ export async function proposeConfigChange(ctx: RequestContext, payload: Record<s
 }
 
 export function decideConfigProposal(ctx: RequestContext, proposalId: string, payload: Record<string, unknown>) {
-  return publishCommand(COMMANDS.rateConfigDecide, ctx, { ...payload, proposalId });
+  // actorRoles is taken from the verified token AFTER the body spread, so a client can never supply its own.
+  return publishCommand(COMMANDS.rateConfigDecide, ctx, { ...payload, proposalId, actorRoles: ctx.roles ?? [] });
 }

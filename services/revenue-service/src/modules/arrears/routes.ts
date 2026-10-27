@@ -4,7 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
-import { istToday } from "./recovery-notice.js";
+import { istToday, DEFAULT_NOTICE_PERIOD_DAYS, NOTICE_SETTINGS_ROLES } from "./recovery-notice.js";
 import {
   createInstalmentBody,
   instalmentDecideBody,
@@ -15,6 +15,7 @@ import {
   recoveryReferralListQuery,
   recoveryDecideBody,
   serveDemandNoticeBody,
+  noticeSettingsBody,
   createWaiverBody,
   waiverDecideBody,
     listWaiversQuery,
@@ -163,7 +164,28 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     if (pre.noticeExists) throw new HttpError(409, "DUPLICATE_NOTICE_NO", "a demand notice with this number already exists");
+    // Owner decision F1: an officer may only lengthen the tenant default (the consumer re-enforces it).
+    const tenantDefault = pre.defaultNoticePeriodDays ?? DEFAULT_NOTICE_PERIOD_DAYS;
+    if (body.noticePeriodDays !== undefined && body.noticePeriodDays < tenantDefault) {
+      throw new HttpError(422, "NOTICE_PERIOD_BELOW_DEFAULT", `the notice period cannot be shorter than the tenant default of ${tenantDefault} days`);
+    }
     const result = await commands.serveDemandNotice(ctx, body as unknown as Record<string, unknown>);
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── GET/PUT /v1/revenue/recovery-settings (owner decision F1) ───────────────
+  app.get("/v1/revenue/recovery-settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const data = await repo.getNoticeSettings(ctx.tenantId);
+    return reply.send({ data });
+  });
+
+  app.put("/v1/revenue/recovery-settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...NOTICE_SETTINGS_ROLES]);
+    const body = noticeSettingsBody.parse(req.body);
+    const result = await commands.setNoticeSettings(ctx, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
 

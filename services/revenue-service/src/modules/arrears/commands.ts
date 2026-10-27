@@ -22,6 +22,11 @@ export function decideRecoveryReferral(ctx: RequestContext, referralId: string, 
   return publishCommand(COMMANDS.recoveryReferDecide, ctx, { ...payload, referralId });
 }
 
+export function setNoticeSettings(ctx: RequestContext, payload: Record<string, unknown>) {
+  // actorRoles comes from the verified token AFTER the body spread: a client can never supply it.
+  return publishCommand(COMMANDS.noticeSettingsSet, ctx, { ...payload, actorRoles: ctx.roles ?? [] });
+}
+
 export function serveDemandNotice(ctx: RequestContext, payload: Record<string, unknown>) {
   return publishCommand(COMMANDS.demandNoticeServe, ctx, payload);
 }

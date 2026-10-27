@@ -10,7 +10,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { demands } from "../assessment/schema.js";
 import { assessees } from "../assessee/schema.js";
 import { getLatestDemandBalance, getAssesseeOutstanding } from "./outstanding.js";
-import { listNoticesTx } from "./recovery-notice.js";
+import { listNoticesTx, loadNoticeDefaultTx } from "./recovery-notice.js";
 
 export async function listInstalmentPlans(
   tenantId: string,
@@ -286,6 +286,15 @@ export async function precheckDemandNotice(
         .limit(1);
       demandAssesseeId = d[0]?.assesseeId ?? null;
     }
-    return { assesseeExists: a.length > 0, noticeExists: dup.length > 0, demandAssesseeId };
+    const def = await loadNoticeDefaultTx(t, tenantId);
+    return { assesseeExists: a.length > 0, noticeExists: dup.length > 0, demandAssesseeId, defaultNoticePeriodDays: def.days };
+  });
+}
+
+/** Owner decision F1: the tenant default notice period (15 until configured). */
+export async function getNoticeSettings(tenantId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const def = await loadNoticeDefaultTx(tx as typeof db, tenantId);
+    return { defaultNoticePeriodDays: def.days, seeded: def.seeded };
   });
 }

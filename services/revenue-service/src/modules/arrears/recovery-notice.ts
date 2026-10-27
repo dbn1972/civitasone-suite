@@ -10,7 +10,7 @@
  * the whole of the last day.
  */
 import { and, eq, asc } from "drizzle-orm";
-import { demandNotices } from "./schema.js";
+import { demandNotices, noticeSettings } from "./schema.js";
 import { DomainError } from "../rate-engine/domain.js";
 
 export type NoticeView = {
@@ -73,4 +73,50 @@ export async function requireLapsedNoticeTx(tx: any, tenantId: string, assesseeI
     throw new DomainError("NOTICE_PERIOD_NOT_LAPSED", `The demand notice period has not lapsed yet (it runs to ${next})`);
   }
   return lapsed;
+}
+
+// ── Owner decision F1 (2026-10-27): tenant-default notice period ─────────────
+
+/** Seeded default when a tenant has not configured one. */
+export const DEFAULT_NOTICE_PERIOD_DAYS = 15;
+
+/** Roles that may change the tenant default (checked on the route AND in the consumer). */
+export const NOTICE_SETTINGS_ROLES = ["revenue_admin", "finance_admin"] as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Tx = any;
+
+/**
+ * The tenant's default notice period. With `seed`, a missing row is written
+ * (15) so the config row exists from the first notice served; without it the
+ * read is side-effect free and a missing row reads as the seeded default.
+ */
+export async function loadNoticeDefaultTx(
+  tx: Tx,
+  tenantId: string,
+  opts: { seed?: boolean } = {},
+): Promise<{ days: number; seeded: boolean }> {
+  const read = () =>
+    tx.select({ d: noticeSettings.defaultNoticePeriodDays }).from(noticeSettings).where(eq(noticeSettings.tenantId, tenantId)).limit(1);
+  let rows = (await read()) as Array<{ d: number }>;
+  if (rows.length === 0 && opts.seed) {
+    await tx.insert(noticeSettings).values({ tenantId, defaultNoticePeriodDays: DEFAULT_NOTICE_PERIOD_DAYS }).onConflictDoNothing();
+    rows = (await read()) as Array<{ d: number }>;
+  }
+  return rows[0] ? { days: rows[0].d, seeded: true } : { days: DEFAULT_NOTICE_PERIOD_DAYS, seeded: false };
+}
+
+/**
+ * The period for a notice being served: the officer's value, which may only
+ * LENGTHEN the tenant default; omitted means the default itself.
+ */
+export function resolveNoticePeriod(requested: number | undefined, tenantDefault: number): number {
+  if (requested === undefined) return tenantDefault;
+  if (requested < tenantDefault) {
+    throw new DomainError(
+      "NOTICE_PERIOD_BELOW_DEFAULT",
+      `The notice period cannot be shorter than the tenant default of ${tenantDefault} days`,
+    );
+  }
+  return requested;
 }

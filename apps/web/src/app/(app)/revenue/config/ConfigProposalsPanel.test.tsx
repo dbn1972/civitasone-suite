@@ -18,6 +18,13 @@ describe("ConfigProposalsPanel (owner decision #2: maker-checker rate config)", 
     vi.restoreAllMocks();
   });
 
+  it("F2: a user who is not revenue_admin/finance_admin sees the buttons disabled with the reason", () => {
+    render(<ConfigProposalsPanel proposals={[PENDING]} currentUserId="checker-1" canApprove={false} />);
+    expect(screen.getByRole("button", { name: "Approve rate-config proposal" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject rate-config proposal" })).toBeDisabled();
+    expect(screen.getByText(/Only a revenue admin or finance admin can approve or reject/)).toBeInTheDocument();
+  });
+
   it("lists pending proposals under 'Awaiting approval' with Approve/Reject for a different officer", () => {
     render(<ConfigProposalsPanel proposals={[PENDING, DECIDED]} currentUserId="checker-1" />);
     expect(screen.getByText("Awaiting approval")).toBeInTheDocument();

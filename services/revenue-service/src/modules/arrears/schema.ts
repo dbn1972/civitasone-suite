@@ -99,6 +99,16 @@ export const demandNotices = arrearsSchema.table("demand_notices", {
   version:          integer("version").notNull().default(1),
 });
 
+// ── arrears.notice_settings ───────────────────────────────────────────────────
+// Owner decision F1: per-tenant default demand-notice period (seeded 15).
+export const noticeSettings = arrearsSchema.table("notice_settings", {
+  tenantId:                uuid("tenant_id").primaryKey(),
+  defaultNoticePeriodDays: integer("default_notice_period_days").notNull().default(15),
+  updatedBy:               uuid("updated_by"),
+  updatedAt:               timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:                 integer("version").notNull().default(1),
+});
+
 export type InstalmentPlanRow = typeof instalmentPlans.$inferSelect;
 export type InstalmentPlanInsert = typeof instalmentPlans.$inferInsert;
 export type InstalmentRow = typeof instalments.$inferSelect;
@@ -108,4 +118,4 @@ export type WriteOffInsert = typeof writeOffs.$inferInsert;
 export type RecoveryReferralRow = typeof recoveryReferrals.$inferSelect;
 export type RecoveryReferralInsert = typeof recoveryReferrals.$inferInsert;
 
-export const schema = { instalmentPlans, instalments, writeOffs, recoveryReferrals, demandNotices };
+export const schema = { instalmentPlans, instalments, writeOffs, recoveryReferrals, demandNotices, noticeSettings };

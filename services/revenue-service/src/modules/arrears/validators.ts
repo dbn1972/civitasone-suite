@@ -88,15 +88,21 @@ export const recoveryDecideBody = z.object({
 });
 
 /**
- * Owner decision #4: serve a demand notice. The notice period (days) is entered
- * per notice by the serving officer — no statutory default is assumed.
+ * Owner decision #4 / F1: serve a demand notice. The notice period (days) is
+ * optional: omitted means the tenant default (15 unless configured); an officer
+ * may only LENGTHEN it, never go below the tenant default (server-enforced).
  */
 export const serveDemandNoticeBody = z.object({
   assesseeId: z.string().uuid(),
   demandId: z.string().uuid().optional(),
   noticeNo: z.string().min(1).max(64),
   servedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
-  noticePeriodDays: z.number().int().min(1).max(365),
+  noticePeriodDays: z.number().int().min(1).max(365).optional(),
+});
+
+/** Owner decision F1: set the tenant default notice period. */
+export const noticeSettingsBody = z.object({
+  defaultNoticePeriodDays: z.number().int().min(1).max(365),
 });
 
 export const createWaiverBody = z.object({
