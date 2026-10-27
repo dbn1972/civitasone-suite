@@ -1,18 +1,18 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getCitizenRequests } from "../../../_data/loaders";
 import { CitizenRequestsClient } from "./CitizenRequestsClient";
 import { LogRequestButton } from "./LogRequestButton";
 import { toHumanError } from "@/lib/messages";
+import { countByBucket } from "../_data/statusCounts";
 
 export default async function Page() {
   const t = await getTranslations("citizenRequests");
   const { data: requests, source } = await getCitizenRequests();
   const errored = source === "error";
 
-  const open = requests.filter((r) => r.status === "submitted" || r.status === "under_review" || r.status === "in_progress").length;
-  const resolved = requests.filter((r) => r.status === "resolved").length;
-  const rejected = requests.filter((r) => r.status === "rejected").length;
+  const { open, resolved, rejected } = countByBucket(requests);
 
   return (
     <>
@@ -20,7 +20,14 @@ export default async function Page() {
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
         help="citizen"
-        actions={<LogRequestButton />}
+        actions={
+          <>
+            <Link href="/citizen/grievances" className="btn">
+              {t("registerLink")}
+            </Link>
+            <LogRequestButton />
+          </>
+        }
       />
       {/* GAP-CITIZEN-REQUESTS-01: a failed fetch must not read as "0 open, no
           service requests" under an amber badge. Show a real retry state and
