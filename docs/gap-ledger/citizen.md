@@ -2062,7 +2062,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — POST /v1/citizen/feedback endpoint absent from snapshot)
+- [~] **Status** (UAT B4, 2026-10-27 NEEDS-OWNER-DECISION: no POST /v1/citizen/feedback exists and the feedback page has no form; what is rated, who reads it and where it aggregates is a product choice - recommend no new endpoint: reuse the built surveys module (citizen/surveys) and point the feedback tile at open surveys)
 - **First-pass claim:** No endpoint referenced anywhere in the tree; whether a feedback API exists is undeterminable (citizen-service absent from snapshot).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['(none referenced) expected POST /v1/citizen/feedback']`
 - **Question:** Does a citizen feedback endpoint exist, with validation, rate limit and citizen ownership?
