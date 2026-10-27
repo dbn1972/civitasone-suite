@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { RTIDetailClient } from "./RTIDetailClient";
 import enMessages from "@/messages/en.json";
+import { formatIndianDate } from "@/lib/formatters";
 import type { RtiDetail } from "../../_data/loaders";
 
 vi.mock("next/navigation", () => ({
@@ -204,6 +205,6 @@ describe("RTIDetailClient -- GAP-CITIZEN-RTI-DETAIL-06 transfer history", () => 
     });
     expect(screen.getByText("Transfers")).toBeInTheDocument();
     expect(screen.getByText("Transferred from Sanitation Dept to Water Works")).toBeInTheDocument();
-    expect(screen.getByText("05/03/2026")).toBeInTheDocument();
+    expect(screen.getByText(formatIndianDate("2026-03-05T04:30:00Z"))).toBeInTheDocument();
   });
 });

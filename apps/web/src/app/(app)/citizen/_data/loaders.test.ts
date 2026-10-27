@@ -100,6 +100,7 @@ describe("citizen loaders", () => {
         updatedAt: "2024-01-01T00:00:00Z",
         responses: [{ id: "resp1", responseUrl: "https://example.gov.in/doc.pdf", respondedAt: "2024-01-20T00:00:00Z" }],
         appeals: [{ id: "ap1", appealType: "first", grounds: "Incomplete response", status: "pending", createdAt: "2024-01-25T00:00:00Z" }],
+        transfers: [{ id: "tr1", fromAuthority: "Sanitation Dept", toAuthority: "Water Works", transferredAt: "2024-01-10T00:00:00Z", transferredBy: "internal" }],
       }),
       source: "api",
     }));
@@ -119,6 +120,7 @@ describe("citizen loaders", () => {
       updatedAt: "2024-01-01T00:00:00Z",
       responses: [{ id: "resp1", responseUrl: "https://example.gov.in/doc.pdf", respondedAt: "2024-01-20T00:00:00Z" }],
       appeals: [{ id: "ap1", appealType: "first", grounds: "Incomplete response", status: "pending", createdAt: "2024-01-25T00:00:00Z" }],
+      transfers: [{ id: "tr1", fromAuthority: "Sanitation Dept", toAuthority: "Water Works", transferredAt: "2024-01-10T00:00:00Z" }],
     });
   });
 
