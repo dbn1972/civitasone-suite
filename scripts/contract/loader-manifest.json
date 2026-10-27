@@ -2075,10 +2075,6 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/indents"
-    },
-    {
-      "module": "procurement",
       "screen": "/procurement/orders"
     },
     {
