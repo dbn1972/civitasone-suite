@@ -1754,6 +1754,7 @@ export const FundReleaseSummarySchema = z.object({
   id: z.string(),
   releaseNo: z.string(),
   projectId: z.string(),
+  schemeId: z.string().optional(),
   projectName: z.string(),
   amount: z.number(),
   releaseDate: z.string(),

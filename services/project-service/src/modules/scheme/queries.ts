@@ -188,6 +188,7 @@ export async function listFundReleaseSummaries(tenantId: string, limit: number) 
     id: row.id,
     releaseNo: row.releaseNo,
     projectId: row.schemeId,
+    schemeId: row.schemeId,
     projectName: schemeById.get(row.schemeId)?.name ?? row.schemeId,
     amount: minorToAmount(row.amountMinor),
     releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
