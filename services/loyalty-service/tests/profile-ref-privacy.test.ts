@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET ?? globalThis.crypto.randomUUID();
 const TENANT = crypto.randomUUID();
 const ACTOR = crypto.randomUUID();
 const ENROLMENT_ID = crypto.randomUUID();

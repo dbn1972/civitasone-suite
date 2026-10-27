@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { findAadhaarLike } from "../src/shared/pii.js";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET ?? globalThis.crypto.randomUUID();
 const TENANT = crypto.randomUUID();
 const USER = crypto.randomUUID();
 const PROFILE_ID = crypto.randomUUID();

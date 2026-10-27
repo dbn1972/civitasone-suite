@@ -33,7 +33,6 @@ const ID_SLICE_ALLOW: readonly string[] = [
   "crm/health/[accountId]/page.tsx",
   "knowledge/repository/page.tsx",
   "knowledge/search/SearchClient.tsx",
-  "loyalty/members/MembersTable.tsx",
   "notifications/templates/[id]/page.tsx",
   "policy/abac/page.tsx",
   "policy/bindings/page.tsx",
