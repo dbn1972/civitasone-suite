@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill, LoadErrorState } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, getSessionUserId, hasAnyRole } from "@/lib/auth/roleGuard";
 import { GRANTS_MAKER_ROLES, GRANT_REVIEWER_ROLES } from "../../roles";
 import { getApplicationById, getSchemeById } from "../../_data";
 import { getGranteeById } from "@/app/_data/loaders";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { ApplicationActions } from "./ApplicationActions";
 
 const STATUS_ACTIONS: Record<string, string[]> = {
@@ -34,6 +36,12 @@ function displayActorRef(ref: string | null | undefined): string {
   if (!ref) return "—";
   if (UUID_RE.test(ref)) return "—";
   return ref;
+}
+
+/** "identity_user:<uuid>" -> "<uuid>"; a legacy free-text label passes through unchanged. */
+function reviewerIdOf(ref: string | null | undefined): string | null {
+  const id = ref?.trim().replace(/^identity_user:/, "");
+  return id ? id : null;
 }
 
 export default async function ApplicationDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -74,6 +82,19 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
   ]);
   const scheme = schemeRes?.data ?? null;
   const grantee = granteeRes?.data ?? null;
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-05: show reviewers by NAME. The refs are user ids; resolve them through the
+  // tenant user directory. An id the directory cannot resolve is never printed; a legacy free-text label is.
+  const t = await getTranslations("grantsB4Review");
+  const assignedReviewerId = reviewerIdOf(application.assignedReviewerRef);
+  const scoredReviewerId = reviewerIdOf(application.scoredReviewerRef ?? application.reviewerRef);
+  const reviewerNames = await resolveUsers([assignedReviewerId, scoredReviewerId].filter((v): v is string => !!v));
+  const reviewerLabel = (id: string | null): string | null => {
+    if (!id) return null;
+    const name = reviewerNames.get(id);
+    if (name) return name;
+    return UUID_RE.test(id) ? t("reviewerUnresolved") : id;
+  };
 
   const hasEvaluation =
     application.technicalScore != null || application.financialScore != null || !!application.recommendation;
@@ -146,6 +167,12 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
           {/* GAP-GRANTS-APPLICATIONS-DETAIL-06: show submitter/approver identity.
               grant-service returns actor IDs (UUIDs); displayActorRef hides
               those until the backend returns a resolved name. */}
+          {assignedReviewerId && (
+            <div>
+              <dt className="lab">{t("assignedReviewer")}</dt>
+              <dd>{reviewerLabel(assignedReviewerId)}</dd>
+            </div>
+          )}
           <div>
             <dt className="lab">Submitted By</dt>
             <dd>{displayActorRef(application.submittedBy)}</dd>
@@ -165,8 +192,8 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
             <div><dt className="lab">Technical score</dt><dd>{application.technicalScore ?? "—"}</dd></div>
             <div><dt className="lab">Financial score</dt><dd>{application.financialScore ?? "—"}</dd></div>
             <div><dt className="lab">Total score</dt><dd>{application.totalScore ?? "—"}</dd></div>
-            {application.reviewerRef && (
-              <div><dt className="lab">Reviewer</dt><dd className="mono">{application.reviewerRef}</dd></div>
+            {scoredReviewerId && (
+              <div><dt className="lab">{t("reviewerLabel")}</dt><dd>{reviewerLabel(scoredReviewerId)}</dd></div>
             )}
             {application.recommendation && (
               <div><dt className="lab">Recommendation</dt><dd style={{ gridColumn: "1 / -1" }}>{application.recommendation}</dd></div>
@@ -185,6 +212,7 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
             requestedMinor={application.amountRequestedMinor}
             minMinor={scheme?.minAmountMinor ?? null}
             maxMinor={scheme?.maxAmountMinor ?? null}
+            defaultReviewerId={assignedReviewerId ?? viewerId}
           />
         </Card>
       ) : !TERMINAL_STATUSES.has(application.status) ? (

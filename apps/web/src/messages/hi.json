@@ -17711,5 +17711,45 @@
     "publishDescription": "नागरिक इस {noun} को तुरंत देख सकेंगे। आप अपना बनाया ड्राफ़्ट स्वयं प्रकाशित नहीं कर सकते।",
     "withdrawTitle": "इस {noun} को वापस लें?",
     "withdrawDescription": "नागरिक अब इस {noun} को नहीं देख सकेंगे। वापसी ऑडिट रिकॉर्ड में दर्ज होगी।"
+  },
+  "grantsB4Scheme": {
+    "sectorLabel": "क्षेत्र",
+    "sectorPlaceholder": "क्षेत्र चुनें (वैकल्पिक)",
+    "sectorAgriculture": "कृषि",
+    "sectorEducation": "शिक्षा",
+    "sectorHealth": "स्वास्थ्य",
+    "sectorRuralDevelopment": "ग्रामीण विकास",
+    "sectorUrbanDevelopment": "शहरी विकास",
+    "sectorSocialWelfare": "समाज कल्याण",
+    "sectorSkillDevelopment": "कौशल विकास",
+    "sectorCultureSports": "संस्कृति और खेल",
+    "sectorOther": "अन्य",
+    "descriptionLabel": "विवरण",
+    "descriptionHint": "वैकल्पिक। अधिकतम 2000 अक्षर। योजना के विवरण पृष्ठ पर दिखाया जाता है।",
+    "descriptionTooLong": "विवरण 2000 अक्षरों या उससे कम का होना चाहिए।"
+  },
+  "grantsB4Installments": {
+    "blockedLabel": "अवरुद्ध",
+    "blockedSequence": "पहले इस अनुदान की पिछली किस्तें जारी करें।",
+    "blockedGrantStatus": "यह अनुदान {status} है; किस्तें जारी नहीं की जा सकतीं।",
+    "grantStatusSuspended": "निलंबित",
+    "grantStatusCancelled": "रद्द",
+    "grantStatusCompleted": "पूर्ण",
+    "payeeAccount": "प्राप्तकर्ता खाता: अंतिम अंक {last4}, IFSC {ifsc}।",
+    "payeeNoAccount": "इस अनुदान प्राप्तकर्ता का कोई बैंक खाता पंजीकृत नहीं है। राशि जारी करने से पहले प्राप्तकर्ता का रिकॉर्ड जाँचें।",
+    "granteeUnresolved": "अनुदान प्राप्तकर्ता",
+    "dash": "—"
+  },
+  "grantsB4Review": {
+    "reviewerLabel": "समीक्षक",
+    "reviewerPlaceholder": "नाम से समीक्षक खोजें",
+    "reviewerRequired": "सूची से समीक्षक चुनें।",
+    "assignTitle": "समीक्षक नियुक्त करें",
+    "assignDescription": "टेनेंट के उपयोगकर्ता निर्देशिका में खोजें और चुनें कि इस आवेदन की समीक्षा कौन करेगा। आवेदन जमा करने वाला व्यक्ति समीक्षक नहीं हो सकता।",
+    "assignConfirm": "नियुक्त करें",
+    "assigning": "नियुक्त किया जा रहा है…",
+    "cancel": "रद्द करें",
+    "assignedReviewer": "नियुक्त समीक्षक",
+    "reviewerUnresolved": "नाम उपलब्ध नहीं"
   }
 }

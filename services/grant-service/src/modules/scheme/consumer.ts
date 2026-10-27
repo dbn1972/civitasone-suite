@@ -13,7 +13,7 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; code: string; name: string;
       sanctionRef?: string; budgetMinor: number; minAmountMinor: number;
       maxAmountMinor: number; currency?: string; openAt?: string; closeAt?: string;
-      reportingFrequencyDays?: number;
+      reportingFrequencyDays?: number; sector?: string; description?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -27,6 +27,8 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
         currency: p.currency ?? "INR",
         status: "active",
         reportingFrequencyDays: p.reportingFrequencyDays ?? 90,
+        sector: p.sector ?? null,
+        description: p.description?.trim() || null,
         openAt: p.openAt ? new Date(p.openAt) : null,
         closeAt: p.closeAt ? new Date(p.closeAt) : null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -66,7 +68,7 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; updatedBy: string;
       name?: string; sanctionRef?: string; budgetMinor?: number;
       maxAmountMinor?: number; openAt?: string; closeAt?: string;
-      reportingFrequencyDays?: number;
+      reportingFrequencyDays?: number; sector?: string; description?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -76,6 +78,8 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
       if (p.budgetMinor !== undefined)            patch.budgetMinor = BigInt(p.budgetMinor);
       if (p.maxAmountMinor !== undefined)         patch.maxAmountMinor = BigInt(p.maxAmountMinor);
       if (p.reportingFrequencyDays !== undefined) patch.reportingFrequencyDays = p.reportingFrequencyDays;
+      if (p.sector !== undefined)                 patch.sector = p.sector;
+      if (p.description !== undefined)            patch.description = p.description.trim() || null;
       if (p.openAt !== undefined)                 patch.openAt = new Date(p.openAt);
       if (p.closeAt !== undefined)                patch.closeAt = new Date(p.closeAt);
       await repo.updateScheme(tx, p.id, patch);

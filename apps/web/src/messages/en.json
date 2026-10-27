@@ -17784,5 +17784,45 @@
     "publishDescription": "Citizens will see this {noun} immediately. You cannot publish a draft you created yourself.",
     "withdrawTitle": "Withdraw this {noun}?",
     "withdrawDescription": "Citizens will no longer see this {noun}. The withdrawal is recorded in the audit trail."
+  },
+  "grantsB4Scheme": {
+    "sectorLabel": "Sector",
+    "sectorPlaceholder": "Select a sector (optional)",
+    "sectorAgriculture": "Agriculture",
+    "sectorEducation": "Education",
+    "sectorHealth": "Health",
+    "sectorRuralDevelopment": "Rural development",
+    "sectorUrbanDevelopment": "Urban development",
+    "sectorSocialWelfare": "Social welfare",
+    "sectorSkillDevelopment": "Skill development",
+    "sectorCultureSports": "Culture and sports",
+    "sectorOther": "Other",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Optional. Up to 2000 characters. Shown on the scheme detail page.",
+    "descriptionTooLong": "The description must be 2000 characters or fewer."
+  },
+  "grantsB4Installments": {
+    "blockedLabel": "Blocked",
+    "blockedSequence": "Release earlier installments of this grant first.",
+    "blockedGrantStatus": "This grant is {status}; installments cannot be released.",
+    "grantStatusSuspended": "suspended",
+    "grantStatusCancelled": "cancelled",
+    "grantStatusCompleted": "completed",
+    "payeeAccount": "Payee account: ending {last4}, IFSC {ifsc}.",
+    "payeeNoAccount": "No bank account is registered for this grantee. Check the grantee record before releasing funds.",
+    "granteeUnresolved": "the grantee",
+    "dash": "—"
+  },
+  "grantsB4Review": {
+    "reviewerLabel": "Reviewer",
+    "reviewerPlaceholder": "Search for a reviewer by name",
+    "reviewerRequired": "Choose the reviewer from the list.",
+    "assignTitle": "Assign reviewer",
+    "assignDescription": "Search the tenant user directory and choose who will review this application. The reviewer cannot be the person who submitted it.",
+    "assignConfirm": "Assign",
+    "assigning": "Assigning…",
+    "cancel": "Cancel",
+    "assignedReviewer": "Assigned reviewer",
+    "reviewerUnresolved": "Name not available"
   }
 }

@@ -288,6 +288,10 @@ export type GrantApplicationDetail = {
   createdAt: string | null;
   // GAP-GRANTS-APPLICATIONS-DETAIL-05: evaluation (latest score), when present.
   reviewerRef?: string | null;
+  /** The reviewer assigned to the application (assign-reviewer), distinct from the one who scored. */
+  assignedReviewerRef?: string | null;
+  /** The reviewer recorded on the latest evaluation. */
+  scoredReviewerRef?: string | null;
   technicalScore?: number | null;
   financialScore?: number | null;
   totalScore?: number | null;
@@ -308,6 +312,9 @@ export type GrantSchemeDetail = {
   closeAt?: string | null;
   reportingFrequencyDays?: number | null;
   sanctionRef?: string | null;
+  /** GAP-GRANTS-SCHEMES-NEW-03: persisted by grant-service (migration 0017). */
+  sector?: string | null;
+  description?: string | null;
   tenantId?: string;
 };
 
@@ -334,6 +341,8 @@ function mapApplicationDetail(payload: unknown): GrantApplicationDetail | null {
     approvedAt: toText(payload.approvedAt ?? payload.approved_at),
     createdAt: toText(payload.createdAt ?? payload.created_at),
     reviewerRef: toText(payload.scoredReviewerRef ?? payload.reviewerRef ?? payload.reviewer_ref),
+    assignedReviewerRef: toText(payload.reviewerRef ?? payload.reviewer_ref),
+    scoredReviewerRef: toText(payload.scoredReviewerRef),
     technicalScore: payload.technicalScore != null ? toNumber(payload.technicalScore) : null,
     financialScore: payload.financialScore != null ? toNumber(payload.financialScore) : null,
     totalScore: payload.totalScore != null ? toNumber(payload.totalScore) : null,
@@ -359,6 +368,8 @@ function mapSchemeDetail(payload: unknown): GrantSchemeDetail | null {
     closeAt: toText(payload.closeAt ?? payload.close_at),
     reportingFrequencyDays: payload.reportingFrequencyDays != null ? toNumber(payload.reportingFrequencyDays) : null,
     sanctionRef: toText(payload.sanctionRef ?? payload.sanction_ref),
+    sector: toText(payload.sector),
+    description: toText(payload.description),
     tenantId: toText(payload.tenantId ?? payload.tenant_id) ?? undefined,
   };
 }

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DataTable } from "@/app/_components/ds";
+import { MaskedReveal } from "@/app/_components/ds/MaskedReveal";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import type { GrantSummary } from "@civitasone/types";
@@ -15,8 +16,15 @@ type Col = {
   render?: (row: GrantSummary) => ReactNode;
 };
 
+/** grant-service audited reveal endpoint (same contract as crm / hrms), relative to /api/proxy. */
+const GRANTS_PII_REVEAL_PATH = "v1/grants/pii/reveal";
+
 /**
- * GAP-GRANTS-LIST-03 (DPDP, safest default — flagged for DPO/HUMAN REVIEW):
+ * GAP-GRANTS-LIST-03 (UAT B4): grant-service now masks a natural person's name at source
+ * (granteeNameMasked) and offers an audited reveal. The client-side mask below only remains as
+ * defence in depth for a response that predates that flag.
+ *
+ * Original note - GAP-GRANTS-LIST-03 (DPDP, safest default — flagged for DPO/HUMAN REVIEW):
  * a grantee may be a natural person, and the grants list is visible to every
  * module viewer. Without a type flag on GrantSummary we cannot single out
  * natural persons, so the conservative DPDP default is to show the name
@@ -38,8 +46,26 @@ function buildColumns(canViewGranteeName: boolean): Col[] {
     {
       key: "granteeName",
       label: "Grantee",
-      render: (row) =>
-        row.granteeName ? (canViewGranteeName ? row.granteeName : maskName(row.granteeName)) : "—",
+      render: (row) => {
+        if (!row.granteeName) return "—";
+        if (row.granteeNameMasked === true) {
+          // The server already hid the name. Maker roles may reveal it (reason required, audited).
+          return canViewGranteeName && row.granteeId ? (
+            <MaskedReveal
+              maskedText={row.granteeName}
+              resourceType="grantee"
+              resourceId={row.granteeId}
+              field="name"
+              label="grantee name"
+              revealPath={GRANTS_PII_REVEAL_PATH}
+            />
+          ) : (
+            row.granteeName
+          );
+        }
+        if (row.granteeNameMasked === false) return row.granteeName; // institution: not personal data
+        return canViewGranteeName ? row.granteeName : maskName(row.granteeName); // legacy response
+      },
     },
     { key: "sanctionDate", label: "Sanction Date", render: (row) => formatIndianDate(row.sanctionDate) },
     // GAP-GRANTS-LIST-04: cells already render ₹ (cellType "amount"), so the

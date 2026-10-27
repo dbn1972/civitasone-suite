@@ -8,8 +8,11 @@
  * convention (local field state, submit-time validation, inline error).
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Modal } from "@/app/_components/ds";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import type { ScoreApplicationRequest } from "@/lib/grants/application";
+import { REVIEWER_REF_PREFIX } from "./AssignReviewerDialog";
 
 interface ScoreApplicationDialogProps {
   open: boolean;
@@ -17,6 +20,11 @@ interface ScoreApplicationDialogProps {
   errorMessage?: string;
   onCancel: () => void;
   onSubmit: (req: ScoreApplicationRequest) => void;
+  /**
+   * GAP-GRANTS-APPLICATIONS-DETAIL-05: user id the reviewer picker starts on -- the reviewer already
+   * assigned to this application, else the signed-in user. The picker can still be changed.
+   */
+  defaultReviewerId?: string | null;
 }
 
 function parseScore(raw: string): number | null {
@@ -26,8 +34,9 @@ function parseScore(raw: string): number | null {
   return n;
 }
 
-export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCancel, onSubmit }: ScoreApplicationDialogProps) {
-  const [reviewerRef, setReviewerRef] = useState("");
+export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCancel, onSubmit, defaultReviewerId = null }: ScoreApplicationDialogProps) {
+  const t = useTranslations("grantsB4Review");
+  const [reviewerId, setReviewerId] = useState<string | null>(defaultReviewerId);
   const [technicalScore, setTechnicalScore] = useState("");
   const [financialScore, setFinancialScore] = useState("");
   const [recommendation, setRecommendation] = useState("");
@@ -36,21 +45,21 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
 
   useEffect(() => {
     if (open) {
-      setReviewerRef("");
+      setReviewerId(defaultReviewerId);
       setTechnicalScore("");
       setFinancialScore("");
       setRecommendation("");
       setValidationError("");
     }
-  }, [open]);
+  }, [open, defaultReviewerId]);
 
   if (!open) return null;
 
   function submit() {
     const technical = parseScore(technicalScore);
     const financial = parseScore(financialScore);
-    if (!reviewerRef.trim()) {
-      setValidationError("Enter the reviewer's reference/ID.");
+    if (!reviewerId) {
+      setValidationError(t("reviewerRequired"));
       return;
     }
     if (technical === null || financial === null) {
@@ -59,7 +68,7 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
     }
     setValidationError("");
     onSubmit({
-      reviewerRef: reviewerRef.trim(),
+      reviewerRef: `${REVIEWER_REF_PREFIX}${reviewerId}`,
       technicalScore: technical,
       financialScore: financial,
       recommendation: recommendation.trim() || undefined,
@@ -80,12 +89,14 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
     >
 
         <div className="cd-field">
-          <label htmlFor={`${titleId}-reviewer`}>Reviewer reference</label>
-          <input
+          <label htmlFor={`${titleId}-reviewer`}>{t("reviewerLabel")}</label>
+          <DirectoryPicker
+            source="user"
             id={`${titleId}-reviewer`}
-            value={reviewerRef}
-            aria-required="true"
-            onChange={(e) => setReviewerRef(e.target.value)}
+            aria-label={t("reviewerLabel")}
+            placeholder={t("reviewerPlaceholder")}
+            value={reviewerId}
+            onChange={setReviewerId}
           />
         </div>
 

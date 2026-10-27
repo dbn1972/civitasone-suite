@@ -10,7 +10,7 @@ import * as repo from "./repo.js";
 import * as appRepo from "../application/repo.js";
 import * as schemeRepo from "../scheme/repo.js";
 import * as ucRepo from "../utilisation/repo.js";
-import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES, isSchemeReleasable } from "./domain.js";
+import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES, isSchemeReleasable, effectiveGrantStatus } from "./domain.js";
 
 async function notifyDisbursementOutcome(
   tx: Parameters<typeof enqueue>[0],
@@ -114,7 +114,23 @@ export function registerDisbursementConsumers(queue: Queue): void {
         });
         return;
       }
+      // GAP-GRANTS-INSTALLMENTS-03: audited, fail-closed rejection (no EFT, no budget reservation).
+      const rejectRelease = async (reason: string, extra: Record<string, unknown> = {}) => {
+        await enqueue(tx, {
+          topic: "grant.disbursement.rejected", eventType: "grant.disbursement.rejected",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { installmentId: p.installmentId, applicationId: installment.applicationId, reason, ...extra },
+        });
+        await audit(tx, msg, "disburse", "grant_installment", p.installmentId, "failure", { reason: reason.split(":")[0] });
+      };
+
       if (app) {
+        // GAP-GRANTS-INSTALLMENTS-03: a withdrawn / rejected / cancelled / suspended grant is never released.
+        const appGrantStatus = effectiveGrantStatus(app.status, null);
+        if (appGrantStatus === "cancelled" || appGrantStatus === "suspended") {
+          await rejectRelease(`GRANT_NOT_ACTIVE: cannot release an installment while the grant is ${app.status}`, { applicationStatus: app.status });
+          return;
+        }
         // GAP-GRANTS-INSTALLMENTS-03: never release while the funding scheme is
         // suspended or closed (a "suspended grant"). The UI blocks the control,
         // but the server is the authority — fail closed here with an auditable
@@ -138,6 +154,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
               reason: `GRANT_NOT_ACTIVE: cannot release an installment while the scheme is ${schemeForStatus.status}`,
             },
           });
+          await audit(tx, msg, "disburse", "grant_installment", p.installmentId, "failure", { reason: "GRANT_NOT_ACTIVE", schemeStatus: schemeForStatus.status });
           return;
         }
         const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId, installment.tenantId);
@@ -151,6 +168,16 @@ export function registerDisbursementConsumers(queue: Queue): void {
           });
           return;
         }
+      }
+
+      // GAP-GRANTS-INSTALLMENTS-03: tranches are released in order - #3 never before #2.
+      const earlierPending = await repo.findEarlierPendingInstallmentTx(tx, installment.applicationId, installment.tenantId, installment.installmentNo);
+      if (earlierPending) {
+        await rejectRelease(
+          `OUT_OF_SEQUENCE: installment #${earlierPending.installmentNo} of this grant must be released before #${installment.installmentNo}`,
+          { installmentNo: installment.installmentNo, blockingInstallmentNo: earlierPending.installmentNo },
+        );
+        return;
       }
 
       // PFMS critical rule: installment N+1 cannot be released unless a UC has been

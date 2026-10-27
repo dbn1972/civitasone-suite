@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// GAP-GRANTS-SCHEMES-NEW-03: the sector/description labels are translated client-side.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -39,11 +46,27 @@ describe("CreateSchemeForm", () => {
     // GAP-GRANTS-SCHEMES-NEW-04: 500000 rupees -> 50000000 paise, no float error.
     expect(body.budgetMinor).toBe(50000000);
     expect(body.maxAmountMinor).toBe(10000000);
-    // GAP-GRANTS-SCHEMES-NEW-03: sector/description are NOT sent (not persisted).
+    // GAP-GRANTS-SCHEMES-NEW-03: left blank, the optional sector/description are not sent.
     expect(body).not.toHaveProperty("sector");
     expect(body).not.toHaveProperty("description");
     // GAP-GRANTS-SCHEMES-NEW-02: a reporting cycle default is included.
     expect(body.reportingFrequencyDays).toBe(90);
+  });
+
+  // GAP-GRANTS-SCHEMES-NEW-03: grant-service persists sector + description (migration 0017).
+  it("sends the chosen sector and description", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 201 }));
+
+    render(<CreateSchemeForm />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Sector"), { target: { value: "agriculture" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "  Input subsidy for small farmers  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Scheme" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/grants/schemes"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.sector).toBe("agriculture");
+    expect(body.description).toBe("Input subsidy for small farmers");
   });
 
   // GAP-GRANTS-SCHEMES-NEW-04: >2 decimals is rejected client-side, no POST.

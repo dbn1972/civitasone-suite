@@ -17,6 +17,21 @@ export async function createBeneficiary(ctx: RequestContext, body: CreateBenefic
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * GAP-GRANTS-LIST-03: record that a user revealed a grantee's clear PII. Awaited by the route BEFORE the value is
+ * returned, so a failure to queue the audit command means nothing is revealed (fail closed). The payload
+ * carries who/what/why, never the revealed value; the consumer writes the audit row in one transaction with
+ * markProcessed, so a redelivery never double-audits.
+ */
+export async function recordPiiReveal(ctx: RequestContext, beneficiaryId: string, field: string, reason: string): Promise<void> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.beneficiaryPiiReveal, {
+    messageId: id, type: COMMANDS.beneficiaryPiiReveal,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, beneficiaryId, field, reason },
+  });
+}
+
 export async function linkBank(ctx: RequestContext, beneficiaryId: string, body: LinkBankBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.beneficiaryLinkBank, {
