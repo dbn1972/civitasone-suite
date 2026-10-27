@@ -23,6 +23,9 @@ export const billingInvoices = invoicesSchema.table("billing_invoices", {
   cgstMinor: bigint("cgst_minor", { mode: "bigint" }).notNull().default(0n),
   sgstMinor: bigint("sgst_minor", { mode: "bigint" }).notNull().default(0n),
   igstMinor: bigint("igst_minor", { mode: "bigint" }).notNull().default(0n),
+  // F11 (migration 0022): sequential tax-invoice number, allocated at issue. NULL on drafts and legacy rows.
+  invoiceSeries: varchar("invoice_series", { length: 15 }),
+  invoiceNumber: varchar("invoice_number", { length: 16 }),
   issuedBy: uuid("issued_by"),
   cancelledBy: uuid("cancelled_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -30,6 +33,14 @@ export const billingInvoices = invoicesSchema.table("billing_invoices", {
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
+});
+
+/** F11: the supplier's legal invoice series (shared across customer tenants, no tenant data, no RLS). */
+export const billingInvoiceSeries = invoicesSchema.table("billing_invoice_series", {
+  supplierGstin: varchar("supplier_gstin", { length: 15 }).notNull(),
+  fiscalYear: char("fiscal_year", { length: 4 }).notNull(),
+  lastSeq: bigint("last_seq", { mode: "bigint" }).notNull().default(0n),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const billingInvoiceItems = invoicesSchema.table("billing_invoice_items", {
@@ -73,4 +84,4 @@ export type BillingInvoiceItemRow = typeof billingInvoiceItems.$inferSelect;
 export type BillingInvoiceItemInsert = typeof billingInvoiceItems.$inferInsert;
 export type BillingInvoiceApprovalRow = typeof billingInvoiceApprovals.$inferSelect;
 export type BillingInvoiceApprovalInsert = typeof billingInvoiceApprovals.$inferInsert;
-export const schema = { billingInvoices, billingInvoiceItems, billingInvoiceApprovals };
+export const schema = { billingInvoices, billingInvoiceSeries, billingInvoiceItems, billingInvoiceApprovals };

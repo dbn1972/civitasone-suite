@@ -9,6 +9,9 @@ import {
   shouldSkipInvoiceGeneration,
   assertIssuable,
   assertCancellable,
+  fiscalYearCode,
+  formatSeriesInvoiceNumber,
+  UNREGISTERED_SERIES,
   type LineItemInput,
 } from "./domain.js";
 
@@ -188,7 +191,15 @@ async function executeIssue(tx: Tx, invoiceId: string, tenantId: string, actorId
   const inv = await repo.findByIdTx(tx, invoiceId);
   if (!inv || inv.tenantId !== tenantId) throw new Error(`invoice ${invoiceId} not found`);
   assertIssuable(inv.status);
-  await repo.updateInvoice(tx, invoiceId, { status: "issued", issuedAt: new Date(), issuedBy: actorId, updatedBy: actorId });
+  // F11: the sequential tax-invoice number is allocated here, in the issuing transaction, so
+  // the number and the status flip commit (or roll back) together.
+  const issuedAt = new Date();
+  const series = inv.supplierGstin ?? UNREGISTERED_SERIES;
+  const fy = fiscalYearCode(issuedAt);
+  const invoiceNo = formatSeriesInvoiceNumber(fy, await repo.allocateSeriesSeq(tx, series, fy));
+  await repo.updateInvoice(tx, invoiceId, {
+    status: "issued", issuedAt, issuedBy: actorId, updatedBy: actorId, invoiceSeries: series, invoiceNumber: invoiceNo,
+  });
   await enqueue(tx, {
     topic: EVENTS.invoiceIssued, eventType: EVENTS.invoiceIssued,
     tenantId, actorId, correlationId, payload: { invoiceId, totalMinor: inv.totalMinor.toString() },

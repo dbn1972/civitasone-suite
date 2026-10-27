@@ -10,6 +10,19 @@ import * as queries from "./queries.js";
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 const TESTABLE_TYPES = new Set(["email", "in_app"]);
 
+/**
+ * F10 (UAT B4): a plain-language reason an admin sees when a channel cannot be test-sent
+ * because no number or device is on file for their own account. No status codes or
+ * internal terms; says what to do instead.
+ */
+function testSendDeclineMessage(type: string): string {
+  if (type === "sms" || type === "whatsapp") {
+    const label = type === "sms" ? "SMS" : "WhatsApp";
+    return `We cannot send a test ${label} message because your account has no mobile number on file. Add a mobile number to your profile, or test an email channel instead.`;
+  }
+  return "We cannot send a test message on this channel because your account has no registered device. Test an email or in-app channel instead.";
+}
+
 export async function channelRoutes(app: FastifyInstance): Promise<void> {
   // This module is registered BEFORE app.ts installs its root error handler, so a
   // ZodError from these routes fell through to Fastify's default and surfaced as a
@@ -46,7 +59,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
     const existing = await queries.getChannel(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "notification channel not found");
     if (!TESTABLE_TYPES.has(existing.type)) {
-      throw new HttpError(422, "TEST_SEND_UNSUPPORTED", "test-send is available for email and in-app channels only: no number or device is on file for your account");
+      throw new HttpError(422, "TEST_SEND_UNSUPPORTED", testSendDeclineMessage(existing.type));
     }
     if (!existing.enabled) throw new HttpError(409, "CHANNEL_DISABLED", "enable this channel before sending a test");
     return sendAccepted(reply, acceptedResponseSchema, await commands.testSendChannel(ctx, id));

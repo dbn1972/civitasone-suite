@@ -104,7 +104,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const bytes = await renderInvoicePdf(detail);
     return reply
       .header("content-type", "application/pdf")
-      .header("content-disposition", `attachment; filename="${detail.invoiceNumber}.pdf"`)
+      .header("content-disposition", `attachment; filename="${detail.invoiceNumber ?? "invoice"}.pdf"`)
       .header("cache-control", "private, no-store")
       .send(Buffer.from(bytes));
   });

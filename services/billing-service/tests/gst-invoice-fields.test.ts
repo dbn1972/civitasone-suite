@@ -86,13 +86,14 @@ describe("POST /v1/billing/invoices with GST fields", () => {
     const d = await app.inject({ method: "GET", url: `/v1/billing/invoices/${id}`, headers: auth(["tenant_admin"]) });
     expect(d.statusCode).toBe(200);
     expect(d.json()).toMatchObject({
-      invoiceNumber: invoiceNumber("2026-09", id),
+      // F11: a draft has no tax-invoice number yet; the sequential number is allocated at issue.
+      invoiceNumber: null,
       supplierGstin: SUP, recipientGstin: REC_SAME, placeOfSupply: "07",
       cgstMinor: "900", sgstMinor: "900", igstMinor: "0", taxMinor: "1800",
     });
     expect(d.json().items[0]).toMatchObject({ hsnSac: "998431" });
     const list = await app.inject({ method: "GET", url: "/v1/billing/invoices", headers: auth(["tenant_admin"]) });
-    expect(list.json().find((x: { id: string }) => x.id === id)).toMatchObject({ supplierGstin: SUP, cgstMinor: "900", invoiceNumber: invoiceNumber("2026-09", id) });
+    expect(list.json().find((x: { id: string }) => x.id === id)).toMatchObject({ supplierGstin: SUP, cgstMinor: "900", invoiceNumber: null });
   });
 
   it("a split that does not add up to the tax lines is a 400 and creates nothing", async () => {

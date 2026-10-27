@@ -153,3 +153,30 @@ export function validateGstSplit(g: GstDetail, taxMinor: bigint): string | null 
 export function invoiceNumber(periodMonth: string, id: string): string {
   return `INV-${periodMonth.replace("-", "")}-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
+
+// ── Sequential tax-invoice numbering (F11, CGST Rule 46) ─────────────────────
+
+/** Series key for an invoice with no supplier GSTIN (non-GST legacy shape). */
+export const UNREGISTERED_SERIES = "UNREGISTERED";
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * Indian financial year (April to March) of an instant, in IST, as the two-digit start and end
+ * years: 2026-04-01 IST .. 2027-03-31 IST is "2627". A UTC instant just before midnight IST on
+ * 31 March is already 1 April in India, so the shift is applied before reading the month.
+ */
+export function fiscalYearCode(at: Date): string {
+  const ist = new Date(at.getTime() + IST_OFFSET_MS);
+  const y = ist.getUTCFullYear();
+  const start = ist.getUTCMonth() >= 3 ? y : y - 1;
+  const two = (n: number) => String(n % 100).padStart(2, "0");
+  return `${two(start)}${two(start + 1)}`;
+}
+
+/** INV-<FY>-<seq, 6 digits min>: at most 16 characters (Rule 46), letters, digits and hyphen only. */
+export function formatSeriesInvoiceNumber(fiscalYear: string, seq: bigint): string {
+  if (seq < 1n) throw new DomainError("INVALID_SEQUENCE", "invoice sequence must start at 1");
+  const n = `INV-${fiscalYear}-${seq.toString().padStart(6, "0")}`;
+  if (n.length > 16) throw new DomainError("INVOICE_SERIES_EXHAUSTED", "the invoice series for this financial year is exhausted");
+  return n;
+}

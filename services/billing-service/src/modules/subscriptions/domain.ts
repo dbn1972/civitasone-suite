@@ -12,4 +12,7 @@ export type SubscriptionView = {
   planId: string;
   status: string;
   trialExpiresAt?: string;
+  /** GAP-BILLING-SUBSCRIPTIONS-03: when the subscription started, and its scheduled end (renewal) if any. */
+  startedAt?: string;
+  endsAt?: string | null;
 };

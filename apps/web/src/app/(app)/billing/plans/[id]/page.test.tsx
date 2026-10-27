@@ -39,6 +39,20 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
     expect(screen.getAllByText("No").length).toBeGreaterThan(0);
   });
 
+  it("NEW-01: shows the plan's stored billing interval, and '—' when the payload omits it", async () => {
+    getPlanMock.mockResolvedValueOnce({
+      data: { id: PARAMS.id, name: "Standard", code: "std_y", priceMinor: "100000", currency: "INR", govtExempt: false, active: true, interval: "yearly" },
+      source: "api", status: 200,
+    });
+    const { unmount } = render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
+    expect(screen.getByText("Yearly")).toBeInTheDocument();
+    unmount();
+    getPlanMock.mockResolvedValueOnce({ data: { id: PARAMS.id, name: "Old", code: "o" }, source: "api", status: 200 });
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
+    expect(screen.queryByText("Yearly")).not.toBeInTheDocument();
+    expect(screen.queryByText("Monthly")).not.toBeInTheDocument();
+  });
+
   it("does NOT fabricate 'Active' or 'INR' when fields are absent (DETAIL-04)", async () => {
     getPlanMock.mockResolvedValueOnce({
       data: { id: PARAMS.id, name: "Partial", code: "p" }, // no price/currency/active/govtExempt

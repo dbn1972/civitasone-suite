@@ -12,6 +12,11 @@ function visiblePanel(container: HTMLElement, selector: string): HTMLElement | n
   return nodes.find((n) => !n.closest("[hidden]")) ?? null;
 }
 
+/** The calls that actually FILE something. GAP-BILLING-GSTN-05 adds a read-only GET history lookup at review. */
+function filings(spy: { mock: { calls: unknown[][] } }): unknown[][] {
+  return spy.mock.calls.filter((c) => ((c[1] as RequestInit | undefined)?.method ?? "GET") === "POST");
+}
+
 function lastButtonNamed(name: string): HTMLElement {
   const matches = screen.getAllByRole("button", { name });
   return matches[matches.length - 1];
@@ -67,13 +72,13 @@ describe("GstnConsole", () => {
 
     // dialog shown, nothing POSTed yet
     await waitFor(() => expect(screen.getByText(/File GSTR1 for 04\/2026\?/)).toBeInTheDocument());
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(filings(fetchSpy)).toHaveLength(0);
     // GAP-BILLING-GSTN-02: taxable value entered as 12500000 rupees -> ₹ summary
     expect(screen.getAllByText("₹1,25,00,000.00").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "File return" }));
     await waitFor(() => expect(screen.getByText("ref-1")).toBeInTheDocument());
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(filings(fetchSpy)).toHaveLength(1);
   });
 
   // GAP-BILLING-GSTN-02: rupees are converted to a paise string in the payload.
@@ -89,13 +94,13 @@ describe("GstnConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
     await waitFor(() => expect(screen.getByText(/File GSTR1/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "File return" }));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    await waitFor(() => expect(filings(fetchSpy)).toHaveLength(1));
+    const body = JSON.parse((filings(fetchSpy)[0][1] as RequestInit).body as string);
     expect(body.totalTaxableValue).toBe("1250000000");
     expect(body.totalCgst).toBe("112500000");
     expect(body.totalIgst).toBe("0");
     // GAP-BILLING-GSTN-01: an idempotency key is sent.
-    const headers = (fetchSpy.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (filings(fetchSpy)[0][1] as RequestInit).headers as Record<string, string>;
     expect(headers["x-idempotency-key"]).toBeTruthy();
   });
 
@@ -222,6 +227,7 @@ describe("GstnConsole", () => {
       render(<GstnConsole />);
       const submitTab = screen.getByRole("tab", { name: "Submit Return" });
       const statusTab = screen.getByRole("tab", { name: "Return Status" });
+      const historyTab = screen.getByRole("tab", { name: "Filing History" });
       const verifyTab = screen.getByRole("tab", { name: "Verify GSTIN" });
 
       expect(submitTab).toHaveAttribute("aria-selected", "true");
@@ -235,6 +241,9 @@ describe("GstnConsole", () => {
       expect(submitTab).toHaveAttribute("tabindex", "-1");
 
       fireEvent.keyDown(statusTab, { key: "ArrowRight" });
+      expect(historyTab).toHaveAttribute("aria-selected", "true");
+
+      fireEvent.keyDown(historyTab, { key: "ArrowRight" });
       expect(verifyTab).toHaveAttribute("aria-selected", "true");
 
       // Wraps from the last tab back to the first.
@@ -305,4 +314,156 @@ describe("GstnConsole", () => {
     expect(pill.className).not.toContain("warn");
   });
 
+
+  // GAP-BILLING-GSTN-05 (UAT B4): filing history tab + duplicate-period warning.
+  describe("filing history (GAP-BILLING-GSTN-05)", () => {
+    const filed = {
+      id: "r1", gstin: VALID_GSTIN, returnPeriod: "04/2026", returnType: "GSTR1", referenceId: "REF-OLD-1", status: "filed",
+      totalTaxableMinor: "1250000000", totalCgstMinor: "112500000", totalSgstMinor: "112500000", totalIgstMinor: "0", filedAt: "2026-05-10T04:30:00.000Z",
+    };
+
+    it("lists previously filed returns on the Filing History tab", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [filed] }), { status: 200 }));
+      render(<GstnConsole />);
+      fireEvent.click(screen.getByRole("tab", { name: "Filing History" }));
+      await waitFor(() => expect(screen.getAllByText("04/2026").length).toBeGreaterThan(0));
+      expect(screen.getAllByText("GSTR1").length).toBeGreaterThan(0);
+    });
+
+    it("shows an honest empty state when nothing has been filed", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      render(<GstnConsole />);
+      fireEvent.click(screen.getByRole("tab", { name: "Filing History" }));
+      await waitFor(() => expect(screen.getAllByText("No returns filed yet").length).toBeGreaterThan(0));
+    });
+
+    it("a failed history read is an error with retry, not an empty list", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ message: "boom" }), { status: 500 }));
+      render(<GstnConsole />);
+      fireEvent.click(screen.getByRole("tab", { name: "Filing History" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument());
+      expect(screen.queryByText("No returns filed yet")).not.toBeInTheDocument();
+    });
+
+    it("warns in the review dialog when the same GSTIN, period and type was already filed", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [filed] }), { status: 200 }));
+      render(<GstnConsole />);
+      fillSubmitForm();
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/File GSTR1 for 04\/2026\?/)).toBeInTheDocument());
+      expect(screen.getByText(/was already filed for this GSTIN/)).toBeInTheDocument();
+      expect(screen.getByText("REF-OLD-1")).toBeInTheDocument();
+    });
+
+    it("describes the earlier return's status in plain words, never the raw status value", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [{ ...filed, status: "processing" }] }), { status: 200 }));
+      render(<GstnConsole />);
+      fillSubmitForm();
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/was already filed for this GSTIN/)).toBeInTheDocument());
+      expect(screen.getByText(/status being processed\)/)).toBeInTheDocument();
+      expect(screen.queryByText(/status processing\)/)).not.toBeInTheDocument();
+    });
+
+    it("shows no duplicate warning when only a rejected return exists or history is empty", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [{ ...filed, status: "rejected" }] }), { status: 200 }));
+      render(<GstnConsole />);
+      fillSubmitForm();
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/File GSTR1 for 04\/2026\?/)).toBeInTheDocument());
+      expect(screen.queryByText(/was already filed for this GSTIN/)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-BILLING-GSTN-03 (UAT B4): prefill from invoices + variance reconciliation.
+  describe("prefill from invoices (GAP-BILLING-GSTN-03)", () => {
+    const prep = {
+      gstin: VALID_GSTIN, period: "04/2026", invoiceCount: 3,
+      totalTaxableMinor: "1250000000", totalCgstMinor: "112500000", totalSgstMinor: "112500000", totalIgstMinor: "0",
+      unsplitTaxMinor: "0", unsplitTaxInvoiceCount: 0,
+    };
+    function serve(data: unknown = prep) {
+      return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes("returns/prepare")) return new Response(JSON.stringify({ data }), { status: 200 });
+        if (url.includes("v1/billing/gstn/returns?")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        return new Response(JSON.stringify({ data: { referenceId: "ref-p", status: "submitted", gstin: VALID_GSTIN, returnPeriod: "04/2026", submittedAt: "x" } }), { status: 201 });
+      });
+    }
+    function typeGstinAndPeriod() {
+      const p = within(submitPanel());
+      fireEvent.change(p.getByLabelText(/^GSTIN/), { target: { value: VALID_GSTIN } });
+      fireEvent.change(p.getByLabelText(/^Return Period/), { target: { value: "04/2026" } });
+    }
+
+    it("fills the four totals from the invoice totals (paise -> rupees) and shows the invoice count", async () => {
+      serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total Taxable Value/) as HTMLInputElement).value).toBe("12500000.00"));
+      expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00");
+      expect((within(submitPanel()).getByLabelText(/^Total IGST/) as HTMLInputElement).value).toBe("0.00");
+      expect(screen.getByText(/3 issued invoices/)).toBeInTheDocument();
+      expect(screen.queryByText("Differs from invoices")).not.toBeInTheDocument();
+    });
+
+    it("needs a valid GSTIN and period first and calls nothing otherwise", () => {
+      const spy = serve();
+      render(<GstnConsole />);
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      expect(within(submitPanel()).getByText(/Enter a valid 15-character GSTIN/)).toBeInTheDocument();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("editing a prefilled total shows the variance and filing needs the acknowledgement", async () => {
+      const spy = serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00"));
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "1000000" } });
+      expect(screen.getByText("Differs from invoices")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/Tick the box to confirm the difference/)).toBeInTheDocument());
+      expect(screen.queryByText(/File GSTR1 for 04\/2026\?/)).not.toBeInTheDocument();
+      expect(filings(spy)).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole("checkbox", { name: /I have checked the difference/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/File GSTR1 for 04\/2026\?/)).toBeInTheDocument());
+    });
+
+    it("changing the totals again after acknowledging requires a fresh acknowledgement", async () => {
+      serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00"));
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "1000000" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: /I have checked the difference/ }));
+      expect(screen.getByRole("checkbox", { name: /I have checked the difference/ })).toBeChecked();
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "999999" } });
+      expect(screen.getByRole("checkbox", { name: /I have checked the difference/ })).not.toBeChecked();
+    });
+
+    it("reports invoices whose tax has no CGST/SGST/IGST split instead of hiding them", async () => {
+      serve({ ...prep, unsplitTaxMinor: "18000", unsplitTaxInvoiceCount: 2 });
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect(screen.getByText(/2 invoices have tax of/)).toBeInTheDocument());
+    });
+
+    it("a failed prefill is an error and leaves the typed totals alone", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ message: "nope" }), { status: 500 }));
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "5" } });
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
+      expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("5");
+    });
+  });
 });

@@ -2,10 +2,13 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
+import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
 import { createPlanBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { getTenantPlansOverview } from "./tenant-overview.js";
+
+const OVERVIEW_READERS = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 
 export async function plansRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/billing/plans", async (req, reply) => {
@@ -17,6 +20,14 @@ export async function plansRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/billing/plans", { config: { public: true } }, async (_req, reply) => {
     return reply.send(await queries.listPlans());
+  });
+
+  // F9: the tenant-admin Plans page read. The CALLER's own tenant only (ctx.tenantId, never a
+  // body/query id). Registered before /plans/:id is irrelevant (different path), kept adjacent for clarity.
+  app.get("/v1/billing/tenant-plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OVERVIEW_READERS);
+    return reply.send(await getTenantPlansOverview(ctx.tenantId, req.headers.authorization));
   });
 
   app.get("/v1/billing/plans/:id", { config: { public: true } }, async (req, reply) => {

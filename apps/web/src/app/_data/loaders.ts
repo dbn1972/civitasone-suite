@@ -6566,8 +6566,8 @@ export type PlansData = {
  * PlansData` cast let that array through, so plans/page.tsx threw on
  * `plansData.plans.find` and the whole page fell to error.tsx. With the guard a
  * mismatched payload becomes source "error" (honest empty/error state) instead.
- * The real wiring (tenant-service /v1/tenant/plans + subscription/current, or a
- * billing-service tenant-plans read) is an owner decision — see the PR notes.
+ * F9: the loader now reads billing-service GET /v1/billing/tenant-plans, which returns this
+ * shape (with the tenant edition) directly.
  */
 export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.object({
   plans: z.array(z.object({
@@ -6648,7 +6648,10 @@ export async function getPendingDowngradeRequests(): Promise<LoaderResult<Pendin
 
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {
   return fetchJson<unknown, PlansData>(
-    "/api/v1/billing/plans",
+    // F9 (UAT B4): the edition-aware tenant read (plans + limits, current plan, GST invoice rows,
+    // tenant edition). The bare /api/v1/billing/plans catalogue has no edition or invoices, so
+    // payment modes and GST rows never reached this page.
+    "/api/v1/billing/tenant-plans",
     { plans: [], currentPlanId: "", invoices: [], trialDaysLeft: null },
     {
       revalidateSeconds: 300,
