@@ -61,3 +61,6 @@ export const createCaseTypeBody = z.object({
   name: z.string().trim().min(1).max(128),
 });
 export type CreateCaseTypeBody = z.infer<typeof createCaseTypeBody>;
+
+/** F4: officer-picker search text (name or employee number). */
+export const officersQuery = z.object({ q: z.string().trim().min(2).max(100) });

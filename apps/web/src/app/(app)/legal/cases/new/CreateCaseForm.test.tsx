@@ -190,6 +190,79 @@ describe("CreateCaseForm — court master, filing date, department (GAP-LEGAL-CA
     expect(calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body).toMatchObject({ privileged: true });
   });
 
+  describe("officer picker for a privileged case (F4)", () => {
+    const PEER = { id: "77777777-aaaa-4000-8000-000000000001", name: "Asha Rao", employeeNo: "E-001", department: "Revenue Department" };
+
+    it("only appears once the case is marked privileged", async () => {
+      mockFetch(async (url) => refData(url) ?? new Response("{}", { status: 404 }));
+      render(<CreateCaseForm />);
+      await ready();
+      expect(screen.queryByLabelText("Search officers by name or employee number")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText(/Privileged \/ confidential case/));
+      expect(screen.getByLabelText("Search officers by name or employee number")).toBeInTheDocument();
+    });
+
+    it("searches the directory, adds the picked officer, and sends assignedOfficerIds with privileged", async () => {
+      const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
+      mockFetch(async (url, init) => {
+        calls.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+        if (url.includes("/v1/legal/officers")) return new Response(JSON.stringify({ items: [PEER] }), { status: 200 });
+        return refData(url) ?? new Response(JSON.stringify({ id: "case-6", status: "accepted" }), { status: 202 });
+      });
+      render(<CreateCaseForm />);
+      await ready();
+      fillMaster("WP/PRIV/2");
+      fireEvent.click(screen.getByLabelText(/Privileged \/ confidential case/));
+      fireEvent.change(screen.getByLabelText("Search officers by name or employee number"), { target: { value: "asha" } });
+      fireEvent.click(await screen.findByRole("button", { name: /Add Asha Rao/ }));
+      expect(screen.getByRole("button", { name: "Remove Asha Rao" })).toBeInTheDocument();
+      expect(calls.some((c) => c.url.includes("/v1/legal/officers?q=asha"))).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Register case" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalled());
+      expect(calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body).toMatchObject({ privileged: true, assignedOfficerIds: [PEER.id] });
+    });
+
+    it("a removed officer is not sent, and unticking privileged drops the picked officers", async () => {
+      const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
+      mockFetch(async (url, init) => {
+        calls.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+        if (url.includes("/v1/legal/officers")) return new Response(JSON.stringify({ items: [PEER] }), { status: 200 });
+        return refData(url) ?? new Response(JSON.stringify({ id: "case-7", status: "accepted" }), { status: 202 });
+      });
+      render(<CreateCaseForm />);
+      await ready();
+      fillMaster("WP/PRIV/3");
+      const box = screen.getByLabelText(/Privileged \/ confidential case/);
+      fireEvent.click(box);
+      fireEvent.change(screen.getByLabelText("Search officers by name or employee number"), { target: { value: "asha" } });
+      fireEvent.click(await screen.findByRole("button", { name: /Add Asha Rao/ }));
+      fireEvent.click(box); // untick
+      fireEvent.click(screen.getByRole("button", { name: "Register case" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalled());
+      const sent = calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body!;
+      expect(sent.assignedOfficerIds).toBeUndefined();
+      expect(sent.privileged).toBeUndefined();
+    });
+
+    it("tells an empty result apart from a failed search", async () => {
+      let mode: "empty" | "down" = "empty";
+      mockFetch(async (url) => {
+        if (url.includes("/v1/legal/officers")) return mode === "empty" ? new Response(JSON.stringify({ items: [] }), { status: 200 }) : new Response("{}", { status: 503 });
+        return refData(url) ?? new Response("{}", { status: 404 });
+      });
+      render(<CreateCaseForm />);
+      await ready();
+      fireEvent.click(screen.getByLabelText(/Privileged \/ confidential case/));
+      const input = screen.getByLabelText("Search officers by name or employee number");
+      fireEvent.change(input, { target: { value: "zzz" } });
+      expect(await screen.findByText("No matching officers.")).toBeInTheDocument();
+      mode = "down";
+      fireEvent.change(input, { target: { value: "zzzz" } });
+      expect(await screen.findByText(/Officer search is unavailable/)).toBeInTheDocument();
+      expect(screen.queryByText("No matching officers.")).not.toBeInTheDocument();
+    });
+  });
+
   it("links an empanelled advocate (advocateId) chosen from the master (GAP-LEGAL-LIST-04, decision #14)", async () => {
     const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
     mockFetch(async (url, init) => {

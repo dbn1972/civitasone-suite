@@ -2500,6 +2500,13 @@ export const LegalCaseSummaryListSchema = z.array(LegalCaseSummarySchema);
 
 export const LegalCaseDetailSchema = LegalCaseSummarySchema.extend({
   description: optText,
+  // Owner decision #12 (F3): privileged/confidential flag. Absent on older producers => not privileged.
+  privileged: z.boolean().default(false),
+  // Owner decision #10 (F3): false = the court was typed as "Other" (unverified). Left undefined (unknown)
+  // when a producer does not send it, so a legacy payload never shows a false "Unverified court" marker.
+  courtVerified: z.boolean().optional(),
+  // Owner decision #14: the linked empanelled-advocate id (advocateName already carries the display name).
+  advocateId: optText,
   hearings: z.array(z.object({
     id: z.string(),
     date: z.string(),

@@ -17364,12 +17364,25 @@
       "failed": "Could not be processed"
     }
   },
+  "legalCaseDetail": {
+    "privileged": "Privileged",
+    "privilegedTitle": "Confidential case: visible only to its assigned officers and the legal head.",
+    "unverifiedCourt": "Unverified court",
+    "unverifiedCourtTitle": "This court was typed in as \"Other\" and is not in the court master list."
+  },
   "legalCaseNew": {
     "advocateLabel": "Empanelled advocate",
     "advocateNone": "No advocate (use the counsel reference below)",
     "advocatesError": "The advocate list could not be loaded; you can still use the counsel reference.",
     "privilegedLabel": "Privileged / confidential case",
     "privilegedHelp": "Only the officers assigned to this case and the legal head can see it. You are assigned automatically.",
+    "officersSearchLabel": "Search officers by name or employee number",
+    "officersHelp": "You are assigned automatically. Search to add other officers who may open this case (at least 2 characters).",
+    "officersSearching": "Searching...",
+    "officersNone": "No matching officers.",
+    "officersError": "Officer search is unavailable right now. Try again shortly.",
+    "officersAdd": "Add {name}",
+    "officersRemove": "Remove {name}",
     "loading": "Loading…",
     "selectCourt": "Select a court or tribunal…",
     "courtOtherOption": "Other (not in the list)",

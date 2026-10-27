@@ -133,3 +133,39 @@ describe("Legal case detail against the real service shape", () => {
     expect(screen.getAllByText(/X\/1\/2026/).length).toBeGreaterThan(0);
   });
 });
+
+describe("Legal case detail privileged / unverified-court markers (F3, owner decisions #10/#12)", () => {
+  beforeEach(() => { getLegalCaseById.mockReset(); notFound.mockClear(); });
+  const render_ = async (data: unknown) => {
+    getLegalCaseById.mockResolvedValue({ data, source: "api", status: 200 });
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
+  };
+
+  it("the shared schema keeps privileged, courtVerified and advocateId (they were stripped before)", () => {
+    const parsed = LegalCaseDetailSchema.parse({ ...caseData, privileged: true, courtVerified: false, advocateId: "a1", department: "Revenue" });
+    expect(parsed).toMatchObject({ privileged: true, courtVerified: false, advocateId: "a1", department: "Revenue" });
+  });
+
+  it("a legacy payload without the flags parses with privileged=false and courtVerified unknown", () => {
+    const parsed = LegalCaseDetailSchema.parse(caseData);
+    expect(parsed.privileged).toBe(false);
+    expect(parsed.courtVerified).toBeUndefined();
+  });
+
+  it("shows the Privileged badge for a privileged case", async () => {
+    await render_({ ...caseData, privileged: true, courtVerified: true });
+    expect(screen.getByText("Privileged")).toBeInTheDocument();
+  });
+
+  it("shows the Unverified court marker only when the service says the court is unverified", async () => {
+    await render_({ ...caseData, courtVerified: false });
+    expect(screen.getByText("Unverified court")).toBeInTheDocument();
+    expect(screen.queryByText("Privileged")).not.toBeInTheDocument();
+  });
+
+  it("shows neither marker for a verified, non-privileged case or a legacy payload", async () => {
+    await render_({ ...caseData, courtVerified: true, privileged: false });
+    expect(screen.queryByText("Privileged")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unverified court")).not.toBeInTheDocument();
+  });
+});
