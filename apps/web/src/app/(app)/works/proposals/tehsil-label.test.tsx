@@ -21,7 +21,7 @@ describe("Tehsil / Block label (D4c #39)", () => {
   });
 
   it("the edit form labels it Tehsil / Block and still saves the same field", () => {
-    render(<ProposalEditToggle proposal={{ id: "p1", status: "draft", description: "d", district: "Pune", taluka: "Haveli", village: "W", remarks: null }} roles={["works_admin"]} />);
+    render(<ProposalEditToggle proposal={{ id: "p1", status: "draft", description: "d", district: "Pune", taluka: "Haveli", village: "W", remarks: null, estimatedCostMinor: "1000" }} roles={["works_admin"]} />);
     fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
     expect(screen.getByLabelText("Tehsil / Block")).toHaveValue("Haveli");
     expect(screen.queryByLabelText(/taluka/i)).toBeNull();
