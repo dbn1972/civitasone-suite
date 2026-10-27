@@ -8,11 +8,11 @@ import {
   isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, canRecordMeasurement,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
-  finalizeStepRoles, isSelfFinalization,
+  finalizeStepRoles, isSelfFinalization, DEDUCTION_HEADS, computeDeductionLines,
 } from "./domain.js";
 import {
   getMb, getMbByNumber, getBill, listBillsForWork, listBills, countBills, listMeasurementsByMb, listMeasurementsByBoqItem,
-  listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations,
+  listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations, getEffectiveDeductionRates, listRecoveriesForBill,
 } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
 import { getProposal } from "../proposal/repo.js";
@@ -25,6 +25,8 @@ const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"
 // DO, with works_admin and super_admin as override. works_operator may create/issue but holds no finalize step.
 // The per-step check (finalizeStepRoles) then narrows each step. "auditor" gets no other write route.
 const FINALIZE_ROLES = ["works_admin", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
+// D4c #37: who may change the default statutory deduction rates of a division (the makers only read them).
+const RATE_ADMIN_ROLES = ["works_admin", "super_admin", "dao", "do"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -194,6 +196,18 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createBillSchema.parse(req.body);
+
+    // D4c #37: the statutory deduction lines ARE the bill's deductions. Refuse a figure that disagrees, or lines that
+    // swallow more than the gross, before anything is queued (the consumer re-checks in its transaction).
+    if (body.recoveries && body.recoveries.length > 0) {
+      const linesTotal = body.recoveries.reduce((sum, r) => sum + parseMinor(r.amountMinor), 0n);
+      if (body.deductionsMinor !== undefined && parseMinor(body.deductionsMinor) !== linesTotal) {
+        throw new HttpError(422, "DEDUCTIONS_MISMATCH", "The deductions total does not equal the sum of the deduction lines");
+      }
+      if (linesTotal > parseMinor(body.grossAmountMinor)) {
+        throw new HttpError(422, "DEDUCTIONS_EXCEED_GROSS", "The deduction lines add up to more than the bill gross amount");
+      }
+    }
 
     const award = await getAwardById(ctx.tenantId, body.awardId);
     if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
@@ -376,5 +390,59 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const query = v.listAccountCompileSchema.parse(req.query);
     const data = await listAccountCompilations(ctx.tenantId, query.month, query.year);
     return reply.send({ data });
+  });
+
+  // D4c #37: default rate (basis points) of every fixed deduction head for a division, or the tenant-wide default.
+  app.get("/v1/works/billing/deduction-rates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { divisionId } = v.deductionScopeQuerySchema.parse(req.query);
+    const rates = await getEffectiveDeductionRates(ctx.tenantId, divisionId ?? null);
+    return reply.send({ data: { divisionId: divisionId ?? null, rates: DEDUCTION_HEADS.map((head) => ({ head, rateBps: rates[head] })) } });
+  });
+
+  // D4c #37: set the default rates (per division, or tenant-wide when no division is sent). CQRS: 202 + consumer.
+  app.put("/v1/works/billing/deduction-rates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RATE_ADMIN_ROLES);
+    const body = v.setDeductionRatesSchema.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setDeductionRatesCommand(ctx, body));
+  });
+
+  // D4c #37: the amounts the maker starts from — each head computed from the gross at the work's division rate.
+  app.get("/v1/works/billing/deduction-preview", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const q = v.deductionPreviewQuerySchema.parse(req.query);
+    const proposal = await getProposal(ctx.tenantId, q.workId);
+    if (!proposal) throw new HttpError(404, "NOT_FOUND", "work not found");
+    const rates = await getEffectiveDeductionRates(ctx.tenantId, proposal.executingDivisionId ?? null);
+    const lines = computeDeductionLines(parseMinor(q.grossAmountMinor), rates);
+    return reply.send({
+      data: {
+        lines: lines.map((l) => ({ head: l.head, rateBps: l.rateBps, amountMinor: l.amountMinor.toString() })),
+        totalMinor: lines.reduce((sum, l) => sum + l.amountMinor, 0n).toString(),
+      },
+    });
+  });
+
+  // D4c #37: the checker's view of a bill's deduction lines — what the maker charged beside what the rates computed.
+  app.get("/v1/works/billing/bills/:id/recoveries", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const id = uuidParam((req.params as { id: string }).id, "id");
+    if (!(await getBill(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "bill not found");
+    const rows = await listRecoveriesForBill(ctx.tenantId, id);
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        recoveryType: r.recoveryType,
+        amountMinor: r.amountMinor.toString(),
+        computedAmountMinor: r.computedAmountMinor === null ? null : r.computedAmountMinor.toString(),
+        rateBps: r.rateBps,
+        adjusted: r.computedAmountMinor !== null && r.computedAmountMinor !== r.amountMinor,
+        remarks: r.remarks,
+      })),
+    });
   });
 }

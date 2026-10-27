@@ -4,17 +4,20 @@ import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
-import { measurementBooks, measurements, bills, billItems, accountCompilations } from "./schema.js";
+import { measurementBooks, measurements, bills, billItems, billRecoveries, deductionRates, accountCompilations } from "./schema.js";
+import { loadDeductionRateRows } from "./repo.js";
+import { workProposals } from "../proposal/schema.js";
 import {
   calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, canRecordMeasurement, billAmountExceedsAward, billNumberLockKey,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
   computeMeasuredValueMinor, boqItemBelongsToMbWork, isSelfFinalization,
   isValidNextStep, eMbFinalizationSequence, billFinalizationSequence,
+  resolveRates, computeDeductionLines, isDeductionHead, DEDUCTION_HEADS,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
 import { awards } from "../tender/schema.js";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -130,7 +133,27 @@ export function registerBillingConsumers(q: Queue): void {
       // The route validates the amounts (shared/validators.ts); re-checked here so a directly published command cannot
       // book a zero or negative gross, or a negative deduction, as a bill.
       const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
-      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
+      // D4c #37: when the maker sent statutory deduction lines they ARE the bill's deductions (a deductionsMinor that
+      // disagrees is refused rather than silently preferring one); without lines the bill keeps its plain figure.
+      const lines = (p.recoveries as Array<{ recoveryType: string; amountMinor: string | number | bigint; remarks?: string }> | undefined) ?? [];
+      const lineAmounts = lines.map((l) => {
+        if (!isDeductionHead(l.recoveryType)) throw new NonRetryableError(`INVALID_DEDUCTION_HEAD: '${l.recoveryType}' is not a statutory deduction head`);
+        const amount = parseMinor(l.amountMinor);
+        if (amount < 0n) throw new NonRetryableError("INVALID_AMOUNT: a deduction line cannot be negative");
+        return amount;
+      });
+      if (new Set(lines.map((l) => l.recoveryType)).size !== lines.length) {
+        throw new NonRetryableError("DUPLICATE_DEDUCTION_HEAD: each deduction head may appear only once on a bill");
+      }
+      const linesTotal = lineAmounts.reduce((a, b) => a + b, 0n);
+      const explicitDeductions = p.deductionsMinor === undefined || p.deductionsMinor === null ? null : parseMinor(p.deductionsMinor as string | number | bigint);
+      if (lines.length > 0 && explicitDeductions !== null && explicitDeductions !== linesTotal) {
+        throw new NonRetryableError("DEDUCTIONS_MISMATCH: deductionsMinor does not equal the sum of the deduction lines");
+      }
+      const deductions = lines.length > 0 ? linesTotal : (explicitDeductions ?? 0n);
+      if (lines.length > 0 && linesTotal > gross) {
+        throw new NonRetryableError("DEDUCTIONS_EXCEED_GROSS: the deduction lines add up to more than the bill gross amount");
+      }
       if (gross <= 0n) throw new NonRetryableError("INVALID_AMOUNT: bill gross amount must be greater than zero");
       if (deductions < 0n) throw new NonRetryableError("INVALID_AMOUNT: bill deductions cannot be negative");
 
@@ -243,6 +266,31 @@ export function registerBillingConsumers(q: Queue): void {
       // No-3-way-match fix: populate bill_items from the MB's measurements —
       // a real, queryable link from bill → BoQ item → measured quantity,
       // not just a ceiling check.
+      // D4c #37: one bill_recoveries row per supplied head. The rate and amount the server computes from the
+      // division's (else tenant, else built-in) rate sit beside the maker's amount, so the checker sees any adjustment.
+      if (lines.length > 0) {
+        const proposalRows = await tx.select({ divisionId: workProposals.executingDivisionId }).from(workProposals)
+          .where(and(eq(workProposals.tenantId, msg.tenantId), eq(workProposals.id, workId))).limit(1);
+        const divisionId = proposalRows[0]?.divisionId ?? null;
+        const rates = resolveRates(await loadDeductionRateRows(tx, msg.tenantId, divisionId), divisionId);
+        const computed = new Map(computeDeductionLines(gross, rates).map((l) => [l.head, l]));
+        for (const [i, l] of lines.entries()) {
+          const c = computed.get(l.recoveryType as (typeof DEDUCTION_HEADS)[number])!;
+          await tx.insert(billRecoveries).values({
+            id: randomUUID(),
+            tenantId: msg.tenantId,
+            billId,
+            recoveryType: l.recoveryType,
+            amountMinor: lineAmounts[i]!,
+            remarks: l.remarks ?? null,
+            rateBps: c.rateBps,
+            computedAmountMinor: c.amountMinor,
+            createdBy: msg.actorId,
+            updatedBy: msg.actorId,
+          });
+        }
+      }
+
       for (const m of mbMeasurements) {
         const rate = rateByBoqItem.get(m.boqItemId);
         if (rate === undefined) continue;
@@ -269,6 +317,43 @@ export function registerBillingConsumers(q: Queue): void {
         payload: { id: p.id, workId: p.workId, netPayableMinor: netPayable.toString() },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "bill", resourceId: p.id, outcome: "success" } });
+    });
+  });
+
+  // D4c #37: set the default statutory deduction rates of one executing division (or the tenant-wide default). The
+  // markProcessed marker, the guarded upsert and the audit row share one transaction; a replay changes nothing.
+  q.subscribe(COMMANDS.deductionRateSet, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const p = msg.payload as { divisionId?: string | null; rates: Array<{ head: string; rateBps: number }> };
+      const divisionId = p.divisionId ?? null;
+      if (!Array.isArray(p.rates) || p.rates.length === 0) throw new NonRetryableError("INVALID_RATES: at least one rate is required");
+      for (const r of p.rates) {
+        if (!isDeductionHead(r.head)) throw new NonRetryableError(`INVALID_DEDUCTION_HEAD: '${r.head}' is not a statutory deduction head`);
+        if (!Number.isInteger(r.rateBps) || r.rateBps < 0 || r.rateBps > 10000) throw new NonRetryableError("INVALID_RATE: a rate must be 0 to 10000 basis points");
+      }
+      // Serialise writers of the same scope so the select-then-write below cannot race into a duplicate row.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`deduction-rates:${msg.tenantId}:${divisionId ?? "default"}`}, 0))`);
+      for (const r of p.rates) {
+        const existing = await tx.select({ id: deductionRates.id }).from(deductionRates)
+          .where(and(
+            eq(deductionRates.tenantId, msg.tenantId),
+            divisionId ? eq(deductionRates.divisionId, divisionId) : isNull(deductionRates.divisionId),
+            eq(deductionRates.head, r.head),
+          )).limit(1);
+        if (existing[0]) {
+          await tx.update(deductionRates)
+            .set({ rateBps: r.rateBps, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${deductionRates.version} + 1` })
+            .where(and(eq(deductionRates.tenantId, msg.tenantId), eq(deductionRates.id, existing[0].id)));
+        } else {
+          await tx.insert(deductionRates).values({
+            tenantId: msg.tenantId, divisionId, head: r.head, rateBps: r.rateBps, createdBy: msg.actorId, updatedBy: msg.actorId,
+          });
+        }
+      }
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "update", resourceType: "deduction_rates", resourceId: divisionId ?? "tenant-default", outcome: "success" } });
     });
   });
 

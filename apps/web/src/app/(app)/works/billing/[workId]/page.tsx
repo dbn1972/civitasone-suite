@@ -9,6 +9,7 @@ import { getBillsForWork, type BillRow } from "../../_data/loaders";
 import { billStatusLabel } from "../../_data/format";
 import { sumMinor } from "@/lib/money";
 import { BillingActions } from "./BillingActions";
+import { BillDeductions } from "./BillDeductions";
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,8 @@ export default async function BillingDetailPage(
           emptyMessage="Issue a Measurement Book to start billing."
         />
       </Card>
+
+      <BillDeductions bills={bills.map((b) => ({ id: b.id, billNo: b.billNo }))} />
 
       <BillingActions
         workId={params.workId}

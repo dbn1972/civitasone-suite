@@ -82,8 +82,26 @@ export const billRecoveries = works.table("bill_recoveries", {
   recoveryType: varchar("recovery_type", { length: 64 }).notNull(),
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
   remarks: varchar("remarks", { length: 2048 }),
+  // D4c #37: the rate (basis points) and amount the SERVER computed for this head when the bill was made, kept beside
+  // amountMinor (what the maker finally charged) so the checker can see what was adjusted.
+  rateBps: integer("rate_bps"),
+  computedAmountMinor: bigint("computed_amount_minor", { mode: "bigint" }),
   version: integer("version").notNull().default(1),
   // GAP2-WORKS-BILLING-08: standard record-provenance audit columns.
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** D4c #37: default statutory deduction rate (basis points) per head; divisionId null = the tenant-wide default. */
+export const deductionRates = works.table("deduction_rates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  divisionId: uuid("division_id"),
+  head: varchar("head", { length: 32 }).notNull(),
+  rateBps: integer("rate_bps").notNull(),
+  version: integer("version").notNull().default(1),
   createdBy: uuid("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedBy: uuid("updated_by"),
@@ -102,4 +120,4 @@ export const accountCompilations = works.table("account_compilations", {
   version: integer("version").notNull().default(1),
 });
 
-export const schema = { measurementBooks, measurements, bills, billItems, billRecoveries, accountCompilations };
+export const schema = { measurementBooks, measurements, bills, billItems, billRecoveries, deductionRates, accountCompilations };
