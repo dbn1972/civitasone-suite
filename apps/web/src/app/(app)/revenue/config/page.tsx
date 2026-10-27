@@ -3,7 +3,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult, type LoaderSource } from "@/app/_data/apiClient";
 import { formatBps, formatIndianDate, formatMoney } from "@/lib/formatters";
-import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { getSessionUserId, getSessionRoles } from "@/lib/auth/roleGuard";
 import { RateConfigConsole } from "./RateConfigConsole";
 import { ConfigProposalsPanel, type ConfigProposal } from "./ConfigProposalsPanel";
 import type { ChangeTarget } from "./ProposeChangeForm";
@@ -119,6 +119,8 @@ export default async function RateConfigPage(
   const proposalsResult = await getProposals();
   const proposals = proposalsResult?.data ?? [];
   const currentUserId = getSessionUserId();
+  // Owner decision F2: only these roles decide a rate-config proposal (the server enforces it too).
+  const canApprove = getSessionRoles().some((r) => r === "revenue_admin" || r === "finance_admin");
   const changeTargets = buildChangeTargets(rateHeads, slabsResult.data, penaltyResult.data, rebateResult.data);
 
   const activeHeads = rateHeads.filter((rh) => rh.isActive).length;
@@ -164,7 +166,7 @@ export default async function RateConfigPage(
             />
           </StatGrid>
 
-          <ConfigProposalsPanel proposals={proposals} currentUserId={currentUserId} />
+          <ConfigProposalsPanel proposals={proposals} currentUserId={currentUserId} canApprove={canApprove} />
 
           <Card title="Rate Engine Configuration">
             <RateConfigConsole
