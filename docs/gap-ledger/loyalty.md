@@ -149,7 +149,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-MEMBERS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: depends on ACCRUALS-02 field classification; role gate and shortened ref already in place)
+- [x] **Status** Closed by dccf96f6d (owner decision D4c #15, 2026-10-27): same ruling as ACCRUALS-02; offline cache no longer stores the full profile id (rows carry only the shortened ref; cache keys moved to v2).
 - **W0 note:** partly fixed by #1924 — role gate (PermissionDenied) added and member ref shortened; no <Masked> reveal component and the offline cache still holds the full profileId.
 - **First-pass claim:** Members and Accruals both call GET /api/v1/loyalty/enrolments (loyalty/_data.ts:89-90): two pages, one dataset. Enrolments are personal data (DPDP) and are printed with no masking or role gate (ModuleListTable.tsx:50-53, layout.tsx:5).
 - **Verified evidence:** True: members and accruals both call /api/v1/loyalty/enrolments (_data.ts:90-91) and ModuleListTable.tsx:48-55 prints rows unmasked; loyalty/layout.tsx only applies ModuleGate (module enabled), no role check. Not verifiable: which fields the enrolment payload holds (id slice, name/label, status, meta only are rendered) - loyalty-service absent, so 'personal data printed' is plausible but unproven. Also the table caches rows in encrypted offline cache via useSeededResource (ModuleListTable.tsx:19).
