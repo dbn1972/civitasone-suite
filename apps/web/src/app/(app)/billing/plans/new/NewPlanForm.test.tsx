@@ -23,10 +23,24 @@ describe("NewPlanForm (GAP-BILLING-PLANS-NEW-01..06)", () => {
     pushMock.mockReset();
   });
 
-  it("NEW-01: renders no Billing Interval control (the backend has no interval field)", () => {
+  it("NEW-01: renders a Billing Interval control defaulting to Monthly (the backend persists it)", () => {
     render(<NewPlanForm />);
-    expect(screen.queryByText(/billing interval/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Quarterly")).not.toBeInTheDocument();
+    const sel = screen.getByLabelText("Billing Interval") as HTMLSelectElement;
+    expect(sel.value).toBe("monthly");
+    expect(Array.from(sel.options).map((o) => o.textContent)).toEqual(["Monthly", "Quarterly", "Yearly"]);
+  });
+
+  it("NEW-01: choosing Quarterly sends interval:'quarterly' in the POST body", async () => {
+    browserFetchMock.mockResolvedValueOnce(okResponse());
+    render(<NewPlanForm />);
+    fireEvent.change(screen.getByLabelText("Plan Name"), { target: { value: "Standard" } });
+    fireEvent.change(screen.getByLabelText("Plan Code"), { target: { value: "std_q" } });
+    fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "1500" } });
+    fireEvent.change(screen.getByLabelText("Billing Interval"), { target: { value: "quarterly" } });
+    fireEvent.click(screen.getByRole("button", { name: /create plan/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /confirm & create/i }));
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    expect(JSON.parse((browserFetchMock.mock.calls[0]![1] as { body: string }).body)).toMatchObject({ interval: "quarterly" });
   });
 
   it("NEW-04: Government exempt defaults to UNCHECKED and has help text", () => {
@@ -38,7 +52,7 @@ describe("NewPlanForm (GAP-BILLING-PLANS-NEW-01..06)", () => {
 
   it("NEW-03: currency picker offers INR only (Government edition)", () => {
     render(<NewPlanForm />);
-    const options = screen.getAllByRole("option");
+    const options = Array.from((screen.getByLabelText("Currency") as HTMLSelectElement).options);
     expect(options.map((o) => o.textContent)).toEqual(["INR"]);
   });
 
@@ -78,8 +92,8 @@ describe("NewPlanForm (GAP-BILLING-PLANS-NEW-01..06)", () => {
     expect(typeof body.priceMinor).toBe("number");
     expect(body.currency).toBe("INR");
     expect(body.govtExempt).toBe(false);
-    // NEW-01: interval is never sent.
-    expect(body).not.toHaveProperty("interval");
+    // NEW-01: the default interval is sent explicitly.
+    expect(body.interval).toBe("monthly");
   });
 
   it("NEW-03: rejects a 3-decimal amount without POSTing", () => {

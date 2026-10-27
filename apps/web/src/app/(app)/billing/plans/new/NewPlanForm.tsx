@@ -19,13 +19,15 @@ const CODE_RE = /^[a-z0-9_-]{2,64}$/;
 // tenant, widen this from tenant settings.)
 const CURRENCIES = ["INR"] as const;
 
-// GAP-BILLING-PLANS-NEW-01: the billing-service POST /v1/billing/plans body
-// (plans/validators.ts createPlanBody) is { name, code, priceMinor, currency,
-// govtExempt } — there is NO `interval` field, and no column stores one. The
-// old form rendered a Billing Interval select whose value was silently
-// discarded on submit. A dead control that looks required is removed rather
-// than left to mislead; reinstate it only once the backend persists an
-// interval.
+// GAP-BILLING-PLANS-NEW-01 (UAT B4): the billing-service now persists a plan
+// billing interval (migration 0023; createPlanBody.interval, default monthly),
+// so the Billing Interval control is back and its value is sent on submit.
+const INTERVALS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "yearly", label: "Yearly" },
+] as const;
+type Interval = (typeof INTERVALS)[number]["value"];
 
 type FieldKey = "name" | "code" | "amount";
 
@@ -39,6 +41,7 @@ export function NewPlanForm() {
   // GAP-BILLING-PLANS-NEW-04: default OFF — tax exemption is a consequential,
   // deliberate choice, not a silent default.
   const [govtExempt, setGovtExempt] = useState(false);
+  const [billingInterval, setBillingInterval] = useState<Interval>("monthly");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -53,6 +56,7 @@ export function NewPlanForm() {
   const codeId = useId();
   const amountId = useId();
   const currencyId = useId();
+  const intervalId = useId();
   const govtExemptId = useId();
   const govtExemptHelpId = useId();
   const codeHelpId = useId();
@@ -130,6 +134,7 @@ export function NewPlanForm() {
           priceMinor: Number(result.priceMinor),
           currency,
           govtExempt,
+          interval: billingInterval,
         }),
       });
       if (!res.ok) {
@@ -229,6 +234,13 @@ export function NewPlanForm() {
         </div>
       </div>
 
+      <div>
+        <label htmlFor={intervalId} style={labelStyle}>Billing Interval</label>
+        <select id={intervalId} value={billingInterval} onChange={(e) => setBillingInterval(e.target.value as Interval)} style={inputStyle}>
+          {INTERVALS.map((i) => (<option key={i.value} value={i.value}>{i.label}</option>))}
+        </select>
+      </div>
+
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <input
           id={govtExemptId} type="checkbox" checked={govtExempt}
@@ -271,6 +283,7 @@ export function NewPlanForm() {
             <li>Name: {name.trim() || "—"}</li>
             <li>Code: {code.trim().toLowerCase() || "—"}</li>
             <li>Price: {pricePreview ?? "—"}</li>
+            <li>Billing interval: {INTERVALS.find((i) => i.value === billingInterval)?.label}</li>
             <li>Government exempt: {govtExempt ? "Yes" : "No"}</li>
           </ul>
         }

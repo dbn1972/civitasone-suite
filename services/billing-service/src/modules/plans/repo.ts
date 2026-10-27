@@ -1,13 +1,13 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { billingPlans, billingPlanFeatures, type BillingPlanInsert } from "./schema.js";
-import type { PlanView } from "./domain.js";
+import { toInterval, type PlanView } from "./domain.js";
 
 // Platform plans are stored under the system tenant — use its context for reads
 const SET_SYSTEM_TENANT = sql.raw(`SET LOCAL "app.tenant_id" = '00000000-0000-0000-0000-000000000000'`);
 
 function toView(r: typeof billingPlans.$inferSelect): PlanView {
-  return { id: r.id, name: r.name, code: r.code, priceMinor: r.priceMinor.toString(), currency: r.currency, govtExempt: r.govtExempt, active: r.active };
+  return { id: r.id, name: r.name, code: r.code, priceMinor: r.priceMinor.toString(), currency: r.currency, govtExempt: r.govtExempt, active: r.active, interval: toInterval(r.billingInterval) };
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { pricePerMonthMinor } from "./domain.js";
 import * as subscriptions from "../subscriptions/queries.js";
 import * as invoices from "../invoices/queries.js";
 import { fetchTenantEdition } from "../../shared/tenant-client.js";
@@ -50,7 +51,7 @@ export async function getTenantPlansOverview(tenantId: string, authorization: st
   const trialEnds = sub?.status === "trial" && sub.trialExpiresAt ? Date.parse(sub.trialExpiresAt) : NaN;
   return {
     plans: (plans ?? []).map((p) => ({
-      id: p.id, name: p.name, pricePerMonth: Number(p.priceMinor),
+      id: p.id, name: p.name, pricePerMonth: Number(pricePerMonthMinor(BigInt(p.priceMinor), p.interval)),
       maxUsers: limit(p.id, "max_users"), storageGb: limit(p.id, "storage_gb"), maxApiCalls: limit(p.id, "max_api_calls"),
       modules: features.filter((f) => f.planId === p.id && f.featureKey.startsWith("module:")).map((f) => f.featureKey.slice("module:".length)),
     })),
