@@ -23,6 +23,7 @@ const mockRti: RtiDetail = {
   updatedAt: "2024-01-01T00:00:00Z",
   responses: [],
   appeals: [],
+  transfers: [],
 };
 
 function renderClient(props: Partial<Parameters<typeof RTIDetailClient>[0]> = {}) {
@@ -186,5 +187,23 @@ describe("RTIDetailClient -- CLOS2-S1-15 offline errors", () => {
     fireEvent.click(screen.getByRole("button", { name: enMessages.citizenRti.submitAppeal }));
     expect(await screen.findByText(enMessages.citizenRti.appealErrorFallback)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("Failed to fetch");
+  });
+});
+
+describe("RTIDetailClient -- GAP-CITIZEN-RTI-DETAIL-06 transfer history", () => {
+  it("shows the s.6(3) transfer trail (from, to, date) and hides the card when there is none", () => {
+    const { unmount } = renderClient({ initialRti: mockRti, initialSource: "api" });
+    expect(screen.queryByText("Transfers")).not.toBeInTheDocument();
+    unmount();
+    renderClient({
+      initialSource: "api",
+      initialRti: {
+        ...mockRti,
+        transfers: [{ id: "t1", fromAuthority: "Sanitation Dept", toAuthority: "Water Works", transferredAt: "2026-03-05T04:30:00Z" }],
+      },
+    });
+    expect(screen.getByText("Transfers")).toBeInTheDocument();
+    expect(screen.getByText("Transferred from Sanitation Dept to Water Works")).toBeInTheDocument();
+    expect(screen.getByText("05/03/2026")).toBeInTheDocument();
   });
 });

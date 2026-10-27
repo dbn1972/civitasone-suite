@@ -113,6 +113,14 @@ export interface RtiAppeal {
   createdAt: string;
 }
 
+/** One RTI Act s.6(3) transfer (GET /v1/citizen/rti/:id -> .transfers[]), oldest first. */
+export interface RtiTransfer {
+  id: string;
+  fromAuthority: string;
+  toAuthority: string;
+  transferredAt: string;
+}
+
 /** Shape returned by GET /v1/citizen/rti/:id. */
 export interface RtiDetail {
   id: string;
@@ -128,6 +136,7 @@ export interface RtiDetail {
   updatedAt: string;
   responses: RtiResponse[];
   appeals: RtiAppeal[];
+  transfers: RtiTransfer[];
 }
 
 function toRtiResponse(r: Record<string, unknown>): RtiResponse {
@@ -135,6 +144,15 @@ function toRtiResponse(r: Record<string, unknown>): RtiResponse {
     id: str(r.id),
     responseUrl: str(r.responseUrl),
     respondedAt: str(r.respondedAt),
+  };
+}
+
+function toRtiTransfer(r: Record<string, unknown>): RtiTransfer {
+  return {
+    id: str(r.id),
+    fromAuthority: str(r.fromAuthority),
+    toAuthority: str(r.toAuthority),
+    transferredAt: str(r.transferredAt),
   };
 }
 
@@ -163,6 +181,7 @@ function toRtiDetail(r: Record<string, unknown>): RtiDetail {
     updatedAt: str(r.updatedAt),
     responses: asArray(r.responses).map(toRtiResponse),
     appeals: asArray(r.appeals).map(toRtiAppeal),
+    transfers: asArray(r.transfers).map(toRtiTransfer),
   };
 }
 
