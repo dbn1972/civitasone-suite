@@ -29,6 +29,8 @@ const sample: LoyaltyRedemptionRow[] = [
     version: 1,
     redeemedAt: "2026-09-10T05:00:00.000Z",
     voidedAt: null,
+    fulfilledAt: null,
+    rejectedAt: null,
   },
   {
     id: "r2222222-2222-4222-8222-222222222222",
@@ -40,6 +42,8 @@ const sample: LoyaltyRedemptionRow[] = [
     version: 2,
     redeemedAt: "2026-09-11T05:00:00.000Z",
     voidedAt: "2026-09-12T05:00:00.000Z",
+    fulfilledAt: null,
+    rejectedAt: null,
   },
 ];
 
@@ -69,6 +73,18 @@ describe("RedemptionsTable (GAP-LOYALTY-REDEMPTIONS-02/03)", () => {
     seed(sample);
     render(<RedemptionsTable rows={sample} source="api" canManage />);
     expect(screen.getAllByRole("button", { name: "Void" }).length).toBe(1); // only the pending row
+  });
+
+  it("REDEMPTIONS-02: fulfil and reject are offered on a pending row to admins only, and a Fulfilled column exists", () => {
+    const { unmount } = render(<RedemptionsTable rows={sample} source="api" canManage={false} />);
+    expect(screen.queryByRole("button", { name: "Fulfil" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    unmount();
+    seed(sample);
+    render(<RedemptionsTable rows={sample} source="api" canManage />);
+    expect(screen.getByRole("columnheader", { name: "Fulfilled" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Fulfil" })).toHaveLength(1); // pending row only
+    expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(1);
   });
 
   it("error-no-data renders a retry state, not an empty nudge", () => {

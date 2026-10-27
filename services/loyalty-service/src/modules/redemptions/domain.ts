@@ -3,7 +3,7 @@
  * Handles validation, partial/full redemption, void/reversal.
  */
 
-export type RedemptionStatus = "pending" | "fulfilled" | "cancelled" | "voided";
+export type RedemptionStatus = "pending" | "fulfilled" | "cancelled" | "voided" | "rejected";
 
 /**
  * Validate that a redemption can be made.
@@ -57,4 +57,12 @@ export function balanceAfterVoid(currentBalance: bigint, voidedPoints: bigint): 
  */
 export function isFullRedemption(requestedPoints: bigint, availableBalance: bigint): boolean {
   return requestedPoints === availableBalance;
+}
+
+/**
+ * Only a pending redemption (points held, reward not yet handed over) can be
+ * fulfilled or rejected. A fulfilled / voided / rejected row is terminal.
+ */
+export function canDecide(status: string): boolean {
+  return status === "pending";
 }

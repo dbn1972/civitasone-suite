@@ -101,6 +101,9 @@ const redemptionApi = z.object({
   redeemedAt: z.string().nullable().optional(),
   voidedAt: z.string().nullable().optional(),
   voidReason: z.string().nullable().optional(),
+  fulfilledAt: z.string().nullable().optional(),
+  rejectedAt: z.string().nullable().optional(),
+  rejectReason: z.string().nullable().optional(),
 });
 
 export type LoyaltyRedemptionRow = {
@@ -113,6 +116,8 @@ export type LoyaltyRedemptionRow = {
   version: number | null;
   redeemedAt: string | null;
   voidedAt: string | null;
+  fulfilledAt: string | null;
+  rejectedAt: string | null;
 };
 
 // ---- Accruals (points ledger) ---------------------------------------------
@@ -300,6 +305,8 @@ export function getLoyaltyRedemptions(
           version: r.version ?? null,
           redeemedAt: r.redeemedAt ?? null,
           voidedAt: r.voidedAt ?? null,
+          fulfilledAt: r.fulfilledAt ?? null,
+          rejectedAt: r.rejectedAt ?? null,
         })),
     },
   );
