@@ -2331,7 +2331,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [~] **Status** (NEEDS OWNER DECISION: timeline state-mapping conflict — code shows Created=done/DAO=current for a draft, but acceptance criteria says Created=current; owner must confirm intended UX before acceptance tests can be written; GAP-WORKS-PROPOSALS-DETAIL-02)
+- [x] **Status** Closed per owner decision D4c #38 (2026-10-27): keep the current timeline (Proposal Created done, DAO Finalized current for a draft); the acceptance wording is amended to match, no code change
 - **W2 works part 2 note (#2047):** status-to-step mapping for a draft is still the owner's call (see the reopen note above). INTERIM, owner decision.
 - **First-pass claim:** Timeline promises "Submitted", "TS Eligible" and "AA Issued" steps that the backend never sets (list page comment, proposals/page.tsx:6-17), so a draft shows "Submitted" as the current step, and after DAO finalisation "TS Eligible" as current with no path to advance it (page.tsx:117-153).
 - **Verified evidence:** page.tsx:117 PROPOSAL_STATUSES=[draft,submitted,dao_finalized,ts_eligible,aa_issued]; buildTimelineSteps 119-153. For status 'draft' (idx 0) the 'Submitted' step is 'current' (:135); for 'dao_finalized' (idx 2) 'TS Eligible' is 'current' (:146) and AA Issued upcoming. proposals/page.tsx:6-17 comment states the backend only ever writes draft and dao_finalized (backend source absent, cannot re-verify). 'Create AA' link (page.tsx:314) exists but does not advance this status.
