@@ -5,6 +5,8 @@ export const createPreTenderSchema = z.object({
   workId: z.string().uuid(),
   referenceNumber: z.string().max(128).optional(),
   tenderType: z.string().max(64).optional(),
+  // D4c #40: the tender-type master record. When sent it must be an active type of the tenant.
+  tenderTypeId: z.string().uuid().optional(),
   tenderCategory: z.string().max(64).optional(),
   bidValidity: z.number().int().positive().max(365).optional(),
   // GAP-WORKS-TENDERS-NEW-02: the opening date the register/status depend on.

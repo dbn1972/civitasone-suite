@@ -117,3 +117,21 @@ export function generateSplitNumber(parentRef: string, sequence: number): string
   const prefix = parentRef.slice(0, 8);
   return `${prefix}/SPLIT/${String(sequence).padStart(3, "0")}`;
 }
+
+/**
+ * D4c #44 (GAP-WORKS-PROPOSALS-NEW-06): the Indian financial year (1 April to 31 March, IST) a moment falls in. Bounds are
+ * half-open [start, end). Used to scope the likely-duplicate warning to proposals of the same financial year.
+ */
+export function financialYearOf(at: Date): { label: string; start: Date; end: Date } {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(at.getTime() + IST_OFFSET_MS);
+  const startYear = ist.getUTCMonth() >= 3 ? ist.getUTCFullYear() : ist.getUTCFullYear() - 1;
+  const start = new Date(Date.UTC(startYear, 3, 1) - IST_OFFSET_MS);
+  const end = new Date(Date.UTC(startYear + 1, 3, 1) - IST_OFFSET_MS);
+  return { label: `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`, start, end };
+}
+
+/** D4c #44: title / place text compared without case, outer or repeated spaces. */
+export function normalizeForDuplicate(text: string | null | undefined): string {
+  return (text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}

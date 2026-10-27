@@ -49,6 +49,7 @@ export const COMMANDS = {
   mbFinalize:                  "works.mb.finalize",
   billCreate:                  "works.bill.create",
   billFinalize:                "works.bill.finalize",
+  deductionRateSet:            "works.deduction_rate.set",
   accountCompile:              "works.account.compile",
   // Contractor
   contractorCreate:            "works.contractor.create",

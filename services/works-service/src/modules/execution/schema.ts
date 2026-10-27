@@ -23,6 +23,10 @@ export const scopeProgress = works.table("scope_progress", {
   priorAchievement: numeric("prior_achievement", { precision: 18, scale: 4 }),
   currentAchievement: numeric("current_achievement", { precision: 18, scale: 4 }),
   percentage: numeric("percentage", { precision: 5, scale: 2 }),
+  // D4c #43: progress = the month's one ordinary entry; correction = a negative entry with a reason;
+  // legacy_duplicate = a pre-rule second entry kept for the running total.
+  entryKind: varchar("entry_kind", { length: 16 }).notNull().default("progress"),
+  correctionReason: varchar("correction_reason", { length: 2048 }),
   version: integer("version").notNull().default(1),
 });
 

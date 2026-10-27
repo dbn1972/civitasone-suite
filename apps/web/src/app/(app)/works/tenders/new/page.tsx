@@ -104,7 +104,12 @@ function NewTenderForm() {
     try {
       const body: Record<string, unknown> = { workId };
       if (form.referenceNumber.trim()) body.referenceNumber = form.referenceNumber.trim();
-      if (form.tenderType) body.tenderType = form.tenderType;
+      // D4c #40: the type is saved by its master record id; the text code goes along for views that still read it.
+      const chosenType = tenderTypes.find((t) => t.id === form.tenderType);
+      if (chosenType) {
+        body.tenderTypeId = chosenType.id;
+        body.tenderType = (chosenType.code ?? chosenType.name).slice(0, 64);
+      }
       if (form.tenderCategory.trim()) body.tenderCategory = form.tenderCategory.trim();
       if (form.openingDate) body.openingDate = new Date(form.openingDate).toISOString();
       if (bidValidity !== undefined) body.bidValidity = bidValidity;
@@ -169,7 +174,7 @@ function NewTenderForm() {
           <select id="tenderType" name="tenderType" className="input" value={form.tenderType} onChange={handleChange}>
             <option value="">— Select —</option>
             {tenderTypes.map((t) => (
-              <option key={t.id} value={t.code ?? t.name}>{t.name}</option>
+              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </div>

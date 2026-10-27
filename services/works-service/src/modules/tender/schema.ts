@@ -9,6 +9,8 @@ export const preTenders = works.table("pre_tenders", {
   workId: uuid("work_id").notNull(),
   referenceNumber: varchar("reference_number", { length: 128 }),
   tenderType: varchar("tender_type", { length: 64 }),
+  // D4c #40: the tender-type master record; nullable, the text tender_type above stays for old records.
+  tenderTypeId: uuid("tender_type_id"),
   covers: integer("covers"),
   tenderCategory: varchar("tender_category", { length: 64 }),
   productCategory: varchar("product_category", { length: 64 }),

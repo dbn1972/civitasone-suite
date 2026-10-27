@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog, useToast, Card, Button, EntityPicker, AcceptedNotice } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
@@ -25,6 +26,8 @@ interface TenderActionsProps {
   canDoFinalize?: boolean;
   /** GAP-WORKS-TENDERS-DETAIL-06: quotations to award from. */
   quotations?: TenderQuotationOption[];
+  /** D4c #45: first wait before re-reading the queued award result (ms); the hook backs off from here. */
+  awardPollDelayMs?: number;
 }
 
 type QuotationMethod = "percentage_rate" | "item_rate";
@@ -44,9 +47,24 @@ export function TenderActions({
   canDaoFinalize = false,
   canDoFinalize = false,
   quotations = [],
+  awardPollDelayMs = 1500,
 }: TenderActionsProps) {
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
+  const tAward = useTranslations("works.tenderAward");
+  // D4c #45: the award is a queued command. After the 202 the page says "Award pending" and re-reads the tender's award
+  // (a real read endpoint) until it exists, then confirms it. Never a success claim before the result is there.
+  const awardWrite = useAcceptedWrite<void, { data?: unknown } | null>({
+    poll: async () => {
+      const res = await fetch(`/api/proxy/v1/works/tenders/${tenderId}/award`);
+      if (!res.ok) return null;
+      return (await res.json()) as { data?: unknown };
+    },
+    isDone: (polled) => !!polled && polled.data != null,
+    onConfirmed: () => toast.success(tAward("confirmed")),
+    initialDelayMs: awardPollDelayMs,
+  });
+  const awardInProgress = awardWrite.phase !== "idle" && awardWrite.phase !== "error";
 
   // ── Add Quotation ──────────────────────────────────────────────────────────
   const [quotOpen, setQuotOpen] = useState(false);
@@ -198,9 +216,8 @@ export function TenderActions({
         setAwardError(resolved.message);
         return;
       }
-      toast.success("Work award submitted. It will be recorded once processed.");
       setAwardOpen(false);
-      void accepted.accept();
+      void awardWrite.accept();
     } catch (caught) {
       setAwardError(awardFormError.fromException("save", caught).message);
     } finally {
@@ -388,7 +405,21 @@ export function TenderActions({
       </Card>
 
       {/* ── Create Award ──────────────────────────────────────────────────── */}
-      {!awardId && (
+      {!awardId && awardInProgress && (
+        <Card title="Create Work Award">
+          <div style={{ padding: "12px 20px" }}>
+            {awardWrite.phase === "confirmed" ? (
+              <p style={{ margin: 0, fontSize: 13 }}><strong>{tAward("confirmed")}</strong></p>
+            ) : (
+              <p style={{ margin: 0, fontSize: 13 }}>
+                <strong>{tAward("pendingLabel")}</strong> {tAward("pendingHint")}
+              </p>
+            )}
+            <AcceptedNotice {...awardWrite.noticeProps} />
+          </div>
+        </Card>
+      )}
+      {!awardId && !awardInProgress && (
         <Card title="Create Work Award">
           {!awardOpen ? (
             <div style={{ padding: "12px 20px" }}>

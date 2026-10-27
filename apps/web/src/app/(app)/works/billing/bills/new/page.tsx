@@ -15,6 +15,25 @@ const errBanner = { background: "var(--badbg)", color: "var(--bad)", padding: 12
 const okBanner = { background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
 
 type BillMode = "e_mb" | "abstract";
+
+// D4c #37: the fixed statutory deduction heads, in display order. Only their default rates are configurable (per division).
+const DEDUCTION_HEADS = ["security_deposit", "income_tax_tds", "gst_tds", "labour_cess", "retention"] as const;
+type DeductionHead = (typeof DEDUCTION_HEADS)[number];
+type Preview = Record<DeductionHead, { rateBps: number; amountMinor: string }>;
+
+function parsePreview(data: unknown): Preview | null {
+  const lines = (data as { lines?: unknown } | null)?.lines;
+  if (!Array.isArray(lines)) return null;
+  const out: Partial<Preview> = {};
+  for (const l of lines) {
+    const row = l as { head?: unknown; rateBps?: unknown; amountMinor?: unknown };
+    if (typeof row.head === "string" && (DEDUCTION_HEADS as readonly string[]).includes(row.head)
+      && typeof row.rateBps === "number" && typeof row.amountMinor === "string" && /^\d+$/.test(row.amountMinor)) {
+      out[row.head as DeductionHead] = { rateBps: row.rateBps, amountMinor: row.amountMinor };
+    }
+  }
+  return DEDUCTION_HEADS.every((h) => out[h]) ? (out as Preview) : null;
+}
 type Option = { id: string; label: string };
 
 function NewBillForm() {
@@ -45,6 +64,10 @@ function NewBillForm() {
   // Set once the clerk edits or fills the gross themselves; until then an e-MB bill starts from the MB's billable value.
   const [grossTouched, setGrossTouched] = useState(false);
   const formError = useFormError("bill");
+  // D4c #37: computed statutory deduction lines for this work + gross (null until loaded or when unavailable), and the
+  // amounts the maker typed over the computed ones.
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [lineEdits, setLineEdits] = useState<Partial<Record<DeductionHead, string>>>({});
 
   // GAP-WORKS-BILLING-BILLS-NEW-01: when the work is known (the normal entry
   // path from the billing detail page), fetch its awards and finalized MBs so
@@ -134,6 +157,46 @@ function NewBillForm() {
     setForm((prev) => ({ ...prev, grossAmount: minorToRupeesInput(position.available) }));
   }, [form.billMode, grossTouched, position]);
 
+  // D4c #37: ask the server to compute the heads from the gross at this work's division rates. Debounced; a failure just
+  // leaves the single deductions field in place (the server still validates whatever is sent).
+  const grossForPreview = rupeesToMinorString(form.grossAmount);
+  useEffect(() => {
+    if (!chosenWorkId || grossForPreview === null) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/proxy/v1/works/billing/deduction-preview?workId=${chosenWorkId}&grossAmountMinor=${grossForPreview}`,
+          );
+          if (!res.ok || cancelled) return;
+          const body = (await res.json()) as { data?: unknown };
+          if (!cancelled) setPreview(parsePreview(body.data));
+        } catch {
+          if (!cancelled) setPreview(null);
+        }
+      })();
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [chosenWorkId, grossForPreview]);
+
+  function lineValue(head: DeductionHead): string {
+    return lineEdits[head] ?? (preview ? minorToRupeesInput(preview[head].amountMinor) : "");
+  }
+  // Per-line paise (null = invalid) and their exact sum; the sum IS the bill's deductions while lines are shown.
+  const lineMinor = preview
+    ? DEDUCTION_HEADS.map((h) => [h, rupeesToMinorString(lineValue(h), { allowZero: true })] as const)
+    : [];
+  const linesTotalMinor = preview && lineMinor.every(([, m]) => m !== null)
+    ? lineMinor.reduce((sum, [, m]) => sum + BigInt(m as string), 0n).toString()
+    : null;
+
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -143,7 +206,9 @@ function NewBillForm() {
   // via toMinorStringOrNull — never Math.round(Number(x) * 100), which
   // mis-rounds values like 1.005.
   const grossMinor = rupeesToMinorString(form.grossAmount);
-  const dedMinor = form.deductions.trim() ? rupeesToMinorString(form.deductions, { allowZero: true }) : "0";
+  const dedMinor = preview
+    ? linesTotalMinor
+    : form.deductions.trim() ? rupeesToMinorString(form.deductions, { allowZero: true }) : "0";
   const netPreview =
     grossMinor !== null && dedMinor !== null
       ? formatMoney((BigInt(grossMinor) - BigInt(dedMinor)).toString())
@@ -166,6 +231,13 @@ function NewBillForm() {
     if (grossMinor === null || BigInt(grossMinor) <= 0n) {
       setError("Enter a valid gross amount in rupees (greater than zero, up to two decimals).");
       return;
+    }
+    if (preview) {
+      const bad = lineMinor.find(([, m]) => m === null);
+      if (bad) {
+        setError(t("lineInvalid", { head: t(`deductionHeads.${bad[0]}`) }));
+        return;
+      }
     }
     if (dedMinor === null) {
       setError("Enter a valid deductions amount in rupees (up to two decimals).");
@@ -197,7 +269,10 @@ function NewBillForm() {
         billNumber: form.billNumber.trim(),
         grossAmountMinor: grossMinor,
       };
-      if (form.deductions.trim()) body.deductionsMinor = dedMinor;
+      if (preview) {
+        // The lines ARE the deductions; the server refuses a total that disagrees, so none is sent.
+        body.recoveries = lineMinor.map(([head, m]) => ({ recoveryType: head, amountMinor: m }));
+      } else if (form.deductions.trim()) body.deductionsMinor = dedMinor;
 
       const res = await fetch("/api/proxy/v1/works/billing/bills", {
         method: "POST",
@@ -402,9 +477,47 @@ function NewBillForm() {
             </div>
             <div>
               <label style={labelStyle} htmlFor="deductions">Deductions (₹)</label>
-              <input id="deductions" style={inputStyle} type="number" step="0.01" min="0" value={form.deductions} onChange={set("deductions")} placeholder="0.00" />
+              {preview ? (
+                <input id="deductions" style={inputStyle} type="number" readOnly value={linesTotalMinor === null ? "" : minorToRupeesInput(linesTotalMinor)} />
+              ) : (
+                <input id="deductions" style={inputStyle} type="number" step="0.01" min="0" value={form.deductions} onChange={set("deductions")} placeholder="0.00" />
+              )}
             </div>
           </div>
+
+          {preview ? (
+            <fieldset data-testid="deduction-lines" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, margin: 0 }}>
+              <legend style={{ ...labelStyle, padding: "0 6px" }}>{t("deductionsHeading")}</legend>
+              <p style={{ fontSize: 11, color: "var(--muted)", margin: "0 0 8px" }}>{t("deductionsHint")}</p>
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                {DEDUCTION_HEADS.map((head) => {
+                  const computed = preview[head];
+                  const current = rupeesToMinorString(lineValue(head), { allowZero: true });
+                  const adjusted = current !== null && current !== computed.amountMinor;
+                  return (
+                    <div key={head}>
+                      <label style={labelStyle} htmlFor={`ded-${head}`}>{t(`deductionHeads.${head}`)} (₹)</label>
+                      <input
+                        id={`ded-${head}`}
+                        style={inputStyle}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={lineValue(head)}
+                        onChange={(e) => setLineEdits((prev) => ({ ...prev, [head]: e.target.value }))}
+                        placeholder="0.00"
+                      />
+                      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                        {adjusted
+                          ? t("adjusted", { computed: formatMoney(computed.amountMinor) })
+                          : t("rateNote", { rate: (computed.rateBps / 100).toString() })}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ) : null}
 
           {netPreview !== null ? (
             <p style={{ fontSize: 13, color: "var(--ink)", margin: 0 }}>

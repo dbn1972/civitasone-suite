@@ -85,6 +85,14 @@ describe("WorkProposalDetailPage", () => {
     expect(screen.queryByText("AA Issued")).not.toBeInTheDocument();
   });
 
+  it("labels the sub-district Tehsil / Block, not Taluka (D4c #39)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: PROPOSAL, source: "api", status: 200 });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
+    render(ui);
+    expect(screen.getByText("Tehsil / Block")).toBeInTheDocument();
+    expect(screen.queryByText("Taluka")).not.toBeInTheDocument();
+  });
+
   it("renders Charged/Voted, Habitation and Sector detail rows (DETAIL-06)", async () => {
     fetchJsonMock.mockResolvedValue({ data: PROPOSAL, source: "api", status: 200 });
     const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });

@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { preTenders, tenders, quotations, awards } from "./schema.js";
+import { tenderTypes } from "../masters/schema.js";
 import { contractors } from "../contractor/schema.js";
 import { isSelfApprovalAward } from "./domain.js";
 import { eq, and, sql } from "drizzle-orm";
@@ -24,12 +25,25 @@ export function registerTenderConsumers(q: Queue): void {
           .limit(1);
         if (dup.length > 0) throw new NonRetryableError("DUPLICATE_REFERENCE: a pre-tender with this reference number already exists");
       }
+      // D4c #40: the type is saved by its master record; re-checked here (the route pre-check can race a deactivation).
+      let tenderTypeId: string | null = null;
+      let tenderType = (p.tenderType as string | undefined) ?? null;
+      if (p.tenderTypeId) {
+        const typeRows = await tx.select({ id: tenderTypes.id, name: tenderTypes.name }).from(tenderTypes)
+          .where(and(eq(tenderTypes.tenantId, msg.tenantId), eq(tenderTypes.id, p.tenderTypeId as string), eq(tenderTypes.active, true)))
+          .limit(1);
+        if (typeRows.length === 0) throw new NonRetryableError("INVALID_TENDER_TYPE: tender type not found or no longer active");
+        tenderTypeId = typeRows[0]!.id;
+        // Keep the list/detail views that read the text type populated when only the id was sent.
+        tenderType = tenderType ?? typeRows[0]!.name.slice(0, 64);
+      }
       await tx.insert(preTenders).values({
         id: p.id as string,
         tenantId: msg.tenantId,
         workId: p.workId as string,
         referenceNumber: (p.referenceNumber as string) ?? null,
-        tenderType: (p.tenderType as string) ?? null,
+        tenderType,
+        tenderTypeId,
         tenderCategory: (p.tenderCategory as string) ?? null,
         bidValidity: (p.bidValidity as number) ?? null,
         // GAP-WORKS-TENDERS-NEW-02: persist the opening date when supplied.

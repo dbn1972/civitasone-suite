@@ -1,5 +1,7 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, EntityPicker, Field, ConfirmDialog } from "@/app/_components/ds";
@@ -29,6 +31,7 @@ type StringFormField = Exclude<keyof ProposalForm, "category">;
 
 export default function NewProposalPage() {
   const router = useRouter();
+  const t = useTranslations("works.location");
   const { toast } = useToast();
   // SF-19: unsaved-changes prompt is the shared ConfirmDialog, not window.confirm.
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -71,6 +74,44 @@ export default function NewProposalPage() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
+
+  // D4c #44: warn (never block) when a proposal with the same title, category and location already exists this
+  // financial year. Debounced; a failed check shows nothing (the server does not depend on it).
+  const tDup = useTranslations("works.proposalDuplicate");
+  const [duplicates, setDuplicates] = useState<Array<{ id: string; workNumber: string }>>([]);
+  const [duplicateFy, setDuplicateFy] = useState("");
+  useEffect(() => {
+    if (!form.description.trim() || saved) {
+      setDuplicates([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const qs = new URLSearchParams({ description: form.description.trim(), category: form.category });
+          if (form.district.trim()) qs.set("district", form.district.trim());
+          if (form.taluka.trim()) qs.set("taluka", form.taluka.trim());
+          if (form.village.trim()) qs.set("village", form.village.trim());
+          const res = await fetch(`/api/proxy/v1/works/proposals/duplicate-check?${qs.toString()}`);
+          if (!res.ok || cancelled) return;
+          const body = (await res.json()) as { data?: { duplicates?: Array<{ id?: unknown; workNumber?: unknown }>; financialYear?: unknown } };
+          if (cancelled) return;
+          const rows = (body.data?.duplicates ?? [])
+            .filter((d) => typeof d.id === "string" && typeof d.workNumber === "string")
+            .map((d) => ({ id: d.id as string, workNumber: d.workNumber as string }));
+          setDuplicates(rows);
+          setDuplicateFy(typeof body.data?.financialYear === "string" ? body.data.financialYear : "");
+        } catch {
+          if (!cancelled) setDuplicates([]);
+        }
+      })();
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.description, form.category, form.district, form.taluka, form.village, saved]);
 
   function set(field: StringFormField) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -176,6 +217,17 @@ export default function NewProposalPage() {
         >
           <p style={{ fontSize: 12, color: "var(--muted)" }}>Fields marked * are required.</p>
 
+          {duplicates.length > 0 && (
+            <div role="note" data-testid="duplicate-proposals-warning" style={{ fontSize: 12, color: "var(--warn)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 12px" }}>
+              <p style={{ margin: 0 }}>{tDup("warning", { fy: duplicateFy || "—" })}</p>
+              <ul style={{ margin: "4px 0 0", paddingInlineStart: 18 }}>
+                {duplicates.map((d) => (
+                  <li key={d.id}><Link href={`/works/proposals/${d.id}`}>{d.workNumber}</Link></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div>
             <label htmlFor="proposal-new-description" style={labelStyle}>Description *</label>
             <textarea
@@ -267,7 +319,7 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label htmlFor="proposal-new-taluka" style={labelStyle}>Taluka</label>
+              <label htmlFor="proposal-new-taluka" style={labelStyle}>{t("tehsilBlock")}</label>
               <input
                 id="proposal-new-taluka"
                 type="text"

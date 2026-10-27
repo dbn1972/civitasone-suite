@@ -60,3 +60,10 @@ export async function compileAccountCommand(
 ): Promise<Accepted> {
   return publish(ctx, COMMANDS.accountCompile, body);
 }
+
+export async function setDeductionRatesCommand(
+  ctx: RequestContext,
+  body: Record<string, unknown>,
+): Promise<Accepted> {
+  return publish(ctx, COMMANDS.deductionRateSet, body);
+}

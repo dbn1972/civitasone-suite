@@ -16476,12 +16476,57 @@
       "workPlaceholder": "Search by work number…",
       "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
+    "proposalDuplicate": {
+      "warning": "A similar proposal (same title, place and category) already exists in {fy}. You can still create this one, but check it is not a duplicate:"
+    },
+    "tenderAward": {
+      "pendingLabel": "Award pending.",
+      "pendingHint": "The award was received and is being recorded. This page updates when it is ready.",
+      "confirmed": "Award recorded."
+    },
+    "tenderDetail": {
+      "deviationNote": "Deviation % = (quoted amount − estimate) ÷ estimate × 100. Plus means above the estimate, minus means below it."
+    },
+    "location": {
+      "tehsilBlock": "Tehsil / Block"
+    },
+    "executionClose": {
+      "blocked": "This work cannot be closed as completed while it has open issues or progress is below 100%. Close the issues and record the remaining progress, or close it as Dropped with a reason.",
+      "reasonRequired": "This work has open issues or progress below 100%. Give a reason to close it early.",
+      "daoRequired": "Closing a work early, with open issues or progress below 100%, needs approval. The DAO must approve this closure.",
+      "reasonLabelClosed": "Reason (needed when issues are open or progress is below 100%)"
+    },
+    "billDeductions": {
+      "title": "Deductions by bill",
+      "bill": "Bill {billNo}",
+      "loading": "Loading deduction lines…",
+      "loadError": "Couldn’t load the deduction lines. Try again.",
+      "empty": "This bill has no statutory deduction lines.",
+      "colHead": "Deduction",
+      "colRate": "Rate",
+      "colComputed": "Computed",
+      "colCharged": "Charged",
+      "colNote": "Note",
+      "adjusted": "Adjusted by maker"
+    },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",
       "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first.",
       "belowAvailable": "This gross is less than the value still billable against this measurement book ({available}).",
-      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number."
+      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number.",
+      "deductionsHeading": "Statutory deductions",
+      "deductionsHint": "Computed from the gross at your division's default rates. You may adjust any amount; the checker will see both figures.",
+      "deductionHeads": {
+        "security_deposit": "Security deposit",
+        "income_tax_tds": "Income-tax TDS",
+        "gst_tds": "GST TDS",
+        "labour_cess": "Labour cess",
+        "retention": "Retention"
+      },
+      "rateNote": "{rate}% of gross",
+      "adjusted": "Adjusted from the computed {computed}",
+      "lineInvalid": "Enter a valid amount for {head} (up to two decimals)."
     },
     "hub": {
       "title": "Works & Billing",
@@ -16546,7 +16591,11 @@
       "attachmentLabel": "Attach a photo or document",
       "attachmentRemove": "Remove",
       "photoPreviewAlt": "Preview of {name}",
-      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
+      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Only one entry per month is allowed: to fix a figure, enter a negative amount with a reason as a correction.",
+      "duplicatePeriodBlocked": "This scope already has an entry for that month, and only one entry per month is allowed. To fix a figure, enter a negative amount with a reason as a correction.",
+      "correctionReasonLabel": "Reason for the correction",
+      "correctionReasonPlaceholder": "Why is this figure being corrected?",
+      "correctionReasonRequired": "Enter the reason for the correction: a negative amount is recorded as a correction."
     },
     "reports": {
       "chipFrom": "From {date}",

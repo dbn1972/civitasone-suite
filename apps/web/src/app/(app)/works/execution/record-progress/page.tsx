@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button, Field, Input, Select, EntityPicker, ConfirmDialog } from "@/app/_components/ds";
+import { PageHeader, Button, Field, Input, Select, Textarea, EntityPicker, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { browserFetch } from "@/lib/api/browserClient";
 import { searchWorkOptions, resolveWorkOptions } from "../../_data/worksPicker";
@@ -50,6 +50,7 @@ function RecordProgressForm() {
     month: String(currentMonth),
     year: String(currentYear),
     currentAchievement: "",
+    correctionReason: "",
   });
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [unitByScopeId, setUnitByScopeId] = useState<Map<string, string>>(new Map());
@@ -131,7 +132,8 @@ function RecordProgressForm() {
             const wsId = String(row.workScopeId ?? "");
             const cur = Number(row.currentAchievement ?? 0);
             if (wsId) cumMap.set(wsId, (cumMap.get(wsId) ?? 0) + (Number.isFinite(cur) ? cur : 0));
-            if (wsId && row.year != null && row.month != null) {
+            // D4c #43: a correction does not take the month's one ordinary entry.
+            if (wsId && row.year != null && row.month != null && row.entryKind !== "correction") {
               const set = periodMap.get(wsId) ?? new Set<string>();
               set.add(`${Number(row.year)}-${Number(row.month)}`);
               periodMap.set(wsId, set);
@@ -165,8 +167,9 @@ function RecordProgressForm() {
   const backDated = selectedPeriod < currentPeriod - 1; // more than one month old
   // The server adds each entry to the running total, so a second entry for the same scope and month is the classic
   // double-count; warn (do not block - a genuine second instalment in the month is allowed).
+  const isCorrection = Number.isFinite(addend) && addend < 0;
   const duplicatePeriod =
-    !!form.workScopeId && (periodsByScope.get(form.workScopeId)?.has(`${Number(form.year)}-${Number(form.month)}`) ?? false);
+    !isCorrection && !!form.workScopeId && (periodsByScope.get(form.workScopeId)?.has(`${Number(form.year)}-${Number(form.month)}`) ?? false);
   const duplicateWarning = t("duplicatePeriodWarning", { month: MONTHS[Number(form.month) - 1] ?? form.month, year: form.year });
 
   function set(field: keyof typeof form) {
@@ -178,6 +181,7 @@ function RecordProgressForm() {
     if (!form.workScopeId) return "Select a scope.";
     if (!form.currentAchievement || !Number.isFinite(addend)) return "Enter the quantity done this period.";
     if (futurePeriod) return "A future reporting period cannot be recorded.";
+    if (isCorrection && !form.correctionReason.trim()) return t("correctionReasonRequired");
     return null;
   }
 
@@ -202,6 +206,8 @@ function RecordProgressForm() {
         month: Number(form.month),
         year: Number(form.year),
         currentAchievement: addend,
+        // D4c #43: a negative entry is a correction and carries its reason.
+        ...(isCorrection ? { correctionReason: form.correctionReason.trim() } : {}),
       };
       const res = await fetch("/api/proxy/v1/works/execution/progress", {
         method: "POST",
@@ -209,6 +215,14 @@ function RecordProgressForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
+        // D4c #43: a refused second entry for the month has a specific, actionable meaning.
+        const env = (await res.clone().json().catch(() => ({}))) as { code?: string; error?: { code?: string } };
+        if ((env.code ?? env.error?.code) === "DUPLICATE_PROGRESS_PERIOD") {
+          setError(t("duplicatePeriodBlocked"));
+          inFlight.current = false;
+          setBusy(false);
+          return;
+        }
         setError((await formError.fromResponse(res, "save")).message);
         inFlight.current = false;
         setBusy(false);
@@ -328,6 +342,16 @@ function RecordProgressForm() {
             </Field>
           </div>
 
+          {isCorrection && (
+            <Field label={t("correctionReasonLabel")} required>
+              <Textarea
+                value={form.correctionReason}
+                maxLength={2048}
+                onChange={(e) => setForm((f) => ({ ...f, correctionReason: e.target.value }))}
+                placeholder={t("correctionReasonPlaceholder")}
+              />
+            </Field>
+          )}
           {futurePeriod && (
             <p role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>A future reporting period cannot be recorded.</p>
           )}
