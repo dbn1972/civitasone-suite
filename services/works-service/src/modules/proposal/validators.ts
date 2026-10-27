@@ -59,4 +59,13 @@ export const updateProposalSchema = z.object({
 
 export type UpdateProposalBody = z.infer<typeof updateProposalSchema>;
 
+/** D4c #44: the fields the likely-duplicate warning compares (title, category, location). */
+export const duplicateCheckQuerySchema = z.object({
+  description: z.string().trim().min(1).max(2048),
+  category: z.enum(["regular", "deposit", "salary"]),
+  district: z.string().max(128).optional(),
+  taluka: z.string().max(128).optional(),
+  village: z.string().max(128).optional(),
+});
+
 export const idParamSchema = z.object({ id: z.string().uuid() });

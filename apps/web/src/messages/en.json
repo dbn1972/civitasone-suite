@@ -16403,6 +16403,9 @@
       "workPlaceholder": "Search by work number…",
       "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
+    "proposalDuplicate": {
+      "warning": "A similar proposal (same title, place and category) already exists in {fy}. You can still create this one, but check it is not a duplicate:"
+    },
     "location": {
       "tehsilBlock": "Tehsil / Block"
     },
