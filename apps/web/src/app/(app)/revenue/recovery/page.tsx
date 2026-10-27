@@ -111,6 +111,18 @@ async function getReadiness(assesseeId: string): Promise<LoaderResult<RecoveryRe
   );
 }
 
+// Owner decision F1: the tenant's default notice period (the floor an officer may lengthen from).
+async function getNoticeDefault(): Promise<number> {
+  const r = await fetchJson<unknown, number>("/api/v1/revenue/recovery-settings", 15, {
+    telemetryKey: "revenue.recovery.settings",
+    mapResponse: (payload) => {
+      const d = isRecord(payload) && isRecord((payload as { data?: unknown }).data) ? (payload as { data: Record<string, unknown> }).data : null;
+      return d && Number.isInteger(d.defaultNoticePeriodDays) ? (d.defaultNoticePeriodDays as number) : null;
+    },
+  });
+  return typeof r?.data === "number" ? r.data : 15;
+}
+
 async function getRecoveryReferrals(): Promise<LoaderResult<RecoveryReferralRow[]>> {
   return fetchJson<unknown, RecoveryReferralRow[]>("/api/v1/revenue/recovery-referrals?limit=200", [], {
     telemetryKey: "revenue.recovery.register",
@@ -133,6 +145,7 @@ export default async function RecoveryPage(
   const pendingReferrals = referrals.filter((r) => r.status === "pending");
   // Fail closed: when the readiness could not be loaded the form is disabled (readiness = null).
   const readinessData = assesseeId ? (await getReadiness(assesseeId))?.data : undefined;
+  const noticeDefault = assesseeId ? await getNoticeDefault() : 15;
   const readiness: RecoveryReadiness | null | undefined = !assesseeId
     ? undefined
     : readinessData && Array.isArray(readinessData.notices)
@@ -197,7 +210,7 @@ export default async function RecoveryPage(
         </Card>
       ) : (
         <>
-          <ServeNoticeForm assesseeId={assesseeId} />
+          <ServeNoticeForm assesseeId={assesseeId} defaultNoticePeriodDays={noticeDefault} />
           <RecoveryReferralCreateForm assesseeId={assesseeId} readiness={readiness} />
         </>
       )}
