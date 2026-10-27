@@ -12,13 +12,33 @@ export async function getItem(tenantId: string, id: string): Promise<ItemWithUom
   return row && row.tenantId === tenantId ? row : null;
 }
 
-/** Item list row as served: category name joined, plus the UOM code the web list shows (GAP-STOCK-LIST-02). */
-export type ItemListEntry = ItemListRow & { uomCode: string | null };
+/** Item list row as served: names joined, plus live stock figures (minor-unit money as strings). */
+export type ItemListEntry = ItemListRow & {
+  uomCode: string | null;
+  currentStock: number;
+  unitCost: string | null;
+  totalValue: string;
+};
 
 export async function listItems(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemListEntry[]> {
   const key = cache.listKey(tenantId, "item", JSON.stringify(opts ?? {}));
   const items = (await cache.getOrLoad(key, () => repo.findItemsWithUomByTenant(tenantId, opts))) ?? [];
-  return items.map((i) => ({ ...i, uomCode: i.uom }));
+  // GAP-STOCK-LIST-04: balances change with every stock entry, so they are read per request
+  // (one grouped query for the page) and overlaid on the cached item master rows.
+  const totals = await repo.findStockTotals(tenantId, items.map((i) => i.id));
+  return items.map((i) => {
+    const t = totals.get(i.id);
+    const qty = t?.qty ?? 0;
+    const value = t?.valueMinor ?? 0n;
+    return {
+      ...i,
+      uomCode: i.uom,
+      currentStock: qty,
+      totalValue: value.toString(),
+      // Average cost per unit; only meaningful when there is stock on hand.
+      unitCost: qty > 0 ? (value / BigInt(qty)).toString() : null,
+    };
+  });
 }
 
 export async function listCategories(tenantId: string): Promise<ItemCategoryRow[]> {

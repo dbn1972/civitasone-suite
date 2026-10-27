@@ -1,4 +1,4 @@
-import { eq, and, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { stockValuationRates } from "../valuation/schema.js";
@@ -138,6 +138,29 @@ export async function findItemBalances(itemId: string, tenantId: string): Promis
       return { warehouseId: r.warehouseId, qty: r.qty, rateMinor: r.rateMinor.toString(), valueMinor: value.toString() };
     });
     return { itemId, totalQty, totalValueMinor: totalValue.toString(), warehouses };
+  }));
+}
+
+export type ItemStockTotals = { qty: number; valueMinor: bigint };
+
+/**
+ * GAP-STOCK-LIST-04: on-hand quantity and stock value (qty x weighted rate, bigint minor units)
+ * summed across warehouses for a page of items. Tenant-filtered explicitly; items with no
+ * valuation rows are simply absent from the map.
+ */
+export async function findStockTotals(tenantId: string, itemIds: string[]): Promise<Map<string, ItemStockTotals>> {
+  if (itemIds.length === 0) return new Map();
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx
+      .select({
+        itemId: stockValuationRates.itemId,
+        qty: sql<string>`COALESCE(SUM(${stockValuationRates.qty}), 0)::text`,
+        value: sql<string>`COALESCE(SUM(${stockValuationRates.qty}::bigint * ${stockValuationRates.rateMinor}), 0)::text`,
+      })
+      .from(stockValuationRates)
+      .where(and(eq(stockValuationRates.tenantId, tenantId), inArray(stockValuationRates.itemId, itemIds)))
+      .groupBy(stockValuationRates.itemId);
+    return new Map(rows.map((r) => [r.itemId, { qty: Number(r.qty), valueMinor: BigInt(r.value) }]));
   }));
 }
 
