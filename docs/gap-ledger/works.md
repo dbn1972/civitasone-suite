@@ -3215,7 +3215,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-WORKID-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: should close be refused when issues are open or progress < 100%; GAP-WORKS-EXECUTION-WORKID-07)
+- [x] **Status** Closed by eb9e84696 (owner decision D4c #41, 2026-10-27): completion closure refused with open issues / progress below 100%; early close needs a reason and the DAO; idempotent close unchanged
 - **W2 works part 2 note (#2048):** done: close is now idempotent (route 409 ALREADY_CLOSED + consumer dead-letter) and the physical-complete certificate key is tenant-checked. Still open: refusing a close while issues are open or progress is below 100% is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — close restricted to dao/do/admin and checks closureEligibility (agreement, physical completion, splits) sync with audit; does not check open issues or 100% progress; no explicit idempotency guard.
 - **First-pass claim:** works-service absent from snapshot — server checks for completion/closure preconditions and audit are undeterminable.
