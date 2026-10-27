@@ -15,6 +15,7 @@ interface ApiRequiredDoc {
   formats?: string[];
   maxSizeMb?: number;
   verifiedAtLane?: string;
+  categoryId?: string;
 }
 
 export function documentsUiToApi(docs: RequiredDocumentUi[]): ApiRequiredDoc[] {
@@ -26,6 +27,7 @@ export function documentsUiToApi(docs: RequiredDocumentUi[]): ApiRequiredDoc[] {
     formats: d.formats,
     maxSizeMb: d.maxSizeMb,
     verifiedAtLane: d.verifiedAtLane || undefined,
+    categoryId: d.categoryId || undefined,
   }));
 }
 
@@ -44,6 +46,7 @@ export function documentsApiToUi(docs: ApiRequiredDoc[]): RequiredDocumentUi[] {
     maxSizeMb: d.maxSizeMb ?? 5,
     mandatory: d.mandatory ?? true,
     verifiedAtLane: d.verifiedAtLane ?? "",
+    categoryId: d.categoryId ?? "",
   }));
 }
 

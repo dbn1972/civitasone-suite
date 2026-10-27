@@ -9,8 +9,11 @@ import {
   type LocaleKey,
 } from "@/app/_components/ds/designer";
 import { localeLabel } from "@/app/_components/ds/designer/LocaleTabs";
+import { useDesignerT } from "@/lib/designerText";
 import {
+  DOCUMENT_CATEGORIES,
   DOCUMENT_FORMAT_OPTIONS,
+  documentCategoryById,
   newDocumentRow,
   slugifyDocType,
   type DocumentsDesignState,
@@ -32,6 +35,12 @@ import {
 import type { WorkflowLane } from "../_data/workflowConstants";
 
 const DEFAULT_LOCALES: readonly LocaleKey[] = ["en", "hi"];
+
+const SENSITIVITY_KEY = {
+  sensitive: "docSensitivitySensitive",
+  personal: "docSensitivityPersonal",
+  standard: "docSensitivityStandard",
+} as const;
 
 interface Props {
   initial: DocumentsDesignState;
@@ -172,6 +181,7 @@ export function DocumentsBuilder({
   onDesignChange,
   locales = DEFAULT_LOCALES,
 }: Props) {
+  const t = useDesignerT();
   const [design, setDesign] = useState(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.documents[0]?.id ?? null);
   const [locale, setLocale] = useState<LocaleKey>("en");
@@ -240,6 +250,24 @@ export function DocumentsBuilder({
     patchDesign((d) => ({
       documents: d.documents.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     }));
+  };
+
+  const selectedCategory = documentCategoryById(selected?.categoryId);
+
+  /**
+   * D4c #8: a category fixes the docType (two documents of one category share it)
+   * and pre-fills an empty name; "Other" keeps whatever free text the designer typed.
+   */
+  const onCategoryChange = (row: RequiredDocumentUi, categoryId: string) => {
+    const cat = documentCategoryById(categoryId);
+    if (!cat) {
+      updateDoc(row.id, { categoryId: "" });
+      return;
+    }
+    const labels = { ...row.labels };
+    if (!labels.en.trim()) labels.en = cat.labels.en;
+    if (!labels.hi.trim()) labels.hi = cat.labels.hi;
+    updateDoc(row.id, { categoryId: cat.id, docType: cat.docType, labels });
   };
 
   const addDoc = () => {
@@ -378,6 +406,38 @@ export function DocumentsBuilder({
                   locales.map((c) => [c, Boolean((selected.labels[c] ?? "").trim())]),
                 )}
               />
+              <label style={{ display: "block", marginBottom: 12 }}>
+                <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("docCategoryLabel")}</span>
+                <select
+                  aria-label={t("docCategoryLabel")}
+                  value={selected.categoryId ?? ""}
+                  onChange={(e) => onCategoryChange(selected, e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">{t("docCategoryOther")}</option>
+                  {DOCUMENT_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>{c.labels.en}</option>
+                  ))}
+                </select>
+              </label>
+              {selectedCategory ? (
+                <div
+                  data-testid="doc-category-info"
+                  style={{ marginBottom: 12, fontSize: 12, color: "var(--mut)", display: "grid", gap: 4 }}
+                >
+                  <div>
+                    <strong style={{ color: selectedCategory.sensitivity === "sensitive" ? "var(--bad)" : "var(--ink)" }}>
+                      {t(SENSITIVITY_KEY[selectedCategory.sensitivity])}
+                    </strong>
+                    {" · "}
+                    {selectedCategory.retention.kind === "years"
+                      ? t("docRetentionYears", { years: selectedCategory.retention.years })
+                      : t("docRetentionAfterVerification")}
+                    {!selectedCategory.dpoConfirmed ? ` · ${t("docDpoToConfirm")}` : ""}
+                  </div>
+                  {selectedCategory.sensitivity === "sensitive" ? <div>{t("docSensitiveNote")}</div> : null}
+                </div>
+              ) : null}
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, color: "var(--mut)" }}>Name</span>
                 <input

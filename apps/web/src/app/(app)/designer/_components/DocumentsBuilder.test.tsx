@@ -153,3 +153,33 @@ describe("DocumentsBuilder", () => {
     expect(screen.getByTestId("documents-locale-hint").textContent).toContain("EN 1/1 · OR 0/1");
   });
 });
+
+// Owner decision D4c #8 (GAP-DESIGNER-DETAIL-B6-03)
+describe("DocumentsBuilder — document category (DPO-classified catalogue)", () => {
+  const doc = {
+    id: "d1", docType: "", labels: { en: "", hi: "" }, formats: ["pdf" as const],
+    maxSizeMb: 5, mandatory: true, verifiedAtLane: "",
+  };
+
+  it("choosing Aadhaar copy shows a sensitive badge, the retention hint and DPO-to-confirm, and sets the shared docType", () => {
+    const onChange = vi.fn();
+    render(<DocumentsBuilder serviceId="s" lanes={baseLanes} initial={{ documents: [doc] }} onDesignChange={onChange} />);
+    fireEvent.click(screen.getByText("Untitled"));
+    fireEvent.change(screen.getByLabelText("Document category"), { target: { value: "aadhaar_copy" } });
+    const info = screen.getByTestId("doc-category-info");
+    expect(info.textContent).toContain("Sensitive");
+    expect(info.textContent).toMatch(/delete the copy once it is verified/i);
+    expect(info.textContent).toContain("DPO to confirm");
+    const last = onChange.mock.calls.at(-1)![0] as { documents: Array<{ docType: string; categoryId: string; labels: { en: string } }> };
+    expect(last.documents[0]).toMatchObject({ docType: "aadhaar_copy", categoryId: "aadhaar_copy" });
+    expect(last.documents[0]!.labels.en).toBe("Aadhaar copy");
+  });
+
+  it("Other keeps free text and shows no classification", () => {
+    render(<DocumentsBuilder serviceId="s" lanes={baseLanes} initial={{ documents: [{ ...doc, docType: "rent", labels: { en: "Rent", hi: "" } }] }} />);
+    fireEvent.click(screen.getByText("Rent"));
+    expect((screen.getByLabelText("Document category") as HTMLSelectElement).value).toBe("");
+    expect(screen.queryByTestId("doc-category-info")).toBeNull();
+  });
+});
+
