@@ -326,14 +326,33 @@ export async function loadFeeDesign(
   return base;
 }
 
-export async function fetchHoaOptions(): Promise<{ code: string; label: string }[]> {
+export interface HoaOption {
+  code: string;
+  label: string;
+  description: string;
+}
+
+/**
+ * Finance major-heads as selectable options. Rejects when finance cannot be
+ * reached, so callers can show a retry instead of an empty (and misleading)
+ * "no heads published" list.
+ */
+export async function fetchHoaOptions(): Promise<HoaOption[]> {
   const res = await fetch("/api/proxy/v1/finance/major-heads", { cache: "no-store" });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`major-heads ${res.status}`);
   const payload = (await res.json()) as { data?: MajorHeadDto[] };
   return (payload.data ?? []).map((h) => ({
     code: h.code,
     label: `${h.code} — ${h.description}`,
+    description: h.description,
   }));
+}
+
+/** code -> description, for review surfaces that only hold a stored hoaCode. */
+export async function fetchHoaDescriptions(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const o of await fetchHoaOptions()) out[o.code] = o.description;
+  return out;
 }
 
 /** Rate heads created by a save whose slab write has not succeeded yet, keyed by service. */
