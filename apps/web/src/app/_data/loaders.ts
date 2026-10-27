@@ -3481,6 +3481,27 @@ function filterByQuery<T>(rows: T[], q: string | undefined, match: (row: T, need
   return rows.filter((row) => match(row, needle));
 }
 
+/** D4c #18 (GAP-PROCUREMENT-INDENTS-01): true indent total + per-status counts (raw service statuses). */
+export type IndentSummaryCounts = { total: number; counts: Record<string, number> };
+
+export async function getProcurementIndentSummary(query?: { q?: string; status?: string }): Promise<LoaderResult<IndentSummaryCounts | null>> {
+  const params = new URLSearchParams();
+  if (query?.q?.trim()) params.set("q", query.q.trim());
+  if (query?.status) params.set("status", query.status);
+  const qs = params.toString();
+  return fetchJson<unknown, IndentSummaryCounts | null>(`/api/v1/procurement/indents/summary${qs ? `?${qs}` : ""}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.indents.summary",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d || typeof d.total !== "number" || !Number.isFinite(d.total) || !isRecord(d.counts)) return null;
+      const counts: Record<string, number> = {};
+      for (const [k, v] of Object.entries(d.counts)) if (typeof v === "number" && Number.isFinite(v)) counts[k] = v;
+      return { total: d.total, counts };
+    },
+  });
+}
+
 export async function getProcurementIndents(query?: ProcurementListQuery): Promise<LoaderResult<IndentSummary[]>> {
   const path = buildListPath("/api/v1/procurement/indents", query);
   const result = await fetchJson<unknown, IndentSummary[]>(path, [], {

@@ -52,6 +52,22 @@ function statusCondition(statuses: string[]) {
     : inArray(procurementIndents.status, statuses);
 }
 
+/**
+ * D4c #18 (GAP-PROCUREMENT-INDENTS-01): whole-tenant indent counts grouped by
+ * status (optionally narrowed by indent-number search), so the list page can
+ * show TRUE totals instead of page-level counts.
+ */
+export async function countIndentsByStatus(tenantId: string, q?: string): Promise<Array<{ status: string; n: number }>> {
+  const conds = [eq(procurementIndents.tenantId, tenantId)];
+  if (q) conds.push(ilike(procurementIndents.indentNo, likePattern(q)));
+  const rows = await db.transaction((tx) => tx
+    .select({ status: procurementIndents.status, n: sql<number>`COUNT(*)` })
+    .from(procurementIndents)
+    .where(and(...conds))
+    .groupBy(procurementIndents.status));
+  return rows.map((r) => ({ status: r.status, n: Number(r.n) }));
+}
+
 export async function findIndentsByTenant(tenantId: string, limit = 100, offset = 0, status?: string, q?: string): Promise<IndentRow[]> {
   const statusCond = statusCondition(parseStatusFilter(status));
   // GAP-PROCUREMENT-ORDERS-NEW-03: optional indent-number search so the PO form's

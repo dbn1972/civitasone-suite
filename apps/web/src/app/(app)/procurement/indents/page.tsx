@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
-import { getProcurementIndents } from "../../../_data/loaders";
+import { getProcurementIndents, getProcurementIndentSummary } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { indentServiceStatusQuery, parseIndentStatusFilter } from "../drillThrough";
+import { indentServiceStatus, indentServiceStatusQuery, parseIndentStatusFilter } from "../drillThrough";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -64,17 +64,26 @@ export default async function IndentsPage(
   const serviceStatus = indentServiceStatusQuery(statusFilters);
   const listFetch = getProcurementIndents({ limit: PAGE_SIZE, offset, q, status: serviceStatus });
   const statsFetch = serviceStatus ? getProcurementIndents({ limit: PAGE_SIZE, offset, q }) : listFetch;
-  const [{ data: listed, source }, { data: indents, source: statsSource }] = await Promise.all([listFetch, statsFetch]);
+  // D4c #18 (GAP-PROCUREMENT-INDENTS-01): TRUE total + per-status counts from
+  // the server, so the tiles and pager no longer present one page as the whole.
+  // If the summary is unavailable the page falls back to page-level counts.
+  const summaryFetch = getProcurementIndentSummary({ q, status: serviceStatus });
+  const [{ data: listed, source }, { data: indents, source: statsSource }, { data: summaryRaw }] = await Promise.all([listFetch, statsFetch, summaryFetch]);
+
+  const summary = summaryRaw && typeof summaryRaw.total === "number" ? summaryRaw : null;
 
   const errored = source === "error" || statsSource === "error";
   // GAP-PROCUREMENT-INDENTS-01: this page is truncated when a full page came
   // back (there may be more rows the server didn't send).
-  const truncated = !errored && listed.length === PAGE_SIZE;
+  const truncated = !errored && (summary ? offset + PAGE_SIZE < summary.total : listed.length === PAGE_SIZE);
 
   // GAP-PROCUREMENT-INDENTS-03: count every status that has a label, so the
   // actionable states (Tender Required especially) are visible, not just the
   // three the page used to show.
-  const countOf = (status: string) => indents.filter((i) => i.status === status).length;
+  const countOf = (status: string) => (summary
+    ? (summary.counts[indentServiceStatus(status)] ?? 0)
+    : indents.filter((i) => i.status === status).length);
+  const allCount = summary ? Object.values(summary.counts).reduce((a, n) => a + n, 0) : indents.length;
 
   // GAP-PROCUREMENT-INDENTS-03: optional client-chosen status narrowing. The
   // server already filtered; this only guards against a service that ignored
@@ -141,7 +150,7 @@ export default async function IndentsPage(
         }
       />
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="On this page" value={stat(indents.length)} hint="Indents in the current page of results" />
+        <StatCard icon="📋" tone="info" label={summary ? "Total indents" : "On this page"} value={stat(allCount)} hint={summary ? "All indents matching the search" : "Indents in the current page of results"} />
         <StatCard icon="⏳" tone="warn" label="Pending Approval" value={stat(countOf("pending_approval"))} href={statusHref("pending_approval")} />
         {/* GAP-PROCUREMENT-INDENTS-03: Tender Required is the actionable state — surface it next to Pending Approval and link to the filtered list. */}
         <StatCard icon="📣" tone="warn" label="Tender Required" value={stat(countOf("tender_required"))} href={statusHref("tender_required")} hint="Indents awaiting a tender to be floated" />
@@ -177,7 +186,10 @@ export default async function IndentsPage(
             {/* GAP-PROCUREMENT-INDENTS-01: honest truncation cue + server paging controls. */}
             {truncated ? (
               <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 10px" }}>
-                Showing the first {PAGE_SIZE} indents on this page. Use the search box or the status counts above to narrow the list, or go to the next page.
+                {summary
+                  ? `Showing ${offset + 1}–${offset + listed.length} of ${summary.total} indents. `
+                  : `Showing the first ${PAGE_SIZE} indents on this page. `}
+                Use the search box or the status counts above to narrow the list, or go to the next page.
               </p>
             ) : null}
             <DataTable<IndentRow>
