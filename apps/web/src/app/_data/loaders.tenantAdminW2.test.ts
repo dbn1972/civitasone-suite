@@ -53,6 +53,21 @@ describe("tenant-admin loaders (W2)", () => {
     expect(res.data.plans).toHaveLength(1);
   });
 
+  it("F9: getPlansData reads the edition-aware tenant endpoint and keeps the edition and GST invoice fields", async () => {
+    serve({
+      plans: [{ id: "p1", name: "Govt", pricePerMonth: 999900, maxUsers: 10, storageGb: 5, maxApiCalls: 100, modules: ["hrms"] }],
+      currentPlanId: "p1",
+      invoices: [{ id: "i1", date: "2026-08-02T00:00:00.000Z", amount: 1180, status: "paid", invoiceNumber: "INV-2627-000007", supplierGstin: "07AAACN1234A1Z5", recipientGstin: "07AABCD5678B1Z2", placeOfSupply: "07", cgstMinor: 90, sgstMinor: 90, igstMinor: 0 }],
+      trialDaysLeft: null,
+      edition: "govt",
+    });
+    const res = await getPlansData();
+    expect(res.source).toBe("api");
+    expect(String((vi.mocked(fetch).mock.calls[0] as unknown[])[0])).toContain("/api/v1/billing/tenant-plans");
+    expect(res.data.edition).toBe("govt");
+    expect(res.data.invoices[0]).toMatchObject({ invoiceNumber: "INV-2627-000007", supplierGstin: "07AAACN1234A1Z5", cgstMinor: 90 });
+  });
+
   it("getTenantAuditSummary reads the server totals and rejects a malformed body", async () => {
     serve({ total: 500, success: 460, failures: 40, last24h: 3, asOf: "2026-10-14T00:00:00.000Z" });
     const ok = await getTenantAuditSummary();

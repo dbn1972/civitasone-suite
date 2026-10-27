@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { billingPlans, type BillingPlanInsert } from "./schema.js";
+import { billingPlans, billingPlanFeatures, type BillingPlanInsert } from "./schema.js";
 import type { PlanView } from "./domain.js";
 
 // Platform plans are stored under the system tenant — use its context for reads
@@ -30,4 +30,15 @@ export async function findById(id: string): Promise<PlanView | null> {
 
 export async function insert(tx: Writer, row: BillingPlanInsert): Promise<void> {
   await tx.insert(billingPlans).values(row);
+}
+
+export interface PlanFeatureRow { planId: string; featureKey: string; limitValue: bigint | null }
+
+/** Platform plan feature limits (read through the sentinel-tenant context, like the plan catalogue). */
+export async function listFeatures(): Promise<PlanFeatureRow[]> {
+  const rows = await db.transaction(async (tx) => {
+    await tx.execute(SET_SYSTEM_TENANT);
+    return tx.select().from(billingPlanFeatures);
+  });
+  return rows.map((r) => ({ planId: r.planId, featureKey: r.featureKey, limitValue: r.limitValue }));
 }
