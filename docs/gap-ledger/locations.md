@@ -160,7 +160,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 13a32fc65 (UAT B4, 2026-10-27): register has an add-asset form for the roles the service allows (POST /v1/locations/infrastructure; the service has no edit or archive endpoint, so none is offered and the copy says so); the register already sorts/filters/paginates. Tests: InfrastructureActions.test.tsx.
 - **W2 note:** copy says read-only; a create UI is a feature build (backend has POST /v1/locations/infrastructure) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
