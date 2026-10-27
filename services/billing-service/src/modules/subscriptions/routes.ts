@@ -80,6 +80,39 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // GAP-BILLING-SUBSCRIPTIONS-03: the caller's OWN tenant subscription history (active and past),
+  // newest first, for the tenant-admin Subscriptions table. Read-only; the tenant is always
+  // ctx.tenantId, never a query/body id, so another tenant's rows can never be listed.
+  app.get("/v1/billing/subscriptions/history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SUBSCRIPTION_READERS);
+    const rows = await queries.listSubscriptionHistory(ctx.tenantId);
+    const planIds = [...new Set(rows.map((r) => r.planId))];
+    const plans = new Map<string, Awaited<ReturnType<typeof plansQueries.getPlan>> | null>();
+    await Promise.all(planIds.map(async (id) => {
+      // A plan lookup failure degrades to unknown (null), never an invented value or a failed list.
+      plans.set(id, await plansQueries.getPlan(id).catch((err: unknown) => {
+        req.log.warn({ err }, "subscription history: plan lookup failed");
+        return null;
+      }));
+    }));
+    return reply.send({
+      data: rows.map((r) => {
+        const plan = plans.get(r.planId) ?? null;
+        return {
+          id: r.id,
+          plan: r.planId,
+          planName: plan?.name ?? null,
+          status: r.status,
+          startDate: r.startedAt.slice(0, 10),
+          renewalDate: r.endsAt?.slice(0, 10) ?? null,
+          amountMinor: plan ? plan.priceMinor : null,
+          currency: plan?.currency ?? null,
+        };
+      }),
+    });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

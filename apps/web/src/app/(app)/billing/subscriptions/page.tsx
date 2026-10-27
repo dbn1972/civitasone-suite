@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, Card, StatCard, StatGrid, EmptyState, StatusPill, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { SubscriptionHistoryTable, type SubscriptionHistoryRow } from "./SubscriptionHistoryTable";
 
 // GAP-BILLING-SUBSCRIPTIONS-01/02/03: the billing-service GET
 // /v1/billing/subscriptions returns the CALLER'S OWN subscription — a single
@@ -54,8 +55,37 @@ async function getSubscription(): Promise<LoaderResult<SubscriptionSummary | nul
   });
 }
 
+// GAP-BILLING-SUBSCRIPTIONS-03: the tenant's own subscription history (active and past). A payload
+// that is not a { data: [] } list is a failure (null), never an empty history.
+async function getHistory(): Promise<LoaderResult<SubscriptionHistoryRow[] | null>> {
+  return fetchJson<unknown, SubscriptionHistoryRow[] | null>("/api/v1/billing/subscriptions/history", null, {
+    telemetryKey: "billing.subscription-history",
+    mapResponse: (p) => {
+      const list = p && typeof p === "object" ? (p as { data?: unknown }).data : undefined;
+      if (!Array.isArray(list)) return null;
+      const rows: SubscriptionHistoryRow[] = [];
+      for (const raw of list) {
+        if (!raw || typeof raw !== "object") continue;
+        const rec = raw as Record<string, unknown>;
+        if (typeof rec.id !== "string") continue;
+        rows.push({
+          id: rec.id,
+          plan: typeof rec.plan === "string" ? rec.plan : "",
+          planName: typeof rec.planName === "string" ? rec.planName : null,
+          status: typeof rec.status === "string" ? rec.status : "—",
+          startDate: typeof rec.startDate === "string" ? rec.startDate : null,
+          renewalDate: typeof rec.renewalDate === "string" ? rec.renewalDate : null,
+          amountMinor: typeof rec.amountMinor === "string" && /^\d+$/.test(rec.amountMinor) ? rec.amountMinor : null,
+          currency: typeof rec.currency === "string" ? rec.currency : null,
+        });
+      }
+      return rows;
+    },
+  });
+}
+
 export default async function BillingSubscriptionsPage() {
-  const { data: sub, source, status, errorMessage } = await getSubscription();
+  const [{ data: sub, source, status, errorMessage }, history] = await Promise.all([getSubscription(), getHistory()]);
 
   const header = (
     <PageHeader
@@ -114,6 +144,14 @@ export default async function BillingSubscriptionsPage() {
           <div className="field"><span className="label">Trial / period end</span><span>{sub.currentPeriodEnd ? formatIndianDate(sub.currentPeriodEnd) : "—"}</span></div>
           <div className="field"><span className="label">Active users</span><span>{sub.activeUsers ?? "—"}</span></div>
         </div>
+      </Card>
+
+      <Card title="Subscription history" padding>
+        {history.source === "error" || history.data === null ? (
+          <LoadErrorState result={{ status: history.status, errorMessage: history.errorMessage }} area="subscription history" backHref="/billing" />
+        ) : (
+          <SubscriptionHistoryTable rows={history.data} />
+        )}
       </Card>
     </div>
   );
