@@ -1833,6 +1833,9 @@ export const GrantSummarySchema = z.object({
   grantor: z.string().optional(),
   granteeId: z.string().optional(),
   granteeName: z.string().optional(),
+  /** GAP-GRANTS-LIST-03: beneficiary type and whether granteeName is the server-masked form (natural persons). */
+  granteeType: z.string().optional(),
+  granteeNameMasked: z.boolean().optional(),
   totalAmount: z.number(),
   disbursedAmount: z.number().default(0),
   pendingAmount: z.number().default(0),

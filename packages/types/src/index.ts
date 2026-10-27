@@ -1748,6 +1748,10 @@ export type GrantSummary = {
   grantor?: string;
   granteeId?: string;
   granteeName?: string;
+  /** GAP-GRANTS-LIST-03: beneficiary type; absent on older services. */
+  granteeType?: string;
+  /** GAP-GRANTS-LIST-03: true when granteeName is the server-masked form of a natural person's name. */
+  granteeNameMasked?: boolean;
   totalAmount: number;
   disbursedAmount: number;
   pendingAmount: number;

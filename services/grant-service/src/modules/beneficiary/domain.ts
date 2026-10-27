@@ -46,3 +46,18 @@ export function maskAadhaar(rawAadhaar: string): { last4: string; token: string 
   const token = createHmac("sha256", key).update(rawAadhaar).digest("hex");
   return { last4, token };
 }
+
+/**
+ * GAP-GRANTS-LIST-03 (DPDP): only a natural person (type "individual") is personal data; an
+ * institution, society or mission is not. List reads mask the former and leave the latter readable.
+ */
+export function isNaturalPerson(beneficiaryType: string | null | undefined): boolean {
+  return beneficiaryType === "individual";
+}
+
+/** First character kept, the rest hidden. At least two mask characters so a short name's length is not given away. */
+export function maskPersonName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  return `${Array.from(trimmed)[0]}${"•".repeat(Math.max(Array.from(trimmed).length - 1, 2))}`;
+}

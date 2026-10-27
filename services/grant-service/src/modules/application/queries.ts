@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
+import { isNaturalPerson, maskPersonName } from "../beneficiary/domain.js";
 import * as disbursementRepo from "../disbursement/repo.js";
 import * as ucRepo from "../utilisation/repo.js";
 import type { ApplicationRow } from "./schema.js";
@@ -44,7 +45,7 @@ export function mapInstallmentStatus(status: string): "pending" | "released" | "
  * ceiling in disbursement.repo.sumDisbursedForApplication — so pendingAmount is
  * the true outstanding balance, never a hardcoded full total.
  */
-async function mapApplicationRow(row: ApplicationRow) {
+async function mapApplicationRow(row: ApplicationRow, opts: { maskNaturalPersons?: boolean } = {}) {
   const [beneficiary, disbursedMinor] = await Promise.all([
     beneficiaryRepo.findBeneficiaryById(row.beneficiaryId, row.tenantId),
     disbursementRepo.sumDisbursedForApplication(db, row.id, row.tenantId),
@@ -54,12 +55,15 @@ async function mapApplicationRow(row: ApplicationRow) {
   const totalMinor = BigInt(row.amountApprovedMinor || row.amountRequestedMinor || 0);
   const disbursed = BigInt(disbursedMinor);
   const pendingMinor = totalMinor > disbursed ? totalMinor - disbursed : 0n;
+  const masked = !!opts.maskNaturalPersons && !!beneficiary && isNaturalPerson(beneficiary.type);
   return {
     id: row.id,
     grantNo: row.grantNo,
     title: row.purpose,
     granteeId: row.beneficiaryId,
-    granteeName: beneficiary?.name,
+    granteeName: masked && beneficiary ? maskPersonName(beneficiary.name) : beneficiary?.name,
+    // GAP-GRANTS-LIST-03: present on masked reads so the UI knows the name is hidden and may offer an audited reveal.
+    ...(opts.maskNaturalPersons && beneficiary ? { granteeType: beneficiary.type, granteeNameMasked: masked } : {}),
     totalAmount: minorToAmount(totalMinor),
     disbursedAmount: minorToAmount(disbursed),
     pendingAmount: minorToAmount(pendingMinor),
@@ -81,7 +85,8 @@ export async function listGrantSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "grants", `list:${limit}`),
     () => repo.listApplicationsByTenant(tenantId, limit),
   );
-  return Promise.all((rows ?? []).map(mapApplicationRow));
+  // GAP-GRANTS-LIST-03: the list is visible to every module reader, so natural-person names are masked at source.
+  return Promise.all((rows ?? []).map((row) => mapApplicationRow(row, { maskNaturalPersons: true })));
 }
 
 /**
