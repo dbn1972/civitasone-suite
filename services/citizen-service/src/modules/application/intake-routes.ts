@@ -175,7 +175,9 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(accepted);
   });
 
-  app.get("/v1/citizen/intake/track/:trackingNo", async (req, reply) => {
+  // GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-02: ownership is enforced in trackByNumber (a
+  // foreign number answers 404, same as an unknown one); this per-client budget also bounds guessing.
+  app.get("/v1/citizen/intake/track/:trackingNo", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { trackingNo } = trackingParam.parse(req.params);
@@ -194,6 +196,11 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     }
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    // @fastify/rate-limit throws its errorResponseBuilder object (statusCode 429); surface it as a 429
+    // so a throttled caller is not reported as a server fault.
+    if ((err as { statusCode?: number }).statusCode === 429) {
+      return reply.code(429).send({ code: "TOO_MANY_REQUESTS", message: "rate limit exceeded", correlationId, retryable: true });
     }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
