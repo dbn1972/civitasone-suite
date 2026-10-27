@@ -30,6 +30,18 @@ export interface TenantPlansOverview {
 
 const DAY_MS = 86_400_000;
 
+/**
+ * The web PlansData contract carries these figures as JSON numbers, so a bigint paise value is
+ * narrowed here. It throws instead of silently losing precision above 2^53 - 1 (about 9e13 rupees).
+ */
+function toSafeNumber(v: bigint | string): number {
+  const b = BigInt(v);
+  if (b > BigInt(Number.MAX_SAFE_INTEGER) || b < -BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new RangeError("money value exceeds the safe integer range");
+  }
+  return Number(b); // bigint-safe: range-checked above
+}
+
 function invoiceStatus(s: string): "paid" | "pending" | "failed" {
   if (s === "paid") return "paid";
   if (s === "cancelled" || s === "waived") return "failed";
@@ -46,12 +58,12 @@ export async function getTenantPlansOverview(tenantId: string, authorization: st
   ]);
   const limit = (planId: string, key: string): number => {
     const f = features.find((x) => x.planId === planId && x.featureKey === key);
-    return f?.limitValue == null ? 0 : Number(f.limitValue);
+    return f?.limitValue == null ? 0 : toSafeNumber(f.limitValue);
   };
   const trialEnds = sub?.status === "trial" && sub.trialExpiresAt ? Date.parse(sub.trialExpiresAt) : NaN;
   return {
     plans: (plans ?? []).map((p) => ({
-      id: p.id, name: p.name, pricePerMonth: Number(pricePerMonthMinor(BigInt(p.priceMinor), p.interval)),
+      id: p.id, name: p.name, pricePerMonth: toSafeNumber(pricePerMonthMinor(BigInt(p.priceMinor), p.interval)),
       maxUsers: limit(p.id, "max_users"), storageGb: limit(p.id, "storage_gb"), maxApiCalls: limit(p.id, "max_api_calls"),
       modules: features.filter((f) => f.planId === p.id && f.featureKey.startsWith("module:")).map((f) => f.featureKey.slice("module:".length)),
     })),
@@ -61,11 +73,11 @@ export async function getTenantPlansOverview(tenantId: string, authorization: st
       id: i.id,
       // The cache may hand back an ISO string instead of a Date; a row with no issue date falls back to its period.
       date: i.issuedAt ? new Date(i.issuedAt).toISOString() : `${i.periodMonth}-01T00:00:00.000Z`,
-      amount: Number(i.totalMinor),
+      amount: toSafeNumber(i.totalMinor),
       status: invoiceStatus(i.status),
       invoiceNumber: i.invoiceNumber,
       supplierGstin: i.supplierGstin, recipientGstin: i.recipientGstin, placeOfSupply: i.placeOfSupply,
-      cgstMinor: Number(i.cgstMinor), sgstMinor: Number(i.sgstMinor), igstMinor: Number(i.igstMinor),
+      cgstMinor: toSafeNumber(i.cgstMinor), sgstMinor: toSafeNumber(i.sgstMinor), igstMinor: toSafeNumber(i.igstMinor),
     })),
     trialDaysLeft: Number.isNaN(trialEnds) ? null : Math.max(0, Math.ceil((trialEnds - now.getTime()) / DAY_MS)),
     edition,
