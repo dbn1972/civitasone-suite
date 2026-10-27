@@ -3,15 +3,17 @@ import { fireEvent, waitFor } from "@testing-library/react";
 import { render, screen } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-vi.mock("../_data", () => ({ getLocationInfrastructureTyped: vi.fn() }));
+vi.mock("../_data", () => ({ getLocationInfrastructureTyped: vi.fn(), getAssetLinkOptions: vi.fn() }));
 const roles = vi.hoisted(() => ({ current: [] as string[] }));
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => roles.current }));
 
 import * as data from "../_data";
 import Page from "./page";
 import { InfrastructureCreateForm } from "./InfrastructureActions";
+import { InfrastructureTable } from "../_tables";
 
 const ID = "6b1a9c9e-6a53-4a51-9a40-8f7d7c1a0010";
+const ASSET = "6b1a9c9e-6a53-4a51-9a40-8f7d7c1a0099";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 let fetchMock: ReturnType<typeof vi.spyOn>;
@@ -75,6 +77,7 @@ describe("InfrastructureCreateForm (GAP-LOCATIONS-INFRASTRUCTURE-02)", () => {
 
 describe("locations/infrastructure page: the form follows the role", () => {
   beforeEach(() => {
+    vi.mocked(data.getAssetLinkOptions).mockResolvedValue({ data: [{ id: ASSET, label: "Ring Road Bridge (AST-001)" }], source: "api" });
     vi.mocked(data.getLocationInfrastructureTyped).mockResolvedValue({ data: [{ id: ID, name: "Old Bridge", type: "bridge", condition: "3/5", status: "active" }], source: "api" });
   });
   it("an asset admin sees the add form", async () => {
@@ -87,5 +90,38 @@ describe("locations/infrastructure page: the form follows the role", () => {
     render(await Page());
     expect(screen.getByText("Old Bridge")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add asset" })).toBeNull();
+  });
+});
+
+describe("asset link (GAP-LOCATIONS-INFRASTRUCTURE-06)", () => {
+  it("links a row's name to its asset record when one is recorded, plain text otherwise", () => {
+    render(
+      <InfrastructureTable
+        rows={[
+          { id: ID, name: "Linked Bridge", type: "bridge", condition: "4/5", status: "active", assetId: ASSET },
+          { id: "6b1a9c9e-6a53-4a51-9a40-8f7d7c1a0011", name: "Unlinked Road", type: "road", condition: "—", status: "active" },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Linked Bridge" }).getAttribute("href")).toBe(`/assets/${ASSET}`);
+    expect(screen.getByText("Unlinked Road").closest("a")).toBeNull();
+  });
+
+  it("sends the chosen asset id with the new asset", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { id: ID } }, 202));
+    fetchMock.mockResolvedValue(json({}, 404));
+    render(<InfrastructureCreateForm assetOptions={[{ id: ASSET, label: "Ring Road Bridge (AST-001)" }]} />);
+    fill(/^Name/, "Ring Road Bridge");
+    fill(/^Latitude/, "22.57");
+    fill(/^Longitude/, "88.36");
+    fireEvent.change(screen.getByLabelText(/Linked asset record/), { target: { value: ASSET } });
+    fireEvent.click(screen.getByRole("button", { name: "Add asset" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body)).assetId).toBe(ASSET);
+  });
+
+  it("leaves the picker out when the asset register cannot be read", () => {
+    render(<InfrastructureCreateForm assetOptions={[]} />);
+    expect(screen.queryByLabelText(/Linked asset record/)).toBeNull();
   });
 });

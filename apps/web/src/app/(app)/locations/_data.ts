@@ -106,6 +106,8 @@ export type InfrastructureRow = {
   type: string;
   condition: string;
   status: string;
+  /** Asset-register record this infrastructure asset is (GAP-LOCATIONS-INFRASTRUCTURE-06); absent = not linked. */
+  assetId?: string;
 };
 
 export type GeofenceRow = {
@@ -150,12 +152,14 @@ function mapInfrastructure(payload: unknown): InfrastructureRow[] {
   for (const [i, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
     const score = toNum(row.conditionScore);
+    const assetId = toText(row.assetId);
     out.push({
       id: toText(row.id) ?? `row-${i + 1}`,
       name: toText(row.name) ?? "—",
       type: toText(row.type) ?? "—",
       condition: score !== undefined ? `${score}/5` : "—",
       status: toText(row.status) ?? "—",
+      ...(assetId ? { assetId } : {}),
     });
   }
   return out;
@@ -287,5 +291,29 @@ export function getLocationsTyped(): Promise<LoaderResult<LocationRow[]>> {
     revalidateSeconds: 30,
     telemetryKey: "locations.list.typed",
     mapResponse: mapLocations,
+  });
+}
+
+export type AssetLinkOption = { id: string; label: string };
+
+function mapAssetOptions(payload: unknown): AssetLinkOption[] {
+  const out: AssetLinkOption[] = [];
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    const code = toText(row.code);
+    out.push({ id, label: code ? `${name} (${code})` : name });
+  }
+  return out;
+}
+
+/** Asset-register records an infrastructure asset can be linked to (GAP-LOCATIONS-INFRASTRUCTURE-06). */
+export function getAssetLinkOptions(): Promise<LoaderResult<AssetLinkOption[]>> {
+  return fetchJson<unknown, AssetLinkOption[]>("/api/v1/assets/assets?limit=200", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "locations.infrastructure.assetOptions",
+    mapResponse: mapAssetOptions,
   });
 }

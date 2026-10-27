@@ -36,6 +36,8 @@ export async function infrastructureRoutes(app: FastifyInstance): Promise<void> 
       lng: z.number().min(-180).max(180),
       capacity: z.string().min(1).max(128).optional(),
       conditionScore: z.number().int().min(1).max(5).optional(),
+      // Optional link to the asset-service register record this infrastructure asset is.
+      assetId: z.string().uuid().optional(),
     }).parse(req.body);
     const id = randomUUID();
     await queue.publish(INFRA_CREATE, {

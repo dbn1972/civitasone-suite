@@ -15,6 +15,7 @@
  * Client components (hence `render:`/cellType is allowed per
  * datatable-render-guard) so the Server pages fetch typed rows and pass them in.
  */
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../_components/ds";
 import type { InfrastructureRow, GeofenceRow, JurisdictionRow } from "./_data";
@@ -33,7 +34,12 @@ export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
       ) : (
         <DataTable<InfraRow>
           columns={[
-            { key: "name", label: t("colName") },
+            {
+              key: "name",
+              label: t("colName"),
+              // GAP-LOCATIONS-INFRASTRUCTURE-06: link to the asset-register record when one is recorded.
+              render: (row: InfraRow) => (row.assetId ? <Link href={`/assets/${encodeURIComponent(row.assetId)}`}>{row.name}</Link> : row.name),
+            },
             { key: "type", label: t("colType") },
             { key: "condition", label: t("colCondition"), align: "right" },
             { key: "status", label: t("colStatus"), cellType: "status" },

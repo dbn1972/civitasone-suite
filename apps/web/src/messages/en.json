@@ -16535,7 +16535,9 @@
       "saving": "Saving…",
       "errName": "Enter a name for the asset.",
       "errLat": "Enter a latitude between -90 and 90.",
-      "errLng": "Enter a longitude between -180 and 180."
+      "errLng": "Enter a longitude between -180 and 180.",
+      "assetLabel": "Linked asset record (optional)",
+      "assetNone": "Not linked"
     },
     "geofences": {
       "pageTitle": "Geofences",

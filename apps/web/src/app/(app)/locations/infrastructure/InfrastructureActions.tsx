@@ -3,17 +3,18 @@
 /**
  * GAP-LOCATIONS-INFRASTRUCTURE-02: add an infrastructure asset to the register. location-service exposes
  * POST /v1/locations/infrastructure (create only: there is no edit or archive endpoint for this register),
- * so this is the one in-app action. The page only renders it for roles the service lets write.
+ * so this is the one in-app action. GAP-LOCATIONS-INFRASTRUCTURE-06: an asset can be linked to its asset-register record. The page only renders it for roles the service lets write.
  */
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { AcceptedNotice, Button, Card, Field, Input, Select } from "../../../_components/ds";
 import { useRegisterWrite } from "../_useRegisterWrite";
+import type { AssetLinkOption } from "../_data";
 
 export const INFRA_TYPES = ["road", "bridge", "building", "water_supply", "drainage", "power_line", "telecom_tower", "park"] as const;
 type InfraType = (typeof INFRA_TYPES)[number];
 
-export function InfrastructureCreateForm() {
+export function InfrastructureCreateForm({ assetOptions = [] }: { assetOptions?: AssetLinkOption[] }) {
   const t = useTranslations("locationsOps.infra");
   const { request, accepted, formError } = useRegisterWrite("infrastructure asset", {
     read: (id) => `/v1/locations/infrastructure/${encodeURIComponent(id)}`,
@@ -24,6 +25,7 @@ export function InfrastructureCreateForm() {
   const [lng, setLng] = useState("");
   const [capacity, setCapacity] = useState("");
   const [condition, setCondition] = useState("");
+  const [assetId, setAssetId] = useState("");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const err = (field: string) => localErrors[field] ?? formError.fieldError(field);
@@ -46,6 +48,7 @@ export function InfrastructureCreateForm() {
         lng: lngN,
         ...(capacity.trim() ? { capacity: capacity.trim() } : {}),
         ...(condition ? { conditionScore: Number(condition) } : {}),
+        ...(assetId ? { assetId } : {}),
       }),
     );
   }
@@ -53,7 +56,7 @@ export function InfrastructureCreateForm() {
   const { phase } = accepted;
   useEffect(() => {
     if (phase === "accepted" || phase === "pending") {
-      setName(""); setLat(""); setLng(""); setCapacity(""); setCondition(""); setType("road");
+      setName(""); setLat(""); setLng(""); setCapacity(""); setCondition(""); setAssetId(""); setType("road");
     }
   }, [phase]);
 
@@ -87,6 +90,16 @@ export function InfrastructureCreateForm() {
             ))}
           </Select>
         </Field>
+        {assetOptions.length > 0 ? (
+          <Field label={t("assetLabel")} error={err("assetId")}>
+            <Select value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+              <option value="">{t("assetNone")}</option>
+              {assetOptions.map((a) => (
+                <option key={a.id} value={a.id}>{a.label}</option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         <div>
           <Button type="submit" disabled={accepted.isBusy} style={{ minHeight: 44 }}>
             {accepted.isBusy ? t("saving") : t("submit")}
