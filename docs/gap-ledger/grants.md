@@ -714,7 +714,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-INSTALLMENTS-03  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [~] **Status** (NEEDS OWNER DECISION: grantStatus field absent from GrantInstallmentSummary type; sequence check done (GAP-GRANTS-INSTALLMENTS-01/02), suspended-grant guard needs backend to add grantStatus to the installments list endpoint)
+- [x] **Status** Closed by 1cc2e44dc (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — out-of-sequence block and grantee name in dialog done, but no client check of grant status (suspended grant row still releasable) and dialog does not show the masked payee account
 - **First-pass claim:** Release is offered for every row with status "pending" (InstallmentsTable.tsx:69) irrespective of grant status (suspended/cancelled), installment sequence (#3 can be released before #2) or outstanding UC, and the dialog does not show the payee account; the irreversible transfer is one reason-string away.
 - **Verified evidence:** Confirmed: Release shown for every status==="pending" row (InstallmentsTable.tsx:69) with no client check of grant status, sequence, or UC. Correction: the dialog does name the payee (grantee name, lines 76-77) but not the account; reason is mandatory (requireReason, line 82) and a ConfirmDialog already exists via ActionButton. Maker!=checker is not applicable client-side (single-step release); server-side rules not verifiable. Whether GrantInstallmentSummary carries grant status cannot be seen (types package absent).
