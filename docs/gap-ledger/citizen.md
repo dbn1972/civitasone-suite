@@ -142,7 +142,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-05  ·  LOW  ·  partly  ·  theme SCOPE (was DEADROUTE)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — alert authoring scope unclear; backend absent)
+- [x] **Status** Closed by 2309dd0f6 (UAT B4, 2026-10-27): owner decision of 2026-10-25 puts alert authoring with officer-tier roles; the alerts page now offers New alert (draft) plus Publish / Withdraw per row to citizen_officer/citizen_admin/super_admin only, with confirmation dialogs; the service keeps enforcing maker-checker and audit.
 - **First-pass claim:** Page is read-only: no publish/draft/expire action exists in the route though the stats imply a publishing workflow (page tree has no mutation).
 - **Verified evidence:** The route is read-only: page.tsx and AlertsTable.tsx contain no POST/PATCH or link to a create/publish screen, and citizen/page.tsx only links here. But stat cards (Active/Expired/Drafts) describe state, they do not promise controls; and whether an alert-authoring UI exists elsewhere (e.g. admin/communications) was not found in citizen/*. Backend publish endpoints cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`
@@ -546,7 +546,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-05  ·  MEDIUM  ·  confirmed  ·  theme MISSINGACTION (was OTHER)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — real file upload endpoint required; JSON-only POST today DocumentPanel.tsx:37)
+- [x] **Status** Closed by a88a27a80 (UAT B4, 2026-10-27): real presign/PUT/record upload already existed (DOCUMENTS-01); each checklist row now has Upload / Re-upload (hidden once verified) using that row's docType, and the checklist refreshes after success.
 - **First-pass claim:** Checklist rows have no per-item upload/re-upload action; 'missing' items are text only (DocumentPanel.tsx:92-102).
 - **Verified evidence:** Checklist <li> rows (DocumentPanel.tsx:89-96) render status text + label only; no button. Upload requires the separate form above with hand-typed docType. Upload endpoint posts JSON only ({applicationId, serviceId, docType}, :37) - no file is actually attached (existing FileUpload.tsx in ds not used), so real upload capability cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`
@@ -1046,7 +1046,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-05  ·  LOW  ·  partly  ·  theme FEATURE (was DEADROUTE)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — no attachmentUrl/documentId in CitizenNotice and no publish/withdraw backend endpoint verified; cannot implement safely without backend contract)
+- [~] **Status** (UAT B4, 2026-10-27 PARTIAL: Draft / Publish / Withdraw built in 2309dd0f6 for officer roles with confirmation, maker-checker and audit enforced by the service. REMAINING: the View link needs an attachment/document reference on notices - NEEDS-OWNER-DECISION on how a notice attachment is stored: recommend a documentId pointing at document-service)
 - **First-pass claim:** Read-only route; no publish/withdraw action or link to the notice document (page tree has no mutation).
 - **Verified evidence:** Route is read-only: NoticesTable has no actions and CitizenNotice (_data/loaders.ts:3420-3428) has no document/url field, so no link to the notice document is possible from current data. No publish/withdraw endpoint is referenced anywhere in apps/web (grep). This is a missing feature rather than a dead route/link; backend contract cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1596,7 +1596,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme MISSING (was DATEFMT)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — expose appeal decision/hearing/outcome and transfers[] on GET /v1/citizen/rti/:id)
+- [~] **Status** (UAT B4, 2026-10-27 PARTIAL: s.6(3) transfer trail built in ebc9fcf18 - migration 0045 rti.citizen_rti_transfers, written in the transfer consumer transaction, returned as transfers[] and shown on the detail; appeal grounds were already displayed. REMAINING: appeal decision/hearing date/outcome - no command records an appeal decision today; NEEDS-OWNER-DECISION on who decides a first appeal and the outcome vocabulary)
 - **First-pass claim:** No record of first-appeal outcome, hearing or transfer history: appeals show only 'First appeal — status' and date (RTIDetailClient.tsx:250-253); the §6(3) transfer done from the list leaves no trace here.
 - **Verified evidence:** Appeals list (RTIDetailClient.tsx:250-253) prints only appealType label, a.status and createdAt. RtiAppeal (loaders.ts:136-143 mapper) has id, appealType, grounds, status, createdAt only - grounds is fetched but not displayed; no decision/hearing/outcome fields. RtiDetail (loaders.ts ~105-126) has no transfer fields, and the list's transfer POST (RTIClient.tsx:100) leaves nothing to show. Whether the API returns such data is unverifiable (rti service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`
@@ -2062,7 +2062,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — POST /v1/citizen/feedback endpoint absent from snapshot)
+- [~] **Status** (UAT B4, 2026-10-27 NEEDS-OWNER-DECISION: no POST /v1/citizen/feedback exists and the feedback page has no form; what is rated, who reads it and where it aggregates is a product choice - recommend no new endpoint: reuse the built surveys module (citizen/surveys) and point the feedback tile at open surveys)
 - **First-pass claim:** No endpoint referenced anywhere in the tree; whether a feedback API exists is undeterminable (citizen-service absent from snapshot).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['(none referenced) expected POST /v1/citizen/feedback']`
 - **Question:** Does a citizen feedback endpoint exist, with validation, rate limit and citizen ownership?
@@ -2084,7 +2084,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — active/resolved metric definitions in portal/metrics undeterminable; service absent)
+- [x] **Status** Closed by 99c759fde (UAT B4, 2026-10-27): definitions verified and pinned by tests/portal-metrics-definitions.test.ts - active = submitted + under_review + in_progress; resolved = status resolved only, in the current IST month (was UTC month: dropped the first 5.5 h of each month).
 - **First-pass claim:** Metrics come from citizen-service portal/metrics (loaders.ts:3355-3361 comment); service absent, so definitions of 'active' and 'resolved' are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/portal/metrics']`
 - **Question:** How are active and resolved defined (statuses included, time window, SLA) in portal/metrics?
@@ -2095,7 +2095,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — citizen-service RBAC for grievance list/create not verifiable; service absent)
+- [x] **Status** Closed by 7704283ae (UAT B4, 2026-10-27): citizen-service exists on main; list is scoped to the caller (foreign ?citizenId = 403), officers list tenant-wide, non-portal roles get 403, create is attributed to the caller and audited - pinned by tests/grievance-list-scope.test.ts.
 - **First-pass claim:** citizen-service is not in the snapshot (services/ = hrms-service only) — route handlers, RBAC, statuses and audit behaviour behind /api/v1/citizen/* are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET/POST /api/proxy/v1/citizen/grievances', 'GET /api/v1/crm/grievances (loader)']`
 - **Question:** What RBAC, status enum and audit apply to grievance list and create, and is list scoped to caller or department?
@@ -2139,7 +2139,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — intake tracking API design undeterminable; service absent)
+- [x] **Status** Closed by 73524b778 (UAT B4, 2026-10-27): ownership scoping was already pinned (tests/authz-counter-track-ownership.test.ts: foreign number = 404); lookups are now rate limited per client (30/min, then 429) - tests/intake-track-rate-limit.test.ts.
 - **First-pass claim:** Access control cannot be seen from the UI: the route takes only a tracking number and displays status, service and certificate state with no citizen ownership check on the client (TrackClient.tsx:27-43). Whether /intake/track/:no is scoped to the caller or enumerable is undeterminable — no citizen backend in this snapshot (DPDP).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/intake/track/:trackingNo']`
 - **Question:** Is tracking lookup scoped to the caller (or requires a secret), and are tracking numbers non-guessable and rate limited?
