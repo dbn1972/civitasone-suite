@@ -6717,6 +6717,15 @@ export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]
   });
 }
 
+/** F7: the modules a data export can actually cover (admin-service reports them from its registered exporters). */
+export async function getExportableModules(): Promise<LoaderResult<string[]>> {
+  return fetchJson<unknown, string[]>("/api/v1/admin/data-export/modules", [] as string[], {
+    revalidateSeconds: 300,
+    telemetryKey: "admin.data-export-modules",
+    mapResponse: (p) => ((getArrayPayload(p) as unknown[] | null) ?? []).filter((m): m is string => typeof m === "string"),
+  });
+}
+
 export type OrgHierarchyNode = {
   id: string;
   name: string;

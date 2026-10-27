@@ -7,6 +7,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import { exportRequests } from "./schema.js";
+import { exportableModules } from "./exporters.js";
 import { scopedRead } from "../../shared/db.js";
 import { eq, and, desc } from "drizzle-orm";
 import { presignedGetUrl, StorageNotConfiguredError } from "@civitasone/storage";
@@ -86,6 +87,13 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
       ...(body.entityId !== undefined ? { entityId: body.entityId } : {}),
     });
     return reply.code(202).send(result);
+  });
+
+  // F7: the modules an export can cover (the web dropdown lists only these).
+  app.get("/v1/admin/data-export/modules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    return reply.send({ data: exportableModules() });
   });
 
   // LIST export requests for tenant

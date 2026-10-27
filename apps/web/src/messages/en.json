@@ -16822,6 +16822,8 @@
       "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
     },
     "export": {
+      "noModules": "No module can be exported yet.",
+      "modulesError": "The list of exportable modules could not be loaded. Refresh to try again.",
       "formatCsv": "CSV (one file per entity)",
       "formatJson": "JSON (single full export)",
       "rows": "{count, plural, one {# row} other {# rows}}",

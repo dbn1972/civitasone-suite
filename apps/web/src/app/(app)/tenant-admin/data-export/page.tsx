@@ -1,9 +1,9 @@
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
-import { getDataExports } from "@/app/_data/loaders";
+import { getDataExports, getExportableModules } from "@/app/_data/loaders";
 import { DataExportClient } from "./DataExportClient";
 
 export default async function DataExportPage() {
-  const { data: exports, source } = await getDataExports();
+  const [{ data: exports, source }, { data: modules, source: modulesSource }] = await Promise.all([getDataExports(), getExportableModules()]);
   const readyCount = exports.filter((e) => e.status === "ready").length;
   const processingCount = exports.filter((e) => e.status === "processing").length;
 
@@ -35,7 +35,7 @@ export default async function DataExportPage() {
         <StatCard icon="📊" tone="neutral" label="Expired" value={exports.filter((e) => e.status === "expired").length} />
       </StatGrid>
 
-      <DataExportClient exports={exports} source={source} />
+      <DataExportClient exports={exports} source={source} modules={modules} modulesFailed={modulesSource === "error"} />
     </div>
   );
 }
