@@ -17364,6 +17364,12 @@
       "failed": "Could not be processed"
     }
   },
+  "legalCaseDetail": {
+    "privileged": "Privileged",
+    "privilegedTitle": "Confidential case: visible only to its assigned officers and the legal head.",
+    "unverifiedCourt": "Unverified court",
+    "unverifiedCourtTitle": "This court was typed in as \"Other\" and is not in the court master list."
+  },
   "legalCaseNew": {
     "advocateLabel": "Empanelled advocate",
     "advocateNone": "No advocate (use the counsel reference below)",
