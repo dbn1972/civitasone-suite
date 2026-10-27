@@ -125,14 +125,21 @@ describe("loyalty loaders — profile id is personal data (D4c #14/#15)", () => 
     meta: { total: 1 },
   });
 
-  it.each([
-    ["members", getLoyaltyMembers],
-    ["accruals", getLoyaltyAccruals],
-  ])("%s: a legacy full profileId is shortened and never kept on the row", async (_n, loader) => {
-    await loader();
+  it("members: a legacy full profileId is shortened and never kept on the row", async () => {
+    await getLoyaltyMembers();
     const out = lastCall().options.mapResponse(payload({ profileId: FULL })) as { rows: Array<Record<string, unknown>> };
     expect(out.rows[0]!.profileRef).toBe("ab12cd34");
     expect(out.rows[0]).not.toHaveProperty("profileId");
+    expect(JSON.stringify(out)).not.toContain(FULL);
+  });
+
+  // GAP-LOYALTY-ACCRUALS-01 (#2345) made accruals a points-transaction ledger that refers to the
+  // member only by enrolment. A stray profileId from the service must still never reach a row.
+  it("accruals: a stray full profileId is dropped and never kept on the row", async () => {
+    await getLoyaltyAccruals();
+    const out = lastCall().options.mapResponse(payload({ profileId: FULL })) as { rows: Array<Record<string, unknown>> };
+    expect(out.rows[0]).not.toHaveProperty("profileId");
+    expect(out.rows[0]).not.toHaveProperty("profileRef");
     expect(JSON.stringify(out)).not.toContain(FULL);
   });
 
