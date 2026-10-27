@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { render, screen } from "@/test-utils/intl-render";
 
@@ -16,7 +16,7 @@ const ID = "6b1a9c9e-6a53-4a51-9a40-8f7d7c1a0010";
 const ASSET = "6b1a9c9e-6a53-4a51-9a40-8f7d7c1a0099";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-let fetchMock: ReturnType<typeof vi.spyOn>;
+let fetchMock: MockInstance<typeof fetch>;
 beforeEach(() => { fetchMock = vi.spyOn(globalThis, "fetch"); });
 afterEach(() => vi.restoreAllMocks());
 const fill = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });

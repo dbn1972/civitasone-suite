@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { render, screen } from "@/test-utils/intl-render";
 
@@ -19,7 +19,7 @@ const offices = [{ id: OFFICE, label: "DM Office" }];
 const units = [{ id: UNIT, label: "Sadar Block" }];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-let fetchMock: ReturnType<typeof vi.spyOn>;
+let fetchMock: MockInstance<typeof fetch>;
 beforeEach(() => { fetchMock = vi.spyOn(globalThis, "fetch"); });
 afterEach(() => vi.restoreAllMocks());
 
