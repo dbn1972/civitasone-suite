@@ -2095,7 +2095,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — citizen-service RBAC for grievance list/create not verifiable; service absent)
+- [x] **Status** Closed (UAT B4, 2026-10-27): citizen-service exists on main; list is scoped to the caller (foreign ?citizenId = 403), officers list tenant-wide, non-portal roles get 403, create is attributed to the caller and audited - pinned by tests/grievance-list-scope.test.ts.
 - **First-pass claim:** citizen-service is not in the snapshot (services/ = hrms-service only) — route handlers, RBAC, statuses and audit behaviour behind /api/v1/citizen/* are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET/POST /api/proxy/v1/citizen/grievances', 'GET /api/v1/crm/grievances (loader)']`
 - **Question:** What RBAC, status enum and audit apply to grievance list and create, and is list scoped to caller or department?
