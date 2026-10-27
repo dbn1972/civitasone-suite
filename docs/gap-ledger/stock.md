@@ -694,7 +694,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 stock: backend verified; entry consumer audit() emits {service,action,resourceType,resourceId,outcome} only — reason/notes are NOT included. Structured reason field absent from POST validator. NEEDS OWNER DECISION: add reason to audit payload + validator)
+- [x] **Status** Closed by 8bd087de1 (UAT B4, 2026-10-27): structured optional reason accepted by POST /v1/stock/entries, stored (migration 0013) and carried in the stock_entry audit event; not mandatory for adjustments so existing callers keep working
 - **First-pass claim:** The audit reason is folded into the free-text notes as 'Reason: …' (page.tsx:79-82) instead of a structured field; whether the server emits a proper audit event with it is undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/stock/entries']`
 - **Question:** Does stock-service accept a structured reason field and emit an audit event containing it, rather than parsing 'Reason:' from notes?
