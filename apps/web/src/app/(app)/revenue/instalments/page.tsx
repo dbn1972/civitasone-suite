@@ -1,7 +1,7 @@
 import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
 import Link from "next/link";
 import { CreateInstalmentPlanForm } from "./CreateInstalmentPlanForm";
 
@@ -233,7 +233,7 @@ export default async function InstalmentsPage(
                 <strong>{formatMoney(p.totalMinor)}</strong>
                 <span>{p.instalmentCount} instalments from {formatIndianDate(p.startDate)}</span>
                 <Link href={`/revenue/instalments/${p.id}`} className="link">
-                  Review {p.id.slice(0, 8)}
+                  Review {formatShortId(p.id)}
                 </Link>
               </li>
             ))}

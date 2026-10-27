@@ -1,4 +1,5 @@
 import { browserJson } from "@/lib/api/browserClient";
+import { formatShortId } from "@/lib/formatters";
 
 export type ConfigKind = "rate_head" | "rate_slab" | "penalty_rule" | "rebate_rule";
 export type ConfigAction = "create" | "revise" | "end_date";
@@ -26,5 +27,5 @@ export async function proposeConfig(input: {
 
 /** Success copy shared by the propose forms. */
 export function proposedMessage(noun: string, id: string | null): string {
-  return `${noun} submitted for approval${id ? ` (proposal ${id.slice(0, 8)})` : ""}. Nothing changes until a different officer approves it — see "Awaiting approval" above.`;
+  return `${noun} submitted for approval${id ? ` (proposal ${formatShortId(id)})` : ""}. Nothing changes until a different officer approves it — see "Awaiting approval" above.`;
 }
