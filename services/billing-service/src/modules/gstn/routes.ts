@@ -17,6 +17,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { prepareReturn } from "./prepare.js";
 import {
   submitGstReturn,
   verifyGstin,
@@ -97,6 +98,11 @@ const returnListQuery = z.object({
   period: z.string().regex(/^(0[1-9]|1[0-2])\/\d{4}$/).optional(),
   returnType: z.enum(["GSTR1", "GSTR3B", "GSTR9", "GSTR9C"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+const prepareQuery = z.object({
+  gstin: z.string().length(15),
+  period: z.string().regex(/^(0[1-9]|1[0-2])\/\d{4}$/),
 });
 
 const returnRefParam = z.object({
@@ -270,6 +276,23 @@ export async function gstnRoutes(app: FastifyInstance): Promise<void> {
       const { code, body: errorBody } = handleAdapterError(err, req.id);
       return reply.code(code).send(errorBody);
     }
+  });
+
+  /**
+   * GET /v1/billing/gstn/returns/prepare?gstin=&period=MM/YYYY
+   *
+   * GAP-BILLING-GSTN-03: totals computed from the caller's own issued invoices for the supplier
+   * GSTIN and IST month, for prefill + variance reconciliation in the console. Local data only,
+   * read-only. Registered before the `/returns/:ref/status` route; the paths do not collide.
+   */
+  app.get("/v1/billing/gstn/returns/prepare", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    const parsed = prepareQuery.safeParse(req.query);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".") || "query"}: ${i.message}`).join("; "));
+    }
+    return reply.send({ data: await prepareReturn(ctx.tenantId, parsed.data.gstin, parsed.data.period) });
   });
 
   /**

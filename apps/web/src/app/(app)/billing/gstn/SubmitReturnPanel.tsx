@@ -3,10 +3,10 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
 import type { PillVariant } from "@/app/_components/ds/StatusPill";
-import { browserFetch, browserJson } from "@/lib/api/browserClient";
+import { browserFetch, browserJson, errorMessageFromResponse } from "@/lib/api/browserClient";
 import type { FiledReturn } from "./FilingHistoryPanel";
 import { formatMoney } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
+import { rupeesToMinorString, minorToDecimalString } from "@/lib/money";
 import { isValidGstin } from "@/lib/gstin";
 
 const RETURN_TYPES = ["GSTR1", "GSTR3B", "GSTR9", "GSTR9C"] as const;
@@ -29,6 +29,26 @@ const PERIOD_RE = /^\d{2}\/\d{4}$/;
 // A clerk types rupees with up to 2 decimals; rupeesToMinorString does the
 // float-free paise conversion. Reject >2 decimals etc. there.
 const RUPEE_INPUT_RE = /^\d+(\.\d{1,2})?$/;
+
+/** GAP-BILLING-GSTN-03: server-computed totals from the officer's own issued invoices (paise strings). */
+interface ReturnPreparation {
+  gstin: string;
+  period: string;
+  invoiceCount: number;
+  totalTaxableMinor: string;
+  totalCgstMinor: string;
+  totalSgstMinor: string;
+  totalIgstMinor: string;
+  unsplitTaxMinor: string;
+  unsplitTaxInvoiceCount: number;
+}
+
+const PREPARED_MINOR: Record<string, keyof ReturnPreparation> = {
+  totalTaxableValue: "totalTaxableMinor",
+  totalCgst: "totalCgstMinor",
+  totalSgst: "totalSgstMinor",
+  totalIgst: "totalIgstMinor",
+};
 
 const MONEY_FIELDS = [
   { key: "totalTaxableValue", label: "Total Taxable Value (₹)" },
@@ -64,6 +84,14 @@ export function SubmitReturnPanel({
   const [copied, setCopied] = useState(false);
   // GAP-BILLING-GSTN-05: returns already filed for this GSTIN + period + type (not rejected).
   const [duplicates, setDuplicates] = useState<FiledReturn[]>([]);
+  // GAP-BILLING-GSTN-03: invoice-derived totals for the GSTIN + period they were fetched for.
+  const [prepared, setPrepared] = useState<ReturnPreparation | null>(null);
+  const [prepareBusy, setPrepareBusy] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  // The variance signature the officer has explicitly acknowledged; any change to the typed
+  // totals or the invoice totals changes the signature and invalidates the acknowledgement.
+  const [ackedSig, setAckedSig] = useState<string>("");
+  const ackRef = useRef<HTMLInputElement>(null);
 
   const idempotencyKeyRef = useRef<string | null>(null);
 
@@ -78,6 +106,55 @@ export function SubmitReturnPanel({
     for (const f of MONEY_FIELDS) out[f.key] = money[f.key] ? rupeesToMinorString(money[f.key], { allowZero: true }) : null;
     return out;
   }, [money]);
+
+  // Only compare against invoice totals that were fetched for what is typed now.
+  const activePrepared = prepared && prepared.gstin === gstin && prepared.period === returnPeriod ? prepared : null;
+  const variance = useMemo(() => {
+    if (!activePrepared) return [] as Array<{ key: string; label: string; typed: string | null; invoices: string }>;
+    return MONEY_FIELDS.flatMap((f) => {
+      const invoices = activePrepared[PREPARED_MINOR[f.key]] as string;
+      const typed = paise[f.key] ?? null;
+      return typed !== null && typed === invoices ? [] : [{ key: f.key, label: f.label.replace(" (₹)", ""), typed, invoices }];
+    });
+  }, [activePrepared, paise]);
+  const varianceSig = variance.map((v) => `${v.key}:${v.typed ?? "-"}:${v.invoices}`).join("|");
+
+  async function prefillFromInvoices() {
+    setPrepareError(null);
+    const errors: Record<string, string> = {};
+    if (!isValidGstin(gstin)) errors.gstin = "Enter a valid 15-character GSTIN (checksum must match, e.g. 27AAPFU0939F1ZV).";
+    if (!PERIOD_RE.test(returnPeriod)) errors.returnPeriod = "Enter the return period as MM/YYYY, e.g. 04/2026.";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }));
+      return;
+    }
+    setPrepareBusy(true);
+    try {
+      const res = await browserFetch(`v1/billing/gstn/returns/prepare?gstin=${encodeURIComponent(gstin)}&period=${encodeURIComponent(returnPeriod)}`);
+      if (!res.ok) {
+        setPrepareError(await errorMessageFromResponse(res));
+        return;
+      }
+      const body = (await res.json()) as { data?: ReturnPreparation };
+      const d = body.data;
+      if (!d) {
+        setPrepareError("Could not read the invoice totals. Please try again.");
+        return;
+      }
+      setPrepared(d);
+      setMoney({
+        totalTaxableValue: minorToDecimalString(d.totalTaxableMinor) ?? "",
+        totalCgst: minorToDecimalString(d.totalCgstMinor) ?? "",
+        totalSgst: minorToDecimalString(d.totalSgstMinor) ?? "",
+        totalIgst: minorToDecimalString(d.totalIgstMinor) ?? "",
+      });
+      setFieldErrors({});
+    } catch (err) {
+      setPrepareError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } finally {
+      setPrepareBusy(false);
+    }
+  }
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
@@ -112,7 +189,15 @@ export function SubmitReturnPanel({
     setSubmitError(null);
     setResult(null);
     const errors = validate();
+    // GAP-BILLING-GSTN-03: filing totals that differ from the invoice totals needs an explicit acknowledgement.
+    if (Object.keys(errors).length === 0 && variance.length > 0 && ackedSig !== varianceSig) {
+      errors.variance = "These totals differ from your issued invoices. Tick the box to confirm the difference is intended.";
+    }
     setFieldErrors(errors);
+    if (errors.variance && Object.keys(errors).length === 1) {
+      ackRef.current?.focus();
+      return;
+    }
     if (Object.keys(errors).length > 0) return;
     setDuplicates(await findDuplicates());
     // Open the confirm/review step; nothing is filed until the user confirms.
@@ -258,6 +343,50 @@ export function SubmitReturnPanel({
         );
       })}
 
+      {/* GAP-BILLING-GSTN-03: prefill from the officer's own issued invoices, then reconcile. */}
+      <div style={{ display: "grid", gap: 8 }}>
+        <div>
+          <Button type="button" variant="ghost" onClick={() => void prefillFromInvoices()} disabled={prepareBusy || disabled}>
+            {prepareBusy ? "Fetching invoice totals…" : "Prefill from invoices"}
+          </Button>
+        </div>
+        {prepareError && <p role="alert" className="pill bad" style={{ width: "fit-content", margin: 0 }}>{prepareError}</p>}
+        {activePrepared && (
+          <div role="status" style={{ display: "grid", gap: 4, fontSize: 12.5, color: "var(--ink2)" }}>
+            <span>
+              Invoice totals for {activePrepared.period}: {activePrepared.invoiceCount} issued invoice{activePrepared.invoiceCount === 1 ? "" : "s"}.
+            </span>
+            {BigInt(activePrepared.unsplitTaxMinor) > 0n && (
+              <span>
+                {activePrepared.unsplitTaxInvoiceCount} invoice{activePrepared.unsplitTaxInvoiceCount === 1 ? " has" : "s have"} tax of{" "}
+                {formatMoney(activePrepared.unsplitTaxMinor)} with no CGST/SGST/IGST split; it is not in the CGST, SGST or IGST totals.
+              </span>
+            )}
+          </div>
+        )}
+        {variance.length > 0 && (
+          <div role="alert" className="pill warn" style={{ display: "grid", gap: 4, width: "fit-content", margin: 0 }}>
+            <strong>Differs from invoices</strong>
+            {variance.map((v) => (
+              <span key={v.key}>{v.label}: entered {v.typed !== null ? formatMoney(v.typed) : "—"}, invoices {formatMoney(v.invoices)}</span>
+            ))}
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5 }}>
+              <input
+                ref={ackRef}
+                type="checkbox"
+                checked={ackedSig === varianceSig}
+                onChange={(e) => setAckedSig(e.target.checked ? varianceSig : "")}
+                aria-describedby={fieldErrors.variance ? `${baseId}-variance-error` : undefined}
+              />
+              <span>I have checked the difference and want to file these totals.</span>
+            </label>
+            {fieldErrors.variance && (
+              <span id={`${baseId}-variance-error`} role="alert" style={{ color: "var(--bad)" }}>{fieldErrors.variance}</span>
+            )}
+          </div>
+        )}
+      </div>
+
       <div>
         <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || disabled}>
           Submit Return
@@ -265,11 +394,11 @@ export function SubmitReturnPanel({
       </div>
 
       {/* GAP-BILLING-GSTN-03: these totals are hand-keyed and are NOT reconciled
-          against this office's billing invoices/ledger — be explicit so an
-          officer doesn't assume the figures were derived or cross-checked.
-          Prefill-from-invoices + variance reconciliation needs a backend
-          return-preparation endpoint (keyed by buyer GSTIN + period, which the
-          invoice records don't yet carry); flagged for finance/tax sign-off. */}
+          against this office's billing invoices/ledger unless the officer uses
+          "Prefill from invoices" (UAT B4: backend return-preparation endpoint
+          GET v1/billing/gstn/returns/prepare), which then reconciles the typed
+          totals against the invoice totals and requires an acknowledgement of
+          any variance. */}
       <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }} role="note">
         These amounts are entered by you and are not automatically checked against your billing
         invoices or ledger. Verify them before filing.

@@ -364,4 +364,96 @@ describe("GstnConsole", () => {
       expect(screen.queryByText(/was already filed for this GSTIN/)).not.toBeInTheDocument();
     });
   });
+
+  // GAP-BILLING-GSTN-03 (UAT B4): prefill from invoices + variance reconciliation.
+  describe("prefill from invoices (GAP-BILLING-GSTN-03)", () => {
+    const prep = {
+      gstin: VALID_GSTIN, period: "04/2026", invoiceCount: 3,
+      totalTaxableMinor: "1250000000", totalCgstMinor: "112500000", totalSgstMinor: "112500000", totalIgstMinor: "0",
+      unsplitTaxMinor: "0", unsplitTaxInvoiceCount: 0,
+    };
+    function serve(data: unknown = prep) {
+      return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes("returns/prepare")) return new Response(JSON.stringify({ data }), { status: 200 });
+        if (url.includes("v1/billing/gstn/returns?")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        return new Response(JSON.stringify({ data: { referenceId: "ref-p", status: "submitted", gstin: VALID_GSTIN, returnPeriod: "04/2026", submittedAt: "x" } }), { status: 201 });
+      });
+    }
+    function typeGstinAndPeriod() {
+      const p = within(submitPanel());
+      fireEvent.change(p.getByLabelText(/^GSTIN/), { target: { value: VALID_GSTIN } });
+      fireEvent.change(p.getByLabelText(/^Return Period/), { target: { value: "04/2026" } });
+    }
+
+    it("fills the four totals from the invoice totals (paise -> rupees) and shows the invoice count", async () => {
+      serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total Taxable Value/) as HTMLInputElement).value).toBe("12500000.00"));
+      expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00");
+      expect((within(submitPanel()).getByLabelText(/^Total IGST/) as HTMLInputElement).value).toBe("0.00");
+      expect(screen.getByText(/3 issued invoices/)).toBeInTheDocument();
+      expect(screen.queryByText("Differs from invoices")).not.toBeInTheDocument();
+    });
+
+    it("needs a valid GSTIN and period first and calls nothing otherwise", () => {
+      const spy = serve();
+      render(<GstnConsole />);
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      expect(within(submitPanel()).getByText(/Enter a valid 15-character GSTIN/)).toBeInTheDocument();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("editing a prefilled total shows the variance and filing needs the acknowledgement", async () => {
+      const spy = serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00"));
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "1000000" } });
+      expect(screen.getByText("Differs from invoices")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/Tick the box to confirm the difference/)).toBeInTheDocument());
+      expect(screen.queryByText(/File GSTR1 for 04\/2026\?/)).not.toBeInTheDocument();
+      expect(filings(spy)).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole("checkbox", { name: /I have checked the difference/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/File GSTR1 for 04\/2026\?/)).toBeInTheDocument());
+    });
+
+    it("changing the totals again after acknowledging requires a fresh acknowledgement", async () => {
+      serve();
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("1125000.00"));
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "1000000" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: /I have checked the difference/ }));
+      expect(screen.getByRole("checkbox", { name: /I have checked the difference/ })).toBeChecked();
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "999999" } });
+      expect(screen.getByRole("checkbox", { name: /I have checked the difference/ })).not.toBeChecked();
+    });
+
+    it("reports invoices whose tax has no CGST/SGST/IGST split instead of hiding them", async () => {
+      serve({ ...prep, unsplitTaxMinor: "18000", unsplitTaxInvoiceCount: 2 });
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect(screen.getByText(/2 invoices have tax of/)).toBeInTheDocument());
+    });
+
+    it("a failed prefill is an error and leaves the typed totals alone", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ message: "nope" }), { status: 500 }));
+      render(<GstnConsole />);
+      typeGstinAndPeriod();
+      fireEvent.change(within(submitPanel()).getByLabelText(/^Total CGST/), { target: { value: "5" } });
+      fireEvent.click(screen.getByRole("button", { name: "Prefill from invoices" }));
+      await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
+      expect((within(submitPanel()).getByLabelText(/^Total CGST/) as HTMLInputElement).value).toBe("5");
+    });
+  });
 });
