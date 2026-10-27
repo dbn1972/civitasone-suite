@@ -27,6 +27,8 @@ import { asUserUuid, loadConsentSignals } from "./consent-gate-io.js";
 import { fetchMarketingConsent, type ConsentLookup } from "./crm-consent-client.js";
 import { syncCampaignRecipientOutcome } from "../bulk/repo.js";
 import { requiresDlt, checkDlt } from "../dlt/guard.js";
+import { deskFor } from "./role-recipients.js";
+import { fanOutToDesk } from "./role-fanout.js";
 import { checkQuota } from "../channels/quota-guard.js";
 import * as quotaRepo from "../channels/quota-repo.js";
 
@@ -103,6 +105,15 @@ export function registerDeliveryConsumers(q: Queue): void {
 
 async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
   const p = msg.payload;
+
+  // notify-roles: a desk / role recipient ("security_control_room", "all_users", ...) is not a user.
+  // Expand it into one send per real user BEFORE any channel logic, so each user's own preferences,
+  // suppression, DND and consent apply. See role-recipients.ts for the desk -> role map.
+  const desk = deskFor(p.recipient ?? p.recipientId);
+  if (desk) {
+    await fanOutToDesk(msg as CommandEnvelope<Record<string, unknown>>, desk.desk, desk.def);
+    return;
+  }
   const deliveryId = p.deliveryId ?? randomUUID();
   const retryCount = p.retryCount ?? 0;
 
