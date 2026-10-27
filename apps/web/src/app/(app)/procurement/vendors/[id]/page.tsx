@@ -2,10 +2,12 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
 import { maskPan, maskPhone, maskEmail } from "../../../../_components/ds/Masked";
-import { getProcurementVendorById, getProcurementPOs } from "../../../../_data/loaders";
+import { getProcurementVendorById, getProcurementPOs, getProcurementGRNs, getVendorEmd, getVendorPbg } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { VendorActions } from "./VendorActions";
 import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
+import { VendorGrnsTable, VendorSecuritiesTable } from "./VendorHistoryTables";
+import { GRN_STATUS_LABELS } from "../../grn/statusLabels";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
@@ -46,6 +48,7 @@ const EXPIRY_WARN_DAYS = 30;
 // admins and auditors only.
 const VENDOR_REVEAL_PATH = "v1/procurement/pii/reveal";
 const VENDOR_PAN_REVEAL_ROLES = ["procurement_admin", "super_admin", "audit_officer"];
+const GRN_HISTORY_LIMIT = 50;
 
 export default async function VendorDetailPage(
   props: { params: Promise<{ id: string }>; searchParams?: Promise<{ registered?: string }> }
@@ -56,9 +59,12 @@ export default async function VendorDetailPage(
   // GAP-PROCUREMENT-VENDORS-DETAIL-04: the vendor's own purchase orders, fetched
   // alongside the profile. Each section reports its own failure - an error is
   // never rendered as "no orders".
-  const [{ data: vendor, source }, orders] = await Promise.all([
+  const [{ data: vendor, source }, orders, grns, emd, pbg] = await Promise.all([
     getProcurementVendorById(params.id),
     getProcurementPOs({ vendorId: params.id, limit: 50 }),
+    getProcurementGRNs({ vendorId: params.id, limit: GRN_HISTORY_LIMIT }),
+    getVendorEmd(params.id),
+    getVendorPbg(params.id),
   ]);
 
   if (!vendor) {
@@ -218,9 +224,8 @@ export default async function VendorDetailPage(
         </div>
       </Card>
 
-      {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: orders history. GRNs, contracts and EMD/BG
-          are still reached from their own registers (they need a vendor filter
-          on their list endpoints). */}
+      {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: orders, GRN and EMD/BG history, each filtered by vendor on the
+          server and each reporting its own failure - an error is never rendered as "none". */}
       <Card title={t("ordersTitle")} padding>
         {orders.source === "error" ? (
           <ErrorState error={toHumanError("load", { area: "vendor orders" })} backHref={`/procurement/vendors/${vendor.id}`} />
@@ -234,6 +239,52 @@ export default async function VendorDetailPage(
               orderDateDisplay: po.orderDate ? formatIndianDate(po.orderDate) : "—",
               status: po.status,
               amountDisplay: formatMoney(po.amount),
+            }))}
+          />
+        )}
+      </Card>
+
+      <Card title={t("grnsTitle")} padding>
+        {grns.source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor goods receipts" })} backHref={`/procurement/vendors/${vendor.id}`} />
+        ) : grns.data.length === 0 ? (
+          <EmptyState icon="📦" title={t("noGrns")} message={t("noGrnsHint")} />
+        ) : (
+          <>
+            <VendorGrnsTable
+              rows={grns.data.map((g) => ({
+                id: g.id,
+                grnNo: g.grnNo,
+                receivedDisplay: g.receivedDate ? formatIndianDate(g.receivedDate) : "—",
+                status: g.status,
+                statusLabel: GRN_STATUS_LABELS[g.status] ?? g.status.replace(/_/g, " "),
+              }))}
+            />
+            {grns.data.length >= GRN_HISTORY_LIMIT ? (
+              <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "10px 0 0" }}>
+                {t("grnsShowingFirst", { count: GRN_HISTORY_LIMIT })}{" "}
+                <Link href="/procurement/grn">{t("viewAllGrns")}</Link>
+              </p>
+            ) : null}
+          </>
+        )}
+      </Card>
+
+      <Card title={t("securitiesTitle")} padding>
+        {emd.source === "error" || pbg.source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor EMD and bank guarantees" })} backHref={`/procurement/vendors/${vendor.id}`} />
+        ) : emd.data.length + pbg.data.length === 0 ? (
+          <EmptyState icon="🛡️" title={t("noSecurities")} message={t("noSecuritiesHint")} />
+        ) : (
+          <VendorSecuritiesTable
+            rows={[...emd.data, ...pbg.data].map((r) => ({
+              id: `${r.kind}-${r.id}`,
+              kind: r.kind,
+              ref: r.ref,
+              instrument: r.instrument,
+              amountDisplay: formatMoney(r.amountMinor),
+              validUntilDisplay: r.validUntil ? formatIndianDate(r.validUntil) : "—",
+              status: r.status,
             }))}
           />
         )}

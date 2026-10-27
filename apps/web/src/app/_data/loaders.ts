@@ -3819,8 +3819,17 @@ export type EmdBgEntry = {
   status: string;
 };
 
-export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
-  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/emd", [], {
+/** GAP-PROCUREMENT-VENDORS-DETAIL-04: optional `vendorId` restricts the register to one vendor, server-side. */
+function securityListPath(base: string, query?: { vendorId?: string; limit?: number }): string {
+  const params = new URLSearchParams();
+  if (query?.limit != null) params.set("limit", String(query.limit));
+  if (query?.vendorId) params.set("vendorId", query.vendorId);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export async function getProcurementEMD(query?: { vendorId?: string; limit?: number }): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/emd", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.emd_bg",
     mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
@@ -3828,11 +3837,65 @@ export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
 }
 
 /** Performance security (bank guarantees) — same register the EMD & BG page renders alongside EMD entries. */
-export async function getProcurementPBG(): Promise<LoaderResult<EmdBgEntry[]>> {
-  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/pbg", [], {
+export async function getProcurementPBG(query?: { vendorId?: string; limit?: number }): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/pbg", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.pbg",
     mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+  });
+}
+
+/**
+ * GAP-PROCUREMENT-VENDORS-DETAIL-04: one EMD or bank guarantee held for a vendor,
+ * read from the raw register payload (emdNo/pbgNo, instrument, amountMinor,
+ * status, validUntil), restricted to that vendor SERVER-side.
+ */
+export type VendorSecurityRow = {
+  id: string;
+  kind: "EMD" | "PBG";
+  ref: string;
+  instrument: string;
+  amountMinor: string;
+  status: string;
+  validUntil?: string;
+};
+
+function mapVendorSecurities(kind: "EMD" | "PBG") {
+  return (payload: unknown): VendorSecurityRow[] | null => {
+    const rows = getArrayPayload(payload);
+    if (!rows) return null;
+    const out: VendorSecurityRow[] = [];
+    for (const r of rows) {
+      if (!isRecord(r)) continue;
+      const id = toText(r.id);
+      if (!id) continue;
+      out.push({
+        id,
+        kind,
+        ref: toText(kind === "EMD" ? r.emdNo : r.pbgNo) ?? id,
+        instrument: toText(r.instrument) ?? "—",
+        amountMinor: toText(r.amountMinor) ?? "",
+        status: toText(r.status) ?? "—",
+        ...(toText(r.validUntil) ? { validUntil: toText(r.validUntil) as string } : {}),
+      });
+    }
+    return out;
+  };
+}
+
+export async function getVendorEmd(vendorId: string, limit = 50): Promise<LoaderResult<VendorSecurityRow[]>> {
+  return fetchJson<unknown, VendorSecurityRow[]>(securityListPath("/api/v1/procurement/emd", { vendorId, limit }), [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.vendor.emd",
+    mapResponse: mapVendorSecurities("EMD"),
+  });
+}
+
+export async function getVendorPbg(vendorId: string, limit = 50): Promise<LoaderResult<VendorSecurityRow[]>> {
+  return fetchJson<unknown, VendorSecurityRow[]>(securityListPath("/api/v1/procurement/pbg", { vendorId, limit }), [], {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.vendor.pbg",
+    mapResponse: mapVendorSecurities("PBG"),
   });
 }
 
