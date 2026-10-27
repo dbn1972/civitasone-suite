@@ -3,7 +3,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as catalogueRepo from "../catalogue/repo.js";
 import * as packRepo from "./repo.js";
 import { applyManifestToDefinition } from "./manifest-apply.js";
@@ -105,6 +105,8 @@ export function registerPacksConsumers(rawQueue: Queue): void {
       domainPackId?: string;
       packKeys?: string[];
       drafts?: ImportDraftPayload[];
+      /** Install-service stage row that tracks this activation; echoed on the completion event. */
+      stageId?: string;
     };
 
     let drafts = p.drafts ?? [];
@@ -137,6 +139,24 @@ export function registerPacksConsumers(rawQueue: Queue): void {
           service: "citizen", action: "domain_pack_activate", resourceType: "domain_pack",
           resourceId: domainPackId, outcome: imported.length > 0 ? "success" : "noop",
           domainPackKey: p.domainPackKey, draftIds: imported, packCount: imported.length,
+        },
+      });
+
+      // Owner decision #28: close the fire-and-forget loop. install-service consumes this event
+      // to mark its Stage 3 row completed/failed and to keep the durable per-tenant activation
+      // record. Same transaction as the import, so "drafts committed" and "event will be
+      // delivered" can never disagree. The activation id is the command's messageId (install
+      // publishes it as the command id), so a redelivered command cannot emit a second event.
+      await enqueue(tx, {
+        topic: EVENTS.packDomainActivated, eventType: EVENTS.packDomainActivated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          activationId: msg.messageId,
+          stageId: p.stageId ?? null,
+          domainPackKey: p.domainPackKey,
+          outcome: imported.length > 0 ? "completed" : "failed",
+          ...(imported.length > 0 ? {} : { reason: "no_drafts_imported" }),
+          draftIds: imported,
         },
       });
     });

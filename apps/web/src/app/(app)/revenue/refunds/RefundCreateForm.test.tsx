@@ -111,4 +111,40 @@ describe("RefundCreateForm", () => {
     expect(option).toBeDisabled();
     expect(option.textContent).toMatch(/already refunded/i);
   });
+
+  // Owner decision #1 (2026-10-26): partial refunds; amount optional, never above the receipt.
+  it("sends an optional partial amountMinor and refuses an amount above the receipt (owner decision #1)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "refund-1" }), { status: 202 }),
+    );
+    render(<RefundCreateForm assesseeId="a1" receipts={receipts} />);
+    fillValidForm();
+
+    fireEvent.change(screen.getByLabelText(/^Refund amount/), { target: { value: "6000.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Refund" }));
+    expect(screen.getByText(/cannot exceed the receipt/i)).toBeInTheDocument();
+    expect(screen.queryByText("Raise this refund?")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Refund amount/), { target: { value: "1000.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Refund" }));
+    await waitFor(() => expect(screen.getByText("Raise this refund?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise refund"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.amountMinor).toBe("100050");
+  });
+
+  it("leaves amountMinor out when the amount field is blank (full refund stays default)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "refund-1" }), { status: 202 }),
+    );
+    render(<RefundCreateForm assesseeId="a1" receipts={receipts} />);
+    fillValidForm();
+    fireEvent.click(screen.getByRole("button", { name: "Raise Refund" }));
+    await waitFor(() => expect(screen.getByText("Raise this refund?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise refund"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.amountMinor).toBeUndefined();
+  });
 });

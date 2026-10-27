@@ -126,4 +126,12 @@ describe("WriteOffDecidePage", () => {
     expect(screen.getByRole("button", { name: /Approve write-off/ })).toBeDisabled();
     expect(screen.queryByText(/₹/)).not.toBeInTheDocument();
   });
+
+  it("flags a write-off with no demand as 'legacy, not linked' instead of implying a live one (owner decision #6)", async () => {
+    routeFetchJson({ writeOff: { data: makeWriteOff({ demandId: null, financialYear: null, legacyUnlinked: true }), source: "api" } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
+    render(ui);
+    expect(screen.getByText(/legacy, not linked/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Against the assessee/)).not.toBeInTheDocument();
+  });
 });

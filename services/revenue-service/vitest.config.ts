@@ -16,6 +16,11 @@ export default defineConfig({
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
               );
             })()),
+      // Owner decision #2: the legacy direct-write rate-config routes are closed by default
+      // (409 RATE_CONFIG_REQUIRES_APPROVAL). The pre-existing route/consumer tests exercise
+      // them as fixtures, so this suite re-opens them; rate-config-proposals.test.ts unsets it
+      // to prove the default is closed.
+      RATE_CONFIG_DIRECT_WRITE_ENABLED: "true",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

@@ -10,10 +10,12 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { renderInvoicePdf } from "./pdf.js";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
 const BILLING_ROLES = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
+const PDF_STATUSES = new Set(["issued", "partially_paid", "paid", "overdue"]);
 
 export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
   // Legacy: auto-generate a usage bill from plan + usage.
@@ -31,7 +33,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const body = createInvoiceBody.parse(req.body);
     if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice creation is not permitted");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items, body.gst));
   });
 
   // Request issue (maker step; maker-checker routes value-significant bills to approval).
@@ -85,6 +87,26 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const detail = await queries.getInvoiceDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "invoice not found");
     return reply.send(detail);
+  });
+
+  // Owner decision #27 (GAP-TENANT-ADMIN-SUBSCRIPTION-04): the invoice as a PDF. Same readers and
+  // tenant scoping as the detail above; another tenant's invoice is a 404. A tax invoice exists
+  // only once issued, so a draft or cancelled bill is a 409 rather than a misleading document.
+  app.get("/v1/billing/invoices/:id/pdf", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    const { id } = idParam.parse(req.params);
+    const detail = await queries.getInvoiceDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "invoice not found");
+    if (!PDF_STATUSES.has(detail.status)) {
+      throw new DomainError("INVOICE_NOT_ISSUED", `a tax invoice PDF is available once the bill is issued (status: ${detail.status})`);
+    }
+    const bytes = await renderInvoicePdf(detail);
+    return reply
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="${detail.invoiceNumber}.pdf"`)
+      .header("cache-control", "private, no-store")
+      .send(Buffer.from(bytes));
   });
 
   // Read model: tenant outstanding aggregate.

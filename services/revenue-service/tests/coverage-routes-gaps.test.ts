@@ -26,6 +26,10 @@ vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/modules/bbps/repo.js")>();
   return {
     ...original,
+    // Owner decision #7: pay-bill resolves a server-issued bill token to the bill (assessee + amount).
+    findBillByToken: vi.fn(async () => ({
+      identifierNo: "PROP-001", amountMinor: 200000n, billExpiresAt: new Date(Date.now() + 600_000), billConsumedAt: null,
+    })),
     getDcbOutstanding: vi.fn(async (_tenantId: string, identifier: string) => {
       if (identifier.startsWith("UNKNOWN")) return null;
       return {
@@ -215,8 +219,7 @@ describe("BBPS routes when BBPS_ENABLED=true", () => {
       url: "/v1/revenue/bbps/pay-bill",
       headers: AUTH,
       payload: {
-        assesseeIdentifier: "PROP-12345",
-        amountMinor: "500000",
+        billToken: "a".repeat(48),
         bbpsTxnId: "TXN001",
         channel: "mobile",
       },

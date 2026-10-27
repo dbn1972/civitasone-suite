@@ -25,6 +25,12 @@ export type DemandOption = {
   penaltyMinor: string;
   interestMinor: string;
   status: string;
+  // Owner decision #5: server-issued live DCB outstanding and the movable
+  // principal (outstanding less penalty+interest). Absent when the endpoint
+  // could not be read — the form then falls back to the net-demand wording and
+  // the server remains the authority.
+  outstandingMinor?: string;
+  movableMinor?: string;
 };
 
 export type AdjustmentRegisterRow = {
@@ -98,6 +104,28 @@ async function getAssessees(): Promise<LoaderResult<AssesseeOption[]>> {
   });
 }
 
+type MovableRow = { demandId: string; outstandingMinor: string; movableMinor: string };
+
+function mapMovable(payload: unknown): MovableRow[] | null {
+  const rows = arrayFromPayload(payload);
+  if (!rows) return null;
+  const mapped: MovableRow[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue;
+    if (typeof raw.demandId !== "string" || raw.outstandingMinor == null || raw.movableMinor == null) continue;
+    mapped.push({ demandId: raw.demandId, outstandingMinor: String(raw.outstandingMinor), movableMinor: String(raw.movableMinor) });
+  }
+  return mapped;
+}
+
+async function getMovable(assesseeId: string): Promise<LoaderResult<MovableRow[]>> {
+  return fetchJson<unknown, MovableRow[]>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/movable-demands`,
+    [],
+    { telemetryKey: "revenue.adjustments.movable", mapResponse: mapMovable },
+  );
+}
+
 async function getDemands(assesseeId: string): Promise<LoaderResult<DemandOption[]>> {
   return fetchJson<unknown, DemandOption[]>(
     `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/demands`,
@@ -160,7 +188,12 @@ export default async function AdjustmentsPage(
     ? await getDemands(assesseeId)
     : ({ data: [] as DemandOption[], source: "api" as const });
 
-  const demands = demandsResult.data;
+  const movableResult = assesseeId ? await getMovable(assesseeId) : null;
+  const movableById = new Map((movableResult?.data ?? []).map((m) => [m.demandId, m]));
+  const demands = demandsResult.data.map((d) => {
+    const m = movableById.get(d.id);
+    return m ? { ...d, outstandingMinor: m.outstandingMinor, movableMinor: m.movableMinor } : d;
+  });
 
   const adjustmentsResult = assesseeId
     ? await getAdjustments(assesseeId)

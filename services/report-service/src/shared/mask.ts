@@ -57,3 +57,11 @@ export function maskValue(value: unknown): unknown {
   }
   return "***";
 }
+
+/**
+ * Mask every PII column unconditionally (owner decision #17: masked by default, no
+ * role skips it). Unmasked export is a separate, explicit, audited grant.
+ */
+export function maskAllPii(rows: Record<string, unknown>[], piiColumns: string[]): Record<string, unknown>[] {
+  return maskPiiColumns(rows, piiColumns, "", []);
+}

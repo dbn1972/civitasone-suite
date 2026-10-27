@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Alert, Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import {
   activateDomainPackStage3,
-  fetchActivationStageStatus,
+  fetchDomainPackActivationStatus,
   fetchDomainPacksForInstallResult,
   type ActivationJobState,
+  type DomainPackActivationStatus,
   type DomainPackActivateResult,
   type DomainPackListItem,
 } from "./domainPackApi";
@@ -45,6 +48,7 @@ export function DomainPackActivatePanel({
   pollIntervalMs = 3000,
 }: DomainPackActivatePanelProps) {
   const router = useRouter();
+  const t = useTranslations("installDomainPack");
   const [packs, setPacks] = useState<DomainPackListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -56,28 +60,47 @@ export function DomainPackActivatePanel({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [jobState, setJobState] = useState<ActivationJobState | "slow">("queued");
 
-  // GAP-INSTALL-DOMAIN-PACKS-01: follow the activation job until it completes or
-  // fails (bounded; after MAX_JOB_POLLS we say it is still running).
-  const stageId = result?.stageId;
+  // Owner decision #28: the activated state comes from install-service's durable per-tenant record, so
+  // it survives a reload. Read it for the selected pack; an in-flight record resumes polling below.
+  const [persisted, setPersisted] = useState<DomainPackActivationStatus | null>(null);
   useEffect(() => {
-    if (!stageId) return;
+    let cancelled = false;
+    setPersisted(null);
+    void fetchDomainPackActivationStatus(selectedKey).then((s) => {
+      if (cancelled) return;
+      setPersisted(s);
+      if (s.state === "queued" || s.state === "completed" || s.state === "failed") setJobState(s.state);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, reloadNonce]);
+
+  // GAP-INSTALL-DOMAIN-PACKS-01: follow the activation record until it completes or fails (bounded;
+  // after MAX_JOB_POLLS we say it is still running). When we just posted an activation we wait for
+  // THAT record (its id) - the status endpoint can still return the previous activation for a moment.
+  const trackedId = result?.id ?? (persisted?.state === "queued" ? persisted.activationId : undefined);
+  useEffect(() => {
+    if (!trackedId) return;
     let cancelled = false;
     let polls = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     setJobState("queued");
     const tick = async () => {
-      const { state } = await fetchActivationStageStatus(stageId);
+      const status = await fetchDomainPackActivationStatus(selectedKey);
       if (cancelled) return;
       polls += 1;
-      if (state === "completed" || state === "failed") {
-        setJobState(state);
+      const mine = status.activationId === trackedId;
+      if (mine && (status.state === "completed" || status.state === "failed")) {
+        setJobState(status.state);
+        setPersisted(status);
         return;
       }
       if (polls >= MAX_JOB_POLLS) {
-        setJobState(state === "unknown" ? "unknown" : "slow");
+        setJobState(status.state === "unknown" ? "unknown" : "slow");
         return;
       }
-      setJobState(state);
+      setJobState(status.state === "unknown" ? "unknown" : "queued");
       timer = setTimeout(() => void tick(), pollIntervalMs);
     };
     timer = setTimeout(() => void tick(), pollIntervalMs);
@@ -85,7 +108,7 @@ export function DomainPackActivatePanel({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [stageId, pollIntervalMs]);
+  }, [trackedId, selectedKey, pollIntervalMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +150,11 @@ export function DomainPackActivatePanel({
     }
   }
 
-  const activated = Boolean(result) && jobState !== "failed";
+  // A record is "tracked" when we just posted an activation or the server already holds one.
+  const hasRecord = persisted !== null && (persisted.state === "queued" || persisted.state === "completed" || persisted.state === "failed");
+  const tracked = Boolean(result) || hasRecord;
+  const activated = tracked && jobState !== "failed";
+  const draftCount = persisted?.state === "completed" ? (persisted.draftCount ?? 0) : null;
 
   return (
     <section
@@ -236,6 +263,14 @@ export function DomainPackActivatePanel({
 
       {selected ? <OutcomePreview pack={selected} /> : null}
 
+      {persisted?.state === "unknown" && !result ? (
+        <div style={{ marginTop: 16 }}>
+          <Alert variant="warning" role="status" title={t("statusUnknownTitle")}>
+            {t("statusUnknownBody")}
+          </Alert>
+        </div>
+      ) : null}
+
       {result ? (
         <div style={{ marginTop: 16 }}>
           <Alert variant={jobState === "failed" ? "danger" : "success"} role="status" title={`Activation accepted (Stage ${result.stageNumber})`}>
@@ -249,6 +284,21 @@ export function DomainPackActivatePanel({
             </Link>{" "}
             to review editable drafts in this session.
             {result.stageId ? <ActivationJobLine state={jobState} /> : null}
+            {jobState === "completed" && draftCount !== null ? (
+              <span style={{ display: "block" }}>{t("draftsImported", { count: draftCount })}</span>
+            ) : null}
+          </Alert>
+        </div>
+      ) : hasRecord ? (
+        <div style={{ marginTop: 16 }}>
+          <Alert variant={jobState === "failed" ? "danger" : "success"} role="status" title={t("recordedTitle", { name: selected?.name ?? "Domain Pack" })}>
+            <ActivationJobLine state={jobState} />
+            {jobState === "completed" && draftCount !== null ? (
+              <span style={{ display: "block" }}>{t("draftsImported", { count: draftCount })}</span>
+            ) : null}
+            {jobState === "completed" && persisted?.completedAt ? (
+              <span style={{ display: "block" }}>{t("completedOn", { date: formatDate(persisted.completedAt) })}</span>
+            ) : null}
           </Alert>
         </div>
       ) : null}
@@ -268,14 +318,14 @@ export function DomainPackActivatePanel({
             aria-busy={busy}
             onClick={() => setConfirmOpen(true)}
           >
-            {activated ? "Activated" : result ? "Retry activation" : "Activate Domain Pack"}
+            {activated ? "Activated" : tracked ? "Retry activation" : "Activate Domain Pack"}
           </Button>
         ) : (
           <p style={{ fontSize: 14, color: "var(--ink2)" }} role="note">
             You have read-only access. Activating a Domain Pack requires an installer or tenant-admin role.
           </p>
         )}
-        {result ? (
+        {tracked ? (
           <Link href="/designer" className="btn ghost btn-tall">
             Review drafts
           </Link>
@@ -305,6 +355,11 @@ export function DomainPackActivatePanel({
       ) : null}
     </section>
   );
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : formatIndianDate(iso);
 }
 
 const TECH_STYLE = { fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--ink2)" } as const;

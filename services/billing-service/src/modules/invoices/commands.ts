@@ -39,6 +39,7 @@ export async function createInvoice(
   tenantId: string,
   periodMonth: string,
   items: LineItemInput[],
+  gst?: { supplierGstin: string; recipientGstin: string; placeOfSupply: string; cgstMinor: number; sgstMinor: number; igstMinor: number },
 ): Promise<Accepted> {
   const id = idempotentId(ctx); // double-submit dedupe
   const totals = computeTotals(items);
@@ -47,6 +48,7 @@ export async function createInvoice(
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: {
       id, tenantId, periodMonth, items,
+      ...(gst ? { gst: { ...gst, cgstMinor: String(gst.cgstMinor), sgstMinor: String(gst.sgstMinor), igstMinor: String(gst.igstMinor) } } : {}),
       taxMinor: totals.taxMinor.toString(),
       chargesMinor: totals.chargesMinor.toString(),
       totalMinor: totals.totalMinor.toString(),

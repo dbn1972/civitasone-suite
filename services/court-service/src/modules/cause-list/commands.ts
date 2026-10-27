@@ -5,6 +5,7 @@ import { getCaseById } from "../case-registry/repo.js";
 import { COMMANDS } from "../../topics.js";
 import { deriveCauseListId, deriveItemId } from "./domain.js";
 import * as repo from "./repo.js";
+import { loadSlotConfig, slotConfigViolation } from "./slot-config.js";
 import {
   createCauseListBody, type CreateCauseListBody,
   listCaseBody, type ListCaseBody,
@@ -106,6 +107,9 @@ export async function listCaseOnCauseList(
     if (!parent) {
       throw new HttpError(404, "CAUSELIST_NOT_FOUND", `Cause-list not found: ${causeListId}`);
     }
+    // Owner decision #33: slot and courtroom must be configured for THIS court (per-court config namespaces).
+    const violation = slotConfigViolation(await loadSlotConfig(ctx.tenantId, parent.courtId), body.slot, body.courtroom);
+    if (violation) throw violation;
     const conflict = await repo.findSlotConflict(ctx.tenantId, parent.listDate, body.slot, body.courtroom);
     if (conflict) {
       throw new HttpError(

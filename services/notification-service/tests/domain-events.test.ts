@@ -12,7 +12,7 @@
  *   5. No PII in template literals (only placeholders carry dynamic data)
  */
 import { describe, it, expect } from "vitest";
-import { getTemplateForEvent, interpolate, getRegisteredEventTypes } from "../src/modules/domain-events/templates.js";
+import { getTemplateForEvent, interpolate, getRegisteredEventTypes, getTemplateDefinitions, buildTemplateMap } from "../src/modules/domain-events/templates.js";
 
 // ─── 1. getTemplateForEvent — lookup ─────────────────────────────────────────
 
@@ -122,6 +122,36 @@ describe("getRegisteredEventTypes — event coverage", () => {
 
   it("covers Contract events", () => {
     expect(events).toContain("contract.expiry.alert");
+  });
+});
+
+// ─── 3b. Template keys are unique ────────────────────────────────────────────
+
+describe("template definitions — one template per event type", () => {
+  it("no event type is defined twice", () => {
+    const keys = getTemplateDefinitions().map((t) => t.eventType);
+    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
+    expect(dupes).toEqual([]);
+    expect(getRegisteredEventTypes()).toHaveLength(keys.length);
+  });
+
+  it("buildTemplateMap refuses a duplicate event type instead of overwriting", () => {
+    const tpl = { eventType: "x.y.z", push: { title: "a", body: "b" }, email: { title: "c", body: "d" } };
+    expect(() => buildTemplateMap([tpl, { ...tpl, push: { title: "other", body: "other" } }])).toThrow(/Duplicate notification template for event type x\.y\.z/);
+  });
+});
+
+// ─── 3c. contract.expiry.alert renders the contract number ──────────────────
+
+describe("contract.expiry.alert — rendered notification", () => {
+  const vars = { contractNo: "CT/2026/0042", contractTitle: " (Street lighting AMC)", endDate: "2026-11-30", daysRemaining: "30" };
+
+  it("push and email both carry the contract number", () => {
+    const t = getTemplateForEvent("contract.expiry.alert")!;
+    expect(interpolate(t.push.body, vars)).toContain("CT/2026/0042");
+    expect(interpolate(t.email.title, vars)).toContain("CT/2026/0042");
+    expect(interpolate(t.email.body, vars)).toContain("CT/2026/0042");
+    expect(interpolate(t.email.body, vars)).toContain("2026-11-30");
   });
 });
 

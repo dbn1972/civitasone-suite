@@ -67,6 +67,18 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     if (live) {
       throw new HttpError(409, "REFUND_ALREADY_EXISTS", `a ${live.status} refund already exists for this receipt`);
     }
+    // Owner decision #1: an explicit (partial) amount must be positive and never
+    // above the refundable balance. With one live refund per receipt, the
+    // refundable balance is the receipt amount.
+    if (body.amountMinor !== undefined) {
+      const amount = BigInt(body.amountMinor);
+      if (amount <= 0n) throw new HttpError(422, "INVALID_AMOUNT", "refund amount must be positive");
+      const receipt = await repo.findReceipt(ctx.tenantId, body.receiptId);
+      if (!receipt) throw new HttpError(404, "NOT_FOUND", "receipt not found");
+      if (amount > receipt.amountMinor) {
+        throw new HttpError(422, "REFUND_EXCEEDS_RECEIPT", "refund amount exceeds the refundable balance of the receipt");
+      }
+    }
     const result = await commands.createRefund(ctx, body);
     return reply.code(202).send({ data: result });
   });
@@ -134,6 +146,16 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createAdjustmentBody.parse(req.body);
+    // Owner decision #5: refuse synchronously (422) an amount above the movable
+    // principal of the source demand; the consumer re-enforces it in-txn.
+    const movable = await repo.getMovableForDemand(ctx.tenantId, body.fromDemandId);
+    if (BigInt(body.amountMinor) > movable.movable) {
+      throw new HttpError(
+        422,
+        "ADJUSTMENT_EXCEEDS_MOVABLE",
+        "amount exceeds the movable principal of the source demand (penalty and interest stay with their demand)",
+      );
+    }
     const result = await commands.createAdjustment(ctx, body);
     return reply.code(202).send({ data: result });
   });
@@ -206,6 +228,17 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
       data: rows,
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
+  });
+
+  // ── GET /v1/revenue/assessees/:id/movable-demands ─────────────────────────
+  // Owner decision #5: per-demand live outstanding + movable principal, so the
+  // adjustment form shows the same cap the server enforces.
+  app.get("/v1/revenue/assessees/:id/movable-demands", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id: assesseeId } = uuidParam.parse(req.params);
+    const data = await repo.listMovableForAssessee(ctx.tenantId, assesseeId);
+    return reply.send({ data });
   });
 
   // ── GET /v1/revenue/assessees/:id/adjustments ─────────────────────────────

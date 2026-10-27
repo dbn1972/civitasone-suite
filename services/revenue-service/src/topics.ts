@@ -28,6 +28,12 @@ export const COMMANDS = {
   /** payload: { rateHeadId, rebateType: "early_payment"|"category", discountBps, validUntilDaysBeforeDue? } */
   rebateRuleCreate: "revenue.rebate_rule.create",
 
+  // ── Rate configuration maker-checker (owner decision #2) ─────────────────
+  /** payload: { id, kind, action, targetId?, rateHeadId?, effectiveFrom, payload } — rate-config proposal, maker step */
+  rateConfigPropose: "revenue.rate_config.propose",
+  /** payload: { proposalId, approve: boolean, reason? } — rate-config proposal, checker step */
+  rateConfigDecide: "revenue.rate_config.decide",
+
   // ── Assessee (SVC-131) ───────────────────────────────────────────────────
   /** payload: { assesseeType: "property"|"water_connection", identifierNo, ownerName, address, wardNo?, zoneNo?, connectionSize?, propertyType?, builtUpArea? } */
   assesseeCreate: "revenue.assessee.create",
@@ -65,6 +71,8 @@ export const COMMANDS = {
   // ── Arrears & Recovery (SVC-137) ─────────────────────────────────────────
   /** payload: { assesseeId, instalmentCount, startDate } — create instalment plan from outstanding */
   instalmentPlanCreate: "revenue.instalment.create",
+  /** payload: { planId, approve: boolean, reason? } — instalment plan, checker step (owner decision #3) */
+  instalmentPlanDecide: "revenue.instalment.decide",
   /** payload: { demandId, amountMinor (bigint string), reason, waiverType? } — waiver, maker step */
   waiverCreate: "revenue.waiver.create",
   /** payload: { waiverId, approve: boolean, reason? } — waiver, checker step */
@@ -73,8 +81,12 @@ export const COMMANDS = {
   writeOffCreate: "revenue.write_off.create",
   /** payload: { writeOffId, approvalId, approve: boolean, reason? } — checker step */
   writeOffDecide: "revenue.write_off.decide",
-  /** payload: { assesseeId, reason } — refer to legal-service */
+  /** payload: { assesseeId, reason } — recovery referral, maker step (needs a served + lapsed demand notice) */
   recoveryRefer: "revenue.recovery.refer",
+  /** payload: { referralId, approve: boolean, reason? } — recovery referral, checker step (owner decision #4) */
+  recoveryReferDecide: "revenue.recovery.decide",
+  /** payload: { assesseeId, noticeNo, servedOn, noticePeriodDays, demandId? } — record a served demand notice */
+  demandNoticeServe: "revenue.demand_notice.serve",
 
   // ── BBPS Biller (SVC-134) ────────────────────────────────────────────────
   /** payload: { assesseeIdentifier } — returns outstanding via DCB */
@@ -89,6 +101,8 @@ export const EVENTS = {
   rateSlabCreated: "revenue.rate_slab.created",
   penaltyRuleCreated: "revenue.penalty_rule.created",
   rebateRuleCreated: "revenue.rebate_rule.created",
+
+  /** An approved rate-config proposal was applied (owner decision #2) */
 
   // ── Assessment ───────────────────────────────────────────────────────────
   assesseeCreated: "revenue.assessee.created",
@@ -110,6 +124,7 @@ export const EVENTS = {
 
   // ── Arrears ──────────────────────────────────────────────────────────────
   instalmentPlanCreated: "revenue.instalment.created",
+  /** A distinct checker approved the plan — it is now active (owner decision #3) */
   writeOffApplied: "revenue.write_off.applied",
   /** Recovery referred — triggers legal-service case creation */
   recoveryReferred: "revenue.recovery.referred",

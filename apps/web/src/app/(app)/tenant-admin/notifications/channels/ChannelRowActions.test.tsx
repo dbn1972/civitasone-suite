@@ -46,3 +46,33 @@ describe("ChannelRowActions — NOTIFICATIONS-CHANNELS-01 enable / disable", () 
     expect(refresh).not.toHaveBeenCalled();
   });
 });
+
+describe("ChannelRowActions — owner decision #25 test-send to the admin's own address", () => {
+  beforeEach(() => { vi.restoreAllMocks(); refresh.mockReset(); });
+
+  it("an enabled email channel offers Send test; it POSTs an EMPTY body (no recipient) and says where it went", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<ChannelRowActions id="c1" name="Office email" type="email" enabled isDefault={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send test to me" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe("/api/proxy/notification/channels/c1/test-send");
+    expect(fetchSpy.mock.calls[0]![1]!.method).toBe("POST");
+    expect(JSON.parse(String(fetchSpy.mock.calls[0]![1]!.body))).toEqual({});
+    expect(await screen.findByRole("status")).toHaveTextContent(/your own/i);
+  });
+
+  it("SMS / push / WhatsApp channels and disabled channels do not show a dead Send test button", () => {
+    const { rerender } = render(<ChannelRowActions id="c1" name="SMS" type="sms" enabled isDefault={false} />);
+    expect(screen.queryByRole("button", { name: "Send test to me" })).toBeNull();
+    rerender(<ChannelRowActions id="c1" name="Email" type="email" enabled={false} isDefault={false} />);
+    expect(screen.queryByRole("button", { name: "Send test to me" })).toBeNull();
+  });
+
+  it("a failed test shows a clerk-safe message, never the raw body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("smtp relay 10.0.0.9 refused", { status: 500 }));
+    render(<ChannelRowActions id="c1" name="Office email" type="email" enabled isDefault={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send test to me" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toMatch(/10\.0\.0\.9|smtp relay|\b500\b/);
+  });
+});

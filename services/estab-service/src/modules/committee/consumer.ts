@@ -76,6 +76,27 @@ export function registerCommitteeConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "committee_meetings", (msg.payload as any).committeeId ?? ""));
   });
 
+  // Owner decision #30: link/unlink the meeting-service meeting that carries the MOM.
+  queue.subscribe(COMMANDS.meetingLinkGovernance, async (msg) => {
+    const p = msg.payload as { meetingId: string; tenantId: string; governanceMeetingId: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const meeting = await repo.findMeetingByIdTx(tx, p.meetingId, msg.tenantId);
+      if (!meeting) return; // unknown here, or another tenant's (RLS + predicate): nothing to change, nothing to audit as ours
+      if (p.governanceMeetingId) {
+        const taken = await repo.findMeetingByGovernanceId(tx, msg.tenantId, p.governanceMeetingId);
+        if (taken && taken.id !== p.meetingId) {
+          await audit(tx, msg, "link_governance_meeting_rejected", "meeting", p.meetingId, { reason: "already_linked", governanceMeetingId: p.governanceMeetingId }, "rejected");
+          return;
+        }
+      }
+      await repo.updateMeeting(tx, p.meetingId, { governanceMeetingId: p.governanceMeetingId, updatedBy: msg.actorId });
+      await audit(tx, msg, p.governanceMeetingId ? "link_governance_meeting" : "unlink_governance_meeting", "meeting", p.meetingId,
+        { governanceMeetingId: p.governanceMeetingId ?? meeting.governanceMeetingId });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "meeting", p.meetingId));
+  });
+
   queue.subscribe(COMMANDS.attendanceRecord, async (msg) => {
     const p = msg.payload as { id: string; meetingId: string; tenantId: string; memberRef: string; role: string; attended: boolean };
     await db.transaction(async (tx) => {
@@ -112,10 +133,13 @@ export function registerCommitteeConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  metadata?: Record<string, unknown>, outcome: "success" | "rejected" = "success",
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "estab", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "estab", action, resourceType, resourceId, outcome, ...(metadata ? { metadata } : {}) },
   });
 }

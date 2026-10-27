@@ -6,8 +6,8 @@
  *   Emitter topic : contract EVENTS.contractExpiryAlert        = "contract.expiry.alert"
  *   Consumer      : notification CONSUMED_EVENTS.contractExpiryAlert = "contract.expiry.alert"
  *
- * (A) EMIT    — contract-service declares exactly one expiry alert event and it
- *     is an EVENT (not a command).
+ * (A) EMIT    — contract-service declares exactly one expiry alert event (an
+ *     EVENT), plus exactly one expiry COMMAND: the sweeper's contract.expiry.check.
  * (B) CONSUME — the REAL notification registration subscribes to that exact
  *     topic, and the declared consumed-events map carries the same string.
  *
@@ -15,10 +15,13 @@
  * event, no contract.* subscription). contract.expiry.alert has since been added
  * on both sides; this file now proves emitter and consumer agree on the topic.
  *
- * KNOWN LIMIT: this is a topic-contract test. It does not prove a scheduler in
- * contract-service enqueues the event — no producer call site exists yet (expiry
- * is otherwise read-side: GET /v1/contract/contracts/expiring plus renewal-notice
- * dates). Tracked as a follow-up; see the PR description.
+ * PRODUCER: owner decision #42 built it (services/contract-service/src/modules/
+ * expiry: daily sweeper -> contract.expiry.check COMMAND -> consumer emits
+ * contract.expiry.alert; migration 0023). The emit behaviour itself (milestone
+ * selection, idempotency, RLS-safe cross-tenant scan, exactly-once alert + audit
+ * in one transaction) is proven against a live database in
+ * services/contract-service/tests/expiry-sweeper.test.ts. This file pins the
+ * producer/consumer topic contract across the two services.
  */
 import { describe, it, expect, vi } from "vitest";
 import { RecordingQueue } from "./_helpers.js";
@@ -40,14 +43,15 @@ const { registerDomainEventConsumers } = await import(
 );
 
 const EXPIRY_TOPIC = "contract.expiry.alert";
+const EXPIRY_CHECK_COMMAND = "contract.expiry.check";
 
 describe("FLOW 4 — Contract expiry → Alert (WIRED)", () => {
-  it("(A) EMIT: contract-service declares exactly one expiry alert event, as an event", () => {
+  it("(A) EMIT: contract-service declares exactly one expiry alert event, plus the sweeper command", () => {
     const eventTopics = Object.values(CONTRACT_EVENTS) as string[];
     const commandTopics = Object.values(CONTRACT_COMMANDS) as string[];
     expect(CONTRACT_EVENTS.contractExpiryAlert).toBe(EXPIRY_TOPIC);
     expect(eventTopics.filter((t) => /expir/i.test(t))).toEqual([EXPIRY_TOPIC]);
-    expect(commandTopics.filter((t) => /expir/i.test(t))).toEqual([]);
+    expect(commandTopics.filter((t) => /expir/i.test(t))).toEqual([EXPIRY_CHECK_COMMAND]);
   });
 
   it("(B) CONSUME: notification subscribes to the contract expiry alert topic", () => {

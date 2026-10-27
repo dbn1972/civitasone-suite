@@ -54,7 +54,7 @@ describe("arrears amountMinor (createWriteOffBody / createWaiverBody)", () => {
   const DEMAND = "dddddddd-0000-4000-8000-000000000001";
 
   it("createWriteOffBody accepts a plain JSON number amountMinor", () => {
-    const r = createWriteOffBody.safeParse({ assesseeId: ASSESSEE, amountMinor: 100000, reason: "Bad debt" });
+    const r = createWriteOffBody.safeParse({ assesseeId: ASSESSEE, demandId: DEMAND, amountMinor: 100000, reason: "Bad debt" });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.amountMinor).toBe("100000");
   });
@@ -62,6 +62,7 @@ describe("arrears amountMinor (createWriteOffBody / createWaiverBody)", () => {
   it("createWriteOffBody rejects an unsafe-integer amountMinor instead of silently mis-encoding it", () => {
     const r = createWriteOffBody.safeParse({
       assesseeId: ASSESSEE,
+      demandId: DEMAND, // owner decision #6: demandId is mandatory, so this isolates the amount check
       amountMinor: 9007199254740993,
       reason: "Bad debt",
     });

@@ -284,7 +284,7 @@ describe("Legal — Zod validation + auth (route inject)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/opinions",
       headers: { authorization: `Bearer ${token}` },
-      payload: { opinionNo: "OP-ROUTE-1", subject: "route test", question: "valid?" },
+      payload: { opinionNo: "OP-ROUTE-1", subject: "route test", question: "valid?", addressee: { type: "external", name: "Test Addressee" } },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");

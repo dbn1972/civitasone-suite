@@ -114,6 +114,9 @@ export async function listLibraryIssueSummaries(
     dueAt: new Date(row.dueAt as unknown as string).toISOString(),
     returnedAt: row.returnedAt ? new Date(row.returnedAt as unknown as string).toISOString() : undefined,
     status: mapIssueStatus(row, now),
+    renewalCount: row.renewalCount ?? 0,
+    ...(row.returnCondition ? { returnCondition: row.returnCondition as "good" | "fair" | "damaged" } : {}),
+    ...(row.returnNotes ? { returnNotes: row.returnNotes } : {}),
   }));
   if (status) list = list.filter((i) => i.status === status);
   if (bookId) list = list.filter((i) => i.bookId === bookId);

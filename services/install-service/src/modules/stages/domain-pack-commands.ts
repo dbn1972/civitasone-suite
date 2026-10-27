@@ -54,6 +54,18 @@ export async function activateDomainPackStage3(
     status: "accepted",
   });
 
+  // Owner decision #28: durable per-tenant activation record (accepted -> completed/failed). Own
+  // messageId so the record command is idempotent independently of the stage create / citizen commands.
+  await queue.publish(COMMANDS.recordDomainPackActivation, {
+    messageId: randomUUID(),
+    type: COMMANDS.recordDomainPackActivation,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id: activationId, domainPackKey, packKeys, stageId },
+  });
+
   // Track Stage 3 in install stages (CQRS create).
   await queue.publish(COMMANDS.createStage, {
     messageId: stageId,
@@ -79,6 +91,8 @@ export async function activateDomainPackStage3(
       domainPackKey,
       packKeys,
       stageNumber: 3,
+      // Echoed back on citizen.pack.domain_activated so the outcome lands on this stage row.
+      stageId,
       source: "install_stage_3",
     },
   });

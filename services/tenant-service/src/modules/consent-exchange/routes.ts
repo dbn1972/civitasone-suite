@@ -20,11 +20,18 @@ const GRANTOR = ["data_principal", "consent_officer", "grievance_officer", "tena
 // Transparency reads (DPDP s.11) — principal or any authorised officer.
 const VIEWER = [...new Set([...REQUESTER, ...GRANTOR])];
 
-// Roles authorised to act on a data-principal's consent ON THEIR BEHALF
-// (grievance redressal, consent/DPB officer, tenant admin). A caller who is
-// ONLY a data_principal may act solely on their OWN artefact. Anyone outside
-// this explicit allow-list acting on a consent that isn't theirs is denied.
+// Roles authorised to act on a data-principal's consent ON THEIR BEHALF for
+// REVOCATION (grievance redressal, consent/DPB officer, tenant admin). A caller
+// who is ONLY a data_principal may act solely on their OWN artefact.
 const CONSENT_OVERRIDE = ["consent_officer", "grievance_officer", "tenant_admin", "platform_admin", "super_admin"];
+
+// OWNER DECISION #19 (TENANT-CONSENT-EXCHANGE-01): approving or rejecting a
+// consent request ON BEHALF of the data-principal is reserved to the
+// consent_officer (DPO), with a recorded reason. tenant_admin (and every other
+// admin role) is VIEW-ONLY on consent decisions. The data-principal may still
+// decide their OWN consent.
+const DECISION_ON_BEHALF = ["consent_officer"];
+const DECISION_ACTORS = ["data_principal", ...DECISION_ON_BEHALF];
 
 /**
  * AUTHZ (CRITICAL): binds a grant/deny/revoke to the acting principal. An
@@ -84,16 +91,27 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
   // ── grant / deny (principal or authorised officer) ────────────────
   app.post("/v1/consent/:id/grant", (req, reply) => decide(req, reply, "grant"));
   app.post("/v1/consent/:id/deny", (req, reply) => decide(req, reply, "deny"));
+  // Owner decision #19: the web decision panel posts through the /api/v1/tenant/*
+  // prefix the gateway forwards verbatim (same aliasing as the list above).
+  app.post("/v1/tenant/consent/:id/grant", (req, reply) => decide(req, reply, "grant"));
+  app.post("/v1/tenant/consent/:id/deny", (req, reply) => decide(req, reply, "deny"));
 
   async function decide(req: FastifyRequest, reply: FastifyReply, kind: "grant" | "deny"): Promise<unknown> {
-    const ctx = resolveContext(req); requireRole(ctx, GRANTOR);
+    const ctx = resolveContext(req); requireRole(ctx, DECISION_ACTORS);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ reason: z.string().max(2000).optional() }).parse(req.body ?? {});
     const artefact = await repo.findArtefact(ctx.tenantId, id);
     if (!artefact) throw new HttpError(404, "NOT_FOUND", "consent artefact not found");
-    assertOwnConsent(ctx, artefact);
+    // The principal decides their own consent; anyone else must be a
+    // consent_officer acting on behalf (reason mandatory, never their own request).
+    const onBehalf = ctx.actorId !== artefact.principalId;
+    if (onBehalf) {
+      if (!hasAnyRole(ctx, DECISION_ON_BEHALF)) throw new HttpError(403, "NOT_YOUR_CONSENT", "only the consent officer may decide on behalf of the data principal");
+      if (!body.reason || body.reason.trim().length < 3) throw new HttpError(400, "REASON_REQUIRED", "a reason is required to decide on behalf of the data principal");
+      if (artefact.createdBy === ctx.actorId) throw new HttpError(403, "SELF_APPROVAL", "you cannot decide a consent request you raised");
+    }
     if (artefact.status !== "requested") throw new HttpError(409, "INVALID_STATE", `cannot ${kind} a consent in status ${artefact.status}`);
-    await queue.publish(`tenant.consent.${kind}`, envelope(ctx, `tenant.consent.${kind}`, { id, tenantId: ctx.tenantId, reason: body.reason }));
+    await queue.publish(`tenant.consent.${kind}`, envelope(ctx, `tenant.consent.${kind}`, { id, tenantId: ctx.tenantId, reason: body.reason?.trim(), onBehalf }));
     return reply.code(202).send({ data: { id, status: kind === "grant" ? "active" : "denied" } });
   }
 

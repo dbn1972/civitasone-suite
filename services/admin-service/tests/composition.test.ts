@@ -215,20 +215,20 @@ function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promi
 
 describe("RLS tenant isolation", () => {
   it("a tenant never sees another tenant's entitlements", async () => {
-    // FRESH was fully disabled above; onboard it as govt (28 defaults), then read as OTHER.
+    // FRESH was fully disabled above; onboard it as govt (29 defaults, incl. field), then read as OTHER.
     await app.inject({ method: "POST", url: "/v1/admin/composition/onboard", headers: auth(ADMIN, ["tenant_admin"], FRESH), payload: { profile: "govt_dept" } });
     const other = await app.inject({ method: "GET", url: "/v1/admin/composition/tenant", headers: auth(ADMIN, ["tenant_admin"], OTHER) });
     expect(other.statusCode).toBe(200);
-    // OTHER is small_office (10 defaults) — must NOT reflect FRESH's govt set (28 defaults)
+    // OTHER is small_office (10 defaults) — must NOT reflect FRESH's govt set (29 defaults)
     expect(other.json().profile.code).toBe("small_office");
     expect(other.json().counts.user).toBe(10);
 
     // FORCE RLS proof: an UNSCOPED read (no app.tenant_id GUC) is fail-closed → 0 rows,
-    // even though the rows exist — a SCOPED read for FRESH sees all 28.
+    // even though the rows exist — a SCOPED read for FRESH sees all 29.
     const unscoped = await sqlClient`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${FRESH}`;
     expect(unscoped[0].n).toBe(0);
     const scoped = await readAsTenant(FRESH, (sql) => sql`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${FRESH}`);
-    expect((scoped as Array<{ n: number }>)[0].n).toBe(28);
+    expect((scoped as Array<{ n: number }>)[0].n).toBe(29);
     // And FRESH cannot see OTHER's rows even with its own GUC set.
     const crossView = await readAsTenant(FRESH, (sql) => sql`SELECT count(*)::int AS n FROM composition.tenant_entitlement WHERE tenant_id = ${OTHER}`);
     expect((crossView as Array<{ n: number }>)[0].n).toBe(0);

@@ -24,13 +24,13 @@
   },
   "themes": {
     "title": "Themes",
-    "description": "Design tokens, templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
+    "description": "Design tokens, document templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
     "editBrandLabel": "Edit tenant brand",
     "editBrandNote": "Change the logo and colours tenants see",
     "tokensLabel": "Tokens",
     "tokensNote": "Review tokens and publish a theme revision to all tenant screens",
-    "templatesLabel": "Templates",
-    "templatesNote": "Ready-made looks you can start from (read-only)",
+    "templatesLabel": "Document templates",
+    "templatesNote": "Email, letter and certificate templates (read-only)",
     "brandingLabel": "Branding",
     "brandingNote": "View branding packs (read-only)",
     "brandLabel": "Brand preset",
@@ -39,8 +39,8 @@
     "brandPageSubtitle": "The active brand and available presets for your organisation.",
     "brandingPageTitle": "Themes — Branding",
     "brandingPageSubtitle": "Branding packs for your organisation.",
-    "templatesPageTitle": "Themes — Templates",
-    "templatesPageSubtitle": "Ready-made looks you can start from."
+    "templatesPageTitle": "Themes — Document templates",
+    "templatesPageSubtitle": "Email, letter and certificate templates for your organisation. These are document templates, not theme presets."
   },
   "action": {
     "save": "Save",
@@ -1137,6 +1137,71 @@
     "filterPlaceholder": "Search service, owner…",
     "documentsCount": "{count, plural, =0 {None} one {# document} other {# documents}}",
     "slaDays": "{days, plural, one {# day} other {# days}}"
+  },
+  "installDomainPack": {
+    "recordedTitle": "{name} activation",
+    "draftsImported": "{count, plural, =0 {No drafts were imported.} one {# draft imported.} other {# drafts imported.}}",
+    "completedOn": "Completed on {date}.",
+    "statusUnknownTitle": "Activation status unavailable",
+    "statusUnknownBody": "We couldn't check whether this Domain Pack was already activated. You can still activate it, but look in the Service Designer first so you do not create duplicate drafts."
+  },
+  "estabLibraryLoans": {
+    "renew": "Renew",
+    "renewTitle": "Renew this loan?",
+    "renewBody": "Extend the loan of {title}, currently due {date}.",
+    "renewDateLabel": "New due date",
+    "renewConfirm": "Confirm renewal",
+    "renewNotAfter": "The new due date must be after the current due date ({date}).",
+    "renewedCount": "{count, plural, one {Renewed # time} other {Renewed # times}}",
+    "thisBook": "this book",
+    "networkError": "Network error. Please try again.",
+    "conditionLabel": "Condition on return",
+    "notesLabel": "Notes (optional)",
+    "condition_good": "Good",
+    "condition_fair": "Fair",
+    "condition_damaged": "Damaged",
+    "conditionShown": "Condition: {condition}",
+    "finesNote": "Overdue fines are not charged in this release: fine rules are not configured."
+  },
+  "estabMeetingMom": {
+    "heading": "Minutes of meeting (MOM)",
+    "intro": "Minutes are drafted and approved in the Meetings module. Link this meeting to its record there to follow the minutes from here.",
+    "linkButton": "Link a meeting",
+    "selectLabel": "Meeting with the minutes",
+    "selectPlaceholder": "Choose a meeting…",
+    "linkConfirm": "Link",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "loadingMeetings": "Loading meetings…",
+    "listErrorTitle": "Meetings list unavailable",
+    "listError": "We couldn't load the meetings list. Try again shortly.",
+    "listEmpty": "No meetings found in the Meetings module yet.",
+    "scheduleMeeting": "Schedule a meeting",
+    "linkError": "We couldn't link the meeting. Check that it isn't already linked to another meeting, then try again.",
+    "checkingMinutes": "Checking the minutes…",
+    "none": "No minutes have been drafted yet.",
+    "startDraft": "Start draft minutes",
+    "startError": "We couldn't start the draft. You may not have permission to draft minutes; ask the meeting secretary.",
+    "loadErrorTitle": "Minutes unavailable",
+    "loadError": "We couldn't load the minutes. Open the workflow to check them directly.",
+    "openWorkflow": "Open minutes workflow",
+    "state_draft": "Draft",
+    "state_submitted": "Awaiting approval",
+    "state_approved": "Approved",
+    "state_signed": "Signed",
+    "state_circulated": "Circulated",
+    "workflowNote": "Edits and sign-off happen in the Meetings module, where the maker and checker are kept separate."
+  },
+  "courtPartyIdentity": {
+    "maskedNote": "Party names and advocate Bar IDs are masked for your role. Judges, registrars and court staff see them in full."
+  },
+  "courtCauseListSlots": {
+    "slotPlaceholder": "Select a slot…",
+    "roomPlaceholder": "Select a courtroom…",
+    "loading": "Loading slots and courtrooms…",
+    "loadError": "We couldn't load the slots and courtrooms for this court. Try again shortly.",
+    "retry": "Retry",
+    "chooseBoth": "Choose a slot and a courtroom."
   },
   "courtCaseSelector": {
     "label": "Case",
@@ -13006,8 +13071,14 @@
     "meetingsViewLabel": "Meetings view",
     "meetingsViewList": "List",
     "meetingsViewCalendar": "Calendar",
-    "momGenerate": "Generate MOM",
-    "momUnavailableTitle": "Minutes can't be generated or edited on this screen yet.",
+    "quarterCategory_general": "General",
+    "quarterCategory_physically_handicapped": "Physically handicapped",
+    "quarterCategory_medical": "Medical",
+    "quarterCategory_defence": "Defence",
+    "quarterCategory_other": "Other",
+    "quarterCategory_other_legacy": "Other (legacy)",
+    "momLink": "Minutes (MOM)",
+    "momLinked": "Linked to the Meetings module",
     "fuelType": "Fuel type",
     "fuelPetrol": "Petrol",
     "fuelDiesel": "Diesel",
@@ -16713,6 +16784,103 @@
   "employeeFallback": {
     "unknownEmployee": "Unknown employee"
   },
+  "tenantW3": {
+    "consent": {
+      "pendingTitle": "Decisions awaiting the consent officer",
+      "pendingHint": "Approve or reject on behalf of the data principal. A reason is required and is recorded in the audit log.",
+      "viewOnly": "You can view consent requests. Approving or rejecting is reserved to the consent officer.",
+      "none": "No consent requests are awaiting a decision.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve this consent request?",
+      "rejectTitle": "Reject this consent request?",
+      "approveBody": "You are approving on behalf of the data principal. This is recorded against your name.",
+      "rejectBody": "You are rejecting on behalf of the data principal. This is recorded against your name.",
+      "reasonLabel": "Reason (recorded in the audit log)",
+      "approved": "Decision recorded: approved.",
+      "rejected": "Decision recorded: rejected.",
+      "actionsFor": "Decide on {label}"
+    },
+    "audit": {
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "revealFor": "Reveal actor and IP for {action}",
+      "hideFor": "Hide actor and IP for {action}",
+      "revealedActor": "actor (revealed)",
+      "revealedIp": "source IP (revealed)",
+      "dialogTitle": "Reveal this actor and IP address?",
+      "dialogBody": "The clear email and source IP are personal data. Revealing them is recorded in the audit log against your name, with the reason below.",
+      "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
+    },
+    "session": {
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "ipMasked": "IP address, partially masked for privacy",
+      "ipRevealed": "IP address, revealed",
+      "dialogTitle": "Reveal this IP address?",
+      "dialogBody": "The source IP is personal data. Revealing it is recorded in the audit log against your name, with the reason below.",
+      "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
+    },
+    "export": {
+      "formatCsv": "CSV (one file per entity)",
+      "formatJson": "JSON (single full export)",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "linksExpire": "These download links expire in 15 minutes. Click Download again for fresh links.",
+      "download": {
+        "expired": "This export has expired. Request a new one.",
+        "storage": "File storage is not available right now. Try again shortly.",
+        "generic": "The download could not be prepared. Try again.",
+        "noFile": "No file was stored for this export. Request a new one."
+      },
+      "failure": {
+        "NO_EXPORTER_FOR_MODULE": "Data from this module cannot be exported yet.",
+        "UNKNOWN_ENTITY": "That entity is not available for export.",
+        "UNSUPPORTED_FORMAT": "That format is not supported. Choose CSV or JSON.",
+        "STORAGE_FAILED": "The file could not be stored. Request the export again.",
+        "UNKNOWN": "The export did not complete. Request it again."
+      }
+    },
+    "migration": {
+      "title": "Bulk imports",
+      "hint": "Each import keeps a record of the rows that did not load. Download the error report (row, field, error), fix the cause, then the migration admin can retry only the failed records.",
+      "none": "No bulk imports yet.",
+      "loadFailed": "Bulk imports could not be loaded. Refresh to try again.",
+      "entity": {
+        "org_unit": "Organisation units"
+      },
+      "counts": "{inserted} of {total} loaded · {failed} failed",
+      "retries": "{count, plural, one {retried once} other {retried # times}}",
+      "download": "Download error report",
+      "downloadFor": "Download error report for {failed} failed rows",
+      "retry": "Retry failed records",
+      "retryFor": "Retry {failed} failed records",
+      "confirmTitle": "Retry the failed records?",
+      "confirmBody": "Only the {count, plural, one {# record} other {# records}} that did not load will be tried again. Records that already loaded are left alone. The retry is recorded in the audit log.",
+      "retryQueued": "Retry queued for {count, plural, one {# record} other {# records}}. Refresh in a moment to see the result."
+    },
+    "plans": {
+      "pendingTitle": "Downgrade requested.",
+      "pendingBody": "Your request to move to {plan} is awaiting approval from platform billing. Nothing changes until it is approved.",
+      "lastApproved": "Your last downgrade request was approved.",
+      "lastRejected": "Your last downgrade request was not approved. {reason}",
+      "rejectReason": {
+        "USAGE_EXCEEDS_TARGET_PLAN": "Your usage was above the limits of the requested plan when it was reviewed.",
+        "PLAN_OR_SUBSCRIPTION_CHANGED": "Your plan or subscription changed before it was reviewed."
+      },
+      "dialogTitle": "Request downgrade to {plan}",
+      "dialogIntro": "You are requesting a downgrade from {from} to {to}. Platform billing reviews every downgrade; your current plan stays in force until it is approved.",
+      "reasonLabel": "Reason for the downgrade (at least 10 characters, recorded in the audit log)",
+      "submit": "Submit request",
+      "blockedTitle": "This downgrade is blocked: your current usage is above the target plan's limits.",
+      "blockedLine": "{resource}: using {used}, the target plan allows {limit}",
+      "resource": {
+        "users": "Users",
+        "storage_gb": "Storage (GB)"
+      },
+      "alreadyPending": "A downgrade request is already awaiting approval.",
+      "approvalNote": "This is a request, not an immediate change. You will not be charged differently until platform billing approves it."
+    }
+  },
   "tenantAdminW2": {
     "compliance": {
       "provenanceMethod": "Scores are derived from your recorded compliance controls (pass or fail over testable controls).",
@@ -16739,6 +16907,30 @@
     },
     "users": {
       "exportNotice": "Exports are recorded in the audit log."
+    },
+    "billingInvoices": {
+      "tableLabel": "Invoices",
+      "number": "Invoice no.",
+      "date": "Date",
+      "supplierGstin": "Supplier GSTIN",
+      "recipientGstin": "Recipient GSTIN",
+      "placeOfSupply": "Place of supply",
+      "cgst": "CGST",
+      "sgst": "SGST",
+      "igst": "IGST",
+      "total": "Total",
+      "status": "Status",
+      "pdf": "PDF",
+      "pdfAria": "Download invoice {number} as PDF",
+      "emptyTitle": "No invoices yet",
+      "emptyMessage": "Invoice history will appear here after your first billing cycle.",
+      "payHeading": "How to pay",
+      "payPoGem": "Purchase order / GeM",
+      "payPoGemHint": "Pay against a purchase order raised through GeM or your department.",
+      "payTreasury": "Treasury e-challan",
+      "payTreasuryHint": "Pay through the state treasury using an e-challan.",
+      "payOnline": "Online payment",
+      "payOnlineHint": "Pay online with a card, UPI or net banking."
     },
     "subscription": {
       "status": {
@@ -16767,7 +16959,10 @@
       "disableConfirm": "Disable channel",
       "reasonLabel": "Reason for disabling (recorded in the audit log)",
       "enabledOk": "Channel \"{name}\" enabled.",
-      "disabledOk": "Channel \"{name}\" disabled."
+      "disabledOk": "Channel \"{name}\" disabled.",
+      "testSend": "Send test to me",
+      "testSendOk": "Test message for \"{name}\" queued to your own address. Check your inbox shortly.",
+      "testSendHint": "Test messages go only to your own address."
     },
     "breakglass": {
       "platformAdminOnly": "Platform administrators only"
@@ -16831,6 +17026,17 @@
     "riskConfirmTitle": "Add risk {riskCode}?",
     "riskConfirmDescription": "{title} · {category} · Score {score} ({band}). The score is recomputed and stored server-side. This will be recorded in the audit trail.",
     "riskConfirmLabel": "Confirm & add"
+  },
+  "knowledgeDocumentsNew": {
+    "duplicateTitle": "A document with this title already exists.",
+    "openExisting": "Open the existing document"
+  },
+  "reportsPiiExport": {
+    "maskedByDefault": "Personal data columns (phone, email, Aadhaar and similar) are masked by default in exports. Download links expire after 15 minutes.",
+    "unmaskLabel": "Export personal data unmasked",
+    "reasonLabel": "Reason for unmasked export *",
+    "reasonRequired": "Give a reason (at least 10 characters) to export personal data unmasked.",
+    "auditNote": "This request and its reason are recorded in the audit log."
   },
   "knowledgeW2": {
     "accessColumn": "Access",
@@ -17127,5 +17333,124 @@
     "legacyShown": "Showing {count} of {total}.",
     "legacyForbiddenTitle": "You do not have access to this report.",
     "legacyForbiddenNext": "Only workflow administrators can see legacy delegations."
+  },
+  "legalAffidavits": {
+    "title": "Affidavit files",
+    "attach": "Attach affidavit file",
+    "chooseFile": "Choose a file (PDF, JPG, PNG or TIFF, up to 20 MB)",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "empty": "No affidavit files are attached to this case.",
+    "loadError": "The affidavit files could not be loaded. Try again.",
+    "retry": "Try again",
+    "open": "Open",
+    "opening": "Opening…",
+    "legalOnly": "Only the legal team can open these files. Each file is virus-scanned before it can be opened.",
+    "colFile": "File",
+    "colStatus": "Status",
+    "colSize": "Size",
+    "colUploaded": "Uploaded",
+    "tooLarge": "This file is larger than 20 MB. Choose a smaller file.",
+    "badType": "This file type is not accepted. Use PDF, JPG, PNG or TIFF.",
+    "noFile": "Choose a file to upload.",
+    "uploadFailed": "The file could not be uploaded. Try again.",
+    "openFailed": "The file could not be opened. Try again.",
+    "status": {
+      "awaiting_upload": "Waiting for upload",
+      "processing": "Being checked",
+      "filed": "Ready",
+      "quarantined": "Blocked (failed virus scan)",
+      "rejected": "Rejected",
+      "failed": "Could not be processed"
+    }
+  },
+  "legalCaseNew": {
+    "advocateLabel": "Empanelled advocate",
+    "advocateNone": "No advocate (use the counsel reference below)",
+    "advocatesError": "The advocate list could not be loaded; you can still use the counsel reference.",
+    "privilegedLabel": "Privileged / confidential case",
+    "privilegedHelp": "Only the officers assigned to this case and the legal head can see it. You are assigned automatically.",
+    "loading": "Loading…",
+    "selectCourt": "Select a court or tribunal…",
+    "courtOtherOption": "Other (not in the list)",
+    "courtOtherLabel": "Court / forum name *",
+    "courtUnverifiedNote": "A court that is not in the list is saved as typed and marked unverified.",
+    "group": {
+      "supreme": "Supreme Court",
+      "high_court": "High Courts",
+      "district": "District and subordinate courts",
+      "tribunal": "Tribunals and commissions"
+    },
+    "filingDateLabel": "Filing date *",
+    "filingDateInvalid": "Enter the filing date. It cannot be in the future.",
+    "departmentLabel": "Department *",
+    "selectDepartment": "Select the owning department…",
+    "departmentRequired": "Select the department that owns this case.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy.",
+    "refDataError": "The court and department lists could not be loaded. Reload the page to try again."
+  },
+  "legalOrderNew": {
+    "loading": "Loading…",
+    "selectDepartment": "Select the owning department (optional)…",
+    "departmentsError": "The department list could not be loaded. Reload the page to try again.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy."
+  },
+  "legalOpinionNew": {
+    "loading": "Loading…",
+    "addresseeLegend": "Addressed to *",
+    "internalDepartment": "Internal department",
+    "externalParty": "External party",
+    "departmentLabel": "Department *",
+    "selectDepartment": "Select the department…",
+    "departmentRequired": "Select the department this opinion is addressed to.",
+    "departmentsError": "The department list could not be loaded. Reload the page to try again.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy, or use an external party.",
+    "externalLabel": "External party name *",
+    "externalRequired": "Enter the name of the external party this opinion is addressed to."
+  },
+  "legalAdvocates": {
+    "title": "Empanelled advocates",
+    "subtitle": "The advocates empanelled with the department. Cases link to an advocate here, so lists show a consistent name.",
+    "loading": "Loading advocates…",
+    "empty": "No advocates are empanelled yet.",
+    "loadError": "The advocate list could not be loaded. Try again.",
+    "retry": "Try again",
+    "colName": "Name",
+    "colBar": "Bar enrolment no.",
+    "colContact": "Contact",
+    "addTitle": "Empanel an advocate",
+    "name": "Name *",
+    "bar": "Bar enrolment number *",
+    "barHelp": "For example D/1234/2011.",
+    "contact": "Phone or email *",
+    "add": "Empanel advocate",
+    "adding": "Saving…",
+    "added": "Advocate empanelled.",
+    "duplicate": "An advocate with this Bar enrolment number is already empanelled.",
+    "invalid": "Check the name, the Bar enrolment number and the phone or email.",
+    "saveFailed": "The advocate could not be saved. Try again.",
+    "adminOnly": "Only the head of legal can add advocates."
+  },
+  "fieldVisits": {
+    "locationNoteSupervisor": "Visit locations are personal data. They are shown rounded and may be exported by supervisors for field-operations purposes only.",
+    "locationNoteLimited": "Visit locations are personal data. They are shown rounded and are limited to field-operations purposes only.",
+    "from": "From",
+    "to": "To",
+    "filter": "Filter",
+    "clearDates": "Clear dates",
+    "statVisitsCapped": "Visits (latest {limit})",
+    "statVisitsInRange": "Visits in range",
+    "statVisits": "Visits",
+    "statOpenCapped": "Open (in latest {limit})",
+    "statOpenPaged": "Open (in visits {first}–{last})",
+    "statOpen": "Open",
+    "windowNote": "Showing visits {first}–{last} of {total}, newest first.",
+    "showNewer": "Show newer visits",
+    "showOlder": "Show older visits",
+    "recentVisits": "Recent visits",
+    "emptyTitleRange": "No visits in this date range",
+    "emptyTitle": "No visits yet",
+    "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
+    "emptyMessage": "Check in on a field task to record GPS and outcomes here."
   }
 }

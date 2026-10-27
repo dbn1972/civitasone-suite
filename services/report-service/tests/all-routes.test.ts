@@ -80,6 +80,11 @@ vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: async () => {} },
 }));
 
+// Owner decision #17: download links are minted per fetch, expiring in 15 minutes.
+vi.mock("@civitasone/storage", () => ({
+  presignedGetUrl: async (o: { key: string; expiresIn?: number }) => `https://s3.example.com/report.pdf?X-Amz-Expires=${o.expiresIn}`,
+  putObject: async () => {},
+}));
 vi.mock("../src/shared/outbox.js", () => ({ enqueue: async () => {}, markProcessed: async () => {} }));
 
 vi.mock("@civitasone/auth/plugin", () => ({
@@ -469,7 +474,7 @@ describe("Job Routes", () => {
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
       });
       expect(res.statusCode).toBe(302);
-      expect(res.headers.location).toBe("https://s3.example.com/report.pdf");
+      expect(res.headers.location).toBe("https://s3.example.com/report.pdf?X-Amz-Expires=900");
     });
 
     it("returns 404 when job not found", async () => {

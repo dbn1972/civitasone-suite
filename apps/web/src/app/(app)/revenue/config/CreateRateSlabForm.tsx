@@ -3,9 +3,9 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { proposeConfig, proposedMessage } from "./proposeConfig";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
-import type { AcceptedResponse, SlabType, RateSlabRow } from "./types";
+import type { SlabType, RateSlabRow } from "./types";
 
 interface CreateRateSlabFormProps {
   rateHeadId: string;
@@ -173,7 +173,6 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
         rateHeadId,
         slabType,
         rateValue: rateValuePaiseOrBps,
-        effectiveFrom,
         effectiveTo: effectiveTo || undefined,
       };
       if (slabType === "band") {
@@ -182,16 +181,9 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
         if (bandToPaise !== null) body.bandTo = bandToPaise;
       }
 
-      const res = await browserJson<AcceptedResponse>("v1/revenue/rate-slabs", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      const res = await proposeConfig({ kind: "rate_slab", action: "create", effectiveFrom, payload: body });
       setConfirmOpen(false);
-      setSuccessMessage(
-        res.id
-          ? `Rate slab submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
-          : "Rate slab submitted.",
-      );
+      setSuccessMessage(proposedMessage("Rate slab", res.id));
       setBandFrom("");
       setBandTo("");
       setRateValue("");
@@ -207,7 +199,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Rate Slab" padding>
+      <Card title="Propose Rate Slab" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
@@ -326,7 +318,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Rate Slab
+              Propose Rate Slab
             </Button>
           </div>
 
@@ -340,13 +332,13 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this rate slab?"
-        confirmLabel="Create rate slab"
+        title="Propose this rate slab?"
+        confirmLabel="Propose rate slab"
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Create a <strong>{slabType}</strong> rate slab for <strong>{rateHeadLabel}</strong>, effective{" "}
+            Propose a <strong>{slabType}</strong> rate slab for <strong>{rateHeadLabel}</strong>, effective{" "}
             {effectiveFrom || "—"}.
           </>
         }

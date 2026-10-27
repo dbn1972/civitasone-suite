@@ -153,4 +153,17 @@ describe("QuarterDetailPage", () => {
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
+
+  // GAP-ESTAB-QUARTERS-04: category renders its localised label, never the raw enum.
+  it("renders the localised category label, not the raw enum value", async () => {
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: { ...QUARTER, category: "other_legacy" }, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
+    });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
+    render(ui);
+
+    expect(screen.getByText(/Other \(legacy\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/other_legacy/)).not.toBeInTheDocument();
+  });
 });

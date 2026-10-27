@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, createCommitteeBody, createMeetingBody, createResolutionBody, minutesBody, recordAttendanceBody, markComplianceBody } from "./validators.js";
+import { idParam, createCommitteeBody, createMeetingBody, createResolutionBody, minutesBody, governanceLinkBody, recordAttendanceBody, markComplianceBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -45,6 +45,16 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = minutesBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.uploadMinutes(ctx, id, body));
+  });
+
+  // Owner decision #30 (GAP-ESTAB-MEETINGS-DETAIL-04): link/unlink the meeting-service meeting whose
+  // minutes workflow (draft -> approve) produces this meeting's MOM.
+  app.patch("/v1/estab/meetings/:id/governance-link", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = governanceLinkBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.linkGovernanceMeeting(ctx, id, body));
   });
 
   app.post("/v1/estab/meetings/:id/attendance", async (req, reply) => {

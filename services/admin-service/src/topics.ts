@@ -61,6 +61,8 @@ export const COMMANDS = {
   featureFlagDelete:  "admin.feature_flag.delete",
   dataExportRequest:  "admin.data_export.request",
   dataExportProcess:  "admin.data_export.process",
+  // Owner decision #22: audit record for each issued signed download link.
+  dataExportDownload: "admin.data_export.download",
   webhookCreate:      "admin.webhook.create",
   webhookUpdate:      "admin.webhook.update",
   webhookDelete:      "admin.webhook.delete",

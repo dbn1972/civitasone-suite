@@ -1,11 +1,14 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { seekOpinionBody, draftOpinionBody, issueOpinionBody, idParam, listOpinionsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
+import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -15,6 +18,16 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const body = seekOpinionBody.parse(req.body);
+    // GAP-LEGAL-CASES-DETAIL-06: an opinion cannot be sought against a case the caller may not see.
+    if (body.caseId) await assertCaseAccess(ctx, body.caseId);
+    // Owner decision #13: an internal-department addressee must be a real department. An external party needs no lookup.
+    if (body.addressee.type === "department") {
+      const departmentId = body.addressee.departmentId;
+      const departments = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });
+      if (!departments.some((d) => d.id === departmentId)) {
+        throw new HttpError(422, "UNKNOWN_DEPARTMENT", "addressee.departmentId does not reference a department in the organisation hierarchy");
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.seekOpinion(ctx, body));
   });
 
@@ -23,6 +36,7 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = draftOpinionBody.parse(req.body);
+    await assertOpinionCaseAccess(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.draftOpinion(ctx, id, body));
   });
 
@@ -31,6 +45,7 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = issueOpinionBody.parse(req.body ?? {});
+    await assertOpinionCaseAccess(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueOpinion(ctx, id, body));
   });
 
@@ -45,6 +60,8 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     // surface as 404 to the caller, not a 202 that the consumer then silently drops.
     const existing = await queries.getOpinion(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "opinion not found");
+    // GAP-LEGAL-CASES-DETAIL-06: an opinion on a hidden privileged case is 404, not 202.
+    if (existing.caseId) await assertCaseAccess(ctx, existing.caseId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitOpinionForApproval(ctx, id));
   });
 
@@ -54,17 +71,33 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const opinion = await queries.getOpinion(id, ctx.tenantId);
     if (!opinion) throw new HttpError(404, "NOT_FOUND", "opinion not found");
-    return reply.send(opinion);
+    // GAP-LEGAL-CASES-DETAIL-06: an opinion on a privileged case is as hidden as the case.
+    if (opinion.caseId) await assertCaseAccess(ctx, opinion.caseId);
+    const [dto] = await queries.withAddressee([opinion], ctx.tenantId, ctx.correlationId);
+    return reply.send(dto);
   });
 
   app.get("/v1/legal/opinions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listOpinionsQuery.parse(req.query);
-    return reply.send({ items: await queries.listOpinions(ctx.tenantId, q.status, q.caseId) });
+    if (q.caseId) await assertCaseAccess(ctx, q.caseId);
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const rows = (await queries.listOpinions(ctx.tenantId, q.status, q.caseId)) ?? [];
+    const visible = rows.filter((o) => !o.caseId || !hidden.has(o.caseId));
+    return reply.send({ items: await queries.withAddressee(visible, ctx.tenantId, ctx.correlationId) });
   });
 
   app.setErrorHandler(errorHandler);
+}
+
+/**
+ * GAP-LEGAL-CASES-DETAIL-06: a write to an opinion on a privileged case the caller may not see is
+ * 404 (existence not leaked). A missing opinion passes through unchanged, as before.
+ */
+async function assertOpinionCaseAccess(ctx: RequestContext, opinionId: string): Promise<void> {
+  const opinion = await queries.getOpinion(opinionId, ctx.tenantId);
+  if (opinion?.caseId) await assertCaseAccess(ctx, opinion.caseId);
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {
@@ -75,6 +108,10 @@ function errorHandler(err: unknown, req: any, reply: any): void {
   }
   if (err instanceof HttpError) {
     void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    return;
+  }
+  if (err instanceof OrgServiceError) {
+    void reply.code(503).send({ code: "ORG_SERVICE_UNAVAILABLE", message: "the department list is temporarily unavailable; please retry", correlationId, retryable: true });
     return;
   }
   req.log.error({ err }, "unhandled error");

@@ -2049,6 +2049,8 @@ export const MeetingSummarySchema = z.object({
 export const MeetingSummaryListSchema = z.array(MeetingSummarySchema);
 
 export const MeetingDetailSchema = MeetingSummarySchema.extend({
+  // Owner decision #30: the meeting-service meeting whose minutes workflow produces this meeting's MOM.
+  governanceMeetingId: z.string().uuid().nullable().optional(),
   agenda: z.array(z.object({
     id: z.string(),
     itemNo: z.number(),
@@ -2144,6 +2146,10 @@ export const LibraryIssueSummarySchema = z.object({
   dueAt: z.string(),
   returnedAt: z.string().optional(),
   status: z.enum(["issued", "returned", "overdue"]),
+  // Owner decision #29 (GAP-ESTAB-LIBRARY-ISSUES-05): renewals and the condition a book came back in.
+  renewalCount: z.number().int().nonnegative().optional(),
+  returnCondition: z.enum(["good", "fair", "damaged"]).optional(),
+  returnNotes: z.string().optional(),
 });
 export const LibraryIssueSummaryListSchema = z.array(LibraryIssueSummarySchema);
 

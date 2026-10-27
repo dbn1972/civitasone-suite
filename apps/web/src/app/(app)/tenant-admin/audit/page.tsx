@@ -6,6 +6,7 @@ import { toHumanError } from "@/lib/messages";
 import { countLast24h } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { AuditLogTable } from "./AuditLogTable";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export default async function TenantAuditPage(props: { searchParams?: Promise<{ entity?: string }> }) {
   const searchParams = await props.searchParams;
@@ -71,6 +72,9 @@ export default async function TenantAuditPage(props: { searchParams?: Promise<{ 
         <RefreshErrorState error={toHumanError("load", { area: "audit events" })} backHref="/tenant-admin" />
       ) : (
         <AuditLogTable
+          // OWNER DECISION #20: only the audit officer may reveal; tenant_admin and
+          // the other admin roles see the masked list. audit-service enforces the same.
+          canReveal={getSessionRoles().includes("audit_officer")}
           events={scoped.map((event) => ({
             id: event.id,
             timestamp: event.timestamp,

@@ -36,6 +36,7 @@ vi.mock("../_data", () => ({
   getTenantCodeLists: async () => ({ data: [], source: "error" }),
   getTenantConsentExchange: async () => ({ data: [], source: "error" }),
   getTenantDataMigration: async () => ({ data: [], source: "error" }),
+  getTenantImportBatches: async () => ({ data: [], source: "api" }),
   getTenantPlans: async () => ({ data: [], source: "error" }),
 }));
 

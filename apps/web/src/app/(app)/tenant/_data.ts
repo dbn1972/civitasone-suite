@@ -542,6 +542,53 @@ function tenantLoader(
     });
 }
 
+/**
+ * OWNER DECISION #23 (TENANT-DATA-MIGRATION-01): bulk-import batches with their
+ * per-record outcome, so the Data Migration page can offer the CSV error report
+ * and a retry of the failed records. `retryable` comes from the server (it knows
+ * whether failed records are stored); the page never infers it from counts.
+ */
+export interface ImportBatchSummary {
+  id: string;
+  entityType: string;
+  status: string;
+  total: number;
+  inserted: number;
+  failed: number;
+  retryCount: number;
+  retryable: boolean;
+  createdAt?: string;
+}
+
+const importBatchSchema = z.object({
+  id: z.string(),
+  entityType: z.string().default("org_unit"),
+  status: z.string(),
+  total: z.number().default(0),
+  inserted: z.number().default(0),
+  failed: z.number().default(0),
+  retryCount: z.number().default(0),
+  retryable: z.boolean().default(false),
+  createdAt: z.string().optional(),
+});
+
+export function mapImportBatches(payload: unknown): ImportBatchSummary[] {
+  const out: ImportBatchSummary[] = [];
+  for (const raw of extractRows(payload)) {
+    const parsed = importBatchSchema.safeParse(raw);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+export function getTenantImportBatches(): Promise<LoaderResult<ImportBatchSummary[]>> {
+  return fetchJson<unknown, ImportBatchSummary[]>("/api/v1/tenant/org/imports", [] as ImportBatchSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "tenant.import-batches",
+    mapResponse: mapImportBatches,
+  });
+}
+
 /** Core tenant profile (11th backend module). */
 export const getTenantOverview = tenantLoader("/api/v1/tenant/current", "tenant.overview", mapOverviewRows);
 export const getTenantQuotas = tenantLoader("/api/v1/tenant/usage", "tenant.quotas", mapQuotaRows);

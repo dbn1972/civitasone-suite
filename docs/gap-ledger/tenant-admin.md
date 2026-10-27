@@ -397,7 +397,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 741f2ed59 (owner decision #20, 2026-10-26): audit list masks actor email and IP on the server; POST /v1/audit/events/:id/reveal for audit_officer only with a 10+ character reason, caller tenant only, writes audit.viewed before returning; list reads are not logged per row; tenant_admin stays excluded. Round 1: audit_officer is admitted to /tenant-admin/audit only)
 - **W2 INTERIM (needs owner decision):** emails/IPs are masked by default and exports are now audited, but a click-to-reveal with an audited reveal and a server-side audit.viewed event are NOT built: they need a policy decision (may tenant admins reveal? an audit.viewed per list read doubles the log volume and appears in the log itself). Note also: audit-service /v1/audit/events allows audit_officer|audit_admin|super_admin|platform_admin — NOT tenant_admin — so confirm who this page is meant for.
 - **W0 note:** partly fixed by #1864 — Emails/IPs masked by default (maskEmail/maskIp); no reveal control or audit.viewed logging
 - **First-pass claim:** DPDP: actor identifiers (emails) and source IPs are shown in clear to every role in the layout with no masking or view-audit; reading the audit log is itself not evidenced as audited (AuditLogTable.tsx:51-56).
@@ -716,7 +716,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [~] **Status** (INTERIM — W2 tenant-admin REOPENED: acceptance 'download of a ready export returns a file' is unmet)
+- [x] **Status** (Closed by 9bcf85622 (owner decision #22, 2026-10-26): exports are generated and stored through packages/storage (one CSV per entity, one JSON for a full export), downloads are signed for 15 minutes and audited, storage keys never reach the browser, unsupported module/entity/format fails with a reason instead of an empty file)
 - **W2 note (needs owner decision):** the Download link is real and authenticated, and Single Entity now requires an id, but the export itself is a stub: the process consumer marks the request ready with fileSizeBytes 0 and no file is generated; `GET /v1/admin/data-export/:id/download` returns a JSON `{downloadUrl, expiresAt}` whose URL points back at itself. A real export needs a generator and storage (S3 or signed URL) - not invented here.
 - **First-pass claim:** 'Single Entity' type offers no entity selector, so the request cannot say which entity; and the Download button has no href/handler in code (DataExportClient.tsx:85,141-143).
 - **Verified evidence:** DataExportClient.tsx:85 offers <option value="entity">Single Entity</option>, but the form renders only a Module select for type==='module' (lines 89-97); the POST body (line 53) has no entity field, so an 'entity' request is unspecified. The Download Button at line 141 has no onClick and is not an anchor with href; DataExportRequest (loaders) contains no download URL that could be used - a download endpoint is not visible in the snapshot.
@@ -1173,7 +1173,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 421a9a1b4 (owner decision #25, 2026-10-26): test-send goes only to the calling admin's own address via the platform-provisioned channel (POST /notifications/channels/:id/test-send, CQRS + masked audit); Edit is moot because channel credentials live only in the secrets manager. Email and in-app are testable; sms/whatsapp/push have no admin number or device on file and are refused 422.)
 - **W2 note (INTERIM):** Add form (#1864) plus, new in W2, audited Enable/Disable (PATCH /notifications/channels/:id, CQRS command, markProcessed + guarded write + audit in one transaction, reason mandatory to disable, tenant-isolated; real-DB test `services/notification-service/tests/channel-enable-disable.test.ts`). STILL OPEN, needs owner decision: Test-send (no provider send path for a single channel is exposed) and Edit (the channel model is {type,name,isDefault,enabled}; no provider/config store exists).
 - **W0 note:** partly fixed by #1864 — ChannelForm Add form exists; edit, test-send and disable intentionally not built (backend has create+list only)
 - **First-pass claim:** Subtitle says 'Configure … providers' but the only way to add a channel is to hand-craft a POST body shown in a <pre>; no Add channel form, edit, test-send or disable (page.tsx:37-42,67-87).
@@ -1449,7 +1449,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 8224590aa (owner decision #24, 2026-10-26): downgrade is a request with a required reason, blocked (409 with the exceeded limits) when usage is above the target plan, approved by platform billing (never the requester), re-checked at approval, audited. Approval is API-ONLY for now: the platform-billing queue (GET /v1/tenant/subscription/downgrade-requests/pending) and decision endpoint (POST .../downgrade-requests/:requestId/decision) have no web screen; the tenant side only requests and sees status. A platform-billing approval screen is a follow-up)
 - **W2 reopened:** the provisional re-check failed its criteria — the downgrade flow shows only a 'contact your administrator' dialog: no required reason, no usage-vs-target-limit blocking, no pending state/audit row (acceptance unmet). Tenant-self-serve plan change needs an owner decision (tenant-service has /v1/tenant/subscription/downgrade; billing-service is super-admin-only) — INTERIM only.
 - **First-pass claim:** Downgrade 'Confirm Downgrade' only sets local state and closes — no API call, no audit reason, no check that current users/data exceed the target plan's limits beyond a warning line (PlansClient.tsx:212).
 - **Verified evidence:** PlansClient.tsx:212 (line 243 by file) 'Confirm Downgrade' runs setCurrentPlanId(targetPlanId!) and closes the modal; no request, no reason, no audit. The only guard is a static warning comparing plan maxUsers (197-201), not actual active users/storage, which the page does not load.
@@ -1483,6 +1483,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
 - [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- **Owner decision #26 (2026-10-26), built in 1a2eaabd1:** GST invoice fields (supplier/recipient GSTIN, place of supply, CGST/SGST/IGST, HSN/SAC per line) in billing-service + payment modes by edition (govt/govt_dept: PO/GeM, treasury e-challan, online; others online) + GST columns in the shared InvoiceList. LEFT OPEN: the plans page loader (getPlansData) still reads /v1/billing/plans, a bare plan array with no edition or invoices (see PLANS-06), so edition and invoice rows only reach this page once that wiring decision is made; the real invoice list with PDF is on the subscription page (SUBSCRIPTION-04).
 - **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
 - **First-pass claim:** 'Pay via Razorpay' presents a card-gateway checkout to a Government department whose payments run through PO/GeM/treasury; GST invoice details are absent from the invoice table and the 📥 PDF button has no handler (PlansClient.tsx:171,145).
@@ -2074,7 +2075,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  interim  ·  theme PII
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 6e1567f87 (owner decision #21, 2026-10-26): admin session views carry a masked IP and a browser-and-OS user agent; POST /identity/sessions/:id/reveal-ip for security_admin only with a reason, audited before the value is returned. Round 1: security_admin is admitted to /tenant-admin/sessions only, may read the masked list/detail but not create or revoke sessions, and the role is seeded in the Keycloak realm)
 - **W2 note (INTERIM, needs owner decision):** IP is already masked by default (no clear IP is rendered). An audited reveal and a server-side session-viewed event need a DPDP policy decision on admin IP visibility and a new identity-service endpoint; not invented here. Full user agent is still printed.
 - **W0-10 note:** review found the W0 tick partly — sessions/[id]/page.tsx:93 IP masked via maskIp (no clear IP shown), but no reveal and no audited reveal/view event (acceptance "reveal audited" unmet; deliberate per comment :14); full userAgent still printed :106.
 - **First-pass claim:** Full user agent and IP are printed for any viewer; personal-data handling (DPDP) and access audit are not addressed (page.tsx:73,84-86).
@@ -2398,7 +2399,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  interim  ·  theme WIRING (was DATEFMT)
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by ac9d1d1d8 (owner decision #27, 2026-10-26): billing-service owns the invoice PDF (GET /v1/billing/invoices/:id/pdf, tenant-scoped, issued bills only); the subscription page lists invoices with a per-invoice PDF link through the authenticated proxy.)
 - **W2 INTERIM (needs owner decision):** the 'Download invoice' link targeted /v1/billing/invoices/latest?format=pdf which NO service implements (billing-service has GET /invoices/:id with a uuid id and no PDF renderer) — it was a dead control, removed (subscription/page.tsx). An invoice list + PDF download needs a billing-service invoice-PDF endpoint.
 - **W0 note:** partly fixed by #1864 — Download routed via /api/proxy; still latest-only link, no invoice list
 - **First-pass claim:** "Download invoice" is a plain link to the "latest" invoice with no invoice list, date or amount, and goes to /api/v1 directly rather than through the proxy used by mutations (page.tsx:28).

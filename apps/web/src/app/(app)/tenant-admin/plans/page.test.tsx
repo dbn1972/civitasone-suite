@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const getPlansDataMock = vi.fn();
-vi.mock("@/app/_data/loaders", () => ({ getPlansData: (...a: unknown[]) => getPlansDataMock(...a) }));
+vi.mock("@/app/_data/loaders", () => ({
+  getPlansData: (...a: unknown[]) => getPlansDataMock(...a),
+  getDowngradeRequests: async () => ({ data: [], source: "api" }),
+}));
 vi.mock("@/lib/sync/resource", () => ({
   useSeededResource: (_k: string, seed: unknown) => ({ data: seed, provenance: "live", offline: false, cachedAt: null }),
 }));

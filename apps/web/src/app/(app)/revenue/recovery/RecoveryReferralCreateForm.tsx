@@ -4,10 +4,37 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
-export function RecoveryReferralCreateForm({ assesseeId }: { assesseeId: string }) {
+/** Owner decision #4: what the officer must see before a coercive referral. */
+export type RecoveryReadiness = {
+  outstandingMinor: string;
+  eligible: boolean;
+  notices: ReadonlyArray<{
+    id: string;
+    noticeNo: string;
+    servedOn: string;
+    noticePeriodDays: number;
+    lapsesOn: string;
+    lapsed: boolean;
+  }>;
+};
+
+export function RecoveryReferralCreateForm({
+  assesseeId,
+  readiness,
+}: {
+  assesseeId: string;
+  /**
+   * undefined = no gating UI (legacy callers); null = eligibility could not be
+   * loaded (fail closed: form disabled); object = show amount + notices and
+   * disable when not eligible. The server re-enforces the same rules.
+   */
+  readiness?: RecoveryReadiness | null;
+}) {
+  const blocked = readiness === null || (readiness !== undefined && !readiness.eligible);
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,7 +80,11 @@ export function RecoveryReferralCreateForm({ assesseeId }: { assesseeId: string 
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(res.id ? `Recovery referral recorded (id ${res.id}).` : "Recovery referral recorded.");
+      setMessage(
+        res.id
+          ? `Recovery referral raised (id ${res.id}) and sent for approval. Nothing is referred until a different officer approves it.`
+          : "Recovery referral raised and sent for approval. Nothing is referred until a different officer approves it.",
+      );
       setReason("");
       setFieldErrors({});
       router.refresh();
@@ -68,6 +99,41 @@ export function RecoveryReferralCreateForm({ assesseeId }: { assesseeId: string 
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} aria-label={`Refer assessee ${assesseeId} for recovery`}>
       <Card title="Refer for Recovery" padding>
         <div style={{ display: "grid", gap: 14 }}>
+          {readiness === null && (
+            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>
+              We couldn&apos;t check this assessee&apos;s arrears and notices, so a referral can&apos;t be raised safely
+              right now. Try again in a moment.
+            </p>
+          )}
+          {readiness && (
+            <div style={{ display: "grid", gap: 8, fontSize: 13.5 }}>
+              <p style={{ margin: 0 }}>
+                Outstanding arrears: <strong>{formatMoney(readiness.outstandingMinor)}</strong>
+              </p>
+              <ul aria-label="Demand notices served" style={{ margin: 0, paddingInlineStart: 18, display: "grid", gap: 4 }}>
+                {readiness.notices.length === 0 ? (
+                  <li>No demand notice on record.</li>
+                ) : (
+                  readiness.notices.map((n) => (
+                    <li key={n.id}>
+                      <span className="mono">{n.noticeNo}</span> — served {formatIndianDate(n.servedOn)}, {n.noticePeriodDays}-day
+                      period {n.lapsed ? "lapsed" : "runs to"} {formatIndianDate(n.lapsesOn)}
+                      {n.lapsed ? " (period lapsed)" : " (period still running)"}
+                    </li>
+                  ))
+                )}
+              </ul>
+              {!readiness.eligible && (
+                <p role="status" style={{ margin: 0, color: "var(--bad)" }}>
+                  {readiness.notices.length === 0
+                    ? "No demand notice has been served, so a recovery referral is not allowed yet."
+                    : readiness.outstandingMinor === "0" || readiness.outstandingMinor.startsWith("-")
+                      ? "This assessee has no outstanding arrears, so a recovery referral is not allowed."
+                      : "The notice period has not lapsed yet, so a recovery referral is not allowed."}
+                </p>
+              )}
+            </div>
+          )}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>
               Reason{" "}
@@ -95,7 +161,7 @@ export function RecoveryReferralCreateForm({ assesseeId }: { assesseeId: string 
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || blocked} loading={busy}>
               Refer for Recovery
             </Button>
           </div>
@@ -120,7 +186,7 @@ export function RecoveryReferralCreateForm({ assesseeId }: { assesseeId: string 
         danger
         busy={busy}
         errorMessage={dialogError}
-        description="This refers the assessee's outstanding arrears for coercive recovery action and takes effect immediately — there is no separate checker approval step for referrals."
+        description="This raises a referral of the assessee's outstanding arrears for coercive recovery action. It is not referred to legal until a different officer must approve it — you cannot approve your own referral."
         onConfirm={() => void submitReferral()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

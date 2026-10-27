@@ -143,6 +143,12 @@ const SECURITY_DESK = "security_control_room";
 const BROADCAST_AUDIENCE = "all_users";
 /** Role recipient for contract lifecycle alerts — resolved per tenant by the delivery pipeline. */
 const CONTRACT_DESK = "contract_management_desk";
+/**
+ * Owner decision #24: platform billing decides plan downgrade requests (the
+ * tenant-service decision route admits platform_admin/super_admin). New requests
+ * are announced to that desk; the decision itself stays on its API queue.
+ */
+const PLATFORM_BILLING_DESK = "platform_billing_desk";
 
 type VisitorSecurityIncidentPayload = {
   incidentType?: string;
@@ -205,6 +211,20 @@ type ContractExpiryAlertPayload = {
   title?: string;
   endDate?: string;
   daysRemaining?: number;
+};
+
+type DowngradeRequestedPayload = {
+  requestId?: string;
+  fromPlanId?: string;
+  targetPlanId?: string;
+  requestedBy?: string;
+};
+
+type DowngradeRejectedPayload = {
+  requestId?: string;
+  targetPlanId?: string;
+  requestedBy?: string;
+  reason?: string | null;
 };
 
 // ─── Recipient resolution ────────────────────────────────────────────────────
@@ -463,6 +483,34 @@ function resolveRecipients(eventType: string, payload: Record<string, unknown>):
           contractTitle: p.title ? ` (${p.title})` : "",
           endDate: p.endDate ?? "",
           daysRemaining: String(p.daysRemaining ?? ""),
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.tenantDowngradeRequested: {
+      const p = payload as DowngradeRequestedPayload;
+      return [{
+        recipientId: PLATFORM_BILLING_DESK,
+        recipient: PLATFORM_BILLING_DESK,
+        variables: {
+          requestId: p.requestId ?? "",
+          fromPlanId: p.fromPlanId ?? "",
+          targetPlanId: p.targetPlanId ?? "",
+        },
+      }];
+    }
+
+    case CONSUMED_EVENTS.tenantDowngradeRejected: {
+      const p = payload as DowngradeRejectedPayload;
+      // Without the requester there is no one to tell; skip rather than guess.
+      if (!p.requestedBy) return [];
+      return [{
+        recipientId: p.requestedBy,
+        recipient: p.requestedBy,
+        variables: {
+          requestId: p.requestId ?? "",
+          targetPlanId: p.targetPlanId ?? "",
+          reason: p.reason ?? "no reason recorded",
         },
       }];
     }

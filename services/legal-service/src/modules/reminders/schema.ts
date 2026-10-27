@@ -9,6 +9,7 @@ export const legalReminders = remindersSchema.table("legal_reminders", {
   remindAt:  timestamp("remind_at", { withTimezone: true }).notNull(),
   message:   text("message").notNull(),
   sent:      boolean("sent").notNull().default(false),
+  sentAt:    timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

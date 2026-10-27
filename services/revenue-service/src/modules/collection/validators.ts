@@ -14,6 +14,10 @@ export const createReceiptBody = z.object({
 export const createRefundBody = z.object({
   receiptId: z.string().uuid(),
   reason: z.string().min(1).max(500),
+  // Owner decision #1 (2026-10-26): partial refunds are allowed. Optional; when
+  // omitted the refund is the full receipt amount. Range-checked against the
+  // refundable balance in the route (and again in the consumer).
+  amountMinor: bigintString.optional(),
 });
 
 export const refundDecideBody = z.object({

@@ -14,11 +14,14 @@ import { registerOpinionEOfficeDecisionConsumers } from "./modules/opinions/eoff
 import { registerCounselBriefConsumers } from "./modules/counsel/consumer.js";
 import { registerFilingConsumers } from "./modules/filings/consumer.js";
 import { registerReminderConsumers } from "./modules/reminders/consumer.js";
+import { registerAttachmentConsumers } from "./modules/attachments/consumer.js";
+import { registerAdvocateConsumers } from "./modules/advocates/consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerLimitationConsumers } from "./modules/limitations/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
 import { registerRtiConsumers } from "./modules/rti/consumer.js";
 import { startCauseListSync } from "./modules/ecourts/sync-consumer.js";
+import { startReminderDispatcher } from "./modules/reminders/dispatcher.js";
 import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "legal-worker" });
@@ -62,6 +65,8 @@ registerOpinionEOfficeDecisionConsumers(queue);
 registerCounselBriefConsumers(queue);
 registerFilingConsumers(queue);
 registerReminderConsumers(queue);
+registerAttachmentConsumers(queue);
+registerAdvocateConsumers(queue);
 registerDocumentConsumers(queue);
 registerLimitationConsumers(queue);
 // Cross-service choreography: board decision → legal intake (for-review).
@@ -80,12 +85,15 @@ log.info("legal-service worker: consumers + outbox relay running");
 
 // Start cause-list sync polling consumer (env-gated via ECOURTS_ENABLED).
 const causeListSyncTimer = startCauseListSync();
+// Owner decision #8: 5-minute reminder dispatcher (notification-service via outbox).
+const stopReminderDispatcher = startReminderDispatcher();
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
   clearInterval(relay);
   if (causeListSyncTimer) clearInterval(causeListSyncTimer);
+  stopReminderDispatcher();
   await queue.stop();
   await scannerSqlClient.end();
   await sqlClient.end();

@@ -37,6 +37,11 @@ export const importBatches = tenantSchema.table("import_batches", {
   inserted:    integer("inserted").notNull().default(0),
   failed:      integer("failed").notNull().default(0),
   errors:      jsonb("errors").notNull().default([]),
+  // Owner decision #23: what a retry re-runs (only the records that did not load).
+  failedRecords: jsonb("failed_records").$type<{ index: number; record: Record<string, unknown> }[]>().notNull().default([]),
+  retryCount:  integer("retry_count").notNull().default(0),
+  lastRetryAt: timestamp("last_retry_at", { withTimezone: true }),
+  lastRetryBy: uuid("last_retry_by"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdBy:   uuid("created_by").notNull(),

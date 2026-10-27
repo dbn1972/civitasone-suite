@@ -20,6 +20,8 @@ export type DemandOption = {
   financialYear: string;
   netMinor: string;
   status: string;
+  /** Owner decision #6: server-issued live balance of this demand (the write-off cap). */
+  outstandingMinor?: string;
 };
 
 export type PendingWriteOffRow = {
@@ -97,6 +99,29 @@ function mapDemands(payload: unknown): DemandOption[] | null {
   return mapped;
 }
 
+// Owner decision #6: live per-demand balance, from the same server endpoint the
+// adjustments form uses, so the write-off cap shown is the one enforced.
+async function getDemandBalances(assesseeId: string): Promise<LoaderResult<Array<{ demandId: string; outstandingMinor: string }>>> {
+  return fetchJson<unknown, Array<{ demandId: string; outstandingMinor: string }>>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/movable-demands`,
+    [],
+    {
+      telemetryKey: "revenue.write-offs.demand-balances",
+      mapResponse: (payload: unknown) => {
+        const rows = arrayFromPayload(payload);
+        if (!rows) return null;
+        const out: Array<{ demandId: string; outstandingMinor: string }> = [];
+        for (const raw of rows) {
+          if (isRecord(raw) && typeof raw.demandId === "string" && raw.outstandingMinor != null) {
+            out.push({ demandId: raw.demandId, outstandingMinor: String(raw.outstandingMinor) });
+          }
+        }
+        return out;
+      },
+    },
+  );
+}
+
 async function getDemands(assesseeId: string): Promise<LoaderResult<DemandOption[]>> {
   return fetchJson<unknown, DemandOption[]>(
     `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/demands`,
@@ -154,13 +179,17 @@ export default async function WriteOffsPage(
   let demands: DemandOption[] = [];
   const selected = assesseeId ? assessees.find((a) => a.id === assesseeId) ?? null : null;
   if (assesseeId) {
-    const [dcbRes, demandsRes] = await Promise.all([getDcb(assesseeId), getDemands(assesseeId)]);
+    const [dcbRes, demandsRes, balancesRes] = await Promise.all([getDcb(assesseeId), getDemands(assesseeId), getDemandBalances(assesseeId)]);
     if (dcbRes.source === "error" || !dcbRes.data) {
       dcbUnavailable = true;
     } else {
       outstandingMinor = dcbRes.data.balance;
     }
-    demands = demandsRes.data;
+    const balanceByDemand = new Map(balancesRes.data.map((b) => [b.demandId, b.outstandingMinor]));
+    demands = demandsRes.data.map((d) => {
+      const live = balanceByDemand.get(d.id);
+      return live !== undefined ? { ...d, outstandingMinor: live } : d;
+    });
   }
 
   return (

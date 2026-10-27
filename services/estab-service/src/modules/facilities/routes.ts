@@ -11,7 +11,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, createGuesthouseBody, bookRoomBody, checkoutBody, addBookBody, issueBookBody,
-  libraryBooksQuery, libraryIssuesQuery, renewIssueBody, editBookBody, withdrawBookBody,
+  libraryBooksQuery, libraryIssuesQuery, renewIssueBody, returnIssueBody, editBookBody, withdrawBookBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 
@@ -131,7 +131,8 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.returnBook(ctx, id));
+    const body = returnIssueBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.returnBook(ctx, id, body));
   });
 
   app.patch("/v1/estab/library/issues/:id/renew", async (req, reply) => {

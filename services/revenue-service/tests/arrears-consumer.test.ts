@@ -64,6 +64,15 @@ vi.mock("../src/modules/arrears/schema.js", () => ({
   instalments: Symbol("instalments"),
   writeOffs: { tenantId: "tenantId", id: "id", assesseeId: "assesseeId", makerUserId: "makerUserId" },
   recoveryReferrals: Symbol("recoveryReferrals"),
+  demandNotices: Symbol("demandNotices"),
+}));
+
+// Owner decision #4: the notice gate has its own DB-backed suite (recovery-referral-approval.test.ts);
+// here a lapsed notice is a given so this suite keeps testing the consumer wiring.
+vi.mock("../src/modules/arrears/recovery-notice.js", () => ({
+  requireLapsedNoticeTx: vi.fn().mockResolvedValue({ id: "notice-1", noticeNo: "DN-1", servedOn: "2026-01-01", noticePeriodDays: 30, lapsesOn: "2026-01-31", lapsed: true }),
+  istToday: () => "2026-10-26",
+  listNoticesTx: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../src/modules/assessment/schema.js", () => ({
@@ -191,7 +200,9 @@ describe("Arrears Consumer", () => {
   });
 
   describe("writeOffCreate (GAP-REVENUE-WRITE-OFFS-03)", () => {
-    it("stores the optional demandId + financialYear on the write-off row", async () => {
+    it("stores the demandId + the demand's financialYear on the write-off row", async () => {
+      // Owner decision #6: the consumer loads the demand (its assessee + authoritative FY).
+      mockSelectLimit.mockResolvedValueOnce([{ assesseeId: "assessee-1", financialYear: "2024-25" }]);
       const msg = buildMsg({
         payload: {
           assesseeId: "assessee-1",
@@ -256,7 +267,7 @@ describe("Arrears Consumer", () => {
   });
 
   describe("recoveryRefer", () => {
-    it("inserts referral and enqueues events", async () => {
+    it("inserts a PENDING referral and audits it — legal-service is NOT notified until a checker approves (owner decision #4)", async () => {
       // GAP-REVENUE-RECOVERY-01: the consumer now checks outstanding arrears
       // first — seed a positive DCB balance so a legitimate referral proceeds.
       mockSelectWhere.mockReturnValueOnce([{ total: 400000n }]);
@@ -267,9 +278,10 @@ describe("Arrears Consumer", () => {
 
       expect(mockMarkProcessed).toHaveBeenCalledTimes(1);
       expect(mockInsert).toHaveBeenCalledTimes(1);
-      expect(mockEnqueue).toHaveBeenCalledTimes(2);
-      expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.recovery.referred");
-      expect(mockEnqueue.mock.calls[1]![1].topic).toBe("audit.event.record");
+      expect(mockEnqueue).toHaveBeenCalledTimes(1);
+      expect(mockEnqueue.mock.calls[0]![1].topic).toBe("audit.event.record");
+      expect(mockEnqueue.mock.calls.some((c) => c[1].topic === "revenue.recovery.referred")).toBe(false);
+      expect(mockValues.mock.calls.map((c) => c[0]).find((v) => v && v.reason === "Chronic defaulter")).toMatchObject({ status: "pending", noticeId: "notice-1" });
       expect(mockCacheInvalidate).toHaveBeenCalledWith("revenue:tenant-1:instalments:assessee-1");
     });
 

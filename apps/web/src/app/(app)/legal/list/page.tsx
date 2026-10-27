@@ -11,7 +11,9 @@ export default async function LegalCasesListPage() {
   // stayed — not only status==="pending" (which dropped appealed/stayed cases
   // the table itself knows about). Shared constant so page and table agree.
   const active = items.filter((i) => ACTIVE_CASE_STATUSES.includes(i.status)).length;
-  const courts = new Set(items.map((i) => i.court)).size;
+  // GAP-LEGAL-CASES-NEW-02: count distinct courts on the normalised value (trim + case-fold) so spelling
+  // variants of a legacy free-text court count once; master courts are already canonical.
+  const courts = new Set(items.map((i) => i.court.trim().replace(/\s+/g, " ").toLowerCase())).size;
   const disposed = items.filter((i) => i.status === "disposed").length;
   // GAP-LEGAL-LIST-01: this counts writ/criminal matters — a case category,
   // not a computed risk assessment. Labelled honestly as "Writ / Criminal"
@@ -27,6 +29,7 @@ export default async function LegalCasesListPage() {
         actions={
           <>
             <Link href="/legal/hearings" className="btn ghost">Cause list</Link>
+            <Link href="/legal/advocates" className="btn ghost">Advocates</Link>
             <Link href="/legal/cases/new" className="btn primary">+ New Case</Link>
           </>
         }

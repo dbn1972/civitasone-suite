@@ -22,6 +22,8 @@ export type LineKind = "line" | "tax" | "charge";
 
 export interface LineItemInput {
   description: string;
+  /** HSN (goods) / SAC (services) code, 4/6/8 digits. */
+  hsnSac?: string | undefined;
   amountMinor: number; // paise per unit
   quantity?: number;
   kind?: LineKind;
@@ -108,4 +110,46 @@ export function assertWithinOutstanding(totalMinor: bigint, paidMinor: bigint, a
       `payment ${amountMinor} paise exceeds outstanding ${outstandingMinor(totalMinor, paidMinor)} paise`,
     );
   }
+}
+
+// ── GST tax-invoice fields (owner decision #26) ──────────────────────────────
+
+export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+export const HSN_SAC_RE = /^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/;
+
+export interface GstDetail {
+  supplierGstin: string;
+  recipientGstin: string;
+  /** Two-digit GST state code of the place of supply. */
+  placeOfSupply: string;
+  cgstMinor: bigint;
+  sgstMinor: bigint;
+  igstMinor: bigint;
+}
+
+/**
+ * Validate the CGST/SGST/IGST split against the tax lines. Intra-state supply (supplier
+ * state == place of supply) is CGST + SGST in equal halves with no IGST; inter-state supply
+ * is IGST only. The split must equal the invoice tax exactly. Returns an error string, or
+ * null when valid.
+ */
+export function validateGstSplit(g: GstDetail, taxMinor: bigint): string | null {
+  if (!GSTIN_RE.test(g.supplierGstin)) return "supplier GSTIN is not a valid 15-character GSTIN";
+  if (!GSTIN_RE.test(g.recipientGstin)) return "recipient GSTIN is not a valid 15-character GSTIN";
+  if (!/^[0-9]{2}$/.test(g.placeOfSupply)) return "place of supply must be a two-digit GST state code";
+  if (g.cgstMinor < 0n || g.sgstMinor < 0n || g.igstMinor < 0n) return "tax components cannot be negative";
+  if (g.cgstMinor + g.sgstMinor + g.igstMinor !== taxMinor) return "CGST + SGST + IGST must equal the invoice tax lines";
+  const intraState = g.supplierGstin.slice(0, 2) === g.placeOfSupply;
+  if (intraState) {
+    if (g.igstMinor !== 0n) return "intra-state supply is CGST + SGST only; IGST must be zero";
+    if (g.cgstMinor !== g.sgstMinor) return "CGST and SGST must be equal";
+  } else if (g.cgstMinor !== 0n || g.sgstMinor !== 0n) {
+    return "inter-state supply is IGST only; CGST and SGST must be zero";
+  }
+  return null;
+}
+
+/** Human invoice number derived from the period and the invoice id (stable, no extra sequence). */
+export function invoiceNumber(periodMonth: string, id: string): string {
+  return `INV-${periodMonth.replace("-", "")}-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }

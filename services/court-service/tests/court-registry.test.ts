@@ -31,6 +31,8 @@ vi.mock("../src/modules/court-registry/repo.js", () => ({
 
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   listActiveKeys: vi.fn(async () => [] as string[]),
+  // Owner decision #33: creating a court seeds its per-court cause-list slot / courtroom config.
+  insertConfig: vi.fn(async () => {}),
 }));
 
 vi.mock("../src/topics.js", () => ({
