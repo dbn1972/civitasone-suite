@@ -97,6 +97,24 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: repo.toView(enrolment) });
   });
 
+  /**
+   * D4c #14/#15: the ONLY route that returns a full member profile id. Loyalty roles only; the reveal is
+   * audited (published and awaited before the id is returned, fail closed). The enrolment is looked up
+   * tenant-scoped first so no audit is written for a missing or foreign id.
+   */
+  app.get("/v1/loyalty/enrolments/:id/profile-ref", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = idParam.parse(req.params);
+
+    const enrolment = await repo.findById(id, ctx.tenantId);
+    if (!enrolment) {
+      throw new HttpError(404, "NOT_FOUND", "enrolment not found");
+    }
+    await commands.recordProfileReveal(ctx, id);
+    return reply.header("cache-control", "no-store").send({ data: { id, profileId: enrolment.profileId } });
+  });
+
   app.patch("/v1/loyalty/enrolments/:id/status", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
