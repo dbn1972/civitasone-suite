@@ -210,7 +210,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-06  ·  LOW  ·  confirmed  ·  theme DEADROUTE
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by d955c80cc (UAT B4, 2026-10-27): infrastructure assets carry an optional assetId (migration 0027, POST/list/get) and the register links the name to /assets/<id> when present, plain text when not; the add form has an optional asset picker. Tests: services/location-service/tests/infrastructure-asset-link.test.ts, InfrastructureActions.test.tsx.
 - **W2 note:** the infrastructure API carries no asset-service id, so rows cannot link to /assets/:id; monitoring markers now open the register - NEEDS OWNER DECISION
 - **First-pass claim:** Infrastructure rows carry no link to the Assets module although Map Monitoring links infrastructure markers to /assets/:refId (maps/_components/MonitoringMap.tsx recordHref).
 - **Verified evidence:** MonitoringMap.tsx:52-53 links infrastructure markers to /assets/<refId>; the infrastructure list uses ModuleListTable rows with no href (ModuleListTable.tsx:48-56) and mapRows keeps only the row id, which may not equal the assets refId. app/(app)/assets/[id] exists. Whether infrastructure id equals asset id is cannot-verify without location-service.
