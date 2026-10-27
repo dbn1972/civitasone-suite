@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/platform-admin/roles", icon: "🔑", label: "Roles & Permissions", desc: "Matrix with SoD enforcement" },
   { href: "/platform-admin/users", icon: "👥", label: "User Management", desc: "All users, role badges, bulk export" },
   { href: "/platform-admin/tenant-config", icon: "🏢", label: "Tenant Config", desc: "Tenant, Keycloak, storage, license" },
+  { href: "/platform-admin/billing", icon: "💳", label: "Plan Downgrades", desc: "Approve or reject tenant downgrade requests" },
 ];
 
 export default async function PlatformAdminPage() {

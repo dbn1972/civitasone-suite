@@ -6611,6 +6611,9 @@ export type DowngradeRequestSummary = {
   requestedAt: string;
   decidedAt?: string | null;
   decisionReason?: string | null;
+  /** F8: an approved downgrade takes effect at the end of the billing period (effectiveAt) and is then applied (appliedAt). */
+  effectiveAt?: string | null;
+  appliedAt?: string | null;
 };
 
 export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequestSummary[]>> {
@@ -6618,6 +6621,28 @@ export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequ
     revalidateSeconds: 30,
     telemetryKey: "admin.downgrade-requests",
     mapResponse: (p) => (getArrayPayload(p) as DowngradeRequestSummary[] | null) ?? [],
+  });
+}
+
+/**
+ * OWNER DECISION F8: platform billing's queue of tenants' pending downgrade
+ * requests (all tenants; platform_admin / super_admin only). An empty list and a
+ * failed read stay distinct (source "error").
+ */
+export type PendingDowngradeRequest = {
+  id: string;
+  tenantId: string;
+  fromPlanId: string;
+  targetPlanId: string;
+  reason: string;
+  requestedAt: string;
+};
+
+export async function getPendingDowngradeRequests(): Promise<LoaderResult<PendingDowngradeRequest[]>> {
+  return fetchJson<unknown, PendingDowngradeRequest[]>("/api/v1/tenant/subscription/downgrade-requests/pending", [] as PendingDowngradeRequest[], {
+    revalidateSeconds: 0,
+    telemetryKey: "platform.downgrade-queue",
+    mapResponse: (p) => (getArrayPayload(p) as PendingDowngradeRequest[] | null) ?? [],
   });
 }
 
@@ -6714,6 +6739,15 @@ export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]
     revalidateSeconds: 30,
     telemetryKey: "admin.data-exports",
     mapResponse: (p) => getArrayPayload(p) as DataExportRequest[] | null,
+  });
+}
+
+/** F7: the modules a data export can actually cover (admin-service reports them from its registered exporters). */
+export async function getExportableModules(): Promise<LoaderResult<string[]>> {
+  return fetchJson<unknown, string[]>("/api/v1/admin/data-export/modules", [] as string[], {
+    revalidateSeconds: 300,
+    telemetryKey: "admin.data-export-modules",
+    mapResponse: (p) => ((getArrayPayload(p) as unknown[] | null) ?? []).filter((m): m is string => typeof m === "string"),
   });
 }
 
