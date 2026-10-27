@@ -512,7 +512,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was ROLEGATE)
 
-- [~] **Status** NEEDS OWNER DECISION: product/backend must confirm HOA category field availability, `[~]` if blocked + reason)
+- [x] **Status** Closed by f6f6baa92 (UAT B4, 2026-10-27). Confirmation line, review/publish description and load-failure retry built; the per-draft confirm checkbox and a head category were not built (finance major-heads carries no category field, and a stored confirmation would need a new definition column) -- acceptance criteria met without them.
 - **First-pass claim:** HOA search lists finance major-heads only by code/description; wrong-head risk is unmitigated with no tariff cross-check (FeeBuilder.tsx:393-470, finance/major-heads).
 - **Verified evidence:** FeeBuilder.tsx:389-470 implements the HOA combobox. Options come from fetchHoaOptions (feeBuilderApi.ts:325-333), which maps /api/proxy/v1/finance/major-heads rows to `${code} — ${description}`. filterHoaOptions matches code or label text only. Once chosen it shows 'Attached: <code>' in green (:463-466). Nothing checks the head against the fee type (no tariff cross-check), and no confirmation is shown. The finding's ROLEGATE tag is wrong (this is wrong-selection risk, not access control). Whether finance restricts which heads a designer may attach is cannot-verify (finance service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
