@@ -2139,7 +2139,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — intake tracking API design undeterminable; service absent)
+- [x] **Status** Closed (UAT B4, 2026-10-27): ownership scoping was already pinned (tests/authz-counter-track-ownership.test.ts: foreign number = 404); lookups are now rate limited per client (30/min, then 429) - tests/intake-track-rate-limit.test.ts.
 - **First-pass claim:** Access control cannot be seen from the UI: the route takes only a tracking number and displays status, service and certificate state with no citizen ownership check on the client (TrackClient.tsx:27-43). Whether /intake/track/:no is scoped to the caller or enumerable is undeterminable — no citizen backend in this snapshot (DPDP).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/intake/track/:trackingNo']`
 - **Question:** Is tracking lookup scoped to the caller (or requires a secret), and are tracking numbers non-guessable and rate limited?
