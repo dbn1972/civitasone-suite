@@ -4,6 +4,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
 import { stockLedger, type LedgerInsert } from "../ledger/schema.js";
 import { stockValuationRates } from "../valuation/schema.js";
+import { stockItems } from "../item/schema.js";
 import { stockWarehouses } from "../warehouse/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -147,14 +148,25 @@ export async function findLedger(
       .offset(opts?.offset ?? 0);
     if (rows.length === 0) return [];
 
-    // GAP-STOCK-LEDGER-02: stock_ledger stores only warehouse ids. Resolve the warehouse names for
-    // this page in the same tenant-scoped read (one keyed lookup, not a per-row query) so the UI
-    // never has to show an id fragment. The lookup is filtered by tenant explicitly (RLS is a second
-    // line of defence, not the only one); an id that cannot be resolved yields a null name.
+    // GAP-STOCK-LEDGER-02 / -03: stock_ledger stores only ids. Resolve the display names for this
+    // page in the same tenant-scoped read (two keyed lookups, not a per-row query) so the UI never
+    // has to show an id fragment. Both lookups are filtered by tenant explicitly (RLS is a second
+    // line of defence, not the only one); an id that cannot be resolved yields null names.
+    const itemIds = [...new Set(rows.map((r) => r.itemId))];
     const warehouseIds = [...new Set(rows.map((r) => r.warehouseId))];
-    const warehouses = await tx.select({ id: stockWarehouses.id, name: stockWarehouses.name }).from(stockWarehouses)
-      .where(and(eq(stockWarehouses.tenantId, tenantId), inArray(stockWarehouses.id, warehouseIds)));
+    const [items, warehouses] = await Promise.all([
+      tx.select({ id: stockItems.id, code: stockItems.code, name: stockItems.name }).from(stockItems)
+        .where(and(eq(stockItems.tenantId, tenantId), inArray(stockItems.id, itemIds))),
+      tx.select({ id: stockWarehouses.id, name: stockWarehouses.name }).from(stockWarehouses)
+        .where(and(eq(stockWarehouses.tenantId, tenantId), inArray(stockWarehouses.id, warehouseIds))),
+    ]);
+    const itemById = new Map(items.map((i) => [i.id, i]));
     const warehouseById = new Map(warehouses.map((w) => [w.id, w.name]));
-    return rows.map((r) => ({ ...r, warehouseName: warehouseById.get(r.warehouseId) ?? null }));
+    return rows.map((r) => ({
+      ...r,
+      itemCode: itemById.get(r.itemId)?.code ?? null,
+      itemName: itemById.get(r.itemId)?.name ?? null,
+      warehouseName: warehouseById.get(r.warehouseId) ?? null,
+    }));
   }));
 }

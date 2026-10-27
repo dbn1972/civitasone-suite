@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -43,7 +44,18 @@ const COLUMNS = [
   { key: "balance" as const, label: "Balance qty", align: "right" as const },
 ];
 
+const UNRESOLVED = "—";
+function ledgerItemLabel(code: string, name: string, unknownLabel: string): string {
+  const hasCode = code.trim() !== "" && code !== UNRESOLVED;
+  const hasName = name.trim() !== "" && name !== UNRESOLVED;
+  if (hasCode && hasName) return `${code} ${name}`;
+  if (hasName) return name;
+  if (hasCode) return code;
+  return unknownLabel;
+}
+
 export function StockLedgerClient({ entries }: Props) {
+  const t = useTranslations("stockLedger");
   const [active, setActive] = useState("All");
 
   const filterType = SEG_TYPE_MAP[active];
@@ -60,7 +72,9 @@ export function StockLedgerClient({ entries }: Props) {
       // GAP-STOCK-LEDGER-07: show short reference for audit queries.
       ref: entry.referenceNo ?? "—",
       date: formatIndianDate(entry.date),
-      item: `${entry.itemCode} ${entry.itemName}`.trim(),
+      // GAP-STOCK-LEDGER-03: show SKU + name from the item register; when the service could not
+      // resolve them the mapper yields "—", which reads as "Unknown item" (never an id fragment).
+      item: ledgerItemLabel(entry.itemCode, entry.itemName, t("unknownItem")),
       warehouse: entry.party ?? "—",
       quantityDisplay: `${sign}${absQty.toLocaleString("en-IN")}`,
       type: entry.type,
