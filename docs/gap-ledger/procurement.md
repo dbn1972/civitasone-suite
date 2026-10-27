@@ -2764,7 +2764,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — phone is now masked via maskPhone() in VendorsTable.tsx (contact: v.contactPerson ?? maskPhone(v.phone)) so no raw number is shown; PAN and bank account are masked in the detail page; audited reveal endpoint (POST /vendors/:id/reveal) needs a backend and role-gate design decision before a reveal control can be added; fail-closed until then)
+- [x] **Status** Closed by c63c60d0e (UAT B4, 2026-10-27): POST /v1/procurement/pii/reveal (role-gated per field, mandatory reason, audit published before the value is released, fail-closed 503); the vendor profile has the Reveal control and the vendor list only receives the masked phone.
 - **W2 p2 REOPENED note: acceptance says an authorised role can reveal the masked value, but no reveal exists (PAN and phone stay masked, fail closed); it needs an audited reveal endpoint; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** DPDP: the Contact column falls back to the raw phone number (contact: v.contactPerson ?? v.phone ?? "—", Table) for every module user; contact persons of proprietorship vendors are natural persons, and no masking or role gate applies.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx:228 sets contact: v.contactPerson ?? v.phone ?? '—' and l.268 shows the Contact column to every module user; the search filter also indexes it. No masking or role gate. Whether contact persons are natural persons is domain fact (plausible for proprietorships).
