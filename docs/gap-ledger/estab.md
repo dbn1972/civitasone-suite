@@ -2329,7 +2329,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [~] **Status** (W2 estab #2052: partly done, the rejection reason is not surfaced)
+- [x] **Status** Closed by aabe396ef (UAT B4, 2026-10-27): the consumer records a refused allotment command (code, command, time; migration 0058) and the detail page shows the localised reason; worker now subscribes the quarters consumers and chk_quarter_status admits 'allotted' (0059). Tests: services/estab-service/tests/quarters-refusal-reason.test.ts, AllotmentDetailActions.test.tsx.
 - **W2 note:** Client-side maker-checker pre-check disables Allot for the applicant with an explanation (en and hi), and the page reports Done / Not applied yet after a command. The consumer swallows the rejection (no stored last-command error), so the reason is not shown; exposing it needs a schema column and migration (db/schema.sql, models, Alembic kept in sync) and is left as the remainder.
 - **W0 note:** partly fixed by #1916 — Maker-checker pre-check + 3x refresh poll added; no 'not applied yet' message or rejection reason surfaced
 - **First-pass claim:** Commands are fire-and-forget: the UI says "accepted for processing" then router.refresh() (AllotmentDetailActions.tsx); if the server later rejects it (maker-checker: allotting officer = applicant) the status simply does not change and nothing tells the officer why.
