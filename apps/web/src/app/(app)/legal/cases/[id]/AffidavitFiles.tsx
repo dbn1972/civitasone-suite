@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, EmptyState } from "../../../../_components/ds";
+import { Button, DataTable, EmptyState } from "../../../../_components/ds";
 
 /**
  * GAP-LEGAL-CASES-DETAIL-01 (owner decision #9): affidavit file attachments.
@@ -109,27 +109,27 @@ export function AffidavitFiles({ caseId }: { caseId: string }) {
         ) : load.items.length === 0 ? (
           <EmptyState icon="📎" title={t("title")} message={t("empty")} />
         ) : (
-          <table className="tbl" style={{ width: "100%" }}>
-            <thead>
-              <tr><th>{t("colFile")}</th><th>{t("colStatus")}</th><th>{t("colSize")}</th><th /></tr>
-            </thead>
-            <tbody>
-              {load.items.map((it) => (
-                <tr key={it.id}>
-                  <td>{it.fileName}</td>
-                  <td>{t(`status.${it.status}` as never)}</td>
-                  <td>{fmtSize(it.sizeBytes)}</td>
-                  <td>
-                    {it.openable ? (
-                      <Button variant="ghost" onClick={() => void openFile(it.id)} disabled={openingId === it.id}>
-                        {openingId === it.id ? t("opening") : t("open")}
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<Item>
+            columns={[
+              { key: "fileName", label: t("colFile") },
+              { key: "status", label: t("colStatus"), render: (it) => t(`status.${it.status}` as never) },
+              { key: "sizeBytes", label: t("colSize"), render: (it) => fmtSize(it.sizeBytes), csvExclude: true },
+              {
+                key: "openable",
+                label: "",
+                csvExclude: true,
+                render: (it) =>
+                  it.openable ? (
+                    <Button variant="ghost" onClick={() => void openFile(it.id)} disabled={openingId === it.id}>
+                      {openingId === it.id ? t("opening") : t("open")}
+                    </Button>
+                  ) : null,
+              },
+            ]}
+            rows={load.items}
+            rowKey={(it) => it.id}
+            pageSize={25}
+          />
         )}
       </div>
     </div>

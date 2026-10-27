@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, EmptyState } from "../../../_components/ds";
+import { Button, DataTable, EmptyState } from "../../../_components/ds";
 
 /**
  * GAP-LEGAL-LIST-04 (owner decision #14): the empanelled-advocate master.
@@ -76,14 +76,16 @@ export function AdvocatesManager() {
         ) : load.items.length === 0 ? (
           <EmptyState icon="⚖️" title={t("title")} message={t("empty")} />
         ) : (
-          <table className="tbl" style={{ width: "100%" }}>
-            <thead><tr><th>{t("colName")}</th><th>{t("colBar")}</th><th>{t("colContact")}</th></tr></thead>
-            <tbody>
-              {load.items.map((a) => (
-                <tr key={a.id}><td>{a.name}</td><td className="mono">{a.barEnrolmentNo}</td><td>{a.contact}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<Advocate>
+            columns={[
+              { key: "name", label: t("colName") },
+              { key: "barEnrolmentNo", label: t("colBar"), render: (a) => <span className="mono">{a.barEnrolmentNo}</span> },
+              { key: "contact", label: t("colContact") },
+            ]}
+            rows={load.items}
+            rowKey={(a) => a.id}
+            pageSize={25}
+          />
         )}
       </div>
 
