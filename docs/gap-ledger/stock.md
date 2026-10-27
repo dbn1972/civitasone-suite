@@ -455,7 +455,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 PQ: INTERIM — transfers intentionally not offered; no warehouse list endpoint exists. NEEDS OWNER DECISION to add GET /v1/stock/warehouses before this can be wired)
+- [x] **Status** Closed by f8988c118 (UAT B4, 2026-10-27): GET /v1/stock/warehouses added; entry form offers Transfer with From/To warehouse pickers, validator requires a distinct pair
 - **W0 note:** partly fixed by #1929 — the raw warehouse-UUID input was removed, but transfers are still not offered (single/no warehouse, no from/to pair; ENTRY_TYPES has receipt/issue/adjustment only)
 - **First-pass claim:** Transfer cannot be expressed: a single free-text 'Warehouse ID' is sent as toWarehouseId for every type except issue (fromWarehouseId) and never both (page.tsx:89-91), so a transfer has no source/destination pair. The field is a raw UUID with no picker (page.tsx:168-169).
 - **Verified evidence:** Single warehouseId state (page.tsx:40); postEntry lines 89-92 sets fromWarehouseId only for issue, else toWarehouseId; transfer never sends both. Input is placeholder 'UUID' (169). Header comment (6-8) shows the API accepts both fromWarehouseId and toWarehouseId.
