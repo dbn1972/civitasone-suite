@@ -184,3 +184,33 @@ describe("VendorDetailPage", () => {
     expect(screen.getByText("No purchase orders")).toBeInTheDocument();
   });
 });
+
+describe("VendorDetailPage - GAP-PROCUREMENT-VENDORS-02 audited reveal", () => {
+  beforeEach(() => {
+    vendorMock.mockReset();
+    ordersMock.mockReset();
+    ordersMock.mockResolvedValue({ data: [], source: "api" });
+    vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
+  });
+
+  it("a procurement officer gets a Reveal control for phone and email but NOT for PAN", async () => {
+    sessionRoles = ["procurement_officer"];
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getAllByRole("button", { name: /^Reveal$/ })).toHaveLength(2);
+    expect(container.innerHTML).not.toContain("9876543210");
+  });
+
+  it("an admin can reveal PAN too; the clear value is still absent from the initial DOM", async () => {
+    sessionRoles = ["procurement_admin"];
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getAllByRole("button", { name: /^Reveal$/ })).toHaveLength(3);
+    expect(container.innerHTML).not.toContain("ABCDE1234F");
+  });
+
+  it("a role without reveal rights sees masked values and no Reveal control (fail closed)", async () => {
+    sessionRoles = ["finance_officer"];
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.queryByRole("button", { name: /^Reveal$/ })).not.toBeInTheDocument();
+    expect(screen.getByText("ABCDE****F")).toBeInTheDocument();
+  });
+});

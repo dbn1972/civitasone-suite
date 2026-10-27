@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
+import { maskPan, maskPhone, maskEmail } from "../../../../_components/ds/Masked";
 import { getProcurementVendorById, getProcurementPOs } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { VendorActions } from "./VendorActions";
 import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
-import { getSessionRoles, hasAnyRole, PROCUREMENT_APPROVER_ROLES, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 
 const EMPANELMENT_LABELS: Record<string, string> = {
   empanelled: "Empanelled",
@@ -39,6 +40,13 @@ function daysUntil(isoDate: string, today: string): number {
 }
 const EXPIRY_WARN_DAYS = 30;
 
+// GAP-PROCUREMENT-VENDORS-02: audited reveal of masked vendor PII. The roles
+// mirror procurement-service's REVEALABLE_VENDOR_FIELDS (the server is the
+// authority and re-checks): contact channels for procurement staff, the PAN for
+// admins and auditors only.
+const VENDOR_REVEAL_PATH = "v1/procurement/pii/reveal";
+const VENDOR_PAN_REVEAL_ROLES = ["procurement_admin", "super_admin", "audit_officer"];
+
 export default async function VendorDetailPage(
   props: { params: Promise<{ id: string }>; searchParams?: Promise<{ registered?: string }> }
 ) {
@@ -69,16 +77,24 @@ export default async function VendorDetailPage(
   }
 
   // GAP-...-DETAIL-01: DPDP / financial-data. PAN, email, phone and the bank
-  // account number are masked for everyone by default (safe default: the raw
-  // value never reaches the client payload). An audited, role-gated reveal is
-  // a backend follow-up (POST /vendors/:id/reveal — see HUMAN REVIEW): until
-  // that audited endpoint exists we FAIL CLOSED and show no reveal control, so
-  // no unaudited clear value is ever emitted. GSTIN and IFSC stay visible —
-  // they are public business identifiers, not personal/financial secrets.
-  const canReveal = hasAnyRole(getSessionRoles(), PROCUREMENT_APPROVER_ROLES);
-  // Reserved for the future audited-reveal wiring; referenced to avoid an
-  // unused-var lint while the control itself is intentionally not rendered yet.
-  void canReveal;
+  // account number are masked for everyone by default (the raw value never
+  // reaches the client payload). GAP-PROCUREMENT-VENDORS-02: a viewer holding a
+  // reveal role gets a "Reveal" control that asks for a reason and calls the
+  // server's audited POST /v1/procurement/pii/reveal; the clear value only
+  // exists after the server has written its audit event. The bank account stays
+  // write-only (no reveal). GSTIN and IFSC stay visible - public business
+  // identifiers, not personal/financial secrets.
+  const roles = getSessionRoles();
+  const canRevealContact = hasAnyRole(roles, PROCUREMENT_WRITE_ROLES);
+  const canRevealPan = hasAnyRole(roles, VENDOR_PAN_REVEAL_ROLES);
+  const revealCfg = (field: string, label: string, canReveal: boolean) => ({
+    canReveal,
+    resourceType: "vendor" as const,
+    resourceId: vendor.id,
+    field,
+    label,
+    revealPath: VENDOR_REVEAL_PATH,
+  });
   // GAP-PROCUREMENT-VENDORS-DETAIL-02: lifecycle actions for procurement writers only.
   const canManage = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
   const today = todayIST();
@@ -160,7 +176,7 @@ export default async function VendorDetailPage(
           {vendor.panNo && (
             <div className="field">
               <span className="label">PAN</span>
-              <Masked value={vendor.panNo} kind="pan" className="mono" ariaLabel="PAN, masked" />
+              <Masked value={maskPan(vendor.panNo)} kind="pan" className="mono" ariaLabel="PAN, masked" onReveal={revealCfg("pan", t("labelPan"), canRevealPan)} />
             </div>
           )}
           {vendor.contactPerson && (
@@ -172,13 +188,13 @@ export default async function VendorDetailPage(
           {vendor.email && (
             <div className="field">
               <span className="label">Email</span>
-              <Masked value={vendor.email} kind="email" className="mono" ariaLabel="Email, masked" />
+              <Masked value={maskEmail(vendor.email)} kind="email" className="mono" ariaLabel="Email, masked" onReveal={revealCfg("email", t("labelEmail"), canRevealContact)} />
             </div>
           )}
           {vendor.phone && (
             <div className="field">
               <span className="label">Phone</span>
-              <Masked value={vendor.phone} kind="phone" className="mono" ariaLabel="Phone, masked" />
+              <Masked value={maskPhone(vendor.phone)} kind="phone" className="mono" ariaLabel="Phone, masked" onReveal={revealCfg("phone", t("labelPhone"), canRevealContact)} />
             </div>
           )}
           {vendor.kycStatus && (

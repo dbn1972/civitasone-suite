@@ -7099,7 +7099,10 @@
         "colPo": "खरीद आदेश",
         "colDate": "आदेश तिथि",
         "colStatus": "स्थिति",
-        "colAmount": "राशि"
+        "colAmount": "राशि",
+        "labelPan": "विक्रेता का पैन",
+        "labelEmail": "विक्रेता का ईमेल",
+        "labelPhone": "विक्रेता का फोन"
       },
       "vendorNew": {
         "duplicatePan": "इस पैन वाला विक्रेता पहले से पंजीकृत है।",

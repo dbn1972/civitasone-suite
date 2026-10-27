@@ -6007,7 +6007,10 @@
         "colPo": "PO",
         "colDate": "Order date",
         "colStatus": "Status",
-        "colAmount": "Amount"
+        "colAmount": "Amount",
+        "labelPan": "vendor PAN",
+        "labelEmail": "vendor email",
+        "labelPhone": "vendor phone"
       },
       "vendorNew": {
         "duplicatePan": "A vendor with this PAN is already registered.",
