@@ -5,6 +5,7 @@ import {
   assessDocumentWarnings,
   buildCitizenUploadPreview,
   documentsLocaleCompleteness,
+  resolveDocumentLocales,
   laneDisplayName,
   suggestFirstVerificationLane,
   summarizeMandatoryLaneWarnings,
@@ -141,5 +142,39 @@ describe("hasBlockingDocumentIssues (GAP-DESIGNER-DETAIL-B6-01)", () => {
       ["inspection"],
     );
     expect(unverifiedMandatoryDocuments(assessments)).toEqual(["Rent agreement"]);
+  });
+});
+
+// GAP-DESIGNER-DETAIL-B6-02
+describe("configured document locales", () => {
+  const doc = (labels: Record<string, string>) => ({
+    id: crypto.randomUUID(),
+    docType: "x",
+    labels: { en: "", hi: "", ...labels },
+    formats: ["pdf" as const],
+    maxSizeMb: 5,
+    mandatory: true,
+    verifiedAtLane: "",
+  });
+
+  it("resolveDocumentLocales defaults to en/hi and always keeps en first", () => {
+    expect(resolveDocumentLocales(undefined)).toEqual(["en", "hi"]);
+    expect(resolveDocumentLocales([])).toEqual(["en", "hi"]);
+    expect(resolveDocumentLocales(["or", "en", "or"])).toEqual(["en", "or"]);
+  });
+
+  it("meter covers the configured locales", () => {
+    const meter = documentsLocaleCompleteness(
+      [doc({ en: "A", or: "ଏ" }), doc({ en: "B" })],
+      ["en", "or"],
+    );
+    expect(meter.meterLabel).toBe("EN 2/2 · OR 1/2");
+    expect(meter.complete).toBe(false);
+  });
+
+  it("preview falls back to another filled locale", () => {
+    const p = buildCitizenUploadPreview(doc({ en: "Rent", or: "ଭଡ଼ା" }), "or", ["en", "or"]);
+    expect(p.label).toBe("ଭଡ଼ା");
+    expect(p.secondaryLabel).toBe("Rent");
   });
 });

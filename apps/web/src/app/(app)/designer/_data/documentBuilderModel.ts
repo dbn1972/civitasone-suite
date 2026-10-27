@@ -18,10 +18,25 @@ export interface DocumentRowAssessment {
 export interface LocaleCompleteness {
   en: { filled: number; total: number };
   hi: { filled: number; total: number };
-  /** True when every document has both EN and HI labels. */
+  /** GAP-DESIGNER-DETAIL-B6-02: counts for every configured locale. */
+  perLocale: Record<string, { filled: number; total: number }>;
+  /** True when every document has a label in every configured locale. */
   complete: boolean;
-  /** Short footer meter string, e.g. "EN 2/2 · HI 1/2". */
+  /** Short footer meter string, e.g. "EN 2/2 · OR 1/2". */
   meterLabel: string;
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B6-02: the locales the document editor offers. B1 stores
+ * the locales a service publishes in; with none configured we keep the historic
+ * en/hi pair. English always leads because docType and the fallback label are
+ * derived from it.
+ */
+export function resolveDocumentLocales(configured: readonly string[] | null | undefined): LocaleKey[] {
+  const cleaned = (configured ?? []).map((c) => c.trim().toLowerCase()).filter(Boolean);
+  if (cleaned.length === 0) return ["en", "hi"];
+  const rest = cleaned.filter((c, i) => c !== "en" && cleaned.indexOf(c) === i);
+  return ["en", ...rest];
 }
 
 export interface CitizenUploadPreviewModel {
@@ -122,20 +137,24 @@ export function summarizeMandatoryLaneWarnings(
   };
 }
 
-export function documentsLocaleCompleteness(docs: RequiredDocumentUi[]): LocaleCompleteness {
+export function documentsLocaleCompleteness(
+  docs: RequiredDocumentUi[],
+  locales: readonly LocaleKey[] = ["en", "hi"],
+): LocaleCompleteness {
   const total = docs.length;
-  let enFilled = 0;
-  let hiFilled = 0;
-  for (const doc of docs) {
-    if (doc.labels.en.trim()) enFilled += 1;
-    if (doc.labels.hi.trim()) hiFilled += 1;
-  }
-  const complete = total === 0 ? true : enFilled === total && hiFilled === total;
+  const count = (code: string) => docs.filter((d) => (d.labels[code] ?? "").trim()).length;
+  const perLocale: Record<string, { filled: number; total: number }> = {};
+  for (const code of locales) perLocale[code] = { filled: count(code), total };
+  const complete = total === 0 ? true : locales.every((c) => perLocale[c]!.filled === total);
   return {
-    en: { filled: enFilled, total },
-    hi: { filled: hiFilled, total },
+    en: perLocale.en ?? { filled: count("en"), total },
+    hi: perLocale.hi ?? { filled: count("hi"), total },
+    perLocale,
     complete,
-    meterLabel: total === 0 ? "No documents yet" : `EN ${enFilled}/${total} · HI ${hiFilled}/${total}`,
+    meterLabel:
+      total === 0
+        ? "No documents yet"
+        : locales.map((c) => `${c.toUpperCase()} ${perLocale[c]!.filled}/${total}`).join(" · "),
   };
 }
 
@@ -168,10 +187,15 @@ export function unverifiedMandatoryDocuments(
 export function buildCitizenUploadPreview(
   doc: RequiredDocumentUi,
   locale: LocaleKey,
+  locales: readonly LocaleKey[] = ["en", "hi"],
 ): CitizenUploadPreviewModel {
   const primary = (doc.labels[locale] ?? "").trim();
-  const other: LocaleKey = locale === "en" ? "hi" : "en";
-  const fallback = (doc.labels[other] ?? "").trim();
+  // First other configured locale (English first) that has a name filled in.
+  const fallback =
+    ["en", ...locales]
+      .filter((c) => c !== locale)
+      .map((c) => (doc.labels[c] ?? "").trim())
+      .find(Boolean) ?? "";
   const label = primary || fallback || "Untitled document";
   const secondaryLabel = primary && fallback && primary !== fallback ? fallback : null;
   const formatsArray = doc.formats.map((f) => f.toUpperCase());

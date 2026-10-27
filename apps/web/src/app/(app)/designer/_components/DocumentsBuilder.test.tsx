@@ -124,4 +124,32 @@ describe("DocumentsBuilder", () => {
       "/designer/svc-9/b4",
     );
   });
+
+  // GAP-DESIGNER-DETAIL-B6-02
+  it("renders one tab and one preview toggle per configured locale", () => {
+    render(
+      <DocumentsBuilder
+        serviceId="svc-or"
+        lanes={baseLanes}
+        locales={["en", "or"]}
+        initial={{
+          documents: [{
+            id: "d-or",
+            docType: "rent",
+            labels: { en: "Rent agreement", hi: "", or: "" },
+            formats: ["pdf"],
+            maxSizeMb: 5,
+            mandatory: false,
+            verifiedAtLane: "",
+          }],
+        }}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /ଓଡ଼ିଆ/ })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /हिंदी/ })).toBeNull();
+    const group = screen.getByRole("group", { name: "Preview language" });
+    expect(group.textContent).toContain("ଓଡ଼ିଆ");
+    expect(group.textContent).not.toContain("हिंदी");
+    expect(screen.getByTestId("documents-locale-hint").textContent).toContain("EN 1/1 · OR 0/1");
+  });
 });
