@@ -24,6 +24,7 @@ import {
   type ApproveApplicationRequest,
 } from "@/lib/grants/application";
 import { ScoreApplicationDialog } from "./ScoreApplicationDialog";
+import { AssignReviewerDialog } from "./AssignReviewerDialog";
 import { ApproveApplicationDialog } from "./ApproveApplicationDialog";
 
 type ActionKey = "assign-reviewer" | "score" | "approve" | "reject" | "withdraw";
@@ -37,6 +38,7 @@ export function ApplicationActions({
   requestedMinor,
   minMinor,
   maxMinor,
+  defaultReviewerId = null,
 }: {
   applicationId: string;
   actions: string[];
@@ -51,6 +53,8 @@ export function ApplicationActions({
   requestedMinor?: number | null;
   minMinor?: number | null;
   maxMinor?: number | null;
+  /** GAP-GRANTS-APPLICATIONS-DETAIL-05: user id the evaluation form's reviewer starts on (assigned reviewer, else the viewer). */
+  defaultReviewerId?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<ActionKey | null>(null);
@@ -133,20 +137,12 @@ export function ApplicationActions({
         Actions are async — changes take effect after processing (usually within seconds).
       </p>
 
-      <ConfirmDialog
+      <AssignReviewerDialog
         open={open === "assign-reviewer"}
-        title="Assign reviewer"
-        description="Enter the reviewer's reference/ID to assign this application for review."
-        confirmLabel="Assign"
-        requireReason
-        reasonLabel="Reviewer reference"
-        maxReasonLength={128}
         busy={busy}
-        errorMessage={error || undefined}
-        onConfirm={(reviewerRef) =>
-          void run(() => assignReviewer(applicationId, { reviewerRef: (reviewerRef ?? "").trim() }))
-        }
+        errorMessage={error}
         onCancel={close}
+        onSubmit={(req) => void run(() => assignReviewer(applicationId, req))}
       />
 
       <ConfirmDialog
@@ -184,6 +180,7 @@ export function ApplicationActions({
         open={open === "score"}
         busy={busy}
         errorMessage={error}
+        defaultReviewerId={defaultReviewerId}
         onCancel={close}
         onSubmit={(req: ScoreApplicationRequest) => void run(() => scoreApplication(applicationId, req))}
       />

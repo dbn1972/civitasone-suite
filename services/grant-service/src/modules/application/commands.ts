@@ -5,6 +5,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import { isReviewerSubmitter } from "./domain.js";
 import type { SubmitApplicationBody, ScoreApplicationBody, ApproveApplicationBody, RejectApplicationBody, WithdrawApplicationBody, AssignReviewerBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -29,6 +30,9 @@ export async function scoreApplication(ctx: RequestContext, id: string, body: Sc
   if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
   if (app.submittedBy && app.submittedBy === ctx.actorId) {
     throw new HttpError(403, "SOD_VIOLATION", "scoring must be performed by someone other than the submitter (separation of duties)");
+  }
+  if (isReviewerSubmitter(body.reviewerRef, app.submittedBy)) {
+    throw new HttpError(403, "SOD_VIOLATION", "the reviewer must be someone other than the submitter (separation of duties)");
   }
   await queue.publish(COMMANDS.applicationScore, {
     messageId: idempotentId({ idempotencyKey: `application-score:${id}:${ctx.actorId}`, tenantId: ctx.tenantId }),
@@ -93,6 +97,9 @@ export async function assignReviewer(ctx: RequestContext, id: string, body: Assi
   // P0-4 SoD: whoever assigns the reviewer must not be the applicant.
   if (app.submittedBy && app.submittedBy === ctx.actorId) {
     throw new HttpError(403, "SOD_VIOLATION", "reviewer assignment must be made by someone other than the submitter (separation of duties)");
+  }
+  if (isReviewerSubmitter(body.reviewerRef, app.submittedBy)) {
+    throw new HttpError(403, "SOD_VIOLATION", "the reviewer must be someone other than the submitter (separation of duties)");
   }
   if (app.status !== "submitted" && app.status !== "under_review") {
     throw new HttpError(409, "INVALID_STATE", `cannot assign reviewer to application in status '${app.status}'`);

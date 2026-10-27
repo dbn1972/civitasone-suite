@@ -1,5 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The reviewer picker / dialogs are translated client-side (grantsB4Review).
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+// GAP-GRANTS-APPLICATIONS-DETAIL-05: the real picker searches the identity directory over the network;
+// the dialogs only depend on its (value, onChange) contract, so a deterministic stand-in is used here.
+const MEERA = "11111111-1111-4111-8111-111111111111";
+vi.mock("@/app/_components/DirectoryPicker", () => ({
+  DirectoryPicker: ({ value, onChange, "aria-label": label }: { value: string | null; onChange: (id: string | null) => void; "aria-label"?: string }) => (
+    <select aria-label={label} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">Choose</option>
+      <option value={MEERA}>Meera Kulkarni</option>
+    </select>
+  ),
+}));
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -42,27 +61,37 @@ describe("ApplicationActions (COMP-012)", () => {
     expect(screen.queryByRole("button", { name: "Withdraw" })).not.toBeInTheDocument();
   });
 
-  it("assigns a reviewer via the real PATCH route and refreshes on success", async () => {
+  it("assigns a reviewer chosen from the directory as an identity_user ref and refreshes on success", async () => {
     vi.mocked(api.assignReviewer).mockResolvedValue(undefined);
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Assign Reviewer" }));
-    fireEvent.change(screen.getByLabelText(/Reviewer reference/i), { target: { value: "rev-42" } });
+    fireEvent.change(screen.getByLabelText("Reviewer"), { target: { value: MEERA } });
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
-    await waitFor(() => expect(api.assignReviewer).toHaveBeenCalledWith("app-1", { reviewerRef: "rev-42" }));
+    await waitFor(() => expect(api.assignReviewer).toHaveBeenCalledWith("app-1", { reviewerRef: `identity_user:${MEERA}` }));
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it("does not assign until a reviewer is chosen from the picker", async () => {
+    render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign Reviewer" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    });
+    expect(await screen.findByText("Choose the reviewer from the list.")).toBeInTheDocument();
+    expect(api.assignReviewer).not.toHaveBeenCalled();
   });
 
   it("submits a score with reviewer + both numeric scores", async () => {
     vi.mocked(api.scoreApplication).mockResolvedValue(undefined);
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Submit Evaluation" }));
-    fireEvent.change(screen.getByLabelText(/Reviewer reference/i), { target: { value: "rev-1" } });
+    fireEvent.change(screen.getByLabelText("Reviewer"), { target: { value: MEERA } });
     fireEvent.change(screen.getByLabelText(/Technical score/i), { target: { value: "85" } });
     fireEvent.change(screen.getByLabelText(/Financial score/i), { target: { value: "72" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit evaluation" }));
     await waitFor(() =>
       expect(api.scoreApplication).toHaveBeenCalledWith("app-1", {
-        reviewerRef: "rev-1",
+        reviewerRef: `identity_user:${MEERA}`,
         technicalScore: 85,
         financialScore: 72,
         recommendation: undefined,
@@ -70,10 +99,41 @@ describe("ApplicationActions (COMP-012)", () => {
     );
   });
 
+  // GAP-GRANTS-APPLICATIONS-DETAIL-05: the evaluation form starts on the assigned reviewer (or the signed-in user).
+  it("prefills the evaluation reviewer with the default reviewer and submits it without retyping", async () => {
+    vi.mocked(api.scoreApplication).mockResolvedValue(undefined);
+    render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} defaultReviewerId={MEERA} />);
+    fireEvent.click(screen.getByRole("button", { name: "Submit Evaluation" }));
+    expect(screen.getByLabelText("Reviewer")).toHaveValue(MEERA);
+    fireEvent.change(screen.getByLabelText(/Technical score/i), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText(/Financial score/i), { target: { value: "60" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit evaluation" }));
+    await waitFor(() =>
+      expect(api.scoreApplication).toHaveBeenCalledWith("app-1", {
+        reviewerRef: `identity_user:${MEERA}`,
+        technicalScore: 90,
+        financialScore: 60,
+        recommendation: undefined,
+      }),
+    );
+  });
+
+  it("requires a reviewer on the evaluation when none is chosen or defaulted", async () => {
+    render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Submit Evaluation" }));
+    fireEvent.change(screen.getByLabelText(/Technical score/i), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText(/Financial score/i), { target: { value: "60" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Submit evaluation" }));
+    });
+    expect(await screen.findByText("Choose the reviewer from the list.")).toBeInTheDocument();
+    expect(api.scoreApplication).not.toHaveBeenCalled();
+  });
+
   it("blocks a score submission with an out-of-range value instead of calling the API", async () => {
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Submit Evaluation" }));
-    fireEvent.change(screen.getByLabelText(/Reviewer reference/i), { target: { value: "rev-1" } });
+    fireEvent.change(screen.getByLabelText("Reviewer"), { target: { value: MEERA } });
     fireEvent.change(screen.getByLabelText(/Technical score/i), { target: { value: "150" } });
     fireEvent.change(screen.getByLabelText(/Financial score/i), { target: { value: "70" } });
     await act(async () => {

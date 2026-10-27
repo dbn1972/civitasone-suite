@@ -8,7 +8,7 @@ import * as repo from "./repo.js";
 import * as schemeRepo from "../scheme/repo.js";
 import { checkEligibility } from "../scheme/domain.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
-import { assertTransition } from "./domain.js";
+import { assertTransition, isReviewerSubmitter } from "./domain.js";
 
 /** Indian financial year (Apr-Mar) for a given date, formatted e.g. "2026-27". */
 function indianFinancialYear(now: Date = new Date()): string {
@@ -81,7 +81,7 @@ export function registerApplicationConsumers(queue: Queue): void {
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
       // P0-4 SoD (defence in depth): never record a score when scorer == submitter.
-      if (app.submittedBy && app.submittedBy === msg.actorId) {
+      if ((app.submittedBy && app.submittedBy === msg.actorId) || isReviewerSubmitter(p.reviewerRef, app.submittedBy)) {
         await enqueue(tx, {
           topic: EVENTS.applicationRejected, eventType: "grant.application.score_sod_violation",
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -208,7 +208,7 @@ export function registerApplicationConsumers(queue: Queue): void {
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
       // P0-4 SoD (defence in depth): the assigner must not be the applicant.
-      if (app.submittedBy && app.submittedBy === p.assignedBy) {
+      if ((app.submittedBy && app.submittedBy === p.assignedBy) || isReviewerSubmitter(p.reviewerRef, app.submittedBy)) {
         await enqueue(tx, {
           topic: EVENTS.applicationRejected, eventType: "grant.application.assign_reviewer_sod_violation",
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

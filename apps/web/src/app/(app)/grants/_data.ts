@@ -288,6 +288,10 @@ export type GrantApplicationDetail = {
   createdAt: string | null;
   // GAP-GRANTS-APPLICATIONS-DETAIL-05: evaluation (latest score), when present.
   reviewerRef?: string | null;
+  /** The reviewer assigned to the application (assign-reviewer), distinct from the one who scored. */
+  assignedReviewerRef?: string | null;
+  /** The reviewer recorded on the latest evaluation. */
+  scoredReviewerRef?: string | null;
   technicalScore?: number | null;
   financialScore?: number | null;
   totalScore?: number | null;
@@ -337,6 +341,8 @@ function mapApplicationDetail(payload: unknown): GrantApplicationDetail | null {
     approvedAt: toText(payload.approvedAt ?? payload.approved_at),
     createdAt: toText(payload.createdAt ?? payload.created_at),
     reviewerRef: toText(payload.scoredReviewerRef ?? payload.reviewerRef ?? payload.reviewer_ref),
+    assignedReviewerRef: toText(payload.reviewerRef ?? payload.reviewer_ref),
+    scoredReviewerRef: toText(payload.scoredReviewerRef),
     technicalScore: payload.technicalScore != null ? toNumber(payload.technicalScore) : null,
     financialScore: payload.financialScore != null ? toNumber(payload.financialScore) : null,
     totalScore: payload.totalScore != null ? toNumber(payload.totalScore) : null,

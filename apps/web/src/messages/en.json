@@ -17480,5 +17480,17 @@
       "payeeNoAccount": "No bank account is registered for this grantee. Check the grantee record before releasing funds.",
       "granteeUnresolved": "the grantee",
       "dash": "—"
+  },
+  "grantsB4Review": {
+      "reviewerLabel": "Reviewer",
+      "reviewerPlaceholder": "Search for a reviewer by name",
+      "reviewerRequired": "Choose the reviewer from the list.",
+      "assignTitle": "Assign reviewer",
+      "assignDescription": "Search the tenant user directory and choose who will review this application. The reviewer cannot be the person who submitted it.",
+      "assignConfirm": "Assign",
+      "assigning": "Assigning…",
+      "cancel": "Cancel",
+      "assignedReviewer": "Assigned reviewer",
+      "reviewerUnresolved": "Name not available"
   }
 }
