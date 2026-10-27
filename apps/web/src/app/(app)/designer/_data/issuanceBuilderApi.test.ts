@@ -147,3 +147,30 @@ describe("numbering reset policy persistence", () => {
     expect(issuanceOutputToUi([cfg], "certificate").numberingResetPolicy).toBe("");
   });
 });
+
+// Owner decision D4c #9 (GAP-DESIGNER-DETAIL-B7-02): the signature method is chosen
+// per document: none, DSC token or Aadhaar eSign. E-seal stays a known gap.
+describe("signature method persistence", () => {
+  it("saves and reloads the method, and keeps the legacy boolean in step", () => {
+    const design = emptyIssuanceDesign("certificate");
+    design.signatureMethod = "esign";
+    const cfg = issuanceUiToOutput(design);
+    expect(cfg.signatureMethod).toBe("esign");
+    expect(cfg.digitalSignature).toBe(true);
+    expect(issuanceOutputToUi([cfg], "certificate").signatureMethod).toBe("esign");
+    design.signatureMethod = "none";
+    expect(issuanceUiToOutput(design).digitalSignature).toBe(false);
+  });
+
+  it("defaults a certificate to DSC and a closure note to none", () => {
+    expect(emptyIssuanceDesign("certificate").signatureMethod).toBe("dsc");
+    expect(emptyIssuanceDesign("grievance").signatureMethod).toBe("none");
+  });
+
+  it("an old draft with digitalSignature=true loads as DSC, and false as none", () => {
+    const base = issuanceUiToOutput(emptyIssuanceDesign("certificate")) as unknown as Record<string, unknown>;
+    delete base.signatureMethod;
+    expect(issuanceOutputToUi([{ ...base, digitalSignature: true }], "certificate").signatureMethod).toBe("dsc");
+    expect(issuanceOutputToUi([{ ...base, digitalSignature: false }], "certificate").signatureMethod).toBe("none");
+  });
+});

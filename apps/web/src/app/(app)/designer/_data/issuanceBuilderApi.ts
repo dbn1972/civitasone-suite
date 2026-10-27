@@ -14,7 +14,9 @@ export interface IssuanceOutputConfig {
   numberingResetPolicy?: IssuanceDesignState["numberingResetPolicy"];
   signatoryDesignationId: string;
   signatoryLabel: string;
+  /** Kept in step with signatureMethod for readers of older drafts. */
   digitalSignature: boolean;
+  signatureMethod?: string;
   validityMode: string;
   validityYears: number;
   validityFixedDate: string;
@@ -22,6 +24,10 @@ export interface IssuanceOutputConfig {
   renewalWindowDays: number;
   orientation: string;
   qrVerifyEnabled: boolean;
+}
+
+function isSignatureMethod(v: unknown): v is IssuanceDesignState["signatureMethod"] {
+  return v === "none" || v === "dsc" || v === "esign";
 }
 
 export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputConfig {
@@ -34,7 +40,8 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
     numberingResetPolicy: design.numberingResetPolicy,
     signatoryDesignationId: design.signatoryDesignationId,
     signatoryLabel: design.signatoryLabel,
-    digitalSignature: design.digitalSignature,
+    digitalSignature: design.signatureMethod !== "none",
+    signatureMethod: design.signatureMethod,
     validityMode: design.validityMode,
     validityYears: design.validityYears,
     validityFixedDate: design.validityFixedDate,
@@ -117,7 +124,8 @@ export function issuanceOutputToUi(
     numberingResetPolicy: cfg.numberingResetPolicy ?? "",
     signatoryDesignationId: cfg.signatoryDesignationId ?? "",
     signatoryLabel: cfg.signatoryLabel ?? "",
-    digitalSignature: cfg.digitalSignature ?? false,
+    // An old draft stored only the boolean: true meant a DSC.
+    signatureMethod: isSignatureMethod(cfg.signatureMethod) ? cfg.signatureMethod : cfg.digitalSignature ? "dsc" : "none",
     validityMode: (cfg.validityMode as IssuanceDesignState["validityMode"]) ?? base.validityMode,
     validityYears: cfg.validityYears ?? base.validityYears,
     validityFixedDate: cfg.validityFixedDate ?? "",

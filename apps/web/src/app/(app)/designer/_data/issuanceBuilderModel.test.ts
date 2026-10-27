@@ -14,6 +14,7 @@ import {
   numberingWarning,
   renderMergedTemplate,
   renewalGuidance,
+  signatoryWarning,
   validitySummary,
 } from "./issuanceBuilderModel";
 
@@ -139,5 +140,20 @@ describe("isSignatoryBlocking (D4c #7 — the signatory is statute-related, so i
     expect(isSignatoryBlocking({ outputType: "certificate", signatoryDesignationId: "p1", signatoryLabel: "" })).toBe(false);
     expect(isSignatoryBlocking({ outputType: "licence", signatoryDesignationId: "", signatoryLabel: "Licensing Officer" })).toBe(false);
     expect(isSignatoryBlocking({ outputType: "receipt", signatoryDesignationId: "", signatoryLabel: "" })).toBe(false);
+  });
+});
+
+describe("signatoryWarning follows the chosen signature method (D4c #9)", () => {
+  const base = { outputType: "certificate" as const, signatoryDesignationId: "p1" };
+  it("names the method that will be required at issue time", () => {
+    expect(signatoryWarning({ ...base, signatureMethod: "dsc" })).toMatch(/DSC token/);
+    expect(signatoryWarning({ ...base, signatureMethod: "esign" })).toMatch(/Aadhaar eSign/);
+    expect(signatoryWarning({ ...base, signatureMethod: "none" })).toBeNull();
+  });
+  it("switching to a licence keeps a chosen method, and a receipt may stay unsigned", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), signatureMethod: "esign" as const };
+    expect(applyOutputTypeChange(d, "licence").signatureMethod).toBe("esign");
+    expect(applyOutputTypeChange({ ...d, signatureMethod: "none" }, "receipt").signatureMethod).toBe("none");
+    expect(applyOutputTypeChange({ ...d, signatureMethod: "none" }, "licence").signatureMethod).toBe("dsc");
   });
 });

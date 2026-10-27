@@ -185,7 +185,7 @@ export function isSignatoryBlocking(
 }
 
 export function signatoryWarning(
-  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "digitalSignature">,
+  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "signatureMethod">,
 ): string | null {
   if (design.outputType === "receipt") return null;
   if (!design.signatoryDesignationId) {
@@ -193,8 +193,11 @@ export function signatoryWarning(
       ? "Pick who closes the case — their designation appears on the closure note."
       : "Pick a signatory designation before publish — certificates need a named authority.";
   }
-  if (design.digitalSignature) {
-    return "Digital signature will be required at issue time (DSC / eSign when the tenant has it configured).";
+  if (design.signatureMethod === "dsc") {
+    return "A DSC token signature will be required at issue time (when the tenant has a DSC configured).";
+  }
+  if (design.signatureMethod === "esign") {
+    return "An Aadhaar eSign will be required at issue time (when the tenant has eSign configured).";
   }
   return null;
 }
@@ -216,7 +219,9 @@ export function applyOutputTypeChange(
       : design.validityMode,
     renewable: nextType === "licence" ? true : isClosure || nextType === "receipt" ? false : design.renewable,
     qrVerifyEnabled: !isClosure && nextType !== "receipt",
-    digitalSignature: isClosure ? design.digitalSignature : design.digitalSignature || nextType !== "receipt",
+    signatureMethod: isClosure || design.signatureMethod !== "none"
+      ? design.signatureMethod
+      : nextType !== "receipt" ? "dsc" : "none",
   };
 }
 

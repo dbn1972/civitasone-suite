@@ -132,4 +132,20 @@ describe("OutputIssuanceBuilder", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(onDesignPersisted).not.toHaveBeenCalled();
   });
+
+  it("offers a signature method select (none, DSC token, Aadhaar eSign) and saves the choice (D4c #9)", async () => {
+    const onChange = vi.fn();
+    render(
+      <OutputIssuanceBuilder serviceName="Trade Licence" initial={emptyIssuanceDesign("certificate")} onDesignChange={onChange} />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Signatory" }));
+    const select = (await screen.findByTestId("signature-method")) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["none", "dsc", "esign"]);
+    expect(select.value).toBe("dsc");
+    fireEvent.change(select, { target: { value: "esign" } });
+    expect(onChange.mock.calls.at(-1)![0]).toMatchObject({ signatureMethod: "esign" });
+    fireEvent.change(screen.getByTestId("signatory-select"), { target: { value: "pos-1" } });
+    expect(screen.getByTestId("signatory-warning").textContent).toMatch(/Aadhaar eSign/);
+  });
 });
+

@@ -21,6 +21,8 @@ import {
   validitySummary,
 } from "../_data/issuanceBuilderModel";
 
+import { useDesignerT } from "@/lib/designerText";
+
 interface Props {
   serviceName: string;
   pattern?: string;
@@ -44,6 +46,7 @@ export function OutputIssuanceBuilder({
   onDesignChange,
   offeringOfficeCount = 0,
 }: Props) {
+  const t = useDesignerT();
   const [design, setDesign] = useState(initial);
   const [tab, setTab] = useState(tabLabelForOutputType(initial.outputType));
   const [positions, setPositions] = useState<{ id: string; label: string }[]>([]);
@@ -273,14 +276,21 @@ export function OutputIssuanceBuilder({
               style={{ width: "100%", maxWidth: 400 }}
             />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={design.digitalSignature}
-              onChange={(e) => patch({ digitalSignature: e.target.checked })}
-            />
-            Require digital signature at issue time
+          <label style={{ display: "block", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("sigMethodLabel")}</span>
+            <select
+              aria-label={t("sigMethodLabel")}
+              data-testid="signature-method"
+              value={design.signatureMethod}
+              onChange={(e) => patch({ signatureMethod: e.target.value as IssuanceDesignState["signatureMethod"] })}
+              style={{ width: "100%", maxWidth: 400 }}
+            >
+              <option value="none">{t("sigMethodNone")}</option>
+              <option value="dsc">{t("sigMethodDsc")}</option>
+              <option value="esign">{t("sigMethodEsign")}</option>
+            </select>
           </label>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--mut)" }}>{t("sigMethodNote")}</p>
           {sigWarn ? (
             <p data-testid="signatory-warning" style={{ marginTop: 12, fontSize: 13, color: "var(--warn)" }}>
               {sigWarn}
