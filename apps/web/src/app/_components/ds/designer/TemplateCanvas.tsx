@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../Button";
+import { useDesignerT } from "@/lib/designerText";
 import { MergeFieldPicker, renderMergePills, type MergeField } from "./MergeFieldPicker";
 import type { OutputType, TemplateOrientation } from "./issuanceTypes";
 
@@ -69,6 +70,7 @@ export function TemplateCanvas({
     });
   };
 
+  const t = useDesignerT();
   const mmWidth = orientation === "portrait" ? 210 : 297;
   const mmHeight = orientation === "portrait" ? 297 : 210;
 
@@ -150,6 +152,13 @@ export function TemplateCanvas({
               {samplePreviewBanner}
             </p>
           ) : null}
+          <p data-testid="paper-size-label" style={{ margin: "0 0 8px", fontSize: 12, color: "var(--mut)" }}>
+            {t("paperSizeLabel", {
+              orientation: t(orientation === "portrait" ? "orientationPortrait" : "orientationLandscape"),
+              width: mmWidth,
+              height: mmHeight,
+            })}
+          </p>
           <div
             aria-label={`${canvasTitle(outputType)} preview`}
             data-testid="template-preview"

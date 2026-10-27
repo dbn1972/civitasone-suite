@@ -6,6 +6,7 @@ import { useEffect, useCallback, useState } from "react";
 import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
+import { DesignIssuesList } from "../../_components/DesignIssuesList";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
 import {
   fetchPublishedByKey,
@@ -13,6 +14,7 @@ import {
   rejectDefinition,
 } from "../../_data/designerReviewApi";
 import { fetchHoaDescriptions } from "../../_data/feeBuilderApi";
+import { documentsReviewSummary } from "../../_data/documentBuilderModel";
 import { publishSummary } from "../../_data/versionDiffModel";
 import { useDesignerSession } from "../../_data/useDesignerSession";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
@@ -153,6 +155,11 @@ export default function DesignerReviewPage() {
           <AccessibilityPreview definitionId={params.id} onResult={onA11yResult} />
         </div>
 
+        {/* D4c #7: all warnings are listed here so none is missed before the decision. */}
+        <div style={{ marginTop: 24 }}>
+          <DesignIssuesList issues={wizard.issues} />
+        </div>
+
         <div style={{ marginTop: 24 }}>{readOnlySummary(wizard.def)}</div>
 
         {!wizard.meta.submittedBy ? (
@@ -259,14 +266,8 @@ function blockSummary(
             def.hoaCode && hoaDescriptions[def.hoaCode] ? ` — ${hoaDescriptions[def.hoaCode]}` : ""
           }`
         : "No fee schedule";
-    case "b6": {
-      const docs = (def.requiredDocuments ?? []) as Array<Record<string, unknown>>;
-      const count = docs.length;
-      const mandatory = docs.filter((d) => d.mandatory);
-      return mandatory.length > 0
-        ? `${count} document requirement(s) · ${mandatory.length} mandatory`
-        : `${count} document requirement(s)`;
-    }
+    case "b6":
+      return documentsReviewSummary((def.requiredDocuments ?? []) as Array<Record<string, unknown>>);
     case "b7":
       return def.issuanceType ?? "Output template configured";
     case "b8":

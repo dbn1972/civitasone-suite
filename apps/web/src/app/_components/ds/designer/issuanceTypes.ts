@@ -15,6 +15,10 @@ export const NUMBERING_RESET_OPTIONS: { id: NumberingResetPolicy; label: string;
   { id: "financial_year", label: "Each financial year", help: "Sequence restarts each financial year (April to March)." },
 ];
 
+export type SignatureMethod = "none" | "dsc" | "esign";
+
+export const SIGNATURE_METHODS: readonly SignatureMethod[] = ["none", "dsc", "esign"];
+
 export interface NumberingToken {
   kind: "prefix" | "ward" | "year" | "fy" | "seq" | "office";
   value?: string;
@@ -28,7 +32,8 @@ export interface IssuanceDesignState {
   numberingResetPolicy: NumberingResetPolicy | "";
   signatoryDesignationId: string;
   signatoryLabel: string;
-  digitalSignature: boolean;
+  /** D4c #9: chosen per document. E-seal is a known gap and not offered yet. */
+  signatureMethod: SignatureMethod;
   validityMode: ValidityMode;
   validityYears: number;
   validityFixedDate: string;
@@ -132,7 +137,7 @@ export function emptyIssuanceDesign(pattern = "certificate"): IssuanceDesignStat
     numberingResetPolicy: "",
     signatoryDesignationId: "",
     signatoryLabel: "",
-    digitalSignature: !isClosure,
+    signatureMethod: isClosure ? "none" : "dsc",
     validityMode: isClosure ? "none" : "duration",
     validityYears: 1,
     validityFixedDate: "",

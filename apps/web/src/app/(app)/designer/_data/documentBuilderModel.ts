@@ -227,3 +227,13 @@ export function buildCitizenUploadPreview(
     emptyName: !primary && !fallback,
   };
 }
+
+/** Review-page summary line for the Documents block (D4c #8 adds the classified count). */
+export function documentsReviewSummary(docs: Array<{ mandatory?: unknown; categoryId?: unknown }>): string {
+  const mandatory = docs.filter((d) => d.mandatory).length;
+  const classified = docs.filter((d) => typeof d.categoryId === "string" && d.categoryId.trim() !== "").length;
+  const parts = [`${docs.length} document requirement(s)`];
+  if (mandatory > 0) parts.push(`${mandatory} mandatory`);
+  if (classified > 0) parts.push(`${classified} classified`);
+  return parts.join(" · ");
+}

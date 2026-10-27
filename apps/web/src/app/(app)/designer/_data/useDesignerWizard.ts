@@ -8,6 +8,7 @@ import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from 
 import { fetchLatestSandboxTest } from "./sandboxTestApi";
 import { submitForApproval } from "./designerReviewApi";
 import { adjacentBlocks } from "./designerNavigation";
+import { collectDesignIssues, countIssuesByBlock } from "./designerGating";
 import { toHumanError } from "@/lib/messages";
 import { isNetworkFailure } from "@/lib/userFacingError";
 
@@ -35,8 +36,16 @@ function blockStatusForDef(def: ServiceDefinitionDto, blockId: string, hidden: S
   }
 }
 
-function blocksCompleteEnough(blocks: DesignerBlock[]): boolean {
-  return blocks.filter((b) => !b.hidden).every((b) => b.status === "complete" || b.status === "in-progress");
+/**
+ * Owner decision D4c #11 (GAP-DESIGNER-DETAIL-B8-03): blocks 1 to 7 must be
+ * complete before the officer can run the test; block 8 (outputs, notifications)
+ * may stay optional. Returns the blocks holding Run Test back, in rail order, so
+ * the footer can say which one to finish.
+ */
+export const OPTIONAL_FOR_RUN_TEST = new Set(["b8"]);
+
+export function blocksHoldingRunTest(blocks: DesignerBlock[]): DesignerBlock[] {
+  return blocks.filter((b) => !b.hidden && !OPTIONAL_FOR_RUN_TEST.has(b.id) && b.status !== "complete");
 }
 
 export function useDesignerWizard(definitionId: string, activeBlockId: string) {
@@ -95,17 +104,22 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
         status: "empty" as const,
       }));
     }
+    const counts = countIssuesByBlock(collectDesignIssues(def, hidden));
     return DEFAULT_BLOCKS.map((b) => ({
       id: b.id,
       shortLabel: b.shortLabel,
       label: b.label,
       hidden: hidden.has(b.id),
       status: blockStatusForDef(def, b.id, hidden),
+      blockingCount: counts[b.id]?.blocking ?? 0,
+      warningCount: counts[b.id]?.warning ?? 0,
     }));
   }, [def, hidden]);
+  const issues = useMemo(() => (def ? collectDesignIssues(def, hidden) : []), [def, hidden]);
 
   const { prev, next } = adjacentBlocks(pattern, activeBlockId);
-  const canRunTest = blocksCompleteEnough(blocks);
+  const runTestBlockedBy = useMemo(() => blocksHoldingRunTest(blocks).map((b) => b.label), [blocks]);
+  const canRunTest = runTestBlockedBy.length === 0;
   const canSubmit = canRunTest && testPassed && def?.status === "draft" && !def?.submittedBy;
 
   const onRunTest = useCallback(() => {
@@ -150,7 +164,9 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
     blocks,
     prev,
     next,
+    issues,
     canRunTest,
+    runTestBlockedBy,
     canSubmit,
     testPassed,
     submitting,

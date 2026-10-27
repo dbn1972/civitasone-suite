@@ -14,7 +14,8 @@ import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from 
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
-import { hoaBlockMessage, isHoaBlocking } from "../../_data/feeBuilderModel";
+import { hoaBlockMessage, isFeeBlocking, isHoaBlocking } from "../../_data/feeBuilderModel";
+import { useDesignerT } from "@/lib/designerText";
 import { normalizeBindingsFromApi } from "../../_data/engineBindingApi";
 import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
 
@@ -98,8 +99,11 @@ export default function DesignerB5Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const { prev, next } = adjacentBlocks(meta.pattern, "b5");
-  const hoaBlocked = isHoaBlocking(liveDesign);
-  const hoaGate = hoaBlockMessage(liveDesign);
+  const t = useDesignerT();
+  const feeBlocked = isFeeBlocking(liveDesign);
+  // Head of Account first (it is the stricter statement), then the fee amount.
+  const hoaBlocked = isHoaBlocking(liveDesign) || feeBlocked;
+  const hoaGate = hoaBlockMessage(liveDesign) ?? (feeBlocked ? t("feeBlockMessage") : null);
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -157,10 +161,7 @@ export default function DesignerB5Page() {
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
       onNext={hoaBlocked ? undefined : () => router.push(`/designer/${params.id}/${next}`)}
       help={
-        <HelpTip term="Fee & Revenue">
-          Set how much applicants pay, which account receives it, and when the demand is raised.
-          Head of Account is required before you can continue.
-        </HelpTip>
+        <HelpTip term="Fee & Revenue">{t("helpB5")}</HelpTip>
       }
     >
       {hoaBlocked ? (
@@ -176,7 +177,7 @@ export default function DesignerB5Page() {
             border: "1px solid var(--bad)",
           }}
         >
-          {hoaGate} Next is disabled until HOA is attached.
+          {t("gateBlocksNext")}: {hoaGate}
         </p>
       ) : null}
       <FeeBuilder
@@ -200,7 +201,7 @@ export default function DesignerB5Page() {
         <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
         {hoaBlocked ? (
           <Button disabled title={hoaGate ?? undefined}>
-            Next blocked — attach HOA
+            {t("gateBlocksNext")}
           </Button>
         ) : (
           <Link href={`/designer/${params.id}/${next}`} className="btn primary">Next block →</Link>

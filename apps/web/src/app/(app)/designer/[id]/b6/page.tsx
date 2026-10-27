@@ -9,6 +9,7 @@ import type { DocumentsDesignState } from "@/app/_components/ds/designer/documen
 import { DocumentsBuilder, documentsUiToApi } from "../../_components/DocumentsBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
+import { useDesignerT } from "@/lib/designerText";
 import { loadDocumentsDesign } from "../../_data/documentBuilderApi";
 import { documentsLocaleCompleteness, resolveDocumentLocales } from "../../_data/documentBuilderModel";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
@@ -18,6 +19,7 @@ export default function DesignerB6Page() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
+  const t = useDesignerT();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
@@ -125,10 +127,7 @@ export default function DesignerB6Page() {
         </span>
       }
       help={
-        <HelpTip term="Documents">
-          List what applicants must upload and which approval step verifies each document.
-          Mandatory documents without a verifying lane warn but do not block Next.
-        </HelpTip>
+        <HelpTip term="Documents">{t("helpB6")}</HelpTip>
       }
     >
       <DocumentsBuilder

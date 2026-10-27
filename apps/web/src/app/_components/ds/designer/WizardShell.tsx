@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent, ReactNode } from "react";
 import { Button } from "../Button";
+import { useDesignerT } from "@/lib/designerText";
 
 export type BlockStatus = "empty" | "in-progress" | "complete" | "error";
 
@@ -12,6 +13,10 @@ export interface DesignerBlock {
   hidden?: boolean;
   status: BlockStatus;
   errorCount?: number;
+  /** D4c #7: issues that stop Next on this block (money / statute). */
+  blockingCount?: number;
+  /** D4c #7: advisory issues on this block; they never stop Next. */
+  warningCount?: number;
 }
 
 export interface BlockRailProps {
@@ -31,6 +36,7 @@ function statusLabel(status: BlockStatus, errorCount?: number): string {
 }
 
 export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
+  const t = useDesignerT();
   const handleKey = (e: KeyboardEvent<HTMLButtonElement>, block: DesignerBlock) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -91,6 +97,22 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                     {hidden ? "Not used by this pattern" : statusLabel(block.status, block.errorCount)}
                   </span>
                 </span>
+                {!hidden && block.blockingCount ? (
+                  <span
+                    data-testid={`rail-blocks-${block.id}`}
+                    style={{ fontSize: 11, fontWeight: 600, color: "var(--bad)", background: "var(--badbg)", border: "1px solid var(--badbd)", borderRadius: 999, padding: "2px 8px" }}
+                  >
+                    {t("railBlocks", { count: block.blockingCount })}
+                  </span>
+                ) : null}
+                {!hidden && block.warningCount ? (
+                  <span
+                    data-testid={`rail-warning-${block.id}`}
+                    style={{ fontSize: 11, fontWeight: 600, color: "var(--warn)", border: "1px solid var(--warn)", borderRadius: 999, padding: "2px 8px" }}
+                  >
+                    {t("railWarning", { count: block.warningCount })}
+                  </span>
+                ) : null}
                 {block.errorCount && block.errorCount > 0 ? (
                   <span
                     aria-label={`${block.errorCount} errors`}
@@ -128,6 +150,8 @@ export interface WizardShellProps {
   onBack?: () => void;
   onNext?: () => void;
   canRunTest?: boolean;
+  /** Labels of the required blocks still holding Run Test back (D4c #11). */
+  runTestBlockedBy?: string[];
   canSubmit?: boolean;
   onRunTest?: () => void;
   onSubmit?: () => void;
@@ -150,6 +174,7 @@ export function WizardShell({
   onBack,
   onNext,
   canRunTest = false,
+  runTestBlockedBy,
   canSubmit = false,
   onRunTest,
   onSubmit,
@@ -158,10 +183,16 @@ export function WizardShell({
   help,
   footerMeta,
 }: WizardShellProps) {
+  const t = useDesignerT();
   const saveLabel =
     saveState === "saving" ? "Saving…"
       : saveState === "offline" ? "Offline — retrying"
         : "Saved just now";
+
+  const runTestHint =
+    !canRunTest && runTestBlockedBy && runTestBlockedBy.length > 0
+      ? t("runTestWaiting", { blocks: runTestBlockedBy.join(", ") })
+      : null;
 
   return (
     <div className="designer-wizard" style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 120px)" }}>
@@ -222,6 +253,11 @@ export function WizardShell({
               {footerMeta}
             </span>
           ) : null}
+          {runTestHint ? (
+            <span data-testid="run-test-blockers" style={{ fontSize: 12, color: "var(--warn)" }}>
+              {runTestHint}
+            </span>
+          ) : null}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onBack ? (
@@ -235,7 +271,7 @@ export function WizardShell({
             variant="ghost"
             disabled={!canRunTest}
             onClick={onRunTest}
-            title={canRunTest ? undefined : "Complete all active blocks first"}
+            title={canRunTest ? undefined : (runTestHint ?? t("runTestFallback"))}
           >
             Run Test
           </Button>

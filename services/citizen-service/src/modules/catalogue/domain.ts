@@ -34,6 +34,8 @@ export interface RequiredDocument {
   mandatory: boolean;
   /** FN-26 — workflow lane key that verifies this document (e.g. "inspection"). */
   verifiedAtLane?: string | undefined;
+  /** D4c #8 — DPDP-classified document category chosen in the designer. */
+  categoryId?: string | undefined;
 }
 
 export type { LaneBinding } from "./lane-bindings.js";

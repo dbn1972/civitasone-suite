@@ -145,6 +145,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
             dprDate: projectDprs.dprDate,
             status: projectDprs.status,
             submittedBy: projectDprs.submittedBy,
+            estimatedCostMinor: projectDprs.estimatedCostMinor,
           }).from(projectDprs)
             .where(eq(projectDprs.tenantId, tenantId))
             .orderBy(desc(projectDprs.dprDate))
@@ -167,7 +168,10 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
             projectTitle: names.get(r.projectId) ?? "Unknown Project",
             submittedBy: r.submittedBy ?? "—",
             submittedDate: r.dprDate?.toString() ?? "—",
-            estimatedCost: "—",
+            // Whole paise as a string (bigint-safe over JSON); null = no estimate recorded.
+            estimatedCostMinor: r.estimatedCostMinor === null || r.estimatedCostMinor === undefined
+              ? null
+              : r.estimatedCostMinor.toString(),
             status: r.status,
             reviewingAuthority: "PMU",
           }));

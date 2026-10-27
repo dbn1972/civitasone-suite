@@ -143,6 +143,7 @@ export default function DesignerB8Page() {
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
       canRunTest={wizard.canRunTest}
+      runTestBlockedBy={wizard.runTestBlockedBy}
       canSubmit={wizard.canSubmit}
       onRunTest={wizard.onRunTest}
       onSubmit={() => void wizard.onSubmit()}

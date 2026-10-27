@@ -7591,7 +7591,8 @@ export type ProjectDprRow = {
   projectTitle: string;
   submittedBy: string;
   submittedDate: string;
-  estimatedCost: string;
+  /** Whole paise as a string (D4c #34); null = no estimate recorded. */
+  estimatedCostMinor: string | null;
   status: string;
   reviewingAuthority: string;
 };

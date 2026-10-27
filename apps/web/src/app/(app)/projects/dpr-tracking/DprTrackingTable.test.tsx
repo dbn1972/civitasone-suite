@@ -15,7 +15,7 @@ const row: DprRow = {
   projectTitle: "Rural Roads",
   submittedBy: "11112222-3333-4444-5555-666677778888",
   submittedDate: "2026-03-05",
-  estimatedCost: "12.50",
+  estimatedCostMinor: "1250000000",
   status: "under review",
   reviewingAuthority: "Chief Engineer",
 };
@@ -37,6 +37,21 @@ describe("DprTrackingTable (GAP-PROJECTS-DPR-TRACKING-03/04)", () => {
     render(<DprTrackingTable rows={[row]} source="api" />);
     const link = screen.getByRole("link", { name: /Open Rural Roads/i });
     expect(link).toHaveAttribute("href", "/projects/p-42");
+  });
+});
+
+// Owner decision D4c #34 (GAP-PROJECTS-DPR-TRACKING-02): the estimate is whole
+// paise from the server, shown with the shared money formatter, never a bare "12.50".
+describe("DprTrackingTable estimated cost (D4c #34)", () => {
+  it("formats whole paise with the shared formatter under a unit-free heading", () => {
+    render(<DprTrackingTable rows={[row]} source="api" />);
+    expect(screen.getByText("₹1.25 Cr")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Estimated Cost/ }).textContent).not.toMatch(/Cr/);
+  });
+  it("shows a dash, not ₹0, when no estimate was recorded", () => {
+    render(<DprTrackingTable rows={[{ ...row, estimatedCostMinor: null }]} source="api" />);
+    expect(screen.queryByText(/₹0/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });
 

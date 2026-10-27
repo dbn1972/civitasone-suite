@@ -19,6 +19,8 @@ export const dprBody = z.object({
   dprNo:     z.string().min(1).max(64),
   dprDate:   z.string().min(1),
   content:   z.record(z.unknown()).default({}),
+  // D4c #34: estimated cost in whole paise, like every other money field.
+  estimatedCostMinor: z.number().int().nonnegative().safe().optional(),
 });
 export type DprBody = z.infer<typeof dprBody>;
 

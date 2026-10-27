@@ -3,6 +3,7 @@ import type { FeeDesignState, FeeExemptionUi } from "@/app/_components/ds/design
 import {
   filterHoaOptions,
   hoaBlockMessage,
+  isFeeBlocking,
   isFeeDesignReadyToAdvance,
   isHoaBlocking,
   suggestExemptSampleValues,
@@ -52,5 +53,21 @@ describe("feeBuilderModel", () => {
     ];
     expect(suggestExemptSampleValues(exemptions)).toEqual({ category: "micro" });
     expect(suggestFullFeeSampleValues(exemptions, [])).toEqual({ category: "micro_other" });
+  });
+});
+
+describe("isFeeBlocking (D4c #7 — the fee is money, so it blocks Next)", () => {
+  const base = { feeModel: null, baseAmountPaise: 0, slabs: [], formula: undefined } as never;
+  it("does not block before a fee model is chosen, nor for the engine model", () => {
+    expect(isFeeBlocking(base)).toBe(false);
+    expect(isFeeBlocking({ ...(base as object), feeModel: "engine" } as never)).toBe(false);
+  });
+  it("blocks a fixed fee with no amount and clears once there is one", () => {
+    expect(isFeeBlocking({ ...(base as object), feeModel: "flat" } as never)).toBe(true);
+    expect(isFeeBlocking({ ...(base as object), feeModel: "flat", baseAmountPaise: 50000 } as never)).toBe(false);
+  });
+  it("blocks a slab model with no slabs and no formula", () => {
+    expect(isFeeBlocking({ ...(base as object), feeModel: "slab" } as never)).toBe(true);
+    expect(isFeeBlocking({ ...(base as object), feeModel: "slab", formula: "area * 2" } as never)).toBe(false);
   });
 });
