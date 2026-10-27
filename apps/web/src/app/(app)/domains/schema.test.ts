@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { domainSchema, toFieldErrors } from "./schema";
+import { domainSchema, registerDomainSchema, toFieldErrors } from "./schema";
 
 function parse(partial: Partial<Record<string, string>>) {
   return domainSchema.safeParse({
@@ -78,5 +78,28 @@ describe("domainSchema — email & phone (GAP-DOMAINS-NEW-03)", () => {
       expect(r.data.organisation).toBe("Ministry of X");
       expect(r.data.contactEmail).toBe("a@b.gov.in");
     }
+  });
+});
+
+// GAP-DOMAINS-NEW-05 / owner decision D4c #12: the form submits only what the admin
+// custom-domains API stores, with the same host rules and type cross-check.
+describe("registerDomainSchema — admin custom-domains payload (D4c #12)", () => {
+  it("defaults the verification method to dns_txt and normalises the host", () => {
+    const r = registerDomainSchema.safeParse({ domainName: " Example.GOV.in ", domainType: "gov.in" });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.domainName).toBe("example.gov.in");
+      expect(r.data.verificationMethod).toBe("dns_txt");
+    }
+  });
+  it("accepts dns_cname and rejects any other method", () => {
+    expect(registerDomainSchema.safeParse({ domainName: "a.gov.in", domainType: "gov.in", verificationMethod: "dns_cname" }).success).toBe(true);
+    expect(registerDomainSchema.safeParse({ domainName: "a.gov.in", domainType: "gov.in", verificationMethod: "http" }).success).toBe(false);
+  });
+  it("keeps the .gov.in / .nic.in host rule and the type cross-check", () => {
+    expect(registerDomainSchema.safeParse({ domainName: "example.co.in", domainType: "gov.in" }).success).toBe(false);
+    const r = registerDomainSchema.safeParse({ domainName: "example.gov.in", domainType: "nic.in" });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(toFieldErrors(r.error).domainType).toMatch(/\.nic\.in/);
   });
 });

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { assertNoAadhaarLike, findAadhaarLike } from "../../shared/pii.js";
 import * as repo from "./repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 import { validateConsent, MAX_BATCH_SIZE } from "./domain.js";
@@ -37,6 +38,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CDP_ROLES);
     const body = ingestBody.parse(req.body);
+    assertNoAadhaarLike(body.payload);
 
     const profile = await profilesRepo.findById(body.profileId, ctx.tenantId);
     if (!profile || profile.profileType === "merged") {
@@ -77,6 +79,10 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       const profile = profileById.get(ev.profileId);
       if (!profile || profile.profileType === "merged") {
         results.push({ index: i, id: "", status: "rejected", reason: "profile not found" });
+        continue;
+      }
+      if (findAadhaarLike(ev.payload)) {
+        results.push({ index: i, id: "", status: "rejected", reason: "identity numbers (Aadhaar) are not accepted" });
         continue;
       }
       const consentFlags = profile.attributes.consent as Record<string, boolean> | undefined;

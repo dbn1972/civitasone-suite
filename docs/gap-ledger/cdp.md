@@ -515,7 +515,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** INTERIM: web defence-in-depth in place; service ingest masking needs owner decision.
+- [x] **Status** Closed by a06ba460d (owner decision D4c #1, 2026-10-27)
   The list page exposes only attribute COUNT (never values). The detail view (c360.ts) masks aadhaar/aadhar/uid keys to last-4 via maskAadhaarValue (c360.ts:92); c360.test.ts "masks an Aadhaar to the last four digits only" covers it.
   The service (profiles/repo.ts toView) does NOT reject or mask Aadhaar at ingest — see NEEDS OWNER DECISION in PR body.
 - **First-pass claim:** cdp-service is absent from this snapshot; CDPProfile schema lives in @civitasone/schemas (not read) — undeterminable whether attributes can hold Aadhaar.

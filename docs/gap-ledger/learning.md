@@ -205,7 +205,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM — NEEDS OWNER DECISION: public verification route exposes employee PII and requires security review; see PR #2080 body)
+- [~] **Status** (INTERIM — NEEDS OWNER DECISION: public verification route exposes employee PII and requires security review; see PR #2080 body) [deferred post-UAT per owner decision D4c #13, 2026-10-27: public token/QR verification (validity, course, issue and expiry dates only, no employee name or id, rate-limited, reuse the public /verify/[token] pattern) is not needed for UAT]
 - **First-pass claim:** Route sits in the authenticated (app) group, so third parties (employers, auditors) who receive a certificate cannot verify it; a public verify page is not in the web tree.
 - **Verified evidence:** Route is under apps/web/src/app/(app)/learning/assessments/verify/ (authenticated); middleware.ts:11 PUBLIC list contains only /auth, /api/auth, /api/careers, /careers etc. The backend also requires a role (routes.ts:279). No public verify page exists.
 - **Files to change:** `apps/web/src/middleware.ts`, `(new) apps/web/src/app/verify/page.tsx`, `services/hrms-service/src/modules/assessment/routes.ts`

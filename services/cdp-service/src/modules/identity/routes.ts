@@ -7,6 +7,7 @@ import {
   deterministicConfidence,
 } from "./domain.js";
 import * as commands from "./commands.js";
+import { assertNoAadhaarLike } from "../../shared/pii.js";
 
 const CDP_ROLES = ["cdp_user", "cdp_admin", "super_admin"];
 const ADMIN_ROLES = ["cdp_admin", "super_admin"];
@@ -28,6 +29,8 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CDP_ROLES);
     const body = resolveBody.parse(req.body);
+    // D4c #1: refuse at ingest; createIfMissing stores these attributes on a new profile.
+    assertNoAadhaarLike(body.attributes);
 
     // PERF-005: was one repo.findByHash() call per submitted identifier
     // (N+1, N<=10). Batch-fetch every distinct hash's matches in a single

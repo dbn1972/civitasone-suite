@@ -2429,7 +2429,7 @@ F9. R5 review round on PR #2130: (1) the duplicate panels were wrong against the
 
 ### GAP-CRM-DEALS-NEW-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 crm rescan: completed by #2130) Canonical noun "Engagement" is the term already live on the hub, list and new screens; the copy, picker hint and banners (shared themed Alert) now follow it. DECIDED BY DEFAULT (the fixer's choice of noun, NOT owner-approved): the owner may still override it; every string lives in the catalogue so a change is key edits only.
+- [x] **Status** Closed per owner decision D4c #5 (2026-10-27): keep Engagement (already applied everywhere, completed by #2130); owner may later override by editing message-catalogue keys only.
 - **First-pass claim:** Copy calls the record 'Deal' (title, button) while the list page says 'Engagement'; the picker says 'Contact' where the list column says 'Account'; banners use hard-coded hex colours (page.tsx:95-101).
 - **Verified evidence:** Copy mismatch is real: new page title 'New Deal' (page.tsx:93), button 'Create deal' (:141), 'Contact (optional)' (:123) versus list 'Vendor / Stakeholder Engagements', '+ New Engagement' (deals/page.tsx:16,20) and column 'Account' (DealsTable.tsx:126). Hard-coded hex at :95 (#ecfdf3) and :100 (#fef2f2, #b42318). Not fabricated data, so the FABRICATED tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`

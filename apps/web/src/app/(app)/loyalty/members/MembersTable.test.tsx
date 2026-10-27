@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 import { useSeededResource } from "@/lib/sync/resource";
@@ -21,7 +28,7 @@ function seed(rows: LoyaltyMemberRow[], provenance = "live") {
 const sample: LoyaltyMemberRow[] = [
   {
     id: "11111111-1111-4111-8111-111111111111",
-    profileId: "ab12cd34-0000-4000-8000-000000000001",
+    profileRef: "ab12cd34",
     programId: "pr000000-0000-4000-8000-000000000001",
     status: "active",
     tier: "Gold",
@@ -71,5 +78,52 @@ describe("MembersTable (GAP-LOYALTY-MEMBERS-01/03, ACCRUALS-03)", () => {
     seed([], "live");
     render(<MembersTable rows={[]} source="api" />);
     expect(screen.getByText("No members")).toBeInTheDocument();
+  });
+});
+
+// GAP-LOYALTY-ACCRUALS-02 / MEMBERS-02 (owner decisions D4c #14/#15): full id only on audited request.
+describe("MembersTable — audited reveal of the full member id (D4c #14/#15)", () => {
+  const FULL = "ab12cd34-0000-4000-8000-000000000001";
+
+  it("never puts the full id in the DOM until revealed (no title attribute, no row data)", () => {
+    const { container } = render(<MembersTable rows={sample} source="api" />);
+    expect(container.innerHTML).not.toContain(FULL);
+    expect(container.querySelector("[title]")?.getAttribute("title") ?? "").not.toContain("ab12cd34-");
+  });
+
+  it("Reveal calls the audited endpoint for that enrolment and shows the full id; Hide removes it", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: sample[0]!.id, profileId: FULL } }), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    render(<MembersTable rows={sample} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: /Reveal full member ID/i }));
+    expect(await screen.findByText(FULL)).toBeInTheDocument();
+    expect(String(spy.mock.calls[0]![0])).toBe(`/api/proxy/v1/loyalty/enrolments/${sample[0]!.id}/profile-ref`);
+    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    expect(screen.queryByText(FULL)).not.toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("shows a safe message (no raw server text) when the reveal is refused", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "AUDIT_UNAVAILABLE internal detail" } }), { status: 503 }),
+    );
+    render(<MembersTable rows={sample} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: /Reveal full member ID/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The full ID could not be shown. Try again.");
+    expect(screen.queryByText(/internal detail/)).not.toBeInTheDocument();
+    expect(screen.queryByText(FULL)).not.toBeInTheDocument();
+    spy.mockRestore();
+  });
+});
+
+describe("MembersTable — offline cache (D4c #15)", () => {
+  it("seeds the offline cache under v2 keys, orphaning earlier entries that held a full profile id", () => {
+    mockedHook.mockClear();
+    render(<MembersTable rows={sample} source="api" />);
+    render(<MembersTable rows={sample} source="api" variant="accruals" />);
+    expect(mockedHook.mock.calls.map((c) => c[0])).toEqual(["loyalty.members.v2", "loyalty.accruals.v2"]);
+    // what is handed to the cache never contains a full profile id
+    for (const c of mockedHook.mock.calls) expect(JSON.stringify(c[1])).not.toContain("profileId");
   });
 });

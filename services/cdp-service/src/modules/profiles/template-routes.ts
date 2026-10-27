@@ -11,6 +11,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
+import { assertNoAadhaarLike } from "../../shared/pii.js";
 import * as repo from "./template-repo.js";
 import * as profilesRepo from "./repo.js";
 import {
@@ -266,6 +267,9 @@ export async function profileTemplateRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = applyBody.parse(req.body);
+    // D4c #1: refuse at ingest; surviving candidate values are written into the profile.
+    // Keyed by attribute name so an aadhaar-named attribute is caught as well as a 12-digit value.
+    assertNoAadhaarLike(body.candidates.map((c) => ({ [c.attribute]: c.value })));
 
     const profile = await profilesRepo.findById(id, ctx.tenantId);
     if (!profile || profile.profileType === "merged") {
