@@ -1174,6 +1174,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
 - [x] **Status** (Closed by 421a9a1b4 (owner decision #25, 2026-10-26): test-send goes only to the calling admin's own address via the platform-provisioned channel (POST /notifications/channels/:id/test-send, CQRS + masked audit); Edit is moot because channel credentials live only in the secrets manager. Email and in-app are testable; sms/whatsapp/push have no admin number or device on file and are refused 422.)
+- **UAT B4 note (2026-10-27, 01d91e6ad):** F10: test-send on an SMS or WhatsApp channel with no admin mobile number on file now declines with a plain sentence (no mobile number on file, add one or test an email channel) instead of the internal wording; status stays 422 TEST_SEND_UNSUPPORTED.
 - **W2 note (INTERIM):** Add form (#1864) plus, new in W2, audited Enable/Disable (PATCH /notifications/channels/:id, CQRS command, markProcessed + guarded write + audit in one transaction, reason mandatory to disable, tenant-isolated; real-DB test `services/notification-service/tests/channel-enable-disable.test.ts`). STILL OPEN, needs owner decision: Test-send (no provider send path for a single channel is exposed) and Edit (the channel model is {type,name,isDefault,enabled}; no provider/config store exists).
 - **W0 note:** partly fixed by #1864 — ChannelForm Add form exists; edit, test-send and disable intentionally not built (backend has create+list only)
 - **First-pass claim:** Subtitle says 'Configure … providers' but the only way to add a channel is to hand-craft a POST body shown in a <pre>; no Add channel form, edit, test-send or disable (page.tsx:37-42,67-87).
@@ -1482,7 +1483,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by daf4d75c9 (UAT B4, 2026-10-27): the plans page loader now reads the edition-aware billing endpoint GET /v1/billing/tenant-plans, so payment modes by edition (owner decision #26) and the GST invoice rows (number, GSTINs, place of supply, CGST/SGST/IGST) reach the page. Tests: services/billing-service/tests/f9-tenant-plans-overview.test.ts, loaders.tenantAdminW2.test.ts.
 - **Owner decision #26 (2026-10-26), built in 1a2eaabd1:** GST invoice fields (supplier/recipient GSTIN, place of supply, CGST/SGST/IGST, HSN/SAC per line) in billing-service + payment modes by edition (govt/govt_dept: PO/GeM, treasury e-challan, online; others online) + GST columns in the shared InvoiceList. LEFT OPEN: the plans page loader (getPlansData) still reads /v1/billing/plans, a bare plan array with no edition or invoices (see PLANS-06), so edition and invoice rows only reach this page once that wiring decision is made; the real invoice list with PDF is on the subscription page (SUBSCRIPTION-04).
 - **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
@@ -3026,6 +3027,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-PLANS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **UAT B4 note (2026-10-27, daf4d75c9):** the loader/billing shape mismatch is resolved: getPlansData reads GET /v1/billing/tenant-plans, which returns {plans, currentPlanId, invoices, trialDaysLeft, edition} directly. Plan limits (users, storage, API calls, modules) come from plans.billing_plan_features and read 0 / none until platform billing configures them.
 - **W2 note:** billing-service returns priceMinor as an integer string + ISO currency (plans/repo.ts toView; bigint column price_minor); web uses the single formatMoney helper (plans/page.tsx, PlansClient.tsx) — no paise/100 float division. NOTE: the web plans loader and billing-service return DIFFERENT shapes (bare plan array vs {plans,currentPlanId,invoices}); the loader now rejects a mismatch (PlansDataSchema) instead of crashing — wiring is an owner decision (see PR).
 - **First-pass claim:** Money handled as paise then formatCurrency(paise/100).toLocaleString('en-IN') — correct lakh grouping but floating division and duplicated in page.tsx and PlansClient.tsx; billing-service is not in this snapshot (undeterminable).
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/plans (loaders.ts getPlansData ~L4600)']`

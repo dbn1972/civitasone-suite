@@ -117,7 +117,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM: needs backend return-preparation endpoint + finance sign-off before prefill-from-invoices can be built; note 'Totals are not checked against invoices' already present per W0)
+- [x] **Status** Closed by 773ae5375 (UAT B4, 2026-10-27): GET /v1/billing/gstn/returns/prepare computes taxable value and CGST/SGST/IGST from the caller's issued invoices for a supplier GSTIN and IST month (tax with no split reported separately); the Submit Return panel gains Prefill from invoices, a typed-vs-invoice variance display and a required acknowledgement before filing a differing return. Tests: services/billing-service/tests/gstn-return-prepare.test.ts, GstnConsole.test.tsx. The filed return remains the officer's responsibility; the computation basis (issued/partially paid/paid/overdue, issue date in IST) is flagged for finance sign-off in the PR.
 - **W0 note:** partly fixed by #1873 — only a visible 'not checked against invoices' note was added; no prefill-from-invoices / variance reconciliation (needs backend return-preparation endpoint + finance sign-off).
 - **First-pass claim:** Return totals are hand-keyed, not derived from Billing invoices or the ledger, and nothing reconciles them; the filed figure can drift from invoices with no check (SubmitReturnPanel.tsx:32-38,102-114).
 - **Verified evidence:** handleSubmit (SubmitReturnPanel.tsx:103-148) posts only hand-typed values from local state (68-74); there is no fetch of invoice/ledger totals and no reconciliation or warning. Whether the backend cross-checks cannot be verified (billing-service absent).
@@ -149,7 +149,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM: needs backend GET v1/billing/gstn/returns?gstin=&period= filing history endpoint before filing-history tab and duplicate-period warning can be built)
+- [x] **Status** Closed by ff64a1009 (UAT B4, 2026-10-27): migration 0024 stores every filed return (tenant-scoped, FORCE RLS, paise); GET /v1/billing/gstn/returns lists the filing history (filter gstin/period/returnType); the console has a Filing History tab and the review dialog warns when the same GSTIN, period and type was already filed. Tests: gstn-return-history.test.ts, GstnConsole.test.tsx.
 - **W0 note:** partly fixed by #1873 — panel now honestly states it is a single-reference lookup; no filing-history list and no duplicate period/type warning (needs backend gstn_returns persistence).
 - **First-pass claim:** No filing history: status is looked up only by a raw reference id, there is no list of returns per GSTIN/period, so an officer cannot see what was already filed for 08/2026 before filing again.
 - **Verified evidence:** ReturnStatusPanel.tsx only calls GET v1/billing/gstn/returns/{ref}/status (311) for a typed reference; no list endpoint is used anywhere in gstn/*. A returns-list endpoint's existence cannot be verified (billing-service absent), so do not assume one.
@@ -475,7 +475,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-03  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [~] **Status** (W0 2026-10-13: obsolete — billing/list route and its loading.tsx deleted by #1873; /billing/list redirects to /billing/plans)
+- [x] **Status** Closed as obsolete (UAT B4, 2026-10-27): apps/web/src/app/(app)/billing/list does not exist on origin/main; next.config.mjs redirects /billing/list to /billing/plans permanently.
 - **First-pass claim:** loading.tsx draws four stat blocks and a table (list/loading.tsx:6-13) but the loaded page has no stat cards.
 - **Verified evidence:** list/loading.tsx:7-12 draws 4 stat cards (h-24) and h-80 table; list/page.tsx renders only ModuleListPage (PageHeader + Records card), no stat cards.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/loading.tsx`
@@ -488,7 +488,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-04  ·  LOW  ·  confirmed  ·  theme LAYOUT (was DEADROUTE)
 
-- [~] **Status** (W0 2026-10-13: obsolete — billing/list/page.tsx deleted by #1873; billing list pages no longer use ModuleListPage (bespoke DataTable pages inside page-main wrap))
+- [x] **Status** Closed as obsolete (UAT B4, 2026-10-27): billing/list/page.tsx is gone on origin/main and no file under apps/web/src/app/(app)/billing uses ModuleListPage; the billing list pages are bespoke DataTable pages.
 - **First-pass claim:** No page-main wrapper: unlike its siblings the list page renders ModuleListPage directly (list/page.tsx:8-13), so spacing differs from /billing/plans.
 - **Verified evidence:** list/page.tsx:6-12 returns <ModuleListPage> directly; ModuleListPage.tsx:20-30 returns a fragment (PageHeader + table) with no container, whereas plans/page.tsx:7 and payments/page.tsx:7 wrap in <div className='page-main'>. Not a dead route issue.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -738,7 +738,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [~] **Status** (INTERIM: needs backend decision — confirm whether POST /v1/billing/plans accepts interval; until confirmed the control is correctly absent per W0 fix)
+- [x] **Status** Closed by b03737d61 (UAT B4, 2026-10-27): migration 0023 adds plans.billing_plans.billing_interval (monthly|quarterly|yearly, default monthly); POST /v1/billing/plans accepts interval, GET returns it; NewPlanForm restores the Billing Interval select and sends it; plan detail shows it. Tests: plans-interval.test.ts, NewPlanForm.test.tsx, plans/[id]/page.test.tsx.
 - **W0 note:** partly fixed by #1873 — the dead Billing Interval select was removed rather than persisted (billing-service createPlanBody has no interval field); acceptance (interval sent/shown on detail) not met, needs a backend decision.
 - **First-pass claim:** Billing Interval is a required-looking field but is never sent: the POST body carries name, code, priceMinor, currency and govtExempt only (NewPlanForm.tsx:83-92). Whatever the user picks is silently discarded.
 - **Verified evidence:** apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx:18 holds `interval` state and :180-197 renders the Billing Interval select, but the POST body at :69-79 sends only name, code, priceMinor, currency, govtExempt. The chosen interval is discarded. The plan detail page ([id]/page.tsx) reads plan.interval, so the field is expected to exist server-side. Billing service is not in the snapshot, so whether POST /v1/billing/plans accepts `interval` cannot be verified.
@@ -847,7 +847,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-01  ·  HIGH  ·  confirmed  ·  theme DEADCODE (was DEADROUTE)
 
-- [~] **Status** (W0 2026-10-13: obsolete — SubscriptionsTable.tsx (churnRisk column) deleted by #1873; subscription page is now a single-record view and the API carries no churn score)
+- [x] **Status** Closed as obsolete (UAT B4, 2026-10-27): SubscriptionsTable.tsx (churnRisk column) is gone on origin/main; the subscription page is a single-record view and the API carries no churn score (only comments mention it).
 - **First-pass claim:** Churn Risk can never render: SubscriptionRow.churnRisk is declared (SubscriptionsTable.tsx:9-18) and read (line 68) but mapModuleRows builds rows from id/label/sublabel/status/meta only (loaders.ts:1685-1691), so every cell is '—' and the PredictionBadge path is dead code.
 - **Verified evidence:** apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx:26-33 declares churnRisk, :80-91 renders PredictionBadge when present; but the page feeds rows from getBillingSubscriptions = moduleLoader with mapModuleRows (apps/web/src/app/_data/loaders.ts:1656-1694,1708) which never sets churnRisk, so the cell is always '—'. Whether the billing/prediction service exposes churn data cannot be verified. Line refs in finding are stale.
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/(app)/billing/subscriptions/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -879,7 +879,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-03  ·  MEDIUM  ·  partly  ·  theme MISSING-DATA (was DEADROUTE)
 
-- [~] **Status** (INTERIM: needs backend payload confirmation — confirm planName/startDate/renewalDate/amountMinor fields on GET /billing/subscriptions before building the DataTable + status filter)
+- [~] **Status** (UAT B4 2026-10-27, 26a94ac7d: PARTIAL. Backend confirmed and extended: GET /v1/billing/subscriptions now returns planName, startDate, renewalDate and amountMinor, and the page shows plan name (link), start, renewal and plan price. NOT built: the DataTable + Active/Past/All status filter, because the endpoint returns the caller's single subscription, so a table and filter over one record has nothing to filter. Needs an owner call: keep the single-record view, or add a subscription history endpoint (past subscriptions) to give the table meaning.)
 - **W0 note:** partly fixed by #1873 — page now shows the single subscription with plan link, status pill and formatted dates; amount/price still not shown and no status filter (single-record view).
 - **First-pass claim:** Subtitle says 'Active and past subscriptions' but there is no filter, sort or grouping and Status is the raw enum text (SubscriptionsTable.tsx:63); no plan, start/renewal date or amount, and no link to the plan or its invoices.
 - **Verified evidence:** apps/web/src/app/(app)/billing/subscriptions/page.tsx:9 subtitle 'Active and past subscriptions loaded from the Billing service.'; the table (SubscriptionsTable.tsx:62-96) has generic columns ID/Name/Detail/Status/Churn/Meta, status raw at :79, no plan, dates or amount, no filter/sort, no row links. Real, but 'dead link' tag is wrong (no link promised); the subtitle also leaks implementation wording. Which fields the API returns is not verifiable.
@@ -911,7 +911,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-05  ·  LOW  ·  partly  ·  theme AI-EXPLAINABILITY (was OTHER)
 
-- [~] **Status** (W0 2026-10-13: obsolete — SubscriptionsTable.tsx / churn PredictionBadge usage removed from billing by #1873 (no remaining caller in billing))
+- [x] **Status** Closed as obsolete (UAT B4, 2026-10-27): no PredictionBadge or churn usage remains in apps/web/src/app/(app)/billing on origin/main (only explanatory comments).
 - **First-pass claim:** Churn model output would be shown to a Government tenant without an audience note; PredictionBadge explainability factors are optional (SubscriptionsTable.tsx:11-15).
 - **Verified evidence:** PredictionBadge factors are optional (app/_components/ds/PredictionBadge.tsx:11-12 and SubscriptionsTable.tsx:27-31), and no audience/purpose note exists. Currently latent because churnRisk is never populated (see -01). Additional finding: the badge colours by model confidence, not risk (PredictionBadge.tsx getColorClasses), so 90%-churn/high-confidence renders green, which misleads. Policy on showing ML output in government tenants is a decision I cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/_components/ds/PredictionBadge.tsx`
@@ -931,7 +931,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-HOME-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM: web-side already done — billing/layout.tsx has requireAnyRole(BILLING_MODULE_ROLES); backend route enforcement needs ops verification; this item tracks the service-side gate)
+- [x] **Status** Closed by b32ba580d (UAT B4, 2026-10-27): verified server-side on origin/main: invoices, IRN and every GSTN route enforce billing roles; a plain tenant user gets 403. Test: services/billing-service/tests/b4-backend-verification.test.ts.
 - **First-pass claim:** No role gate anywhere in the billing segment (layout.tsx:4-5, page.tsx:6-15): every tenant user sees links to Invoices (IRN cancel) and the GSTN Console (return filing). Server-side enforcement cannot be checked — billing-service is not in the snapshot.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/invoices', 'POST v1/billing/invoices/{id}/generate-irn', 'POST .../cancel-irn', 'GSTN console endpoints']`
 - **Question:** Do billing routes enforce billing/finance roles server-side, so a plain tenant user gets 403 on invoice, IRN and GSTN endpoints?
@@ -942,7 +942,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM: needs backend ops check — confirm whether GET /billing/invoices caps results and supports page/status params before adding server pagination to page.tsx)
+- [x] **Status** Closed by b32ba580d (UAT B4, 2026-10-27): verified on origin/main: GET /v1/billing/invoices caps at 100 rows and honours ?status= and offset paging (status applied before the cap). Tests: invoices-list-paging.test.ts (cap, status, offset), referenced from b4-backend-verification.test.ts.
 - **First-pass claim:** Full list fetched and paged client-side (pageSize 15) with no server pagination or status filter (page.tsx:23-29,57); whether billing-service caps the list is undeterminable.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/invoices']`
 - **Question:** Does the invoices list cap results and support page/status query params?
@@ -953,7 +953,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (INTERIM: web-side done in w2/billing-part-1 — InvoiceActions gains canIrn prop; page.tsx computes it from BILLING_INVOICE_READER_ROLES; backend requireRole enforcement needs ops verification)
+- [x] **Status** Closed by b32ba580d (UAT B4, 2026-10-27): verified on origin/main: generate-irn and cancel-irn are role-gated (403 for a plain tenant user), cancel needs a reason (400), commands return 202; the 24h cancel window, idempotency and audit live in the consumer. Tests: einvoice-irn-authz.test.ts, closure3-s4-01/02 redelivery tests, b4-backend-verification.test.ts.
 - **First-pass claim:** Generate IRN and Cancel IRN are irreversible calls to a government system and are rendered for every role — no requireAnyRole / permission check in the page or InvoiceActions (InvoiceActions.tsx:104-125); a 403 only appears after confirming. Server-side role list undeterminable.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['POST v1/billing/invoices/{id}/generate-irn', 'POST v1/billing/invoices/{id}/cancel-irn', 'GET /api/v1/billing/invoices/{id}/einvoice']`
 - **Question:** Which roles may generate and cancel IRN, is cancel limited to the GST window (24h) with reason required, and is it idempotent and audited?
@@ -964,7 +964,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PAYMENTS-02  ·  HIGH  ·  partly  ·  theme BACKEND
 
-- [~] **Status** (INTERIM: web-side done — payments/page.tsx has bespoke getPayments() loader keyed by id; backend GET /billing/payments payload shape needs ops verification to confirm id-only rows aren't dropped)
+- [x] **Status** Closed by b32ba580d (UAT B4, 2026-10-27): verified on origin/main: each payment row carries id, invoiceId, amountMinor (string), method and status and no name-like field, matching the bespoke web mapper. Test: b4-backend-verification.test.ts.
 - **First-pass claim:** mapModuleRows requires id and a name|title|subject|label|code|contractNo|fileNo (loaders.ts:1662-1671); a payment row carrying only invoiceId/amount/method is dropped silently and the page reads 'No records'. Actual payment payload undeterminable.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/payments']`
 - **Question:** Does each payment row carry id plus one of name/title/subject/label/code/contractNo/fileNo, or only invoiceId/amount/method?
@@ -976,7 +976,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-DETAIL-01  ·  HIGH  ·  partly  ·  theme BACKEND
 
-- [~] **Status** (INTERIM: web-side done — plans/[id]/page.tsx reads priceMinor/code/govtExempt; backend GET /plans/{id} response field names need ops verification to confirm no rename)
+- [x] **Status** Closed by b32ba580d (UAT B4, 2026-10-27): verified on origin/main: GET /v1/billing/plans/:id returns the same names the create form posts (priceMinor, code, govtExempt, currency, name, active). Test: b4-backend-verification.test.ts.
 - **First-pass claim:** Read/write field mismatch: the create form posts priceMinor, code and govtExempt (NewPlanForm.tsx:86-92) but this page reads amount and interval and never shows code or govtExempt (page.tsx:23-26,71-84). Amount will show '—' or a wrong figure unless the API renames fields — undeterminable without billing-service.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/billing/plans', 'GET /api/v1/billing/plans/{id}']`
 - **Question:** Does GET plan/{id} return the same fields posted on create (priceMinor, code, govtExempt) or rename them to amount/interval?
