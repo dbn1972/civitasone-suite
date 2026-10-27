@@ -88,6 +88,9 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
           <dd style={{ margin: 0 }}>{scheme.schemeCode}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Department</dt>
           <dd style={{ margin: 0 }}>{scheme.department ?? "—"}</dd>
+          {/* Owner decision D4c #30: the nodal officer is a public-office holder in official
+              capacity. Shown to all staff: name, designation and official contact only,
+              never a personal mobile. */}
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Nodal Officer</dt>
           <dd style={{ margin: 0 }}>{scheme.nodalOfficer ?? "—"}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Funding Pattern</dt>
