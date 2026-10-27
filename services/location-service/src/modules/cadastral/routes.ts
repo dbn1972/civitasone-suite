@@ -36,6 +36,16 @@ export async function cadastralRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
+  // GAP-LOCATIONS-MAPS-MONITORING-01: one parcel by id (the monitoring map's "Open record" target). The
+  // repo already had findParcel; only the route was missing. Tenant-scoped; another tenant's id is a 404.
+  app.get("/v1/locations/cadastral/parcels/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const parcel = await repo.findParcel(id, ctx.tenantId);
+    if (!parcel) throw new HttpError(404, "NOT_FOUND", "parcel not found");
+    return reply.send({ data: parcel });
+  });
+
   app.get("/v1/locations/cadastral/parcels/:id/history", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);

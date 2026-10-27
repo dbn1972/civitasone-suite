@@ -69,11 +69,13 @@ const STATUS_LABEL_KEY = {
  * The page that shows the record behind a marker, or null when none exists.
  * Infrastructure markers carry location-service's own asset id (not an
  * asset-service id), so they open the infrastructure register rather than a
- * /assets/:id page that would 404. Cadastral parcels have no page yet, so no
- * link is offered instead of a misleading one.
+ * /assets/:id page that would 404. A cadastral parcel marker's refId is the
+ * parcel id, which opens that parcel's own page (GAP-LOCATIONS-MAPS-MONITORING-01).
  */
-function recordHref(domain: string): string | null {
+function recordHref(domain: string, refId: string): string | null {
   switch (domain) {
+    case "parcel":
+      return refId ? `/locations/parcels/${encodeURIComponent(refId)}` : null;
     case "infrastructure":
       return "/locations/infrastructure";
     case "geofence":
@@ -331,9 +333,9 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>
                   ({selected.lat.toFixed(4)}, {selected.lng.toFixed(4)})
                 </div>
-                {recordHref(selected.domain) ? (
+                {recordHref(selected.domain, selected.refId) ? (
                   <Link
-                    href={recordHref(selected.domain) as string}
+                    href={recordHref(selected.domain, selected.refId) as string}
                     className="btn primary"
                     style={{ marginTop: 4, textAlign: "center" }}
                   >

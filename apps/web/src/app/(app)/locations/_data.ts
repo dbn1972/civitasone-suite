@@ -389,3 +389,69 @@ export async function getJurisdictionFormOptions(): Promise<LoaderResult<{ offic
     ...(failed?.status !== undefined ? { status: failed.status } : {}),
   };
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// GAP-LOCATIONS-MAPS-MONITORING-01: one cadastral parcel, the target of the monitoring map's
+// "Open record" link for a parcel marker (marker refId = parcel id).
+// ───────────────────────────────────────────────────────────────────────────
+
+export type ParcelDetail = {
+  id: string;
+  parcelNo: string;
+  village: string;
+  district: string;
+  areaSquareMeters?: number;
+  landUse: string;
+  ownershipType: string;
+  status: string;
+  /** Number of vertices in the recorded boundary (the geometry itself is not shown as text). */
+  boundaryPoints: number;
+};
+
+export type ParcelEvent = { id: string; eventType: string; createdAt: string };
+
+function mapParcel(payload: unknown): ParcelDetail | null {
+  const row = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+  if (!isRecord(row)) return null;
+  const id = toText(row.id);
+  if (!id) return null;
+  const area = toNum(row.areaSquareMeters);
+  return {
+    id,
+    parcelNo: toText(row.parcelNo) ?? "—",
+    village: toText(row.village) ?? "—",
+    district: toText(row.district) ?? "—",
+    ...(area !== undefined ? { areaSquareMeters: area } : {}),
+    landUse: toText(row.landUse) ?? "—",
+    ownershipType: toText(row.ownershipType) ?? "—",
+    status: toText(row.status) ?? "—",
+    boundaryPoints: Array.isArray(row.boundary) ? row.boundary.length : 0,
+  };
+}
+
+function mapParcelHistory(payload: unknown): ParcelEvent[] {
+  const out: ParcelEvent[] = [];
+  for (const [i, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    out.push({
+      id: toText(row.id) ?? `event-${i + 1}`,
+      eventType: toText(row.eventType) ?? "—",
+      createdAt: toText(row.createdAt) ?? "",
+    });
+  }
+  return out;
+}
+
+export function getParcel(id: string): Promise<LoaderResult<ParcelDetail | null>> {
+  return fetchJson<unknown, ParcelDetail | null>(`/api/v1/locations/cadastral/parcels/${encodeURIComponent(id)}`, null, {
+    telemetryKey: "locations.parcel.detail",
+    mapResponse: mapParcel,
+  });
+}
+
+export function getParcelHistory(id: string): Promise<LoaderResult<ParcelEvent[]>> {
+  return fetchJson<unknown, ParcelEvent[]>(`/api/v1/locations/cadastral/parcels/${encodeURIComponent(id)}/history`, [], {
+    telemetryKey: "locations.parcel.history",
+    mapResponse: mapParcelHistory,
+  });
+}

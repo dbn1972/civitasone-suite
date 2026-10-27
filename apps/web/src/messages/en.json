@@ -16619,6 +16619,43 @@
       "colLgd": "LGD code"
     }
   },
+  "locationsParcel": {
+    "pageTitle": "Land parcel",
+    "title": "Parcel {parcelNo}",
+    "subtitle": "{village}, {district}",
+    "backLabel": "Map monitoring",
+    "area": "land parcel",
+    "historyArea": "parcel history",
+    "detailsTitle": "Parcel details",
+    "parcelNo": "Parcel number",
+    "village": "Village",
+    "district": "District",
+    "areaUnit": "m²",
+    "landUseLabel": "Land use",
+    "ownershipLabel": "Ownership",
+    "boundaryLabel": "Recorded boundary",
+    "boundaryPoints": "{count, plural, one {# point} other {# points}}",
+    "landUse": {
+      "agricultural": "Agricultural",
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "industrial": "Industrial",
+      "forest": "Forest",
+      "wetland": "Wetland",
+      "barren": "Barren"
+    },
+    "ownership": {
+      "private": "Private",
+      "government": "Government",
+      "community": "Community",
+      "temple_trust": "Temple trust"
+    },
+    "historyTitle": "History",
+    "historyEmptyTitle": "No history",
+    "historyEmptyMessage": "No changes have been recorded for this parcel yet.",
+    "colEvent": "Event",
+    "colWhen": "When"
+  },
   "fieldHub": {
     "title": "Field Operations",
     "subtitle": "Task management, visit tracking, and route optimization.",

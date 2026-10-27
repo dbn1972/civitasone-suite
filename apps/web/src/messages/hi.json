@@ -16516,6 +16516,43 @@
       "colLgd": "एलजीडी कोड"
     }
   },
+  "locationsParcel": {
+    "pageTitle": "भूमि खंड",
+    "title": "खंड {parcelNo}",
+    "subtitle": "{village}, {district}",
+    "backLabel": "मानचित्र निगरानी",
+    "area": "भूमि खंड",
+    "historyArea": "खंड का इतिहास",
+    "detailsTitle": "खंड का विवरण",
+    "parcelNo": "खंड संख्या",
+    "village": "गाँव",
+    "district": "जिला",
+    "areaUnit": "वर्ग मीटर",
+    "landUseLabel": "भूमि उपयोग",
+    "ownershipLabel": "स्वामित्व",
+    "boundaryLabel": "दर्ज सीमा",
+    "boundaryPoints": "{count, plural, one {# बिंदु} other {# बिंदु}}",
+    "landUse": {
+      "agricultural": "कृषि",
+      "residential": "आवासीय",
+      "commercial": "वाणिज्यिक",
+      "industrial": "औद्योगिक",
+      "forest": "वन",
+      "wetland": "आर्द्रभूमि",
+      "barren": "बंजर"
+    },
+    "ownership": {
+      "private": "निजी",
+      "government": "सरकारी",
+      "community": "सामुदायिक",
+      "temple_trust": "मंदिर ट्रस्ट"
+    },
+    "historyTitle": "इतिहास",
+    "historyEmptyTitle": "कोई इतिहास नहीं",
+    "historyEmptyMessage": "इस खंड के लिए अभी तक कोई बदलाव दर्ज नहीं हुआ है।",
+    "colEvent": "घटना",
+    "colWhen": "कब"
+  },
   "fieldHub": {
     "title": "फ़ील्ड संचालन",
     "subtitle": "कार्य प्रबंधन, दौरा ट्रैकिंग और रूट अनुकूलन।",

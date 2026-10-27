@@ -141,7 +141,7 @@ describe("MonitoringMap (SVC-119)", () => {
   });
 
   // GAP-LOCATIONS-GEOFENCES-05 / GAP-LOCATIONS-MAPS-MONITORING-01
-  it("sends geofence and parcel markers to pages that exist", async () => {
+  it("sends geofence markers to the geofence register", async () => {
     vi.stubGlobal(
       "fetch",
       fetchReturning({
@@ -157,15 +157,26 @@ describe("MonitoringMap (SVC-119)", () => {
     await waitFor(() => expect(screen.getByText("Open record →").closest("a")).toHaveAttribute("href", "/locations/geofences"));
   });
 
-  it("offers no Open record link for a parcel, which has no page", async () => {
+  it("opens a parcel's own page from its Open record link (GAP-LOCATIONS-MAPS-MONITORING-01)", async () => {
     vi.stubGlobal(
       "fetch",
-      fetchReturning({ markers: [{ id: "p1", domain: "parcel", refId: "p1", lat: 3, lng: 4, label: "Plot 1", status: "active" }] }),
+      fetchReturning({ markers: [{ id: "m-p1", domain: "parcel", refId: "7c1f0a52-4c2e-4b53-9d1a-0c6b1b6f1001", lat: 3, lng: 4, label: "Plot 1", status: "active" }] }),
     );
     render(<MonitoringMap />);
     await waitFor(() => expect(mapIframe().getAttribute("srcdoc") ?? "").toContain("Plot 1"));
-    window.dispatchEvent(new MessageEvent("message", { source: mapIframe().contentWindow, data: { type: "marker-click", marker: { id: "p1", lat: 3, lng: 4 } } }));
-    await waitFor(() => expect(screen.getByText("Plot 1")).toBeInTheDocument());
+    window.dispatchEvent(new MessageEvent("message", { source: mapIframe().contentWindow, data: { type: "marker-click", marker: { id: "m-p1", lat: 3, lng: 4 } } }));
+    await waitFor(() => expect(screen.getByText("Open record →").closest("a")).toHaveAttribute("href", "/locations/parcels/7c1f0a52-4c2e-4b53-9d1a-0c6b1b6f1001"));
+  });
+
+  it("offers no Open record link for a marker with no record to open (e.g. a bare geo-point)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      fetchReturning({ markers: [{ id: "gp1", domain: "vehicle", refId: "v-9", lat: 3, lng: 4, label: "Truck 9", status: "active" }] }),
+    );
+    render(<MonitoringMap />);
+    await waitFor(() => expect(mapIframe().getAttribute("srcdoc") ?? "").toContain("Truck 9"));
+    window.dispatchEvent(new MessageEvent("message", { source: mapIframe().contentWindow, data: { type: "marker-click", marker: { id: "gp1", lat: 3, lng: 4 } } }));
+    await waitFor(() => expect(screen.getByText("Truck 9")).toBeInTheDocument());
     expect(screen.queryByText("Open record →")).toBeNull();
   });
 
