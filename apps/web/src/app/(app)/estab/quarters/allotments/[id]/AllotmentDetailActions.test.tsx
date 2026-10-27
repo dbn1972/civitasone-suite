@@ -200,3 +200,61 @@ describe("AllotmentDetailActions — GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01 (co
     expect(screen.queryByTestId("allotment-not-applied")).not.toBeInTheDocument();
   });
 });
+
+// GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01 (UAT B4): the refusal the server recorded is shown with its reason.
+describe("AllotmentDetailActions - recorded refusal reason", () => {
+  it("shows the localised maker-checker reason when the server recorded a refusal", () => {
+    render(
+      <AllotmentDetailActions
+        {...BASE_PROPS}
+        status="applied"
+        lastCommandError={{ code: "MAKER_CHECKER_VIOLATION", at: "2026-10-27T05:00:00.000Z" }}
+      />,
+    );
+    const alert = screen.getByTestId("allotment-refused");
+    expect(alert).toHaveTextContent(/last action was refused/i);
+    expect(alert).toHaveTextContent(/maker-checker/i);
+    expect(screen.queryByTestId("allotment-not-applied")).not.toBeInTheDocument();
+  });
+
+  it("falls back to a generic line for an unknown code and never prints the raw code", () => {
+    render(
+      <AllotmentDetailActions
+        {...BASE_PROPS}
+        status="applied"
+        lastCommandError={{ code: "SOMETHING_NEW", at: "2026-10-27T05:00:00.000Z" }}
+      />,
+    );
+    const alert = screen.getByTestId("allotment-refused");
+    expect(alert).toHaveTextContent(/server refused this action/i);
+    expect(alert).not.toHaveTextContent("SOMETHING_NEW");
+  });
+
+  it("shows nothing when no refusal is recorded", () => {
+    render(<AllotmentDetailActions {...BASE_PROPS} status="applied" lastCommandError={null} />);
+    expect(screen.queryByTestId("allotment-refused")).not.toBeInTheDocument();
+  });
+
+  it("stops waiting and shows the reason as soon as a new refusal appears after a command", async () => {
+    vi.useFakeTimers();
+    browserJsonMock.mockResolvedValue({ status: "accepted" });
+    const { rerender } = render(<AllotmentDetailActions {...BASE_PROPS} status="applied" lastCommandError={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
+    await act(async () => { fireEvent.click(screen.getAllByRole("button", { name: "Allot quarter" })[1]); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    const refreshesSoFar = refreshMock.mock.calls.length;
+    expect(refreshesSoFar).toBeGreaterThan(0);
+    // the refresh renders the recorded refusal
+    rerender(
+      <AllotmentDetailActions
+        {...BASE_PROPS}
+        status="applied"
+        lastCommandError={{ code: "MAKER_CHECKER_VIOLATION", at: "2026-10-27T05:00:03.000Z" }}
+      />,
+    );
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(screen.getByTestId("allotment-refused")).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalledTimes(refreshesSoFar);
+    vi.useRealTimers();
+  });
+});

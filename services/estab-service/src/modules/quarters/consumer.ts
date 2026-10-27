@@ -16,7 +16,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
-import { assertValidTransition, assertMakerChecker, computeEligibilityScore, findApplicableRate, computeOverstayPenalty } from "./domain.js";
+import { assertValidTransition, assertMakerChecker, computeEligibilityScore, findApplicableRate, computeOverstayPenalty, DomainError } from "./domain.js";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { estabQuarters, estabQuarterAllotments, estabLicenceFeeRates, estabOverstayPenalties } from "./schema.js";
@@ -45,6 +45,36 @@ function istDateIso(d: Date): string {
 function dailyRateFromMonthly(monthlyMinor: bigint, onDate: Date): bigint {
   const daysInMonth = new Date(onDate.getUTCFullYear(), onDate.getUTCMonth() + 1, 0).getUTCDate();
   return monthlyMinor / BigInt(daysInMonth);
+}
+
+/** Cleared on every applied transition so a stale refusal never outlives the next success. */
+const CLEAR_LAST_ERROR = { lastCommandErrorCode: null, lastCommandErrorCommand: null, lastCommandErrorAt: null } as const;
+
+/**
+ * GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: a lifecycle command the server refuses (maker-checker,
+ * illegal transition, stale version) used to vanish: the throw rolled back the inbox mark and the
+ * officer saw nothing. The refusal is now recorded on the allotment (code only, never a raw message;
+ * the web maps the code to localised copy) and audited, committed in the SAME transaction as the
+ * inbox mark, so a redelivery is a no-op and the reason is readable on GET /quarter-allotments/:id.
+ */
+async function refuseCommand(
+  tx: any, msg: any, p: { id: string; tenantId: string }, command: string, code: string,
+): Promise<void> {
+  await tx.update(estabQuarterAllotments)
+    .set({ lastCommandErrorCode: code, lastCommandErrorCommand: command, lastCommandErrorAt: new Date() })
+    .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId)));
+  await audit(tx, msg, `allotment_${command}_refused`, "quarter_allotment", p.id, "refused");
+}
+
+/** Runs the pure domain guards; returns the refusal code (DomainError) or undefined when they all pass. */
+function guardCode(...guards: Array<() => void>): string | undefined {
+  try {
+    for (const g of guards) g();
+    return undefined;
+  } catch (err) {
+    if (err instanceof DomainError) return err.code;
+    throw err;
+  }
 }
 
 export function registerQuarterConsumers(queue: Queue): void {
@@ -103,11 +133,17 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
-        assertValidTransition(allotment.status, "allotted");
-        assertMakerChecker(allotment.employeeRef, msg.actorId);
-        await tx.update(estabQuarterAllotments)
-          .set({ status: "allotted", allottedAt: new Date(), allottedBy: msg.actorId, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+        const refusal = guardCode(
+          () => assertValidTransition(allotment.status, "allotted"),
+          () => assertMakerChecker(allotment.employeeRef, msg.actorId),
+        );
+        if (refusal) { await refuseCommand(tx, msg, p, "allot", refusal); return; }
+        const allotted = await tx.update(estabQuarterAllotments)
+          .set({ status: "allotted", allottedAt: new Date(), allottedBy: msg.actorId, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1`, ...CLEAR_LAST_ERROR })
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        // Optimistic-lock miss: nothing was allotted, so the quarter must not be marked allotted either.
+        if (allotted.length === 0) { await refuseCommand(tx, msg, p, "allot", "ALLOTMENT_VERSION_CONFLICT"); return; }
         await tx.update(estabQuarters)
           .set({ status: "allotted", updatedBy: msg.actorId, updatedAt: new Date() })
           .where(eq(estabQuarters.id, allotment.quarterId));
@@ -126,11 +162,15 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
-        assertValidTransition(allotment.status, "occupied");
+        const refusal = guardCode(() => assertValidTransition(allotment.status, "occupied"));
+        if (refusal) { await refuseCommand(tx, msg, p, "occupy", refusal); return; }
 
-        await tx.update(estabQuarterAllotments)
-          .set({ status: "occupied", occupiedAt: new Date(), updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+        const occupied = await tx.update(estabQuarterAllotments)
+          .set({ status: "occupied", occupiedAt: new Date(), updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1`, ...CLEAR_LAST_ERROR })
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        // Optimistic-lock miss: no payroll deduction / receivable may be raised for an occupation that did not happen.
+        if (occupied.length === 0) { await refuseCommand(tx, msg, p, "occupy", "ALLOTMENT_VERSION_CONFLICT"); return; }
         await tx.update(estabQuarters)
           .set({ status: "occupied", updatedBy: msg.actorId, updatedAt: new Date() })
           .where(eq(estabQuarters.id, allotment.quarterId));
@@ -201,10 +241,13 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
-        assertValidTransition(allotment.status, "vacation_notice");
-        await tx.update(estabQuarterAllotments)
-          .set({ status: "vacation_notice", vacationNoticeAt: new Date(), vacationDueDate: p.vacationDueDate, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+        const refusal = guardCode(() => assertValidTransition(allotment.status, "vacation_notice"));
+        if (refusal) { await refuseCommand(tx, msg, p, "vacation_notice", refusal); return; }
+        const noticed = await tx.update(estabQuarterAllotments)
+          .set({ status: "vacation_notice", vacationNoticeAt: new Date(), vacationDueDate: p.vacationDueDate, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1`, ...CLEAR_LAST_ERROR })
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        if (noticed.length === 0) { await refuseCommand(tx, msg, p, "vacation_notice", "ALLOTMENT_VERSION_CONFLICT"); return; }
         await audit(tx, msg, "vacation_notice_issued", "quarter_allotment", p.id);
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterVacationNotice failed"); }
@@ -220,15 +263,16 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
-        assertValidTransition(allotment.status, "vacated");
+        const refusal = guardCode(() => assertValidTransition(allotment.status, "vacated"));
+        if (refusal) { await refuseCommand(tx, msg, p, "vacate", refusal); return; }
         const vacatedAt = new Date();
         const vacated = await tx.update(estabQuarterAllotments)
-          .set({ status: "vacated", vacatedAt, handoverNotes: p.handoverNotes ?? null, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
+          .set({ status: "vacated", vacatedAt, handoverNotes: p.handoverNotes ?? null, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1`, ...CLEAR_LAST_ERROR })
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
           .returning({ id: estabQuarterAllotments.id });
         // Optimistic-lock miss (stale version): nothing was vacated, so do not
         // free the quarter or raise an overstay penalty for a vacate that did not happen.
-        if (vacated.length === 0) throw new Error("ALLOTMENT_VERSION_CONFLICT");
+        if (vacated.length === 0) { await refuseCommand(tx, msg, p, "vacate", "ALLOTMENT_VERSION_CONFLICT"); return; }
         await tx.update(estabQuarters)
           .set({ status: "vacant", updatedBy: msg.actorId, updatedAt: new Date() })
           .where(eq(estabQuarters.id, allotment.quarterId));
@@ -300,8 +344,9 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
-        assertValidTransition(allotment.status, "cancelled");
-        await tx.update(estabQuarterAllotments)
+        const refusal = guardCode(() => assertValidTransition(allotment.status, "cancelled"));
+        if (refusal) { await refuseCommand(tx, msg, p, "cancel", refusal); return; }
+        const cancelled = await tx.update(estabQuarterAllotments)
           .set({
             status: "cancelled",
             cancelledAt: new Date(),
@@ -309,8 +354,11 @@ export function registerQuarterConsumers(queue: Queue): void {
             updatedBy: msg.actorId,
             updatedAt: new Date(),
             version: sql`${estabQuarterAllotments.version} + 1`,
+            ...CLEAR_LAST_ERROR,
           })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        if (cancelled.length === 0) { await refuseCommand(tx, msg, p, "cancel", "ALLOTMENT_VERSION_CONFLICT"); return; }
         // If the allotment was "allotted", the quarter should revert to vacant.
         if (allotment.status === "allotted") {
           await tx.update(estabQuarters)

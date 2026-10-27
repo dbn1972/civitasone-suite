@@ -7,7 +7,7 @@ import { Button, ActionButton, Card, ConfirmDialog } from "@/app/_components/ds"
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
 import { UserFacingError } from "@/lib/userFacingError";
-import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatIndianDateTime, todayIST } from "@/lib/formatters";
 
 type Props = {
   allotmentId: string;
@@ -23,6 +23,18 @@ type Props = {
   canAct: boolean;
   /** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: session user is the applicant. */
   isApplicant: boolean;
+  /**
+   * GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: the last command the server refused (code + when), read from
+   * the allotment. Cleared server-side by the next applied transition.
+   */
+  lastCommandError?: { code: string; at: string } | null;
+};
+
+/** Refusal codes the consumer stores, mapped to localised copy (anything else gets the generic line). */
+const REFUSAL_KEYS: Record<string, string> = {
+  MAKER_CHECKER_VIOLATION: "allotRefuseMakerChecker",
+  INVALID_TRANSITION: "allotRefuseInvalidTransition",
+  ALLOTMENT_VERSION_CONFLICT: "allotRefuseVersionConflict",
 };
 
 export function AllotmentDetailActions({
@@ -35,6 +47,7 @@ export function AllotmentDetailActions({
   licenceFeeSource,
   canAct,
   isApplicant,
+  lastCommandError = null,
 }: Props) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -47,6 +60,12 @@ export function AllotmentDetailActions({
   // The status/version the server renders NOW (props refresh after router.refresh()).
   const currentKeyRef = useRef(`${status}:${version}`);
   currentKeyRef.current = `${status}:${version}`;
+  // The refusal the server holds NOW (props refresh after router.refresh()).
+  const refusalAtRef = useRef(lastCommandError?.at ?? null);
+  refusalAtRef.current = lastCommandError?.at ?? null;
+  const refusalReason = lastCommandError
+    ? tP2(REFUSAL_KEYS[lastCommandError.code] ?? "allotRefuseGeneric")
+    : null;
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); }, []);
 
@@ -91,6 +110,7 @@ export function AllotmentDetailActions({
     setNotApplied(false);
     setPolling(true);
     const startKey = currentKeyRef.current;
+    const startRefusalAt = refusalAtRef.current;
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
@@ -100,6 +120,14 @@ export function AllotmentDetailActions({
         pollTimerRef.current = null;
         setPolling(false);
         setMessage(tP2("allotApplied"));
+        return;
+      }
+      // The consumer recorded a refusal after this command was sent: stop waiting, the reason is shown below.
+      if (refusalAtRef.current !== startRefusalAt) {
+        clearInterval(iv);
+        pollTimerRef.current = null;
+        setPolling(false);
+        setMessage(null);
         return;
       }
       if (tries > 4) {
@@ -341,7 +369,12 @@ export function AllotmentDetailActions({
         <div role="status">
           {message && <p className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
-        {notApplied && (
+        {refusalReason && lastCommandError && (
+          <p role="alert" data-testid="allotment-refused" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>
+            {tP2("allotLastRefused", { when: formatIndianDateTime(lastCommandError.at), reason: refusalReason })}
+          </p>
+        )}
+        {notApplied && !refusalReason && (
           <p role="alert" data-testid="allotment-not-applied" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>
             {tP2("allotNotApplied")}
           </p>

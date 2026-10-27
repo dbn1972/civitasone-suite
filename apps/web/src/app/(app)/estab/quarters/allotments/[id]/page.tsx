@@ -150,6 +150,11 @@ export default async function AllotmentDetailPage(props: { params: Promise<{ id:
         employeeName={allotment.employeeName}
         canAct={canAct}
         isApplicant={isApplicant}
+        lastCommandError={
+          allotment.lastCommandErrorCode && allotment.lastCommandErrorAt
+            ? { code: allotment.lastCommandErrorCode, at: allotment.lastCommandErrorAt }
+            : null
+        }
         monthlyLicenceFeeMinor={applicableRate ? applicableRate.monthlyMinor : null}
         licenceFeeSource={ratesSource}
       />
