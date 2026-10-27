@@ -592,7 +592,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 PQ: partial in #2036; dashes replace fabricated ids/units, but itemCode is not required and names are not joined from the backend, needs owner acceptance or a backend change)
+- [x] **Status** Closed by 6b3589dd4 (UAT B4, 2026-10-27): GET /v1/stock/items joins categoryName and uomCode; item code is already mandatory on create
 - **First-pass claim:** Raw ids leak into cells: UOM falls back to uomId.slice(0,4) and Category to categoryId.slice(0,8) when the API returns ids not names (apiMappers.ts:1013-1014); item code falls back to the record id (apiMappers.ts:1005). A clerk sees 'a3f9' as a unit.
 - **Verified evidence:** apiMappers.ts:1005 itemCode falls back to record id; :1013 category falls back to categoryId.slice(0,8); :1014 unit falls back to uomId.slice(0,4), else 'EA'. These reach StockListClient COLUMNS (unit, itemCode) directly.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
