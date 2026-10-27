@@ -12,6 +12,20 @@ const WRITER = ["super_admin", "location_admin", "gis_admin"];
 
 const bboxSchema = z.string().regex(/^-?\d+(\.\d+)?(,-?\d+(\.\d+)?){3}$/).optional();
 
+/**
+ * GAP-LOCATIONS-MAPS-MONITORING-02: "as of" date, YYYY-MM-DD (IST calendar day). It answers "which records
+ * existed on that day" (created on or before it). The service keeps no history of status or position
+ * changes, so those are always today's values; meta.statusIsCurrent says so.
+ */
+const asOfSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD")
+  .refine((d) => {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+  }, "date is not a real calendar date")
+  .optional();
+
 export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/locations/map-markers", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER);
@@ -19,6 +33,7 @@ export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
       domain: z.string().max(48).optional(),
       status: z.string().max(32).optional(),
       bbox: bboxSchema,
+      date: asOfSchema,
       limit: z.coerce.number().int().min(1).max(5000).default(1000),
     }).parse(req.query);
     let bbox: [number, number, number, number] | undefined;
@@ -28,10 +43,15 @@ export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
     }
     // GAP-LOCATIONS-MAPS-MONITORING-02: ask for one extra row so a capped feed is
     // reported honestly (meta.truncated) instead of looking like the full set.
-    const fetched = await repo.markers(ctx.tenantId, { domain: q.domain, status: q.status, bbox }, q.limit + 1);
+    // End of the requested IST day: a record created any time that day existed "as of" it.
+    const createdBefore = q.date ? new Date(`${q.date}T23:59:59.999+05:30`) : undefined;
+    const fetched = await repo.markers(ctx.tenantId, { domain: q.domain, status: q.status, bbox, createdBefore }, q.limit + 1);
     const truncated = fetched.length > q.limit;
     const markers = truncated ? fetched.slice(0, q.limit) : fetched;
-    return reply.send({ markers, meta: { total: markers.length, limit: q.limit, truncated } });
+    return reply.send({
+      markers,
+      meta: { total: markers.length, limit: q.limit, truncated, asOf: q.date ?? null, statusIsCurrent: true },
+    });
   });
 
   // CQRS: publish only — consumer upserts (no sync repo write).

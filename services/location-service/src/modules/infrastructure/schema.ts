@@ -13,6 +13,8 @@ export const infrastructureAssets = locationSchema.table("infrastructure_assets"
   capacity: varchar("capacity", { length: 128 }),
   conditionScore: integer("condition_score"),
   status: varchar("status", { length: 16 }).notNull().default("active"),
+  // Optional cross-service ref to the asset-service register record (migration 0027); no FK across services.
+  assetId: uuid("asset_id"),
   lastInspectionAt: timestamp("last_inspection_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -32,6 +34,7 @@ export type InfrastructureAssetView = {
   lng: number;
   capacity: string | null;
   conditionScore: number | null;
+  assetId: string | null;
   status: string;
   version: number;
 };

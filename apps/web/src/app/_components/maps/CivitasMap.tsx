@@ -21,6 +21,7 @@
  * - center: { lat, lng } — initial map center
  * - zoom: initial zoom level (default 12)
  * - onMarkerClick: callback when a marker is clicked
+ * - onViewChange: callback with the visible bounds / centre / zoom after each pan or zoom
  * - maxMarkers: max visible markers (default 200)
  * - tileUrl: base-map XYZ tile URL template
  * - className: additional CSS classes for the container
@@ -56,12 +57,34 @@ export interface MapLayer {
   visible: boolean;
 }
 
+/** What the map is currently showing, reported after every pan / zoom (and once on load). */
+export interface MapView {
+  /** [west, south, east, north] */
+  bbox: [number, number, number, number];
+  center: MapCenter;
+  zoom: number;
+}
+
+function toMapView(data: unknown): MapView | null {
+  const d = data as { bbox?: unknown; center?: { lat?: unknown; lng?: unknown }; zoom?: unknown } | null;
+  const nums = (v: unknown[]) => v.every((n) => typeof n === "number" && Number.isFinite(n));
+  if (!d || !Array.isArray(d.bbox) || d.bbox.length !== 4 || !nums(d.bbox)) return null;
+  if (!d.center || !nums([d.center.lat, d.center.lng, d.zoom])) return null;
+  return {
+    bbox: d.bbox as [number, number, number, number],
+    center: { lat: d.center.lat as number, lng: d.center.lng as number },
+    zoom: d.zoom as number,
+  };
+}
+
 export interface CivitasMapProps {
   markers?: MapMarker[];
   layers?: MapLayer[];
   center?: MapCenter;
   zoom?: number;
   onMarkerClick?: (marker: MapMarker) => void;
+  /** Called with the visible area after each pan / zoom (and once when the map loads). */
+  onViewChange?: (view: MapView) => void;
   maxMarkers?: number;
   /** Base-map XYZ tile URL template. Defaults to public OpenStreetMap tiles. */
   tileUrl?: string;
@@ -133,6 +156,7 @@ export function CivitasMap({
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
   onMarkerClick,
+  onViewChange,
   maxMarkers = MAX_MARKERS_DEFAULT,
   tileUrl = DEFAULT_TILE_URL,
   className = "",
@@ -167,10 +191,14 @@ export function CivitasMap({
       if (event.data?.type === "marker-click" && onMarkerClick) {
         onMarkerClick(event.data.marker as MapMarker);
       }
+      if (event.data?.type === "map-view" && onViewChange) {
+        const view = toMapView(event.data);
+        if (view) onViewChange(view);
+      }
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [onMarkerClick]);
+  }, [onMarkerClick, onViewChange]);
 
   // Generate map HTML
   const srcDoc = useMemo(

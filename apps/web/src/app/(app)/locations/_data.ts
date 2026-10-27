@@ -106,6 +106,8 @@ export type InfrastructureRow = {
   type: string;
   condition: string;
   status: string;
+  /** Asset-register record this infrastructure asset is (GAP-LOCATIONS-INFRASTRUCTURE-06); absent = not linked. */
+  assetId?: string;
 };
 
 export type GeofenceRow = {
@@ -126,6 +128,10 @@ export type JurisdictionRow = {
   office: string;
   /** Resolved administrative-unit name; "" when it could not be resolved. */
   unit: string;
+  /** Name of the unit's parent in the administrative hierarchy; "" when it has none / is unresolved. */
+  parent?: string;
+  /** The unit's LGD code; "" when none is recorded. */
+  lgdCode?: string;
   primary?: boolean;
 };
 
@@ -150,12 +156,14 @@ function mapInfrastructure(payload: unknown): InfrastructureRow[] {
   for (const [i, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
     const score = toNum(row.conditionScore);
+    const assetId = toText(row.assetId);
     out.push({
       id: toText(row.id) ?? `row-${i + 1}`,
       name: toText(row.name) ?? "—",
       type: toText(row.type) ?? "—",
       condition: score !== undefined ? `${score}/5` : "—",
       status: toText(row.status) ?? "—",
+      ...(assetId ? { assetId } : {}),
     });
   }
   return out;
@@ -201,18 +209,41 @@ function indexNames(payload: unknown, into: NameIndex = new Map()): NameIndex {
   return into;
 }
 
-function mapJurisdictions(payload: unknown, names: NameIndex): JurisdictionRow[] {
+type UnitDetail = { name: string; parentId?: string; lgdCode?: string };
+type UnitIndex = Map<string, UnitDetail>;
+
+/** Flattens the administrative hierarchy (`{ id, name, parentId, lgdCode, children? }` tree) into id -> detail. */
+function indexUnits(payload: unknown, into: UnitIndex = new Map()): UnitIndex {
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (id && name) {
+      const parentId = toText(row.parentId);
+      const lgdCode = toText(row.lgdCode);
+      into.set(id, { name, ...(parentId ? { parentId } : {}), ...(lgdCode ? { lgdCode } : {}) });
+    }
+    if (Array.isArray(row.children)) indexUnits(row.children, into);
+  }
+  return into;
+}
+
+function mapJurisdictions(payload: unknown, names: NameIndex, units: UnitIndex = new Map()): JurisdictionRow[] {
   const out: JurisdictionRow[] = [];
   for (const [i, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
     const officeId = toText(row.officeId);
     const unitId = toText(row.unitId);
+    const unit = unitId ? units.get(unitId) : undefined;
     out.push({
       id: toText(row.id) ?? `row-${i + 1}`,
       level: toText(row.level) ?? "—",
       // The register stores ids; show names, never the raw id. Unresolved -> "".
       office: (officeId && names.get(officeId)) || "",
       unit: (unitId && names.get(unitId)) || "",
+      // GAP-LOCATIONS-JURISDICTIONS-05: the unit's place in the hierarchy (parent name, LGD code).
+      parent: (unit?.parentId && units.get(unit.parentId)?.name) || "",
+      lgdCode: unit?.lgdCode ?? "",
       primary: row.isPrimary === true,
     });
   }
@@ -259,7 +290,7 @@ export function getLocationGeofencesTyped(): Promise<LoaderResult<GeofenceRow[]>
 export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<JurisdictionRow[]>> {
   // Name lookups are best-effort: a failure leaves the names unresolved
   // (shown as "Not available") but never fails the register itself.
-  const [main, units, offices] = await Promise.all([
+  const [main, units, offices, unitDetails] = await Promise.all([
     fetchJson<unknown, unknown>("/api/v1/jurisdictions", [], {
       revalidateSeconds: 30,
       telemetryKey: "locations.jurisdictions.typed",
@@ -275,10 +306,15 @@ export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<Juri
       telemetryKey: "locations.jurisdictions.offices",
       mapResponse: (p) => indexNames(p),
     }),
+    fetchJson<unknown, UnitIndex>("/api/v1/hierarchy", new Map(), {
+      revalidateSeconds: 60,
+      telemetryKey: "locations.jurisdictions.unitDetails",
+      mapResponse: (p) => indexUnits(p),
+    }),
   ]);
   const names: NameIndex = new Map([...offices.data, ...units.data]);
   const { data, ...rest } = main;
-  return { ...rest, data: mapJurisdictions(data, names) };
+  return { ...rest, data: mapJurisdictions(data, names, unitDetails.data) };
 }
 
 /** Typed loader for the /locations/list register (name, type, parent, LGD code, status). */
@@ -287,5 +323,135 @@ export function getLocationsTyped(): Promise<LoaderResult<LocationRow[]>> {
     revalidateSeconds: 30,
     telemetryKey: "locations.list.typed",
     mapResponse: mapLocations,
+  });
+}
+
+export type AssetLinkOption = { id: string; label: string };
+
+function mapAssetOptions(payload: unknown): AssetLinkOption[] {
+  const out: AssetLinkOption[] = [];
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    const code = toText(row.code);
+    out.push({ id, label: code ? `${name} (${code})` : name });
+  }
+  return out;
+}
+
+/** Asset-register records an infrastructure asset can be linked to (GAP-LOCATIONS-INFRASTRUCTURE-06). */
+export function getAssetLinkOptions(): Promise<LoaderResult<AssetLinkOption[]>> {
+  return fetchJson<unknown, AssetLinkOption[]>("/api/v1/assets/assets?limit=200", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "locations.infrastructure.assetOptions",
+    mapResponse: mapAssetOptions,
+  });
+}
+
+/** A record picked by name in a form; the id is what is sent, the label is what the user sees. */
+export type NameOption = { id: string; label: string };
+
+function flattenNames(payload: unknown, out: NameOption[] = []): NameOption[] {
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (id && name && toText(row.status) !== "archived") out.push({ id, label: name });
+    if (Array.isArray(row.children)) flattenNames(row.children, out);
+  }
+  return out;
+}
+
+/**
+ * Options for the assign-jurisdiction form (GAP-LOCATIONS-JURISDICTIONS-02): the offices register and the
+ * administrative hierarchy, both by name. `source` is "error" if either could not be read, so the page can
+ * leave the form out rather than offer an empty picker.
+ */
+export async function getJurisdictionFormOptions(): Promise<LoaderResult<{ offices: NameOption[]; units: NameOption[] }>> {
+  const [offices, units] = await Promise.all([
+    fetchJson<unknown, NameOption[]>("/api/v1/locations?limit=500", [], {
+      revalidateSeconds: 30,
+      telemetryKey: "locations.jurisdictions.formOffices",
+      mapResponse: (p) => flattenNames(p),
+    }),
+    fetchJson<unknown, NameOption[]>("/api/v1/hierarchy", [], {
+      revalidateSeconds: 30,
+      telemetryKey: "locations.jurisdictions.formUnits",
+      mapResponse: (p) => flattenNames(p),
+    }),
+  ]);
+  const failed = offices.source === "error" ? offices : units.source === "error" ? units : null;
+  return {
+    data: { offices: offices.data, units: units.data },
+    source: failed ? "error" : offices.source,
+    ...(failed?.status !== undefined ? { status: failed.status } : {}),
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// GAP-LOCATIONS-MAPS-MONITORING-01: one cadastral parcel, the target of the monitoring map's
+// "Open record" link for a parcel marker (marker refId = parcel id).
+// ───────────────────────────────────────────────────────────────────────────
+
+export type ParcelDetail = {
+  id: string;
+  parcelNo: string;
+  village: string;
+  district: string;
+  areaSquareMeters?: number;
+  landUse: string;
+  ownershipType: string;
+  status: string;
+  /** Number of vertices in the recorded boundary (the geometry itself is not shown as text). */
+  boundaryPoints: number;
+};
+
+export type ParcelEvent = { id: string; eventType: string; createdAt: string };
+
+function mapParcel(payload: unknown): ParcelDetail | null {
+  const row = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+  if (!isRecord(row)) return null;
+  const id = toText(row.id);
+  if (!id) return null;
+  const area = toNum(row.areaSquareMeters);
+  return {
+    id,
+    parcelNo: toText(row.parcelNo) ?? "—",
+    village: toText(row.village) ?? "—",
+    district: toText(row.district) ?? "—",
+    ...(area !== undefined ? { areaSquareMeters: area } : {}),
+    landUse: toText(row.landUse) ?? "—",
+    ownershipType: toText(row.ownershipType) ?? "—",
+    status: toText(row.status) ?? "—",
+    boundaryPoints: Array.isArray(row.boundary) ? row.boundary.length : 0,
+  };
+}
+
+function mapParcelHistory(payload: unknown): ParcelEvent[] {
+  const out: ParcelEvent[] = [];
+  for (const [i, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    out.push({
+      id: toText(row.id) ?? `event-${i + 1}`,
+      eventType: toText(row.eventType) ?? "—",
+      createdAt: toText(row.createdAt) ?? "",
+    });
+  }
+  return out;
+}
+
+export function getParcel(id: string): Promise<LoaderResult<ParcelDetail | null>> {
+  return fetchJson<unknown, ParcelDetail | null>(`/api/v1/locations/cadastral/parcels/${encodeURIComponent(id)}`, null, {
+    telemetryKey: "locations.parcel.detail",
+    mapResponse: mapParcel,
+  });
+}
+
+export function getParcelHistory(id: string): Promise<LoaderResult<ParcelEvent[]>> {
+  return fetchJson<unknown, ParcelEvent[]>(`/api/v1/locations/cadastral/parcels/${encodeURIComponent(id)}/history`, [], {
+    telemetryKey: "locations.parcel.history",
+    mapResponse: mapParcelHistory,
   });
 }

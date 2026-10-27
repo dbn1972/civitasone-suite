@@ -26,6 +26,7 @@ import { registerConsumablesConsumers } from "./modules/consumables/consumer.js"
 import { registerScanLinkConsumers } from "./modules/scan-link/consumer.js";
 import { registerBookingConsumers } from "./modules/booking/consumer.js";
 import { registerCitizenLeaseConsumers } from "./modules/citizen-lease/consumer.js";
+import { registerQuarterConsumers } from "./modules/quarters/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -63,6 +64,9 @@ registerConsumablesConsumers(queue);
 registerScanLinkConsumers(queue);
 registerBookingConsumers(queue);
 registerCitizenLeaseConsumers(queue);
+// GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: the allotment lifecycle commands (apply/allot/occupy/vacate/cancel)
+// were published by the routes but no worker ever subscribed, so none was ever applied.
+registerQuarterConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

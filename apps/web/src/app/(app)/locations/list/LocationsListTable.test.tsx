@@ -51,6 +51,21 @@ describe("LocationsListTable (GAP-LOCATIONS-LIST-02)", () => {
     expect(document.body.textContent).not.toContain("db-7.internal");
   });
 
+  it.each([
+    ["IN_USE", /employees are still posted/i],
+    ["REFERENCES_UNVERIFIABLE", /could not check whether employees/i],
+  ])("GAP-LOCATIONS-LIST-04: a %s refusal shows catalogued copy, never the raw server message", async (code, copy) => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code, message: "hrms-service at 10.0.0.7 timed out" }), { status: code === "IN_USE" ? 409 : 503 }),
+    );
+    render(<LocationsListTable rows={rows} canManage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Archive" })[0]!);
+    fireEvent.change(await screen.findByLabelText(/Reason/i), { target: { value: "Merged into HQ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Archive location" }));
+    expect(await screen.findByText(copy)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("10.0.0.7");
+  });
+
   it("shows the empty state for an empty register", () => {
     render(<LocationsListTable rows={[]} canManage={false} />);
     expect(screen.getByText("No locations yet")).toBeTruthy();

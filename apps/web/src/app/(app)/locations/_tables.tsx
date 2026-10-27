@@ -15,9 +15,12 @@
  * Client components (hence `render:`/cellType is allowed per
  * datatable-render-guard) so the Server pages fetch typed rows and pass them in.
  */
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../_components/ds";
 import type { InfrastructureRow, GeofenceRow, JurisdictionRow } from "./_data";
+import { GeofenceToggle } from "./geofences/GeofenceActions";
+import { JurisdictionRevoke } from "./jurisdictions/JurisdictionActions";
 
 type InfraRow = InfrastructureRow & Record<string, unknown>;
 type GeoRow = GeofenceRow & Record<string, unknown>;
@@ -32,7 +35,12 @@ export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
       ) : (
         <DataTable<InfraRow>
           columns={[
-            { key: "name", label: t("colName") },
+            {
+              key: "name",
+              label: t("colName"),
+              // GAP-LOCATIONS-INFRASTRUCTURE-06: link to the asset-register record when one is recorded.
+              render: (row: InfraRow) => (row.assetId ? <Link href={`/assets/${encodeURIComponent(row.assetId)}`}>{row.name}</Link> : row.name),
+            },
             { key: "type", label: t("colType") },
             { key: "condition", label: t("colCondition"), align: "right" },
             { key: "status", label: t("colStatus"), cellType: "status" },
@@ -48,7 +56,7 @@ export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
   );
 }
 
-export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
+export function GeofencesTable({ rows, canManage = false }: { rows: GeofenceRow[]; canManage?: boolean }) {
   const t = useTranslations("locationsOps.geofences");
   return (
     <Card title={t("cardTitle")}>
@@ -63,6 +71,9 @@ export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
             { key: "radius", label: t("colRadius"), align: "right" },
             { key: "center", label: t("colCenter"), align: "right" },
             { key: "status", label: t("colStatus"), cellType: "status" },
+            ...(canManage
+              ? [{ key: "actions", label: "", render: (row: GeoRow) => <GeofenceToggle id={row.id} name={row.name} active={row.status === "active"} /> }]
+              : []),
           ]}
           rows={rows as GeoRow[]}
           sortable
@@ -75,7 +86,7 @@ export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
   );
 }
 
-export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
+export function JurisdictionsTable({ rows, canManage = false }: { rows: JurisdictionRow[]; canManage?: boolean }) {
   const t = useTranslations("locationsOps.jurisdictions");
   return (
     <Card title={t("cardTitle")}>
@@ -87,7 +98,12 @@ export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
             { key: "level", label: t("colLevel") },
             { key: "office", label: t("colOffice"), render: (row: JurisRow) => row.office || t("unresolved") },
             { key: "unit", label: t("colUnit"), render: (row: JurisRow) => row.unit || t("unresolved") },
+            { key: "parent", label: t("colParent"), render: (row: JurisRow) => row.parent || "—" },
+            { key: "lgdCode", label: t("colLgd"), render: (row: JurisRow) => row.lgdCode || "—" },
             { key: "primary", label: t("colPrimary"), render: (row: JurisRow) => (row.primary ? t("yes") : t("no")) },
+            ...(canManage
+              ? [{ key: "actions", label: "", render: (row: JurisRow) => <JurisdictionRevoke id={row.id} office={row.office} unit={row.unit} /> }]
+              : []),
           ]}
           rows={rows as JurisRow[]}
           sortable

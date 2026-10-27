@@ -130,6 +130,22 @@ describe("CivitasMap", () => {
     });
   });
 
+  // GAP-LOCATIONS-MAPS-MONITORING-02
+  it("reports the visible area from the iframe, and ignores a malformed or foreign view message", () => {
+    const onViewChange = vi.fn();
+    render(<CivitasMap onViewChange={onViewChange} />);
+    const iframe = screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement;
+    const view = { type: "map-view", bbox: [77, 28, 78, 29], center: { lat: 28.5, lng: 77.5 }, zoom: 9 };
+    window.dispatchEvent(new MessageEvent("message", { source: iframe.contentWindow, data: view }));
+    expect(onViewChange).toHaveBeenCalledWith({ bbox: [77, 28, 78, 29], center: { lat: 28.5, lng: 77.5 }, zoom: 9 });
+
+    onViewChange.mockClear();
+    window.dispatchEvent(new MessageEvent("message", { source: iframe.contentWindow, data: { ...view, bbox: [77, "x", 78, 29] } }));
+    window.dispatchEvent(new MessageEvent("message", { source: iframe.contentWindow, data: { ...view, zoom: "9" } }));
+    window.dispatchEvent(new MessageEvent("message", { source: window, data: view }));
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
   it("does not call onMarkerClick for unrelated messages", () => {
     const onMarkerClick = vi.fn();
     render(<CivitasMap onMarkerClick={onMarkerClick} />);

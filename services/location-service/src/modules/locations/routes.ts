@@ -10,6 +10,7 @@ import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
 import { wouldCreateCycle } from "./domain.js";
 import { RESOURCE } from "../../topics.js";
+import { countActiveEmployeesAt } from "../../shared/hrms-client.js";
 
 const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
@@ -159,6 +160,16 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const children = (await repo.listAllByTenant(ctx.tenantId)).filter((l) => l.parentId === id && l.status !== "archived");
     if (children.length > 0) {
       throw new HttpError(409, "HAS_ACTIVE_CHILDREN", `archive its ${children.length} active sub-location(s) first`);
+    }
+    // GAP-LOCATIONS-LIST-04: never orphan people. Current employees still posted here (hrms owns that
+    // data; asset-service's locationId is its own functional-location master, not this register)
+    // block the archive. Fails closed: if the count cannot be read the archive is refused, not allowed.
+    const staff = await countActiveEmployeesAt(ctx.tenantId, id);
+    if (!staff.ok) {
+      throw new HttpError(503, "REFERENCES_UNVERIFIABLE", "could not check whether employees are still posted at this location; try again");
+    }
+    if (staff.total > 0) {
+      throw new HttpError(409, "IN_USE", "current employees are still posted at this location; move them first");
     }
     sendAccepted(reply, acceptedResponseSchema, await commands.updateLocation(ctx, id, { status: "archived", ...(body.reason ? { reason: body.reason } : {}) }));
   });
