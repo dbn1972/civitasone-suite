@@ -26,7 +26,8 @@ interface Props {
   formFields?: FormFieldDefinition[];
   initial: IssuanceDesignState;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
-  onDesignPersisted?: (design: IssuanceDesignState) => void;
+  /** Should reject when the save fails so the footer can show "offline". */
+  onDesignPersisted?: (design: IssuanceDesignState) => void | Promise<void>;
   onDesignChange?: (design: IssuanceDesignState) => void;
 }
 
@@ -77,7 +78,7 @@ export function OutputIssuanceBuilder({
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
-        onDesignPersisted?.(latest.current);
+        await onDesignPersisted?.(latest.current);
         onSaveState?.("saved");
       } catch {
         onSaveState?.("offline");
@@ -86,7 +87,12 @@ export function OutputIssuanceBuilder({
   }, [onDesignPersisted, onSaveState]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
+  // Only a real edit schedules a save: opening the page must not rewrite the
+  // stored validity / renewal of an existing service.
+  useEffect(() => {
+    if (design === initial) return;
+    schedulePersist();
+  }, [design, initial, schedulePersist]);
 
   const mergeFields = useMemo(
     () => mergeFieldsForDesign(formFields, design.outputType),

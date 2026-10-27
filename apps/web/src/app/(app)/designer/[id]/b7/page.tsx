@@ -8,22 +8,20 @@ import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
-import { RenewalPolicyBuilder } from "../../_components/RenewalPolicyBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
-import { usePhase3Config } from "../../_data/usePhase3Config";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
   issuanceOutputToUi,
   issuanceUiToOutput,
   mergeOutputsWithIssuance,
+  renewalPolicyFromDesign,
+  withStoredRenewalPolicy,
 } from "../../_data/issuanceBuilderApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB7Page() {
   const params = useParams<{ id: string }>();
-  // FN-15 — validity and renewal describe the issued output.
-  const phase3 = usePhase3Config(params.id);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -57,7 +55,14 @@ export default function DesignerB7Page() {
           status: def.status,
           serviceKey: def.serviceKey,
         });
-        setInitialDesign(issuanceOutputToUi(def.outputs, pattern, def.issuanceType));
+        // The stored runtime renewalPolicy wins, so opening this page never changes
+        // an existing service's expiry (GAP-DESIGNER-DETAIL-B7-01).
+        setInitialDesign(
+          withStoredRenewalPolicy(
+            issuanceOutputToUi(def.outputs, pattern, def.issuanceType),
+            def.renewalPolicy,
+          ),
+        );
 
         try {
           const form = await loadFormDesign(def.serviceKey, def.name);
@@ -96,16 +101,15 @@ export default function DesignerB7Page() {
   );
 
   const onDesignPersisted = async (design: IssuanceDesignState) => {
-    try {
-      const outputs = mergeOutputsWithIssuance(outputsRef.current, issuanceUiToOutput(design));
-      outputsRef.current = outputs;
-      await updateServiceDefinition(params.id, {
-        issuanceType: design.outputType,
-        outputs,
-      });
-    } catch {
-      // best-effort autosave — footer shows offline via onSaveState
-    }
+    // One PATCH carries the output design and the runtime policy derived from it.
+    // A failure propagates so the builder shows "offline" instead of "saved".
+    const outputs = mergeOutputsWithIssuance(outputsRef.current, issuanceUiToOutput(design));
+    await updateServiceDefinition(params.id, {
+      issuanceType: design.outputType,
+      outputs,
+      renewalPolicy: renewalPolicyFromDesign(design),
+    });
+    outputsRef.current = outputs;
   };
 
   if (loading) {
@@ -147,33 +151,6 @@ export default function DesignerB7Page() {
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
-      {/* GAP-DESIGNER-DETAIL-B7-01 (decision — recorded): two editors store validity
-          in two places (outputs.validity vs phase3.renewalPolicy). Until the backend
-          unifies them, show the Renewal Policy builder as READ-ONLY derived from the
-          issuance design above, with an honest note. We keep it visible so the checker
-          on review sees both; removing it would lose the explicit renewable toggle. */}
-      <div style={{ marginTop: 24 }}>
-        <p
-          role="note"
-          style={{
-            margin: "0 0 8px",
-            padding: "6px 10px",
-            fontSize: 12,
-            color: "var(--warn)",
-            background: "var(--warnbg)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r-sm)",
-          }}
-        >
-          Validity and renewal settings above (in the Output tab) are the source of truth.
-          The summary below reflects those values. Changes here are saved separately until the
-          backend unifies the two storage paths — please set validity above only.
-        </p>
-        <RenewalPolicyBuilder
-          value={phase3.config.renewalPolicy ?? null}
-          onChange={(renewalPolicy) => void phase3.patch({ renewalPolicy })}
-        />
-      </div>
     </WizardShell>
   );
 }

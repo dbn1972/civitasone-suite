@@ -43,6 +43,57 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
   };
 }
 
+/** The FN-15 runtime policy the catalogue stores and the renewal engine reads. */
+export interface DerivedRenewalPolicy {
+  renewable: boolean;
+  renewalWindowDays: number;
+  validityMode: "none" | "duration" | "fixed_date";
+  validityYears?: number;
+  validityFixedDate?: string;
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B7-01: B7 has ONE validity editor (the Output tab). The
+ * runtime renewalPolicy is derived from it on every save, so the two stored
+ * copies cannot disagree. Values are clamped to what the catalogue API accepts.
+ */
+export function renewalPolicyFromDesign(design: IssuanceDesignState): DerivedRenewalPolicy {
+  const mode = design.validityMode;
+  const out: DerivedRenewalPolicy = {
+    // Nothing that never expires can be renewed.
+    renewable: mode === "none" ? false : design.renewable,
+    renewalWindowDays: Math.min(3650, Math.max(0, Math.trunc(design.renewalWindowDays) || 0)),
+    validityMode: mode,
+  };
+  if (mode === "duration") {
+    out.validityYears = Math.min(99, Math.max(1, Math.trunc(design.validityYears) || 1));
+  }
+  if (mode === "fixed_date" && /^\d{4}-\d{2}-\d{2}$/.test(design.validityFixedDate)) {
+    out.validityFixedDate = design.validityFixedDate;
+  }
+  return out;
+}
+
+/**
+ * The stored runtime policy is what citizens\' licences actually follow, so when
+ * one exists it wins over the copy inside outputs. Returns the design unchanged
+ * when nothing is stored.
+ */
+export function withStoredRenewalPolicy(
+  design: IssuanceDesignState,
+  stored: DerivedRenewalPolicy | null | undefined,
+): IssuanceDesignState {
+  if (!stored) return design;
+  return {
+    ...design,
+    validityMode: stored.validityMode,
+    validityYears: stored.validityYears ?? design.validityYears,
+    validityFixedDate: stored.validityFixedDate ?? "",
+    renewable: stored.renewable,
+    renewalWindowDays: stored.renewalWindowDays,
+  };
+}
+
 export function issuanceOutputToUi(
   outputs: unknown[] | undefined | null,
   pattern: string,
