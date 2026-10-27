@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, EmptyState, Field, Input, Select, StatusPill, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -12,9 +13,14 @@ import type { DataExportRequest } from "@/app/_data/loaders";
 type ExportType = "full" | "module" | "entity";
 type ExportFormat = "csv" | "json" | "pdf";
 
-const MODULES = ["finance", "hrms", "payroll", "procurement", "projects", "assets", "inventory", "documents"];
+const MODULES = ["admin", "finance", "hrms", "payroll", "procurement", "projects", "assets", "inventory", "documents"];
+
+/** Owner decision #22: a signed link lives 15 minutes; the file list comes from the download route. */
+type DownloadFile = { entity: string; fileName: string; rowCount: number; sizeBytes: number; url: string };
 // Full / payroll / hrms exports touch personal data and require a recorded purpose.
 const MIN_PURPOSE_LEN = 10;
+
+const FAILURE_REASONS = new Set(["NO_EXPORTER_FOR_MODULE", "UNKNOWN_ENTITY", "UNSUPPORTED_FORMAT", "STORAGE_FAILED"]);
 
 function formatSize(bytes: number | null) {
   if (!bytes) return "—";
@@ -34,6 +40,34 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [exports, setExports] = useState<DataExportRequest[]>(seededExports);
   const formError = useFormError("data export");
+  const t = useTranslations("tenantW3.export");
+  // OWNER DECISION #22: files are signed on demand (15-minute links), so the
+  // links are fetched when the user clicks Download and shown under the row.
+  const [links, setLinks] = useState<Record<string, DownloadFile[]>>({});
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<Record<string, string>>({});
+
+  async function fetchLinks(id: string) {
+    if (linkBusy) return;
+    setLinkBusy(id);
+    setLinkError((cur) => { const next = { ...cur }; delete next[id]; return next; });
+    try {
+      const res = await fetch(`/api/proxy/v1/admin/data-export/${id}/download`, { credentials: "same-origin" });
+      if (!res.ok) {
+        const code = res.status === 410 ? "expired" : res.status === 503 || res.status === 502 ? "storage" : "generic";
+        setLinkError((cur) => ({ ...cur, [id]: t(`download.${code}`) }));
+        return;
+      }
+      const body = (await res.json()) as { files?: DownloadFile[] };
+      const files = Array.isArray(body.files) ? body.files : [];
+      if (files.length === 0) setLinkError((cur) => ({ ...cur, [id]: t("download.noFile") }));
+      else setLinks((cur) => ({ ...cur, [id]: files }));
+    } catch {
+      setLinkError((cur) => ({ ...cur, [id]: t("download.generic") }));
+    } finally {
+      setLinkBusy(null);
+    }
+  }
 
   // GAP-TENANT-ADMIN-DATA-EXPORT-02: a full / module (payroll|hrms) export of
   // personal data must be confirmed with a reason before it fires.
@@ -136,9 +170,8 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
 
             <Field label="Format">
               <Select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
-                <option value="csv">CSV</option>
-                <option value="json">JSON</option>
-                <option value="pdf">PDF</option>
+                <option value="csv">{t("formatCsv")}</option>
+                <option value="json">{t("formatJson")}</option>
               </Select>
             </Field>
 
@@ -202,13 +235,32 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
                     {/* GAP-TENANT-ADMIN-DATA-EXPORT-03: a ready export is a real
                         authenticated download link; aria-label uses a readable date. */}
                     {exp.status === "ready" ? (
-                      <a
-                        className="btn btn-sm"
-                        href={exp.downloadUrl ?? `/api/proxy/v1/admin/data-export/${exp.id}/download`}
-                        aria-label={`Download ${exp.type} export (${exp.format.toUpperCase()}) from ${formatIndianDate(exp.createdAt)}`}
-                      >
-                        ⬇️ Download
-                      </a>
+                      <>
+                        <a
+                          className="btn btn-sm"
+                          href={exp.downloadUrl ?? `/api/proxy/v1/admin/data-export/${exp.id}/download`}
+                          aria-label={`Download ${exp.type} export (${exp.format.toUpperCase()}) from ${formatIndianDate(exp.createdAt)}`}
+                          aria-disabled={linkBusy === exp.id}
+                          onClick={(e) => { e.preventDefault(); void fetchLinks(exp.id); }}
+                        >
+                          ⬇️ Download
+                        </a>
+                        {linkError[exp.id] ? <div role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{linkError[exp.id]}</div> : null}
+                        {links[exp.id] ? (
+                          <div style={{ fontSize: 12 }}>
+                            <ul style={{ margin: "6px 0", paddingInlineStart: 16 }}>
+                              {links[exp.id]!.map((f) => (
+                                <li key={f.fileName}>
+                                  <a href={f.url} rel="noopener noreferrer">{f.fileName}</a> ({t("rows", { count: f.rowCount })})
+                                </li>
+                              ))}
+                            </ul>
+                            <span style={{ color: "var(--ink2)" }}>{t("linksExpire")}</span>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : exp.status === "failed" ? (
+                      <span role="status" style={{ color: "var(--bad)", fontSize: 12 }}>{t(`failure.${exp.failureReason && FAILURE_REASONS.has(exp.failureReason) ? exp.failureReason : "UNKNOWN"}`)}</span>
                     ) : exp.status === "processing" ? (
                       <span style={{ color: "var(--ink2)", fontSize: 12 }}>Processing</span>
                     ) : exp.status === "expired" ? (

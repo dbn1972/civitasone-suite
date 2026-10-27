@@ -13,6 +13,7 @@ import {
 } from "@civitasone/schemas/web";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import { clearedAccessLevels, canSetAccessLevel } from "./clearance.js";
 
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
@@ -35,6 +36,23 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     // not read it back, and it would bypass the least-privilege default).
     if (!canSetAccessLevel(ctx, body.accessLevel)) {
       throw new HttpError(403, "FORBIDDEN", `accessLevel "${body.accessLevel}" requires knowledge_admin`);
+    }
+    // UAT owner decision #15: one live document per title per tenant. A duplicate
+    // is a 409 that points at the existing document; a new version is only ever
+    // created through the explicit POST /documents/:id/versions action.
+    const existing = await repo.findLiveByTitle(ctx.tenantId, body.title);
+    if (existing) {
+      const levels = clearedAccessLevels(ctx);
+      const visible = levels === null || levels.includes(existing.accessLevel);
+      return reply.code(409).send({
+        code: "DUPLICATE_TITLE",
+        message: "A document with this title already exists.",
+        correlationId: ctx.correlationId,
+        retryable: false,
+        ...(visible
+          ? { existingDocumentId: existing.id, existingDocumentHref: `/knowledge/documents/${existing.id}` }
+          : {}),
+      });
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDocument(ctx, body));
   });

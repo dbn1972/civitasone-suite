@@ -16,7 +16,7 @@ describe("CreateRateSlabForm", () => {
 
   it("requires a rate and an effective-from date before opening the confirm dialog", () => {
     render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rate Slab" }));
     expect(screen.getByText(/Rate \(₹\) is required/)).toBeInTheDocument();
   });
 
@@ -29,19 +29,21 @@ describe("CreateRateSlabForm", () => {
     fireEvent.change(screen.getByLabelText(/^Slab Type/), { target: { value: "ad_valorem" } });
     fireEvent.change(screen.getByLabelText(/^Rate \(%\)/), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rate Slab" }));
 
-    await waitFor(() => expect(screen.getByText("Create this rate slab?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create rate slab"));
+    await waitFor(() => expect(screen.getByText("Propose this rate slab?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose rate slab"));
 
     await waitFor(() => {
       expect(screen.getByText(/Rate slab submitted/)).toBeInTheDocument();
     });
 
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { rateValue: string; slabType: string };
-    expect(body.slabType).toBe("ad_valorem");
-    expect(body.rateValue).toBe("1200"); // 12% -> 1200 bps, never double-divided
+    const env = JSON.parse(init.body as string) as { kind: string; effectiveFrom: string; payload: { rateValue: string; slabType: string } };
+    expect(env.kind).toBe("rate_slab");
+    expect(env.effectiveFrom).toBe("2026-04-01");
+    expect(env.payload.slabType).toBe("ad_valorem");
+    expect(env.payload.rateValue).toBe("1200"); // 12% -> 1200 bps, never double-divided
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -51,10 +53,10 @@ describe("CreateRateSlabForm", () => {
     render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rate Slab" }));
 
-    await waitFor(() => expect(screen.getByText("Create this rate slab?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create rate slab"));
+    await waitFor(() => expect(screen.getByText("Propose this rate slab?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose rate slab"));
 
     await waitFor(() => {
       expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
@@ -88,10 +90,10 @@ describe("CreateRateSlabForm", () => {
     fireEvent.change(screen.getByLabelText(/^Band To/), { target: { value: "150" } }); // ₹150 — still inside
     fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "50" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rate Slab" }));
 
     expect(screen.getByText(/overlaps an existing band/i)).toBeInTheDocument();
-    expect(screen.queryByText("Create this rate slab?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Propose this rate slab?")).not.toBeInTheDocument();
   });
 
   it("rejects a band whose Band To is not greater than Band From (GAP-REVENUE-CONFIG-04)", () => {
@@ -101,9 +103,9 @@ describe("CreateRateSlabForm", () => {
     fireEvent.change(screen.getByLabelText(/^Band To/), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "50" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rate Slab" }));
 
     expect(screen.getByText(/Band To \(₹\) must be greater than Band From/)).toBeInTheDocument();
-    expect(screen.queryByText("Create this rate slab?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Propose this rate slab?")).not.toBeInTheDocument();
   });
 });

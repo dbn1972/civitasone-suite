@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen } from "@/test-utils/intl-render";
 
-const { getSubscription } = vi.hoisted(() => ({ getSubscription: vi.fn() }));
-vi.mock("../../../_data/loaders", () => ({ getSubscription: () => getSubscription() }));
+const { getSubscription, getTenantInvoices } = vi.hoisted(() => ({ getSubscription: vi.fn(), getTenantInvoices: vi.fn() }));
+vi.mock("../../../_data/loaders", () => ({ getSubscription: () => getSubscription(), getTenantInvoices: () => getTenantInvoices() }));
 
 import SubscriptionPage from "./page";
 
 afterEach(() => vi.clearAllMocks());
+beforeEach(() => getTenantInvoices.mockResolvedValue({ source: "api", data: [] }));
 
 const SUB = {
   id: "s1",
@@ -78,5 +79,32 @@ describe("SubscriptionPage (GAP-TENANT-ADMIN-SUBSCRIPTION-01/02/04/05)", () => {
     // 499900 paise -> ₹4,999.00 (not ₹499900).
     expect(screen.getByText("₹4,999.00")).toBeInTheDocument();
     expect(screen.getByText("Hr Payroll")).toBeInTheDocument();
+  });
+});
+
+describe("SubscriptionPage - owner decision #27 invoice list + PDF (SUBSCRIPTION-04)", () => {
+  const INV = { id: "11111111-1111-4111-8111-111111111111", invoiceNumber: "INV-202609-11111111", periodMonth: "2026-09", issuedAt: "2026-09-05T00:00:00.000Z", status: "issued", totalMinor: "11800", supplierGstin: "07AAACN1234A1Z5", recipientGstin: "07AABCD5678B1Z2", placeOfSupply: "07", cgstMinor: "900", sgstMinor: "900", igstMinor: "0" };
+
+  it("lists the tenant's invoices with a PDF link per issued invoice", async () => {
+    getSubscription.mockResolvedValue({ source: "api", data: SUB });
+    getTenantInvoices.mockResolvedValue({ source: "api", data: [INV] });
+    render(await SubscriptionPage());
+    expect(screen.getByText("INV-202609-11111111")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download invoice INV-202609-11111111 as PDF" })).toHaveAttribute("href", `/api/proxy/v1/billing/invoices/${INV.id}/pdf`);
+  });
+
+  it("no invoices yet is an empty state", async () => {
+    getSubscription.mockResolvedValue({ source: "api", data: SUB });
+    getTenantInvoices.mockResolvedValue({ source: "api", data: [] });
+    render(await SubscriptionPage());
+    expect(screen.getByText("No invoices yet")).toBeInTheDocument();
+  });
+
+  it("when the invoice list fails to load it says so instead of claiming there are none", async () => {
+    getSubscription.mockResolvedValue({ source: "api", data: SUB });
+    getTenantInvoices.mockResolvedValue({ source: "error", data: [] });
+    render(await SubscriptionPage());
+    expect(screen.queryByText("No invoices yet")).toBeNull();
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
   });
 });

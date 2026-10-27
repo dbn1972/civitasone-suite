@@ -54,4 +54,26 @@ describe("FetchBillForm", () => {
     });
     expect(screen.queryByText(/BBPS_DISABLED: BBPS not enabled/)).not.toBeInTheDocument();
   });
+
+  // Owner decision #7: once the fetch succeeds, the server-issued bill token is handed on for payment.
+  it("hands the server-issued bill (token, amount, assessee) to the payment form on success (owner decision #7)", async () => {
+    mockFetchRouting({
+      messageId: "msg-1", status: "success", billToken: "b".repeat(48), amountMinor: "250000",
+      billExpiresAt: "2099-01-01T00:00:00.000Z",
+    });
+    const onBillReady = vi.fn();
+    render(
+      <FetchBillForm
+        onBillReady={onBillReady}
+        assessees={[{ id: "a1", ownerName: "Priya Singh", identifierNo: "PROP-001", assesseeType: "residential" }]}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Assessee Identifier/), { target: { value: "PROP-001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fetch Bill" }));
+    await waitFor(() => expect(onBillReady).toHaveBeenCalled(), { timeout: 4000 });
+    expect(onBillReady).toHaveBeenCalledWith({
+      token: "b".repeat(48), identifierNo: "PROP-001", ownerName: "Priya Singh",
+      amountMinor: "250000", expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+  });
 });

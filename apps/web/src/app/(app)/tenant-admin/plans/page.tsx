@@ -1,10 +1,10 @@
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
-import { getPlansData } from "@/app/_data/loaders";
+import { getPlansData, getDowngradeRequests } from "@/app/_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { PlansClient } from "./PlansClient";
 
 export default async function PlansPage() {
-  const { data: plansData, source } = await getPlansData();
+  const [{ data: plansData, source }, downgrades] = await Promise.all([getPlansData(), getDowngradeRequests()]);
   const currentPlan = plansData.plans.find((p) => p.id === plansData.currentPlanId);
 
   return (
@@ -20,7 +20,7 @@ export default async function PlansPage() {
         <StatCard icon="💰" tone="warn" label="Monthly Cost" value={currentPlan ? formatMoney(currentPlan.pricePerMonth) : "—"} />
       </StatGrid>
 
-      <PlansClient plansData={plansData} source={source} />
+      <PlansClient plansData={plansData} source={source} downgradeRequests={downgrades.data} />
     </div>
   );
 }

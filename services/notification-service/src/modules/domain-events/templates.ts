@@ -270,17 +270,52 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "The following change has been released:\n\n{{title}}\n\n{{releaseNotes}}\n\nAffected services: {{affectedServices}}\n\nRegards,\nPlatform Administration",
     },
   },
+  // Owner decision #24: plan downgrade requests are decided by platform billing.
   {
-    eventType: "contract.expiry.alert",
-    push: { title: "Contract Expiry Alert", body: "A contract is approaching expiry. Please review and initiate renewal." },
-    email: { title: "Contract Expiry Notice", body: "Dear Team,\n\nA contract under your oversight is approaching its expiry date. Please review and initiate the renewal process if required.\n\nRegards,\nContract Management" },
+    eventType: "tenant.subscription.downgrade_requested",
+    push: {
+      title: "Plan Downgrade Request",
+      body: "A tenant has requested a plan downgrade (request {{requestId}}). Review it in the downgrade queue.",
+    },
+    email: {
+      title: "Plan Downgrade Request — {{requestId}}",
+      body: "Dear Billing Team,\n\nA tenant has requested a downgrade from plan {{fromPlanId}} to plan {{targetPlanId}} (request {{requestId}}).\n\nPlease review the request and its usage check in the pending downgrade queue, then approve or reject it.\n\nRegards,\nCivitasOne Platform Billing",
+    },
+  },
+  {
+    eventType: "tenant.subscription.downgrade_rejected",
+    push: {
+      title: "Plan Downgrade Not Approved",
+      body: "Your plan downgrade request {{requestId}} was not approved: {{reason}}.",
+    },
+    email: {
+      title: "Plan Downgrade Request {{requestId}} Not Approved",
+      body: "Dear Administrator,\n\nYour request to downgrade to plan {{targetPlanId}} (request {{requestId}}) was not approved by platform billing.\n\nReason: {{reason}}\n\nYour current plan is unchanged. You may submit a new request once the reason has been addressed.\n\nRegards,\nCivitasOne Platform Billing",
+    },
   },
 ];
 
-const templateMap = new Map<string, NotificationTemplate>();
-for (const t of TEMPLATES) {
-  templateMap.set(t.eventType, t);
+/**
+ * Build the eventType -> template map, refusing duplicate keys. A second entry for
+ * the same eventType used to overwrite the first silently (contract.expiry.alert
+ * was defined twice and the generic copy hid the {{contractNo}} one), so a
+ * duplicate is now a load-time error instead.
+ */
+export function buildTemplateMap(templates: ReadonlyArray<NotificationTemplate>): Map<string, NotificationTemplate> {
+  const map = new Map<string, NotificationTemplate>();
+  for (const t of templates) {
+    if (map.has(t.eventType)) throw new Error(`Duplicate notification template for event type ${t.eventType}`);
+    map.set(t.eventType, t);
+  }
+  return map;
 }
+
+/** The raw template definitions, in declaration order (for validation/testing). */
+export function getTemplateDefinitions(): ReadonlyArray<NotificationTemplate> {
+  return TEMPLATES;
+}
+
+const templateMap = buildTemplateMap(TEMPLATES);
 
 /**
  * Look up a notification template by event type.

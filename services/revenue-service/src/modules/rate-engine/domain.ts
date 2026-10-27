@@ -44,6 +44,9 @@ export interface PenaltyRule {
   /** Rounding mode for interest calculation */
   roundingMode: RoundingMode;
   isActive: boolean;
+  /** Owner decision #2: effective window [from, to). Absent = always in effect (pre-versioning rows). */
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
 }
 
 export interface RebateRule {
@@ -55,6 +58,9 @@ export interface RebateRule {
   /** Days before due date within which rebate applies. null for category-based */
   validUntilDaysBeforeDue: number | null;
   isActive: boolean;
+  /** Owner decision #2: effective window [from, to). Absent = always in effect (pre-versioning rows). */
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
 }
 
 export interface ComputeInput {
@@ -115,6 +121,17 @@ const BPS_DIVISOR = 10_000n;
 const MONTHS_PER_YEAR = 12;
 
 // ── Pure Functions ────────────────────────────────────────────────────────────
+
+/**
+ * Owner decision #2: is a penalty/rebate rule in effect on `asOf`? Rules are
+ * versioned with effective dates (window [from, to)); a rule with no dates
+ * (pre-versioning data) is always in effect.
+ */
+export function ruleInEffect(rule: { effectiveFrom?: string | null; effectiveTo?: string | null }, asOf: string): boolean {
+  if (rule.effectiveFrom && asOf < rule.effectiveFrom) return false;
+  if (rule.effectiveTo && asOf >= rule.effectiveTo) return false;
+  return true;
+}
 
 /**
  * Lookup the effective rate slab for a given date from a set of slabs.
@@ -454,7 +471,9 @@ export function compute(
   const { principal, slabUsed } = computePrincipal(input.baseValue, effectiveSlabs);
 
   // 3. Compute rebate (if payment is early)
-  const activeRebates = rebateRules.filter((r) => r.isActive && r.rateHeadId === input.rateHeadId);
+  const activeRebates = rebateRules.filter(
+    (r) => r.isActive && r.rateHeadId === input.rateHeadId && ruleInEffect(r, input.asOfDate),
+  );
   const { rebate, ruleUsed: rebateRuleUsed } = computeRebate(
     principal,
     input.dueDate,
@@ -463,7 +482,9 @@ export function compute(
   );
 
   // 4. Compute penalty/interest (if overdue)
-  const activePenaltyRule = penaltyRules.find((r) => r.isActive && r.rateHeadId === input.rateHeadId);
+  const activePenaltyRule = penaltyRules.find(
+    (r) => r.isActive && r.rateHeadId === input.rateHeadId && ruleInEffect(r, input.asOfDate),
+  );
   let interest = 0n;
   let penalty = 0n;
   let overdueDays = 0;

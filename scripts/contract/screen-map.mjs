@@ -106,6 +106,10 @@ const SERVICE_DIR_MAP = {
   'ai': 'ai-agent-service',
   'locations': 'location-service',
   'tenant': 'tenant-service',
+  // registry.ts "tenant-singular" (/api/v1/tenant -> tenant-service /v1/tenant/*, e.g. the
+  // owner decision #24 /v1/tenant/subscription/downgrade-requests route). Without this alias
+  // every chain through the singular prefix read 'service-missing' though the route exists.
+  'tenant-singular': 'tenant-service',
   'sync': 'identity-service',
   'devices': 'identity-service',
   // COMP-004: registry.ts's "admin-users" entry is a pre-existing,

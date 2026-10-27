@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { todayIST } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
 
 interface CaseTypeOption {
@@ -11,6 +13,14 @@ interface CaseTypeOption {
   code: string;
   name: string;
 }
+
+interface CourtOption { code: string; name: string; kind: "supreme" | "high_court" | "district" | "tribunal" }
+interface DepartmentOption { id: string; name: string }
+
+const OTHER = "other";
+const COURT_GROUPS: ReadonlyArray<CourtOption["kind"]> = ["supreme", "high_court", "district", "tribunal"];
+
+const todayIso = (): string => todayIST();
 
 /** Poll the new case detail until the async create consumer has written it. */
 async function waitForCase(id: string): Promise<boolean> {
@@ -28,14 +38,28 @@ async function waitForCase(id: string): Promise<boolean> {
 }
 
 export function CreateCaseForm() {
+  const t = useTranslations("legalCaseNew");
   const router = useRouter();
   const [caseNo, setCaseNo] = useState("");
   const [title, setTitle] = useState("");
-  const [court, setCourt] = useState("");
+  // GAP-LEGAL-CASES-NEW-02 (owner decision #10): court from the master, or "Other" free text (unverified).
+  const [courtCode, setCourtCode] = useState("");
+  const [courtOther, setCourtOther] = useState("");
+  const [filingDate, setFilingDate] = useState(todayIso());
+  const [departmentId, setDepartmentId] = useState("");
+  // GAP-LEGAL-CASES-DETAIL-06 (owner decision #12): privileged / confidential case.
+  const [privileged, setPrivileged] = useState(false);
+  const [courts, setCourts] = useState<CourtOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [refData, setRefData] = useState<"loading" | "ready" | "error">("loading");
   const [petitioner, setPetitioner] = useState("");
   const [respondent, setRespondent] = useState("");
   const [subject, setSubject] = useState("");
   const [counselRef, setCounselRef] = useState("");
+  // GAP-LEGAL-LIST-04 (owner decision #14): link the case to an empanelled advocate (counselRef stays as a free-text fallback).
+  const [advocateId, setAdvocateId] = useState("");
+  const [advocates, setAdvocates] = useState<Array<{ id: string; name: string; barEnrolmentNo: string }>>([]);
+  const [advocatesFailed, setAdvocatesFailed] = useState(false);
   const [caseTypeId, setCaseTypeId] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -52,6 +76,26 @@ export function CreateCaseForm() {
   useEffect(() => {
     let active = true;
     void (async () => {
+      try {
+        const [c, d] = await Promise.all([
+          fetch("/api/proxy/v1/legal/courts"),
+          fetch("/api/proxy/v1/legal/departments"),
+        ]);
+        if (!c.ok || !d.ok) throw new Error("reference data unavailable");
+        const cj = (await c.json()) as { items?: CourtOption[] };
+        const dj = (await d.json()) as { items?: DepartmentOption[] };
+        if (active) { setCourts(cj.items ?? []); setDepartments(dj.items ?? []); setRefData("ready"); }
+      } catch {
+        if (active) setRefData("error");
+      }
+      try {
+        const a = await fetch("/api/proxy/v1/legal/advocates");
+        if (!a.ok) throw new Error("advocates unavailable");
+        const aj = (await a.json()) as { items?: Array<{ id: string; name: string; barEnrolmentNo: string }> };
+        if (active) setAdvocates(aj.items ?? []);
+      } catch {
+        if (active) setAdvocatesFailed(true);
+      }
       try {
         const res = await fetch("/api/proxy/v1/legal/case-types");
         if (!res.ok) {
@@ -74,9 +118,20 @@ export function CreateCaseForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!caseNo.trim() || !title.trim() || !court.trim()) {
+    const courtMissing = courtCode === "" || (courtCode === OTHER && !courtOther.trim());
+    if (!caseNo.trim() || !title.trim() || courtMissing) {
       setStatus("error");
       setMessage("Case number, title and court are required.");
+      return;
+    }
+    if (!filingDate || filingDate > todayIso()) {
+      setStatus("error");
+      setMessage(t("filingDateInvalid"));
+      return;
+    }
+    if (!departmentId) {
+      setStatus("error");
+      setMessage(t("departmentRequired"));
       return;
     }
     setStatus("submitting");
@@ -85,10 +140,16 @@ export function CreateCaseForm() {
     const body = {
       caseNo: caseNo.trim(),
       title: title.trim(),
-      court: court.trim(),
+      courtCode,
+      // Only "Other" carries free text; a master court is named by the server.
+      ...(courtCode === OTHER ? { court: courtOther.trim() } : {}),
+      filingDate,
+      departmentId,
+      ...(privileged ? { privileged: true } : {}),
       subject: subject.trim() || undefined,
       petitioner: petitioner.trim() || undefined,
       counselRef: counselRef.trim() || undefined,
+      advocateId: advocateId || undefined,
       // GAP-LEGAL-CASES-NEW-01: send the explicit case type (caseTypeId) when the
       // registrar picked one from the master. Optional — omitted falls back to
       // the caseNo-prefix heuristic in the list classifier.
@@ -150,7 +211,42 @@ export function CreateCaseForm() {
         </div>
         <div className="field">
           <label className="label" htmlFor="court">Court / Forum *</label>
-          <input id="court" className="inp" value={court} onChange={(e) => setCourt(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. High Court" />
+          <select id="court" className="inp" value={courtCode} onChange={(e) => setCourtCode(e.target.value)} required style={{ minHeight: 44 }} disabled={refData !== "ready"}>
+            <option value="">{refData === "loading" ? t("loading") : t("selectCourt")}</option>
+            {COURT_GROUPS.map((kind) => {
+              const group = courts.filter((c) => c.kind === kind);
+              return group.length === 0 ? null : (
+                <optgroup key={kind} label={t(`group.${kind}`)}>
+                  {group.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </optgroup>
+              );
+            })}
+            <option value={OTHER}>{t("courtOtherOption")}</option>
+          </select>
+          {courtCode === OTHER ? (
+            <div style={{ marginTop: 8 }}>
+              <label className="label" htmlFor="courtOther">{t("courtOtherLabel")}</label>
+              <input id="courtOther" className="inp" value={courtOther} onChange={(e) => setCourtOther(e.target.value)} required maxLength={128} style={{ minHeight: 44 }} />
+              <p style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--ink2)" }}>{t("courtUnverifiedNote")}</p>
+            </div>
+          ) : null}
+          {refData === "error" ? (
+            <p role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{t("refDataError")}</p>
+          ) : null}
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="filingDate">{t("filingDateLabel")}</label>
+          <input id="filingDate" type="date" className="inp" value={filingDate} max={todayIso()} onChange={(e) => setFilingDate(e.target.value)} required style={{ minHeight: 44 }} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="department">{t("departmentLabel")}</label>
+          <select id="department" className="inp" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} required style={{ minHeight: 44 }} disabled={refData !== "ready"}>
+            <option value="">{refData === "loading" ? t("loading") : t("selectDepartment")}</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          {refData === "ready" && departments.length === 0 ? (
+            <p style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--ink2)" }}>{t("departmentsEmpty")}</p>
+          ) : null}
         </div>
         <div className="field">
           <label className="label" htmlFor="caseType">Case type</label>
@@ -189,8 +285,25 @@ export function CreateCaseForm() {
           <input id="respondent" className="inp" value={respondent} onChange={(e) => setRespondent(e.target.value)} style={{ minHeight: 44 }} />
         </div>
         <div className="field">
+          <label className="label" htmlFor="advocateId">{t("advocateLabel")}</label>
+          <select id="advocateId" className="inp" value={advocateId} onChange={(e) => setAdvocateId(e.target.value)} style={{ minHeight: 44 }}>
+            <option value="">{t("advocateNone")}</option>
+            {advocates.map((a) => <option key={a.id} value={a.id}>{`${a.name} (${a.barEnrolmentNo})`}</option>)}
+          </select>
+          {advocatesFailed ? <p role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{t("advocatesError")}</p> : null}
+        </div>
+        <div className="field">
           <label className="label" htmlFor="counselRef">Counsel reference</label>
           <input id="counselRef" className="inp" value={counselRef} onChange={(e) => setCounselRef(e.target.value)} style={{ minHeight: 44 }} />
+        </div>
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label className="label" htmlFor="privileged" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <input id="privileged" type="checkbox" checked={privileged} onChange={(e) => setPrivileged(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>
+              {t("privilegedLabel")}
+              <span style={{ display: "block", fontSize: "0.75rem", color: "var(--ink2)", fontWeight: 400 }}>{t("privilegedHelp")}</span>
+            </span>
+          </label>
         </div>
         <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="subject">Subject</label>

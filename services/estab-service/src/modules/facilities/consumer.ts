@@ -148,7 +148,7 @@ export function registerFacilitiesConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.libraryReturn, async (msg) => {
-    const p = msg.payload as { issueId: string; tenantId: string };
+    const p = msg.payload as { issueId: string; tenantId: string; condition?: string; notes?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const issue = await repo.getIssueByIdTx(tx, p.issueId);
@@ -156,9 +156,9 @@ export function registerFacilitiesConsumers(queue: Queue): void {
       // Idempotent: a second return for the same loan is a no-op (already
       // returned) — do not double-increment copiesAvailable.
       if (issue.status === "returned") return;
-      await repo.markIssueReturned(tx, p.issueId, new Date(), msg.actorId);
+      await repo.markIssueReturned(tx, p.issueId, new Date(), msg.actorId, { condition: p.condition ?? null, notes: p.notes ?? null });
       await repo.incrementCopies(tx, issue.bookId);
-      await audit(tx, msg, "return", "library_issue", p.issueId);
+      await audit(tx, msg, "return", "library_issue", p.issueId, p.condition ? { condition: p.condition } : undefined);
       await enqueue(tx, {
         topic: EVENTS.libraryReturned, eventType: EVENTS.libraryReturned,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -173,8 +173,11 @@ export function registerFacilitiesConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const issue = await repo.getIssueByIdTx(tx, p.issueId);
       if (!issue || issue.status === "returned") return;
+      // Owner decision #29: re-validated on the row in the transaction (the route's check can be stale);
+      // a renewal that does not extend the loan is a no-op, never a shortening.
+      if (new Date(p.dueAt).getTime() <= new Date(issue.dueAt as unknown as string).getTime()) return;
       await repo.updateIssueDueAt(tx, p.issueId, new Date(p.dueAt), msg.actorId);
-      await audit(tx, msg, "renew", "library_issue", p.issueId);
+      await audit(tx, msg, "renew", "library_issue", p.issueId, { dueAt: p.dueAt });
       await enqueue(tx, {
         topic: EVENTS.libraryRenewed, eventType: EVENTS.libraryRenewed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

@@ -37,6 +37,11 @@ export const bbpsTransactions = bbpsSchema.table("bbps_transactions", {
   messageId:      uuid("message_id"),
   failureReason:  text("failure_reason"),
   requestType:    varchar("request_type", { length: 16 }), // fetch, pay
+  // Owner decision #7: server-issued, single-use bill token (fetch rows only).
+  // pay-bill takes this token and derives assessee + amount from it.
+  billToken:      varchar("bill_token", { length: 64 }),
+  billExpiresAt:  timestamp("bill_expires_at", { withTimezone: true }),
+  billConsumedAt: timestamp("bill_consumed_at", { withTimezone: true }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:        integer("version").notNull().default(1),

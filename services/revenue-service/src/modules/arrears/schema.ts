@@ -18,7 +18,12 @@ export const instalmentPlans = arrearsSchema.table("instalment_plans", {
   totalMinor:     bigint("total_minor", { mode: "bigint" }).notNull(),
   instalmentCount: integer("instalment_count").notNull(),
   startDate:      date("start_date").notNull(),
-  status:         varchar("status", { length: 16 }).notNull().default("active"), // active, completed, defaulted
+  // Owner decision #3: a plan defers a demand, so it is created `pending` and
+  // only becomes `active` when a DIFFERENT officer approves it (or `rejected`).
+  status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, active, rejected, completed, defaulted
+  checkerUserId:  uuid("checker_user_id"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
   version:        integer("version").notNull().default(1),
@@ -65,11 +70,33 @@ export const recoveryReferrals = arrearsSchema.table("recovery_referrals", {
   assesseeId:     uuid("assessee_id").notNull(),
   reason:         text("reason").notNull(),
   legalCaseId:    uuid("legal_case_id"),
-  status:         varchar("status", { length: 16 }).notNull().default("referred"), // referred, accepted, resolved
+  // Owner decision #4: maker-checker. `pending` until a DIFFERENT officer approves
+  // (-> `referred`, legal-service is notified then) or rejects (-> `rejected`).
+  status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, referred, rejected, accepted, resolved
+  noticeId:       uuid("notice_id"), // the lapsed demand notice this referral relied on
+  checkerUserId:  uuid("checker_user_id"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
   referredAt:     timestamp("referred_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
   version:        integer("version").notNull().default(1),
+});
+
+// ── arrears.demand_notices ────────────────────────────────────────────────────
+// Owner decision #4: a served demand notice. A recovery referral may only be
+// raised once a notice has been served AND its notice period has lapsed.
+export const demandNotices = arrearsSchema.table("demand_notices", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  assesseeId:       uuid("assessee_id").notNull(),
+  demandId:         uuid("demand_id"),
+  noticeNo:         varchar("notice_no", { length: 64 }).notNull(),
+  servedOn:         date("served_on").notNull(),
+  noticePeriodDays: integer("notice_period_days").notNull(),
+  servedBy:         uuid("served_by").notNull(),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  version:          integer("version").notNull().default(1),
 });
 
 export type InstalmentPlanRow = typeof instalmentPlans.$inferSelect;
@@ -81,4 +108,4 @@ export type WriteOffInsert = typeof writeOffs.$inferInsert;
 export type RecoveryReferralRow = typeof recoveryReferrals.$inferSelect;
 export type RecoveryReferralInsert = typeof recoveryReferrals.$inferInsert;
 
-export const schema = { instalmentPlans, instalments, writeOffs, recoveryReferrals };
+export const schema = { instalmentPlans, instalments, writeOffs, recoveryReferrals, demandNotices };

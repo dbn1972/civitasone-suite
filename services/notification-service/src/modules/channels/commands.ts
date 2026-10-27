@@ -18,6 +18,17 @@ export async function setChannelEnabled(
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/** Owner decision #25: send ONE test message to the calling admin's own address. */
+export async function testSendChannel(ctx: RequestContext, id: string): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.testSendChannel, {
+    messageId, type: COMMANDS.testSendChannel, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function createChannel(ctx: RequestContext, body: CreateChannelBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.createChannel, {

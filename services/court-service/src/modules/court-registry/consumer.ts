@@ -5,7 +5,10 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { DEFAULT_COURT_TYPES, assertCourtTypeAllowed } from "./domain.js";
-import { effectiveAllowed } from "../config-registry/domain.js";
+import { effectiveAllowed, deriveConfigId } from "../config-registry/domain.js";
+import {
+  slotNamespace, courtroomNamespace, DEFAULT_SLOTS, DEFAULT_COURTROOMS,
+} from "../cause-list/domain.js";
 
 type CreateCourtPayload = {
   id: string;
@@ -62,6 +65,27 @@ export function registerCourtRegistryConsumers(
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      // Owner decision #33 (GAP-COURT-CAUSE-LIST-03): seed the court's own cause-list slot and courtroom
+      // config with the defaults, in the SAME transaction as the court, so a new court is usable at once and
+      // the tenant can then add, rename or retire values per court. Deterministic ids make a redelivery a no-op.
+      const seed: Array<[string, string, number]> = [
+        ...DEFAULT_SLOTS.map((k, i): [string, string, number] => [slotNamespace(p.id), k, i]),
+        ...DEFAULT_COURTROOMS.map((k, i): [string, string, number] => [courtroomNamespace(p.id), k, i]),
+      ];
+      for (const [namespace, configKey, sortOrder] of seed) {
+        await configRepo.insertConfig(tx, {
+          id: deriveConfigId(p.tenantId, namespace, configKey),
+          tenantId: p.tenantId,
+          namespace,
+          configKey,
+          value: {},
+          label: configKey,
+          active: true,
+          sortOrder,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      }
       await enqueue(tx, {
         topic: EVENTS.courtRegistered,
         eventType: EVENTS.courtRegistered,

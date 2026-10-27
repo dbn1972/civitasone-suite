@@ -199,3 +199,47 @@ export async function fetchActivationStageStatus(stageId: string): Promise<{ sta
     return { state: "unknown" };
   }
 }
+
+export type DomainPackActivationState = "none" | "queued" | "completed" | "failed" | "unknown";
+
+export type DomainPackActivationStatus = {
+  state: DomainPackActivationState;
+  /** Id of the activation record the state belongs to (absent for none/unknown). */
+  activationId?: string;
+  /** Drafts imported (completed only). */
+  draftCount?: number;
+  completedAt?: string;
+};
+
+/**
+ * Owner decision #28 (GAP-INSTALL-DOMAIN-PACKS-01/-04): the tenant's latest activation of a Domain
+ * Pack, read from install-service's durable activation record (not React state), so a reload still
+ * shows Activated/failed. `none` = never activated; a failed or malformed read is `unknown` so the UI
+ * never claims a state it could not observe. Raw server failure text is never returned.
+ */
+export async function fetchDomainPackActivationStatus(domainPackKey: string): Promise<DomainPackActivationStatus> {
+  try {
+    const res = await fetch(
+      `/api/proxy/v1/install/stages/3/domain-pack/status?domainPackKey=${encodeURIComponent(domainPackKey)}`,
+      { cache: "no-store", headers: { accept: "application/json" } },
+    );
+    if (!res.ok) return { state: "unknown" };
+    const body = (await res.json()) as { activation?: unknown };
+    if (body.activation === null) return { state: "none" };
+    if (!isRecord(body.activation)) return { state: "unknown" };
+    const a = body.activation;
+    const activationId = str(a.id);
+    if (!activationId) return { state: "unknown" };
+    const status = str(a.status);
+    if (status === "accepted") return { state: "queued", activationId };
+    if (status === "failed") return { state: "failed", activationId };
+    if (status === "completed") {
+      const draftCount = Array.isArray(a.draftIds) ? a.draftIds.length : 0;
+      const completedAt = str(a.completedAt);
+      return { state: "completed", activationId, draftCount, ...(completedAt ? { completedAt } : {}) };
+    }
+    return { state: "unknown" };
+  } catch {
+    return { state: "unknown" };
+  }
+}

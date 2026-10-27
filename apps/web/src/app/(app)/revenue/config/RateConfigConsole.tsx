@@ -10,6 +10,7 @@ import { CreateRateHeadForm } from "./CreateRateHeadForm";
 import { CreateRateSlabForm } from "./CreateRateSlabForm";
 import { CreatePenaltyRuleForm } from "./CreatePenaltyRuleForm";
 import { CreateRebateRuleForm } from "./CreateRebateRuleForm";
+import { ProposeChangeForm, type ChangeTarget } from "./ProposeChangeForm";
 import type { RateHeadRow, RateSlabRow, PenaltyRuleRow, RebateRuleRow } from "./types";
 
 const TABS = ["Rate Heads", "Rate Slabs", "Penalty Rules", "Rebate Rules"] as const;
@@ -25,6 +26,8 @@ interface RateConfigConsoleProps {
   penaltyRulesSource: LoaderSource;
   rebateRules: RebateRuleRow[];
   rebateRulesSource: LoaderSource;
+  /** Owner decision #2: existing rows a revenue admin may propose a new version / end-date for. */
+  changeTargets?: ChangeTarget[];
 }
 
 type WithStatus<T> = T & { statusLabel: string } & Record<string, unknown>;
@@ -51,6 +54,7 @@ export function RateConfigConsole({
   penaltyRulesSource,
   rebateRules,
   rebateRulesSource,
+  changeTargets,
 }: RateConfigConsoleProps) {
   const [active, setActive] = useState<Tab>("Rate Heads");
   const selectedRateHead = rateHeads.find((rh) => rh.id === selectedRateHeadId) ?? null;
@@ -79,6 +83,7 @@ export function RateConfigConsole({
                 { key: "name", label: "Name" },
                 { key: "category", label: "Category", render: (r) => prettifyEnum(r.category) },
                 { key: "unitOfMeasure", label: "Unit of Measure", render: (r) => r.unitOfMeasure ?? "—" },
+                { key: "effectiveTo", label: "Ends On", render: (r) => (r.effectiveTo ? formatIndianDate(r.effectiveTo) : "—") },
                 { key: "statusLabel", label: "Status", cellType: "status" },
               ]}
               rows={withStatus(rateHeads)}
@@ -145,6 +150,7 @@ export function RateConfigConsole({
                       label: "Effective To",
                       render: (r) => (r.effectiveTo ? formatIndianDate(r.effectiveTo) : "—"),
                     },
+                    { key: "version", label: "Version", align: "right", render: (r) => r.version ?? 1 },
                     { key: "statusLabel", label: "Status", cellType: "status" },
                   ]}
                   rows={withStatus(slabs)}
@@ -187,6 +193,9 @@ export function RateConfigConsole({
                     { key: "graceDays", label: "Grace Days", align: "right" },
                     { key: "capMonths", label: "Cap (Months)", align: "right", render: (r) => r.capMonths ?? "—" },
                     { key: "roundingMode", label: "Rounding" },
+                    { key: "effectiveFrom", label: "Effective From", render: (r) => (r.effectiveFrom ? formatIndianDate(r.effectiveFrom) : "—") },
+                    { key: "effectiveTo", label: "Effective To", render: (r) => (r.effectiveTo ? formatIndianDate(r.effectiveTo) : "—") },
+                    { key: "version", label: "Version", align: "right", render: (r) => r.version ?? 1 },
                     { key: "statusLabel", label: "Status", cellType: "status" },
                   ]}
                   rows={withStatus(penaltyRules)}
@@ -232,6 +241,9 @@ export function RateConfigConsole({
                       align: "right",
                       render: (r) => r.validUntilDaysBeforeDue ?? "—",
                     },
+                    { key: "effectiveFrom", label: "Effective From", render: (r) => (r.effectiveFrom ? formatIndianDate(r.effectiveFrom) : "—") },
+                    { key: "effectiveTo", label: "Effective To", render: (r) => (r.effectiveTo ? formatIndianDate(r.effectiveTo) : "—") },
+                    { key: "version", label: "Version", align: "right", render: (r) => r.version ?? 1 },
                     { key: "statusLabel", label: "Status", cellType: "status" },
                   ]}
                   rows={withStatus(rebateRules)}
@@ -243,6 +255,8 @@ export function RateConfigConsole({
           )}
         </div>
       )}
+
+      {changeTargets && changeTargets.length > 0 && <ProposeChangeForm targets={changeTargets} />}
     </div>
   );
 }

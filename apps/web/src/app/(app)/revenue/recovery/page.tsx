@@ -3,7 +3,10 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDateTime } from "@/lib/formatters";
-import { RecoveryReferralCreateForm } from "./RecoveryReferralCreateForm";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { DecideActions } from "../_components/DecideActions";
+import { RecoveryReferralCreateForm, type RecoveryReadiness } from "./RecoveryReferralCreateForm";
+import { ServeNoticeForm } from "./ServeNoticeForm";
 
 export type AssesseeOption = {
   id: string;
@@ -18,6 +21,8 @@ export type RecoveryReferralRow = {
   reason: string;
   status: string | null;
   referredAt: string;
+  /** The officer who raised the referral (maker); a different officer must decide it. */
+  createdBy: string | null;
 } & Record<string, unknown>;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -73,9 +78,37 @@ function mapReferrals(payload: unknown): RecoveryReferralRow[] | null {
       reason: typeof raw.reason === "string" ? raw.reason : "—",
       status: typeof raw.status === "string" ? raw.status : null,
       referredAt: typeof raw.referredAt === "string" ? raw.referredAt : "",
+      createdBy: typeof raw.createdBy === "string" ? raw.createdBy : null,
     });
   }
   return mapped;
+}
+
+// Owner decision #4: amount outstanding, notices served and eligibility, shown before a referral.
+function mapReadiness(payload: unknown): RecoveryReadiness | null {
+  const body = isRecord(payload) && isRecord((payload as { data?: unknown }).data) ? ((payload as { data: Record<string, unknown> }).data) : null;
+  if (!body || typeof body.outstandingMinor !== "string" || typeof body.eligible !== "boolean" || !Array.isArray(body.notices)) return null;
+  const notices: RecoveryReadiness["notices"][number][] = [];
+  for (const raw of body.notices) {
+    if (!isRecord(raw) || typeof raw.id !== "string") continue;
+    notices.push({
+      id: raw.id,
+      noticeNo: typeof raw.noticeNo === "string" ? raw.noticeNo : "—",
+      servedOn: typeof raw.servedOn === "string" ? raw.servedOn : "",
+      noticePeriodDays: Number(raw.noticePeriodDays ?? 0),
+      lapsesOn: typeof raw.lapsesOn === "string" ? raw.lapsesOn : "",
+      lapsed: raw.lapsed === true,
+    });
+  }
+  return { outstandingMinor: body.outstandingMinor, eligible: body.eligible, notices };
+}
+
+async function getReadiness(assesseeId: string): Promise<LoaderResult<RecoveryReadiness | null>> {
+  return fetchJson<unknown, RecoveryReadiness | null>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/recovery-readiness`,
+    null,
+    { telemetryKey: "revenue.recovery.readiness", mapResponse: mapReadiness },
+  );
 }
 
 async function getRecoveryReferrals(): Promise<LoaderResult<RecoveryReferralRow[]>> {
@@ -96,6 +129,15 @@ export default async function RecoveryPage(
   const { data: assessees, source: assesseesSource } = await getAssessees();
   const referralsResult = await getRecoveryReferrals();
   const referrals = referralsResult.data;
+  const currentUserId = getSessionUserId();
+  const pendingReferrals = referrals.filter((r) => r.status === "pending");
+  // Fail closed: when the readiness could not be loaded the form is disabled (readiness = null).
+  const readinessData = assesseeId ? (await getReadiness(assesseeId))?.data : undefined;
+  const readiness: RecoveryReadiness | null | undefined = !assesseeId
+    ? undefined
+    : readinessData && Array.isArray(readinessData.notices)
+      ? readinessData
+      : null;
 
   const nameById = new Map(assessees.map((a) => [a.id, a.ownerName] as const));
   const referralRows = referrals.map((r) => ({
@@ -154,7 +196,36 @@ export default async function RecoveryPage(
           />
         </Card>
       ) : (
-        <RecoveryReferralCreateForm assesseeId={assesseeId} />
+        <>
+          <ServeNoticeForm assesseeId={assesseeId} />
+          <RecoveryReferralCreateForm assesseeId={assesseeId} readiness={readiness} />
+        </>
+      )}
+
+      {pendingReferrals.length > 0 && (
+        <Card title="Awaiting approval" padding>
+          <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "var(--ink2)" }}>
+            A recovery referral is a coercive action, so a second officer must approve it before legal is told. The
+            officer who raised a referral cannot decide it.
+          </p>
+          <div style={{ display: "grid", gap: 14 }}>
+            {pendingReferrals.map((r) => (
+              <div key={r.id} style={{ display: "grid", gap: 8, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
+                <div style={{ fontSize: 13.5 }}>
+                  <strong>{nameById.get(r.assesseeId) ?? r.assesseeId}</strong> — {r.reason}
+                </div>
+                <DecideActions
+                  decideUrl={`v1/revenue/recovery-referrals/${r.id}/decide`}
+                  noun="recovery referral"
+                  status={r.status ?? "unknown"}
+                  makerUserId={r.createdBy}
+                  currentUserId={currentUserId}
+                  summary={<>a recovery referral of <strong>{nameById.get(r.assesseeId) ?? r.assesseeId}</strong> for coercive action</>}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       <Card title="Recovery register" padding>

@@ -20,3 +20,9 @@ export const setChannelEnabledBody = z.object({
 export type SetChannelEnabledBody = z.infer<typeof setChannelEnabledBody>;
 
 export const channelIdParam = z.object({ id: z.string().uuid() });
+
+// Owner decision #25: test-send takes NO body fields. The recipient is always the
+// calling admin's own address, resolved server-side; a caller-supplied recipient is
+// a 400 (strict) so the control can never be used to message a third party.
+export const testSendBody = z.object({}).strict();
+export type TestSendBody = z.infer<typeof testSendBody>;

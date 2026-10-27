@@ -14,11 +14,12 @@ import { jobs } from "../jobs/schema.js";
 import { eq, and } from "drizzle-orm";
 import { renderPdf } from "@civitasone/render/pdf";
 import { renderXlsx, renderCsv } from "@civitasone/render/xlsx";
-import { putObject, presignedGetUrl } from "@civitasone/storage";
+import { putObject } from "@civitasone/storage";
 import { pino } from "pino";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { applyPdfWatermark, applyCsvWatermark } from "../../shared/watermark.js";
-import { maskPiiColumns } from "../../shared/mask.js";
+import { maskAllPii } from "../../shared/mask.js";
+import { jobStorageKey } from "../../shared/download.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -60,12 +61,20 @@ interface RenderPayload {
   title?: string;
   /** Watermark text to overlay on the export */
   watermark?: string;
-  /** Column keys containing PII to mask */
+  /** Column keys containing PII. Always masked unless `piiUnmask` is a valid grant. */
   piiColumns?: string[];
-  /** Roles allowed to see unmasked PII */
-  piiAllowedRoles?: string[];
-  /** The executing user's role */
-  actorRole?: string;
+  /**
+   * Owner decision #17: the ONLY way to export PII columns unmasked. Issued by the
+   * job consumer for a report_admin's request; needs a reason and must name the
+   * actor of this very command, so a payload cannot borrow someone else's grant.
+   */
+  piiUnmask?: { reason?: string; grantedBy?: string };
+}
+
+/** The reason of a valid unmask grant, else null (=> mask). */
+function validUnmaskReason(grant: RenderPayload["piiUnmask"], actorId: string): string | null {
+  const reason = grant?.reason?.trim();
+  return reason && grant?.grantedBy === actorId ? reason : null;
 }
 
 export function registerRenderConsumers(queue: Queue): void {
@@ -97,15 +106,13 @@ export function registerRenderConsumers(queue: Queue): void {
         });
       });
 
-      // Apply PII masking before rendering if configured
+      // Owner decision #17: PII columns are masked BY DEFAULT. Only an explicit grant
+      // with a reason (see validUnmaskReason) skips masking, and it is audited below.
       let rows = p.rows ?? [];
-      if (p.piiColumns && p.piiColumns.length > 0 && p.actorRole) {
-        rows = maskPiiColumns(
-          rows,
-          p.piiColumns,
-          p.actorRole,
-          p.piiAllowedRoles ?? ["super_admin"],
-        );
+      const piiColumns = p.piiColumns ?? [];
+      const unmaskReason = piiColumns.length > 0 ? validUnmaskReason(p.piiUnmask, msg.actorId) : null;
+      if (piiColumns.length > 0 && !unmaskReason) {
+        rows = maskAllPii(rows, piiColumns);
       }
 
       let buffer: Buffer;
@@ -158,16 +165,17 @@ export function registerRenderConsumers(queue: Queue): void {
       }
 
       // Upload to S3
-      const key = `reports/${p.tenantId}/${p.jobId}.${ext}`;
+      // Owner decision #17: store the key, never a presigned bearer URL. The download
+      // route mints a 15-minute link per (owner-checked, audited) fetch.
+      const key = jobStorageKey(p.tenantId, p.jobId, ext);
       await putObject(key, buffer, contentType);
-      const downloadUrl = await presignedGetUrl({ key, expiresIn: 86400 }); // 24h
 
       // Mark completed
       await db.transaction(async (tx) => {
         await tx.update(jobs)
           .set({
             status: "completed",
-            downloadUrl,
+            downloadUrl: key,
             format: ext,
             rowCount: p.rows?.length ?? null,
             ...buildResultPreview(p.columns, rows),
@@ -183,8 +191,30 @@ export function registerRenderConsumers(queue: Queue): void {
           tenantId: p.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { jobId: p.jobId, downloadUrl, format: ext, sizeBytes: buffer.length },
+          payload: { jobId: p.jobId, format: ext, sizeBytes: buffer.length },
         });
+        // Every export that touches PII columns is audited; an unmasked one carries
+        // the reason and the actor. Counts only, never row values.
+        if (piiColumns.length > 0) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC,
+            eventType: AUDIT_TOPIC,
+            tenantId: p.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: {
+              service: "report-service",
+              action: unmaskReason ? "export_unmasked" : "export",
+              resourceType: "report_job",
+              resourceId: p.jobId,
+              outcome: "success",
+              format: ext,
+              piiColumnCount: piiColumns.length,
+              piiMasked: !unmaskReason,
+              ...(unmaskReason ? { unmaskReason, unmaskedBy: msg.actorId } : {}),
+            },
+          });
+        }
       });
 
       await cache.invalidate(cache.makeKey(p.tenantId, RESOURCE, p.jobId));

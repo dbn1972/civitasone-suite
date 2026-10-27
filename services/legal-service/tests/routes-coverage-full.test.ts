@@ -2,6 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+// GAP-LEGAL-CASES-NEW-02: creating a case now requires filingDate + a department from the org hierarchy.
+useFakeOrg();
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000099";
 const TENANT = "11111111-aaaa-4000-8000-000000000099";
@@ -30,7 +33,7 @@ describe("Cases routes", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/cases",
       headers: authHeader(),
-      payload: { caseNo: "WP-2026-TEST", title: "Test case", court: "High Court" },
+      payload: { caseNo: "WP-2026-TEST", title: "Test case", court: "High Court", filingDate: "2026-03-01", departmentId: TEST_DEPT_ID },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");
@@ -508,7 +511,7 @@ describe("Opinions routes", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/opinions",
       headers: authHeader(),
-      payload: { opinionNo: "OP-TEST-1", subject: "Validity of clause", question: "Is it valid?" },
+      payload: { opinionNo: "OP-TEST-1", subject: "Validity of clause", question: "Is it valid?", addressee: { type: "external", name: "Test Addressee" } },
     });
     expect(res.statusCode).toBe(202);
   });
@@ -804,7 +807,7 @@ describe("super_admin role access", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/cases",
       headers: authHeader(["super_admin"]),
-      payload: { caseNo: "SA-001", title: "Super admin case", court: "SC" },
+      payload: { caseNo: "SA-001", title: "Super admin case", court: "SC", filingDate: "2026-03-01", departmentId: TEST_DEPT_ID },
     });
     expect(res.statusCode).toBe(202);
   });

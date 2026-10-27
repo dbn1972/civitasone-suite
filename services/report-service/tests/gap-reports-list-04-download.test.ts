@@ -56,6 +56,11 @@ vi.mock("../src/modules/scheduled/repo.js", () => ({
   insert: async () => {},
 }));
 vi.mock("../src/modules/kpis/repo.js", () => ({ listByTenant: async () => [] }));
+// Owner decision #17: the download link is minted per fetch and expires in 15 minutes.
+vi.mock("@civitasone/storage", () => ({
+  presignedGetUrl: async (o: { key: string; expiresIn?: number }) => `https://files.example/${o.key}?X-Amz-Signature=abc&X-Amz-Expires=${o.expiresIn}`,
+  putObject: async () => {},
+}));
 
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: async (app: FastifyInstance) => {
@@ -147,7 +152,7 @@ describe("GAP-REPORTS-LIST-04 download is audited", () => {
     const app = await jobsApp();
     const res = await app.inject({ method: "GET", url: DOWNLOAD_PATH, headers: hdr(["report_user"]) });
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(PRESIGNED);
+    expect(res.headers.location).toBe(`https://files.example/reports/${TENANT}/${JOB_ID}.pdf?X-Amz-Signature=abc&X-Amz-Expires=900`);
     const audits = S.published.filter((p) => p.topic === "audit.event.record");
     expect(audits).toHaveLength(1);
     expect(audits[0]!.msg).toMatchObject({ tenantId: TENANT, actorId: ME });

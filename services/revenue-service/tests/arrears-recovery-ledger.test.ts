@@ -76,6 +76,7 @@ async function cleanup() {
   await inTenant(async (tx) => {
     await tx`DELETE FROM assessment.dcb_entries WHERE tenant_id = ${TENANT}`;
     await tx`DELETE FROM arrears.recovery_referrals WHERE tenant_id = ${TENANT}`;
+    await tx`DELETE FROM arrears.demand_notices WHERE tenant_id = ${TENANT}`;
   });
 }
 
@@ -92,6 +93,14 @@ beforeAll(async () => {
     await entry(tx, PARTIAL, D3, "collection", 50, 0, "2026-01-05T00:00:00Z");
     await entry(tx, PARTIAL, D4, "demand", 100, 100, "2026-01-01T00:00:00Z");
     await entry(tx, PARTIAL, D4, "collection", 30, 70, "2026-01-09T00:00:00Z");
+    // Owner decision #4: a referral also needs a served demand notice whose period has lapsed.
+    // This suite is about the OUTSTANDING gate, so OWING and PARTIAL carry a long-lapsed notice
+    // (PAID has none, and is refused on the outstanding gate first).
+    for (const [assessee, no] of [[OWING, "DN-LEDGER-OWING"], [PARTIAL, "DN-LEDGER-PARTIAL"]] as const) {
+      await tx`
+        INSERT INTO arrears.demand_notices (tenant_id, assessee_id, notice_no, served_on, notice_period_days, served_by)
+        VALUES (${TENANT}, ${assessee}, ${no}, '2026-01-01', 30, ${ACTOR})`;
+    }
   });
   registerArrearsConsumers({
     subscribe: (t: string, h: Handler) => { handlers[t] = h; },

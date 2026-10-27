@@ -1,7 +1,8 @@
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { receipts, refunds, adjustments } from "./schema.js";
-import { dcbEntries } from "../assessment/schema.js";
+import { dcbEntries, demands } from "../assessment/schema.js";
+import { movablePrincipal } from "./domain.js";
 import { eq, ne, and, desc, sql } from "drizzle-orm";
 
 /** Minimal read handle a caller-supplied transaction must satisfy for the
@@ -198,6 +199,34 @@ export async function getDemandBalance(tenantId: string, demandId: string): Prom
  * that happens inside an already-open consumer transaction through this,
  * not getDemandBalance().
  */
+/**
+ * Owner decision #5: the live DCB outstanding of a demand plus the penalty and
+ * interest components that stay with it, and the resulting movable principal.
+ * A demand with no demands row (ledger-only fixture) has no components to
+ * retain, so its whole live balance is movable.
+ */
+export async function getMovableForDemandTx(tx: Writer, tenantId: string, demandId: string) {
+  const outstanding = await getDemandBalanceTx(tx, tenantId, demandId);
+  const rows = await tx
+    .select({
+      penaltyMinor: demands.penaltyMinor,
+      interestMinor: demands.interestMinor,
+      principalMinor: demands.principalMinor,
+      rebateMinor: demands.rebateMinor,
+      netMinor: demands.netMinor,
+    })
+    .from(demands)
+    .where(and(eq(demands.tenantId, tenantId), eq(demands.id, demandId)))
+    .limit(1);
+  const d = rows[0];
+  const penalty = d?.penaltyMinor ?? 0n;
+  const interest = d?.interestMinor ?? 0n;
+  // Charges that stay with the demand = what net carries beyond (principal - rebate).
+  const charges = d ? d.netMinor - d.principalMinor + d.rebateMinor : 0n;
+  const retained = charges > 0n ? charges : 0n;
+  return { outstanding, penalty, interest, retained, movable: movablePrincipal(outstanding, retained) };
+}
+
 export async function getDemandBalanceTx(tx: Writer, tenantId: string, demandId: string): Promise<bigint> {
   const rows = await tx
     .select({ balanceMinor: dcbEntries.balanceMinor })
@@ -206,4 +235,29 @@ export async function getDemandBalanceTx(tx: Writer, tenantId: string, demandId:
     .orderBy(desc(dcbEntries.createdAt))
     .limit(1);
   return rows[0]?.balanceMinor ?? 0n;
+}
+
+/**
+ * Owner decision #5: per-demand live outstanding + movable principal for an
+ * assessee, so the adjustment form can show (and the route can enforce) the
+ * same cap the consumer applies. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function listMovableForAssessee(tenantId: string, assesseeId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const rows = await t
+      .select({ id: demands.id })
+      .from(demands)
+      .where(and(eq(demands.tenantId, tenantId), eq(demands.assesseeId, assesseeId)));
+    const out: Array<{ demandId: string; outstandingMinor: string; movableMinor: string }> = [];
+    for (const r of rows) {
+      const m = await getMovableForDemandTx(t, tenantId, r.id);
+      out.push({ demandId: r.id, outstandingMinor: m.outstanding.toString(), movableMinor: m.movable.toString() });
+    }
+    return out;
+  });
+}
+
+export async function getMovableForDemand(tenantId: string, demandId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => getMovableForDemandTx(tx as typeof db, tenantId, demandId));
 }

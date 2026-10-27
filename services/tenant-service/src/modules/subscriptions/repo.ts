@@ -1,9 +1,10 @@
 /**
  * subscriptions repo — Drizzle queries against `subscriptions.*` ONLY (L2).
  */
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { subscriptions, type SubscriptionRow, type SubscriptionInsert } from "./schema.js";
+import { subscriptions, downgradeRequests, type SubscriptionRow, type SubscriptionInsert, type DowngradeRequestRow } from "./schema.js";
 
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "suspended" | "cancelled";
 
@@ -45,9 +46,63 @@ export async function findById(id: string): Promise<SubscriptionView | null> {
   return rows[0] ? toView(rows[0]) : null;
 }
 
+/** Tenant-scoped (GUC-carrying) subscription read for the downgrade flow; see plans/repo.ts findByIdScoped. */
+export async function findByTenantIdScoped(tenantId: string): Promise<SubscriptionView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1)));
+  return rows[0] ? toView(rows[0]) : null;
+}
+
 export async function findByTenantId(tenantId: string): Promise<SubscriptionView | null> {
   const rows = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
   return rows[0] ? toView(rows[0]) : null;
+}
+
+// ── downgrade requests (owner decision #24) ─────────────────────────────
+export type DowngradeRequestView = Omit<DowngradeRequestRow, "createdAt" | "updatedAt" | "version">;
+
+function toDowngradeView(r: DowngradeRequestRow): DowngradeRequestView {
+  const { createdAt: _c, updatedAt: _u, version: _v, ...rest } = r;
+  return rest;
+}
+
+/** The caller's own tenant's requests, newest first. Tenant-scoped (RLS + explicit predicate). */
+export async function listDowngradeRequests(tenantId: string, limit = 20): Promise<DowngradeRequestView[]> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(downgradeRequests)
+    .where(eq(downgradeRequests.tenantId, tenantId)).orderBy(desc(downgradeRequests.requestedAt)).limit(limit)));
+  return rows.map(toDowngradeView);
+}
+
+export async function findPendingDowngrade(tenantId: string): Promise<DowngradeRequestView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(downgradeRequests)
+    .where(and(eq(downgradeRequests.tenantId, tenantId), eq(downgradeRequests.status, "pending"))).limit(1)));
+  return rows[0] ? toDowngradeView(rows[0]) : null;
+}
+
+export async function findDowngradeRequest(tenantId: string, id: string): Promise<DowngradeRequestView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(downgradeRequests)
+    .where(and(eq(downgradeRequests.tenantId, tenantId), eq(downgradeRequests.id, id))).limit(1)));
+  return rows[0] ? toDowngradeView(rows[0]) : null;
+}
+
+/**
+ * Platform billing's queue: pending requests of ALL tenants, through the
+ * SECURITY DEFINER function of migration 0032. CALLERS MUST be role-gated.
+ */
+export async function listPendingDowngradesForPlatform(limit = 100): Promise<Array<Record<string, unknown>>> {
+  const res = await db.execute(sql`SELECT * FROM subscriptions.list_pending_downgrades(${limit}::int)`);
+  const raw: Array<Record<string, unknown>> = Array.isArray(res)
+    ? (res as unknown as Array<Record<string, unknown>>)
+    : (res as unknown as { rows: Array<Record<string, unknown>> }).rows;
+  return raw.map((r) => ({
+    id: String(r.id),
+    tenantId: String(r.tenant_id),
+    fromPlanId: String(r.from_plan_id),
+    targetPlanId: String(r.target_plan_id),
+    reason: String(r.reason),
+    usageSnapshot: r.usage_snapshot,
+    requestedBy: String(r.requested_by),
+    requestedAt: new Date(r.requested_at as string | Date).toISOString(),
+  }));
 }
 
 // ── writes (consumer only, within a tx) ──────────────────────────────

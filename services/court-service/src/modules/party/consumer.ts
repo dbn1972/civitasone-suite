@@ -21,6 +21,13 @@ type AddPartyPayload = {
   advocateBarId?: string;
 };
 
+type RevealAuditPayload = {
+  caseId: string;
+  surface: "case_parties" | "case_detail";
+  roles: string[];
+  parties: Array<{ id: string; fields: string[] }>;
+};
+
 type UpdateAdvocatePayload = {
   partyId: string;
   tenantId: string;
@@ -73,6 +80,25 @@ export function registerPartyConsumers(
         payload: { partyId: p.id, caseId: p.caseId, partyRole: p.partyRole },
       });
       await audit(tx, msg, "add_party", "court_party", p.id);
+    });
+  });
+
+  // Owner decision #32: one court audit event per unmasked party-identity reveal. ids/field names only.
+  register<RevealAuditPayload>(COMMANDS.partyRevealAudit, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "court", action: "party_identity_revealed", resourceType: "case", resourceId: p.caseId,
+          outcome: "success", surface: p.surface, roles: p.roles, parties: p.parties,
+        },
+      });
     });
   });
 

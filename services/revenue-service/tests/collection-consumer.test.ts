@@ -88,6 +88,12 @@ vi.mock("../src/modules/collection/domain.js", () => ({
 
 vi.mock("../src/modules/collection/repo.js", () => ({
   getDemandBalanceTx: (...args: any[]) => mockGetDemandBalance(...args),
+  // Owner decision #5: adjustments read the live movable principal; with no penalty/interest on the
+  // fixture demand it equals the live balance, so these mock-driven assertions are unchanged.
+  getMovableForDemandTx: async (...args: any[]) => {
+    const balance = (await mockGetDemandBalance(...args)) as bigint;
+    return { outstanding: balance, penalty: 0n, interest: 0n, movable: balance };
+  },
 }));
 
 vi.mock("drizzle-orm", () => ({

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { ModuleGate } from "../ModuleGate";
-import { TENANT_ADMIN_ROLES } from "./_roles";
+import { getRequestPathname } from "@/lib/auth/requestPath";
+import { adminAreaRoles } from "./_routeRoles";
 
 /**
  * GAP-TENANT-HOME-01 / GAP-TENANT-CONSENT-EXCHANGE-02: the /tenant area fans
@@ -20,6 +21,6 @@ import { TENANT_ADMIN_ROLES } from "./_roles";
  * leaking governance tiles.
  */
 export default function TenantLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(TENANT_ADMIN_ROLES);
+  requireAnyRole(adminAreaRoles(getRequestPathname()));
   return <ModuleGate moduleKey="tenant">{children}</ModuleGate>;
 }

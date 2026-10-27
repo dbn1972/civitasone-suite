@@ -12,6 +12,7 @@ import { registerRetentionConsumers } from "./modules/retention/consumer.js";
 import { registerSearchConsumers } from "./modules/search/consumer.js";
 import { registerVersionsConsumers } from "./modules/versions/consumer.js";
 import { registerSharingConsumers } from "./modules/sharing/consumer.js";
+import { startAssistantRetentionPurge } from "./modules/assistant/retention.js";
 import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "knowledge-worker" });
@@ -43,12 +44,15 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
+// UAT owner decision #16: purge assistant interactions past their 90-day retention.
+const assistantPurge = startAssistantRetentionPurge();
 log.info("knowledge-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
   clearInterval(relay);
+  if (assistantPurge) clearInterval(assistantPurge);
   await queue.stop();
   await sqlClient.end();
   log.info("shutdown complete");

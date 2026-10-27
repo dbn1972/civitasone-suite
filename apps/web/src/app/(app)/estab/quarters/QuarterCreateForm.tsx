@@ -11,11 +11,12 @@ import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
 const QUARTER_TYPES = ["type_i", "type_ii", "type_iii", "type_iv", "type_v", "type_vi"] as const;
 
 /**
- * GAP-ESTAB-QUARTERS-04: common quarter categories as a datalist; a hard
- * <select> enum risks locking out legacy free-text values already in the DB.
- * The datalist offers consistent values while still allowing arbitrary text.
+ * GAP-ESTAB-QUARTERS-04 (owner decision #31): Category is a CLOSED list - a select, not suggestions plus
+ * free text. Legacy free-text values were mapped onto it by migration 0057 (unmappable ones are parked as
+ * "Other (legacy)", which the API never accepts and this form never offers).
  */
 const QUARTER_CATEGORIES = ["general", "physically_handicapped", "medical", "defence", "other"] as const;
+type QuarterCategory = (typeof QUARTER_CATEGORIES)[number];
 
 type FieldErrors = {
   quarterNo?: string;
@@ -32,7 +33,7 @@ export function QuarterCreateForm() {
 
   const [quarterNo, setQuarterNo] = useState("");
   const [quarterType, setQuarterType] = useState<(typeof QUARTER_TYPES)[number]>("type_iv");
-  const [category, setCategory] = useState("general");
+  const [category, setCategory] = useState<QuarterCategory>("general");
   const [address, setAddress] = useState("");
   const [locality, setLocality] = useState("");
   const [carpetAreaSqft, setCarpetAreaSqft] = useState("");
@@ -50,7 +51,6 @@ export function QuarterCreateForm() {
   const areaErrId = useId();
   const typeField = useId();
   const categoryField = useId();
-  const categoryListId = useId();
   const addressField = useId();
   const localityField = useId();
   const orgUnitField = useId();
@@ -88,7 +88,7 @@ export function QuarterCreateForm() {
         body: JSON.stringify({
           quarterNo: quarterNo.trim(),
           quarterType,
-          category: category.trim() || "general",
+          category,
           address: address.trim() || undefined,
           locality: locality.trim() || undefined,
           carpetAreaSqft: carpetAreaSqft.trim() ? parseInt(carpetAreaSqft, 10) : undefined,
@@ -154,24 +154,16 @@ export function QuarterCreateForm() {
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={categoryField} style={{ fontSize: 13, fontWeight: 600 }}>Category</label>
-              {/* GAP-ESTAB-QUARTERS-04: a datalist combobox offers the common
-                  categories so operators pick a consistent value, while still
-                  accepting a legacy free-text value already in the DB (a hard
-                  <select> enum would lock those out). Decision recorded in the
-                  per-GAP report. */}
-              <input
+              <select
                 id={categoryField}
-                list={categoryListId}
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="general"
+                onChange={(e) => setCategory(e.target.value as QuarterCategory)}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-              <datalist id={categoryListId}>
+              >
                 {QUARTER_CATEGORIES.map((c) => (
-                  <option key={c} value={c} />
+                  <option key={c} value={c}>{t(`quarterCategory_${c}`)}</option>
                 ))}
-              </datalist>
+              </select>
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -262,7 +254,7 @@ export function QuarterCreateForm() {
         errorMessage={dialogError}
         description={
           <>
-            Add quarter <strong>{quarterNo}</strong> ({quarterType.replace(/_/g, " ").toUpperCase()}, {category}) to
+            Add quarter <strong>{quarterNo}</strong> ({quarterType.replace(/_/g, " ").toUpperCase()}, {t(`quarterCategory_${category}`)}) to
             the inventory.
           </>
         }

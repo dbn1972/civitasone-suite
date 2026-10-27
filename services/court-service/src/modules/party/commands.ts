@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { derivePartyId } from "./domain.js";
+import { derivePartyId, type RevealedIdentity } from "./domain.js";
 import { getPartyForPrecheck } from "./repo.js";
 import { getCaseForPrecheck } from "../case-lifecycle/repo.js";
 import { httpError } from "../../shared/context.js";
@@ -94,4 +95,30 @@ export async function updateAdvocate(
   });
 
   return { accepted: true, partyId };
+}
+
+/**
+ * Owner decision #32: record that unmasked party identity was delivered. Published BEFORE the response
+ * is sent and awaited, so a reveal that cannot be audited is refused (503) instead of going unrecorded.
+ * The command carries party ids and field names only, never the values.
+ */
+export async function recordIdentityReveal(
+  ctx: RequestContext,
+  caseId: string,
+  parties: RevealedIdentity[],
+  surface: "case_parties" | "case_detail",
+): Promise<void> {
+  try {
+    await queue.publish(COMMANDS.partyRevealAudit, {
+      messageId: randomUUID(),
+      type: COMMANDS.partyRevealAudit,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { caseId, surface, roles: ctx.roles, parties },
+    });
+  } catch {
+    throw httpError("AUDIT_UNAVAILABLE", "Party identity cannot be shown while the audit trail is unavailable");
+  }
 }

@@ -289,3 +289,55 @@ describe("tenant id is validated before it reaches the admin-service URL", () =>
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// GAP-FIELD-HOME-04 / owner decision #36 (2026-10-26): /api/v1/field is
+// entitlement-gated at the edge; an un-entitled tenant fails CLOSED.
+// ─────────────────────────────────────────────────────────────────────────
+describe("field module entitlement (decision #36)", () => {
+  it("403s a configured tenant whose allow-list omits `field` (legacy/off mode)", async () => {
+    mockFetch({ data: [{ name: "finance" }] });
+    const reply = fakeReply();
+    const ok = await checkModuleEnabled(fakeReq(TID), reply, "field");
+    expect(ok).toBe(false);
+    expect(reply._code).toBe(403);
+    expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+
+  it("allows a tenant entitled to `field`", async () => {
+    mockFetch({ data: [{ name: "field" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(true);
+  });
+
+  it("enforce mode fails closed on configured:false for field", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: false, mode: "enforce", data: [] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(false);
+    expect(reply._code).toBe(403);
+  });
+});
+
+// Decision #36 follow-up: the admin composition catalogue now carries a `field`
+// module that projects to the gateway key `field`. Under composition enforcement
+// an entitled tenant must get through on /api/v1/field (the gate must not deny
+// everyone), and an un-entitled tenant must be 403'd (fail CLOSED).
+describe("field module entitlement under composition enforcement", () => {
+  it("an entitled tenant (projection carries `field`) gets through", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "finance" }, { name: "field" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(true);
+    expect(reply._code).toBe(200);
+  });
+
+  it("an un-entitled tenant (projection omits `field`) gets 403 MODULE_DISABLED", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "finance" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(false);
+    expect(reply._code).toBe(403);
+    expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+});

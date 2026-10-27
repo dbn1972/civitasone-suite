@@ -1,12 +1,16 @@
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
+import { instalmentPlans, instalments, writeOffs, recoveryReferrals, demandNotices } from "./schema.js";
 // GAP-REVENUE-WAIVERS-03: waivers live in the revenue schema (trade-license
 // module's schema.ts); the arrears consumer already reads/writes this table for
 // waiver create/decide, so the decide screen's single-record fetch is added
 // here alongside the other arrears maker-checker reads for consistency.
 import { waivers } from "../trade-license/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { demands } from "../assessment/schema.js";
+import { assessees } from "../assessee/schema.js";
+import { getLatestDemandBalance, getAssesseeOutstanding } from "./outstanding.js";
+import { listNoticesTx } from "./recovery-notice.js";
 
 export async function listInstalmentPlans(
   tenantId: string,
@@ -43,6 +47,82 @@ export async function findWriteOffById(tenantId: string, id: string) {
       .limit(1);
   });
   return rows[0] ?? null;
+}
+
+/** Owner decision #4: one referral by id, tenant-scoped (the decide screen + the route pre-check). */
+export async function findRecoveryReferralById(tenantId: string, id: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(recoveryReferrals)
+      .where(and(eq(recoveryReferrals.tenantId, tenantId), eq(recoveryReferrals.id, id)))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
+ * Owner decision #4: what the officer needs to see BEFORE raising a coercive
+ * referral — the live outstanding (latest balance per demand), the demand
+ * notices served and whether their period has lapsed, and the resulting
+ * eligibility. The consumer enforces the same rules in-transaction.
+ */
+export async function getRecoveryReadiness(tenantId: string, assesseeId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const outstanding = await getAssesseeOutstanding(tx, tenantId, assesseeId);
+    const notices = await listNoticesTx(tx, tenantId, assesseeId);
+    return {
+      outstandingMinor: outstanding,
+      notices,
+      eligible: outstanding > 0n && notices.some((n) => n.lapsed),
+    };
+  });
+}
+
+/**
+ * Owner decision #3: tenant-scoped, paginated instalment plans across all
+ * assessees, optionally by status, so a second officer can DISCOVER plans
+ * awaiting approval (?status=pending) instead of being handed a UUID.
+ */
+export async function listInstalmentPlansByStatus(
+  tenantId: string,
+  opts: { status?: string; limit: number; offset: number },
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = opts.status
+      ? and(eq(instalmentPlans.tenantId, tenantId), eq(instalmentPlans.status, opts.status))
+      : eq(instalmentPlans.tenantId, tenantId);
+    const rows = await t
+      .select()
+      .from(instalmentPlans)
+      .where(where)
+      .orderBy(desc(instalmentPlans.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(instalmentPlans).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
+}
+
+/**
+ * Owner decision #6: the demand a new write-off targets — its assessee, FY and
+ * live DCB balance (latest running balance). Null when the demand does not
+ * exist for the tenant. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function getWriteOffTarget(tenantId: string, demandId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const d = await t
+      .select({ assesseeId: demands.assesseeId, financialYear: demands.financialYear })
+      .from(demands)
+      .where(and(eq(demands.tenantId, tenantId), eq(demands.id, demandId)))
+      .limit(1);
+    if (!d[0]) return null;
+    const balance = await getLatestDemandBalance(t, tenantId, demandId);
+    return { assesseeId: d[0].assesseeId, financialYear: d[0].financialYear, balanceMinor: balance };
+  });
 }
 
 /**
@@ -129,12 +209,14 @@ export async function listRecoveryReferrals(
   tenantId: string,
   pagination: { limit: number; offset: number },
   assesseeId?: string,
+  status?: string,
 ) {
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;
-    const where = assesseeId
-      ? and(eq(recoveryReferrals.tenantId, tenantId), eq(recoveryReferrals.assesseeId, assesseeId))
-      : eq(recoveryReferrals.tenantId, tenantId);
+    const conds = [eq(recoveryReferrals.tenantId, tenantId)];
+    if (assesseeId) conds.push(eq(recoveryReferrals.assesseeId, assesseeId));
+    if (status) conds.push(eq(recoveryReferrals.status, status));
+    const where = and(...conds);
     const rows = await t
       .select()
       .from(recoveryReferrals)
@@ -169,5 +251,41 @@ export async function findInstalmentPlanById(tenantId: string, id: string) {
       .where(and(eq(instalments.tenantId, tenantId), eq(instalments.planId, id)))
       .orderBy(instalments.sequenceNo);
     return { ...plan, schedule: scheduleRows };
+  });
+}
+
+/**
+ * Synchronous pre-check for POST /demand-notices (same pattern as
+ * GAP-REVENUE-ASSESSEES-03): the serve consumer runs after the 202, so an
+ * unknown assessee, a demand that is not the assessee's or a duplicate noticeNo
+ * would otherwise fail silently in the background. Uncached; tenant-scoped.
+ * The unique index uq_demand_notices_tenant_no stays the authoritative backstop.
+ */
+export async function precheckDemandNotice(
+  tenantId: string,
+  input: { assesseeId: string; demandId?: string | undefined; noticeNo: string },
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const a = await t
+      .select({ id: assessees.id })
+      .from(assessees)
+      .where(and(eq(assessees.tenantId, tenantId), eq(assessees.id, input.assesseeId)))
+      .limit(1);
+    const dup = await t
+      .select({ id: demandNotices.id })
+      .from(demandNotices)
+      .where(and(eq(demandNotices.tenantId, tenantId), eq(demandNotices.noticeNo, input.noticeNo)))
+      .limit(1);
+    let demandAssesseeId: string | null | undefined;
+    if (input.demandId) {
+      const d = await t
+        .select({ assesseeId: demands.assesseeId })
+        .from(demands)
+        .where(and(eq(demands.tenantId, tenantId), eq(demands.id, input.demandId)))
+        .limit(1);
+      demandAssesseeId = d[0]?.assesseeId ?? null;
+    }
+    return { assesseeExists: a.length > 0, noticeExists: dup.length > 0, demandAssesseeId };
   });
 }

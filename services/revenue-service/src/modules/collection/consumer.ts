@@ -6,7 +6,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { validateReceipt, validateRefund, validateAdjustment, assertMakerChecker, DomainError } from "./domain.js";
-import { getDemandBalanceTx } from "./repo.js";
+import { getDemandBalanceTx, getMovableForDemandTx } from "./repo.js";
 import { eq, and } from "drizzle-orm";
 
 export function registerCollectionConsumers(queue: Queue): void {
@@ -113,7 +113,11 @@ export function registerCollectionConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const { receiptId, reason } = msg.payload as { receiptId: string; reason: string };
+      const { receiptId, reason, amountMinor: requestedAmount } = msg.payload as {
+        receiptId: string;
+        reason: string;
+        amountMinor?: string;
+      };
 
       // Load the original receipt to get its amount
       const receiptRows = await tx
@@ -141,14 +145,16 @@ export function registerCollectionConsumers(queue: Queue): void {
       }
 
       // Domain validation
-      validateRefund(receipt.amountMinor, receipt.amountMinor);
+      // Owner decision #1: optional partial amount, default = full receipt.
+      const refundAmount = requestedAmount !== undefined ? BigInt(requestedAmount) : receipt.amountMinor;
+      validateRefund(refundAmount, receipt.amountMinor);
 
       // Insert refund (status: pending, makerUserId: actorId)
       await tx.insert(refunds).values({
         tenantId: msg.tenantId,
         receiptId,
         assesseeId: receipt.assesseeId,
-        amountMinor: receipt.amountMinor,
+        amountMinor: refundAmount,
         reason,
         status: "pending",
         makerUserId: msg.actorId,
@@ -314,8 +320,14 @@ export function registerCollectionConsumers(queue: Queue): void {
 
       // Load from-demand balance and validate up front (positive, distinct
       // demands, within balance) — no row and no DCB entry is written if invalid.
-      const fromBalance = await getDemandBalanceTx(tx, msg.tenantId, fromDemandId);
-      validateAdjustment({ assesseeId, fromDemandId, toDemandId, amountMinor: amount, reason }, fromBalance);
+      // Owner decision #5: only principal is movable, capped at the LIVE DCB
+      // outstanding less the penalty+interest that stay with the demand.
+      const fromState = await getMovableForDemandTx(tx, msg.tenantId, fromDemandId);
+      validateAdjustment(
+        { assesseeId, fromDemandId, toDemandId, amountMinor: amount, reason },
+        fromState.outstanding,
+        fromState.movable,
+      );
 
       // Insert the adjustment in PENDING status — NO DCB movement yet.
       await tx.insert(adjustments).values({
@@ -337,7 +349,10 @@ export function registerCollectionConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending" },
+        payload: {
+          service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending",
+          fromDemandId, toDemandId, amountMinor: amount.toString(),
+        },
       });
     });
 
@@ -396,7 +411,8 @@ export function registerCollectionConsumers(queue: Queue): void {
 
       if (approve) {
         // Re-read the live source balance and re-validate before moving money.
-        const fromBalance = await getDemandBalanceTx(tx, msg.tenantId, adjustment.fromDemandId);
+        const fromState = await getMovableForDemandTx(tx, msg.tenantId, adjustment.fromDemandId);
+        const fromBalance = fromState.outstanding;
         validateAdjustment(
           {
             assesseeId: adjustment.assesseeId,
@@ -406,6 +422,7 @@ export function registerCollectionConsumers(queue: Queue): void {
             reason: adjustment.reason,
           },
           fromBalance,
+          fromState.movable,
         );
 
         // Debit source (reduce balance).
@@ -467,6 +484,9 @@ export function registerCollectionConsumers(queue: Queue): void {
         payload: {
           service: SERVICE, action: "decide", resourceType: "adjustment", resourceId: adjustmentId,
           outcome: newStatus, reason: reason ?? null,
+          // Owner decision #41: the audit trail names the demands the balance moved between.
+          fromDemandId: adjustment.fromDemandId, toDemandId: adjustment.toDemandId,
+          amountMinor: adjustment.amountMinor.toString(),
         },
       });
     });

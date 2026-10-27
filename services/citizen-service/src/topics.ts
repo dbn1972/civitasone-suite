@@ -122,6 +122,12 @@ export const EVENTS = {
   // SVC-086 issuance
   certificateIssued:      "citizen.certificate.issued",
   certificateRevoked:     "citizen.certificate.revoked",
+  /**
+   * Owner decision #28 (GAP-INSTALL-DOMAIN-PACKS-01/-04): outcome of citizen.pack.domain_activate.
+   * payload: { activationId, stageId|null, domainPackKey, outcome: "completed"|"failed", reason?, draftIds }
+   * Consumed by install-service (Stage 3 row + durable activation record).
+   */
+  packDomainActivated:    "citizen.pack.domain_activated",
   // SVC-090 proactive discovery
   serviceDiscovered:      "citizen.discovery.service_discovered",
   // SVC-081 government service catalogue

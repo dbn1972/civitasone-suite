@@ -3,8 +3,8 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
-import type { AcceptedResponse } from "./types";
+import { proposeConfig, proposedMessage } from "./proposeConfig";
+import { todayIST } from "@/lib/formatters";
 
 type InvalidField = "code" | "name" | "category" | null;
 
@@ -25,6 +25,8 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [unitOfMeasure, setUnitOfMeasure] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(todayIST());
+  const effId = useId();
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -75,21 +77,19 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<AcceptedResponse>("v1/revenue/rate-heads", {
-        method: "POST",
-        body: JSON.stringify({
+      const res = await proposeConfig({
+        kind: "rate_head",
+        action: "create",
+        effectiveFrom,
+        payload: {
           code: code.trim(),
           name: name.trim(),
           category: normalizeCategory(category),
           unitOfMeasure: unitOfMeasure.trim() || undefined,
-        }),
+        },
       });
       setConfirmOpen(false);
-      setSuccessMessage(
-        res.id
-          ? `Rate head submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
-          : "Rate head submitted.",
-      );
+      setSuccessMessage(proposedMessage("Rate head", res.id));
       setCode("");
       setName("");
       setCategory("");
@@ -104,7 +104,7 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Rate Head" padding>
+      <Card title="Propose Rate Head" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
@@ -190,9 +190,27 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
             </div>
           </div>
 
+          <div style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+            <label htmlFor={effId} style={{ fontSize: 13, fontWeight: 600 }}>
+              Effective from <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+            </label>
+            <input
+              id={effId}
+              type="date"
+              value={effectiveFrom}
+              min={todayIST()}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+              aria-required="true"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              Changes are never made in place: the new rate applies from this date, after a second officer approves.
+            </span>
+          </div>
+
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Rate Head
+              Propose Rate Head
             </Button>
           </div>
 
@@ -206,13 +224,13 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this rate head?"
-        confirmLabel="Create rate head"
+        title="Propose this rate head?"
+        confirmLabel="Propose rate head"
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Create rate head <strong>{code}</strong> — {name} ({category}).
+            Propose rate head <strong>{code}</strong> — {name} ({category}).
           </>
         }
         onConfirm={() => void createRateHead()}

@@ -6,8 +6,10 @@ const addCauseListItemMock = vi.fn();
 const fetchCauseListItemsMock = vi.fn();
 const fetchCauseListByCourtDateMock = vi.fn();
 const fetchCaseMock = vi.fn();
+const fetchConfigNamespaceMock = vi.fn();
 
 vi.mock("../_data/client", () => ({
+  fetchConfigNamespace: (...a: unknown[]) => fetchConfigNamespaceMock(...a),
   createCauseList: (...a: unknown[]) => createCauseListMock(...a),
   addCauseListItem: (...a: unknown[]) => addCauseListItemMock(...a),
   fetchCauseListItems: (...a: unknown[]) => fetchCauseListItemsMock(...a),
@@ -56,6 +58,9 @@ describe("CauseListConsole", () => {
     fetchCauseListByCourtDateMock.mockResolvedValue(null);
     fetchCauseListItemsMock.mockResolvedValue([]);
     fetchCaseMock.mockResolvedValue(null);
+    // Owner decision #33: no per-court config rows -> the console offers the defaults.
+    fetchConfigNamespaceMock.mockReset();
+    fetchConfigNamespaceMock.mockResolvedValue([]);
   });
 
   it("CAUSE-LIST-01: courts are listed by NAME, no 8-char UUID; an empty court is still selectable", () => {
@@ -91,29 +96,87 @@ describe("CauseListConsole", () => {
     await waitFor(() => expect(createCauseListMock).toHaveBeenCalledWith({ courtId: COURT_A, listDate: expect.any(String) }));
   });
 
-  it("CAUSE-LIST-03: blocks a duplicate item number and normalises slot/courtroom", async () => {
+  async function openListWithItems(existing: CauseListItem[] = []) {
     fetchCauseListByCourtDateMock.mockResolvedValue({ id: "list-1", courtId: COURT_A, listDate: "2026-02-01" });
-    const existing: CauseListItem[] = [
-      { id: "it1", causeListId: "list-1", caseId: CASE_A, itemNumber: 1, slot: "AM-1", courtroom: "A", listDate: "2026-02-01", version: 1 },
-    ];
     fetchCauseListItemsMock.mockResolvedValue(existing);
     renderConsole();
     fireEvent.change(screen.getByLabelText("Court"), { target: { value: COURT_A } });
     await waitFor(() => expect(screen.getByLabelText("Item number")).toBeInTheDocument());
-    // Duplicate item number 1 → blocked.
+  }
+  const optionValues = (label: string) =>
+    within(screen.getByLabelText(label) as HTMLSelectElement).getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
+
+  it("CAUSE-LIST-03: blocks a duplicate item number, then lists with the chosen configured slot/courtroom", async () => {
+    await openListWithItems([
+      { id: "it1", causeListId: "list-1", caseId: CASE_A, itemNumber: 1, slot: "AM-1", courtroom: "A", listDate: "2026-02-01", version: 1 },
+    ]);
+    // Duplicate item number 1 -> blocked.
     fireEvent.change(screen.getByLabelText("Case"), { target: { value: CASE_A } });
     fireEvent.change(screen.getByLabelText("Item number"), { target: { value: "1" } });
-    fireEvent.change(screen.getByLabelText("Slot"), { target: { value: "am 2" } });
-    fireEvent.change(screen.getByLabelText("Courtroom"), { target: { value: "b" } });
+    await waitFor(() => expect(optionValues("Slot")).toContain("AM-2"));
+    fireEvent.change(screen.getByLabelText("Slot"), { target: { value: "AM-2" } });
+    fireEvent.change(screen.getByLabelText("Courtroom"), { target: { value: "COURT-1" } });
     fireEvent.click(screen.getByRole("button", { name: "List case" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/already used/i);
     expect(addCauseListItemMock).not.toHaveBeenCalled();
-    // Fix the number → slot/courtroom normalised on submit.
+    // Fix the number -> the configured values are sent exactly as chosen.
     addCauseListItemMock.mockResolvedValue(undefined);
     fireEvent.change(screen.getByLabelText("Item number"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "List case" }));
     await waitFor(() => expect(addCauseListItemMock).toHaveBeenCalledTimes(1));
-    expect(addCauseListItemMock).toHaveBeenCalledWith("list-1", expect.objectContaining({ slot: "AM-2", courtroom: "B", itemNumber: 2 }));
+    expect(addCauseListItemMock).toHaveBeenCalledWith("list-1", expect.objectContaining({ slot: "AM-2", courtroom: "COURT-1", itemNumber: 2 }));
+  });
+
+  // Owner decision #33 (GAP-COURT-CAUSE-LIST-03): slots and courtrooms come from the court's own config namespaces.
+  describe("slots and courtrooms from per-court config (owner decision #33)", () => {
+    it("reads the selected court's slot and courtroom namespaces and offers ONLY those values", async () => {
+      fetchConfigNamespaceMock.mockImplementation(async (ns: string) =>
+        ns === "cl_slot_11111111111141118111111111111111"
+          ? [{ id: "1", namespace: ns, configKey: "MORNING", value: {}, label: null, description: null, active: true, sortOrder: 0, version: 1 },
+             { id: "2", namespace: ns, configKey: "AFTERNOON", value: {}, label: null, description: null, active: true, sortOrder: 1, version: 1 }]
+          : ns === "cl_room_11111111111141118111111111111111"
+            ? [{ id: "3", namespace: ns, configKey: "HALL-A", value: {}, label: "Hall A", description: null, active: true, sortOrder: 0, version: 1 }]
+            : []);
+      await openListWithItems();
+      await waitFor(() => expect(optionValues("Slot")).toEqual(["", "MORNING", "AFTERNOON"]));
+      expect(optionValues("Courtroom")).toEqual(["", "HALL-A"]);
+      expect(fetchConfigNamespaceMock).toHaveBeenCalledWith("cl_slot_11111111111141118111111111111111");
+      expect(fetchConfigNamespaceMock).toHaveBeenCalledWith("cl_room_11111111111141118111111111111111");
+    });
+
+    it("a court with no config rows offers the defaults", async () => {
+      await openListWithItems();
+      await waitFor(() => expect(optionValues("Slot")).toEqual(["", "AM-1", "AM-2", "PM-1", "PM-2"]));
+      expect(optionValues("Courtroom")).toEqual(["", "COURT-1"]);
+    });
+
+    it("there is no free-text slot or courtroom input any more", async () => {
+      await openListWithItems();
+      await waitFor(() => expect(optionValues("Slot").length).toBeGreaterThan(1));
+      expect((screen.getByLabelText("Slot") as HTMLElement).tagName).toBe("SELECT");
+      expect((screen.getByLabelText("Courtroom") as HTMLElement).tagName).toBe("SELECT");
+    });
+
+    it("a failed config read says so, offers Retry, and does not let a value be listed", async () => {
+      fetchConfigNamespaceMock.mockRejectedValue(new Error("boom"));
+      await openListWithItems();
+      expect(await screen.findByText(/couldn't load the slots and courtrooms/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "List case" })).toBeDisabled();
+      fetchConfigNamespaceMock.mockResolvedValue([]);
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(optionValues("Slot")).toContain("AM-1"));
+      expect(screen.getByRole("button", { name: "List case" })).toBeEnabled();
+    });
+
+    it("requires a slot and a courtroom to be chosen", async () => {
+      await openListWithItems();
+      await waitFor(() => expect(optionValues("Slot")).toContain("AM-1"));
+      fireEvent.change(screen.getByLabelText("Case"), { target: { value: CASE_A } });
+      fireEvent.click(screen.getByRole("button", { name: "List case" }));
+      expect(screen.getByRole("alert")).toHaveTextContent(/choose a slot and a courtroom/i);
+      expect(addCauseListItemMock).not.toHaveBeenCalled();
+    });
   });
 
   it("CAUSE-LIST-04: shows the slot verbatim and type/stage columns", async () => {

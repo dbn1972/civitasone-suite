@@ -8,7 +8,10 @@ vi.mock("next/navigation", () => ({
 
 import { WriteOffCreateForm } from "./WriteOffCreateForm";
 
+const DEMANDS = [{ id: "demand-9", financialYear: "2024-25", netMinor: "120000", outstandingMinor: "120000", status: "raised" }];
+
 function fillValidForm() {
+  fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "demand-9" } });
   fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "1200.00" } });
   fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Deceased assessee, no legal heir traced" } });
 }
@@ -20,7 +23,7 @@ describe("WriteOffCreateForm", () => {
   });
 
   it("requires amount and reason before opening the confirm dialog", () => {
-    render(<WriteOffCreateForm assesseeId="a1" />);
+    render(<WriteOffCreateForm assesseeId="a1" demands={DEMANDS} />);
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
     expect(screen.getByText("Please correct the highlighted fields.")).toBeInTheDocument();
     expect(
@@ -34,7 +37,7 @@ describe("WriteOffCreateForm", () => {
       new Response(JSON.stringify({ id: "wo-1", status: "accepted" }), { status: 202 }),
     );
 
-    render(<WriteOffCreateForm assesseeId="a1" />);
+    render(<WriteOffCreateForm assesseeId="a1" demands={DEMANDS} />);
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
 
@@ -50,7 +53,7 @@ describe("WriteOffCreateForm", () => {
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/message (error path, UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<WriteOffCreateForm assesseeId="a1" />);
+    render(<WriteOffCreateForm assesseeId="a1" demands={DEMANDS} />);
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
 
@@ -65,9 +68,10 @@ describe("WriteOffCreateForm", () => {
 
   it("shows outstanding arrears and blocks an amount above the cap (GAP-REVENUE-WRITE-OFFS-01)", async () => {
     render(
-      <WriteOffCreateForm assesseeId="a1" assesseeName="Ravi Kumar" outstandingMinor="150000" />,
+      <WriteOffCreateForm assesseeId="a1" assesseeName="Ravi Kumar" outstandingMinor="150000" demands={DEMANDS} />,
     );
     expect(screen.getByText("₹1,500.00")).toBeInTheDocument(); // outstanding shown
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "demand-9" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "2000" } }); // > ₹1,500
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Irrecoverable" } });
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
@@ -79,8 +83,9 @@ describe("WriteOffCreateForm", () => {
 
   it("allows an amount within the cap and shows the balance-after (GAP-REVENUE-WRITE-OFFS-01)", async () => {
     render(
-      <WriteOffCreateForm assesseeId="a1" assesseeName="Ravi Kumar" outstandingMinor="150000" />,
+      <WriteOffCreateForm assesseeId="a1" assesseeName="Ravi Kumar" outstandingMinor="150000" demands={DEMANDS} />,
     );
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "demand-9" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Irrecoverable" } });
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
@@ -106,7 +111,7 @@ describe("WriteOffCreateForm", () => {
         demands={[{ id: "demand-9", financialYear: "2024-25", netMinor: "120000", status: "pending" }]}
       />,
     );
-    fireEvent.change(screen.getByLabelText(/Demand \(optional\)/), { target: { value: "demand-9" } });
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "demand-9" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Irrecoverable" } });
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
@@ -118,5 +123,31 @@ describe("WriteOffCreateForm", () => {
       expect(body.demandId).toBe("demand-9");
       expect(body.financialYear).toBe("2024-25");
     });
+  });
+
+  // Owner decision #6 (2026-10-26): demand mandatory; cap = that demand's balance.
+  it("requires a demand before the confirm dialog opens (owner decision #6)", () => {
+    render(<WriteOffCreateForm assesseeId="a1" demands={DEMANDS} />);
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
+    expect(screen.getByText("Select the demand this write-off reduces.")).toBeInTheDocument();
+    expect(screen.queryByText("Raise this write-off?")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Against the assessee/)).not.toBeInTheDocument();
+  });
+
+  it("caps the amount at the selected demand's balance, not the assessee total (owner decision #6)", () => {
+    render(<WriteOffCreateForm assesseeId="a1" outstandingMinor="9000000" demands={DEMANDS} />);
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "demand-9" } });
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "1200.01" } }); // demand balance is ₹1,200.00
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
+    expect(screen.getByText("Amount cannot exceed the balance of the selected demand (₹1,200.00).")).toBeInTheDocument();
+  });
+
+  it("blocks the form when the assessee has no demand to write off against (owner decision #6)", () => {
+    render(<WriteOffCreateForm assesseeId="a1" demands={[]} />);
+    expect(screen.getByRole("button", { name: "Raise Write-off" })).toBeDisabled();
+    expect(screen.getByText(/no demand on record/i)).toBeInTheDocument();
   });
 });

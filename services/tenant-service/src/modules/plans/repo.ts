@@ -3,7 +3,8 @@
  * READS are used by the query path (always behind the cache).
  * WRITES are used ONLY by the consumer, inside the outbox transaction.
  */
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { plans, type PlanRow, type PlanInsert } from "./schema.js";
 
@@ -42,6 +43,17 @@ function toView(r: PlanRow): PlanView {
 // ── reads (query path) ───────────────────────────────────────────────
 export async function findById(id: string): Promise<PlanView | null> {
   const rows = await db.select().from(plans).where(eq(plans.id, id)).limit(1);
+  return rows[0] ? toView(rows[0]) : null;
+}
+
+/**
+ * Tenant-scoped read for the self-service flows. plans.plans has FORCED RLS, and
+ * a bare db.select() outside a transaction carries no tenant GUC (zero rows), so
+ * this runs inside runWithTenant + a transaction and filters on tenant_id too.
+ */
+export async function findByIdScoped(tenantId: string, id: string): Promise<PlanView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(plans)
+    .where(and(eq(plans.id, id), eq(plans.tenantId, tenantId))).limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 

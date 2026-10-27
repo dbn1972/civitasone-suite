@@ -310,6 +310,8 @@ vi.mock("../src/modules/appeal/commands.js", () => ({
 vi.mock("../src/modules/party/commands.js", () => ({
   addParty: async () => ({ id: "new-party-id", accepted: true }),
   updateAdvocate: async () => ({ accepted: true }),
+  // Owner decision #32: the audit-before-reveal publish (covered for real in party-identity-reveal.integration.test.ts).
+  recordIdentityReveal: async () => undefined,
 }));
 
 vi.mock("../src/modules/evidence/commands.js", () => ({
@@ -491,7 +493,7 @@ describe("Case Registry Routes", () => {
       expect(getCasePartiesByCaseId).toHaveBeenCalledWith(TENANT_ID, CASE_ID);
     });
 
-    it("masks party PII for a registrar but reveals it for super_admin (DPDP regression guard)", async () => {
+    it("masks party contact PII for a registrar but reveals it for super_admin (DPDP regression guard)", async () => {
       // This is the exact bug PR #794 fixed: GET /cases/:id used to embed
       // parties straight from the DB row with NO role-based masking at all,
       // while the dedicated GET /cases/:id/parties endpoint (party module,
@@ -517,7 +519,9 @@ describe("Case Registry Routes", () => {
       expect(registrarRes.statusCode).toBe(200);
       const registrarBody = registrarRes.json();
       expect(registrarBody.piiRevealed).toBe(false);
-      expect(registrarBody.parties[0].name).toBeNull();
+      // Owner decision #32: a registrar sees party identity (name / advocate / Bar ID) but NOT contact details.
+      expect(registrarBody.parties[0].name).toBe("Ramesh Kumar Sharma");
+      expect(registrarBody.parties[0].advocateBarId).toBe("UP/1234/2010");
       expect(registrarBody.parties[0].address).toBeNull();
       expect(registrarBody.parties[0].phone).not.toBe("9876543210");
       expect(registrarBody.parties[0].email).not.toBe("ramesh@example.com");
@@ -1538,7 +1542,9 @@ describe("Party Routes", () => {
       const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}/parties`, headers: { authorization: `Bearer ${REGISTRAR_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
       expect(res.json().piiRevealed).toBe(false);
-      expect(res.json().items[0].name).toBeNull();
+      // Owner decision #32: registrars see identity; contact details stay masked.
+      expect(res.json().items[0].name).toBe("A. Rao");
+      expect(res.json().items[0].address).toBeNull();
     });
 
     it("returns 401 without auth", async () => {

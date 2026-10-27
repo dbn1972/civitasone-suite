@@ -14,7 +14,7 @@
  * Every new test asserts real behavior (DB row / response shape / audit
  * side-effect), not just "doesn't throw", per workspace testing conventions.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
@@ -41,6 +41,16 @@ import * as configRepo from "../src/modules/config/repo.js";
 import { queue as sharedQueue } from "../src/shared/infra.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+
+// Owner decision #22: the data-export consumer now stores real files via
+// packages/storage. These suites drive the real consumer without an object
+// store, so putObject is replaced by a no-op; the real behaviour is covered in
+// w3-data-export-storage.test.ts.
+vi.mock("@civitasone/storage", async (orig) => ({
+  ...(await orig<typeof import("@civitasone/storage")>()),
+  putObject: async () => undefined,
+  presignedGetUrl: async (o: { key: string; expiresIn?: number }) => `https://files.test/${o.key}?X-Amz-Expires=${o.expiresIn ?? 0}`,
+}));
 
 // The HTTP routes for data-export/scheduled-jobs/webhooks/feature-flags
 // publish onto the real `queue` singleton exported from shared/infra.ts

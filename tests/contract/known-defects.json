@@ -7,7 +7,7 @@
     "undeliverableDispatch": 1,
     "orphanEvents": 946,
     "phantomConsumption": 5,
-    "unemittedEvents": 36
+    "unemittedEvents": 35
   },
   "deadSubscriptions": [
     "asset-service|asset.disposal.file_decided",
@@ -1062,7 +1062,6 @@
     "asset-service|asset.meter_reading.threshold_breached",
     "billing-service|billing.subscription.expired",
     "catalogue-service|catalogue.eligibility.updated",
-    "contract-service|contract.expiry.alert",
     "crm-service|crm.lead.score_recalculated",
     "estab-service|estab.rti.overdue",
     "inspection-service|inspection.tada_claim.published",

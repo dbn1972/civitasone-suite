@@ -10,6 +10,9 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import type { FastifyInstance } from "fastify";
+import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+// GAP-LEGAL-CASES-NEW-02: creating a case now requires filingDate + a department from the org hierarchy.
+useFakeOrg();
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -49,6 +52,7 @@ describe("Legal — Cross-Tenant RLS Isolation", () => {
         caseNo: `CASE-RLS-${Date.now()}`,
         title: "RLS Isolation Test Case",
         court: "High Court",
+        filingDate: "2026-03-01", departmentId: TEST_DEPT_ID,
       },
     });
     expect(res.statusCode).toBe(202);

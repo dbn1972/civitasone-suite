@@ -172,4 +172,25 @@ describe("RateConfigConsole", () => {
     fireEvent.click(screen.getByText("Rate Slabs"));
     expect(screen.getByText("Select a rate head")).toBeInTheDocument();
   });
+
+  it("shows the effective window and version of penalty and rebate rules (owner decision #2)", () => {
+    render(
+      <RateConfigConsole
+        rateHeads={[rateHead]}
+        rateHeadsSource="api"
+        selectedRateHeadId="rh1"
+        slabs={[]}
+        slabsSource="api"
+        penaltyRules={[{ ...penalty, effectiveFrom: "2026-04-01", effectiveTo: "2026-10-31", version: 2 }]}
+        penaltyRulesSource="api"
+        rebateRules={[]}
+        rebateRulesSource="api"
+      />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Penalty Rules" }));
+    expect(screen.getByText("Effective From")).toBeInTheDocument();
+    expect(screen.getByText("Effective To")).toBeInTheDocument();
+    expect(screen.getByText("Version")).toBeInTheDocument();
+    expect(screen.getByText("31 Oct 2026")).toBeInTheDocument();
+  });
 });

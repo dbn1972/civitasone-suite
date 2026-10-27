@@ -10,6 +10,10 @@ export const legalOpinions = opinionsSchema.table("legal_opinions", {
   subject:     text("subject").notNull(),
   question:    text("question").notNull(),
   soughtBy:    text("sought_by"),
+  // Owner decision #13: the addressee is an internal department (id from the org hierarchy) or an external party (name).
+  addresseeType:         text("addressee_type"),
+  addresseeDepartmentId: uuid("addressee_department_id"),
+  addresseeName:         text("addressee_name"),
   counselName: text("counsel_name"),
   opinionText: text("opinion_text"),
   status:      varchar("status", { length: 24 }).notNull().default("sought"),

@@ -41,7 +41,9 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: projected,
+    // Owner decision #17: the unmask grant rides the command only (never the cached
+    // projection); the route has already verified the caller is a report_admin.
+    payload: body.unmaskPii && body.unmaskReason ? { ...projected, piiUnmask: { reason: body.unmaskReason } } : projected,
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

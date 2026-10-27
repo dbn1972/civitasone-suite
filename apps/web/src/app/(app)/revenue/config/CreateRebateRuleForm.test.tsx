@@ -16,16 +16,16 @@ describe("CreateRebateRuleForm", () => {
 
   it("requires a discount percent before opening the confirm dialog", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rebate Rule" }));
     expect(screen.getByText(/Discount \(%\) is required/)).toBeInTheDocument();
   });
 
   it("requires Valid Until (Days Before Due) — blank must NOT pass client validation, since the backend field is not optional", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rebate Rule" }));
     expect(screen.getByText(/Valid Until \(Days Before Due\) is required/)).toBeInTheDocument();
-    expect(screen.queryByText("Create this rebate rule?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Propose this rebate rule?")).not.toBeInTheDocument();
   });
 
   it("converts the discount percent to basis points and creates the rule on confirm (happy path)", async () => {
@@ -36,19 +36,20 @@ describe("CreateRebateRuleForm", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText(/^Valid Until/), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rebate Rule" }));
 
-    await waitFor(() => expect(screen.getByText("Create this rebate rule?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create rebate rule"));
+    await waitFor(() => expect(screen.getByText("Propose this rebate rule?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose rebate rule"));
 
     await waitFor(() => {
       expect(screen.getByText(/Rebate rule submitted/)).toBeInTheDocument();
     });
 
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { discountBps: number; validUntilDaysBeforeDue: number };
-    expect(body.discountBps).toBe(500); // 5% -> 500 bps
-    expect(body.validUntilDaysBeforeDue).toBe(30);
+    const env = JSON.parse(init.body as string) as { kind: string; payload: { discountBps: number; validUntilDaysBeforeDue: number } };
+    expect(env.kind).toBe("rebate_rule");
+    expect(env.payload.discountBps).toBe(500); // 5% -> 500 bps
+    expect(env.payload.validUntilDaysBeforeDue).toBe(30);
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -58,10 +59,10 @@ describe("CreateRebateRuleForm", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText(/^Valid Until/), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Rebate Rule" }));
 
-    await waitFor(() => expect(screen.getByText("Create this rebate rule?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create rebate rule"));
+    await waitFor(() => expect(screen.getByText("Propose this rebate rule?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose rebate rule"));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();

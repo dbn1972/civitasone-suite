@@ -981,8 +981,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 knowledge REOPENED in #2059 by PROVISIONAL re-check - needs owner decision: PII redaction before persistence is real and tested (gap-knowledge-faqs02-assistant06.test.ts), but there is no retention window/expiresAt column or purge job on assistant_interactions and no per-interaction audit event. Retention period needs an owner decision, then a migration + purge job. Was: W0 PROVISIONAL closed by #1916.)
-  [partial: per-interaction audit event closed by e60f91382 (UAT B2, tests/gap-knowledge-assistant06-audit.test.ts); remaining = retention window/expiresAt column + purge job, blocked on owner decision of the retention period]
+- [x] **Status** Closed by 3d5882e84 (owner decision #16, 2026-10-26)
+  [per-interaction audit event closed earlier by e60f91382 (UAT B2, tests/gap-knowledge-assistant06-audit.test.ts); 90-day retention expires_at + purge sweep by owner decision #16]
 - **First-pass claim:** Free-text questions are stored as assistant interactions (metrics.total); DPDP retention/masking of personal data typed into the question is undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/assistant/ask', 'POST /v1/knowledge/assistant/escalate', 'GET /v1/knowledge/assistant/metrics']`
 - **Question:** The assistant ask/escalate handlers must apply a retention limit and PII masking (Aadhaar, PAN, phone, email) to stored question text, and log an audit event per interaction.
@@ -1005,7 +1005,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 knowledge REOPENED in #2059 by PROVISIONAL re-check - needs owner decision: title length (200) + trim and the document.created audit event are covered by tests, but duplicate-title handling is NOT implemented (acceptance: same title twice -> 409 DUPLICATE_TITLE or a new version). Choosing 409 vs versioning (and a unique index on lower(title) per tenant) is a product call. Was: W0 PROVISIONAL closed by #1916.)
+- [x] **Status** Closed by 39528462c (owner decision #15, 2026-10-26)
 - **First-pass claim:** Audit event on document creation, title length limit and duplicate-title handling are undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/documents']`
 - **Question:** POST /v1/knowledge/documents must zod-validate title (max length, trim), reject or version duplicate titles per tenant, restrict to a publisher role and emit a document.created audit event.

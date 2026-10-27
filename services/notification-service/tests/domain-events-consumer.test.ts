@@ -67,9 +67,12 @@ describe("domain-events templates", () => {
     }
   });
 
-  it("getRegisteredEventTypes returns all 23 event types", () => {
+  it("getRegisteredEventTypes returns all 25 event types", () => {
     const types = getRegisteredEventTypes();
-    expect(types).toHaveLength(23);
+    expect(types).toHaveLength(25);
+    // Owner decision #24 — plan downgrade request / rejection.
+    expect(types).toContain("tenant.subscription.downgrade_requested");
+    expect(types).toContain("tenant.subscription.downgrade_rejected");
     expect(types).toContain("hrms.leave.approved");
     expect(types).toContain("audit.para.issued");
     // Visitor security/safety events wired into the notification choreography.
@@ -342,6 +345,52 @@ describe("domain-events consumer", () => {
     expect(payload.recipientId).toBe("head-12");
     expect(payload.variables?.paraNo).toBe("AP/2024/007");
     expect(payload.variables?.dueDate).toBe("2024-05-15");
+  });
+
+  it("tenant.subscription.downgrade_requested → notifies the platform billing desk (owner decision #24)", async () => {
+    const envelope = buildEnvelope(CONSUMED_EVENTS.tenantDowngradeRequested, {
+      requestId: "dg-1",
+      subscriptionId: "sub-1",
+      fromPlanId: "plan-big",
+      targetPlanId: "plan-small",
+      requestedBy: "admin-7",
+    });
+
+    await q.publish(CONSUMED_EVENTS.tenantDowngradeRequested, envelope);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event
+    const msg = outboxMock.__enqueuedMessages[0]!;
+    expect(msg.topic).toBe("notification.send");
+    const payload = msg.payload as { recipientId: string; eventType: string; variables: Record<string, string> };
+    expect(payload.recipientId).toBe("platform_billing_desk");
+    expect(payload.eventType).toBe("tenant.subscription.downgrade_requested");
+    expect(payload.variables).toMatchObject({ requestId: "dg-1", fromPlanId: "plan-big", targetPlanId: "plan-small" });
+  });
+
+  it("tenant.subscription.downgrade_rejected → notifies the requester with the reason (owner decision #24)", async () => {
+    const envelope = buildEnvelope(CONSUMED_EVENTS.tenantDowngradeRejected, {
+      requestId: "dg-2",
+      subscriptionId: "sub-1",
+      targetPlanId: "plan-small",
+      requestedBy: "admin-7",
+      reason: "USAGE_EXCEEDS_TARGET_PLAN",
+    });
+
+    await q.publish(CONSUMED_EVENTS.tenantDowngradeRejected, envelope);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);
+    const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
+    expect(payload.recipientId).toBe("admin-7");
+    expect(payload.variables).toMatchObject({ requestId: "dg-2", targetPlanId: "plan-small", reason: "USAGE_EXCEEDS_TARGET_PLAN" });
+  });
+
+  it("tenant.subscription.downgrade_rejected without a requester sends nothing", async () => {
+    const envelope = buildEnvelope(CONSUMED_EVENTS.tenantDowngradeRejected, { requestId: "dg-3", reason: "x" });
+    await q.publish(CONSUMED_EVENTS.tenantDowngradeRejected, envelope);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(outboxMock.__enqueuedMessages).toHaveLength(0);
   });
 
   // ── Idempotency ───────────────────────────────────────────────────────────

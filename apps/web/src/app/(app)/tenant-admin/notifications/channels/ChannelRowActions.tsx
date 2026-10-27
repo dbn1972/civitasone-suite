@@ -9,11 +9,17 @@ import { useFormError } from "@/lib/useFormError";
 /**
  * GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01: enable / disable a channel via
  * PATCH /notifications/channels/:id (CQRS command, audited). Disabling asks for
- * confirmation and a reason. Edit and test-send are deliberately NOT offered:
- * the notification-service has no such endpoint, and a dead button is worse
- * than none.
+ * confirmation and a reason. Owner decision #25: "Send test to me" POSTs
+ * /notifications/channels/:id/test-send with an EMPTY body; the server sends one
+ * message to the calling admin's OWN address (never a typed recipient), via the
+ * platform-provisioned channel. Offered only where an address is on file (email,
+ * in-app). Edit is deliberately NOT offered: channel credentials live only in the
+ * secrets manager, so there is nothing to edit here.
  */
-export function ChannelRowActions({ id, name, enabled, isDefault }: { id: string; name: string; enabled: boolean; isDefault: boolean }) {
+// Owner decision #25: test-send needs an address we hold for the admin (email / in-app).
+const TESTABLE = new Set(["email", "in_app"]);
+
+export function ChannelRowActions({ id, name, type, enabled, isDefault }: { id: string; name: string; type?: string; enabled: boolean; isDefault: boolean }) {
   const t = useTranslations("tenantAdminW2.channels");
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,8 +53,36 @@ export function ChannelRowActions({ id, name, enabled, isDefault }: { id: string
     }
   }
 
+  async function sendTest(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    setNotice("");
+    formError.clear();
+    try {
+      const res = await fetch(`/api/proxy/notification/channels/${encodeURIComponent(id)}/test-send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
+      setNotice(t("testSendOk", { name }));
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
+      {enabled && type && TESTABLE.has(type) ? (
+        <Button variant="ghost" size="sm" disabled={busy} title={t("testSendHint")} onClick={() => void sendTest()}>
+          {t("testSend")}
+        </Button>
+      ) : null}
       {enabled ? (
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setError(undefined); setNotice(""); setOpen(true); }}>
           {t("disable")}

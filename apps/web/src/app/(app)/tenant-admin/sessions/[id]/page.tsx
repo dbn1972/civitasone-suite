@@ -3,9 +3,10 @@ import { PageHeader, Card, StatusPill, RefreshErrorState } from "@/app/_componen
 import { formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionById } from "@/app/_data/loaders";
-import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { getSessionUserId, getSessionRoles } from "@/lib/auth/roleGuard";
 import { deviceLabel, networkLabel } from "../sessionHelpers";
 import { RevokeButton } from "./RevokeButton";
+import { IpReveal } from "./IpReveal";
 
 /**
  * GAP-TENANT-ADMIN-SESSIONS-DETAIL-05: an IP is personal data under DPDP. The
@@ -16,6 +17,8 @@ import { RevokeButton } from "./RevokeButton";
  */
 function maskIp(ip?: string): string {
   if (!ip) return "—";
+  // identity-service already masks the IP for admin views (owner decision #21); only mask here if a clear one arrives.
+  if (ip.includes("*")) return ip;
   const octets = ip.split(".");
   if (octets.length === 4) return `${octets[0]}.${octets[1]}.•.•`;
   // IPv6 or unexpected shape: show only the first segment.
@@ -88,7 +91,17 @@ export default async function SessionDetailPage(props: { params: Promise<{ id: s
           <dl style={{ margin: 0 }}>
             <Field label="Device" value={deviceLabel(session.userAgent)} />
             <Field label="Network" value={networkLabel(session.ipAddress)} />
-            <Field label="IP Address" value={<span className="mono" aria-label="IP address, partially masked for privacy">{maskIp(session.ipAddress)}</span>} />
+            <Field
+              label="IP Address"
+              value={
+                <IpReveal
+                  sessionId={session.id}
+                  maskedIp={maskIp(session.ipAddress)}
+                  // OWNER DECISION #21: only the security admin may reveal the clear IP (audited, with a reason).
+                  canReveal={getSessionRoles().includes("security_admin") && session.ipAddress !== undefined}
+                />
+              }
+            />
           </dl>
         </Card>
       </div>

@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -40,6 +41,23 @@ export async function exportRequest(ctx: RequestContext, payload: ExportRequestP
       purpose: payload.purpose ?? null,
       entityId: payload.entityId ?? null,
     },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+const COMMAND_DOWNLOAD = COMMANDS.dataExportDownload;
+
+/** Owner decision #22: audit record for an issued signed download link. */
+export async function exportDownloadIssued(ctx: RequestContext, exportId: string, fileCount: number, linkTtlSeconds: number): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMAND_DOWNLOAD, {
+    messageId: id,
+    type: COMMAND_DOWNLOAD,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { exportId, tenantId: ctx.tenantId, fileCount, linkTtlSeconds },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

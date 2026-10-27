@@ -232,7 +232,9 @@ describe("render consumer with PII masking", () => {
     expect(csv).not.toContain("9876543210");
   });
 
-  it("does NOT mask PII columns for allowed roles", async () => {
+  // Owner decision #17 retired the role-based bypass: no role (super_admin included)
+  // skips masking. The unmasked path is the explicit, reasoned, requester-bound grant.
+  it("still masks PII for super_admin: roles no longer bypass masking", async () => {
     const { registerRenderConsumers } = await import("../src/modules/render/consumer.js");
     const handlers = new Map<string, (msg: unknown) => Promise<void>>();
     const mockQueue = {
@@ -271,8 +273,36 @@ describe("render consumer with PII masking", () => {
 
     expect(mockState.uploadedBuffers.length).toBe(1);
     const csv = mockState.uploadedBuffers[0]!.toString("utf-8");
-    // Email should be visible for super_admin
-    expect(csv).toContain("jane@example.com");
+    expect(csv).not.toContain("jane@example.com");
+    expect(csv).toContain("ja***m");
+  });
+
+  it("does NOT mask PII columns when the requester holds a reasoned unmask grant", async () => {
+    const { registerRenderConsumers } = await import("../src/modules/render/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    registerRenderConsumers({
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish: async () => {},
+    } as any);
+    await handlers.get("reports.job.render")!({
+      messageId: `pii-grant-${JOB_ID}`,
+      type: "reports.job.render",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-pii-3",
+      schemaVersion: "1.0",
+      payload: {
+        jobId: JOB_ID,
+        tenantId: TENANT_ID,
+        templateHtml: "",
+        format: "csv",
+        columns: [{ header: "Name", key: "name" }, { header: "Email", key: "email" }],
+        rows: [{ name: "Jane Doe", email: "jane@example.com" }],
+        piiColumns: ["email"],
+        piiUnmask: { reason: "approved audit request", grantedBy: ACTOR_ID },
+      },
+    });
+    expect(mockState.uploadedBuffers[0]!.toString("utf-8")).toContain("jane@example.com");
   });
 
   it("applies both watermark and PII masking together", async () => {

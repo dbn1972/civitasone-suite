@@ -23,9 +23,10 @@ export type FieldVisit = {
 /**
  * GAP-FIELD-VISITS-03 (PII): precise GPS fixes an identifiable field worker's
  * location. Round to this many decimals by default (~110 m at 3 dp) so a
- * coordinate is not pinpoint-accurate on screen or in a CSV export. Full
- * precision stays in the API payload for anyone with a legitimate, audited
- * reason to pull it directly.
+ * coordinate is not pinpoint-accurate on screen or in a CSV export. Since
+ * owner decision #35 (2026-10-26) field-service itself returns coordinates
+ * already rounded to 3dp for permitted roles and null for everyone else; an
+ * audited full-precision reveal is a later feature.
  */
 export const COORD_DISPLAY_PRECISION = 3;
 

@@ -69,7 +69,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId, istRange(q.from, q.to),
     );
     const page = Math.floor(q.offset / q.limit) + 1;
-    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
+    return reply.send({ data: rows.map((r) => repo.toView(r, isFieldSupervisor(ctx))), meta: { page, pageSize: q.limit, total } });
   });
 
   // POST /v1/field/visits/check-in — record check-in at location
@@ -145,7 +145,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const { rows, total } = await repo.findByTaskId(taskId, ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
     const page = Math.floor(q.offset / q.limit) + 1;
 
-    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
+    return reply.send({ data: rows.map((r) => repo.toView(r, isFieldSupervisor(ctx))), meta: { page, pageSize: q.limit, total } });
   });
 
   // GET /v1/field/visits/by-agent/:agentId — history by agent
@@ -161,7 +161,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const { rows, total } = await repo.findByAgent(agentId, ctx.tenantId, q.limit, q.offset);
     const page = Math.floor(q.offset / q.limit) + 1;
 
-    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
+    return reply.send({ data: rows.map((r) => repo.toView(r, isFieldSupervisor(ctx))), meta: { page, pageSize: q.limit, total } });
   });
 
   // GET /v1/field/visits/:id — get single visit
@@ -175,6 +175,6 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "visit not found");
     }
 
-    return reply.send({ data: repo.toView(visit) });
+    return reply.send({ data: repo.toView(visit, isFieldSupervisor(ctx)) });
   });
 }

@@ -42,6 +42,8 @@ export const assistantInteractions = domainSchema.table("assistant_interactions"
   ticketRef: uuid("ticket_ref"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
+  // UAT owner decision #16: retention window end (created_at + 90 days); the purge sweep deletes past it.
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().$defaultFn(() => new Date(Date.now() + 90 * 86_400_000)),
 });
 
 export type FlowStepRow = { order: number; title: string; instruction: string };

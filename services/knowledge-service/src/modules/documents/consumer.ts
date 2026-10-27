@@ -16,10 +16,14 @@ function keyFor(tenantId: string, id: string) {
 export function registerDocumentsConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe<DocumentView>(COMMANDS.createDocument, async (msg) => {
+    let created = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
-      await repo.insert(tx, {
+      // UAT owner decision #15: a duplicate live title is refused here too (the
+      // route pre-checks, but two racing creates both pass it). The unique index
+      // swallows the loser; markProcessed + the audit row stay in this ONE txn.
+      const inserted = await repo.insertUnlessDuplicateTitle(tx, {
         id: p.id,
         tenantId: p.tenantId,
         title: p.title,
@@ -31,9 +35,21 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
         updatedBy: msg.actorId,
         version: 1,
       });
+      if (!inserted) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: "knowledge", action: "create", resourceType: "document", resourceId: p.id, outcome: "rejected", reason: "DUPLICATE_TITLE" },
+        });
+        return;
+      }
+      created = true;
       await emit(tx, msg, EVENTS.documentCreated, { documentId: p.id, title: p.title }, "create", p.id);
     });
-    await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
+    if (created) await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 }

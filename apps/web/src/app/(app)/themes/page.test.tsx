@@ -66,4 +66,13 @@ describe("themes hub (GAP-THEMES-HOME-02 / -04)", () => {
     // the read-only tiles remain visible
     expect(screen.getByText("Branding")).toBeInTheDocument();
   });
+
+  it("labels the templates tile as document templates, not looks (decision #38)", async () => {
+    roles.current = ["theme_admin"];
+    render(await Page());
+    expect(screen.getByText("Document templates")).toBeInTheDocument();
+    expect(screen.getByText(/Email, letter and certificate templates \(read-only\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ready-made looks/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Design tokens, document templates and branding/i)).toBeInTheDocument();
+  });
 });

@@ -14,6 +14,11 @@ vi.mock("next/navigation", () => ({
   notFound: () => notFoundMock(),
 }));
 
+const getSessionUserIdMock = vi.fn<() => string | null>(() => "checker-1");
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionUserId: () => getSessionUserIdMock(),
+}));
+
 import InstalmentPlanDetailPage from "./page";
 
 const PLAN = {
@@ -61,5 +66,31 @@ describe("InstalmentPlanDetailPage", () => {
 
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  // Owner decision #3 (2026-10-26): a plan defers a demand, so a second officer approves it.
+  it("shows Approve/Reject on a PENDING plan to a different officer (owner decision #3)", async () => {
+    getSessionUserIdMock.mockReturnValue("checker-1");
+    fetchJsonMock.mockResolvedValue({ data: { ...PLAN, status: "pending", createdBy: "maker-1" }, source: "api", status: 200 });
+    const ui = await InstalmentPlanDetailPage({ params: Promise.resolve({ id: "p1" }) });
+    render(ui);
+    expect(screen.getByRole("button", { name: "Approve instalment plan" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reject instalment plan" })).toBeEnabled();
+  });
+
+  it("disables the decision for the maker of a PENDING plan (owner decision #3)", async () => {
+    getSessionUserIdMock.mockReturnValue("maker-1");
+    fetchJsonMock.mockResolvedValue({ data: { ...PLAN, status: "pending", createdBy: "maker-1" }, source: "api", status: 200 });
+    const ui = await InstalmentPlanDetailPage({ params: Promise.resolve({ id: "p1" }) });
+    render(ui);
+    expect(screen.getByRole("button", { name: "Approve instalment plan" })).toBeDisabled();
+    expect(screen.getByText(/different officer must decide/i)).toBeInTheDocument();
+  });
+
+  it("offers no decision on an already-active plan", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { ...PLAN, status: "active", createdBy: "maker-1" }, source: "api", status: 200 });
+    const ui = await InstalmentPlanDetailPage({ params: Promise.resolve({ id: "p1" }) });
+    render(ui);
+    expect(screen.queryByRole("button", { name: "Approve instalment plan" })).not.toBeInTheDocument();
   });
 });

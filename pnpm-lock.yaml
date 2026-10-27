@@ -1309,6 +1309,9 @@ importers:
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       pino:
         specifier: ^8.21.0
         version: 8.21.0

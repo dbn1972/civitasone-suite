@@ -72,6 +72,10 @@
         "name": "citizen_officer"
       },
       {
+        "name": "consent_officer",
+        "description": "DPDP consent officer: approves or rejects consent requests on behalf of the data principal (owner decision 19)"
+      },
+      {
         "name": "crm_admin",
         "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
       },
@@ -124,6 +128,10 @@
         "description": "Line manager (test role, minimal — added for role-coverage UX testing)"
       },
       {
+        "name": "migration_admin",
+        "description": "Data migration admin: the only role that may retry failed records of a bulk import (owner decision 23)"
+      },
+      {
         "name": "payroll_admin",
         "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
       },
@@ -147,6 +155,10 @@
       {
         "name": "section_officer",
         "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "security_admin",
+        "description": "Security admin: the only role that may reveal a session clear IP, with a reason, audited (owner decision 21)"
       },
       {
         "name": "works_admin",

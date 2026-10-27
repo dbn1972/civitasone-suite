@@ -3,8 +3,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { AssesseeOption } from "./FetchBillForm";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { FetchBillForm } from "./FetchBillForm";
-import { PayBillForm } from "./PayBillForm";
+import { BbpsWorkspace } from "./BbpsWorkspace";
 
 export type BbpsRequestRow = {
   id: string;
@@ -104,12 +103,13 @@ export default async function BbpsPage() {
         <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink2)" }}>
           BBPS requests are processed asynchronously by the biller adapter. After you submit a request, this
           screen tracks its outcome (pending → success or failed) and, on a successful payment, links you to the
-          resulting receipt. Recent requests and their status are also listed below.
+          resulting receipt. Recent requests and their status are also listed below. Live BBPS is not connected in
+          UAT: recording a payment is only possible against a bill fetched from this screen — the assessee and amount
+          come from that bill and cannot be typed.
         </p>
       </Card>
 
-      <FetchBillForm assessees={assessees} />
-      <PayBillForm assessees={assessees} />
+      <BbpsWorkspace assessees={assessees} />
 
       <Card title="Recent BBPS requests" padding>
         {source === "error" ? (
