@@ -1632,7 +1632,9 @@
     "noDeadline": "No deadline on record",
     "disposed": "Disposed — clock stopped",
     "overdueBreach": "Overdue by {count, plural, one {# day} other {# days}} (statutory breach)",
-    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining"
+    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining",
+    "transfersTitle": "Transfers",
+    "transferLine": "Transferred from {from} to {to}"
   },
   "citizenServices": {
     "applicationSteps": "Application steps",
