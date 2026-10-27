@@ -273,3 +273,36 @@ describe("browserFetch timeout (CLOS3-S3-24)", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+/** CodeQL js/client-side-request-forgery (#4183): a caller-supplied path can never leave /api/proxy. */
+describe("browserFetch path guard", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    ["dot-dot traversal", "v1/../../internal/admin"],
+    ["encoded dot-dot", "v1/%2e%2e/x"],
+    ["backslash", "v1/a\\b"],
+    ["empty segment", "v1//x"],
+    ["single dot", "v1/./x"],
+    ["fragment in query", "v1/x?a=1#frag"],
+    ["malformed escape", "v1/%E0%A4%A"],
+    ["scheme-relative host", "//evil.example/x"],
+  ])("rejects %s without calling fetch", async (_n, path) => {
+    const f = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", f);
+    await expect(browserFetch(path)).rejects.toThrow("Invalid API path");
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("forwards normal paths (leading slash, query, encoded ids) under /api/proxy/", async () => {
+    const f = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", f);
+    await browserFetch("/v1/things/ab%20c/items?limit=5&q=a/b");
+    await browserFetch("v1/users/a@b.in");
+    await browserFetch(`v1/crm/price-books/${encodeURIComponent("b/1?x#y")}/history`);
+    expect((f.mock.calls as unknown as [string][])[0][0]).toBe("/api/proxy/v1/things/ab%20c/items?limit=5&q=a/b");
+    expect((f.mock.calls as unknown as [string][])[1][0]).toBe("/api/proxy/v1/users/a@b.in");
+    // an id containing separators stays ONE encoded segment (the BFF guard rejects it server-side)
+    expect((f.mock.calls as unknown as [string][])[2][0]).toBe("/api/proxy/v1/crm/price-books/b%2F1%3Fx%23y/history");
+  });
+});

@@ -36,8 +36,43 @@ export type BrowserFetchInit = RequestInit & {
   timeoutMs?: number;
 };
 
+const UNSAFE_PATH_CHARS = /[/\\?#]/;
+
+/**
+ * Normalise a caller-supplied API path so it can only address a path BELOW /api/proxy.
+ * Companion to the BFF proxy guard (app/api/proxy/[...path]/route.ts isSafeSegment, which
+ * additionally rejects encoded separators server-side): every segment must be a single plain
+ * component (no empty, dot or dot-dot segment, no unencoded separator, query or fragment
+ * character, no malformed escape) and is re-encoded so it can never smuggle a separator. A trailing ?query is kept as is.
+ * Throws on anything that could steer the request out of /api/proxy.
+ */
+export function safeProxyPath(path: string): string {
+  const qi = path.indexOf("?");
+  const pathPart = qi === -1 ? path : path.slice(0, qi);
+  const query = qi === -1 ? "" : path.slice(qi);
+  if (query.includes("#")) throw new Error("Invalid API path");
+  const trimmed = pathPart.replace(/^\//, "").replace(/\/$/, "");
+  const encoded = trimmed.split("/").map((raw) => {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(raw);
+    } catch {
+      throw new Error("Invalid API path");
+    }
+    // Raw segment: no separator/query/fragment character may appear unencoded. Decoded segment:
+    // must not be a dot segment (browsers normalise %2e%2e like ..). An encoded separator inside
+    // a segment (e.g. an id containing "/") stays encoded below, so it can never act as one.
+    if (raw === "" || UNSAFE_PATH_CHARS.test(raw) || decoded === "" || decoded === "." || decoded === "..") {
+      throw new Error("Invalid API path");
+    }
+    // encodeURIComponent, then restore RFC 3986 path-safe sub-delims so ids like "a:b" keep their wire form.
+    return encodeURIComponent(decoded).replace(/%(3A|40|24|26|2B|2C|3B|3D)/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16)));
+  });
+  return encoded.join("/") + query;
+}
+
 export async function browserFetch(path: string, init: BrowserFetchInit = {}): Promise<Response> {
-  const normalized = path.startsWith("/") ? path.slice(1) : path;
+  const normalized = safeProxyPath(path);
   const { timeoutMs = DEFAULT_BROWSER_FETCH_TIMEOUT_MS, signal: callerSignal, ...rest } = init;
   // Merge the caller's signal with our timeout (AbortSignal.any is not in older Safari).
   const controller = new AbortController();
