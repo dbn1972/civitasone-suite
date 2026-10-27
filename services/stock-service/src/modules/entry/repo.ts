@@ -1,9 +1,10 @@
-import { eq, and, gte, lte, desc, sql, SQL } from "drizzle-orm";
+import { eq, and, gte, lte, desc, inArray, sql, SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
 import { stockLedger, type LedgerInsert } from "../ledger/schema.js";
 import { stockValuationRates } from "../valuation/schema.js";
+import { stockWarehouses } from "../warehouse/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -137,12 +138,23 @@ export async function findLedger(
     if (opts?.warehouseId) conditions.push(eq(stockLedger.warehouseId, opts.warehouseId));
     if (opts?.from) conditions.push(gte(stockLedger.postingDate, opts.from));
     if (opts?.to)   conditions.push(lte(stockLedger.postingDate, opts.to));
-    return tx.select().from(stockLedger)
+    const rows = await tx.select().from(stockLedger)
       .where(and(...conditions))
       // Newest first with a total tiebreak, so limit/offset pages are stable and
       // a full page is the latest N movements rather than an arbitrary subset.
       .orderBy(desc(stockLedger.postingDate), desc(stockLedger.createdAt), stockLedger.id)
       .limit(opts?.limit ?? 100)
       .offset(opts?.offset ?? 0);
+    if (rows.length === 0) return [];
+
+    // GAP-STOCK-LEDGER-02: stock_ledger stores only warehouse ids. Resolve the warehouse names for
+    // this page in the same tenant-scoped read (one keyed lookup, not a per-row query) so the UI
+    // never has to show an id fragment. The lookup is filtered by tenant explicitly (RLS is a second
+    // line of defence, not the only one); an id that cannot be resolved yields a null name.
+    const warehouseIds = [...new Set(rows.map((r) => r.warehouseId))];
+    const warehouses = await tx.select({ id: stockWarehouses.id, name: stockWarehouses.name }).from(stockWarehouses)
+      .where(and(eq(stockWarehouses.tenantId, tenantId), inArray(stockWarehouses.id, warehouseIds)));
+    const warehouseById = new Map(warehouses.map((w) => [w.id, w.name]));
+    return rows.map((r) => ({ ...r, warehouseName: warehouseById.get(r.warehouseId) ?? null }));
   }));
 }
