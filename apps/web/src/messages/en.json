@@ -2670,6 +2670,11 @@
     "revealError": "Couldn't reveal the account number. Please try again."
   },
   "domainsNew": {
+    "subtitle": "Add a government domain (.gov.in / .nic.in). You will be given a DNS record to publish so ownership can be verified.",
+    "verificationMethod": "Verification method",
+    "methodTxt": "DNS TXT record",
+    "methodCname": "DNS CNAME record",
+    "afterRegister": "After you register, add the DNS record shown under Tenant admin, Domain, then request verification.",
     "register": "Register Domain",
     "registering": "Registering…",
     "registerUnavailable": "Register Domain (unavailable)",

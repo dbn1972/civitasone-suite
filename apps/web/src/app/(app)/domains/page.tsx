@@ -25,7 +25,7 @@ export default function DomainsPage() {
       <div className="card" style={{ marginTop: 18 }}>
         <EmptyState
           title="No domain registry listing yet"
-          message="The registry listing is not available in this build, and domain registration is not yet connected to a backend service. Use the button below to start a registration request."
+          message="The registry listing is not available on this page. Domain registration uses the admin custom-domains service; registered domains and their DNS verification are managed under Tenant admin, Domain. Use the button below to register a domain."
           action={
             <Link href="/domains/new" className="btn primary">
               Register New Domain

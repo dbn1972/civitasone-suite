@@ -3,20 +3,10 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Field, Input, PageHeader, Select, Textarea } from "@/app/_components/ds";
+import { Button, Field, Input, PageHeader, Select } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { DOMAIN_TYPES, domainSchema, toFieldErrors } from "../schema";
+import { DOMAIN_TYPES, VERIFICATION_METHODS, registerDomainSchema, toFieldErrors } from "../schema";
 import { DOMAIN_REGISTRATION_AVAILABLE } from "./availability";
-
-const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
-  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-  "Andaman & Nicobar Islands", "Chandigarh", "Dadra & Nagar Haveli and Daman & Diu",
-  "Delhi", "Jammu & Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
-];
 
 const DOMAIN_TYPE_LABELS: Record<(typeof DOMAIN_TYPES)[number], string> = {
   "gov.in": ".gov.in — Central Government",
@@ -29,13 +19,8 @@ export default function NewDomainPage() {
   const t = useTranslations("domainsNew");
   const [form, setForm] = useState({
     domainName: "",
-    organisation: "",
-    contactEmail: "",
-    contactPhone: "",
-    department: "",
-    state: "",
     domainType: "gov.in",
-    notes: "",
+    verificationMethod: "dns_txt",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,22 +36,26 @@ export default function NewDomainPage() {
     // GAP-DOMAINS-NEW-02/03: validate everything with the shared zod schema
     // (not includes("@") / a mis-written regex). GAP-DOMAINS-NEW-06: lower-case
     // and trim happen HERE (and in the schema), not on every keystroke.
-    const parsed = domainSchema.safeParse(form);
+    const parsed = registerDomainSchema.safeParse(form);
     if (!parsed.success) {
       setFieldErrors(toFieldErrors(parsed.error));
       return;
     }
     setFieldErrors({});
-    // GAP2-DOMAINS-NEW-07: no registration backend yet (see ./availability);
-    // never issue the doomed fetch while it is unavailable.
+    // GAP2-DOMAINS-NEW-07: kill switch (see ./availability); never issue the
+    // request while registration is switched off.
     if (!DOMAIN_REGISTRATION_AVAILABLE) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/proxy/v1/domains", {
+      // D4c #12: the existing admin custom-domains API stores only the domain
+      // and its verification method; send exactly that (domainType is a
+      // client-side cross-check only).
+      const res = await fetch("/api/proxy/v1/admin/custom-domains", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        credentials: "same-origin",
+        body: JSON.stringify({ domain: parsed.data.domainName, verificationMethod: parsed.data.verificationMethod }),
       });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "save")).message);
@@ -88,7 +77,7 @@ export default function NewDomainPage() {
     <div className="page-main wrap">
       <PageHeader
         title="Register New Domain"
-        subtitle="Add a government domain for GovUX audit and WCAG compliance tracking."
+        subtitle={t("subtitle")}
         back="/domains"
         backLabel="Domains"
       />
@@ -168,72 +157,20 @@ export default function NewDomainPage() {
               </Select>
             </Field>
 
-            <Field label="Organisation" required error={fieldErrors.organisation || undefined}>
-              <Input
-                type="text"
-                value={form.organisation}
-                onChange={(e) => { setForm({ ...form, organisation: e.target.value }); clearFieldError("organisation"); }}
-                placeholder="Ministry of Electronics and IT"
-              />
-            </Field>
-
-            <Field label="Department / Division">
-              <Input
-                type="text"
-                value={form.department}
-                onChange={(e) => setForm({ ...form, department: e.target.value })}
-                placeholder="e.g. Digital India Division"
-              />
-            </Field>
-
-            <Field label="State / UT">
+            <Field label={t("verificationMethod")} required error={fieldErrors.verificationMethod || undefined}>
               <Select
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
+                value={form.verificationMethod}
+                onChange={(e) => { setForm({ ...form, verificationMethod: e.target.value }); clearFieldError("verificationMethod"); }}
               >
-                <option value="">— Select state / UT —</option>
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                {VERIFICATION_METHODS.map((m) => (
+                  <option key={m} value={m}>{m === "dns_txt" ? t("methodTxt") : t("methodCname")}</option>
                 ))}
               </Select>
             </Field>
-
-            <Field label="Contact Email" required error={fieldErrors.contactEmail || undefined}>
-              <Input
-                type="email"
-                value={form.contactEmail}
-                onChange={(e) => { setForm({ ...form, contactEmail: e.target.value }); clearFieldError("contactEmail"); }}
-                placeholder="webmaster@example.gov.in"
-              />
-            </Field>
-
-            <Field label="Contact Phone" error={fieldErrors.contactPhone || undefined}>
-              <Input
-                type="tel"
-                value={form.contactPhone}
-                onChange={(e) => { setForm({ ...form, contactPhone: e.target.value }); clearFieldError("contactPhone"); }}
-                placeholder="011-24301001"
-                inputMode="tel"
-              />
-            </Field>
           </div>
 
-          <Field label="Notes">
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any relevant context about this domain — e.g. legacy CMS, prior audit findings…"
-              rows={3}
-              style={{ resize: "vertical" }}
-            />
-          </Field>
-
-          {/* GAP-DOMAINS-NEW-05: DPDP purpose/consent notice for the personal
-              contact data collected above. */}
-          <p style={{ fontSize: 12, color: "var(--muted)", margin: "16px 0 24px" }}>
-            The contact email and phone are collected only to reach the domain
-            owner about GovUX audit and compliance matters, and are stored with
-            the domain record. They are not used for any other purpose.
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 24px" }}>
+            {t("afterRegister")}
           </p>
 
           <div style={{ display: "flex", gap: 10 }}>
