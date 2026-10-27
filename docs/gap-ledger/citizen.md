@@ -142,7 +142,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-05  ·  LOW  ·  partly  ·  theme SCOPE (was DEADROUTE)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — alert authoring scope unclear; backend absent)
+- [x] **Status** Closed (UAT B4, 2026-10-27): owner decision of 2026-10-25 puts alert authoring with officer-tier roles; the alerts page now offers New alert (draft) plus Publish / Withdraw per row to citizen_officer/citizen_admin/super_admin only, with confirmation dialogs; the service keeps enforcing maker-checker and audit.
 - **First-pass claim:** Page is read-only: no publish/draft/expire action exists in the route though the stats imply a publishing workflow (page tree has no mutation).
 - **Verified evidence:** The route is read-only: page.tsx and AlertsTable.tsx contain no POST/PATCH or link to a create/publish screen, and citizen/page.tsx only links here. But stat cards (Active/Expired/Drafts) describe state, they do not promise controls; and whether an alert-authoring UI exists elsewhere (e.g. admin/communications) was not found in citizen/*. Backend publish endpoints cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`

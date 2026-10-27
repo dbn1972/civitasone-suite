@@ -1095,7 +1095,8 @@
     "colCategory": "Category",
     "colPublished": "Published",
     "colAudience": "Target Audience",
-    "colStatus": "Status"
+    "colStatus": "Status",
+    "colActions": "Actions"
   },
   "citizenAppeals": {
     "pageTitle": "Appeals & Revision",
@@ -17456,5 +17457,23 @@
     "emptyTitle": "No visits yet",
     "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
     "emptyMessage": "Check in on a field task to record GPS and outcomes here."
+  },
+  "citizenEngagementActions": {
+    "newAlert": "New alert",
+    "newAlertTitle": "New public alert",
+    "draftNote": "Saved as a draft. A different officer must publish it before citizens can see it.",
+    "saveDraft": "Save draft",
+    "fieldTitle": "Title",
+    "fieldBody": "Details",
+    "fieldCategory": "Category",
+    "fieldAudience": "Target audience",
+    "fieldExpires": "Expires (optional)",
+    "nounAlert": "alert",
+    "publish": "Publish",
+    "withdraw": "Withdraw",
+    "publishTitle": "Publish this {noun}?",
+    "publishDescription": "Citizens will see this {noun} immediately. You cannot publish a draft you created yourself.",
+    "withdrawTitle": "Withdraw this {noun}?",
+    "withdrawDescription": "Citizens will no longer see this {noun}. The withdrawal is recorded in the audit trail."
   }
 }

@@ -1094,7 +1094,8 @@
     "colCategory": "श्रेणी",
     "colPublished": "प्रकाशित",
     "colAudience": "लक्षित दर्शक",
-    "colStatus": "स्थिति"
+    "colStatus": "स्थिति",
+    "colActions": "कार्रवाइयाँ"
   },
   "citizenAppeals": {
     "pageTitle": "अपील और पुनरीक्षण",
@@ -17383,5 +17384,23 @@
     "emptyTitle": "अभी तक कोई विज़िट नहीं",
     "emptyMessageRange": "व्यापक तिथि सीमा आज़माएँ, या सभी विज़िट देखने के लिए तिथियाँ हटाएँ।",
     "emptyMessage": "यहाँ GPS और परिणाम दर्ज करने के लिए किसी फ़ील्ड कार्य पर चेक-इन करें।"
+  },
+  "citizenEngagementActions": {
+    "newAlert": "नई चेतावनी",
+    "newAlertTitle": "नई सार्वजनिक चेतावनी",
+    "draftNote": "ड्राफ़्ट के रूप में सहेजा जाएगा। नागरिकों को दिखने से पहले कोई दूसरा अधिकारी इसे प्रकाशित करेगा।",
+    "saveDraft": "ड्राफ़्ट सहेजें",
+    "fieldTitle": "शीर्षक",
+    "fieldBody": "विवरण",
+    "fieldCategory": "श्रेणी",
+    "fieldAudience": "लक्षित वर्ग",
+    "fieldExpires": "समाप्ति (वैकल्पिक)",
+    "nounAlert": "चेतावनी",
+    "publish": "प्रकाशित करें",
+    "withdraw": "वापस लें",
+    "publishTitle": "इस {noun} को प्रकाशित करें?",
+    "publishDescription": "नागरिक इस {noun} को तुरंत देख सकेंगे। आप अपना बनाया ड्राफ़्ट स्वयं प्रकाशित नहीं कर सकते।",
+    "withdrawTitle": "इस {noun} को वापस लें?",
+    "withdrawDescription": "नागरिक अब इस {noun} को नहीं देख सकेंगे। वापसी ऑडिट रिकॉर्ड में दर्ज होगी।"
   }
 }
