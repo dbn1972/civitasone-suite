@@ -569,7 +569,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: backend contract must support extra locale keys in requiredDocuments, `[~]` if blocked + reason)
+- [x] **Status** Closed by 489cf84c6 (UAT B4, 2026-10-27).
 - **First-pass claim:** Preview language toggle offers fixed languages while B1 stores tenant locales (en, or); Odia is not previewable if the toggle is English/Hindi only (DocumentsBuilder.tsx:81 vs GovernanceLinkageBuilder.tsx:156-168).
 - **Verified evidence:** DocumentsBuilder.tsx:82 hard-codes the preview toggle as ['en','hi']. LocaleKey is 'en' | 'hi' only (LocaleTabs.tsx:5), documents store labels as {en, hi} (documentTypes.ts:3-6), and documentBuilderApi.ts:13-38 persists only those two. B1's locale list is free text (GovernanceLinkageBuilder.tsx:152-171, placeholder 'en, or', hint 'e.g. en, or'), so a tenant that publishes in Odia ('or') cannot author or preview Odia document names. The two places are not connected. The locale completeness meter (documentsLocaleCompleteness) is also en/hi only.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/documentTypes.ts`, `apps/web/src/app/_components/ds/designer/LocaleTabs.tsx`, `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderApi.ts`, `apps/web/src/app/(app)/designer/_data/documentBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b6/page.tsx`
