@@ -4761,10 +4761,13 @@ export type CitizenNotice = {
   published: string;
   expiry: string;
   type: string;
+  /** draft | published | withdrawn (citizens only ever receive published). */
+  status: string;
 };
 
-export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>> {
-  return fetchJson<unknown, CitizenNotice[]>("/api/v1/citizen/notices", [], {
+/** `includeAll` (officers only) asks the service for drafts and withdrawn notices too; the service ignores it for citizens. */
+export async function getCitizenNotices(includeAll = false): Promise<LoaderResult<CitizenNotice[]>> {
+  return fetchJson<unknown, CitizenNotice[]>(includeAll ? "/api/v1/citizen/notices?status=all" : "/api/v1/citizen/notices", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.notices",
     responseSchema: CitizenNoticeListSchema,

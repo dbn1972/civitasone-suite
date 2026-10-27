@@ -1095,7 +1095,8 @@
     "colCategory": "Category",
     "colPublished": "Published",
     "colAudience": "Target Audience",
-    "colStatus": "Status"
+    "colStatus": "Status",
+    "colActions": "Actions"
   },
   "citizenAppeals": {
     "pageTitle": "Appeals & Revision",
@@ -1314,7 +1315,11 @@
     "statusVerified": "Verified",
     "statusProvided": "Provided (pending)",
     "statusMissing": "Missing",
-    "required": "required"
+    "required": "required",
+    "uploadRow": "Upload",
+    "reupload": "Re-upload",
+    "uploadRowAria": "Upload file for {doc}",
+    "reuploadAria": "Re-upload file for {doc}"
   },
   "citizenEligibility": {
     "pageTitle": "Eligibility & Entitlement",
@@ -1410,7 +1415,11 @@
     "filterStatusAria": "Filter notices by status",
     "filterActive": "Active",
     "filterExpired": "Expired",
-    "filterAll": "All"
+    "filterAll": "All",
+    "colActions": "Actions",
+    "statusDraft": "Draft",
+    "statusWithdrawn": "Withdrawn",
+    "filterDrafts": "Drafts"
   },
   "citizenPayments": {
     "pageTitle": "Fees & Payments",
@@ -1623,7 +1632,9 @@
     "noDeadline": "No deadline on record",
     "disposed": "Disposed — clock stopped",
     "overdueBreach": "Overdue by {count, plural, one {# day} other {# days}} (statutory breach)",
-    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining"
+    "daysRemaining": "{count, plural, one {# day} other {# days}} remaining",
+    "transfersTitle": "Transfers",
+    "transferLine": "Transferred from {from} to {to}"
   },
   "citizenServices": {
     "applicationSteps": "Application steps",
@@ -17513,5 +17524,34 @@
   },
   "stockLedger": {
     "unknownItem": "Unknown item"
+  },
+  "citizenEngagementActions": {
+    "newAlert": "New alert",
+    "newAlertTitle": "New public alert",
+    "newNotice": "New notice",
+    "newNoticeTitle": "New public notice",
+    "draftNote": "Saved as a draft. A different officer must publish it before citizens can see it.",
+    "saveDraft": "Save draft",
+    "fieldTitle": "Title",
+    "fieldBody": "Details",
+    "fieldCategory": "Category",
+    "fieldAudience": "Target audience",
+    "fieldExpires": "Expires (optional)",
+    "fieldSubject": "Subject",
+    "fieldDepartment": "Department",
+    "fieldNoticeNo": "Notice number (optional, auto-numbered if blank)",
+    "fieldType": "Type",
+    "type_general": "General",
+    "type_statutory": "Statutory",
+    "type_public_hearing": "Public hearing",
+    "type_tender": "Tender",
+    "nounAlert": "alert",
+    "nounNotice": "notice",
+    "publish": "Publish",
+    "withdraw": "Withdraw",
+    "publishTitle": "Publish this {noun}?",
+    "publishDescription": "Citizens will see this {noun} immediately. You cannot publish a draft you created yourself.",
+    "withdrawTitle": "Withdraw this {noun}?",
+    "withdrawDescription": "Citizens will no longer see this {noun}. The withdrawal is recorded in the audit trail."
   }
 }

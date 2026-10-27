@@ -1094,7 +1094,8 @@
     "colCategory": "श्रेणी",
     "colPublished": "प्रकाशित",
     "colAudience": "लक्षित दर्शक",
-    "colStatus": "स्थिति"
+    "colStatus": "स्थिति",
+    "colActions": "कार्रवाइयाँ"
   },
   "citizenAppeals": {
     "pageTitle": "अपील और पुनरीक्षण",
@@ -1313,7 +1314,11 @@
     "statusVerified": "सत्यापित",
     "statusProvided": "प्रदान किया गया (लंबित)",
     "statusMissing": "अनुपलब्ध",
-    "required": "आवश्यक"
+    "required": "आवश्यक",
+    "uploadRow": "अपलोड करें",
+    "reupload": "दोबारा अपलोड करें",
+    "uploadRowAria": "{doc} के लिए फ़ाइल अपलोड करें",
+    "reuploadAria": "{doc} के लिए फ़ाइल दोबारा अपलोड करें"
   },
   "citizenEligibility": {
     "pageTitle": "पात्रता और हकदारी",
@@ -1409,7 +1414,11 @@
     "filterStatusAria": "स्थिति के अनुसार सूचनाएं फ़िल्टर करें",
     "filterActive": "सक्रिय",
     "filterExpired": "समाप्त",
-    "filterAll": "सभी"
+    "filterAll": "सभी",
+    "colActions": "कार्रवाइयाँ",
+    "statusDraft": "ड्राफ़्ट",
+    "statusWithdrawn": "वापस लिया गया",
+    "filterDrafts": "ड्राफ़्ट"
   },
   "citizenPayments": {
     "pageTitle": "शुल्क और भुगतान",
@@ -1622,7 +1631,9 @@
     "noDeadline": "कोई समय सीमा दर्ज नहीं",
     "disposed": "निपटाया गया — घड़ी रुकी",
     "overdueBreach": "{count, plural, one {# दिन} other {# दिन}} विलंबित (सांविधिक उल्लंघन)",
-    "daysRemaining": "{count, plural, one {# दिन} other {# दिन}} शेष"
+    "daysRemaining": "{count, plural, one {# दिन} other {# दिन}} शेष",
+    "transfersTitle": "स्थानांतरण",
+    "transferLine": "{from} से {to} को स्थानांतरित"
   },
   "citizenServices": {
     "applicationSteps": "आवेदन चरण",
@@ -17440,5 +17451,34 @@
   },
   "stockLedger": {
     "unknownItem": "अज्ञात वस्तु"
+  },
+  "citizenEngagementActions": {
+    "newAlert": "नई चेतावनी",
+    "newAlertTitle": "नई सार्वजनिक चेतावनी",
+    "newNotice": "नई सूचना",
+    "newNoticeTitle": "नई सार्वजनिक सूचना",
+    "draftNote": "ड्राफ़्ट के रूप में सहेजा जाएगा। नागरिकों को दिखने से पहले कोई दूसरा अधिकारी इसे प्रकाशित करेगा।",
+    "saveDraft": "ड्राफ़्ट सहेजें",
+    "fieldTitle": "शीर्षक",
+    "fieldBody": "विवरण",
+    "fieldCategory": "श्रेणी",
+    "fieldAudience": "लक्षित वर्ग",
+    "fieldExpires": "समाप्ति (वैकल्पिक)",
+    "fieldSubject": "विषय",
+    "fieldDepartment": "विभाग",
+    "fieldNoticeNo": "सूचना क्रमांक (वैकल्पिक, खाली होने पर स्वतः बनेगा)",
+    "fieldType": "प्रकार",
+    "type_general": "सामान्य",
+    "type_statutory": "वैधानिक",
+    "type_public_hearing": "सार्वजनिक सुनवाई",
+    "type_tender": "निविदा",
+    "nounAlert": "चेतावनी",
+    "nounNotice": "सूचना",
+    "publish": "प्रकाशित करें",
+    "withdraw": "वापस लें",
+    "publishTitle": "इस {noun} को प्रकाशित करें?",
+    "publishDescription": "नागरिक इस {noun} को तुरंत देख सकेंगे। आप अपना बनाया ड्राफ़्ट स्वयं प्रकाशित नहीं कर सकते।",
+    "withdrawTitle": "इस {noun} को वापस लें?",
+    "withdrawDescription": "नागरिक अब इस {noun} को नहीं देख सकेंगे। वापसी ऑडिट रिकॉर्ड में दर्ज होगी।"
   }
 }

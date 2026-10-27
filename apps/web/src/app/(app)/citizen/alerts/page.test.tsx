@@ -29,6 +29,13 @@ vi.mock("next-intl/server", async () => {
   };
 });
 
+const sessionRoles = vi.hoisted(() => ({ value: [] as string[] }));
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => sessionRoles.value,
+  CITIZEN_OFFICER_ROLES: ["citizen_officer", "citizen_admin", "super_admin"],
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 import AlertsPage from "./page";
 
 function render(page: Promise<React.ReactElement>) {
@@ -105,5 +112,22 @@ describe("AlertsPage", () => {
 
     expect(screen.getByText("05 Mar 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-03-05T10:00:00Z")).not.toBeInTheDocument();
+  });
+
+  // GAP-CITIZEN-ALERTS-05: authoring controls are officer-only (the service is the real gate).
+  it("shows the New alert control and per-row actions to an officer, and neither to a citizen", async () => {
+    getCitizenAlertsMock.mockResolvedValue({ data: [{ ...MOCK_ALERTS[0], status: "draft" }], source: "api" });
+    sessionRoles.value = ["citizen"];
+    const citizenView = await render(AlertsPage());
+    expect(screen.queryByRole("button", { name: "New alert" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
+    citizenView.unmount();
+
+    sessionRoles.value = ["citizen_officer"];
+    await render(AlertsPage());
+    expect(screen.getByRole("button", { name: "New alert" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
+    sessionRoles.value = [];
   });
 });

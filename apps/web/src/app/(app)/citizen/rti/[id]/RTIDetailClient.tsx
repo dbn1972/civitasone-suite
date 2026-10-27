@@ -277,6 +277,22 @@ export function RTIDetailClient({
               )}
             </div>
           </div>
+          {/* GAP-CITIZEN-RTI-DETAIL-06: the s.6(3) transfer trail (from, to, when). */}
+          {(rti.transfers ?? []).length > 0 ? (
+            <div className="card">
+              <div className="card-h"><h3>{t("transfersTitle")}</h3></div>
+              <div className="pad">
+                <ul className="tl">
+                  {(rti.transfers ?? []).map((tr) => (
+                    <li key={tr.id} className="done">
+                      <div className="t">{t("transferLine", { from: tr.fromAuthority, to: tr.toAuthority })}</div>
+                      <div className="d">{formatIndianDate(tr.transferredAt)}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
           <div className="card">
             <div className="card-h"><h3>{t("appealsTitle")}</h3></div>
             <div className="pad">

@@ -1,5 +1,6 @@
 import { eq, and, gte, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { periodStart } from "../helpdesk/sla.js";
 import {
   citizenRequests, citizenRequestStatusHistory,
   type CitizenRequestRow, type CitizenRequestInsert, type CitizenRequestHistoryInsert,
@@ -77,9 +78,8 @@ export async function countByStatuses(tenantId: string, statuses: string[]): Pro
 }
 
 export async function resolvedThisMonthStats(tenantId: string): Promise<{ count: number; avgResolutionDays: number }> {
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
+  // GAP-CITIZEN-PORTAL-05: "this month" is the Indian calendar month (midnight IST), not the UTC month.
+  const monthStart = periodStart("mtd");
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   const [row] = await db.transaction((tx) => tx

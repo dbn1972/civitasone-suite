@@ -75,6 +75,13 @@ export function registerRtiConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
       if (!rti) return;
+      // GAP-CITIZEN-RTI-DETAIL-06: keep the statutory trail (where from, where to, who, when)
+      // in the SAME transaction as the cpio_ref overwrite and the markProcessed guard.
+      await repo.insertTransfer(tx, {
+        id: p.id, tenantId: msg.tenantId, rtiId: p.rtiId,
+        fromAuthority: String(rti.cpioRef), toAuthority: p.toAuthority,
+        transferredBy: msg.actorId, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
       await repo.updateRti(tx, p.rtiId, msg.tenantId, {
         status: "transferred", cpioRef: p.toAuthority, updatedBy: msg.actorId,
       });
