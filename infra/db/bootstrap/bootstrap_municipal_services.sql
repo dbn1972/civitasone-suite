@@ -30,6 +30,9 @@
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'advertisement_svc') THEN
     CREATE ROLE advertisement_svc WITH LOGIN PASSWORD 'advertisement_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE advertisement_svc WITH LOGIN PASSWORD 'advertisement_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_advertisement OWNER advertisement_svc'
@@ -38,6 +41,9 @@ SELECT 'CREATE DATABASE civitas_advertisement OWNER advertisement_svc'
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'vendor_svc') THEN
     CREATE ROLE vendor_svc WITH LOGIN PASSWORD 'vendor_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE vendor_svc WITH LOGIN PASSWORD 'vendor_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_vendor OWNER vendor_svc'
@@ -46,6 +52,9 @@ SELECT 'CREATE DATABASE civitas_vendor OWNER vendor_svc'
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'animal_svc') THEN
     CREATE ROLE animal_svc WITH LOGIN PASSWORD 'animal_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE animal_svc WITH LOGIN PASSWORD 'animal_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_animal OWNER animal_svc'
@@ -54,6 +63,9 @@ SELECT 'CREATE DATABASE civitas_animal OWNER animal_svc'
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'trade_svc') THEN
     CREATE ROLE trade_svc WITH LOGIN PASSWORD 'trade_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE trade_svc WITH LOGIN PASSWORD 'trade_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_trade OWNER trade_svc'
@@ -62,6 +74,9 @@ SELECT 'CREATE DATABASE civitas_trade OWNER trade_svc'
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'parks_svc') THEN
     CREATE ROLE parks_svc WITH LOGIN PASSWORD 'parks_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE parks_svc WITH LOGIN PASSWORD 'parks_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_parks OWNER parks_svc'
@@ -70,6 +85,9 @@ SELECT 'CREATE DATABASE civitas_parks OWNER parks_svc'
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roadcut_svc') THEN
     CREATE ROLE roadcut_svc WITH LOGIN PASSWORD 'roadcut_dev_pw';
+  ELSE
+    -- converge a role that was hand-created with a different dev credential
+    ALTER ROLE roadcut_svc WITH LOGIN PASSWORD 'roadcut_dev_pw';
   END IF;
 END $$;
 SELECT 'CREATE DATABASE civitas_roadcut OWNER roadcut_svc'

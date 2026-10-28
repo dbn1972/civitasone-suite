@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { tradeScrutinyRecords, type TradeScrutinyRow, type TradeScrutinyInsert } from "./schema.js";
 
@@ -28,7 +28,7 @@ export async function completeScrutiny(
   findings: Record<string, unknown>, deficiencyDetails: string | null, updatedBy: string,
 ): Promise<boolean> {
   const result = await tx.update(tradeScrutinyRecords)
-    .set({ status, findings, deficiencyDetails, completedAt: new Date(), updatedBy, updatedAt: new Date() })
+    .set({ status, findings, deficiencyDetails, completedAt: new Date(), updatedBy, updatedAt: new Date(), version: sql`${tradeScrutinyRecords.version} + 1` })
     .where(and(eq(tradeScrutinyRecords.id, id), eq(tradeScrutinyRecords.tenantId, tenantId)))
     .returning({ id: tradeScrutinyRecords.id });
   return result.length > 0;

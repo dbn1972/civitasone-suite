@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { roadcutInspections, type InspectionRow, type InspectionInsert } from "./schema.js";
 
@@ -55,6 +55,7 @@ export async function completeInspection(
       inspectedAt: new Date(),
       updatedBy,
       updatedAt: new Date(),
+      version: sql`${roadcutInspections.version} + 1`,
     })
     .where(and(
       eq(roadcutInspections.id, id),

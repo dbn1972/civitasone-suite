@@ -47,13 +47,13 @@ const DB_USERS = {
   civitas_ml: "ml_svc",
   civitas_inspection: "inspection_svc",
   // Municipal Sec5 batch 2 (deep-verification pass, 2026-08-27): roles/DBs
-  // provisioned and migrations authored for these 5 in the same change. Scoped
-  // deliberately to just these 5 — civitas_advertisement/animal/vendor above
-  // this block have the identical missing-grant defect (their *_svc roles hold
-  // only the CONNECT/CREATE bits `\l` shows at the database level, not the
-  // schema/table grants this script applies) but that gap predates this batch
-  // and is tracked separately; left untouched here to avoid colliding with
-  // whoever picks that up.
+  // provisioned and migrations authored for these in the same change.
+  // advertisement/animal/vendor previously carried a known gap here (their
+  // *_svc roles held only database-level CONNECT/CREATE, not the schema/table/
+  // sequence grants this script applies); UAT DB test 2026-10-28 closed it.
+  civitas_advertisement: "advertisement_svc",
+  civitas_animal: "animal_svc",
+  civitas_vendor: "vendor_svc",
   civitas_parks: "parks_svc",
   civitas_refund: "refund_svc",
   civitas_roadcut: "roadcut_svc",
@@ -88,6 +88,10 @@ const DB_USERS = {
   // civitas_smarttransfer; grant-all applies schema/table grants to
   // smarttransfer_svc, same as every other service.
   civitas_smarttransfer: "smarttransfer_svc",
+  // UAT DB test 2026-10-28: sewerage/swm workers hit permission denied on
+  // sequences and _outbox/_inbox (objects owned by civitas_admin).
+  civitas_swm: "swm_svc",
+  civitas_sewerage: "sewerage_svc",
 };
 
 const GRANT_SQL = (role) => `
@@ -103,6 +107,7 @@ BEGIN
     EXECUTE format('GRANT ALL ON ALL TABLES IN SCHEMA %I TO ${role}', s.nspname);
     EXECUTE format('GRANT ALL ON ALL SEQUENCES IN SCHEMA %I TO ${role}', s.nspname);
     EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON TABLES TO ${role}', s.nspname);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON SEQUENCES TO ${role}', s.nspname);
   END LOOP;
 END $$;
 `;

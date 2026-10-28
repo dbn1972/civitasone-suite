@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { scrutinyRecords, type ScrutinyRecordRow, type ScrutinyRecordInsert } from "./schema.js";
 
@@ -49,6 +49,7 @@ export async function completeScrutiny(
       completedAt: new Date(),
       updatedBy,
       updatedAt: new Date(),
+      version: sql`${scrutinyRecords.version} + 1`,
     })
     .where(and(
       eq(scrutinyRecords.id, id),
