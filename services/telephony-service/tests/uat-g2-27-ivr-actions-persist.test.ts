@@ -10,7 +10,8 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { registerConsumersOnce, drainQueue, seedCall } from "./consumer-harness.js";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+// JWT_SECRET is provided by vitest.config.ts (test env).
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT_A = "aaaaaaaa-2727-4000-8000-0000000a0001";
 const TENANT_B = "bbbbbbbb-2727-4000-8000-0000000b0001";
 const ACTOR = "cccccccc-2727-4000-8000-0000000c0001";

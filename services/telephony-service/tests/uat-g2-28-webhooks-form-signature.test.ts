@@ -100,7 +100,7 @@ describe("Twilio webhooks: form-urlencoded + signature enforcement", () => {
   });
 
   it("does not add a form parser to non-webhook routes (still 415)", async () => {
-    const token = signToken({ sub: "cccccccc-2828-4000-8000-0000000c0001", tid: "aaaaaaaa-2828-4000-8000-0000000a0001", roles: ["telephony_admin"], sid: "s" }, "test_secret_for_civitasone_32chr");
+    const token = signToken({ sub: "cccccccc-2828-4000-8000-0000000c0001", tid: "aaaaaaaa-2828-4000-8000-0000000a0001", roles: ["telephony_admin"], sid: "s" }, process.env.JWT_SECRET as string);
     const res = await app.inject({ method: "POST", url: "/v1/telephony/ivr-actions", headers: { "content-type": FORM, authorization: `Bearer ${token}` }, payload: "digit=1" });
     expect(res.statusCode).toBe(415);
   });
