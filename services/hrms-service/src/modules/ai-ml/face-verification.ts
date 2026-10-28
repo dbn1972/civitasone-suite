@@ -230,7 +230,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
   app.get("/v1/hrms/ai/face/status/:employeeId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FACE_ROLES);
-    const { employeeId } = req.params as { employeeId: string };
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
 
     const row = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT employee_id, photo_key, enrolled_at FROM hrms.face_embeddings
