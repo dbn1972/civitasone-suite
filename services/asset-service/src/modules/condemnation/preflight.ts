@@ -1,4 +1,5 @@
 import { HttpError } from "../../shared/context.js";
+import { DomainError, assertAuctionable, assertNoActiveAuction } from "./domain.js";
 
 /**
  * GAP-ASSETS-CONDEMNATION-08: synchronous checks run by the routes BEFORE a
@@ -45,5 +46,32 @@ export function preflightCompleteAuction(
   if (auction.status !== "pending") throw new HttpError(409, "NOT_PENDING", "the auction is not open");
   if (BigInt(body.highestBidMinor) < auction.reserveValueMinor) {
     throw new HttpError(422, "BID_BELOW_FLOOR", "the winning bid is below the auction reserve");
+  }
+}
+
+const DOMAIN_STATUS: Record<string, number> = {
+  RECOMMENDATION_NOT_FOUND: 404,
+  RECOMMENDATION_NOT_APPROVED: 409,
+  RECOMMENDATION_NOT_CONDEMN: 409,
+  ASSET_MISMATCH: 422,
+  AUCTION_ALREADY_EXISTS: 409,
+};
+
+/**
+ * An auction may only open on an APPROVED "condemn" recommendation for the same asset, once. The consumer re-asserts all
+ * of this (assertAuctionable / assertNoActiveAuction) and silently drops a violating command, so without this the
+ * caller got a 202 for an auction that was never created (UAT DB test, asset defect 6).
+ */
+export function preflightCreateAuction(
+  rec: { status: string; decision: string; assetId: string } | undefined,
+  activeAuctionCount: number,
+  body: { assetId: string },
+): void {
+  try {
+    assertAuctionable(rec, body.assetId);
+    assertNoActiveAuction(activeAuctionCount);
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(DOMAIN_STATUS[err.code] ?? 409, err.code, err.message);
+    throw err;
   }
 }

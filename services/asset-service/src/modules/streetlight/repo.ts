@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   assetStreetlights, assetStreetlightFaults, assetStreetlightRequests,
@@ -27,7 +27,7 @@ export async function updateStreetlightStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetStreetlights)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetStreetlights.version} + 1` })
     .where(and(eq(assetStreetlights.id, id), eq(assetStreetlights.tenantId, tenantId)));
 }
 
@@ -57,7 +57,7 @@ export async function updateFaultStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetStreetlightFaults)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetStreetlightFaults.version} + 1` })
     .where(and(eq(assetStreetlightFaults.id, id), eq(assetStreetlightFaults.tenantId, tenantId)));
 }
 
@@ -87,7 +87,7 @@ export async function updateRequestStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetStreetlightRequests)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetStreetlightRequests.version} + 1` })
     .where(and(eq(assetStreetlightRequests.id, id), eq(assetStreetlightRequests.tenantId, tenantId)));
 }
 

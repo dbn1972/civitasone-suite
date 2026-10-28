@@ -36,7 +36,7 @@ export async function waterMeteringRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const body = z.object({
       connectionId: z.string().uuid(), readingId: z.string().uuid(),
-      consumptionKl: z.number(), ratePerKl: z.number(), billingPeriod: z.string(),
+      consumptionKl: z.number().nonnegative(), ratePerKl: z.number().nonnegative(), billingPeriod: z.string(),
       dueDate: z.string(),
     }).parse(req.body);
     const result = await commands.generateBill(ctx, body);
