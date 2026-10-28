@@ -9,7 +9,8 @@ import { resolveContext, requireRole } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { contacts } from "./schema.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { normalizePhone, normalizeEmail, matchScore } from "./identity-domain.js";
+import { normalizePhone, matchScore } from "./identity-domain.js";
+import { blindIndex } from "../../shared/pii-crypto.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
@@ -35,7 +36,8 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
 
     // Try exact match on email blind index first
     if (body.email) {
-      const normalizedEmail = normalizeEmail(body.email);
+      // email_idx stores the HMAC blind index (contacts/repo.ts withEmailIdx), never plain text.
+      const emailIdx = blindIndex(body.email);
       const emailMatch = await scopedRead(async (tx) => {
         const result = tx.select({
           id: contacts.id,
@@ -46,7 +48,7 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
         }).from(contacts).where(
           and(
             eq(contacts.tenantId, ctx.tenantId),
-            eq(contacts.emailIdx, normalizedEmail),
+            eq(contacts.emailIdx, emailIdx),
             eq(contacts.status, "active"),
           ),
         );

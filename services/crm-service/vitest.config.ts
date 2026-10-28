@@ -27,6 +27,8 @@ export default defineConfig({
                 "REL-035: CRM_SCANNER_DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export CRM_SCANNER_DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
               );
             })()),
+      // Test-only service-to-service secret (crm -> notification-service internal auth). Never a real secret.
+      INTERNAL_SERVICE_SECRET: "test_internal_service_secret_crm", // gitleaks:allow
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
       // Test-only key (same literal the crm test files already set inline via

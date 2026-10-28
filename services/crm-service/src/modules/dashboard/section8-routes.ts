@@ -368,18 +368,24 @@ export async function section8Routes(app: FastifyInstance): Promise<void> {
     const body = campaignCostBody.parse(req.body);
 
     await scopedRead(async (tx) => {
-      // Update cost on all campaign_performance rows for this campaign,
-      // or insert a summary row if none exists yet.
+      // Update cost on all campaign_performance rows for this campaign, or upsert a
+      // cost-only summary row if none exists yet. The UPDATE must RETURNING: postgres-js
+      // yields an empty array for a bare UPDATE, which made every call fall through to
+      // the INSERT and trip the (tenant, campaign, period_start) unique key on the 2nd call.
       const updated = await tx.execute(sql`
         UPDATE crm.campaign_performance
         SET cost_minor = ${body.costMinor}::bigint,
-            currency = ${body.currency.toUpperCase()}
+            currency = ${body.currency.toUpperCase()},
+            updated_at = now(),
+            updated_by = ${ctx.actorId},
+            version = version + 1
         WHERE tenant_id = ${ctx.tenantId}
           AND campaign_id = ${id}
+        RETURNING id
       `) as unknown as Array<unknown>;
 
       if (!updated || (updated as unknown[]).length === 0) {
-        // No existing rows — insert a cost-only row
+        // No existing rows: upsert a cost-only row (ON CONFLICT covers a concurrent insert)
         await tx.execute(sql`
           INSERT INTO crm.campaign_performance (
             id, tenant_id, campaign_id, cost_minor, revenue_minor, responses, currency, period_start, created_by, updated_by
@@ -387,6 +393,12 @@ export async function section8Routes(app: FastifyInstance): Promise<void> {
             gen_random_uuid(), ${ctx.tenantId}, ${id}, ${body.costMinor}::bigint, 0, 0,
             ${body.currency.toUpperCase()}, '1970-01-01', ${ctx.actorId}, ${ctx.actorId}
           )
+          ON CONFLICT ON CONSTRAINT campaign_performance_tenant_campaign_period_uk
+          DO UPDATE SET cost_minor = EXCLUDED.cost_minor,
+                        currency = EXCLUDED.currency,
+                        updated_at = now(),
+                        updated_by = EXCLUDED.updated_by,
+                        version = crm.campaign_performance.version + 1
         `);
       }
     });
