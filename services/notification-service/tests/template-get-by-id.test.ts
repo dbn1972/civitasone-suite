@@ -19,7 +19,7 @@ const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();
 const ACTOR = randomUUID();
 const TEMPLATE = randomUUID();
-const SECRET_VALUE = "test_internal_secret_for_template_get"; // gitleaks:allow
+const SECRET_VALUE = randomUUID(); // generated per run, never a fixed literal
 const savedSecret = process.env.INTERNAL_SERVICE_SECRET;
 
 let app: FastifyInstance;

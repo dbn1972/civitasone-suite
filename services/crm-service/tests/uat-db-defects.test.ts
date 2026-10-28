@@ -31,7 +31,6 @@ const ACTOR = randomUUID();
 const OWNER = randomUUID();
 
 const originalFetch = globalThis.fetch;
-const originalInternalSecret = process.env.INTERNAL_SERVICE_SECRET;
 
 function headers(roles = ["crm_admin"]) {
   return {
@@ -88,15 +87,17 @@ async function createContact(name: string, email?: string, consent = false): Pro
   return id;
 }
 
+let internalSecret: string;
+
 beforeAll(async () => {
+  internalSecret = process.env.INTERNAL_SERVICE_SECRET!; // set per run by tests/setup-internal-secret.ts
   registerAllConsumers(queue);
   await queue.start();
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  if (originalInternalSecret === undefined) delete process.env.INTERNAL_SERVICE_SECRET;
-  else process.env.INTERNAL_SERVICE_SECRET = originalInternalSecret;
+  process.env.INTERNAL_SERVICE_SECRET = internalSecret;
 });
 
 afterAll(async () => {
