@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   assetWaterMeterReadings, assetWaterBills, assetWaterServiceRequests,
@@ -57,7 +57,7 @@ export async function updateBillStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetWaterBills)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetWaterBills.version} + 1` })
     .where(and(eq(assetWaterBills.id, id), eq(assetWaterBills.tenantId, tenantId)));
 }
 
@@ -87,6 +87,6 @@ export async function updateServiceRequestStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetWaterServiceRequests)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetWaterServiceRequests.version} + 1` })
     .where(and(eq(assetWaterServiceRequests.id, id), eq(assetWaterServiceRequests.tenantId, tenantId)));
 }

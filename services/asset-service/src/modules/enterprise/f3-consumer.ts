@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas/money";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -583,6 +584,9 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               costMinor: BigInt(p.costMinor as number),
               createdBy: msg.actorId,
             });
+            await auditEvent(tx, msg, "create", "spare_part", p.id as string, {
+              workOrderId: p.workOrderId, partCode: p.partCode, qty: p.qty, costMinor: p.costMinor,
+            });
             break;
           }
           case "request_disposal": {
@@ -628,10 +632,21 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               createdBy: msg.actorId,
             });
             await registerRepo.updateAssetLocation(tx, p.assetId as string, p.tenantId as string, String(p.toOrg), msg.actorId);
+            await auditEvent(tx, msg, "inter_org_transfer", "asset", p.assetId as string, {
+              transferId: p.id, fromOrg: p.fromOrg, toOrg: p.toOrg, transferDate: p.transferDate,
+            });
             break;
           }
           case "bulk_import": {
-            const rows = p.rows as Array<Record<string, unknown>>;
+            // Money columns arrive as exact base-10 strings (the route's minorString); a legacy/in-process bigint
+            // is accepted too. parseMinor rebuilds the bigint the BIGINT columns need.
+            const rows = (p.rows as Array<Record<string, unknown>>).map((r) => ({
+              ...r,
+              acquisitionCost: parseMinor(r.acquisitionCost as string | number | bigint),
+              salvageValue: parseMinor(r.salvageValue as string | number | bigint),
+              bookValue: parseMinor(r.bookValue as string | number | bigint),
+              accumulatedDep: parseMinor(r.accumulatedDep as string | number | bigint),
+            }));
             await repo.bulkInsertAssets(tx, rows as never);
             // GAP-ASSETS-BULK-IMPORT-04: one audit event per batch (actor,
             // row count, reason), in the same transaction as the insert.

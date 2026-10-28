@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as registerRepo from "../register/repo.js";
 import { isUniqueViolation } from "../register/consumer.js";
 import { postMaintenanceOrDefer } from "../enterprise/postings.js";
 
@@ -34,6 +35,44 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.maintenancePlan }, "Consumer processing failed");
+    }
+  });
+
+  // POST /assets/:id/meter-readings was accepted (202) but nothing consumed COMMANDS.meterReadingRecord, so no
+  // reading was ever stored (UAT DB test, asset defect 2). Same shape as the handlers here: inbox dedupe, guarded
+  // write and audit event in ONE transaction. A reading for an asset that is not in this tenant is refused (audited
+  // as a failure, not retried: a retry could never succeed) instead of being stored against nothing.
+  queue.subscribe(COMMANDS.meterReadingRecord, async (msg) => {
+    try {
+      const p = msg.payload as {
+        id: string; assetId: string; tenantId: string; meterType: string; readingValue: number;
+        unit?: string; readingDate: string; source?: string; notes?: string;
+      };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
+        if (!asset) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "asset", action: "record", resourceType: "meter_reading", resourceId: p.id, outcome: "failure",
+              details: { failure: "ASSET_NOT_FOUND", assetId: p.assetId },
+            },
+          });
+          log.warn({ messageId: msg.messageId, assetId: p.assetId }, "meter reading refused: asset not found for tenant");
+          return;
+        }
+        await repo.insertMeterReading(tx, {
+          id: p.id, tenantId: p.tenantId, assetId: p.assetId, meterType: p.meterType,
+          // numeric(18,4) is carried as text (see schema.ts); String() keeps the decimal exactly as the caller sent it.
+          readingValue: String(p.readingValue), unit: p.unit ?? "km", readingDate: p.readingDate,
+          source: p.source ?? "manual", notes: p.notes ?? null, createdBy: msg.actorId,
+        });
+        await audit(tx, msg, "record", "meter_reading", p.id);
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.meterReadingRecord }, "Consumer processing failed");
     }
   });
 

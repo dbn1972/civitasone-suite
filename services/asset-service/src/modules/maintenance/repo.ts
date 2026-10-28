@@ -1,15 +1,19 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { assetAssets } from "../register/schema.js";
 import { db, scopedRead } from "../../shared/db.js";
 import {
-  assetMaintenancePlans, assetWorkOrders,
-  type MaintenancePlanInsert, type WorkOrderInsert, type WorkOrderRow,
+  assetMaintenancePlans, assetWorkOrders, assetMeterReadings,
+  type MaintenancePlanInsert, type WorkOrderInsert, type WorkOrderRow, type MeterReadingInsert,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insertMaintenancePlan(tx: Writer, row: MaintenancePlanInsert): Promise<void> {
   await tx.insert(assetMaintenancePlans).values(row);
+}
+
+export async function insertMeterReading(tx: Writer, row: MeterReadingInsert): Promise<void> {
+  await tx.insert(assetMeterReadings).values(row);
 }
 
 export async function insertWorkOrder(tx: Writer, row: WorkOrderInsert): Promise<void> {
@@ -47,7 +51,7 @@ export async function findWorkOrderByIdTx(tx: Writer, id: string, tenantId: stri
 
 export async function completeWorkOrder(tx: Writer, id: string, tenantId: string, completedDate: string, costMinor: bigint, actorId: string): Promise<void> {
   await (tx as typeof db).update(assetWorkOrders)
-    .set({ status: "completed", completedDate, costMinor, updatedAt: new Date(), updatedBy: actorId })
+    .set({ status: "completed", completedDate, costMinor, updatedAt: new Date(), updatedBy: actorId, version: sql`${assetWorkOrders.version} + 1` })
     .where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId)));
 }
 

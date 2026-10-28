@@ -87,7 +87,9 @@ describe("Condemnation consumer — CQRS behaviour", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("creates auction with reserve value", async () => {
+  // UAT DB test defect 6: `recId` is not a real recommendation here, so the route answers 404 instead of a 202 that
+  // the consumer would silently drop (the accepted path is covered end to end in uat-db-defects.test.ts).
+  it("an auction on an unknown recommendation is a 404", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/auctions",
       headers: { authorization: `Bearer ${token()}` },
@@ -96,7 +98,7 @@ describe("Condemnation consumer — CQRS behaviour", () => {
         reserveValueMinor: 50000, auctionDate: "2026-08-20",
       },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("complete against an unknown auction is a 404", async () => {

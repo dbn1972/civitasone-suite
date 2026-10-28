@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { transferBody, disposeBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
+import { preflightDisposal } from "./preflight.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 
@@ -22,6 +23,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = disposeBody.parse(req.body);
+    await preflightDisposal(ctx.tenantId, id, { checkPending: false });
     return sendAccepted(reply, acceptedResponseSchema, await commands.disposeAsset(ctx, id, body));
   });
 
@@ -34,6 +36,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = disposeBody.parse(req.body);
+    await preflightDisposal(ctx.tenantId, id, { checkPending: true });
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitDisposalForApproval(ctx, id, body));
   });
 

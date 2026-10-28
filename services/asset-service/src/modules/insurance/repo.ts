@@ -96,7 +96,7 @@ export async function updatePolicyTx(
   tx: DrizzleTx,
   tenantId: string, id: string, patch: Partial<PolicyInsert>, audit: DecisionAudit,
 ): Promise<PolicyRow | null> {
-  const rows = await tx.update(assetPolicies).set(patch)
+  const rows = await tx.update(assetPolicies).set({ ...patch, version: sql`${assetPolicies.version} + 1` })
     .where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, tenantId)))
     .returning();
   const row = rows[0];

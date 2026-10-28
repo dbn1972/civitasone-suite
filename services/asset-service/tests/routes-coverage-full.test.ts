@@ -188,13 +188,15 @@ describe("Lifecycle routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("PATCH /v1/assets/assets/:id/dispose → 202", async () => {
+  // UAT DB test defect 6: the route now preflights, so a disposal of an asset that is not in the register is a 404
+  // (the 202 path -- real asset + committee-approved write-off -- is covered in uat-db-defects.test.ts).
+  it("PATCH /v1/assets/assets/:id/dispose → 404 unknown asset", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/assets/${FAKE_UUID}/dispose`,
       headers: authHeader(),
       payload: { disposalDate: "2024-06-15", disposalMethod: "sale", proceedsMinor: 10000 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("PATCH /v1/assets/assets/:id/dispose → 400 empty body", async () => {
@@ -215,13 +217,13 @@ describe("Lifecycle routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/disposals/:id/submit-approval → 202", async () => {
+  it("POST /v1/assets/disposals/:id/submit-approval → 404 unknown asset", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/disposals/${FAKE_UUID}/submit-approval`,
       headers: authHeader(),
       payload: { disposalDate: "2024-06-15", disposalMethod: "auction" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/disposals/:id/submit-approval → 400 empty body", async () => {

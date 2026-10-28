@@ -7,6 +7,7 @@ import { maintenancePlanBody, workOrderBody, completeWorkOrderBody, idParam, met
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import * as registerRepo from "../register/repo.js";
 import { z } from "zod";
 
 const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin"];
@@ -49,6 +50,10 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = meterReadingBody.parse(req.body);
+    // The consumer refuses a reading for an unknown asset; say so now instead of answering 202.
+    if (!(await registerRepo.findAssetById(id, ctx.tenantId))) {
+      throw new HttpError(404, "NOT_FOUND", "asset not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createMeterReading(ctx, id, body));
   });
 
