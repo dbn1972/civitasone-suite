@@ -9,6 +9,7 @@
  * threshold. When exceeded, the campaign is submitted for approval (202 with
  * status "pending_approval") instead of sending immediately.
  */
+import { internalServiceHeaders } from "../../shared/internal-auth.js";
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -33,15 +34,21 @@ const HTTP_TIMEOUT_MS = Number(process.env.CROSS_SERVICE_TIMEOUT_MS ?? 10_000);
  * Returns missing variable names if validation fails.
  */
 async function validateTemplateVariables(
+  tenantId: string,
+  correlationId: string,
   templateId: string,
   suppliedVars: Record<string, string> | undefined,
 ): Promise<string[]> {
+  // notification-service authenticates every route; the lookup used to go out with no
+  // credential, got a 401, and the "graceful degradation" below silently skipped validation.
+  const headers = internalServiceHeaders(tenantId, correlationId);
+  if (!headers) return []; // no credential configured: same fail-open as an unreachable service
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {
     const res = await fetch(`${NOTIFICATION_BASE}/notifications/templates/${templateId}`, {
       signal: controller.signal,
-      headers: { "content-type": "application/json" },
+      headers,
     });
     if (!res.ok) {
       // Graceful degradation: if notification-service is down, skip validation
@@ -117,7 +124,7 @@ export async function sendRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // CH-04: validate template variables before publishing the send command
-    const missingVars = await validateTemplateVariables(body.templateId, body.variables);
+    const missingVars = await validateTemplateVariables(ctx.tenantId, ctx.correlationId, body.templateId, body.variables);
     if (missingVars.length > 0) {
       return reply.code(422).send({ code: "MISSING_TEMPLATE_VARIABLES", missingVars });
     }

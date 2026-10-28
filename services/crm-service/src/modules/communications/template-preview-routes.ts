@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { internalServiceHeaders } from "../../shared/internal-auth.js";
 import { templatePreviewBody } from "./template-preview-validators.js";
 
 const PREVIEW_ROLES = ["crm_user", "crm_admin", "super_admin"];
@@ -50,13 +51,18 @@ interface TemplateResponse {
   variables?: string[];
 }
 
-async function fetchTemplate(templateId: string): Promise<TemplateResponse> {
+async function fetchTemplate(tenantId: string, correlationId: string, templateId: string): Promise<TemplateResponse> {
   const controller = new AbortController();
+  // notification-service authenticates every route: use the internal service credential.
+  const headers = internalServiceHeaders(tenantId, correlationId);
+  if (!headers) {
+    throw new HttpError(503, "TEMPLATE_SERVICE_UNAVAILABLE", "notification-service credentials are not configured");
+  }
   const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {
     const res = await fetch(`${NOTIFICATION_BASE}/notifications/templates/${templateId}`, {
       signal: controller.signal,
-      headers: { "content-type": "application/json" },
+      headers,
     });
     if (!res.ok) {
       if (res.status === 404) throw new HttpError(404, "TEMPLATE_NOT_FOUND", "template not found");
@@ -124,7 +130,7 @@ export async function templatePreviewRoutes(app: FastifyInstance): Promise<void>
     const body = templatePreviewBody.parse(req.body);
 
     // Fetch template from notification-service
-    const template = await fetchTemplate(body.templateId);
+    const template = await fetchTemplate(ctx.tenantId, ctx.correlationId, body.templateId);
 
     // Fetch contact fields
     const contact = await fetchContact(ctx.tenantId, body.contactId);

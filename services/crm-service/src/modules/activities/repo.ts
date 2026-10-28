@@ -66,6 +66,7 @@ export async function updateActivity(
   id: string,
   tenantId: string,
   fields: { status?: string; completedAt?: Date | null; dueDate?: string; ownerId?: string },
+  actorId?: string,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
   if (fields.status !== undefined) {
@@ -81,6 +82,10 @@ export async function updateActivity(
   // GAP-CRM-TASK-ESCALATION-06: reassign.
   if (fields.ownerId !== undefined) patch.ownerId = fields.ownerId;
   if (Object.keys(patch).length === 0) return;
+  // Every CRM update bumps the optimistic-lock version and stamps who/when changed it.
+  patch.version = sql`${activities.version} + 1`;
+  patch.updatedAt = new Date();
+  if (actorId !== undefined) patch.updatedBy = actorId;
   await (tx as typeof db).update(activities)
     .set(patch)
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)));

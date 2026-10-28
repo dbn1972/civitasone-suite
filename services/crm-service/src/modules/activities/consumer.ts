@@ -82,7 +82,7 @@ export function registerActivityConsumers(queue: Queue): void {
       if (p.completedAt !== undefined) fields.completedAt = p.completedAt ? new Date(p.completedAt) : null;
       if (p.dueDate !== undefined) fields.dueDate = p.dueDate;
       if (p.ownerId !== undefined) fields.ownerId = p.ownerId;
-      await repo.updateActivity(tx, p.id, p.tenantId, fields);
+      await repo.updateActivity(tx, p.id, p.tenantId, fields, msg.actorId);
       // GAP-CRM-TASK-ESCALATION-06: snooze/reassign carry their reason and the
       // changed fields onto the audit event (ids + dates only, no PII).
       const action = p.ownerId !== undefined ? "reassign" : p.dueDate !== undefined ? "snooze" : "update";

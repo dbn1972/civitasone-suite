@@ -79,9 +79,12 @@ export const idParam = z.object({ id: z.string().uuid() });
  * optional (older callers send none); a supplied reason is recorded on the
  * document_type_delete audit event.
  */
-export const deleteDocumentTypeBody = z
-  .object({ reason: z.string().trim().min(1).max(500).optional() })
-  .optional();
+export const deleteDocumentTypeBody = z.preprocess(
+  // Through the gateway a body-less DELETE arrives as an empty string (not undefined),
+  // which the strict object schema rejected with 400 "Expected object, received string".
+  (v) => (v === "" || v === null ? undefined : v),
+  z.object({ reason: z.string().trim().min(1).max(500).optional() }).optional(),
+);
 export type DeleteDocumentTypeBody = z.infer<typeof deleteDocumentTypeBody>;
 
 /**

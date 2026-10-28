@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { internalServiceHeaders } from "../../shared/internal-auth.js";
 
 const log = pino({ name: "crm-send-consumer" });
 const AUDIT = "audit.event.record";
@@ -47,16 +48,19 @@ async function callNotificationService(
   variables: Record<string, string>,
   correlationId: string,
 ): Promise<{ deliveryId: string } | null> {
+  // notification-service authenticates every route; send the internal service credential
+  // (x-internal + x-service-secret), not a user token. Fail closed when it is not configured.
+  const headers = internalServiceHeaders(tenantId, correlationId);
+  if (!headers) {
+    log.error({ contactId }, "INTERNAL_SERVICE_SECRET unset - cannot authenticate to notification-service");
+    return null;
+  }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch(`${NOTIFICATION_URL}/notifications/send`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": tenantId,
-        "x-correlation-id": correlationId,
-      },
+      headers,
       body: JSON.stringify({
         channel,
         templateId,

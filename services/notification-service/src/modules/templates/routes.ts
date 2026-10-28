@@ -22,6 +22,20 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await queries.listTemplates(ctx.tenantId));
   });
 
+  // Single-template read. crm-service (send / bulk-send template-variable validation and
+  // template-preview) fetches a template by id over the internal service path; without this
+  // route every such lookup was a 404.
+  app.get("/notifications/templates/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const { id } = templateIdParam.parse(req.params);
+    const template = await queries.getTemplate(ctx.tenantId, id);
+    // findTemplateById is not tenant-filtered, so the tenant check here is what isolates tenants.
+    if (!template || template.tenantId !== ctx.tenantId) {
+      throw new HttpError(404, "NOT_FOUND", "template not found");
+    }
+    return reply.send({ data: template });
+  });
+
   app.patch("/notifications/templates/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
