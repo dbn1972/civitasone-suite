@@ -24,7 +24,8 @@ export function registerSharingConsumers(queue: Queue): void {
         documentId: p.documentId,
         sharedWith: p.sharedWith,
         permission: p.permission,
-        expiresAt: p.expiresAt,
+        // The payload crossed the queue as JSON, so a Date arrives as an ISO string; the timestamp column needs a Date.
+        expiresAt: p.expiresAt ? new Date(p.expiresAt) : null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,

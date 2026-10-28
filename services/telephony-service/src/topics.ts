@@ -11,6 +11,7 @@ export const COMMANDS = {
   assignCall: "telephony.call.assign",
   recordIvrHit: "telephony.call.ivr_hit",
   batchIvrHits: "telephony.ivr.batch_hits",
+  createIvrAction: "telephony.ivr.action_create",
   linkCall: "telephony.call.link",
   attachRecording: "telephony.call.recording",
   // queue + agent administration

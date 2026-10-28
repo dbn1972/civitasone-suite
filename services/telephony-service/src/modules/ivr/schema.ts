@@ -9,7 +9,7 @@
  *
  * Max 50 IVR hits per call enforced at the application layer.
  */
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("telephony");
 
@@ -41,4 +41,30 @@ export type IvrHitView = {
   ordinal: number;
 };
 
-export const schema = { ivrHits };
+/** Per-tenant IVR digit -> action configuration (migration 0021). */
+export const ivrActions = domainSchema.table("ivr_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  digit: varchar("digit", { length: 4 }).notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  templateId: uuid("template_id"),
+  leadSource: varchar("lead_source", { length: 100 }),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+export type IvrActionRow = typeof ivrActions.$inferSelect;
+export type IvrActionInsert = typeof ivrActions.$inferInsert;
+export type IvrActionView = {
+  id: string;
+  tenantId: string;
+  digit: string;
+  action: string;
+  templateId: string | null;
+  leadSource: string | null;
+  enabled: boolean;
+};
+export const schema = { ivrHits, ivrActions };

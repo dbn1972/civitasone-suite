@@ -8,7 +8,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { withTenantScope } from "@civitasone/db";
-import { ivrHits, type IvrHitRow, type IvrHitInsert, type IvrHitView } from "./schema.js";
+import { ivrHits, ivrActions, type IvrHitRow, type IvrHitInsert, type IvrHitView, type IvrActionRow, type IvrActionInsert, type IvrActionView } from "./schema.js";
 
 function toView(r: IvrHitRow): IvrHitView {
   return {
@@ -70,4 +70,31 @@ export async function listByCall(tenantId: string, callId: string): Promise<IvrH
       .orderBy(ivrHits.ordinal);
     return rows.map(toView);
   }) as Promise<IvrHitView[]>;
+}
+
+function toActionView(r: IvrActionRow): IvrActionView {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    digit: r.digit,
+    action: r.action,
+    templateId: r.templateId,
+    leadSource: r.leadSource,
+    enabled: r.enabled,
+  };
+}
+/** Insert one IVR action configuration (consumer-only write path). */
+export async function insertAction(tx: Writer, row: IvrActionInsert): Promise<void> {
+  await tx.insert(ivrActions).values(row);
+}
+/** List the tenant's configured IVR actions, ordered by digit then creation time. */
+export async function listActions(tenantId: string): Promise<IvrActionView[]> {
+  return withTenantScope(db, tenantId, async (tx) => {
+    const rows = await (tx as typeof db)
+      .select()
+      .from(ivrActions)
+      .where(eq(ivrActions.tenantId, tenantId))
+      .orderBy(ivrActions.digit, ivrActions.createdAt);
+    return rows.map(toActionView);
+  }) as Promise<IvrActionView[]>;
 }
