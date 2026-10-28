@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { localeVariants } from "./schema.js";
 
@@ -62,6 +62,7 @@ export async function flagStaleVariants(
     status: "needs_review",
     updatedAt: new Date(),
     updatedBy: actorId,
+    version: sql`${localeVariants.version} + 1`,
   }).where(and(
     eq(localeVariants.tenantId, tenantId),
     eq(localeVariants.templateId, templateId),
@@ -88,6 +89,7 @@ export async function updateVariant(
   await tx.update(localeVariants).set({
     ...data,
     updatedAt: new Date(),
+    version: sql`${localeVariants.version} + 1`,
   }).where(and(
     eq(localeVariants.id, id),
     eq(localeVariants.tenantId, tenantId),

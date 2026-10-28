@@ -2,12 +2,13 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { RTISummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody } from "./validators.js";
 import { isAppealAllowed } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { findCpioById } from "../cpio/repo.js";
 
 const CITIZEN_ROLES  = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 const OFFICER_ROLES  = ["citizen_officer", "citizen_admin", "super_admin"];
@@ -63,6 +64,12 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = transferRtiBody.parse(req.body);
+    // UAT #8: toAuthority lands in the uuid column cpio_ref -- it must be an existing
+    // rti.cpio_directory id (this tenant), else the consumer DLQs after a 202.
+    const cpio = z.string().uuid().safeParse(body.toAuthority).success
+      ? await findCpioById(ctx.tenantId, body.toAuthority)
+      : null;
+    if (!cpio) throw new HttpError(422, "UNPROCESSABLE", "toAuthority must be the id of an existing CPIO directory entry");
     return sendAccepted(reply, acceptedResponseSchema, await commands.transferRti(ctx, id, body));
   });
 

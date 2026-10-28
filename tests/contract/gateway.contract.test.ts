@@ -106,7 +106,8 @@ describe("gateway contract", () => {
       // meeting-service: singular /meeting (rewrites to /v1/meetings) + plural
       ["meeting", "meetings"],
       // notification-service: legacy /api/notification + versioned /api/v1/notification
-      ["notification", "notification-v1"],
+      // + /api/v1/segments (web campaign composer, UAT #31)
+      ["notification", "notification-v1", "notification-segments"],
       // location-service: plural resource prefixes share one upstream
       ["locations", "geofences", "jurisdictions", "hierarchy", "pincodes"],
       // tenant-service: plural /tenants + singular /tenant alias

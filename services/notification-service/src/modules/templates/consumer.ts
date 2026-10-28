@@ -20,7 +20,7 @@ export function registerTemplateConsumers(q: Queue): void {
         const p = msg.payload;
         await repo.insertTemplate(tx, {
           id: p.id, tenantId: p.tenantId, channel: p.channel, name: p.name,
-          subject: p.subject ?? null, body: p.body, status: "active",
+          subject: p.subject ?? null, body: p.body, status: "draft",
           createdBy: msg.actorId, updatedBy: msg.actorId, version: 1, supersededBy: null,
         });
         await emitAudit(tx, msg, EVENTS.templateCreated, { templateId: p.id }, "create", p.id);
@@ -42,7 +42,7 @@ export function registerTemplateConsumers(q: Queue): void {
       await repo.insertTemplate(tx, {
         id: p.id, tenantId: old.tenantId, channel: p.channel ?? old.channel,
         name: p.name ?? old.name, subject: p.subject ?? old.subject, body: p.body ?? old.body,
-        status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
+        status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId,
         version: plan.version, supersededBy: null,
       });
       await repo.supersedeTemplate(tx, old.id, p.id, msg.actorId);

@@ -61,8 +61,8 @@ export function registerDndConsumers(q: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
 
-      const { eq, and } = await import("drizzle-orm");
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      const { eq, and, sql } = await import("drizzle-orm");
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${dndWindows.version} + 1` };
       if (p.startTime !== undefined) set.startTime = p.startTime;
       if (p.endTime !== undefined) set.endTime = p.endTime;
       if (p.timezone !== undefined) set.timezone = p.timezone;

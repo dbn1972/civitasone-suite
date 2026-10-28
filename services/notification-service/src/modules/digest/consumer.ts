@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { sql } from "drizzle-orm";
 import { digestRules, digestBuckets } from "./schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -64,8 +65,8 @@ export function registerDigestConsumers(q: Queue): void {
         throw new NonRetryableError("INVALID_WINDOW", "accumulationWindowMinutes must be between 5 and 1440");
       }
 
-      const { eq, and } = await import("drizzle-orm");
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      const { eq, and, sql } = await import("drizzle-orm");
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${digestRules.version} + 1` };
       if (p.accumulationWindowMinutes !== undefined) set.accumulationWindowMinutes = p.accumulationWindowMinutes;
       if (p.maxBatchSize !== undefined) set.maxBatchSize = p.maxBatchSize;
       if (p.digestTemplateId !== undefined) set.digestTemplateId = p.digestTemplateId;
@@ -111,6 +112,7 @@ export function registerDigestConsumers(q: Queue): void {
           status: "flushed",
           updatedAt: new Date(),
           updatedBy: msg.actorId,
+          version: sql`${digestBuckets.version} + 1`,
         }).where(eq(digestBuckets.id, p.bucketId));
 
         await enqueue(tx, {

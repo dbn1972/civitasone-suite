@@ -60,4 +60,12 @@ describe("gateway registry", () => {
     expect(resolved?.route.upstreamPath).toBe("/v1/notification");
     expect(resolved?.remainder).toBe("/experiments");
   });
+
+  it("UAT #31: /api/v1/segments (called by the web campaign composer) reaches notification-service /v1/segments", () => {
+    const resolved = resolveRoute("/api/v1/segments/abc/preview");
+    expect(resolved?.route.name).toBe("notification-segments");
+    expect(resolved?.route.upstream).toBe(resolveRoute("/api/v1/notification/x")?.route.upstream);
+    expect(resolved?.route.upstreamPath).toBe("/v1/segments");
+    expect(resolved?.remainder).toBe("/abc/preview");
+  });
 });

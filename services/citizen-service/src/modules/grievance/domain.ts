@@ -20,6 +20,18 @@ export function assertGrievanceTransition(from: string, to: GrievanceStatus): vo
   }
 }
 
+/**
+ * Assignment guard. A grievance is created already `assigned` (auto-assigned to its
+ * department, see the register consumer), so the officer assign command on a new
+ * grievance is a RE-assignment (assigned -> assigned: change assignee/department),
+ * not a status transition. Every other source status still goes through the
+ * lifecycle machine, so assertGrievanceTransition stays strict (no self-transitions).
+ */
+export function assertGrievanceAssignable(from: string): void {
+  if (from === "assigned") return;
+  assertGrievanceTransition(from, "assigned");
+}
+
 export function inferPriority(category: string): Priority {
   const urgent = ["corruption", "safety", "emergency"];
   const high = ["water", "electricity", "health"];
