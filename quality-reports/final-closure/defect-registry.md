@@ -17,14 +17,14 @@ This section lists the open and recently closed findings from the V5 certificati
 | REG5-02 | low (flake) | citizen-service service-gaps-routes SVC-090 409 vs 202 once under parallel load; 27/27 on reruns | OPEN, known flake, post-UAT |
 | REG5-03 | low (flake) | helpdesk ticket-payload-shapes worker-timing; 2/2 reruns pass | OPEN, known flake, post-UAT |
 | REG5-06 | medium-low (env) | tests/quality-program L2/L4 cannot run in a plain checkout; CI Live Stack Verification lanes success | OPEN, post-UAT harness fix |
-| REG5-07 | low-medium (flake) | CI Tests job red on frozen SHA (ocr process-stream; report-service schedule list) | ACCEPTED by owner 2026-10-28 (exception 2); the report-service test is not named in the reply |
+| REG5-07 | low-medium (flake) | CI Tests job red on frozen SHA: attempt 1 ocr process-stream and report-service schedule list; attempt 2 ocr process-stream only | ACCEPTED by owner 2026-10-28 (exception 2); the remaining red in attempt 2 is the test the reply names |
 | REG5-D | env | tests/data-integrity 7 failures assume dev-DB role state; idor timeout 5000 ms on emulated PG; 3 service-suite flakes | OPEN, environment; D3 post-UAT |
 | SEC5-01 | high x5 alerts | Open HIGH code-scanning alerts: CodeQL #3683, #20; Trivy #3838, #2049, #2050 | #3683 and #20 DISMISSED; Trivy x3 ACCEPTED until 2026-11-08 (exception 3) |
 | SEC5-02 | low | secret-scanner.mjs false positive on redaction.redos.test.ts:6 (not CI-wired) | OPEN, post-UAT |
 | SEC5-03 | low | Dev-only fallback key in ecosystem.config.js:166 | OPEN, owner to confirm it falls under exception 6 |
 | SEC5-04 | medium | 11 CVE allow-list entries expire 2026-11-08; zod 2026-11-23 | OPEN, deadline-bound |
 | BLD5-01 | low | scripts/governance and steering-audit tests stale and dependent on host-only .kiro | OPEN, post-UAT |
-| NGT5-01 | unclassified | Nightly on this SHA: Accessibility Full Sweep 3 failed (/finance/medical, /finance/travel, baseline aggregate); Three-Way-Match Live SQS 2/3 timeouts; Lighthouse build OOM; Perf k6 failure | OPEN, not covered by an owner decision, not investigated |
+| NGT5-01 | mixed | Nightly on this SHA: (a) Accessibility Full Sweep: 2 route failures are redirects to /hr/medical and /hr/travel (stale route list) plus the aggregate; (b) Three-Way-Match Live SQS 2/3 timeouts; (c) Lighthouse build OOM; (d) Perf k6 failure | (a) test maintenance, update route list post-UAT, not a product defect; (b), (c) environment-suspected, unverified, no owner decision; (d) under D2 |
 | DB5-01 | low | crm-service duplicate migration number 0112 (#1938, #1946); pre-existing | OPEN, post-UAT |
 
 Counts at V5 from the lane files: CRITICAL 0; HIGH product defects 0 (HIGH items are the process incident REG5-01, closed, and five HIGH scanner alerts, dispositioned); MEDIUM and lower items as listed.
