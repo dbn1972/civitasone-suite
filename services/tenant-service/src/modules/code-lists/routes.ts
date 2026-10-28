@@ -1,6 +1,7 @@
 import type { FastifyInstance, RouteHandlerMethod } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import * as repo from "./repo.js";
@@ -66,12 +67,9 @@ export async function codeListRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { status: "accepted" } });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
-    req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (was a local
+  // copy that missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }
 
 function env(ctx: { tenantId: string; actorId: string; correlationId: string }, type: string, messageId: string, payload: Record<string, unknown>) {

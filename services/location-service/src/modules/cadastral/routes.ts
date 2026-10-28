@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { listQuerySchema } from "@civitasone/schemas/common";
@@ -80,10 +81,7 @@ export async function cadastralRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { disputeId: id, status: "filed" } });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
-    req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (a local
+  // copy missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }

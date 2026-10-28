@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createLocationBody, updateLocationBody, archiveLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema, locationHierarchySchema } from "./validators.js";
 import * as commands from "./commands.js";
@@ -174,21 +174,7 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     sendAccepted(reply, acceptedResponseSchema, await commands.updateLocation(ctx, id, { status: "archived", ...(body.reason ? { reason: body.reason } : {}) }));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED",
-        message: "invalid request",
-        correlationId,
-        retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (a local
+  // copy missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }

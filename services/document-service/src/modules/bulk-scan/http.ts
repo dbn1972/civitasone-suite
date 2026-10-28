@@ -28,6 +28,14 @@ export function installBulkScanErrorHandler(app: FastifyInstance): void {
     if (err instanceof Error && err.name === "StorageNotConfiguredError") {
       return reply.code(503).send({ code: "STORAGE_UNAVAILABLE", message: "object storage is not configured", correlationId, retryable: true });
     }
+    // Malformed JSON body (Fastify SyntaxError) and any other Fastify-raised 4xx (413, 415, empty body...) are client errors.
+    if (err instanceof SyntaxError && "statusCode" in err) {
+      return reply.code(400).send({ code: "MALFORMED_BODY", message: "The request body could not be parsed. Please send valid JSON.", correlationId, retryable: false });
+    }
+    const sc = (err as { statusCode?: unknown }).statusCode;
+    if (typeof sc === "number" && sc >= 400 && sc < 500) {
+      return reply.code(sc).send({ code: (err as { code?: string }).code ?? "CLIENT_ERROR", message: (err as Error).message, correlationId, retryable: false });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });

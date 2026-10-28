@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -72,10 +73,7 @@ export async function mapLayerRoutes(app: FastifyInstance): Promise<void> {
     sendAccepted(reply, acceptedResponseSchema, await commands.mapLayerDelete(ctx, id, reason));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
-    req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (a local
+  // copy missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }

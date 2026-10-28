@@ -36,6 +36,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.addHook("onRequest", createTenantTxHook(db));
 
+  // MUST be registered BEFORE any app.register(<routes>): encapsulated child contexts copy the parent error handler
+  // at creation, so a handler set after the routes left ZodError/HttpError as Fastify default 500 (UAT API sweep 2026-10-29).
+  registerSchemaErrorHandler(app, HttpError);
+
   registerOpsRoutes(app, { service: "document-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(fileRoutes);
@@ -47,7 +51,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reviewRoutes);
   await app.register(linksRoutes);
   await app.register(filedDocumentRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

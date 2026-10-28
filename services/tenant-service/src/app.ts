@@ -49,6 +49,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
 
+  // MUST be registered BEFORE any app.register(<routes>): encapsulated child contexts copy the parent error handler
+  // at creation, so a handler set after the routes left ZodError/HttpError as Fastify default 500 (UAT API sweep 2026-10-29).
+  registerSchemaErrorHandler(app, HttpError);
+
   registerOpsRoutes(app, {
     service: "tenant-service",
     checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue },
@@ -77,7 +81,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { tenantExtensionRoutes } =
     await import("./modules/tenant-extensions/routes.js");
   await app.register(tenantExtensionRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }
