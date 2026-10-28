@@ -3,6 +3,11 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { scopedRead } from "../../shared/db.js";
+import { asc, eq } from "drizzle-orm";
+import { COMMANDS } from "../../topics.js";
+import { publishConfig } from "./commands.js";
+import { categories } from "./categories-schema.js";
 
 const CONFIG_ROLES = ["helpdesk_admin", "super_admin"];
 const READ_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
@@ -31,7 +36,10 @@ export async function categoriesRoutes(app: FastifyInstance): Promise<void> {
 
     const cacheKey = cache.makeKey(ctx.tenantId, "categories", "list");
     const data = await cache.getOrLoad<{ data: unknown[] }>(cacheKey, async () => {
-      return { data: [] };
+      const rows = await scopedRead((tx) =>
+        tx.select().from(categories).where(eq(categories.tenantId, ctx.tenantId)).orderBy(asc(categories.ordinal), asc(categories.name)),
+      );
+      return { data: rows };
     });
 
     return reply.send(data);
@@ -44,6 +52,13 @@ export async function categoriesRoutes(app: FastifyInstance): Promise<void> {
     const body = createCategoryBody.parse(req.body);
 
     const id = randomUUID();
+    await publishConfig(ctx, COMMANDS.configCategoryCreate, {
+      id,
+      name: body.name,
+      parentId: body.parentId ?? null,
+      ordinal: body.ordinal ?? 0,
+      enabled: body.enabled ?? true,
+    });
     await cache.invalidateResource(ctx.tenantId, "categories");
 
     return reply.code(201).send({
@@ -69,6 +84,7 @@ export async function categoriesRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "EMPTY_BODY", "at least one field required");
     }
 
+    await publishConfig(ctx, COMMANDS.configCategoryUpdate, { id, ...body });
     await cache.invalidateResource(ctx.tenantId, "categories");
 
     return reply.send({

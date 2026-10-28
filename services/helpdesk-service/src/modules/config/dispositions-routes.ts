@@ -3,6 +3,11 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { scopedRead } from "../../shared/db.js";
+import { asc, eq } from "drizzle-orm";
+import { COMMANDS } from "../../topics.js";
+import { publishConfig } from "./commands.js";
+import { dispositions } from "./dispositions-schema.js";
 
 const CONFIG_ROLES = ["helpdesk_admin", "super_admin"];
 const READ_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
@@ -21,7 +26,10 @@ export async function dispositionsRoutes(app: FastifyInstance): Promise<void> {
 
     const cacheKey = cache.makeKey(ctx.tenantId, "dispositions", "list");
     const data = await cache.getOrLoad<{ data: unknown[] }>(cacheKey, async () => {
-      return { data: [] };
+      const rows = await scopedRead((tx) =>
+        tx.select().from(dispositions).where(eq(dispositions.tenantId, ctx.tenantId)).orderBy(asc(dispositions.label)),
+      );
+      return { data: rows };
     });
 
     return reply.send(data);
@@ -34,6 +42,12 @@ export async function dispositionsRoutes(app: FastifyInstance): Promise<void> {
     const body = createDispositionBody.parse(req.body);
 
     const id = randomUUID();
+    await publishConfig(ctx, COMMANDS.configDispositionCreate, {
+      id,
+      label: body.label,
+      category: body.category ?? null,
+      enabled: body.enabled ?? true,
+    });
     await cache.invalidateResource(ctx.tenantId, "dispositions");
 
     return reply.code(201).send({

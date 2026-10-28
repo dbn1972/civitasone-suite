@@ -26,7 +26,8 @@ export async function listRules(tenantId: string, limit: number, offset: number)
 export async function getRule(tenantId: string, id: string): Promise<AutomationRuleRow | null> {
   const [rule] = await db.transaction((tx) =>
     tx.select().from(automationRules)
-      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, tenantId)))
+      // Soft-deleted rules (status "deleted") are gone as far as the API is concerned.
+      .where(and(eq(automationRules.id, id), eq(automationRules.tenantId, tenantId), eq(automationRules.status, "active")))
       .limit(1),
   );
   return rule ?? null;

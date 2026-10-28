@@ -4,7 +4,7 @@
  * Reads wrap in db.transaction() so createTenantDb's wrapWithTenantGuc injects
  * app.tenant_id from AsyncLocalStorage before the query.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   roadHotspots,
@@ -70,6 +70,41 @@ export async function updateHotspot(
     .where(and(eq(roadHotspots.id, id), eq(roadHotspots.tenantId, tenantId)))
     .returning();
   return res[0] ?? null;
+}
+
+/**
+ * Status-guarded hotspot update (see sanitation transitionComplaint): the WHERE
+ * clause requires the current status to be in `fromStatuses`.
+ */
+export async function transitionHotspot(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  fromStatuses: readonly string[],
+  patch: Partial<HotspotInsert>,
+): Promise<HotspotRow | null> {
+  const res = await (tx as typeof db)
+    .update(roadHotspots)
+    .set({ ...patch, updatedAt: new Date(), version: sql`${roadHotspots.version} + 1` })
+    .where(and(
+      eq(roadHotspots.id, id),
+      eq(roadHotspots.tenantId, tenantId),
+      inArray(roadHotspots.status, [...fromStatuses]),
+    ))
+    .returning();
+  return res[0] ?? null;
+}
+
+export async function findHotspotTx(tx: Writer, id: string, tenantId: string): Promise<HotspotRow | null> {
+  const rows = await (tx as typeof db).select().from(roadHotspots)
+    .where(and(eq(roadHotspots.id, id), eq(roadHotspots.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findLinkTx(tx: Writer, tenantId: string, hotspotId: string, ticketId: string): Promise<HotspotLinkRow | null> {
+  const rows = await (tx as typeof db).select().from(roadHotspotLinks)
+    .where(and(eq(roadHotspotLinks.tenantId, tenantId), eq(roadHotspotLinks.hotspotId, hotspotId), eq(roadHotspotLinks.ticketId, ticketId))).limit(1);
+  return rows[0] ?? null;
 }
 
 // ── Hotspot links ─────────────────────────────────────────────────────────────

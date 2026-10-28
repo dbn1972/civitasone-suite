@@ -171,7 +171,7 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   });
 }
 
-export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 
 export async function insert(tx: Writer, row: TicketInsert): Promise<void> {
   await tx.insert(tickets).values(row);
@@ -303,7 +303,10 @@ export async function assign(
   const res = await (tx as typeof db).update(tickets)
     .set({
       assigneeId,
-      status: "assigned",
+      // open -> assigned only. Any other status is kept: a problem/change ticket
+      // has no "assigned" stage, and re-assigning an investigating/resolved/closed
+      // ticket must not silently move it backwards in its workflow.
+      status: sql`CASE WHEN ${tickets.status} = 'open' THEN 'assigned' ELSE ${tickets.status} END`,
       updatedBy: actorId,
       updatedAt: now,
       version: sql`${tickets.version} + 1`,
@@ -522,6 +525,63 @@ export async function listLinks(tenantId: string, ticketId: string): Promise<Tic
       or(eq(ticketLinks.sourceTicketId, ticketId), eq(ticketLinks.targetTicketId, ticketId)),
     )),
   );
+}
+
+/** findRow scoped to a transaction (read-your-write inside the consumer's tx). */
+export async function findRowTx(tx: Writer, id: string, tenantId: string): Promise<TicketRow | null> {
+  const rows = await (tx as typeof db).select().from(tickets)
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Apply a partial update of the mutable ticket fields (PATCH /tickets/:id).
+ * Tenant-scoped and version-bumping. Only keys present in `patch` are written,
+ * so an omitted field is never clobbered. Returns the updated row, or null if
+ * the ticket does not exist in this tenant.
+ */
+export type TicketFieldPatch = Partial<Pick<TicketInsert,
+  "subject" | "description" | "priority" | "categoryId" | "ticketType" | "channel">>;
+
+export async function updateFields(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  patch: TicketFieldPatch,
+  actorId: string,
+  now: Date,
+): Promise<TicketRow | null> {
+  const res = await (tx as typeof db).update(tickets)
+    .set({
+      ...patch,
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${tickets.version} + 1`,
+    })
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId)))
+    .returning();
+  return res[0] ?? null;
+}
+
+/**
+ * Remove a ticket link. Scoped to the tenant AND to the ticket in the URL (the
+ * ticket must be one end of the link), so a link id from another ticket cannot
+ * be deleted through an unrelated ticket's URL. Returns the deleted row or null.
+ */
+export async function deleteLink(
+  tx: Writer,
+  tenantId: string,
+  ticketId: string,
+  linkId: string,
+): Promise<TicketLinkRow | null> {
+  const res = await (tx as typeof db).delete(ticketLinks)
+    .where(and(
+      eq(ticketLinks.id, linkId),
+      eq(ticketLinks.tenantId, tenantId),
+      or(eq(ticketLinks.sourceTicketId, ticketId), eq(ticketLinks.targetTicketId, ticketId)),
+    ))
+    .returning();
+  return res[0] ?? null;
 }
 
 export { mapStatus, mapPriority };
