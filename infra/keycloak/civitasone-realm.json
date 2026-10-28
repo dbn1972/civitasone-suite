@@ -66,6 +66,10 @@
         "name": "audit_officer"
       },
       {
+        "name": "bid_opening_committee",
+        "description": "Owner decision H1 (2026-10-28): the only role that sees bidder identities before tender opening (procurement-service masks everyone else as Bidder N). Assign per tender to opening-committee members only."
+      },
+      {
         "name": "budget_officer"
       },
       {
