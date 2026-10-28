@@ -1,4 +1,4 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { categories, type CategoryRow, type CategoryInsert, type CategoryView } from "./schema.js";
@@ -104,7 +104,7 @@ export async function insert(tx: Writer, row: CategoryInsert): Promise<void> {
 }
 
 export async function update(tx: Writer, id: string, data: Partial<CategoryInsert>): Promise<void> {
-  await tx.update(categories).set(data).where(eq(categories.id, id));
+  await tx.update(categories).set({ ...data, version: sql`${categories.version} + 1` }).where(eq(categories.id, id));
 }
 
 export async function remove(tx: Writer, id: string): Promise<void> {

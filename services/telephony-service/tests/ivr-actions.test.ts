@@ -30,7 +30,7 @@ describe("Gaps 6 & 7: IVR actions", () => {
       payload: { digit: "1", action: "create_lead", leadSource: "ivr_callback" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().data.action).toBe("create_lead");
   });
 

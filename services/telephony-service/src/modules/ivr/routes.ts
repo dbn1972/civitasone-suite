@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { batchIvrHitsBody, callIdParam } from "./validators.js";
 import { MAX_IVR_HITS_PER_CALL } from "./domain.js";
 import * as repo from "./repo.js";
+import * as callsRepo from "../calls/repo.js";
 import * as commands from "./commands.js";
 
 const TELEPHONY_ROLES = ["telephony_user", "telephony_supervisor", "telephony_admin", "super_admin"];
@@ -17,6 +18,12 @@ export async function ivrRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id: callId } = callIdParam.parse(req.params);
     const { hits } = batchIvrHitsBody.parse(req.body);
+
+    // Reject hits for a call that does not exist in this tenant, instead of accepting (202) work that
+    // would attach orphan rows to an arbitrary id (UAT G2 observation).
+    if (!(await callsRepo.findRow(callId, ctx.tenantId))) {
+      throw new HttpError(404, "CALL_NOT_FOUND", "call not found");
+    }
 
     // Fast fail so a caller learns immediately that the batch cannot fit. The
     // authoritative check is repeated by the consumer inside the write

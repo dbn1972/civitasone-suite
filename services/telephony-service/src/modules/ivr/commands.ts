@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { IvrHitEntry } from "./validators.js";
+import type { IvrHitEntry, CreateIvrActionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -30,4 +30,30 @@ export async function batchIvrHits(
     inserted: meta.inserted,
     totalHits: meta.totalHits,
   };
+}
+
+export async function createIvrAction(
+  ctx: RequestContext,
+  body: CreateIvrActionBody,
+): Promise<Accepted & { action: Record<string, unknown> }> {
+  const id = randomUUID();
+  const action = {
+    id,
+    tenantId: ctx.tenantId,
+    digit: body.digit,
+    action: body.action,
+    templateId: body.templateId ?? null,
+    leadSource: body.leadSource ?? null,
+    enabled: body.enabled ?? true,
+  };
+  await queue.publish(COMMANDS.createIvrAction, {
+    messageId: id,
+    type: COMMANDS.createIvrAction,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: action,
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId, action };
 }
