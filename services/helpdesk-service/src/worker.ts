@@ -13,6 +13,9 @@ import { registerSlaConsumers } from "./modules/sla/consumer.js";
 import { registerCsatConsumer } from "./modules/sla/csat-consumer.js";
 import { registerRoutingConsumers } from "./modules/routing/consumer.js";
 import { registerCatalogueConsumers } from "./modules/catalogue/consumer.js";
+import { registerConfigConsumers } from "./modules/config/consumer.js";
+import { registerSanitationConsumers } from "./modules/sanitation/consumer.js";
+import { registerRoadHotspotConsumers } from "./modules/road-hotspot/consumer.js";
 import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "helpdesk-worker" });
@@ -38,6 +41,9 @@ registerSlaConsumers(queue);
 registerCsatConsumer(queue);
 registerRoutingConsumers(queue);
 registerCatalogueConsumers(queue);
+registerConfigConsumers(queue);
+registerSanitationConsumers(queue);
+registerRoadHotspotConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

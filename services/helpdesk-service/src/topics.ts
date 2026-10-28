@@ -11,6 +11,8 @@ export const COMMANDS = {
   transferTicket: "helpdesk.ticket.transfer",
   /** TKT-08 — link two tickets (parent/child/duplicate/related). */
   linkTickets: "helpdesk.ticket.link",
+  /** TKT-08 — remove a link between two tickets. */
+  unlinkTickets: "helpdesk.ticket.unlink",
   /** TKT-09 — bulk action on up to 50 tickets. */
   bulkAction: "helpdesk.ticket.bulk_action",
   /** TKT-14 — reopen a closed/resolved ticket. */
@@ -46,6 +48,13 @@ export const COMMANDS = {
   slaExtend: "helpdesk.ticket.sla_extend",
   cesSubmit: "helpdesk.ces.submit",
   detectDuplicates: "helpdesk.ticket.detect_duplicates",
+
+  // Config masters (CFG-02 categories, CFG-04 statuses, CFG-05 dispositions)
+  configCategoryCreate: "helpdesk.config.category_create",
+  configCategoryUpdate: "helpdesk.config.category_update",
+  configStatusCreate: "helpdesk.config.status_create",
+  configStatusUpdate: "helpdesk.config.status_update",
+  configDispositionCreate: "helpdesk.config.disposition_create",
 
   // Road hotspot module (BRD 5.14 ROAD-004)
   roadHotspotCreate: "helpdesk.road_hotspot.create",

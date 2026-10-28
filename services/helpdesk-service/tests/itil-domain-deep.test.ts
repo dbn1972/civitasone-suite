@@ -31,7 +31,7 @@ describe("getInitialStatus", () => {
 
 describe("getStatusesForType", () => {
   it("incident: open, investigating, resolved, closed", () => {
-    expect([...getStatusesForType("incident")]).toEqual(["open", "investigating", "resolved", "closed"]);
+    expect([...getStatusesForType("incident")]).toEqual(["open", "assigned", "investigating", "resolved", "closed"]);
   });
   it("problem: identified, root_cause, fix_applied, closed", () => {
     expect([...getStatusesForType("problem")]).toEqual(["identified", "root_cause", "fix_applied", "closed"]);

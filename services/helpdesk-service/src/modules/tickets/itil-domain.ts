@@ -12,7 +12,10 @@ export type TicketType = (typeof TICKET_TYPES)[number];
 
 // ─── Status Workflows per Type ──────────────────────────────────────────────
 
-export const INCIDENT_STATUSES = ["open", "investigating", "resolved", "closed"] as const;
+// "assigned" is entered via the assign command (not via transition) and is a real
+// incident stage: an assigned incident must be able to continue the lifecycle
+// (assigned -> investigating -> resolved -> closed).
+export const INCIDENT_STATUSES = ["open", "assigned", "investigating", "resolved", "closed"] as const;
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
 export const PROBLEM_STATUSES = ["identified", "root_cause", "fix_applied", "closed"] as const;
@@ -27,6 +30,7 @@ export type TicketStatus = IncidentStatus | ProblemStatus | ChangeStatus;
 
 const INCIDENT_TRANSITIONS: Record<IncidentStatus, readonly IncidentStatus[]> = {
   open: ["investigating"],
+  assigned: ["investigating"],
   investigating: ["resolved"],
   resolved: ["closed"],
   closed: [],
