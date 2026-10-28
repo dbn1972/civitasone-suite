@@ -76,7 +76,7 @@ const USERS: Record<string, DevUser> = {
   procurementofficer: {
     sub: "0de00000-0000-0000-0000-000000000005",
     name: "Procurement Officer", email: "procurementofficer@demo.gov.in",
-    roles: ["procurement_officer", "procurement_admin"],
+    roles: ["procurement_officer", "procurement_admin", "bid_opening_committee"],
   },
   legalofficer: {
     sub: "0de00000-0000-0000-0000-000000000007",

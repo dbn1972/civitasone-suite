@@ -82,7 +82,7 @@ Demo password for **all** rows: **`Demo@12345`** (DEV-ONLY). Tenant **T1** =
 | HR / Establishment Officer | `hrofficer` | `Demo@12345` | hr_officer, hr_admin, estab_officer | T1 | HRMS: employees, departments, leave, attendance; Establishment files |
 | Finance / Budget Officer | `financeofficer` | `Demo@12345` | finance_officer, budget_officer | T1 | Finance: budget heads, allocations, sanctions, bills (prepare/read) |
 | Chief Accounts Officer | `financeadmin` | `Demo@12345` | finance_admin | T1 | Finance approver: approve sanctions / bills / payments |
-| Procurement Officer | `procurementofficer` | `Demo@12345` | procurement_officer, procurement_admin | T1 | Procurement: vendors, indents, RFQs, tenders, POs, GRNs |
+| Procurement Officer | `procurementofficer` | `Demo@12345` | procurement_officer, procurement_admin, bid_opening_committee | T1 | Procurement: vendors, indents, RFQs, tenders, POs, GRNs |
 | Internal Auditor | `auditor` | `Demo@12345` | audit_officer, audit_admin | T1 | Audit: plans, observations, risk register; read-only finance |
 | Law Officer | `legalofficer` | `Demo@12345` | legal_officer, legal_admin | T1 | Legal: cases, hearings, notices, opinions, orders |
 | Field Inspector | `inspector` | `Demo@12345` | inspector, inspection_admin | T1 | Inspection: templates, field instances, findings |
