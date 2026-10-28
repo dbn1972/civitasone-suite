@@ -18,6 +18,11 @@ export async function depRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = assetIdParam.parse(req.params);
     const body = createDepScheduleBody.parse(req.body);
+    // An asset created through POST /assets already has its company + statutory schedules; a second company schedule
+    // violates uq_dep_schedules_tenant_asset_book in the consumer and the message dead-letters. Say so now.
+    if (await repo.findScheduleByAsset(id, ctx.tenantId, "company")) {
+      throw new HttpError(409, "DEP_SCHEDULE_EXISTS", "a depreciation schedule already exists for this asset");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDepSchedule(ctx, id, body));
   });
 

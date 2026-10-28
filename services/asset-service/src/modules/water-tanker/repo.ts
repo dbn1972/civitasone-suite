@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   assetWaterTankerBookings,
@@ -23,7 +23,7 @@ export async function updateBookingStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
   await (tx as typeof db).update(assetWaterTankerBookings)
-    .set({ status, updatedAt: new Date(), ...extra })
+    .set({ status, updatedAt: new Date(), ...extra, version: sql`${assetWaterTankerBookings.version} + 1` })
     .where(and(eq(assetWaterTankerBookings.id, id), eq(assetWaterTankerBookings.tenantId, tenantId)));
 }
 

@@ -27,7 +27,7 @@ import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { BILLING_WEBHOOK_PREFIX, PUBLIC_PREFIXES } from "./public-prefixes.js";
+import { BILLING_WEBHOOK_PREFIX, TELEPHONY_WEBHOOK_PREFIX, PUBLIC_PREFIXES } from "./public-prefixes.js";
 import {
   getConfig,
   applyConfig,
@@ -290,6 +290,21 @@ async function proxyHandler(
     }
   }
 
+  // UAT G2 #28: carrier (Twilio/Exotel) callbacks. Same pass-through shape: raw body, carrier credential
+  // headers forwarded (telephony-service verifies them and fails closed), identity headers dropped so an
+  // anonymous caller cannot present a tenant. `authorization` IS forwarded here (Exotel may send its
+  // webhook token as a Bearer value); telephony treats it only as that token on these public routes.
+  const isTelephonyWebhook =
+    pathname === TELEPHONY_WEBHOOK_PREFIX || pathname.startsWith(TELEPHONY_WEBHOOK_PREFIX + "/");
+  if (isTelephonyWebhook) {
+    for (const h of ["x-twilio-signature", "x-exotel-token"]) {
+      const v = req.headers[h];
+      if (typeof v === "string") headers[h] = v;
+    }
+    for (const h of ["x-tenant-id", "x-actor-id", "x-idempotency-key"]) {
+      delete (headers as Record<string, string | undefined>)[h];
+    }
+  }
   // GAP2-SHELL-PROXY-01: authoritatively re-derive the tenant/actor identity headers
   // from a SERVER-VERIFIED source here, unconditionally, rather than relying on
   // jwtEdgeVerify to have overwritten them. jwtEdgeVerify only reaches its
@@ -365,7 +380,7 @@ async function proxyHandler(
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   // Webhook paths carry the raw string captured by the scoped parser; everything else is re-serialised JSON.
   const body = hasBody
-    ? isBillingWebhook && typeof req.body === "string"
+    ? (isBillingWebhook || isTelephonyWebhook) && typeof req.body === "string"
       ? req.body
       : JSON.stringify(req.body ?? {})
     : null;
@@ -798,6 +813,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     webhookScope.route({
       method: "POST",
       url: `${BILLING_WEBHOOK_PREFIX}/*`,
+      config: { rateLimit: {} },
+      handler: proxyHandler,
+    });
+    // UAT G2 #28: carrier callbacks share this raw-string scope (Twilio signs the form params).
+    webhookScope.route({
+      method: "POST",
+      url: `${TELEPHONY_WEBHOOK_PREFIX}/*`,
       config: { rateLimit: {} },
       handler: proxyHandler,
     });

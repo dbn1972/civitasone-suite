@@ -1,4 +1,4 @@
-import { eq, and, ilike, sql, type SQL } from "drizzle-orm";
+import { eq, and, ilike, inArray, sql, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { products, type ProductRow, type ProductInsert } from "./schema.js";
 
@@ -93,7 +93,7 @@ export async function findByIds(ids: string[], tenantId: string): Promise<Produc
     tx.select().from(products)
       .where(and(
         eq(products.tenantId, tenantId),
-        sql`${products.id} = ANY(${ids})`,
+        inArray(products.id, ids),
       )),
   );
 }

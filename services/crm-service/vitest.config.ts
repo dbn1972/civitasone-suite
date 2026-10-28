@@ -4,6 +4,7 @@ import { sharedTestTimeouts } from "../../vitest.shared";
 export default defineConfig({
   test: {
     ...sharedTestTimeouts,
+    setupFiles: ["./tests/setup-internal-secret.ts"],
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

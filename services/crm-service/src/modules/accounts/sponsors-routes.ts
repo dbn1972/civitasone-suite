@@ -34,11 +34,11 @@ export async function sponsorRoutes(app: FastifyInstance): Promise<void> {
 
     // Insert into account_relationships with rel_type = 'sponsor'
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      INSERT INTO crm.account_relationships (tenant_id, from_account_id, to_account_id, rel_type, created_by)
-      VALUES (${ctx.tenantId}, ${accountId}, ${body.contactId}, 'sponsor', ${ctx.actorId})
+      INSERT INTO crm.account_relationships (tenant_id, from_account_id, to_account_id, rel_type, notes, created_by)
+      VALUES (${ctx.tenantId}, ${accountId}, ${body.contactId}, 'sponsor', ${body.notes ?? null}, ${ctx.actorId})
       ON CONFLICT DO NOTHING
       RETURNING id, from_account_id AS "accountId", to_account_id AS "contactId",
-                rel_type AS "relType", created_at AS "createdAt"
+                rel_type AS "relType", notes, created_at AS "createdAt"
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
@@ -56,7 +56,7 @@ export async function sponsorRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT r.id, r.from_account_id AS "accountId", r.to_account_id AS "contactId",
-             r.rel_type AS "relType", r.created_at AS "createdAt",
+             r.rel_type AS "relType", r.notes, r.created_at AS "createdAt",
              c.name AS "contactName"
       FROM crm.account_relationships r
       LEFT JOIN crm.contacts c ON c.id = r.to_account_id AND c.tenant_id = r.tenant_id

@@ -69,10 +69,21 @@ export async function linksRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/helpdesk/tickets/:id/links/:linkId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
-    linkIdParams.parse(req.params);
+    const { id, linkId } = linkIdParams.parse(req.params);
 
+    // The consumer removes the row (tenant + ticket scoped) and audits it. 204 is
+    // kept as the contract status; a link that does not exist is audited as a
+    // rejected no-op rather than failing the request.
+    await queue.publish(COMMANDS.unlinkTickets, {
+      messageId: randomUUID(),
+      type: COMMANDS.unlinkTickets,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { tenantId: ctx.tenantId, ticketId: id, linkId },
+    });
     await cache.invalidateResource(ctx.tenantId, "ticket_links");
-    // In full CQRS this would publish a command; for now we accept.
     return reply.code(204).send();
   });
 

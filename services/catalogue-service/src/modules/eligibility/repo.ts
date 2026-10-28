@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eligibilityRules, type EligibilityRuleRow, type EligibilityRuleInsert } from "./schema.js";
 
@@ -29,7 +29,7 @@ export async function listByProducts(productIds: string[], tenantId: string): Pr
     tx.select().from(eligibilityRules)
       .where(and(
         eq(eligibilityRules.tenantId, tenantId),
-        sql`${eligibilityRules.productId} = ANY(${productIds})`,
+        inArray(eligibilityRules.productId, productIds),
         eq(eligibilityRules.status, "active"),
       ))
       .orderBy(eligibilityRules.productId, eligibilityRules.createdAt),

@@ -4,7 +4,7 @@
  * Reads wrap in db.transaction() so createTenantDb's wrapWithTenantGuc injects
  * app.tenant_id from AsyncLocalStorage before the query.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   sanitationComplaints,
@@ -72,6 +72,37 @@ export async function updateComplaint(
     .where(and(eq(sanitationComplaints.id, id), eq(sanitationComplaints.tenantId, tenantId)))
     .returning();
   return res[0] ?? null;
+}
+
+/**
+ * Status-guarded complaint update: the WHERE clause itself requires the current
+ * status to be one of `fromStatuses`, so a redelivery or a racing command can
+ * never apply an invalid transition. Returns null when the complaint does not
+ * exist in this tenant OR is not in an allowed source status.
+ */
+export async function transitionComplaint(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  fromStatuses: readonly string[],
+  patch: Partial<ComplaintInsert>,
+): Promise<ComplaintRow | null> {
+  const res = await (tx as typeof db)
+    .update(sanitationComplaints)
+    .set({ ...patch, updatedAt: new Date(), version: sql`${sanitationComplaints.version} + 1` })
+    .where(and(
+      eq(sanitationComplaints.id, id),
+      eq(sanitationComplaints.tenantId, tenantId),
+      inArray(sanitationComplaints.status, [...fromStatuses]),
+    ))
+    .returning();
+  return res[0] ?? null;
+}
+
+export async function findComplaintTx(tx: Writer, id: string, tenantId: string): Promise<ComplaintRow | null> {
+  const rows = await (tx as typeof db).select().from(sanitationComplaints)
+    .where(and(eq(sanitationComplaints.id, id), eq(sanitationComplaints.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
 }
 
 // ── Field actions ─────────────────────────────────────────────────────────────

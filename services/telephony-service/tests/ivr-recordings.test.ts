@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vites
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
+import { registerConsumersOnce, drainQueue, seedCall } from "./consumer-harness.js";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../src/shared/db.js";
@@ -48,6 +48,10 @@ beforeAll(async () => {
   // any of these POSTs to reach Postgres.
   registerConsumersOnce();
   app = await buildApp();
+  // ivr-hits now 404s on an unknown call, so the calls these tests post hits to must exist.
+  for (const id of [CALL_ID, "44444444-4444-4444-4444-444444444444", "55555555-5555-5555-5555-555555555555", "66666666-6666-6666-6666-666666666666", "77777777-7777-7777-7777-777777777777"]) {
+    await seedCall(TENANT_ID, id);
+  }
 });
 
 beforeEach(async () => {

@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import {
   assetAcquisitions, assetTransfers, assetDisposals, pendingDisposals,
   type AcquisitionInsert, type TransferInsert, type DisposalInsert,
@@ -49,4 +49,15 @@ export async function updatePendingDisposalStatus(tx: Writer, id: string, tenant
   await (tx as typeof db).update(pendingDisposals)
     .set({ workflowStatus })
     .where(and(eq(pendingDisposals.id, id), eq(pendingDisposals.tenantId, tenantId)));
+}
+
+/** Route-side (tenant-scoped, outside any tx) twin of findActivePendingDisposal, for the submit-approval preflight. */
+export async function findActivePendingDisposalRead(tenantId: string, assetId: string): Promise<PendingDisposalRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(pendingDisposals)
+    .where(and(
+      eq(pendingDisposals.tenantId, tenantId),
+      eq(pendingDisposals.assetId, assetId),
+      eq(pendingDisposals.workflowStatus, "pending"),
+    )).limit(1));
+  return rows[0] ?? null;
 }

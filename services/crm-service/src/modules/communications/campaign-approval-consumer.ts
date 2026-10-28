@@ -12,7 +12,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 
@@ -46,11 +46,17 @@ export function registerCampaignApprovalConsumers(queue: Queue): void {
     }
   });
 
-  // Approve campaign — update status and leave an audit trail. In production
-  // this would then publish the actual bulk-send command to
-  // notification-service for the eligible contacts.
+  // Approve campaign — update status, leave an audit trail, and DISPATCH the
+  // campaign by enqueueing the existing bulkSendCommunication command (consumed by
+  // send-consumer.ts, which re-checks consent per contact and calls
+  // notification-service). The enqueue is in the same transaction as the status
+  // flip, so a campaign is dispatched exactly once: the flip is guarded by
+  // status='pending' and the message by markProcessed.
   queue.subscribe(COMMANDS.approveCampaign, async (msg) => {
-    const p = msg.payload as { campaignId: string; contactIds: string[]; templateId: string; channel: string };
+    const p = msg.payload as {
+      campaignId: string; contactIds: string[]; templateId: string; channel: string;
+      variables?: Record<string, string>; scheduledAt?: string | null;
+    };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -71,6 +77,22 @@ export function registerCampaignApprovalConsumers(queue: Queue): void {
             channel: p.channel,
             templateId: p.templateId,
             contactCount: p.contactIds?.length ?? 0,
+          },
+        });
+        await enqueue(tx, {
+          topic: COMMANDS.bulkSendCommunication,
+          eventType: COMMANDS.bulkSendCommunication,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: p.campaignId,
+            tenantId: msg.tenantId,
+            contactIds: p.contactIds ?? [],
+            templateId: p.templateId,
+            channel: p.channel,
+            variables: p.variables ?? {},
+            scheduledAt: p.scheduledAt ?? null,
           },
         });
       });

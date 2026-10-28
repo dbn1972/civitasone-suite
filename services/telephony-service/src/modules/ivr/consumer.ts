@@ -18,7 +18,7 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { MAX_IVR_HITS_PER_CALL } from "./domain.js";
-import { batchIvrHitsPayload } from "./validators.js";
+import { batchIvrHitsPayload, createIvrActionPayload } from "./validators.js";
 import type { IvrHitInsert } from "./schema.js";
 
 const log = pino({ name: "telephony-ivr-consumer" });
@@ -71,6 +71,31 @@ export function registerIvrConsumers(rawQueue: Queue): void {
       log.error({ err, messageId: msg.messageId }, "batchIvrHits failed");
       throw err;
     }
+  });
+
+  // UAT G2 #27: persist an IVR digit -> action configuration (previously discarded).
+  queue.subscribe(COMMANDS.createIvrAction, async (msg) => {
+    const parsed = createIvrActionPayload.safeParse(msg.payload);
+    if (!parsed.success) throw new Error(`invalid createIvrAction payload: ${parsed.error.message}`);
+    const p = parsed.data;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertAction(tx as unknown as typeof db, {
+        id: p.id,
+        tenantId: p.tenantId,
+        digit: p.digit,
+        action: p.action,
+        templateId: p.templateId,
+        leadSource: p.leadSource,
+        enabled: p.enabled,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "telephony", action: "ivr_action_create", resourceType: "ivr_action", resourceId: p.id, outcome: "success" },
+      });
+    });
   });
 }
 

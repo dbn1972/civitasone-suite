@@ -11,17 +11,12 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { dispatchIvrAction, type IvrActionConfig, type IvrActionContext } from "./action-handlers.js";
+import { createIvrActionBody } from "./validators.js";
+import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 
 const ADMIN_ROLES = ["telephony_admin", "super_admin"];
 const TELEPHONY_ROLES = ["telephony_user", "telephony_supervisor", "telephony_admin", "super_admin"];
-
-const createIvrActionBody = z.object({
-  digit: z.string().min(1).max(4),
-  action: z.enum(["create_lead", "send_sms"]),
-  templateId: z.string().uuid().optional(),
-  leadSource: z.string().min(1).max(100).optional(),
-  enabled: z.boolean().optional(),
-});
 
 const triggerIvrActionBody = z.object({
   callId: z.string().uuid(),
@@ -36,19 +31,30 @@ export async function ivrActionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/telephony/ivr-actions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const body = createIvrActionBody.parse(req.body);
+    // safeParse -> 400: this plugin has no ZodError handler of its own (the root handler is installed after
+    // registration), so a bare .parse() surfaced as a 500.
+    const parsed = createIvrActionBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const body = parsed.data;
 
-    const id = randomUUID();
-    // In a full implementation, this would write to a DB table.
-    // For now, return the configured action.
-    return reply.code(201).send({
-      data: {
-        id,
-        tenantId: ctx.tenantId,
-        ...body,
-        enabled: body.enabled ?? true,
-      },
+    // Queue-first write: the ivr consumer persists to telephony.ivr_actions (UAT G2 #27).
+    const accepted = await commands.createIvrAction(ctx, body);
+    return reply.code(202).send({
+      id: accepted.id,
+      status: "accepted",
+      correlationId: accepted.correlationId,
+      data: accepted.action,
     });
+  });
+
+  // List the tenant's configured IVR actions.
+  app.get("/v1/telephony/ivr-actions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TELEPHONY_ROLES);
+    const data = await repo.listActions(ctx.tenantId);
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // Trigger an IVR action (called by the IVR flow engine when a digit is pressed)

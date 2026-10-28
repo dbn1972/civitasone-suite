@@ -11,6 +11,8 @@ import { tickets } from "./schema.js";
 import { allocateTicketNo } from "../../shared/numbering.js";
 import { slaPolicies } from "../sla/schema.js";
 import { eq, and } from "drizzle-orm";
+import { categories } from "../config/categories-schema.js";
+import { isValidStatusForType, type TicketType } from "./itil-domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -113,6 +115,29 @@ type LinkPayload = {
   targetTicketId: string;
   linkType: "parent" | "child" | "duplicate" | "related";
   createdBy: string;
+};
+
+/** TKT-08 — helpdesk.ticket.unlink payload. */
+type UnlinkPayload = {
+  tenantId: string;
+  ticketId: string;
+  linkId: string;
+};
+
+/** helpdesk.ticket.update payload (PATCH /tickets/:id). */
+type UpdatePayload = {
+  id: string;
+  tenantId: string;
+  ticketId: string;
+  updates: {
+    subject?: string;
+    description?: string;
+    priority?: string;
+    categoryId?: string | null;
+    ticketType?: string | null;
+    channel?: string;
+  };
+  updatedBy?: string;
 };
 
 /** TKT-09 — helpdesk.ticket.bulk_action payload (one message per ticket in the batch). */
@@ -388,6 +413,101 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     if (linkId && created) {
       await cache.invalidateResource(msg.tenantId, "ticket_links");
     }
+  });
+
+  // ---- PATCH /tickets/:id: update mutable fields ----------------------------
+  // The route published helpdesk.ticket.update with NOTHING consuming it, so
+  // every PATCH returned 202 and persisted nothing. Idempotent via markProcessed
+  // (the route's messageId); the write is tenant-scoped, version-bumping and
+  // audited in the same transaction. Two guards keep a bad field from poisoning
+  // the whole message (an FK / workflow violation would otherwise throw and
+  // retry forever): categoryId must exist in this tenant's category master, and
+  // ticketType may only change when the ticket's current status is valid for the
+  // new type. A guarded-out field is dropped and named in the audit outcome.
+  queue.subscribe<UpdatePayload>(COMMANDS.updateTicket, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const current = await repo.findRowTx(tx, p.ticketId, msg.tenantId);
+      const rejectAudit = (outcome: string) => enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "helpdesk", action: "update", resourceType: "ticket", resourceId: p.ticketId, outcome },
+      });
+      if (!current) {
+        await rejectAudit("rejected_not_found");
+        return;
+      }
+      const patch: repo.TicketFieldPatch = {};
+      const dropped: string[] = [];
+      const u = p.updates ?? {};
+      if (u.subject !== undefined) patch.subject = u.subject;
+      if (u.description !== undefined) patch.description = u.description;
+      if (u.priority !== undefined) patch.priority = u.priority;
+      if (u.channel !== undefined) patch.channel = u.channel;
+      if (u.categoryId !== undefined) {
+        if (u.categoryId === null) {
+          patch.categoryId = null;
+        } else {
+          const found = await (tx as unknown as typeof db).select({ id: categories.id }).from(categories)
+            .where(and(eq(categories.id, u.categoryId), eq(categories.tenantId, msg.tenantId))).limit(1);
+          if (found.length > 0) patch.categoryId = u.categoryId;
+          else dropped.push("categoryId");
+        }
+      }
+      if (u.ticketType !== undefined) {
+        if (u.ticketType === null || isValidStatusForType(u.ticketType as TicketType, current.status)) {
+          patch.ticketType = u.ticketType;
+        } else {
+          dropped.push("ticketType");
+        }
+      }
+      const changedFields = Object.keys(patch);
+      if (changedFields.length === 0) {
+        await rejectAudit(`rejected_no_applicable_fields:${dropped.join(",")}`);
+        return;
+      }
+      const updated = await repo.updateFields(tx, p.ticketId, msg.tenantId, patch, msg.actorId, new Date());
+      if (!updated) {
+        await rejectAudit("rejected_not_found");
+        return;
+      }
+      await emit(tx, msg, EVENTS.ticketUpdated, { ticketId: p.ticketId, changedFields }, "update", p.ticketId);
+      if (dropped.length > 0) await rejectAudit(`partial_fields_rejected:${dropped.join(",")}`);
+    });
+    const row = await repo.findById(p.ticketId, msg.tenantId);
+    if (row) await cache.put(keyFor(msg.tenantId, p.ticketId), row);
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
+  // ---- TKT-08: unlink tickets -------------------------------------------------
+  // DELETE /tickets/:id/links/:linkId used to just invalidate the cache and
+  // return 204 — the row was never removed. markProcessed dedupes redelivery; the
+  // delete is scoped to the tenant and the URL's ticket; the outcome (removed or
+  // not found) is audited in the same transaction.
+  queue.subscribe<UnlinkPayload>(COMMANDS.unlinkTickets, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const removed = await repo.deleteLink(tx, msg.tenantId, p.ticketId, p.linkId);
+      if (!removed) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "helpdesk", action: "unlink", resourceType: "ticket_link", resourceId: p.linkId, outcome: "rejected_not_found" },
+        });
+        return;
+      }
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "helpdesk", action: "unlink", resourceType: "ticket_link", resourceId: removed.id, outcome: "success",
+          sourceTicketId: removed.sourceTicketId, targetTicketId: removed.targetTicketId, linkType: removed.linkType,
+        },
+      });
+    });
+    await cache.invalidateResource(msg.tenantId, "ticket_links");
   });
 
   // ---- TKT-09: bulk action ---------------------------------------------------

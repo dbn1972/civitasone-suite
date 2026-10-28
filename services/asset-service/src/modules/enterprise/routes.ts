@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { minorString } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -600,12 +601,14 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     if (existing.length > 0) {
       throw new HttpError(409, "DUPLICATE_CODE", `asset code(s) already in the register: ${summariseCodes(existing)}`);
     }
+    // Money crosses the queue as exact base-10 strings (minorString): the bus JSON.stringify()s the message and a
+    // BigInt throws there, which made every bulk import a 500. The consumer decodes with parseMinor.
     const rows = body.assets.map((a) => ({
       id: randomUUID(), tenantId: ctx.tenantId, name: a.name, code: a.code,
       categoryId: DEFAULT_IT_CATEGORY, assetType: a.assetType, barcode: makeBarcode(a.code),
-      status: "active" as const, acquisitionCost: BigInt(a.acquisitionCostMinor), salvageValue: 0n,
+      status: "active" as const, acquisitionCost: minorString(a.acquisitionCostMinor), salvageValue: "0",
       usefulLifeYears: 5, depRate: "20", depMethod: "SLM" as const, currency: "INR" as const,
-      bookValue: BigInt(a.acquisitionCostMinor), accumulatedDep: 0n,
+      bookValue: minorString(a.acquisitionCostMinor), accumulatedDep: "0",
       acquisitionDate: new Date().toISOString().slice(0, 10),
       poRef: null, grnRef: null, location: null, notes: `bulk:${batchId}`,
       orgUnit: a.orgUnit ?? null,

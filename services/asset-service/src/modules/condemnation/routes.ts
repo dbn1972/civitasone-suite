@@ -14,8 +14,8 @@ import {
 import * as commands from "./commands.js";
 import { scopedRead } from "../../shared/db.js";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
-import { and, eq } from "drizzle-orm";
-import { preflightSubmitSurvey, preflightApproveRecommendation, preflightCompleteAuction } from "./preflight.js";
+import { and, eq, inArray } from "drizzle-orm";
+import { preflightSubmitSurvey, preflightApproveRecommendation, preflightCompleteAuction, preflightCreateAuction } from "./preflight.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const AUDIT_ROLES = [...ASSET_ROLES, "audit_officer"];
@@ -64,6 +64,14 @@ export async function condemnationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = createAuctionBody.parse(req.body);
+    const [rec] = await scopedRead((tx) => tx.select().from(condemnationRecommendations)
+      .where(and(eq(condemnationRecommendations.id, body.recommendationId), eq(condemnationRecommendations.tenantId, ctx.tenantId))).limit(1));
+    const active = await scopedRead((tx) => tx.select({ id: assetAuctions.id }).from(assetAuctions)
+      .where(and(
+        eq(assetAuctions.tenantId, ctx.tenantId), eq(assetAuctions.recommendationId, body.recommendationId),
+        inArray(assetAuctions.status, ["pending", "completed"]),
+      )));
+    preflightCreateAuction(rec, active.length, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createAuction(ctx, body));
   });
 

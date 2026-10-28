@@ -81,9 +81,7 @@ export function registerWaterMeteringConsumers(rawQueue: Queue): void {
         consumptionKl: number; ratePerKl: number; billingPeriod?: string; dueDate: string;
       };
       const ratePerKlMinor = BigInt(Math.round(p.ratePerKl));
-      // NOTE: domain.ts's calculateBillAmount does `BigInt(consumptionKl)`,
-      // which throws for a fractional consumptionKl (e.g. 12.5) -- a
-      // pre-existing limitation in that function, not introduced here.
+      // calculateBillAmount takes fractional kilolitres (litre precision) and returns exact integer paise.
       const { amountMinor, taxMinor, totalMinor } = calculateBillAmount(p.consumptionKl, ratePerKlMinor);
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;

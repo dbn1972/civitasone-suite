@@ -5,27 +5,45 @@
 import type { Queue } from "@civitasone/queue";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { markProcessed, enqueue } from "../../shared/outbox.js";
+import { markProcessed, enqueue, stableUuid } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { computeCommission, derivePeriod } from "./domain.js";
 
-interface DealClosedPayload {
+/**
+ * Union of the two payloads that mean "a deal was won":
+ *  - crm.deal.closed (deals/close-consumer.ts, OP-006): { dealId, outcome, stage, accountId, closedValueMinor }
+ *    (a rejected/duplicate close carries only { dealId, rejected: true } and must be ignored)
+ *  - crm.deal.stage_updated (plain stage move): { dealId, previousStage, newStage, ... }
+ * This consumer used to read only `newStage`, which the close publisher never sends, so a
+ * deal closed through the close command never earned commission.
+ */
+export interface DealWonPayload {
   dealId: string;
+  outcome?: string;
+  stage?: string | null;
   previousStage?: string;
-  newStage: string;
-  accountId?: string | null;
-  transitionTimestamp?: string;
+  newStage?: string;
+  rejected?: boolean;
+}
+
+export function reachedWon(p: DealWonPayload): boolean {
+  if (p.rejected) return false;
+  return p.outcome === "won" || p.stage === "Won" || p.newStage === "Won";
 }
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerCommissionConsumers(queue: Queue): void {
-  queue.subscribe<DealClosedPayload>(EVENTS.dealClosed, async (msg) => {
-    // Only process deals that closed as Won
-    if (msg.payload.newStage !== "Won") return;
+  const onDealWon = async (msg: { messageId: string; tenantId: string; actorId: string; correlationId: string; payload: DealWonPayload }): Promise<void> => {
+    // Only process deals that ended up Won
+    if (!msg.payload.dealId || !reachedWon(msg.payload)) return;
 
     await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Dedupe key is per-consumer: _inbox.processed is keyed on message_id alone and the
+      // onboarding consumer subscribes to the same crm.deal.closed message (same messageId),
+      // so claiming the raw id here made whichever of the two ran second silently skip --
+      // the other half of why commissions were never computed.
+      if (!(await markProcessed(tx, stableUuid(`commissions:${msg.messageId}`)))) return;
 
       // Get deal details
       const dealRows = (await tx.execute(sql`
@@ -55,6 +73,15 @@ export function registerCommissionConsumers(queue: Queue): void {
 
         if (amount <= 0n) continue;
 
+        // A deal can be both closed-won and stage-moved to Won (two distinct events):
+        // one ledger row per (deal, rule) so it never earns the commission twice.
+        const already = (await tx.execute(sql`
+          SELECT 1 FROM crm.commission_ledger
+          WHERE tenant_id = ${msg.tenantId} AND deal_id = ${deal.id} AND rule_id = ${rule.id}
+          LIMIT 1
+        `)) as unknown as unknown[];
+        if (already.length > 0) continue;
+
         await tx.execute(sql`
           INSERT INTO crm.commission_ledger (tenant_id, agent_id, deal_id, rule_id, amount_minor, currency, status, period)
           VALUES (${msg.tenantId}, ${deal.owner_id}, ${deal.id}, ${rule.id}, ${amount.toString()}, ${deal.currency}, 'pending', ${period})
@@ -70,5 +97,8 @@ export function registerCommissionConsumers(queue: Queue): void {
         payload: { service: "crm", action: "compute_commission", resourceType: "commission_ledger", resourceId: msg.payload.dealId, outcome: "success" },
       });
     });
-  });
+  };
+
+  queue.subscribe<DealWonPayload>(EVENTS.dealClosed, onDealWon);
+  queue.subscribe<DealWonPayload>(EVENTS.dealStageUpdated, onDealWon);
 }

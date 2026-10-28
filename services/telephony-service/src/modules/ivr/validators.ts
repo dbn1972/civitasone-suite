@@ -28,3 +28,23 @@ export const batchIvrHitsPayload = z.object({
 });
 
 export const callIdParam = z.object({ id: z.string().uuid() });
+
+/** IVR action configuration (POST /v1/telephony/ivr-actions). */
+export const createIvrActionBody = z.object({
+  digit: z.string().min(1).max(4),
+  action: z.enum(["create_lead", "send_sms"]),
+  templateId: z.string().uuid().optional(),
+  leadSource: z.string().min(1).max(100).optional(),
+  enabled: z.boolean().optional(),
+});
+export type CreateIvrActionBody = z.infer<typeof createIvrActionBody>;
+/** Command payload re-validated at the consume edge. */
+export const createIvrActionPayload = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  digit: z.string().min(1).max(4),
+  action: z.enum(["create_lead", "send_sms"]),
+  templateId: z.string().uuid().nullable(),
+  leadSource: z.string().min(1).max(100).nullable(),
+  enabled: z.boolean(),
+});

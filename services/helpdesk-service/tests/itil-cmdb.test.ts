@@ -48,7 +48,7 @@ describe("ITIL domain — ticket types", () => {
   });
 
   it("incident has correct statuses", () => {
-    expect(INCIDENT_STATUSES).toEqual(["open", "investigating", "resolved", "closed"]);
+    expect(INCIDENT_STATUSES).toEqual(["open", "assigned", "investigating", "resolved", "closed"]);
   });
 
   it("problem has correct statuses", () => {

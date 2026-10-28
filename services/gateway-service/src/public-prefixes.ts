@@ -51,10 +51,19 @@
  * approval, list and lifecycle routes still require a bearer token. The upstream route is marked
  * config:{public:true}, is keyed on an unguessable token (migration 0044 token-scoped SELECT
  * policy), returns non-PII attestation fields only and rate-limits per client IP.
+ *
+ * `/api/v1/telephony/webhooks` (UAT G2 #28) - carrier (Twilio/Exotel) inbound/status/recording callbacks.
+ * A carrier holds no user JWT. telephony-service marks exactly these routes config:{public:true} and
+ * authenticates EVERY one with the carrier credential (X-Twilio-Signature HMAC-SHA1 / X-Exotel-Token),
+ * failing closed with 401 when the secret is unset or the credential is missing/invalid. Narrow to the
+ * `webhooks` sub-tree, NOT /api/v1/telephony, so calls, queues, agents, DIDs, IVR, recordings and
+ * broadcast routes keep their edge check.
  */
 /** Payment-gateway callbacks: passed through with the RAW body (provider signatures cover the exact bytes). */
 export const BILLING_WEBHOOK_PREFIX = "/api/v1/billing/webhooks";
 
+/** Carrier callbacks: passed through RAW (Twilio signs the form params); the carrier credential is the auth. */
+export const TELEPHONY_WEBHOOK_PREFIX = "/api/v1/telephony/webhooks";
 export const PUBLIC_PREFIXES = [
   "/api/identity",
   "/api/v1/install",
@@ -70,4 +79,6 @@ export const PUBLIC_PREFIXES = [
   // V4-B-03: payment-gateway server-to-server callbacks (Razorpay/PayU/CCAvenue). No bearer token
   // exists on them; billing-service authenticates each by the provider signature / hash.
   BILLING_WEBHOOK_PREFIX,
+  // UAT G2 #28: carrier webhooks; telephony-service verifies the Twilio signature / Exotel token.
+  TELEPHONY_WEBHOOK_PREFIX,
 ];

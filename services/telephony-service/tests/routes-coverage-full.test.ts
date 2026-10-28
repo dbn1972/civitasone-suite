@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { seedCall } from "./consumer-harness.js";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -13,6 +14,8 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";
 const ACTOR = "00000000-aaaa-4000-8000-000000000001";
 const UUID1 = "11111111-1111-4000-8000-000000000001";
+// A real call for the ivr-hits routes (UUID1 must stay nonexistent for the 404 tests).
+const IVR_CALL = "11111111-1111-4000-8000-0000000000a1";
 const UUID2 = "22222222-2222-4000-8000-000000000002";
 const UUID3 = "33333333-3333-4000-8000-000000000003";
 
@@ -50,7 +53,7 @@ function noRoleAuthHeader() {
 
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => { app = await buildApp(); await seedCall(TENANT, IVR_CALL); });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -939,7 +942,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/ivr-hits", () => {
     it("returns 202 with valid batch body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${IVR_CALL}/ivr-hits`, headers: authHeader(),
         payload: { hits: [{ menuKey: "main_menu", digit: "1", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(202);
@@ -947,7 +950,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with DTMF special chars", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ivr-hits`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${IVR_CALL}/ivr-hits`, headers: authHeader(),
         payload: { hits: [{ menuKey: "support", digit: "*#", timestamp: "2024-06-15T10:00:00Z" }] },
       });
       expect(res.statusCode).toBe(202);

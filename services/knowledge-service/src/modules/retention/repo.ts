@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { retentionPolicies, type RetentionPolicyRow, type RetentionPolicyInsert, type RetentionPolicyView } from "./schema.js";
@@ -71,5 +71,5 @@ export async function insert(tx: Writer, row: RetentionPolicyInsert): Promise<vo
 }
 
 export async function update(tx: Writer, id: string, data: Partial<RetentionPolicyInsert>): Promise<void> {
-  await tx.update(retentionPolicies).set(data).where(eq(retentionPolicies.id, id));
+  await tx.update(retentionPolicies).set({ ...data, version: sql`${retentionPolicies.version} + 1` }).where(eq(retentionPolicies.id, id));
 }

@@ -54,7 +54,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(callRoutes);
   await app.register(queueRoutes);
   await app.register(agentRoutes);
-  await app.register(webhookRoutes);
+  // UAT G2 #28: Twilio posts application/x-www-form-urlencoded. Parse it into a plain object for the
+  // webhook routes ONLY (encapsulated scope), so no other route gains a new body parser. The parsed
+  // params are exactly what the Twilio signature check hashes.
+  await app.register(async (webhookScope) => {
+    webhookScope.addContentTypeParser(
+      "application/x-www-form-urlencoded",
+      { parseAs: "string" },
+      (_req, body, done) => {
+        try {
+          done(null, Object.fromEntries(new URLSearchParams(body as string)));
+        } catch (err) {
+          done(err as Error, undefined);
+        }
+      },
+    );
+    await webhookScope.register(webhookRoutes);
+  });
   await app.register(didRoutes);
   await app.register(ivrRoutes);
   // Gap 6 & 7: IVR → create lead, IVR → send SMS

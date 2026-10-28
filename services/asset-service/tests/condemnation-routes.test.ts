@@ -121,7 +121,9 @@ describe("Committee Recommendations", () => {
 });
 
 describe("Auctions", () => {
-  it("POST /v1/assets/auctions → 202", async () => {
+  // UAT DB test defect 6: an auction on a recommendation that does not exist is a 404 now (the 202 path, with an
+  // approved "condemn" recommendation, is covered end to end in uat-db-defects.test.ts).
+  it("POST /v1/assets/auctions → 404 unknown recommendation", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/auctions",
       headers: authHeader(),
@@ -130,7 +132,7 @@ describe("Auctions", () => {
         reserveValueMinor: 50000, auctionDate: "2026-08-15",
       },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/auctions → 400 zero reserve", async () => {
