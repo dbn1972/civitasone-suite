@@ -146,13 +146,12 @@ export default function NewStockItemPage() {
     return () => { active = false; };
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- initial fetch only
   // Pending post-create redirect timer. Cleared on unmount so a redirect scheduled by a create
   // the user has since navigated away from (or a torn-down test) can never fire later and yank
   // the user to /stock/list, or run a second cache purge + push.
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initial fetch only
   useEffect(() => { fetchCategories(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- initial fetch only
   useEffect(() => { fetchUoms(); }, []);
