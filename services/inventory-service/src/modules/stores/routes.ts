@@ -6,6 +6,8 @@ import { createStoreBody, storeQueryParams, patchStoreBody, idParam } from "./va
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { cache } from "../../shared/infra.js";
+import { RESOURCE } from "../../topics.js";
 
 const WRITE_ROLES  = ["inventory_manager", "inventory_admin", "super_admin"];
 const READER_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "audit_officer", "super_admin"];
@@ -36,8 +38,10 @@ export async function storeRoutes(app: FastifyInstance): Promise<void> {
     if (body.name !== undefined) patch.name = body.name;
     if (body.code !== undefined) patch.code = body.code;
     if (body.location !== undefined) patch.location = body.location;
-    const updated = await repo.updateStore(id, ctx.tenantId, patch, ctx.actorId);
+    const updated = await repo.updateStore(id, ctx.tenantId, patch, ctx.actorId, ctx.correlationId);
     if (!updated) throw new HttpError(404, "NOT_FOUND", "store not found");
+    // Read-your-writes: drop the cached store list so the next GET reflects this PATCH.
+    await cache.invalidateResource(ctx.tenantId, RESOURCE.store);
     return reply.send(updated);
   });
 

@@ -226,7 +226,7 @@ describe("reservation consumer — create + release round-trip", () => {
     expect(mq.dlq.slice(before).some((d) => d.error.includes("RESERVATION_RELEASE_FAILED"))).toBe(true);
   });
 
-  it("release of a nonexistent reservation is a safe no-op (dead-lettered, not thrown to the caller)", async () => {
+  it("release of a nonexistent reservation is refused synchronously with 404 (no 202, nothing published)", async () => {
     const bogusId = "ffffffff-0000-4000-8000-00000000d999";
     const mq = queue as unknown as MemoryQueue;
     const before = mq.dlq.length;
@@ -234,7 +234,20 @@ describe("reservation consumer — create + release round-trip", () => {
       method: "PATCH", url: `/v1/inventory/reservations/${bogusId}/release`, headers: hdr(TENANT_A, ACTOR_A),
       payload: { version: 1 },
     });
-    expect(release.statusCode).toBe(202);
+    expect(release.statusCode).toBe(404);
+    await drain();
+    expect(mq.dlq.length).toBe(before);
+  });
+
+  it("consumer defence in depth: a release command for a nonexistent reservation (bypassing the route) is dead-lettered", async () => {
+    const bogusId = "ffffffff-0000-4000-8000-00000000d998";
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    await queue.publish(COMMANDS.reservationRelease, {
+      messageId: "aaaaaaaa-0000-4000-8000-00000000d998", type: COMMANDS.reservationRelease,
+      tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c-defence", schemaVersion: "1.0",
+      payload: { id: bogusId, tenantId: TENANT_A, version: 1 },
+    });
     await drain();
     expect(mq.dlq.slice(before).some((d) => d.error.includes("RESERVATION_RELEASE_FAILED"))).toBe(true);
   });

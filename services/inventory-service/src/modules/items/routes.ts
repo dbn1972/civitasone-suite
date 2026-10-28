@@ -18,6 +18,8 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
+import { cache } from "../../shared/infra.js";
+import { RESOURCE } from "../../topics.js";
 
 const WRITE_ROLES  = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
 const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer"];
@@ -87,7 +89,9 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     if (body.name !== undefined) patch.name = body.name;
     if (body.code !== undefined) patch.code = body.code;
     if (body.parentId !== undefined) patch.parentId = body.parentId;
-    const updated = await repo.updateCategory(id, ctx.tenantId, patch, ctx.actorId);
+    const updated = await repo.updateCategory(id, ctx.tenantId, patch, ctx.actorId, ctx.correlationId);
+    // Read-your-writes: drop the cached category list so the next GET reflects this PATCH.
+    await cache.invalidateResource(ctx.tenantId, RESOURCE.category);
     return reply.send(updated);
   });
 
@@ -117,7 +121,9 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const patch: { name?: string; symbol?: string } = {};
     if (body.name !== undefined) patch.name = body.name;
     if (body.symbol !== undefined) patch.symbol = body.symbol;
-    const updated = await repo.updateUom(id, ctx.tenantId, patch, ctx.actorId);
+    const updated = await repo.updateUom(id, ctx.tenantId, patch, ctx.actorId, ctx.correlationId);
+    // Read-your-writes: drop the cached UoM list so the next GET reflects this PATCH.
+    await cache.invalidateResource(ctx.tenantId, RESOURCE.uom);
     return reply.send(updated);
   });
 
@@ -204,6 +210,13 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = releaseReservationBody.parse(req.body);
+    // Synchronous pre-checks: a missing / already-released reservation is a real answer, not a 202 the
+    // consumer then drops. The consumer still enforces status + version atomically in its guarded UPDATE.
+    const reservation = await repo.findReservation(ctx.tenantId, id);
+    if (!reservation) throw new HttpError(404, "NOT_FOUND", "reservation not found");
+    if (reservation.status !== "active") {
+      throw new HttpError(409, "NOT_ACTIVE", `reservation is already ${reservation.status}`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.releaseReservation(ctx, id, body));
   });
 

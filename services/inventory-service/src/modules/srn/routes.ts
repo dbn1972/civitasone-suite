@@ -11,6 +11,8 @@ import { resolveContext, requireRole, registerErrorHandler, HttpError } from "..
 import { createSrnBody, signSrnBody, idParam, grnIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { fetchGrn, ProcurementUnavailableError } from "./grn-client.js";
+import { canCreateSrn } from "./domain.js";
 
 const WRITE_ROLES  = ["store_officer", "inventory_manager", "inventory_admin", "warehouse_officer", "super_admin"];
 const READER_ROLES = [...WRITE_ROLES, "procurement_officer", "procurement_admin", "finance_officer", "audit_officer"];
@@ -21,6 +23,18 @@ export async function srnRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createSrnBody.parse(req.body);
+    // Synchronous GFR-149 pre-check: an SRN needs an accepted GRN. Answer now instead of returning 202 and
+    // letting the consumer fail with GRN_NOT_ACCEPTED / GRN_NOT_FOUND. If procurement-service is unreachable
+    // we cannot tell, so fall through and let the (retrying) consumer decide; it re-enforces the gate.
+    try {
+      const grn = await fetchGrn(ctx.tenantId, body.grnId);
+      if (!grn) throw new HttpError(404, "GRN_NOT_FOUND", "GRN not found");
+      if (!canCreateSrn({ status: grn.status } as Parameters<typeof canCreateSrn>[0])) {
+        throw new HttpError(409, "GRN_NOT_ACCEPTED", `GRN must be accepted before an SRN can be raised (status: ${grn.status})`);
+      }
+    } catch (err) {
+      if (!(err instanceof ProcurementUnavailableError)) throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSrn(ctx, body));
   });
 
