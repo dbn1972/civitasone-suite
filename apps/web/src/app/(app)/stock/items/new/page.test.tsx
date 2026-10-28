@@ -211,6 +211,26 @@ describe("GAP-STOCK-ITEMS-NEW-01: purge the stock view cache before landing on t
     }
   });
 
+  // Determinism: a redirect timer left armed by a create whose page has unmounted used to fire
+  // later (real-time 700 ms), polluting whichever test happened to be running then with a second
+  // revalidate + push. Unmounting must cancel it.
+  it("cancels the pending redirect when the page unmounts before it fires", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      installLookupFetch();
+      const { unmount } = render(<Page />);
+      await fillValid();
+      fireEvent.click(screen.getByRole("button", { name: /Create item/i }));
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Stock item created."));
+      unmount();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(revalidateMock).not.toHaveBeenCalled();
+      expect(pushMock).not.toHaveBeenCalledWith("/stock/list");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("still navigates when the cache purge fails (it is an optimisation, not part of the write)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
