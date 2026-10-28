@@ -50,7 +50,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await repo.insertDebitNote(tx, {
         id: p.id, tenantId: p.tenantId, grnRef: p.grnRef, vendorId: p.vendorId,
         amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
-        reason: p.reason ?? "", status: "issued",
+        reason: p.reason ?? "", status: "issued", // allowed by migration 0046 (0015 only allowed "draft")
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "debit_note", p.id);

@@ -21,6 +21,9 @@ export const procurementPos = poSchema.table("procurement_pos", {
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
   status:          varchar("status", { length: 24 }).notNull().default("draft"),
   deliveryDate:    date("delivery_date"),
+  // D4 (UAT g4-procurement): populated when the PO is closed (PATCH /pos/:id/close). Migration 0046.
+  closedAt:        timestamp("closed_at", { withTimezone: true }),
+  closureReason:   text("closure_reason"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
