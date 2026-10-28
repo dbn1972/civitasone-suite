@@ -1,0 +1,438 @@
+{
+ "frozenSha": "66b04aedd827b7e4fdcb402731d6d45a678badc8",
+ "tables": {
+  "V4 cycle (discovery V4-*, plus certification-found V4-INTEG/V4-CERT)": {
+   "CRITICAL": {
+    "found": 1,
+    "fixed": 0,
+    "verified": 0,
+    "awaiting": 0,
+    "unresolved": 1,
+    "other": 0
+   },
+   "HIGH": {
+    "found": 18,
+    "fixed": 15,
+    "verified": 15,
+    "awaiting": 0,
+    "unresolved": 3,
+    "other": 0
+   },
+   "MEDIUM": {
+    "found": 34,
+    "fixed": 26,
+    "verified": 26,
+    "awaiting": 0,
+    "unresolved": 8,
+    "other": 0
+   },
+   "LOW": {
+    "found": 19,
+    "fixed": 12,
+    "verified": 12,
+    "awaiting": 0,
+    "unresolved": 7,
+    "other": 0
+   },
+   "TOTAL": {
+    "found": 72,
+    "fixed": 53,
+    "verified": 53,
+    "awaiting": 0,
+    "unresolved": 19,
+    "other": 0
+   }
+  },
+  "V4 discovered defects only (V4-A..G)": {
+   "CRITICAL": {
+    "found": 0,
+    "fixed": 0,
+    "verified": 0,
+    "awaiting": 0,
+    "unresolved": 0,
+    "other": 0
+   },
+   "HIGH": {
+    "found": 16,
+    "fixed": 15,
+    "verified": 15,
+    "awaiting": 0,
+    "unresolved": 1,
+    "other": 0
+   },
+   "MEDIUM": {
+    "found": 26,
+    "fixed": 26,
+    "verified": 26,
+    "awaiting": 0,
+    "unresolved": 0,
+    "other": 0
+   },
+   "LOW": {
+    "found": 12,
+    "fixed": 12,
+    "verified": 12,
+    "awaiting": 0,
+    "unresolved": 0,
+    "other": 0
+   },
+   "TOTAL": {
+    "found": 54,
+    "fixed": 53,
+    "verified": 53,
+    "awaiting": 0,
+    "unresolved": 1,
+    "other": 0
+   }
+  },
+  "All runs (Run 1, Run 2, Run 3, V4, certification-found)": {
+   "CRITICAL": {
+    "found": 1,
+    "fixed": 0,
+    "verified": 0,
+    "awaiting": 0,
+    "unresolved": 1,
+    "other": 0
+   },
+   "HIGH": {
+    "found": 39,
+    "fixed": 35,
+    "verified": 15,
+    "awaiting": 0,
+    "unresolved": 4,
+    "other": 0
+   },
+   "MEDIUM": {
+    "found": 140,
+    "fixed": 125,
+    "verified": 26,
+    "awaiting": 5,
+    "unresolved": 9,
+    "other": 1
+   },
+   "LOW": {
+    "found": 106,
+    "fixed": 94,
+    "verified": 12,
+    "awaiting": 1,
+    "unresolved": 11,
+    "other": 0
+   },
+   "TOTAL": {
+    "found": 286,
+    "fixed": 254,
+    "verified": 53,
+    "awaiting": 6,
+    "unresolved": 25,
+    "other": 1
+   }
+  }
+ },
+ "byRun": {
+  "RUN1": {
+   "rows": 60,
+   "status": {
+    "FIXED_MERGED": 51,
+    "BLOCKED_FOR_APPROVAL": 5,
+    "ACCEPTED_DEFERRAL": 1,
+    "UNRESOLVED": 3
+   }
+  },
+  "RUN2": {
+   "rows": 53,
+   "status": {
+    "FIXED_MERGED": 51,
+    "UNRESOLVED": 1,
+    "BLOCKED_FOR_APPROVAL": 1
+   }
+  },
+  "RUN3": {
+   "rows": 101,
+   "status": {
+    "FIXED_MERGED": 99,
+    "UNRESOLVED": 2
+   }
+  },
+  "V4": {
+   "rows": 58,
+   "status": {
+    "VERIFIED": 53,
+    "NOT_REPRODUCED": 1,
+    "DUPLICATE": 3,
+    "UNRESOLVED": 1
+   }
+  },
+  "V4-CERT": {
+   "rows": 18,
+   "status": {
+    "UNRESOLVED": 18
+   }
+  }
+ },
+ "excluded": {
+  "V4-B-05": {
+   "status": "NOT_REPRODUCED",
+   "duplicateOf": null
+  },
+  "V4-E-01": {
+   "status": "DUPLICATE",
+   "duplicateOf": "V4-B-02"
+  },
+  "V4-E-04": {
+   "status": "DUPLICATE",
+   "duplicateOf": "V4-A-03"
+  },
+  "V4-G-04": {
+   "status": "DUPLICATE",
+   "duplicateOf": "V4-B-02"
+  }
+ },
+ "statusCountsV4Cycle": {
+  "VERIFIED": 53,
+  "NOT_REPRODUCED": 1,
+  "DUPLICATE": 3,
+  "UNRESOLVED": 19
+ },
+ "openHighCritical": [
+  {
+   "id": "V4-G-12",
+   "severity": "HIGH",
+   "status": "UNRESOLVED",
+   "run": "V4",
+   "title": "Appeal filing window is evaluated against a client-supplied decisionDate (never the application's actual decision time); applicationId/ownership not verified"
+  },
+  {
+   "id": "V4-CERT-10",
+   "severity": "HIGH",
+   "status": "UNRESOLVED",
+   "run": "V4-CERT",
+   "title": "service roles citizen_svc, legal_svc, telephony_svc have BYPASSRLS in the bootstrapped DB (RLS inert)"
+  },
+  {
+   "id": "V4-CERT-15",
+   "severity": "CRITICAL",
+   "status": "UNRESOLVED",
+   "run": "V4-CERT",
+   "title": "open CRITICAL code-scanning alerts on main: 5 (CodeQL 2, Trivy 3)"
+  },
+  {
+   "id": "V4-CERT-16",
+   "severity": "HIGH",
+   "status": "UNRESOLVED",
+   "run": "V4-CERT",
+   "title": "open HIGH code-scanning alerts on main: 245 (CodeQL 68, Trivy 177)"
+  },
+  {
+   "id": "FINAL-GATE-02",
+   "severity": "HIGH",
+   "status": "UNRESOLVED",
+   "run": "RUN1",
+   "title": "Release Gate evidence audit, 11 gates UNMEASURED"
+  }
+ ],
+ "approvalPending": [
+  {
+   "id": "CLOS-S1-17",
+   "severity": "MEDIUM",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS-S4-04",
+   "severity": "MEDIUM",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS-S5-05",
+   "severity": "MEDIUM",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS-S6-02",
+   "severity": "LOW",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS-S6-06",
+   "severity": "MEDIUM",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS2-S2-09",
+   "severity": "MEDIUM",
+   "run": "RUN2"
+  }
+ ],
+ "unresolved": [
+  {
+   "id": "V4-G-12",
+   "severity": "HIGH",
+   "run": "V4"
+  },
+  {
+   "id": "V4-INTEG-01",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-01",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-02",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-03",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-04",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-05",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-06",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-07",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-08",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-09",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-10",
+   "severity": "HIGH",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-11",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-12",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-13",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-14",
+   "severity": "LOW",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-17",
+   "severity": "MEDIUM",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-15",
+   "severity": "CRITICAL",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "V4-CERT-16",
+   "severity": "HIGH",
+   "run": "V4-CERT"
+  },
+  {
+   "id": "FINAL-GATE-02",
+   "severity": "HIGH",
+   "run": "RUN1"
+  },
+  {
+   "id": "FINAL-TEST-01",
+   "severity": "LOW",
+   "run": "RUN1"
+  },
+  {
+   "id": "FINAL-FLAKY-01",
+   "severity": "LOW",
+   "run": "RUN1"
+  },
+  {
+   "id": "CLOS2-S1-14",
+   "severity": "LOW",
+   "run": "RUN2"
+  },
+  {
+   "id": "CLOS3-S1-15",
+   "severity": "LOW",
+   "run": "RUN3"
+  },
+  {
+   "id": "CLOS3-S3-13",
+   "severity": "MEDIUM",
+   "run": "RUN3"
+  }
+ ],
+ "verificationBlocked": [],
+ "v5": {
+  "frozenSha": "e2cbc29f038fd4552a2a924bc705ee45a13ef360",
+  "decision": "PASS with exceptions (UAT)",
+  "performanceLoad": "accepted-not-run for UAT (D2)",
+  "criticalOpen": 0,
+  "highProductDefectsOpen": 0,
+  "highScannerAlerts": {
+   "dismissed": [
+    "CodeQL #3683",
+    "CodeQL #20"
+   ],
+   "acceptedUntil2026-11-08": [
+    "Trivy #3838 node-forge CVE-2026-85393",
+    "Trivy #2049 uuid CVE-2026-41907",
+    "Trivy #2050 uuid CVE-2026-41907"
+   ]
+  },
+  "openCodeScanningAlertsOnMain": 885,
+  "laneGateCounts": {
+   "build": {
+    "PASS": 45,
+    "FAIL": 5
+   },
+   "db": {
+    "PASS": 11,
+    "FAIL": 3,
+    "NOT_RUN": 1
+   },
+   "regression": {
+    "PASS": 7,
+    "FAIL": 3,
+    "NOT_RUN": 1
+   },
+   "contract-e2e": {
+    "PASS": 4,
+    "NOT_RUN": 1
+   },
+   "security-perf": {
+    "PASS": 16,
+    "FAIL": 3,
+    "NOT_RUN": 1
+   }
+  },
+  "note": "V4 tables above/below describe the V4 certification of 66b04aedd; not re-scored for V5. See release-readiness.md and defect-registry.md."
+ }
+}
