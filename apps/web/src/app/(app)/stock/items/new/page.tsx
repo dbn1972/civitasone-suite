@@ -13,7 +13,7 @@
  * GAP-STOCK-ITEMS-NEW-07: Helper text on item type select.
  * GAP-STOCK-ITEMS-NEW-08: aria-describedby linking errors to their fields.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -147,6 +147,12 @@ export default function NewStockItemPage() {
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- initial fetch only
+  // Pending post-create redirect timer. Cleared on unmount so a redirect scheduled by a create
+  // the user has since navigated away from (or a torn-down test) can never fire later and yank
+  // the user to /stock/list, or run a second cache purge + push.
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
+
   useEffect(() => { fetchCategories(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- initial fetch only
   useEffect(() => { fetchUoms(); }, []);
@@ -200,7 +206,7 @@ export default function NewStockItemPage() {
       // server Data Cache for /stock too (awaited just before landing on the list, by which time
       // a queued 202 create has normally been applied) so the list is not a stale 60 s copy.
       router.refresh();
-      setTimeout(() => {
+      redirectTimer.current = setTimeout(() => {
         void (async () => {
           try { await revalidateStockViews(); } catch { /* cache purge is best-effort */ }
           router.push("/stock/list");

@@ -8,13 +8,16 @@ import type { GrnRow } from "./schema.js";
  * GAP2-PROCUREMENT-GRN-DETAIL-06 — GRN rows carry the cross-domain PO reference
  * as the opaque composite `procurement_po:<uuid>` (house rule 13). Extract the
  * bare PO uuid so callers can resolve it to a human PO number; null for a
- * missing/placeholder ref.
+ * missing/placeholder ref. A ref that is not a uuid (e.g. the legacy/seeded
+ * human number `PO/2024/001`) also yields null: passing it to a uuid column
+ * lookup makes Postgres throw and the GRN detail answers HTTP 500.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function poIdFromRef(ref: string | null | undefined): string | null {
   if (!ref) return null;
   const PREFIX = "procurement_po:";
   const id = ref.startsWith(PREFIX) ? ref.slice(PREFIX.length) : ref;
-  return id && id !== "undefined" ? id : null;
+  return id && UUID_RE.test(id) ? id : null;
 }
 
 export async function getGrn(id: string, tenantId: string): Promise<Record<string, unknown> | null> {
