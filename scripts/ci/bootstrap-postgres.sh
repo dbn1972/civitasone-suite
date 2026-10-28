@@ -71,7 +71,11 @@ done
 
 run_bootstrap() {
   echo "→ $1"
-  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$1"
+  # civitas.allow_dev_pw=on: explicit DEV/CI opt-in that lets bootstrap files
+  # reset an existing role's password to its dev credential (see
+  # bootstrap_municipal_services.sql). This script only targets ephemeral DBs.
+  PGOPTIONS="${PGOPTIONS:-} -c civitas.allow_dev_pw=on" \
+    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$1"
 }
 
 # MUST be first. No bootstrap file created civitas_admin, yet

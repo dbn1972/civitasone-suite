@@ -9,8 +9,14 @@
 -- The password is derived at run time, so no credential literal is committed.
 -- Idempotent; roles that do not exist yet are skipped (run again after migrate).
 --
---   psql -h <host> -U <superuser> -d postgres -v ON_ERROR_STOP=1 \
---        -f scripts/dev/align-dev-role-passwords.sql
+-- Refuses to run unless the session opts in explicitly:
+--   PGOPTIONS='-c civitas.allow_dev_pw=on' psql -h <host> -U <superuser> \
+--        -d postgres -v ON_ERROR_STOP=1 -f scripts/dev/align-dev-role-passwords.sql
+DO $$ BEGIN
+  IF current_setting('civitas.allow_dev_pw', true) IS DISTINCT FROM 'on' THEN
+    RAISE EXCEPTION 'align-dev-role-passwords: DEV/CI only. Set civitas.allow_dev_pw=on in the session to run.';
+  END IF;
+END $$;
 DO $$
 DECLARE r text;
 BEGIN
