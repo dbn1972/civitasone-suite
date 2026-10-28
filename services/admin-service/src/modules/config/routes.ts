@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { timingSafeEqual } from "node:crypto";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { tenantModulesResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
@@ -8,6 +8,11 @@ import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../..
 import { tenantIdParam, moduleParam, moduleKeyParam, toggleBody, createFlagBody, overrideFlagBody, flagKeyParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+
+const flagListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 const TENANT_ADMIN = ["tenant_admin", "super_admin", "platform_admin"];
 
@@ -88,9 +93,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/feature-flags", async (req, reply) => {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
-    const q = req.query as { limit?: string; offset?: string };
-    const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
-    const offset = Math.max(0, Number(q.offset) || 0);
+    const { limit, offset } = flagListQuery.parse(req.query);
     const all = (await queries.listFeatureFlags()) ?? [];
     return reply.send(all.slice(offset, offset + limit));
   });
