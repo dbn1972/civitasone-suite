@@ -2,7 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
-import { deriveConfigId } from "./domain.js";
+import { deriveConfigId, deterministicId, MEETING_NAMESPACE } from "./domain.js";
 import { POLICY_NS, COMMITTEE_TYPES_NS } from "./policy.js";
 
 /**
@@ -83,7 +83,10 @@ export async function applyPreset(ctx: RequestContext, presetName: string): Prom
   for (const e of entries) {
     const configId = deriveConfigId(ctx.tenantId, e.namespace, e.configKey);
     await queue.publish(COMMANDS.setConfig, {
-      messageId: configId,
+      // Deterministic per (tenant, preset, entry) and DISTINCT from the configId used as the
+      // entry's row id and (previously) by setConfig as its messageId: re-applying the same preset
+      // stays a no-op, but it no longer occupies the inbox slot a later manual setConfig needs.
+      messageId: deterministicId(MEETING_NAMESPACE, `${ctx.tenantId}:preset:${presetName}:${configId}`),
       type: COMMANDS.setConfig,
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,

@@ -28,9 +28,11 @@ export interface SubmitReportBody {
   reportId: string;
 }
 
-async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>): Promise<void> {
+// `messageId` defaults to the entity id (fresh on create); submit/approve act on an existing report
+// and MUST pass a per-command id or they collide with the create's inbox row and are dropped.
+async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>, messageId: string = id): Promise<void> {
   await queue.publish(type, {
-    messageId: id, type,
+    messageId, type,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload,
   });
@@ -55,13 +57,13 @@ export async function addObservation(ctx: RequestContext, reportId: string, body
 export async function submitReport(ctx: RequestContext, reportId: string): Promise<Accepted> {
   await publish("inspection.report.submit", ctx, reportId, {
     id: reportId, tenantId: ctx.tenantId,
-  });
+  }, randomUUID());
   return { id: reportId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function approveReport(ctx: RequestContext, reportId: string): Promise<Accepted> {
   await publish("inspection.report.approve", ctx, reportId, {
     id: reportId, tenantId: ctx.tenantId, approverId: ctx.actorId,
-  });
+  }, randomUUID());
   return { id: reportId, status: "accepted", correlationId: ctx.correlationId };
 }

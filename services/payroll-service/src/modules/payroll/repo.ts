@@ -123,6 +123,17 @@ export async function listSlipsByTenant(
   return rows.map(r => ({ ...r, month: r.month ?? "", runDeptId: r.runDeptId ?? null }));
 }
 
+/**
+ * Same read, but takes a row lock (SELECT ... FOR UPDATE) for the rest of the transaction. The
+ * approve / disburse / revert consumers use it as their duplicate guard: command messageIds are
+ * per-invocation, so two racing identical commands are NOT deduped by markProcessed(); the second
+ * one blocks here until the first commits and then sees the already-advanced status.
+ */
+export async function findRunByIdForUpdateTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
+  const rows = await (tx as typeof db).select().from(payrollRuns).where(eq(payrollRuns.id, id)).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
 export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
   const rows = await (tx as typeof db).select().from(payrollRuns).where(eq(payrollRuns.id, id)).limit(1);
   return rows[0] ?? null;

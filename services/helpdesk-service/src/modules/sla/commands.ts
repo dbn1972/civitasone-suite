@@ -67,9 +67,10 @@ async function pub(
   type: string,
   id: string,
   payload: Record<string, unknown>,
+  messageId: string = id,
 ): Promise<Accepted> {
   await queue.publish(type, {
-    messageId: id,
+    messageId,
     type,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -89,7 +90,7 @@ export const updateCalendar = (
   ctx: RequestContext,
   id: string,
   body: { name?: string; timezone?: string; workDays?: unknown[]; holidays?: unknown[]; expectedVersion: number },
-) => pub(ctx, COMMANDS.calendarUpdate, id, body);
+) => pub(ctx, COMMANDS.calendarUpdate, id, body, randomUUID());
 
 export const pauseSla = (ctx: RequestContext, ticketId: string, body: { pauseStatus: string }) =>
   pub(ctx, COMMANDS.slaPause, randomUUID(), { ticketId, ...body });
