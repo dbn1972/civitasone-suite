@@ -78,7 +78,7 @@ const PERSONAS = [
     roles: ["finance_admin"],
     what: "Finance — approve sanctions/bills/payments (approver tier)" },
   { username: "procurementofficer", sub: "0de00000-0000-0000-0000-000000000005",   tenant: T1, name: "Procurement Officer",           email: "procurementofficer@demo.gov.in",
-    roles: ["procurement_officer", "procurement_admin"],
+    roles: ["procurement_officer", "procurement_admin", "bid_opening_committee"],
     what: "Procurement — vendors, indents, RFQs, tenders, POs, GRNs" },
   { username: "auditor",            sub: "0de00000-0000-0000-0000-000000000006",   tenant: T1, name: "Internal Auditor",              email: "auditor@demo.gov.in",
     roles: ["audit_officer", "audit_admin"],

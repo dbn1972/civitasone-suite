@@ -11,8 +11,21 @@ const realm = JSON.parse(
 const seeded = new Set(realm.roles.realm.map((r) => r.name));
 
 describe("owner-decision officer roles are seeded in the Keycloak realm", () => {
-  it.each(["consent_officer", "audit_officer", "security_admin", "migration_admin"])("%s", (role) => {
+  it.each(["consent_officer", "audit_officer", "security_admin", "migration_admin", "bid_opening_committee"])("%s", (role) => {
     expect(seeded.has(role)).toBe(true);
+  });
+  // Owner decision H1: procurement-service reveals bidder identities before
+  // opening only to this exact role string, so the realm must define that string.
+  it("realm defines the role procurement-service checks (BID_OPENING_COMMITTEE_ROLES)", () => {
+    const src = readFileSync(
+      fileURLToPath(new URL("../../services/procurement-service/src/modules/tender/domain.ts", import.meta.url)),
+      "utf8",
+    );
+    const m = /BID_OPENING_COMMITTEE_ROLES\s*=\s*\[([^\]]+)\]/.exec(src);
+    expect(m).not.toBeNull();
+    const roles = [...m![1]!.matchAll(/"([a-z_]+)"/g)].map((x) => x[1]!);
+    expect(roles).toEqual(["bid_opening_committee"]);
+    for (const r of roles) expect(seeded.has(r)).toBe(true);
   });
   it("has no duplicate realm role names", () => {
     expect(seeded.size).toBe(realm.roles.realm.length);
