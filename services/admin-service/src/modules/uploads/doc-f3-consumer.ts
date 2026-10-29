@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { resourceIdOf } from "../../shared/f3-resource.js";
 import { COMMANDS } from "../../topics.js";
 import {
   apply_uploads_0,
@@ -26,7 +27,7 @@ export function registerF3_uploads_Consumers(queue: Queue): void {
         ok = await markProcessed(tx, msg.messageId);
       });
       if (!ok) return;
-      const req = { body: p.body, params: p.params, query: p.query };
+      const req = { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) };
       switch (op) {
         case "uploads_op_0":
           await apply_uploads_0(ctx, req);

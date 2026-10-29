@@ -105,6 +105,9 @@ async function createTemplate(
   const rows = (list.json() as ListBody<Template>).data;
   const match = rows.find((r) => r.code === code);
   if (!match) throw new Error(`created template with code '${code}' never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(match.id).toBe((res.json() as SingleBody<{ id: string }>).data.id);
   return { ...match, foreignTenantRefs };
 }
 
@@ -297,13 +300,16 @@ describe("department templates — list, read, update", () => {
     expect((active.json() as ListBody<Template>).data.every((r) => r.status === "active")).toBe(true);
   });
 
-  it("400 for an unknown status filter and 400 without limit", async () => {
+  it("400 for an unknown status filter; a missing limit defaults to one bounded page", async () => {
     const bad = await app.inject({
       method: "GET", url: "/v1/admin/department-templates?limit=10&status=deleted", headers: auth(),
     });
     expect(bad.statusCode).toBe(400);
     const none = await app.inject({ method: "GET", url: "/v1/admin/department-templates", headers: auth() });
-    expect(none.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(none.statusCode).toBe(200);
+    expect((none.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 
   it("reads one template, 404 for an unknown id, 400 for a non-uuid", async () => {
@@ -456,6 +462,9 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
     expect(row).toBeDefined();
     expect(row?.templateVersion).toBe(t.version);
     expect(row?.config).toEqual({ roles: ["clerk"], sla: { hours: 4 } });
+    // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+    // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+    expect(row?.id).toBe(res.json().data.id);
   });
 
   it("re-sanitises at instantiate time so a legacy template cannot emit a foreign ref", async () => {
@@ -660,11 +669,14 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
     expect(missing.statusCode).toBe(404);
   });
 
-  it("400 when listing instantiations without limit", async () => {
+  it("listing instantiations without limit serves one bounded page", async () => {
     const t = await createTemplate(nextCode("nolimit"));
     const res = await app.inject({
       method: "GET", url: `/v1/admin/department-templates/${t.id}/instantiations`, headers: auth(),
     });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 });

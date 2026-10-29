@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { resourceIdOf } from "../../shared/f3-resource.js";
 import { COMMANDS } from "../../topics.js";
 import { apply_dept_templates_0, apply_dept_templates_1, apply_dept_templates_2 } from "./f3-apply.js";
 
@@ -20,15 +21,15 @@ export function registerF3_dept_templates_Consumers(queue: Queue): void {
       if (!ok) return;
       switch (op) {
       case 'dept_templates_op_0': {
-        await apply_dept_templates_0(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_dept_templates_0(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'dept_templates_op_1': {
-        await apply_dept_templates_1(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_dept_templates_1(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'dept_templates_op_2': {
-        await apply_dept_templates_2(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_dept_templates_2(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       }

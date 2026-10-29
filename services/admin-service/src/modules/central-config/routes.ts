@@ -27,6 +27,7 @@ import {
   configKey,
 } from "./domain.js";
 import type { ConfigEntryRow, ConfigChangeRow, ConfigVersionRow } from "./schema.js";
+import { acceptedCreate } from "../../shared/f3-resource.js";
 
 const CONFIG_ROLES = [...TENANT_ADMIN_ROLES];
 
@@ -133,12 +134,13 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'central_config_op_0',
+      resourceId: __f3Id,
       body: (req.body as Record<string, unknown>),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   // Approve a change — maker-checker enforced; applies the value + versions it.

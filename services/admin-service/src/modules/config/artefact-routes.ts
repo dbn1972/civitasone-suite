@@ -51,6 +51,7 @@ import {
   type ConfigEntries,
 } from "./artefact-domain.js";
 import type { ConfigArtefactRow, ConfigPromotionRow, ConfigEnvStateRow } from "./artefact-schema.js";
+import { acceptedCreate } from "../../shared/f3-resource.js";
 
 const ARTEFACT_ROLES = [...TENANT_ADMIN_ROLES];
 
@@ -59,7 +60,8 @@ const MAX_ENTRIES_KEYS = 500;
 const MAX_ENTRIES_BYTES = 256_000;
 
 const setKeySchema = z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+$/, "invalid set key");
-const limitSchema = z.coerce.number().int().min(1).max(200);
+// W6 P9b: list GETs without ?limit answered 400; default like the service's other lists.
+const limitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
 
 const snapshotBody = z.object({
@@ -192,12 +194,13 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'config_op_0',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   // ── list artefact versions ────────────────────────────────────────────────
@@ -252,12 +255,13 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'config_op_1',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   // ── approve a promotion (the CHECKER half — applies it) ───────────────────

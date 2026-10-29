@@ -9,7 +9,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { scheduledJobs, jobExecutionHistory } from "./schema.js";
-import { eq, and, ne, or, lt, isNull } from "drizzle-orm";
+import { eq, and, ne, or, lt, isNull, sql } from "drizzle-orm";
 
 const log = pino({ name: "admin-scheduled-jobs-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -70,6 +70,7 @@ export function registerScheduledJobConsumers(queue: Queue): void {
         if (p.targetCommand !== undefined) updates.targetCommand = p.targetCommand;
         if (p.payload !== undefined) updates.payload = p.payload;
         if (p.enabled !== undefined) updates.enabled = p.enabled;
+        updates.version = sql`${scheduledJobs.version} + 1`;
         await (tx as any).update(scheduledJobs).set(updates)
           .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)));
         await emit(tx, msg, "admin.scheduled_job.updated", p, "update", p.jobId);
@@ -103,16 +104,26 @@ export function registerScheduledJobConsumers(queue: Queue): void {
     }
   });
 
+  // FQ12 #38 is deliberately NOT implemented here: run-now records the run
+  // (history row + lastRunStatus) but dispatches nothing. Forwarding a stored
+  // job payload to an arbitrary admin.* command let a job forge the identity
+  // fields (tenantId / actorId / actorRoles) that several consumers trust
+  // (review of #2382). Firing jobs needs a designed job-runner with an
+  // explicit command registry and per-command payload schemas -- follow-up.
+  // A paused/disabled job is never started (the route answers 409; this
+  // WHERE clause is the race-safe backstop).
   queue.subscribe<ActionPayload>(COMMANDS.scheduledJobRunNow, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
+        const now = new Date();
         const started = await (tx as any).update(scheduledJobs)
-          .set({ lastRunAt: new Date(), lastRunStatus: "running", updatedBy: msg.actorId, updatedAt: new Date() })
+          .set({ lastRunAt: now, lastRunStatus: "running", updatedBy: msg.actorId, updatedAt: now, version: sql`${scheduledJobs.version} + 1` })
           .where(and(
             eq(scheduledJobs.id, p.jobId),
             eq(scheduledJobs.tenantId, p.tenantId),
+            eq(scheduledJobs.enabled, true),
             // Debounce a double click / redelivered request: a job that started
             // running within the last RUN_NOW_DEBOUNCE_MS is not fired again.
             or(ne(scheduledJobs.lastRunStatus, "running"), isNull(scheduledJobs.lastRunAt), lt(scheduledJobs.lastRunAt, new Date(Date.now() - RUN_NOW_DEBOUNCE_MS))),
@@ -124,7 +135,7 @@ export function registerScheduledJobConsumers(queue: Queue): void {
           id: executionId,
           tenantId: p.tenantId,
           jobId: p.jobId,
-          startedAt: new Date(),
+          startedAt: now,
           status: "running",
         });
         await emit(tx, msg, "admin.scheduled_job.run_triggered", { ...p, executionId }, "run_now", p.jobId, p.reason);
@@ -145,7 +156,7 @@ export function registerScheduledJobConsumers(queue: Queue): void {
           if (!(await markProcessed(tx, msg.messageId))) return;
           const p = msg.payload;
           const changed = await (tx as any).update(scheduledJobs)
-            .set({ enabled, updatedBy: msg.actorId, updatedAt: new Date() })
+            .set({ enabled, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${scheduledJobs.version} + 1` })
             .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)))
             .returning({ id: scheduledJobs.id });
           if (changed.length === 0) return;

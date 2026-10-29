@@ -33,6 +33,11 @@ export const SENSITIVE_SERVICES = new Set(["finance-service", "hrms-service", "a
 const COMMAND_SHAPE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 // Case-insensitive SUBSTRING match: "purgeall", "PurgeAll" and "bulk_wipe" are all destructive.
 const DESTRUCTIVE = /(delete|purge|erase|truncate|drop|wipe|revoke|destroy)/i;
+// Privileged control-plane commands (access grants, tenant lifecycle, approvals,
+// generic write replay, the scheduler itself, roles/permissions/keys): a job's
+// stored payload must never be able to drive these (review of #2382).
+// Matched on whole dot/underscore-delimited segments (so "processor" is not "sso").
+const PRIVILEGED = /(?:^|[._])(?:break_?glass|tenant_lifecycle|approve|authori[sz]e|sanction|route_write|scheduled_jobs?|roles?|permissions?|api_?keys?|impersonat[a-z_]*|mfa|sso|idp)(?:$|[._])/i;
 export const PAYLOAD_MAX_CHARS = 10_000;
 
 function configured(): Record<string, string[]> | null {
@@ -60,6 +65,9 @@ export function checkTarget(targetService: string, targetCommand: string, payloa
   }
   if (DESTRUCTIVE.test(targetCommand)) {
     return { ok: false, field: "targetCommand", message: "destructive commands cannot be scheduled" };
+  }
+  if (PRIVILEGED.test(targetCommand)) {
+    return { ok: false, field: "targetCommand", message: "privileged commands (access, lifecycle, approvals, roles) cannot be scheduled" };
   }
   const override = configured()?.[targetService];
   // Money, people and the audit trail: namespace-only is not enough, an explicit allow-list is mandatory.

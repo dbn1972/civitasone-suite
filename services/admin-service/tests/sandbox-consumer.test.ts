@@ -97,6 +97,9 @@ async function registerSandbox(code: string, name: string, sourceEnvironment: st
     WHERE tenant_id = ${TENANT} AND code = ${code}`);
   const found = rows[0];
   if (!found) throw new Error(`sandbox with code '${code}' never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(found.id).toBe(res.json().data.id);
   return found;
 }
 

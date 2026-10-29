@@ -6,6 +6,12 @@ import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/conte
 import { tenantIdParam, scheduleBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as tenantsRepo from "../tenants/repo.js";
+
+/** W6 P1: a backup command for a tenant that does not exist is a 404, not a queued no-op. */
+async function assertTenantExists(id: string): Promise<void> {
+  if (!(await tenantsRepo.findById(id))) throw new HttpError(404, "NOT_FOUND", "tenant not found");
+}
 
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/tenants/:id/backup/schedule", async (req, reply) => {
@@ -13,6 +19,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const { id } = tenantIdParam.parse(req.params);
     const body = scheduleBody.parse(req.body);
+    await assertTenantExists(id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.scheduleBackup(ctx, id, body.cronExpr));
   });
 
@@ -20,6 +27,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const { id } = tenantIdParam.parse(req.params);
+    await assertTenantExists(id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.triggerBackup(ctx, id));
   });
 
