@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient, type ScopedTx } from "../src/shared/db.js";
+import * as requestsRepo from "../src/modules/requests/repo.js";
 import * as reconciliationRepo from "../src/modules/reconciliation/repo.js";
 import { encryptPii, decryptPii, isEncrypted, maskAccountNumber, resetPiiKeyCache } from "../src/shared/pii-crypto.js";
 import { hdr, TENANT_A } from "./support.js";
@@ -80,23 +81,73 @@ describe("#6 initiate disbursement never publishes or stores the account number 
     expect(JSON.stringify(published[0]!.payload)).not.toContain(ACCOUNT);
   });
 
-  it("route answers 503 ENCRYPTION_UNAVAILABLE (and publishes nothing) when no key is configured", async () => {
+  async function seedApprovedRequest(): Promise<string> {
+    const id = randomUUID();
+    const actor = randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${TENANT_A}'`));
+      await requestsRepo.insertRequest(tx, {
+        id, tenantId: TENANT_A, requestNumber: `TEST/G3/${id.slice(0, 8)}`, status: "approved",
+        applicantName: "UATTEST g3", applicantPhone: "9000000000",
+        originalServiceType: "test", originalTransactionRef: "G3-TEST",
+        originalAmountMinor: 100n, refundAmountMinor: 100n, refundReason: "other",
+        description: null, documents: [], currency: "INR", createdBy: actor, updatedBy: actor,
+      });
+    });
+    return id;
+  }
+  async function deleteRequest(id: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${TENANT_A}'`));
+      await tx.execute(sql`DELETE FROM refund.refund_requests WHERE id = ${id}`);
+    });
+  }
+  const initiate = (requestId: string, accountNumber: string) => app.inject({
+    method: "POST", url: "/v1/refund/disbursements", headers: hdr(),
+    payload: { requestId, bankAccountDetails: { accountNumber, ifscCode: "SBIN0001234", accountHolderName: "T" }, disbursedAmountMinor: "100" },
+  });
+
+  it("route answers 503 ENCRYPTION_UNAVAILABLE (and publishes nothing) when no key is configured, for a real approved request", async () => {
+    const requestId = await seedApprovedRequest();
     const saved = process.env.PII_ENC_KEY;
     delete process.env.PII_ENC_KEY;
     resetPiiKeyCache();
+    published.length = 0;
     try {
-      const requestId = randomUUID();
-      const res = await app.inject({
-        method: "POST", url: "/v1/refund/disbursements", headers: hdr(),
-        payload: { requestId, bankAccountDetails: { accountNumber: ACCOUNT, ifscCode: "SBIN0001234", accountHolderName: "T" }, disbursedAmountMinor: "100" },
-      });
-      // 404 (no such request) is evaluated before the key check; a 503 needs a real approved request,
-      // so assert the guard directly through the helper it uses.
-      expect([404, 503]).toContain(res.statusCode);
-      expect(published.some((p) => JSON.stringify(p.payload).includes(ACCOUNT))).toBe(false);
+      const res = await initiate(requestId, ACCOUNT);
+      expect(res.statusCode).toBe(503);
+      expect(JSON.stringify(res.json())).toContain("ENCRYPTION_UNAVAILABLE");
+      expect(published).toHaveLength(0);
     } finally {
       process.env.PII_ENC_KEY = saved;
       resetPiiKeyCache();
+      await deleteRequest(requestId);
+    }
+  });
+
+  it("with a key, the same approved request is accepted (202) and the published account number is sealed", async () => {
+    const requestId = await seedApprovedRequest();
+    published.length = 0;
+    try {
+      const res = await initiate(requestId, ACCOUNT);
+      expect(res.statusCode).toBe(202);
+      expect(JSON.stringify(published[0]!.payload)).not.toContain(ACCOUNT);
+    } finally {
+      await deleteRequest(requestId);
+    }
+  });
+
+  it("rejects a client-supplied enc: envelope as accountNumber with 400 and publishes nothing", async () => {
+    const requestId = await seedApprovedRequest();
+    published.length = 0;
+    try {
+      for (const v of ["enc:v2:k1:AAAA", " ENC:v1:AAAA"]) {
+        const res = await initiate(requestId, v);
+        expect(res.statusCode).toBe(400);
+      }
+      expect(published).toHaveLength(0);
+    } finally {
+      await deleteRequest(requestId);
     }
   });
 

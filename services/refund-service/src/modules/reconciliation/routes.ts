@@ -18,7 +18,11 @@ const MINOR_AMOUNT = z.string().regex(/^[1-9]\d{0,17}$/, "must be a positive int
 const initiateBody = z.object({
   requestId: z.string().uuid(),
   bankAccountDetails: z.object({
-    accountNumber: z.string().min(1),
+    // Reject a client-supplied envelope: commands.ts skips sealing anything that already looks
+    // encrypted, so an "enc:" value would be stored as-is (and could not be decrypted/masked).
+    accountNumber: z.string().min(1).refine((v) => !v.trim().toLowerCase().startsWith("enc:"), {
+      message: "accountNumber must be a plain account number",
+    }),
     ifscCode: z.string().min(1),
     accountHolderName: z.string().min(1),
     bankName: z.string().optional(),
