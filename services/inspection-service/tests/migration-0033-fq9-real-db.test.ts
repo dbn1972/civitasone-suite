@@ -67,6 +67,7 @@ describe("migration 0033 (UAT FQ9 #24/#25)", () => {
     expect(TEMP_SQL).not.toMatch(/findings\.findings|evidence\.evidence_artifacts|table_schema = 'findings'/);
   });
 
+  // FLAKY-SKIP: env-gated — needs PG superuser (PGUSER/PGPASSWORD), set in the CI Tests job; runs in CI (expires: 2027-04-30)
   it.skipIf(!HAS_ADMIN)("old shape, run twice: question_id becomes text (uuids preserved), 'unverified' allowed, junk rejected, CHECK validated", async () => {
     await inOldShape(async (tx) => {
       const kept = randomUUID();
@@ -94,6 +95,7 @@ describe("migration 0033 (UAT FQ9 #24/#25)", () => {
     });
   });
 
+  // FLAKY-SKIP: env-gated — needs PG superuser (PGUSER/PGPASSWORD), set in the CI Tests job; runs in CI (expires: 2027-04-30)
   it.skipIf(!HAS_ADMIN)("an existing row that violates the new CHECK never leaves the table without one (NOT VALID + NOTICE)", async () => {
     await inOldShape(async (tx) => {
       await tx`ALTER TABLE fq9_evidence_artifacts DROP CONSTRAINT evidence_artifacts_integrity_status_check`;
