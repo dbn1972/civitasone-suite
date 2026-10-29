@@ -641,12 +641,25 @@ export function computeBackoffSeconds(
   return Math.min(max, Math.round(raw));
 }
 
-/** SQS request handler with an explicit connection ceiling and fail-fast timeouts. */
+/**
+ * SQS request handler with an explicit connection ceiling and fail-fast timeouts.
+ *
+ * FQ13: this MUST use @smithy/node-http-handler 4.x (the version the AWS SDK
+ * itself depends on). 3.x armed a socket `timeout` listener on every request
+ * that lasted more than 3 s and never removed it from the pooled keep-alive
+ * socket, so every slow long-poll leaked the whole request/response graph
+ * (~11 KB) and the worker fleet grew ~20 GB/h with zero messages.
+ *
+ * In 4.x `requestTimeout` alone only logs a WARN when exceeded;
+ * `throwOnRequestTimeout: true` keeps the fail-fast contract described above
+ * (the request is destroyed and rejects with a TimeoutError).
+ */
 export function buildRequestHandler(maxSockets: number = resolveMaxSockets()): NodeHttpHandler {
   return new NodeHttpHandler({
     ...buildSqsAgents(maxSockets),
     connectionTimeout: resolveConnectionTimeout(),
     requestTimeout: resolveRequestTimeout(),
+    throwOnRequestTimeout: true,
   });
 }
 
