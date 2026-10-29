@@ -2,7 +2,7 @@
  * HRMS POST route coverage — valid payloads that pass zod validation
  * to reach deeper into handler code paths (DB calls, etc.)
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -793,6 +793,28 @@ describe("HRMS routes — Device Trust", () => {
 });
 
 describe("HRMS routes — ID Cards & Visiting Cards", () => {
+  // The visiting-card/me routes resolve the caller (token subject UUID) to an
+  // employee via user_ref, so this block needs exactly one serving employee
+  // linked to UUID. It used to rely on seedTransfer() having linked every
+  // transfer fixture to UUID earlier in the file; that no longer happens
+  // (migration 0253 forbids two serving employees sharing a user_ref), so seed
+  // it here. Reuses an existing link if one is already present (never a
+  // second one), and unlinks only the row it created afterwards.
+  let seededForMe: string | null = null;
+  beforeAll(async () => {
+    const existing = await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`
+      SELECT id FROM employee.hrms_employees
+       WHERE tenant_id = ${TENANT} AND user_ref = ${UUID}
+         AND status NOT IN ('terminated', 'separated', 'retired', 'no_show')`);
+    if (existing.length === 0) seededForMe = await seedEmployeeForMe(UUID);
+  });
+  afterAll(async () => {
+    if (seededForMe) {
+      const id = seededForMe;
+      await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`UPDATE employee.hrms_employees SET user_ref = NULL WHERE id = ${id}`);
+    }
+  });
+
   it("POST /v1/hrms/id-cards", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards", headers: { authorization: `Bearer ${token()}` },
