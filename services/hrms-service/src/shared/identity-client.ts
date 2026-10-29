@@ -66,3 +66,27 @@ export async function fetchVerifiedActorEmail(tenantId: string, actorId: string)
     return undefined;
   }
 }
+
+/**
+ * FQ14: the status of one user of `tenantId` (an identity user id or a Keycloak
+ * sub -- identity-service resolves both), for HR linking a login to an employee.
+ * Same internal path and fail-closed contract as crm-service's
+ * isActiveTenantUser: the status string when identity answered, null for a
+ * definite 404 (no such user in this tenant), undefined when it could not be
+ * verified (outage, timeout, unexpected status). Callers must treat undefined
+ * as "not verified", never as permitted.
+ */
+export async function fetchUserStatus(tenantId: string, userId: string): Promise<string | null | undefined> {
+  try {
+    const res = await fetch(`${IDENTITY_URL}/identity/internal/users/${encodeURIComponent(userId)}/status`, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { status?: unknown };
+    return typeof body.status === "string" ? body.status : undefined;
+  } catch {
+    return undefined;
+  }
+}

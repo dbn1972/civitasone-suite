@@ -4,11 +4,12 @@ import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../.
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
-import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
+import { EmployeeLoginLinkCard } from "./EmployeeLoginLinkCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
@@ -235,6 +236,8 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // W1 SF-05a: values arrive server-masked; a permitted role gets the audited reveal (reason + audit row).
   const canRevealPii = roles.some((r) => EMPLOYEE_PII_REVEAL_ROLES.includes(r));
   const canRevealPhone = roles.some((r) => EMPLOYEE_PHONE_REVEAL_ROLES.includes(r));
+  // FQ14: linking a login is the hr_admin tier only (backend LOGIN_LINK_ROLES).
+  const canLinkLogin = roles.some((r) => EMPLOYEE_LOGIN_LINK_ROLES.includes(r));
   const revealFor = (field: string, label: string, canReveal: boolean) => ({
     canReveal, resourceType: "employee" as const, resourceId: params.id, field, label, revealPath: "v1/hrms/pii/reveal",
   });
@@ -546,6 +549,7 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
       )}
 
       {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
+      {canLinkLogin && <EmployeeLoginLinkCard employeeId={params.id} />}
 
       {scannedDocs && <ScannedDocumentsSection result={scannedDocs} backHref="/hr/employees" />}
 

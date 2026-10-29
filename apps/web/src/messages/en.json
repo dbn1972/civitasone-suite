@@ -12242,6 +12242,28 @@
     "colDepartment": "Department",
     "colActions": "Actions"
   },
+  "employeeLoginLink": {
+    "title": "Login link",
+    "help": "Link the login this employee signs in with, so their own leave, attendance, claims and approvals open this record. The reason is recorded in the audit log.",
+    "userIdLabel": "Login (user id)",
+    "reasonLabel": "Reason",
+    "linkButton": "Link login",
+    "unlinkButton": "Unlink login",
+    "linked": "Login linked to this employee.",
+    "unlinked": "Login unlinked from this employee.",
+    "invalidUserId": "Enter the login's user id (a UUID).",
+    "reasonRequired": "Enter a reason (at least 3 characters).",
+    "error": {
+      "LOGIN_ALREADY_LINKED": "This login is already linked to another employee record. Unlink it there first.",
+      "LOGIN_NOT_FOUND": "No login with this id exists in this organisation.",
+      "LOGIN_NOT_ACTIVE": "This login is not active and cannot be linked.",
+      "EMPLOYEE_EXITED": "A login cannot be linked to an employee who has left or never joined.",
+      "IDENTITY_UNAVAILABLE": "The login could not be verified right now. Try again shortly.",
+      "FORBIDDEN": "Only an HR administrator can link or unlink a login.",
+      "NOT_FOUND": "This employee record was not found.",
+      "generic": "The login link could not be saved. Try again."
+    }
+  },
   "employeePayGroup": {
     "title": "Pay group",
     "unavailable": "Pay group details couldn't be loaded right now.",
