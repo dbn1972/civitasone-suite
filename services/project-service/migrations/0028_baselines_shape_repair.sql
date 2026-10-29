@@ -21,6 +21,8 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'project' AND table_name = 'project_baselines' AND column_name = 'label'
   ) THEN
+    -- Block concurrent writers until the transaction ends so no row can slip in between count and DROP.
+    EXECUTE 'LOCK TABLE project.project_baselines IN ACCESS EXCLUSIVE MODE';
     EXECUTE 'ALTER TABLE project.project_baselines NO FORCE ROW LEVEL SECURITY';
     EXECUTE 'SELECT count(*) FROM project.project_baselines' INTO legacy_rows;
     IF legacy_rows = 0 THEN
