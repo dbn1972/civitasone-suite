@@ -34,7 +34,12 @@ const fieldRecordBody = z.object({
   workPerformed: z.string().max(4000).optional(),
   beforePhoto: z.string().max(512).optional(),
   afterPhoto: z.string().max(512).optional(),
-});
+}).refine(
+  // UAT W6 P2: every field is optional, but an EMPTY record used to be queued as a
+  // blank field record. Require at least one field that says what the record is.
+  (b) => Object.values(b).some((v) => v !== undefined && v !== ""),
+  { message: "a field record needs at least one of complaintId, bookingId, assetRef, manholeRef, workPerformed or a photo" },
+);
 
 export async function complaintRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/sewerage/complaints", async (req, reply) => {

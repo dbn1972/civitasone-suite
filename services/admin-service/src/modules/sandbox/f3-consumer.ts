@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { resourceIdOf } from "../../shared/f3-resource.js";
 import { COMMANDS } from "../../topics.js";
 import { apply_sandbox_0, apply_sandbox_1, apply_sandbox_2, apply_sandbox_3, apply_sandbox_4 } from "./f3-apply.js";
 
@@ -26,23 +27,23 @@ export function registerF3_sandbox_Consumers(queue: Queue): void {
       // poisoned message instead of it vanishing after one log line.
       switch (op) {
       case 'sandbox_op_0': {
-        await apply_sandbox_0(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_sandbox_0(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'sandbox_op_1': {
-        await apply_sandbox_1(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_sandbox_1(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'sandbox_op_2': {
-        await apply_sandbox_2(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_sandbox_2(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'sandbox_op_3': {
-        await apply_sandbox_3(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_sandbox_3(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'sandbox_op_4': {
-        await apply_sandbox_4(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_sandbox_4(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       }

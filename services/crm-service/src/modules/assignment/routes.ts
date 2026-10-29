@@ -202,6 +202,9 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = v.idParam.parse(req.params);
+    // UAT W6 P1: same predicate the consumer's markAccepted uses (active lead in this
+    // tenant); anything else is a 404 instead of a 202 the consumer can only reject.
+    if (!(await repo.isActiveLead(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "lead not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.acceptLead(ctx, id));
   });
 

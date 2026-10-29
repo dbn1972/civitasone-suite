@@ -279,13 +279,16 @@ describe("GET /v1/notification/suppressions — route boundary", () => {
     expect(ids).not.toContain(SUPPRESSION_ID);
   });
 
-  it("400 when limit is omitted — an unbounded list is never allowed", async () => {
+  // UAT W6 P9b: a bare list GET uses the bounded default page size (50, still capped
+  // at 200 — see the over-max test below), so the list is never unbounded.
+  it("200 with the bounded default page size when limit is omitted", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/notification/suppressions", headers: bearer(["tenant_admin"]),
     });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().meta.pageSize).toBe(50);
   });
 
   it("400 when limit exceeds the maximum page size", async () => {

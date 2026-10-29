@@ -11,6 +11,7 @@ import * as keycloak from "../../shared/keycloak.js";
 import { recordPendingDeactivation, deprovisionInKeycloak } from "../../shared/kc-reconcile.js";
 import { pino } from "pino";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { persistKeycloakUserId } from "./keycloak-link.js";
 
 const kcLog = pino({ name: "identity-keycloak" });
 
@@ -52,6 +53,14 @@ export function registerUserConsumers(rawQueue: Queue): void {
       kcLog,
     ).then(async (r) => {
       if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak provision");
+      // FQ14: remember the realm user's id (= the login's JWT sub) so internal
+      // lookups keyed by a sub resolve this user. Best-effort like the rest of
+      // this chain; the keycloak-reconcile route / backfill repair a miss.
+      if (r.ok && r.kcUserId && r.tenantVerified) {
+        await persistKeycloakUserId(msg.payload.tenantId, msg.payload.id, r.kcUserId)
+          .then((outcome) => { if (outcome === "conflict") kcLog.warn({ userId: msg.payload.id, kcUserId: r.kcUserId }, "keycloak user id already mapped differently"); })
+          .catch((err: unknown) => kcLog.warn({ userId: msg.payload.id, err: String(err) }, "persisting keycloak user id failed"));
+      }
       if (r.ok && !r.skipped && initialRoles && initialRoles.length > 0) {
         const rr = await keycloak.assignRealmRoles(
           { tenantId: msg.payload.tenantId, email: msg.payload.email },

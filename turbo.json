@@ -1,7 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": ["vitest.shared.ts"],
+  "globalDependencies": [
+    "vitest.shared.ts",
+    "vitest.testdb.ts"
+  ],
   "tasks": {
     "build": {
       "dependsOn": [
@@ -66,6 +69,28 @@
       ],
       "outputs": [
         "coverage/**"
+      ],
+      "passThroughEnv": [
+        "CI",
+        "GITHUB_ACTIONS",
+        "PGHOST",
+        "PGPORT",
+        "PGUSER",
+        "PGPASSWORD",
+        "PGDATABASE",
+        "POSTGRES_ADMIN_PASSWORD",
+        "POSTGRES_ADMIN_USER",
+        "PROVISIONING_RUNNER_DSN",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "JWT_ALGORITHM",
+        "QUEUE_DRIVER",
+        "CACHE_DRIVER",
+        "NODE_ENV",
+        "COURT_E2E",
+        "COURT_CAPTCHA_DEV_TOKEN",
+        "COURT_PII_KEY"
       ]
     }
   }

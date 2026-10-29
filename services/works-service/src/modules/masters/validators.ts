@@ -127,3 +127,6 @@ export const divisionSearchSchema = z.object({
   q: z.string().max(256).optional().default(""),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
+
+/** UAT W6-A: every master table keys on a uuid id; a malformed id is the caller's 400, not a Postgres cast 500. */
+export const idParamSchema = z.object({ id: z.string().uuid() });

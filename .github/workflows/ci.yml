@@ -728,6 +728,19 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/datatable-render-guard.mjs
 
+      # FQ15: tests never default to a live database. CI's Postgres sits on host
+      # port 5435 (the ports: mapping above), so tests and vitest configs grew a
+      # localhost:5435 fallback; on the shared dev/UAT host that port is the LIVE
+      # database (6432 its pgbouncer) and a run with no DB env wrote to it. Every
+      # test DB host/port now comes from PGHOST/PGPORT via vitest.testdb.ts, which
+      # throws "test DB not configured" instead of guessing. Pure text analysis
+      # (no live DB needed). One step runs the fixture tests AND the real-tree
+      # scan; no baseline: the tree is clean, so any new default fails.
+      - name: No-live-DB-default guard (tests/configs must not default to :5435/:6432, FQ15)
+        id: no-live-db-default-guard
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/no-live-db-default-guard.test.ts
+
       # REL-039: this job's actual gate. Every guard above always reports
       # its own real outcome now instead of being skipped, but continue-on-
       # error also forces every one of those steps' `conclusion` to
@@ -777,6 +790,7 @@ jobs:
           R_STAT_TILE_LITERAL: ${{ steps.stat-tile-literal-guard.outcome }}
           R_DATATABLE_RENDER_GUARD_TESTS: ${{ steps.datatable-render-guard-tests.outcome }}
           R_DATATABLE_RENDER_GUARD: ${{ steps.datatable-render-guard.outcome }}
+          R_NO_LIVE_DB_DEFAULT: ${{ steps.no-live-db-default-guard.outcome }}
         run: |
           fail=0
           check() {
@@ -826,6 +840,7 @@ jobs:
           check "Stat-tile literal guard" "$R_STAT_TILE_LITERAL"
           check "DataTable render-prop guard unit tests" "$R_DATATABLE_RENDER_GUARD_TESTS"
           check "DataTable render-prop guard" "$R_DATATABLE_RENDER_GUARD"
+          check "No-live-DB-default guard (FQ15)" "$R_NO_LIVE_DB_DEFAULT"
           if [ "$fail" = "1" ]; then
             echo "One or more architecture guard steps failed -- see the individual step logs above (each now reports its own real result, never 'skipped')."
             exit 1

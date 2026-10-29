@@ -52,11 +52,13 @@ import {
   assertVersionMatch,
 } from "./doc-domain.js";
 import type { DocumentTypeRow, DocumentRequirementRow, DocumentRow } from "./doc-schema.js";
+import { acceptedCreate } from "../../shared/f3-resource.js";
 
 const DOC_ROLES = [...TENANT_ADMIN_ROLES, "hr_admin", "hr_officer", "officer", "manager"];
 const ADMIN_ONLY = [...TENANT_ADMIN_ROLES];
 
-const limitSchema = z.coerce.number().int().min(1).max(200);
+// W6 P9b: list GETs without ?limit answered 400; default like the service's other lists.
+const limitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
 const codeSchema = z.string().min(2).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, "lower-case alphanumeric, - and _ only");
 const contextTypeSchema = z.string().min(2).max(48).regex(/^[a-z0-9_]+$/, "lower-case alphanumeric and _ only");
@@ -191,12 +193,13 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'uploads_op_0',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   app.get("/v1/admin/document-types", async (req, reply) => {
@@ -251,15 +254,22 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
     assertTypeActive(type.status);
 
+    // FQ12: setting a requirement is an upsert on (context, type) -- an existing
+    // requirement keeps its id, so report that id rather than a fresh one.
+    const existingReq = await scopedRead((tx) => repo.findRequirementTx(
+      tx, ctx.tenantId, body.contextType, body.contextKey, body.documentTypeCode));
+
     const __f3Id = randomUUID();
+    const requirementId = existingReq?.id ?? __f3Id;
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'uploads_op_2',
+      resourceId: requirementId,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, requirementId));
   });
 
   app.get("/v1/admin/document-requirements", async (req, reply) => {
@@ -292,12 +302,13 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'uploads_op_3',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   app.get("/v1/admin/documents", async (req, reply) => {

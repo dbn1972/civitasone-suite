@@ -8,7 +8,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db, sqlClient } from "../src/shared/db.js";
+import { adminTenants } from "../src/modules/tenants/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-cccc-4000-8000-000000000001";
@@ -179,6 +182,25 @@ describe("GET /v1/admin/health/:service", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 describe("PATCH /v1/admin/tenants/:id/suspend", () => {
   const id = "11111111-cccc-4000-8000-aaaaaaaaaaaa";
+  // W6 P1: suspend now 404s an unknown tenant, so the happy path suspends a real one.
+  const drop = () => runWithTenant(id, () => db.transaction((tx) => tx.delete(adminTenants).where(eq(adminTenants.id, id))));
+  beforeAll(async () => {
+    await drop();
+    await runWithTenant(id, () => db.transaction((tx) => tx.insert(adminTenants).values({
+      id, tenantId: id, name: "sa seed", domain: `sa-${id}.example`, edition: "psu", status: "active",
+      region: "ap-south-1", residency: "IN", settings: {}, createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+    })));
+  });
+  afterAll(drop);
+
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/admin/tenants/11111111-cccc-4000-8000-0000000dead1/suspend",
+      headers: authHeader(["super_admin"]),
+      payload: { reason: "Non-payment" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
 
   it("returns 202 for super_admin", async () => {
     const res = await app.inject({

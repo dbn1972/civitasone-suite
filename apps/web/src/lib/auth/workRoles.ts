@@ -65,6 +65,17 @@ export const EMPLOYEE_ADMIN_ROLES = [...HR_STAFF_ROLES];
  * enforces it regardless; this only hides the button from roles that would 403.
  */
 export const EMPLOYEE_PII_REVEAL_ROLES = ["hr_admin", "super_admin"];
+
+/**
+ * FQ14: who may link / unlink the login an employee record belongs to (the
+ * "Login link" card on the employee profile). Mirrors hrms-service
+ * employee/routes.ts LOGIN_LINK_ROLES exactly: binding a login decides whose
+ * payslips, leave and approvals a person sees, so it is the hr_admin tier --
+ * narrower than EMPLOYEE_ADMIN_ROLES (which also admits hr_officer) on
+ * purpose. Only this action is narrowed; who may open or edit the employee
+ * page is unchanged.
+ */
+export const EMPLOYEE_LOGIN_LINK_ROLES = [...HR_ADMIN_TIER_ROLES];
 export const EMPLOYEE_PHONE_REVEAL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export const PROPOSAL_WRITE_ROLES = [

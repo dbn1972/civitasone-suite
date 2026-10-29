@@ -5,10 +5,11 @@
  * and competency tables. Proves the 0046 policies are enforced at the database.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+const DATABASE_URL = process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 
 const TA = randomUUID();
 const TB = randomUUID();

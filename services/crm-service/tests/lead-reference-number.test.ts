@@ -164,7 +164,9 @@ describe("LM-006: gapless lead reference number", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/crm/contacts/${c.contactId}`,
-      headers: { authorization: `Bearer ${token()}` },
+      // UAT W6 P1: PATCH now reads the contact first; x-tenant-id (forwarded by the
+      // gateway) gives that read its tenant RLS context, as in the other contact tests.
+      headers: { authorization: `Bearer ${token()}`, "x-tenant-id": TENANT_A },
       payload: { company: "Updated Corp" },
     });
     await app.close();

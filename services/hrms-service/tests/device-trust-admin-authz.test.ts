@@ -27,7 +27,8 @@
  * passes the intended roles through (statusCode !== 403) rather than that
  * the full response succeeds end to end (today it still 500s downstream).
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -40,7 +41,24 @@ function token(roles: string[]) {
   return signToken({ sub: UUID, tid: TENANT, roles, sid: "s1" }, SECRET);
 }
 
+// UAT W6-A: /devices/:deviceId/activity now answers 404 for a device this tenant never
+// registered, so the "allows <role> (200)" cases need a real trusted_devices row.
+const DEVICE_ROW_ID = randomUUID();
+async function asTenantSql<T>(fn: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
+  return sqlClient.begin(async (sql) => {
+    await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [TENANT]);
+    return fn(sql as unknown as typeof sqlClient);
+  }) as Promise<T>;
+}
+beforeAll(async () => {
+  await asTenantSql((sql) => sql.unsafe(
+    "INSERT INTO hrms.trusted_devices (id, tenant_id, user_id, device_id) VALUES ($1, $2, $3, 'some-device-id') ON CONFLICT DO NOTHING",
+    [DEVICE_ROW_ID, TENANT, randomUUID()],
+  ));
+});
+
 afterAll(async () => {
+  await asTenantSql((sql) => sql.unsafe("DELETE FROM hrms.trusted_devices WHERE id = $1", [DEVICE_ROW_ID]));
   await sqlClient.end();
 });
 
@@ -103,6 +121,23 @@ describe("GET /v1/hrms/devices/admin -- authz (hr_admin/it_admin/super_admin onl
     });
     await app.close();
     expect(r.statusCode).not.toBe(403);
+  });
+});
+
+describe("GET /v1/hrms/devices/:deviceId/activity -- UAT W6-A validation", () => {
+  it("400 for a device id shorter than the registered minimum", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/devices/abc/activity", headers: { authorization: `Bearer ${token(["hr_admin"])}` } });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+  });
+
+  it("404 for a device this tenant never registered (was 200 [])", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/devices/not-a-uuid/activity", headers: { authorization: `Bearer ${token(["hr_admin"])}` } });
+    await app.close();
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("DEVICE_NOT_FOUND");
   });
 });
 

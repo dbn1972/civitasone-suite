@@ -449,6 +449,11 @@ const PAGE_GATES = [
     match: (r) => /device-trust\/routes\.ts$/.test(r.file) &&
       (/\/devices\/(admin|export-audit|:id\/block|:id\/unblock|:deviceId\/activity)$/.test(r.routePath) ||
         (r.method === "PATCH" && r.routePath === "/v1/hrms/devices/policy")) },
+  // FQ14: linking a login to an employee record is the hr_admin tier only
+  // (backend LOGIN_LINK_ROLES), narrower than the employee admin pages; the
+  // profile page renders its "Login link" card only for this same tier.
+  { area: "employee login-link (hr_admin/super_admin tier)", page: "../../../lib/auth/workRoles.ts", constName: "EMPLOYEE_LOGIN_LINK_ROLES",
+    match: (r) => /\/modules\/employee\/routes\.ts$/.test(r.file) && r.method === "PATCH" && r.routePath === "/v1/hrms/employees/:id/login-link" },
   { area: "advances", page: "advances/page.tsx", constName: "ADVANCE_ROLES",
     match: (r) => /employee\/loans-routes\.ts$/.test(r.file) && r.routePath.includes("salary-advances") },
   // GAP-HR-SF09A-010 / GAP-HR-APAR-04 / GAP-HR-APAR-NEW-01: apar/routes.ts's

@@ -192,16 +192,16 @@ export async function tenantLifecycleRoutes(app: FastifyInstance): Promise<void>
 }
 
 /**
- * `strict` = the caller wants a synchronous 404/409 pre-check against the
- * tenant row. The three legacy PATCH routes pass false: they historically
- * answered 202 without looking the tenant up, and the consumer (the real
- * authority) records an unknown tenant or a policy refusal on its own.
+ * `strict` = the caller wants the full synchronous pre-check against the
+ * tenant row. The three legacy PATCH routes pass false, but an unknown tenant
+ * is a 404 on every route (W6 P1: they used to answer 202 for a random id);
+ * the consumer (the real authority) still re-checks under its own lock.
  */
 async function create(ctx: ReturnType<typeof resolveContext>, id: string, body: CreateLifecycleBody, strict = true) {
   const kind: LifecycleKind = body.kind;
   try { assertNotOwnTenant(ctx, id); } catch (e) { throw e instanceof LifecycleError ? lifecycleToHttp(e) : e; }
   const t = strict ? await loadTenant(id) : await repo.findById(id);
-  if (!t) return publish(ctx, id, body);
+  if (!t) throw new HttpError(404, "NOT_FOUND", "tenant not found");
   try {
     const need = requirementsFor(kind, resolvePolicy(t.settings));
     assertReason(body.reason, need.reasonRequired);

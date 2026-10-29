@@ -13,6 +13,16 @@ import { sql } from "drizzle-orm";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { lockedThroughMonth } from "../pay-profiles/rules-api.js";
 import { maskPpoNo } from "./fin03-domain.js";
+import * as repo from "./repo.js";
+
+/**
+ * UAT W6-A: tenant-scoped existence read before publishing a run command, so an
+ * unknown run id answers 404 instead of a 202 that can never apply. The consumer
+ * stays the race-safe authority for status transitions.
+ */
+async function requireRun(id: string, tenantId: string): Promise<void> {
+  if (!(await repo.findRunById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "run not found");
+}
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -91,6 +101,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     await requirePermissionKey(ctx, "payroll.run.approve");
     const { id } = idParam.parse(req.params);
     const body = runActionBody.parse(req.body ?? {});
+    await requireRun(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason));
   });
 
@@ -99,6 +110,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = runActionBody.parse(req.body ?? {});
+    await requireRun(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.disburseRun(ctx, id, body.reason));
   });
 
@@ -109,6 +121,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     // GAP-PAYROLL-DETAIL-02: the web revert dialog collects a reason (>= 10 chars);
     // it is carried on the command and recorded on the audit event, like approve.
     const body = runActionBody.parse(req.body ?? {});
+    await requireRun(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id, body.reason));
   });
 

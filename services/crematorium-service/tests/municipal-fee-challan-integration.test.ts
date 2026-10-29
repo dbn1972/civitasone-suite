@@ -28,6 +28,7 @@
  * vitest.config.ts / the test run's env.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -98,7 +99,7 @@ async function drainOutbox(db: unknown, queue: MemoryQueue, service: string): Pr
 
 const FINANCE_URL =
   process.env.CREMATORIUM_TEST_FINANCE_DATABASE_URL ??
-  "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+  `postgres://finance_svc:finance_dev_pw@${testDbHostPort()}/civitas_finance`;
 
 // Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
 serializeFinanceOutboxRelay(FINANCE_URL);

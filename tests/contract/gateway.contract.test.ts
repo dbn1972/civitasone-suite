@@ -50,6 +50,15 @@ const LOADER_PATHS = [
   { method: "GET", gatewayPath: "/api/v1/knowledge/documents", expectUpstream: "/v1/knowledge/documents" },
   { method: "GET", gatewayPath: "/api/v1/workflow/instances", expectUpstream: "/v1/workflow/instances" },
   { method: "GET", gatewayPath: "/api/v1/analytics/dashboards", expectUpstream: "/v1/analytics/dashboards" },
+  // UAT F30: tenant-service resource trees beyond /tenants and /tenant.
+  { method: "GET", gatewayPath: "/api/v1/plans", expectUpstream: "/v1/plans/" },
+  { method: "GET", gatewayPath: "/api/v1/subscriptions/current", expectUpstream: "/v1/subscriptions/current" },
+  { method: "GET", gatewayPath: "/api/v1/settings", expectUpstream: "/v1/settings/" },
+  { method: "GET", gatewayPath: "/api/v1/org/hierarchy", expectUpstream: "/v1/org/hierarchy" },
+  { method: "GET", gatewayPath: "/api/v1/code-lists", expectUpstream: "/v1/code-lists/" },
+  { method: "GET", gatewayPath: "/api/v1/positions", expectUpstream: "/v1/positions/" },
+  { method: "GET", gatewayPath: "/api/v1/data-governance/domains", expectUpstream: "/v1/data-governance/domains" },
+  { method: "GET", gatewayPath: "/api/v1/consent/requests", expectUpstream: "/v1/consent/requests" },
 ] as const;
 
 function resolveUpstream(gatewayPath: string): string | null {
@@ -110,8 +119,14 @@ describe("gateway contract", () => {
       ["notification", "notification-v1", "notification-segments"],
       // location-service: plural resource prefixes share one upstream
       ["locations", "geofences", "jurisdictions", "hierarchy", "pincodes"],
-      // tenant-service: plural /tenants + singular /tenant alias
-      ["tenant", "tenant-singular"],
+      // tenant-service: plural /tenants + singular /tenant alias, plus its other top-level
+      // resource trees (plans, subscriptions, quotas, settings, org, code-lists, positions,
+      // data-governance, consent; UAT F30, registry.ts). One service, distinct prefixes.
+      [
+        "tenant", "tenant-singular", "tenant-plans", "tenant-subscriptions", "tenant-quotas",
+        "tenant-settings", "tenant-org", "tenant-code-lists", "tenant-positions",
+        "tenant-data-governance", "tenant-consent",
+      ],
       // document-service (COMP-003/REL-007): /api/v1/documents is the
       // canonical prefix; /api/v1/eoffice is an intentional alias onto the
       // SAME service (upstreamPath rewrites it to /v1/documents — see

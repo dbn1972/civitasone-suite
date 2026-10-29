@@ -39,6 +39,7 @@
  * the same values those services' own CI-passing test runs already rely on.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
@@ -80,12 +81,12 @@ let registerDeliveryConsumers: (q: unknown) => void;
 // from whatever DATABASE_URL the test run itself already supplies (vitest
 // config / process env), captured and restored below instead of re-pointed.
 const FINANCE_URL = process.env.TRADE_TEST_FINANCE_DATABASE_URL
-  ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+  ?? `postgres://finance_svc:finance_dev_pw@${testDbHostPort()}/civitas_finance`;
 
 // Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
 serializeFinanceOutboxRelay(FINANCE_URL);
 const NOTIFICATION_URL = process.env.TRADE_TEST_NOTIFICATION_DATABASE_URL
-  ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
+  ?? `postgres://notification_svc:notification_dev_pw@${testDbHostPort()}/civitas_notification`;
 
 let q: MemoryQueue;
 

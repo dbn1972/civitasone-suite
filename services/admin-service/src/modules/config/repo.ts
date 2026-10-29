@@ -79,7 +79,7 @@ export async function upsertModule(tx: Writer, tenantId: string, moduleKey: stri
   const existing = await tx.select().from(adminModuleConfigs)
     .where(and(eq(adminModuleConfigs.tenantId, tenantId), eq(adminModuleConfigs.moduleKey, moduleKey))).limit(1);
   if (existing[0]) {
-    await tx.update(adminModuleConfigs).set({ enabled, updatedBy: actorId, updatedAt: new Date() })
+    await tx.update(adminModuleConfigs).set({ enabled, updatedBy: actorId, updatedAt: new Date(), version: sql`${adminModuleConfigs.version} + 1` })
       .where(eq(adminModuleConfigs.id, existing[0].id));
   } else {
     await tx.insert(adminModuleConfigs).values({
@@ -123,7 +123,7 @@ export async function setFlagOverride(tx: Writer, flagKey: string, tenantId: str
     const rows = await tx.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, flagKey)).limit(1);
     if (!rows[0]) throw new Error(`flag ${flagKey} not found`);
     const overrides = { ...(rows[0].overrides as Record<string, boolean>), [tenantId]: enabled };
-    await tx.update(adminFeatureFlags).set({ overrides, updatedBy: actorId, updatedAt: new Date() })
+    await tx.update(adminFeatureFlags).set({ overrides, updatedBy: actorId, updatedAt: new Date(), version: sql`${adminFeatureFlags.version} + 1` })
       .where(eq(adminFeatureFlags.id, rows[0].id));
   } finally {
     await t.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);

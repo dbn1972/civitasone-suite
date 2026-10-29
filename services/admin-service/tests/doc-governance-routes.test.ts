@@ -154,7 +154,11 @@ async function createType(over: Record<string, unknown> = {}, tenantId = T_MAIN)
   expect(res.statusCode).toBe(202);
   expect((res.json() as { status: string }).status).toBe("accepted");
   await drainQueue();
-  return findTypeByCode(code, tenantId);
+  const row = await findTypeByCode(code, tenantId);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(row.id).toBe(res.json().data.id);
+  return row;
 }
 
 async function findDocumentByStorageKey(storageKey: string, tenantId = T_MAIN): Promise<Doc> {
@@ -184,7 +188,11 @@ async function registerDoc(over: Record<string, unknown>, tenantId = T_MAIN, rol
   expect(res.statusCode).toBe(202);
   expect((res.json() as { status: string }).status).toBe("accepted");
   await drainQueue();
-  return findDocumentByStorageKey(storageKey, tenantId);
+  const row = await findDocumentByStorageKey(storageKey, tenantId);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(row.id).toBe(res.json().data.id);
+  return row;
 }
 
 async function findRequirement(
@@ -212,7 +220,12 @@ async function upsertRequirement(
   expect(res.statusCode).toBe(202);
   expect((res.json() as { status: string }).status).toBe("accepted");
   await drainQueue();
-  return findRequirement(body.contextType, body.contextKey, body.documentTypeCode, tenantId);
+  const row = await findRequirement(body.contextType, body.contextKey, body.documentTypeCode, tenantId);
+  // FQ12: a requirement is an upsert -- a first set reports the new row's id, a
+  // re-set reports the EXISTING requirement's id (never a fresh, dangling one).
+  expect(row.id).toBe(res.json().data.id);
+  expect(row.id).toBe(res.json().id); // top-level id is the resource id too (review of #2382)
+  return row;
 }
 
 // ── auth ────────────────────────────────────────────────────────────────────
@@ -360,8 +373,12 @@ describe("document types", () => {
     expect((res.json() as ListBody<DocType>).data.map((r) => r.code)).toContain(t.code);
   });
 
-  it("400 without limit and 400 for an unknown status filter", async () => {
-    expect((await app.inject({ method: "GET", url: "/v1/admin/document-types", headers: auth() })).statusCode).toBe(400);
+  it("a missing limit defaults to one bounded page; 400 for an unknown status filter", async () => {
+    const none = await app.inject({ method: "GET", url: "/v1/admin/document-types", headers: auth() });
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(none.statusCode).toBe(200);
+    expect((none.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
     expect((await app.inject({
       method: "GET", url: "/v1/admin/document-types?limit=10&status=gone", headers: auth(),
     })).statusCode).toBe(400);
@@ -520,9 +537,12 @@ describe("document requirements", () => {
     expect(body.data[0]?.documentTypeCode).toBe(t.code);
   });
 
-  it("400 without limit", async () => {
+  it("a missing limit defaults to one bounded page", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/document-requirements", headers: auth() });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 });
 
@@ -698,11 +718,15 @@ describe("documents", () => {
     expect((byStatus.json() as ListBody<Doc>).data.every((d) => d.status === "expired")).toBe(true);
   });
 
-  it("400 for an unknown status filter and 400 without limit", async () => {
+  it("400 for an unknown status filter; a missing limit defaults to one bounded page", async () => {
     expect((await app.inject({
       method: "GET", url: "/v1/admin/documents?limit=10&status=shredded", headers: auth(),
     })).statusCode).toBe(400);
-    expect((await app.inject({ method: "GET", url: "/v1/admin/documents", headers: auth() })).statusCode).toBe(400);
+    const none = await app.inject({ method: "GET", url: "/v1/admin/documents", headers: auth() });
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(none.statusCode).toBe(200);
+    expect((none.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 
   it("does not list another tenant's documents", async () => {
@@ -816,7 +840,7 @@ describe("GET /v1/admin/documents/compliance", () => {
     expect(report.missingCount).toBe(1);
   });
 
-  it("400 when contextType or limit is missing", async () => {
+  it("400 when contextType is missing; a missing limit defaults to one bounded page", async () => {
     const noCtx = await app.inject({
       method: "GET", url: "/v1/admin/documents/compliance?limit=10&contextKey=k", headers: auth(),
     });
@@ -824,7 +848,11 @@ describe("GET /v1/admin/documents/compliance", () => {
     const noLimit = await app.inject({
       method: "GET", url: "/v1/admin/documents/compliance?contextType=ctx_q&contextKey=k", headers: auth(),
     });
-    expect(noLimit.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    // Past validation now: this context has no requirements, so the route gives its domain answer.
+    expect(noLimit.statusCode).toBe(404);
+    expect(noLimit.json().code ?? noLimit.json().error?.code).toBe("NO_REQUIREMENTS");
   });
 });
 

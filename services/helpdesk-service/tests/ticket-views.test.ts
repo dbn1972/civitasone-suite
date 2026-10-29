@@ -6,7 +6,7 @@
  * PATCH  /v1/helpdesk/tickets/views/:id — update (command → 202)
  * DELETE /v1/helpdesk/tickets/views/:id — delete (command → 202)
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -20,7 +20,24 @@ function token(roles = ["helpdesk_admin"], tenantId = TENANT, sub = ACTOR) {
   return signToken({ sub, tid: tenantId, roles, sid: "sess-views" }, SECRET);
 }
 
-afterAll(async () => { await sqlClient.end(); });
+// UAT W6 P1: PATCH now reads the view before publishing, so the update test needs a
+// real view row (owned by ACTOR in TENANT). Seeded here, removed afterwards.
+async function inTenant(fn: (tx: Parameters<Parameters<typeof sqlClient.begin>[0]>[0]) => Promise<unknown>): Promise<void> {
+  await sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    await fn(tx);
+  });
+}
+beforeAll(async () => {
+  await inTenant((tx) => tx`
+    INSERT INTO helpdesk.saved_views (id, tenant_id, owner_id, name)
+    VALUES (${VIEW_ID}, ${TENANT}, ${ACTOR}, 'TKT-11 fixture view')
+    ON CONFLICT (id) DO NOTHING`);
+});
+afterAll(async () => {
+  await inTenant((tx) => tx`DELETE FROM helpdesk.saved_views WHERE id = ${VIEW_ID} AND tenant_id = ${TENANT}`);
+  await sqlClient.end();
+});
 
 describe("GET /v1/helpdesk/tickets/views (list)", () => {
   it("returns 200 with data array", async () => {
@@ -139,7 +156,7 @@ describe("PATCH /v1/helpdesk/tickets/views/:id (update)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/helpdesk/tickets/views/${VIEW_ID}`,
-      headers: { authorization: `Bearer ${token()}` },
+      headers: { authorization: `Bearer ${token()}`, "x-tenant-id": TENANT },
       payload: { name: "Updated Name" },
     });
     await app.close();

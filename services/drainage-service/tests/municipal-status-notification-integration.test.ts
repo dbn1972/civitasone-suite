@@ -22,6 +22,7 @@
  * assertions in tests/complaints.test.ts and tests/field-actions.test.ts.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -82,7 +83,7 @@ async function drainOutbox(db: unknown, queue: MemoryQueue, service: string): Pr
 
 const NOTIFICATION_URL =
   process.env.DRAINAGE_TEST_NOTIFICATION_DATABASE_URL ??
-  "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
+  `postgres://notification_svc:notification_dev_pw@${testDbHostPort()}/civitas_notification`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let notification: any;

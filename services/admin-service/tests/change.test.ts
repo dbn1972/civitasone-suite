@@ -97,6 +97,9 @@ async function createChange(body: Record<string, unknown> = {}): Promise<string>
   const rows = list.json().data as Array<{ id: string; title: string }>;
   const match = rows.find((r) => r.title === title);
   if (!match) throw new Error(`created change '${title}' never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(match.id).toBe(res.json().data.id);
   return match.id;
 }
 
@@ -305,6 +308,9 @@ describe("release window — freeze conflict", () => {
     const found = data.find((f) => f.name === name);
     expect(found).toBeDefined();
     expect(found?.startsAt).toBe("2027-01-01T00:00:00.000Z");
+    // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+    // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+    expect((found as { id?: string } | undefined)?.id).toBe(create.json().data.id);
   });
 
   it("rejects a freeze whose end precedes its start (422)", async () => {

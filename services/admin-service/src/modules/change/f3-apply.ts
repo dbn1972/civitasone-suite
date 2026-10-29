@@ -5,6 +5,8 @@ import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { changeRequests, changeFreezes } from "./schema.js";
+import { resourceExists } from "../../shared/f3-resource.js";
 import type { ChangeRequestRow } from "./schema.js";
 import {
   assertTransition,
@@ -72,11 +74,13 @@ async function recordTransition(
   });
 }
 
-export async function apply_change_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_0(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests"
     const body = createChangeBody.parse(req.body);
-    const id = randomUUID();
+    const id = req.resourceId ?? randomUUID();
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, changeRequests, req.resourceId)) return;
       await repo.insertRequest(tx, {
         id,
         tenantId: ctx.tenantId,
@@ -100,7 +104,7 @@ export async function apply_change_0(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_1(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/rollback-plan"
     const { id } = idParam.parse(req.params);
     const body = rollbackPlanBody.parse(req.body);
@@ -115,7 +119,7 @@ export async function apply_change_1(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_2(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/submit"
     const { id } = idParam.parse(req.params);
     await db.transaction(async (tx) => {
@@ -134,7 +138,7 @@ export async function apply_change_2(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_3(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_3(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/approve"
     const { id } = idParam.parse(req.params);
     const body = approveBody.parse(req.body ?? {});
@@ -164,7 +168,7 @@ export async function apply_change_3(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_4(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_4(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/reject"
     const { id } = idParam.parse(req.params);
     const body = rejectBody.parse(req.body);
@@ -185,7 +189,7 @@ export async function apply_change_4(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_5(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_5(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/schedule"
     const { id } = idParam.parse(req.params);
     const body = scheduleBody.parse(req.body);
@@ -220,7 +224,7 @@ export async function apply_change_5(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_6(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_6(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/start"
     const { id } = idParam.parse(req.params);
     await db.transaction(async (tx) => {
@@ -239,7 +243,7 @@ export async function apply_change_6(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_7(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_7(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/requests/:id/complete"
     const { id } = idParam.parse(req.params);
     const body = completeBody.parse(req.body);
@@ -282,14 +286,16 @@ export async function apply_change_7(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_change_8(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_change_8(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/change/freezes"
     const body = createFreezeBody.parse(req.body);
     const start = new Date(body.startsAt);
     const end = new Date(body.endsAt);
     assertValidWindow(start, end);
-    const id = randomUUID();
+    const id = req.resourceId ?? randomUUID();
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, changeFreezes, req.resourceId)) return;
       await repo.insertFreeze(tx, {
         id, tenantId: ctx.tenantId, name: body.name, startsAt: start, endsAt: end,
         reason: body.reason, createdBy: ctx.actorId, updatedBy: ctx.actorId,

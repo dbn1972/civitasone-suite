@@ -35,6 +35,8 @@ import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { parseOrThrow } from "../../shared/envelope.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { departmentTemplates } from "./schema.js";
+import { resourceExists, withResourceId } from "../../shared/f3-resource.js";
 import {
   sanitizeTemplateConfig,
   findForeignTenantRefs,
@@ -96,7 +98,7 @@ function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: stri
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
 }
 
-export async function apply_dept_templates_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_dept_templates_0(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/department-templates"
     const body = parseOrThrow(createBody, req.body);
     if (Object.keys(body.config).length > MAX_CONFIG_KEYS) {
@@ -108,10 +110,13 @@ export async function apply_dept_templates_0(ctx: any, req: { body: unknown; par
     assertConfigNotEmpty(config);
 
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, departmentTemplates, req.resourceId)) return;
       const w = tx as repo.Writer;
       const clash = await repo.findTemplateByCodeTx(w, ctx.tenantId, body.code);
       if (clash) throw new HttpError(409, "TEMPLATE_EXISTS", `a template with code '${body.code}' already exists`);
       const row = await repo.insertTemplate(w, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         code: body.code,
         name: body.name,
@@ -134,7 +139,7 @@ export async function apply_dept_templates_0(ctx: any, req: { body: unknown; par
   
 }
 
-export async function apply_dept_templates_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_dept_templates_1(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/department-templates/:id/instantiate"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(instantiateBody, req.body);
@@ -157,6 +162,7 @@ export async function apply_dept_templates_1(ctx: any, req: { body: unknown; par
       }
 
       const row = await repo.insertInstantiation(w, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         templateId: id,
         templateVersion: template.version,
@@ -188,7 +194,7 @@ export async function apply_dept_templates_1(ctx: any, req: { body: unknown; par
   
 }
 
-export async function apply_dept_templates_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_dept_templates_2(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // patch:"/v1/admin/department-templates/:id"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(patchBody, req.body);

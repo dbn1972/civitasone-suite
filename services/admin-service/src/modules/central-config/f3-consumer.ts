@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { resourceIdOf } from "../../shared/f3-resource.js";
 import { COMMANDS } from "../../topics.js";
 import { apply_central_config_0, apply_central_config_1, apply_central_config_2 } from "./f3-apply.js";
 
@@ -36,15 +37,15 @@ export function registerF3_central_config_Consumers(queue: Queue): void {
       // need apply_* to accept a shared tx, a larger refactor left for follow-up.)
       switch (op) {
       case 'central_config_op_0': {
-        await apply_central_config_0(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_central_config_0(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'central_config_op_1': {
-        await apply_central_config_1(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_central_config_1(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'central_config_op_2': {
-        await apply_central_config_2(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_central_config_2(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       }

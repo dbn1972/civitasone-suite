@@ -118,33 +118,34 @@ describe("Sync routes — ABAC mailbox authorization (SEC-3)", () => {
   });
 });
 
-describe("Sync routes — validation (400/500)", () => {
-  it("POST /v1/sync/push with invalid mailbox → 500 (zod enum error)", async () => {
+describe("Sync routes — validation (400)", () => {
+  it("POST /v1/sync/push with invalid mailbox → 400 (zod enum error)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/sync/push",
       headers: headers(["super_admin"]),
       payload: { mailbox: "invalid_mailbox", deviceId: DEVICE_ID, cursor: "0", mutations: [] },
     });
-    // The sync routes don't register their own ZodError handler → falls through to 500
-    expect(res.statusCode).toBe(500);
+    // UAT W5-C: this used to pin a 500 -- the shared schema error handler was registered after the routes in
+    // app.ts, so a ZodError here fell through to Fastify's default handler. It is now registered first.
+    expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/sync/push with missing deviceId → 500 (zod required)", async () => {
+  it("POST /v1/sync/push with missing deviceId → 400 (zod required)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/sync/push",
       headers: headers(["super_admin"]),
       payload: { mailbox: "employees", cursor: "0", mutations: [] },
     });
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/sync/pull with missing mailbox → 500 (zod required)", async () => {
+  it("POST /v1/sync/pull with missing mailbox → 400 (zod required)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/sync/pull",
       headers: headers(["super_admin"]),
       payload: { deviceId: DEVICE_ID, cursor: "0", limit: 50 },
     });
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
   it("POST /v1/sync/pull with valid params → passes validation (may fail at device)", async () => {

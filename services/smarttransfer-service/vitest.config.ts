@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbHostPort } from "../../vitest.testdb";
 
 // smarttransfer-service is provisioned in CI (scripts/ci/bootstrap-postgres.sh
 // SERVICE_DBS — role smarttransfer_svc, db civitas_smarttransfer, port 5435)
@@ -20,7 +21,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://smarttransfer_svc:smarttransfer_dev_pw@localhost:5435/civitas_smarttransfer"
+          ? `postgres://smarttransfer_svc:smarttransfer_dev_pw@${testDbHostPort()}/civitas_smarttransfer`
           : (() => {
               throw new Error(
                 "DATABASE_URL is not set. This suite does not silently fall back to the shared dev Postgres — export DATABASE_URL (point it at your own disposable Postgres) before running tests.",
@@ -31,7 +32,7 @@ export default defineConfig({
       // fleet `<role>_dev_pw` convention bootstrap-postgres.sh sets via the GUC.
       SMARTTRANSFER_SCANNER_DATABASE_URL:
         process.env.SMARTTRANSFER_SCANNER_DATABASE_URL ??
-        (process.env.DATABASE_URL ?? "postgres://smarttransfer_svc:smarttransfer_dev_pw@localhost:5435/civitas_smarttransfer")
+        (process.env.DATABASE_URL ?? `postgres://smarttransfer_svc:smarttransfer_dev_pw@${testDbHostPort()}/civitas_smarttransfer`)
           .replace("smarttransfer_svc:smarttransfer_dev_pw", "smarttransfer_scanner:smarttransfer_scanner_dev_pw"),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",

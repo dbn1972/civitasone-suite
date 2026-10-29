@@ -10,6 +10,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as sessionCommands from "../sessions/commands.js";
 import * as keycloak from "../../shared/keycloak.js";
+import { persistKeycloakUserId } from "./keycloak-link.js";
 import { cache } from "../../shared/infra.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
@@ -122,7 +123,14 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const result = await keycloak.reconcileUser(
       { id: view.id, tenantId: view.tenantId, email: view.email, name: view.name, active: view.status === "active" },
     );
-    return reply.send({ userId: id, keycloak: result });
+    // FQ14: also (re)record the identity -> Keycloak id mapping, so this route
+    // doubles as the per-user backfill for users created before migration 0033.
+    // Recorded only when the realm user's `tid` equals this tenant; a realm
+    // user without it is reported (tid_missing), never mapped.
+    const keycloakUserIdLink = result.ok && result.kcUserId
+      ? (result.tenantVerified ? await persistKeycloakUserId(ctx.tenantId, view.id, result.kcUserId) : "tid_missing")
+      : undefined;
+    return reply.send({ userId: id, keycloak: result, ...(keycloakUserIdLink ? { keycloakUserIdLink } : {}) });
   });
 
   // P0 security — Revoke ALL of a user's active sessions. Admin-gated and

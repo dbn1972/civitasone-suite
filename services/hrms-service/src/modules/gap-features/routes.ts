@@ -116,10 +116,12 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ score: z.number().min(0).max(100).optional() }).parse(req.body ?? {});
-    await sqlClient.begin(async (sql) => {
+    // UAT W6-A: an UPDATE that touched no row means no such enrollment in this tenant: 404, not "completed".
+    const updated = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      await sql.unsafe(`UPDATE training.lms_enrollments SET status = 'completed', completed_at = NOW(), score = $1 WHERE id = $2 AND tenant_id = $3`, [body.score ?? null, id, ctx.tenantId]);
+      return sql.unsafe(`UPDATE training.lms_enrollments SET status = 'completed', completed_at = NOW(), score = $1 WHERE id = $2 AND tenant_id = $3 RETURNING id`, [body.score ?? null, id, ctx.tenantId]);
     });
+    if (updated.length === 0) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
     return reply.send({ data: { id, status: "completed" } });
   });
 

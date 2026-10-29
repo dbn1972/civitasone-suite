@@ -35,7 +35,7 @@ describe("runPsql", () => {
     // Shell-hostile value, randomised so no secret-shaped literal lives in the repo.
     const pw = `${globalThis.crypto.randomUUID()}$\`x\``;
     const res = runPsql(
-      { host: `h; touch ${marker}`, port: "5435", user: "u", db: "d", password: pw },
+      { host: `h; touch ${marker}`, port: "55432", user: "u", db: "d", password: pw },
       [`SELECT $$a "b" $$; touch ${marker}`],
       { onErrorStop: true },
     );

@@ -93,7 +93,9 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const user = await repo.findById(ctx.tenantId, id);
+    // FQ14: callers hold the actor's JWT sub, which is the KEYCLOAK user id, not
+    // users.users.id -- resolve either, still strictly inside ctx.tenantId.
+    const user = await repo.findByIdOrKeycloakId(ctx.tenantId, id);
     if (!user) return reply.code(404).send({ code: "NOT_FOUND" });
     return reply.send({ id: user.id, email: user.email });
   });
@@ -108,7 +110,8 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const user = await repo.findById(ctx.tenantId, id);
+    // FQ14: an identity id or a Keycloak sub, tenant-scoped (see the email lookup above).
+    const user = await repo.findByIdOrKeycloakId(ctx.tenantId, id);
     if (!user) return reply.code(404).send({ code: "NOT_FOUND" });
     return reply.send({ id: user.id, status: user.status });
   });

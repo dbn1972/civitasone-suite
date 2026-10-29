@@ -13,6 +13,7 @@ import { getCommandOutcome } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
+import * as tenderRepo from "./repo.js";
 import { BID_OPENING_COMMITTEE_ROLES } from "./domain.js";
 import { createTenderBody, submitBidBody, techEvaluateBody, awardTenderBody, idParam } from "./validators.js";
 
@@ -135,6 +136,9 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W6-A: tenant-scoped existence read; unknown tender answers 404, not 202.
+    const tender = await db.transaction((tx) => tenderRepo.findTenderByIdTx(tx, id, ctx.tenantId));
+    if (!tender) throw new HttpError(404, "NOT_FOUND", "tender not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.openFinancials(ctx, id));
   });
 

@@ -12,6 +12,7 @@ import {
   verifyTotpStep,
 } from "../../shared/mfa-crypto.js";
 import { mfaConfigs } from "./schema.js";
+import * as usersRepo from "../users/repo.js";
 import {
   enableMfaBody,
   enableMfa,
@@ -32,6 +33,10 @@ export async function mfaRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     if (ctx.actorId !== id) requireRole(ctx, ADMIN);
     const body = enableMfaBody.parse(req.body);
+    // UAT W6 P1 (accept-nonexistent): this used to publish for ANY uuid and answer 202 for a user that does not
+    // exist (or lives in another tenant). Tenant-scoped (RLS + WHERE tenant_id) read first, 404 on a miss --
+    // after the role check, so a non-admin cannot probe which ids exist. Precedent: finance payments/routes.ts.
+    if (!(await usersRepo.findById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "user not found");
     return sendAccepted(reply, acceptedResponseSchema, await enableMfa(ctx, id, body));
   });
 

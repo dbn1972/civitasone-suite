@@ -17,6 +17,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { validateExperience, type Employment, type ExperienceRequirement } from "./experience-domain.js";
 import { validateEducation, EDUCATION_LEVELS, type Qualification, type EducationRequirement } from "./education-domain.js";
 import * as repo from "./qualification-repo.js";
+import { findJobOpeningByTenant } from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -41,7 +42,8 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_REQUIREMENT", "minimum relevant years cannot exceed minimum total years");
     }
 
-    await repo.findByJob(ctx.tenantId, jobOpeningId);
+    // UAT W6-A: the requirement row is upserted per job opening, but the opening itself must exist.
+    if (!(await findJobOpeningByTenant(jobOpeningId, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "job opening not found");
     try {
       await publishF3Write(ctx, "recruitment_qualification_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {

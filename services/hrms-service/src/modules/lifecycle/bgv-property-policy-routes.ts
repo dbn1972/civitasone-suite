@@ -69,6 +69,10 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   app.patch("/v1/hrms/property-returns/:id/return", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W6-A: tenant-scoped existence read; an unknown property return answers 404, not "returned".
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsPropertyReturns.id }).from(hrmsPropertyReturns)
+      .where(and(eq(hrmsPropertyReturns.id, id), eq(hrmsPropertyReturns.tenantId, ctx.tenantId))).limit(1));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "property return not found");
     await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, returnStatus: "returned" }) as any;
   });

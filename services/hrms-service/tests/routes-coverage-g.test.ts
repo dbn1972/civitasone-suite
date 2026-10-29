@@ -2,7 +2,7 @@
  * HRMS POST route coverage — valid payloads that pass zod validation
  * to reach deeper into handler code paths (DB calls, etc.)
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -130,7 +130,10 @@ async function seedProfilePhoto(employeeId: string): Promise<void> {
  * "relieved" is what /join requires — see lifecycle/routes.ts.
  */
 async function seedTransfer(status: "requested" | "ordered" | "relieved"): Promise<string> {
-  const employeeId = await seedEmployeeForMe();
+  // Each transfer gets its own employee with its own login: the transfer routes
+  // do not need the caller linked to it, and migration 0253 forbids two serving
+  // employees sharing one user_ref (this used to link every one to UUID).
+  const employeeId = await seedEmployeeForMe(randomUUID());
   const id = randomUUID();
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsTransfers).values({
     id, tenantId: TENANT, employeeId, fromDeptId: randomUUID(), toDeptId: randomUUID(),
@@ -763,7 +766,10 @@ describe("HRMS routes — Device Trust", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/devices/${FAKE}/activity`, headers: { authorization: `Bearer ${token()}` } });
     await app.close();
-    expect(r.statusCode).not.toBe(404);
+    // UAT W6-A: an unregistered device is a domain 404 (DEVICE_NOT_FOUND), not a
+    // 200 []; the route itself is still matched (not Fastify's route-not-found).
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("DEVICE_NOT_FOUND");
   });
 
   it("GET /v1/hrms/devices/policy", async () => {
@@ -790,6 +796,28 @@ describe("HRMS routes — Device Trust", () => {
 });
 
 describe("HRMS routes — ID Cards & Visiting Cards", () => {
+  // The visiting-card/me routes resolve the caller (token subject UUID) to an
+  // employee via user_ref, so this block needs exactly one serving employee
+  // linked to UUID. It used to rely on seedTransfer() having linked every
+  // transfer fixture to UUID earlier in the file; that no longer happens
+  // (migration 0253 forbids two serving employees sharing a user_ref), so seed
+  // it here. Reuses an existing link if one is already present (never a
+  // second one), and unlinks only the row it created afterwards.
+  let seededForMe: string | null = null;
+  beforeAll(async () => {
+    const existing = await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`
+      SELECT id FROM employee.hrms_employees
+       WHERE tenant_id = ${TENANT} AND user_ref = ${UUID}
+         AND status NOT IN ('terminated', 'separated', 'retired', 'no_show')`);
+    if (existing.length === 0) seededForMe = await seedEmployeeForMe(UUID);
+  });
+  afterAll(async () => {
+    if (seededForMe) {
+      const id = seededForMe;
+      await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`UPDATE employee.hrms_employees SET user_ref = NULL WHERE id = ${id}`);
+    }
+  });
+
   it("POST /v1/hrms/id-cards", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards", headers: { authorization: `Bearer ${token()}` },

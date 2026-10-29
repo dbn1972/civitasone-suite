@@ -18,8 +18,15 @@ export default {
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
-      // Finance service DB (for cross-tenant isolation tests)
-      DATABASE_URL: process.env.DATABASE_URL ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance",
+      // Finance service DB (for cross-tenant isolation tests). FQ15: injected ONLY
+      // when the caller gave a database (DATABASE_URL, or PGHOST+PGPORT as CI sets);
+      // never a default host/port -- on the shared host 5435 is the LIVE database.
+      // DB-backed root suites then fail fast via vitest.testdb.ts's requireTestDb().
+      ...(process.env.DATABASE_URL
+        ? { DATABASE_URL: process.env.DATABASE_URL }
+        : process.env.PGHOST && process.env.PGPORT
+          ? { DATABASE_URL: `postgres://finance_svc:finance_dev_pw@${process.env.PGHOST}:${process.env.PGPORT}/civitas_finance` }
+          : {}),
     },
     coverage: {
       provider: "v8",

@@ -30,12 +30,13 @@
  * UUIDs like the sibling real-DB test does.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+const DATABASE_URL = process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -41,10 +41,12 @@ import {
   assertConfigNotEmpty,
 } from "./domain.js";
 import type { DepartmentTemplateRow, DepartmentInstantiationRow } from "./schema.js";
+import { acceptedCreate } from "../../shared/f3-resource.js";
 
 const TEMPLATE_ROLES = [...TENANT_ADMIN_ROLES];
 
-const limitSchema = z.coerce.number().int().min(1).max(200);
+// W6 P9b: list GETs without ?limit answered 400; default like the service's other lists.
+const limitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
 const codeSchema = z.string().min(2).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, "lower-case alphanumeric, - and _ only");
 
@@ -135,6 +137,7 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'dept_templates_op_0',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
@@ -195,12 +198,13 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'dept_templates_op_1',
+      resourceId: __f3Id,
       body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   app.get("/v1/admin/department-templates/:id/instantiations", async (req, reply) => {

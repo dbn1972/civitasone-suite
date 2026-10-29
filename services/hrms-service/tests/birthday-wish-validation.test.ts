@@ -18,6 +18,7 @@
  * travel-requests/expenses.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
 import { buildApp } from "../src/app.js";
@@ -39,7 +40,7 @@ const GIVER_EMP_ID = "eeeeeeee-b1a7-0000-0000-000000000001";
 const GIVER_SUB = "eeeeeeee-b1a7-0000-0000-0000000000ff";
 
 const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+  process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 
 function token(roles: string[], tenant: string = TENANT_T, sub = "aaaaaaaa-9999-4000-8000-000000000009") {
   return signToken({ sub, tid: tenant, roles, sid: "s1" }, SECRET);

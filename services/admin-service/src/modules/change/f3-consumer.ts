@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { resourceIdOf } from "../../shared/f3-resource.js";
 import { COMMANDS } from "../../topics.js";
 import { apply_change_0, apply_change_1, apply_change_2, apply_change_3, apply_change_4, apply_change_5, apply_change_6, apply_change_7, apply_change_8 } from "./f3-apply.js";
 
@@ -26,39 +27,39 @@ export function registerF3_change_Consumers(queue: Queue): void {
       // message instead of it vanishing after one log line.
       switch (op) {
       case 'change_op_0': {
-        await apply_change_0(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_0(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_1': {
-        await apply_change_1(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_1(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_2': {
-        await apply_change_2(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_2(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_3': {
-        await apply_change_3(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_3(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_4': {
-        await apply_change_4(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_4(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_5': {
-        await apply_change_5(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_5(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_6': {
-        await apply_change_6(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_6(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_7': {
-        await apply_change_7(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_7(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       case 'change_op_8': {
-        await apply_change_8(ctx, { body: p.body, params: p.params, query: p.query });
+        await apply_change_8(ctx, { body: p.body, params: p.params, query: p.query, resourceId: resourceIdOf(p) });
         break;
       }
       }

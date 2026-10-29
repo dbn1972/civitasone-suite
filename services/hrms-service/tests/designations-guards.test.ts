@@ -12,6 +12,7 @@
  * tests/manpower-rls.test.ts does for manpower.plans/requisitions.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { signToken } from "@civitasone/auth";
@@ -29,7 +30,7 @@ async function drainF3(): Promise<void> {
   await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
 }
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+const DATABASE_URL = process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

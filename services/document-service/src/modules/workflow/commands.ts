@@ -19,8 +19,8 @@ export async function createDak(ctx: RequestContext, body: CreateDakBody): Promi
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function forwardDak(ctx: RequestContext, dakId: string, assignedTo: string, asAdmin = false): Promise<Accepted> {
-  return pub(COMMANDS.dakForward, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId, assignedTo, asAdmin });
+export async function forwardDak(ctx: RequestContext, dakId: string, assignedTo: string, asAdmin = false, remarks?: string | null): Promise<Accepted> {
+  return pub(COMMANDS.dakForward, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId, assignedTo, asAdmin, ...(remarks ? { remarks } : {}) });
 }
 
 export async function acknowledgeDak(ctx: RequestContext, dakId: string, asAdmin = false): Promise<Accepted> {

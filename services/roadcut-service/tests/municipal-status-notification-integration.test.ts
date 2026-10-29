@@ -17,6 +17,7 @@
  * one process.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
@@ -45,7 +46,7 @@ async function drainOutbox(db: unknown, queue: { publish: (...a: never[]) => unk
   return total;
 }
 
-const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5435";
+const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? requireTestDb().port;
 const ROADCUT_DSN = `postgres://roadcut_svc:roadcut_dev_pw@localhost:${PGPORT}/civitas_roadcut`;
 const NOTIFICATION_DSN = `postgres://notification_svc:notification_dev_pw@localhost:${PGPORT}/civitas_notification`;
 

@@ -12,7 +12,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
@@ -106,6 +106,10 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = createBody.partial().parse(req.body);
+    // UAT W6-A: tenant-scoped existence read; an unknown type answers 404, not "updated".
+    const existing = await scopedRead((tx) => tx.select({ id: employeeTypeMaster.id }).from(employeeTypeMaster)
+      .where(and(eq(employeeTypeMaster.id, id), eq(employeeTypeMaster.tenantId, ctx.tenantId))).limit(1));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "employee type not found");
     const patch: Record<string, unknown> = {};
     if (body.code !== undefined) patch.code = body.code;
     if (body.name !== undefined) patch.name = body.name;

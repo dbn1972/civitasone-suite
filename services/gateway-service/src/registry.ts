@@ -103,6 +103,21 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "pincodes",      prefix: "/api/v1/pincodes",     upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   { name: "tenant-singular", prefix: "/api/v1/tenant", upstream: upstream("tenant", 3002) },
+  // UAT F30 (runner-fq12 D9): tenant-service also serves these top-level /v1/* resource trees
+  // (services/tenant-service/src/modules/*/routes.ts), which no gateway prefix reached, so every
+  // call 404'd "no upstream for path". Each forwards verbatim (/api/v1/x -> /v1/x). Every upstream
+  // route resolves the caller context and enforces its own role check; the gateway still requires a
+  // bearer/api-key (none of these are public) and treats them as the platform tenant surface in the
+  // module guard, like "tenant" / "tenant-singular".
+  { name: "tenant-plans",           prefix: "/api/v1/plans",           upstream: upstream("tenant", 3002) },
+  { name: "tenant-subscriptions",   prefix: "/api/v1/subscriptions",   upstream: upstream("tenant", 3002) },
+  { name: "tenant-quotas",          prefix: "/api/v1/quotas",          upstream: upstream("tenant", 3002) },
+  { name: "tenant-settings",        prefix: "/api/v1/settings",        upstream: upstream("tenant", 3002) },
+  { name: "tenant-org",             prefix: "/api/v1/org",             upstream: upstream("tenant", 3002) },
+  { name: "tenant-code-lists",      prefix: "/api/v1/code-lists",      upstream: upstream("tenant", 3002) },
+  { name: "tenant-positions",       prefix: "/api/v1/positions",       upstream: upstream("tenant", 3002) },
+  { name: "tenant-data-governance", prefix: "/api/v1/data-governance", upstream: upstream("tenant", 3002) },
+  { name: "tenant-consent",         prefix: "/api/v1/consent",         upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },

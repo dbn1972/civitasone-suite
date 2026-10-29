@@ -285,11 +285,13 @@ describe("PATCH /v1/payroll/runs/:id/approve (core)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("PATCH /v1/payroll/runs/:id/disburse (core)", () => {
-  it("202 — valid request", async () => {
+  // UAT W6-A: UNKNOWN_ID is not a run: 404, not a 202 that can never apply.
+  // Real-run 202s are covered in run-maker-checker-real-db.test.ts.
+  it("404 — unknown run", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${UNKNOWN_ID}/disburse`, headers: auth(["payroll_officer"]) });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 — invalid UUID", async () => {
@@ -319,11 +321,12 @@ describe("PATCH /v1/payroll/runs/:id/disburse (core)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("PATCH /v1/payroll/runs/:id/revert (core)", () => {
-  it("202 — valid request", async () => {
+  // UAT W6-A: UNKNOWN_ID is not a run: 404, not 202 (real-run revert 202 is in run-maker-checker-real-db.test.ts).
+  it("404 — unknown run", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${UNKNOWN_ID}/revert`, headers: auth(["super_admin"]) });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 — invalid UUID", async () => {

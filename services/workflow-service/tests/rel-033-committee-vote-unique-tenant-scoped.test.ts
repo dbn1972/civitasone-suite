@@ -49,6 +49,7 @@
  * green results again.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbFromEnv } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
@@ -58,18 +59,23 @@ import { castVote } from "../src/modules/quorum/repo.js";
 import { committeeDecisions, committeeVotes } from "../src/modules/quorum/schema.js";
 
 const WORKFLOW_DB = "civitas_workflow";
-const PGHOST = process.env["PGHOST"] ?? "localhost";
-const PGPORT = process.env["PGPORT"] ?? "5435";
+// FQ15: no default host/port (5435 is the LIVE database on the shared host).
+// Unset PGHOST/PGPORT -> probe() is false -> this already env-gated suite skips.
+const TEST_DB = testDbFromEnv();
 const PGUSER = process.env["PGUSER"] ?? "civitas";
 const PGPASSWORD = process.env["PGPASSWORD"] ?? "civitas_test";
-const SUPERUSER_URL = new URL(`postgres://${PGHOST}:${PGPORT}/${WORKFLOW_DB}`);
-SUPERUSER_URL.username = PGUSER;
-SUPERUSER_URL.password = PGPASSWORD;
-const SUPERUSER_DSN = SUPERUSER_URL.toString();
+let SUPERUSER_DSN = "";
+if (TEST_DB) {
+  const SUPERUSER_URL = new URL(`postgres://${TEST_DB.host}:${TEST_DB.port}/${WORKFLOW_DB}`);
+  SUPERUSER_URL.username = PGUSER;
+  SUPERUSER_URL.password = PGPASSWORD;
+  SUPERUSER_DSN = SUPERUSER_URL.toString();
+}
 
 /** Cheap connectivity probe, used only to decide skip vs run -- same convention as
  * this directory's other rel-032/rel-033 test files. */
 async function probe(): Promise<boolean> {
+  if (!SUPERUSER_DSN) return false;
   const client = postgres(SUPERUSER_DSN, { max: 1, connect_timeout: 2, idle_timeout: 1, onnotice: () => {} });
   try {
     await client`SELECT 1`;

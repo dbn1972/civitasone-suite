@@ -181,6 +181,8 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const { id } = closeParam.parse(req.params);
+    // W6 P1: an unknown grant is a 404 here; the consumer's closed_at IS NULL guard stays the race-safe check.
+    if (!(await repo.findBreakGlassById(id))) throw new HttpError(404, "NOT_FOUND", "break-glass grant not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeBreakGlass(ctx, id));
   });
 

@@ -8,12 +8,33 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db, sqlClient } from "../src/shared/db.js";
+import { adminTenants } from "../src/modules/tenants/schema.js";
+import { adminBreakGlassLog } from "../src/modules/support/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-cccc-4000-8000-000000000001";
 const ACTOR = "00000000-cccc-4000-8000-000000000002";
 const VALID_UUID = "11111111-cccc-4000-8000-333333333333";
+// W6 P1: tenant-scoped commands (suspend/reactivate/edition/backup) now 404 an
+// unknown tenant, so their happy paths run against real seeded tenants.
+const T_ACTIVE = "11111111-cccc-4000-8000-5eed000000a1";
+const T_SUSPENDED = "11111111-cccc-4000-8000-5eed000000b1";
+async function seedTenant(id: string, status: string): Promise<void> {
+  await runWithTenant(id, () => db.transaction(async (tx) => {
+    await tx.delete(adminTenants).where(eq(adminTenants.id, id));
+    await tx.insert(adminTenants).values({
+      id, tenantId: id, name: "cov seed", domain: `cov-${id}.example`, edition: "psu", status,
+      region: "ap-south-1", residency: "IN", settings: { approvalPolicy: { reasonRequired: false } },
+      createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+    });
+  }));
+}
+async function unseedTenant(id: string): Promise<void> {
+  await runWithTenant(id, () => db.transaction((tx) => tx.delete(adminTenants).where(eq(adminTenants.id, id))));
+}
 
 function token(roles: string[] = ["super_admin"], tenantId = TENANT): string {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-cov" }, SECRET, 3600);
@@ -25,8 +46,8 @@ function authHeader(roles?: string[], tenantId?: string) {
 
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => { app = await buildApp(); await seedTenant(T_ACTIVE, "active"); await seedTenant(T_SUSPENDED, "suspended"); });
+afterAll(async () => { await unseedTenant(T_ACTIVE); await unseedTenant(T_SUSPENDED); await app.close(); await sqlClient.end(); });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // HEALTH ROUTES
@@ -600,9 +621,18 @@ describe("GET /v1/admin/tenants/:id", () => {
 });
 
 describe("PATCH /v1/admin/tenants/:id/edition", () => {
-  it("returns 202 for super_admin with valid edition", async () => {
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/tenants/${VALID_UUID}/edition`,
+      headers: authHeader(["super_admin"]),
+      payload: { edition: "small_office" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin with valid edition", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/tenants/${T_ACTIVE}/edition`,
       headers: authHeader(["super_admin"]),
       payload: { edition: "small_office" },
     });
@@ -638,9 +668,18 @@ describe("PATCH /v1/admin/tenants/:id/edition", () => {
 });
 
 describe("PATCH /v1/admin/tenants/:id/suspend", () => {
-  it("returns 202 for super_admin with valid reason", async () => {
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/tenants/${VALID_UUID}/suspend`,
+      headers: authHeader(["super_admin"]),
+      payload: { reason: "Policy violation detected" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin with valid reason", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/tenants/${T_ACTIVE}/suspend`,
       headers: authHeader(["super_admin"]),
       payload: { reason: "Policy violation detected" },
     });
@@ -667,9 +706,17 @@ describe("PATCH /v1/admin/tenants/:id/suspend", () => {
 });
 
 describe("PATCH /v1/admin/tenants/:id/reactivate", () => {
-  it("returns 202 for super_admin", async () => {
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/tenants/${VALID_UUID}/reactivate`,
+      headers: authHeader(["super_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/tenants/${T_SUSPENDED}/reactivate`,
       headers: authHeader(["super_admin"]),
     });
     expect(res.statusCode).toBe(202);
@@ -696,9 +743,18 @@ describe("PATCH /v1/admin/tenants/:id/reactivate", () => {
 // BACKUP ROUTES
 // ══════════════════════════════════════════════════════════════════════════════
 describe("POST /v1/admin/tenants/:id/backup/schedule", () => {
-  it("returns 202 for super_admin with valid cron", async () => {
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/admin/tenants/${VALID_UUID}/backup/schedule`,
+      headers: authHeader(["super_admin"]),
+      payload: { cronExpr: "30 2 * * *" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin with valid cron", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/admin/tenants/${T_ACTIVE}/backup/schedule`,
       headers: authHeader(["super_admin"]),
       payload: { cronExpr: "30 2 * * *" },
     });
@@ -752,9 +808,17 @@ describe("POST /v1/admin/tenants/:id/backup/schedule", () => {
 });
 
 describe("POST /v1/admin/tenants/:id/backup/run", () => {
-  it("returns 202 for super_admin", async () => {
+  it("returns 404 for a tenant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/admin/tenants/${VALID_UUID}/backup/run`,
+      headers: authHeader(["super_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/admin/tenants/${T_ACTIVE}/backup/run`,
       headers: authHeader(["super_admin"]),
     });
     expect(res.statusCode).toBe(202);
@@ -881,9 +945,29 @@ describe("POST /v1/admin/support/break-glass", () => {
 });
 
 describe("PATCH /v1/admin/support/break-glass/:id/close", () => {
-  it("returns 202 for super_admin", async () => {
+  // W6 P1: close now 404s an unknown grant, so the happy path closes a real open one.
+  const BG_OPEN = "11111111-cccc-4000-8000-5eed0000bb01";
+  const dropGrant = () => runWithTenant(T_ACTIVE, () => db.transaction((tx) => tx.delete(adminBreakGlassLog).where(eq(adminBreakGlassLog.id, BG_OPEN))));
+  beforeAll(async () => {
+    await dropGrant();
+    await runWithTenant(T_ACTIVE, () => db.transaction((tx) => tx.insert(adminBreakGlassLog).values({
+      id: BG_OPEN, tenantId: T_ACTIVE, ticketId: VALID_UUID, actorId: ACTOR, reason: "coverage open grant",
+      expiresAt: new Date(Date.now() + 3_600_000), correlationId: "corr-cov-bg", createdBy: ACTOR, updatedBy: ACTOR,
+    })));
+  });
+  afterAll(dropGrant);
+
+  it("returns 404 for a grant that does not exist (W6 P1: no 202 for a random id)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/support/break-glass/${VALID_UUID}/close`,
+      headers: authHeader(["super_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 202 for super_admin", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/support/break-glass/${BG_OPEN}/close`,
       headers: authHeader(["super_admin"]),
     });
     expect(res.statusCode).toBe(202);

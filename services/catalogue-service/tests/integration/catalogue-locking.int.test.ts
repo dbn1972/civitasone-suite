@@ -16,13 +16,15 @@
  * dev database still gets a green suite.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { hasTestDb, testDbHostPort } from "../../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { eq, and, sql } from "drizzle-orm";
 import type { ScopedTx } from "../../src/shared/db.js";
 
 const EXPECTED_DB = "civitas_catalogue";
-const DEFAULT_DSN = `postgres://catalogue_svc:catalogue_dev_pw@localhost:5435/${EXPECTED_DB}`;
+// FQ15: no live default. Unset PGHOST/PGPORT -> DSN undefined -> probe() false -> skip.
+const DEFAULT_DSN = hasTestDb() ? `postgres://catalogue_svc:catalogue_dev_pw@${testDbHostPort()}/${EXPECTED_DB}` : undefined;
 // Only honour an inherited DSN when it actually addresses this service's
 // database — a vitest config further up the tree can otherwise point
 // DATABASE_URL at a different service's DB.
@@ -31,10 +33,11 @@ const DSN = inheritedDsn?.includes(EXPECTED_DB) === true ? inheritedDsn : DEFAUL
 // `src/shared/db.ts` builds its client at module-evaluation time from
 // DATABASE_URL, so the value has to be in place BEFORE that module is imported.
 // Hence the dynamic imports below — static imports would be hoisted above this.
-process.env["DATABASE_URL"] = DSN;
+if (DSN) process.env["DATABASE_URL"] = DSN;
 
 /** Cheap connectivity probe on a throwaway client, used only to decide skip vs run. */
 async function probe(): Promise<boolean> {
+  if (!DSN) return false;
   const client = postgres(DSN, { max: 1, connect_timeout: 2, idle_timeout: 1, onnotice: () => {} });
   try {
     await client`SELECT 1`;

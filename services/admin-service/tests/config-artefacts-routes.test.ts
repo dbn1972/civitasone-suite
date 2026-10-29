@@ -101,6 +101,9 @@ async function snapshot(
   const rows = (list.json() as ListBody<Artefact>).data;
   const match = rows[0];
   if (!match) throw new Error(`snapshot for '${setKey}' never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(match.id).toBe(res.json().data.id);
   return match;
 }
 
@@ -125,6 +128,9 @@ async function requestPromotion(
   const rows = (list.json() as ListBody<Promotion>).data;
   const match = rows.find((r) => r.setKey === setKey && r.artefactVersion === artefactVersion && r.targetEnv === targetEnv);
   if (!match) throw new Error(`promotion request for '${setKey}' -> ${targetEnv} never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(match.id).toBe(res.json().data.id);
   return match;
 }
 
@@ -347,9 +353,12 @@ describe("GET /v1/admin/config-artefacts — list and read", () => {
     expect(body.meta.page).toBe(2);
   });
 
-  it("400 when limit is absent — an unbounded list is never served", async () => {
+  it("defaults an absent limit to one bounded page — an unbounded list is never served", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/config-artefacts", headers: auth(CHECKER) });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 
   it("400 when limit exceeds the 200 page-size ceiling", async () => {
@@ -866,11 +875,14 @@ describe("config-artefact environments and rollback", () => {
     expect(body.meta.total).toBeGreaterThanOrEqual(1);
   });
 
-  it("400 when the environments list omits limit", async () => {
+  it("the environments list defaults an omitted limit to one bounded page", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/admin/config-artefacts/environments", headers: auth(CHECKER, ["tenant_admin"], T_ROLLBACK),
     });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 });
 

@@ -109,6 +109,9 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
     const { id, mId } = milestoneParam.parse(req.params);
+    // UAT W6-A: the milestone must exist in THIS project (tenant-scoped); else 404, not 202.
+    const milestone = await repo.findMilestoneById(mId, ctx.tenantId);
+    if (!milestone || milestone.projectId !== id) throw new HttpError(404, "NOT_FOUND", "milestone not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeMilestone(ctx, id, mId));
   });
 
@@ -149,6 +152,9 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROJ_ROLES);
     const { id, taskId } = taskParam.parse(req.params);
     const body = updateTaskBody.parse(req.body);
+    // UAT W6-A: same ownership guard as PATCH .../status: the task must exist in THIS project.
+    const task = await repo.findTaskById(taskId, ctx.tenantId);
+    if (!task || task.projectId !== id) throw new HttpError(404, "NOT_FOUND", "task not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateTask(ctx, id, taskId, body));
   });
 

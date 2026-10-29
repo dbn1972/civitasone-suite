@@ -12,20 +12,23 @@
  * database still gets a green suite.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { hasTestDb, testDbHostPort } from "../../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { eq, sql } from "drizzle-orm";
 import type { ScopedTx } from "../../src/shared/db.js";
 
 const EXPECTED_DB = "civitas_cdp";
-const DEFAULT_DSN = `postgres://cdp_svc:cdp_dev_pw@localhost:5435/${EXPECTED_DB}`;
+// FQ15: no live default. Unset PGHOST/PGPORT -> DSN undefined -> probe() false -> skip.
+const DEFAULT_DSN = hasTestDb() ? `postgres://cdp_svc:cdp_dev_pw@${testDbHostPort()}/${EXPECTED_DB}` : undefined;
 const inheritedDsn = process.env["DATABASE_URL"];
 const DSN = inheritedDsn?.includes(EXPECTED_DB) === true ? inheritedDsn : DEFAULT_DSN;
 // shared/db.ts builds its client at module-evaluation time, so the DSN has to be in
 // place BEFORE that import — hence the dynamic imports below.
-process.env["DATABASE_URL"] = DSN;
+if (DSN) process.env["DATABASE_URL"] = DSN;
 
 async function probe(): Promise<boolean> {
+  if (!DSN) return false;
   const client = postgres(DSN, { max: 1, connect_timeout: 2, idle_timeout: 1, onnotice: () => {} });
   try {
     await client`SELECT 1`;

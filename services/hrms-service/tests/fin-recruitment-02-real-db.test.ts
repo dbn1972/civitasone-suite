@@ -8,6 +8,7 @@
  *  - APPLICATION-06: GET /applications/:id/scorecards with the blind-scoring rule and resolved interviewer names.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
@@ -67,7 +68,7 @@ async function asTenant<T>(fn: (tx: postgres.TransactionSql) => Promise<T>, tid 
 
 beforeAll(async () => {
   await seedHrmsCoreFixtures();
-  db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  db = postgres(process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`, { max: 5 });
   app = await buildApp();
 });
 

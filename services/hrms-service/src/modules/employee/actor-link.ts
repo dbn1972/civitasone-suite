@@ -1,8 +1,12 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, notInArray } from "drizzle-orm";
+import { pino } from "pino";
 import { scopedRead, db } from "../../shared/db.js";
 import { hrmsEmployees, type EmployeeRow } from "./schema.js";
 import { HttpError } from "../../shared/context.js";
 import { fetchVerifiedActorEmail } from "../../shared/identity-client.js";
+import { LINK_INELIGIBLE_STATUSES, findOtherHolder, lockLogin } from "./login-holder.js";
+
+const log = pino({ name: "hrms.actor-link" });
 
 /**
  * Resolve the hrmsEmployees row linked to a request's actor.
@@ -56,43 +60,87 @@ export async function resolveEmployeeForActor(
   tenantId: string,
   actorId: string,
 ): Promise<EmployeeRow | undefined> {
-  // Issue #1780: nothing in the schema enforces (tenant_id, user_ref) uniqueness, and
-  // an unordered rows[0] picked an ARBITRARY row when an actor was linked twice
-  // (duplicate onboarding / re-link / bad import) -- self-service routes then
-  // served another employee's data or a false 404. Fetch every match (no
-  // arbitrary rows[0]) and fail CLOSED on ambiguity: never guess whose record
-  // the caller is, so the outcome no longer depends on row order.
-  let rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+  const linked = await findLinkedEmployee(tenantId, actorId);
+  if (linked) return linked;
+
+  const email = await fetchVerifiedActorEmail(tenantId, actorId);
+  if (!email) return undefined;
+  if (!(await autoLinkByVerifiedEmail(tenantId, actorId, email))) return undefined;
+  // Re-read through the userRef path so the result (and its ambiguity check)
+  // is exactly what every later request will see.
+  return findLinkedEmployee(tenantId, actorId);
+}
+
+// Issue #1780: nothing in the schema enforced (tenant_id, user_ref) uniqueness
+// (migration 0253 now does, once existing duplicates are cleaned), and an
+// unordered rows[0] picked an ARBITRARY row when an actor was linked twice
+// (duplicate onboarding / re-link / bad import) -- self-service routes then
+// served another employee's data or a false 404. Fetch every match (no
+// arbitrary rows[0]) and fail CLOSED on ambiguity: never guess whose record
+// the caller is, so the outcome no longer depends on row order.
+async function findLinkedEmployee(tenantId: string, actorId: string): Promise<EmployeeRow | undefined> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.userRef, actorId))));
   if (rows.length > 1) {
     throw new HttpError(409, "AMBIGUOUS_EMPLOYEE_LINK",
       "Your account is linked to more than one employee record. Please contact HR.");
   }
-  let emp = rows[0];
+  return rows[0];
+}
 
-  if (!emp) {
-    const email = await fetchVerifiedActorEmail(tenantId, actorId);
-    if (email) {
-      rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.email, email))));
-      emp = rows[0];
-      if (emp) {
-        // Auto-link userRef so future lookups (here and elsewhere) are fast
-        // and don't depend on this email-fallback path again. Must run inside
-        // db.transaction (not a bare db.update()) so wrapWithTenantGuc sets
-        // app.tenant_id for the write — a bare call runs on a pooled connection
-        // with no GUC set, and under the NOBYPASSRLS service role the
-        // fail-closed RLS policy silently matches zero rows (the same
-        // "RLS inert at runtime" trap payroll's createRun() duplicate-run guard
-        // hit on the read side — see that function's BUG-3 comment).
-        const empId = emp.id;
-        await db.transaction(async (tx) => {
-          await tx.update(hrmsEmployees)
-            .set({ userRef: actorId })
-            .where(and(eq(hrmsEmployees.id, empId), eq(hrmsEmployees.tenantId, tenantId)));
-        });
-      }
+/**
+ * FQ14 (security review of PR #2379, findings 1-2): the verified-email
+ * bootstrap link. Writes user_ref only when it is unambiguous and cannot
+ * collide with another link:
+ *  - candidates are this tenant's UNLINKED (user_ref IS NULL) employees with
+ *    the verified email and a link-eligible status -- an exited or no_show
+ *    record never receives a login, and a record already linked to some other
+ *    login is never taken over;
+ *  - exactly one candidate, or nothing is written (fail CLOSED: the caller
+ *    gets the normal "no employee linked" outcome and HR links explicitly via
+ *    PATCH /v1/hrms/employees/:id/login-link). Duplicates are logged with
+ *    employee ids only, never the email;
+ *  - the write takes the candidate's row lock and then the same per-login
+ *    advisory lock + "no other holder" check as the HR link route
+ *    (login-holder.ts), re-validating the candidate under the lock, so a
+ *    concurrent HR link and auto-link of one login cannot both commit.
+ * Returns true when the actor is linked afterwards (by this call or a
+ * concurrent writer).
+ */
+async function autoLinkByVerifiedEmail(tenantId: string, actorId: string, email: string): Promise<boolean> {
+  const eligible = and(
+    eq(hrmsEmployees.tenantId, tenantId),
+    eq(hrmsEmployees.email, email),
+    isNull(hrmsEmployees.userRef),
+    notInArray(hrmsEmployees.status, [...LINK_INELIGIBLE_STATUSES]),
+  );
+  const candidates = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+    .where(eligible).limit(2));
+  if (candidates.length !== 1) {
+    if (candidates.length > 1) {
+      log.warn({ tenantId, employeeIds: candidates.map((c) => c.id) },
+        "verified-email auto-link skipped: more than one eligible employee shares the email; HR must link explicitly");
     }
+    return false;
   }
-  return emp;
+  const empId = candidates[0]!.id;
+
+  // Must run inside db.transaction (not a bare db.update()) so
+  // wrapWithTenantGuc sets app.tenant_id for the write -- a bare call runs on
+  // a pooled connection with no GUC set, and under the NOBYPASSRLS service
+  // role the fail-closed RLS policy silently matches zero rows.
+  return db.transaction(async (tx) => {
+    const locked = await tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.id, empId), eligible))
+      .for("update")
+      .limit(1);
+    await lockLogin(tx, tenantId, actorId);
+    const holder = await findOtherHolder(tx, tenantId, actorId);
+    if (holder) return true; // linked meanwhile (e.g. by HR); never add a second link
+    if (!locked[0]) return false; // candidate changed (linked, exited, email edited) meanwhile
+    await tx.update(hrmsEmployees)
+      .set({ userRef: actorId })
+      .where(and(eq(hrmsEmployees.id, empId), eq(hrmsEmployees.tenantId, tenantId)));
+    return true;
+  });
 }
