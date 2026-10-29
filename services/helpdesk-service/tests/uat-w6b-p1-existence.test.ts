@@ -19,8 +19,8 @@ const OTHER_TENANT = randomUUID();
 const ACTOR = randomUUID();
 const SOMEONE_ELSE = randomUUID();
 
-const headers = (tid = TENANT, sub = ACTOR) => ({
-  authorization: `Bearer ${signToken({ sub, tid, roles: ["helpdesk_admin"], sid: "sess-w6b" }, SECRET, 3600)}`,
+const headers = (tid = TENANT, sub = ACTOR, roles: string[] = ["helpdesk_admin"]) => ({
+  authorization: `Bearer ${signToken({ sub, tid, roles, sid: "sess-w6b" }, SECRET, 3600)}`,
   "x-tenant-id": tid,
 });
 
@@ -91,10 +91,34 @@ describe("UAT W6 P1 — helpdesk commands on non-existent ids", () => {
     });
   }
 
-  it("PATCH view: someone else's PRIVATE view is invisible → 404, nothing published", async () => {
+  it("PATCH view: a NON-admin cannot see someone else's PRIVATE view → 404, nothing published", async () => {
     const spy = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
-    const res = await app.inject({ method: "PATCH", url: `/v1/helpdesk/tickets/views/${ids.privateView}`, headers: headers(), payload: { name: "x" } });
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/helpdesk/tickets/views/${ids.privateView}`,
+      headers: headers(TENANT, ACTOR, ["helpdesk_user"]), payload: { name: "x" },
+    });
     expect(res.statusCode).toBe(404);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("PATCH view: an admin MAY update someone else's PRIVATE view → 202 (same rule as the consumer and DELETE)", async () => {
+    const spy = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/helpdesk/tickets/views/${ids.privateView}`,
+      headers: headers(), payload: { name: "Fixed by admin" },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0]).toBe(VIEW_COMMANDS.update);
+  });
+
+  it("PATCH view: a non-admin may update a view they own → 202", async () => {
+    const spy = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/helpdesk/tickets/views/${ids.view}`,
+      headers: headers(TENANT, ACTOR, ["helpdesk_user"]), payload: { name: "Mine" },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });

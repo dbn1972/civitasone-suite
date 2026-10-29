@@ -140,6 +140,8 @@ describe("UAT W6 P9b — list GETs default limit instead of 400", () => {
     "/v1/notification/suppressions",
     "/v1/notification/experiments",
     "/v1/notification/push/subscriptions",
+    // Shares the push list schema (inboxQuery extends listQuery), so it gets the same default.
+    "/v1/notification/in-app/messages",
   ]) {
     it(`GET ${url} without ?limit → 200, pageSize 50`, async () => {
       const res = await app.inject({ method: "GET", url, headers: bearer() });

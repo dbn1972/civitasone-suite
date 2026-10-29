@@ -48,6 +48,10 @@ const verbs: Array<{ verb: string; topic: string; payload: unknown }> = [
   { verb: "miss", topic: COMMANDS.missCall, payload: {} },
   { verb: "abandon", topic: COMMANDS.abandonCall, payload: {} },
   { verb: "answer", topic: COMMANDS.answerCall, payload: { agentId: randomUUID() } },
+  { verb: "complete", topic: COMMANDS.completeCall, payload: { disposition: "resolved" } },
+  { verb: "assign", topic: COMMANDS.assignCall, payload: { agentId: randomUUID() } },
+  { verb: "link", topic: COMMANDS.linkCall, payload: { refType: "grievance", refId: randomUUID() } },
+  { verb: "recording", topic: COMMANDS.attachRecording, payload: { recordingId: "rec-w6b-1", format: "mp3" } },
 ];
 
 describe("UAT W6 P1 — call commands on non-existent ids", () => {
