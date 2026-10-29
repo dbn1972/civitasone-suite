@@ -43,10 +43,17 @@ beforeEach(() => {
   });
 });
 
+// The intro copy names "Municipal India (ULB)" statically, so waiting on that text resolves before the
+// pack library has loaded and the following assertions race the fetch. Wait for the library list itself
+// (rendered only once loading is done).
+async function packsLoaded() {
+  await screen.findByRole("list", { name: /Domain Pack library/i });
+}
+
 describe("DomainPackActivatePanel (FN-17)", () => {
   it("shows municipal-in-v1 → TL / PGR / Water outcome clearly", async () => {
     render(<DomainPackActivatePanel variant="page" />);
-    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    await packsLoaded();
     expect(screen.getAllByText(/municipal-in-v1/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/TL \/ PGR \/ Water/i).length).toBeGreaterThanOrEqual(1);
     const outcomes = screen.getByRole("list", { name: /Service packs imported on activate/i });
@@ -109,14 +116,14 @@ describe("DomainPackActivatePanel (FN-17)", () => {
 
   it("shows no retry banner on a healthy load", async () => {
     render(<DomainPackActivatePanel variant="page" />);
-    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    await packsLoaded();
     expect(screen.queryByText(/Showing built-in pack only/i)).not.toBeInTheDocument();
   });
 
   // GAP-INSTALL-HOME-03 / DOMAIN-PACKS-01: a read-only viewer gets no Activate.
   it("hides Activate for a read-only viewer", async () => {
     render(<DomainPackActivatePanel variant="page" canOperate={false} />);
-    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    await packsLoaded();
     expect(screen.queryByRole("button", { name: /Activate Domain Pack/i })).not.toBeInTheDocument();
     expect(screen.getByText(/read-only access/i)).toBeInTheDocument();
   });
@@ -125,7 +132,7 @@ describe("DomainPackActivatePanel (FN-17)", () => {
   // (keys live behind a Technical details disclosure).
   it("does not expose DoD '§' or raw 'pack:' keys in the default view", async () => {
     render(<DomainPackActivatePanel variant="page" />);
-    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    await packsLoaded();
     expect(document.body.textContent).not.toMatch(/§/);
     // The pack: keys only appear inside collapsed <details>, not as a visible
     // heading/outcome line. Assert they are not in an open/visible position by
@@ -200,7 +207,7 @@ describe("DomainPackActivatePanel (FN-17)", () => {
   describe("design-system tokens (GAP-INSTALL-DOMAIN-PACKS-04)", () => {
     it("renders no hard-coded Tailwind palette colour classes", async () => {
       const { container } = render(<DomainPackActivatePanel variant="page" />);
-      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      await packsLoaded();
       const palette = /\b(?:bg|text|border|ring|from|to)-(?:indigo|slate|emerald|amber|red|gray|green|blue)-\d{2,3}/;
       expect(container.innerHTML).not.toMatch(palette);
     });
@@ -223,7 +230,7 @@ describe("DomainPackActivatePanel (FN-17)", () => {
 
     it("the page back link is a real link without a hand-typed arrow glyph", async () => {
       render(<DomainPackActivatePanel variant="page" />);
-      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      await packsLoaded();
       const back = screen.getByRole("link", { name: /Installer wizard/i });
       expect(back).toHaveAttribute("href", "/install");
       expect(back.textContent).not.toMatch(/[←→]/);

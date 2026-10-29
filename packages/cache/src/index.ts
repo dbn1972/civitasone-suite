@@ -249,12 +249,12 @@ export class Cache {
     loader: () => Promise<T>,
     ttlSeconds?: number,
   ): Promise<T> {
+    // Delegate to getOrLoad so list reads share its in-flight registration, stampede coalescing
+    // and CLOS3-S6-11 invalidation epochs. A bare "get -> load -> put" here was not tracked, so a
+    // list loaded just before a write could be written back AFTER the consumer's
+    // invalidateResource() and pin the pre-write list for the whole TTL.
     const key = this.listKey(tenantId, resource, hash);
-    const cached = await this.store.get(key);
-    if (cached !== null) return deserialize<T>(cached);
-    const fresh = await loader();
-    await this.writeToStore(key, fresh, this.resolveTtl(ttlSeconds));
-    return fresh;
+    return (await this.getOrLoad<T>(key, loader as () => Promise<T | null>, ttlSeconds)) as T;
   }
 
   /** Read-through: return cached value or load from source, cache it, return it.
