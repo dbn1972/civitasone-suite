@@ -7,6 +7,9 @@ import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/** Status written when a settlement is recorded (must be in legal_settlements_status_check). */
+export const SETTLEMENT_STATUS_ON_CREATE = "executed";
+
 export function registerSettlementConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.settlementCreate, async (msg) => {
     const p = msg.payload as {
@@ -20,7 +23,11 @@ export function registerSettlementConsumers(queue: Queue): void {
       await repo.insertSettlement(tx, {
         id: p.id, tenantId: p.tenantId, caseId: p.caseId ?? null,
         settlementNo: p.settlementNo, amountMinor: BigInt(p.amountMinor),
-        currency: p.currency ?? "INR", status: "settled", settledAt: now,
+        // FQ9 #2: a recorded settlement (settledAt = now) is `executed` in the
+        // settlement lifecycle (draft → proposed → accepted/rejected → executed).
+        // 'settled' was rejected by legal_settlements_status_check on UAT and
+        // every message dead-lettered; migration 0037 reconciles the CHECK.
+        currency: p.currency ?? "INR", status: SETTLEMENT_STATUS_ON_CREATE, settledAt: now,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (p.lokAdalat) {

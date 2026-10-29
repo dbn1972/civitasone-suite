@@ -6,7 +6,7 @@
  * router (which establishes tenant context via runWithTenant) → consumer →
  * db.transaction (app.tenant_id GUC set) → INSERT accepted under RLS; the written
  * row is invisible to another tenant; and a config-invalid courtType is rejected
- * through the full stack (dead-lettered, never written).
+ * through the full stack (FQ9 #8: synchronously with 422 INVALID_COURT_TYPE, never written).
  *
  * Part B (§47 full loop): applying a VERTICAL PRESET seeds a tenant's config, and
  * because config is authoritative-when-present the tenant is then RESTRICTED to
@@ -100,7 +100,8 @@ describe.skipIf(!RUN)("court-service write-path + §47 full loop (e2e, real DB, 
   });
 
   it("a config-invalid courtType is rejected through the full stack (never written)", async () => {
-    expect(await createCourt(TENANT, invalidName, "totally_made_up_type")).toBe(202);
+    // FQ9 #8: rejected up front (422) instead of 202 + a dead-lettered INVALID_COURT_TYPE.
+    expect(await createCourt(TENANT, invalidName, "totally_made_up_type")).toBe(422);
     expect(await waitFor(async () => (await listCourtNames(TENANT)).includes(invalidName), 12, 25)).toBe(false);
   });
 
@@ -124,7 +125,8 @@ describe.skipIf(!RUN)("court-service write-path + §47 full loop (e2e, real DB, 
   it("REJECTS a built-in default type not in the preset — config is authoritative (§47)", async () => {
     // 'tehsildar' is a DEFAULT court type, but the consumer preset does not include
     // it; once the tenant has configured court_type, its set is authoritative.
-    expect(await createCourt(PRESET_TENANT, restrictedName, "tehsildar")).toBe(202);
+    // FQ9 #8: the route validates against the same tenant-config-authoritative set → 422.
+    expect(await createCourt(PRESET_TENANT, restrictedName, "tehsildar")).toBe(422);
     expect(await waitFor(async () => (await listCourtNames(PRESET_TENANT)).includes(restrictedName), 12, 25)).toBe(false);
   });
 });

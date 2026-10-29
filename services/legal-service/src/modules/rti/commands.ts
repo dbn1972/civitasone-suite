@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
+import { assertAppealTierAllowed, DomainError, type AppealTier, type AppealOrder } from "./domain.js";
 import type {
   CreateRtiBody, TransferRtiBody, ThirdPartyConsultBody, AdditionalFeeBody,
   RespondRtiBody, FileAppealBody, AppealOrderBody, DisclosureBody,
@@ -65,6 +68,18 @@ export async function respond(ctx: RequestContext, applicationId: string, body: 
 }
 
 export async function fileAppeal(ctx: RequestContext, applicationId: string, body: FileAppealBody): Promise<Accepted> {
+  // FQ9 #8: run the tier-ordering guard synchronously so a duplicate / out-of-
+  // order appeal is rejected 409 up front instead of 202 + dead-letter. The
+  // consumer keeps the same guard (authoritative under concurrent filings).
+  const existing = await repo.listAppealsForApplication(applicationId, ctx.tenantId);
+  try {
+    assertAppealTierAllowed(body.tier as AppealTier, existing.map((a) => ({
+      tier: a.tier as AppealTier, order: a.orderStatus as AppealOrder,
+    })));
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
   const appealId = randomUUID();
   await queue.publish(COMMANDS.rtiAppealFile, {
     messageId: appealId, type: COMMANDS.rtiAppealFile,

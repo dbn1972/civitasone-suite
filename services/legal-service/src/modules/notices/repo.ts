@@ -21,18 +21,21 @@ export async function insertNoticeResponse(tx: Writer, row: typeof legalNoticeRe
   await tx.insert(legalNoticeResponses).values(row);
 }
 
+// FQ9 #4: both reads were BARE db.select() calls — they ran with no
+// app.tenant_id GUC, so FORCE RLS returned zero rows and the tenant could not
+// see its own notices. Wrapped in db.transaction() like every other read in
+// this service, so wrapWithTenantGuc sets the GUC from the request context.
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<NoticeRow[]> {
-  const rows = await db.select().from(legalNotices)
+  return db.transaction((tx) => tx.select().from(legalNotices)
     .where(eq(legalNotices.tenantId, tenantId))
     .orderBy(legalNotices.createdAt)
     .limit(limit)
-    .offset(offset);
-  return rows;
+    .offset(offset));
 }
 
 export async function getById(tenantId: string, id: string): Promise<NoticeRow | null> {
-  const rows = await db.select().from(legalNotices)
+  const rows = await db.transaction((tx) => tx.select().from(legalNotices)
     .where(and(eq(legalNotices.tenantId, tenantId), eq(legalNotices.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0] ?? null;
 }

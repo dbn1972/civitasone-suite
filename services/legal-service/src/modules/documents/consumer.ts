@@ -117,15 +117,20 @@ export function registerDocumentConsumers(queue: Queue): void {
 
       const newVersion = isContentUpdate ? doc.version + 1 : doc.version;
 
-      // Save current version to history before updating (only for content changes)
+      // Record the NEW content version (only for content changes). The version
+      // table holds every content version including the current one — create
+      // already writes version 1 — so re-inserting the *current* version here
+      // collided with uq_document_versions_doc_ver and dead-lettered every
+      // name+body PATCH (FQ9 #3). Writing newVersion keeps the history complete
+      // and never duplicates a (document_id, version_number) pair.
       if (isContentUpdate) {
         await repo.insertVersion(tx, {
           tenantId: doc.tenantId,
           documentId: doc.id,
-          versionNumber: doc.version,
-          body: doc.body,
-          fileKey: doc.fileKey,
-          createdBy: doc.updatedBy,
+          versionNumber: newVersion,
+          body: p.body !== undefined ? p.body : doc.body,
+          fileKey: p.fileKey !== undefined ? p.fileKey : doc.fileKey,
+          createdBy: msg.actorId,
         });
       }
 

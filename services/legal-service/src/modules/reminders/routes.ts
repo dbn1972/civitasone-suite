@@ -81,9 +81,11 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     await assertCaseAccess(ctx, id);
-    const rows = await db.select().from(legalReminders).where(
+    // FQ9 #4: wrapped in db.transaction() so the RLS tenant GUC is set (a bare
+    // db.select() returned zero rows under FORCE RLS — see /hearings/upcoming).
+    const rows = await db.transaction((tx) => tx.select().from(legalReminders).where(
       and(eq(legalReminders.tenantId, ctx.tenantId), eq(legalReminders.caseId, id))
-    ).limit(100);
+    ).limit(100));
     return reply.send({ data: rows, total: rows.length });
   });
 
