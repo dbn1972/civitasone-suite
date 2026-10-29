@@ -9,9 +9,9 @@
  *
  * Now the route mints `resourceId`, publishes it in the command payload, and
  * the apply inserts with exactly that id. The 202 keeps every field it already
- * had (`id`, `status`, `correlationId`, `data.id`) and adds `data.commandId`;
- * for a fresh create resourceId === commandId, so the top-level `id` that
- * existing callers read is now also a real resource id.
+ * had (`id`, `status`, `correlationId`, `data.id`) and adds `data.commandId`.
+ * Both `id` and `data.id` are the resource id (for a fresh create it equals
+ * the command id; for an upsert of an existing row it is that row's id).
  */
 import { eq, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -36,7 +36,7 @@ export function acceptedCreate(
   commandId: string,
   resourceId: string,
 ): { id: string; status: "accepted"; correlationId: string; data: { id: string; commandId: string } } {
-  return { id: commandId, status: "accepted", correlationId: ctx.correlationId, data: { id: resourceId, commandId } };
+  return { id: resourceId, status: "accepted", correlationId: ctx.correlationId, data: { id: resourceId, commandId } };
 }
 
 /**

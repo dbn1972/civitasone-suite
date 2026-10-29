@@ -115,6 +115,8 @@ export async function scheduledJobRoutes(app: FastifyInstance): Promise<void> {
     const { reason } = safeParse(actionBody, req.body ?? {});
     const job = await findJob(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "scheduled job not found");
+    // A paused/disabled job is not run (review of #2382); resume it first.
+    if (!job.enabled) throw new HttpError(409, "JOB_DISABLED", "scheduled job is paused; resume it before running it");
     const result = await commands.jobRunNow(ctx, id, requireReason(reason, SENSITIVE_SERVICES.has(job.targetService)));
     return reply.code(202).send(result);
   });

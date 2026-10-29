@@ -10,7 +10,6 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { scheduledJobs, jobExecutionHistory } from "./schema.js";
 import { eq, and, ne, or, lt, isNull, sql } from "drizzle-orm";
-import { checkTarget } from "./targets.js";
 
 const log = pino({ name: "admin-scheduled-jobs-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -105,35 +104,26 @@ export function registerScheduledJobConsumers(queue: Queue): void {
     }
   });
 
-  // FQ12 #38: run-now used to be bookkeeping only (history row + "running"),
-  // and nothing ever fired the job. There is no cron scheduler in this
-  // platform to delegate to, so run-now itself dispatches the job's target:
-  // the job's targetCommand is published with its stored payload through the
-  // transactional outbox, in the SAME transaction as the history row, so a
-  // run is recorded if and only if its dispatch is. The target policy is
-  // re-checked at fire time (an allow-list may have narrowed since the job
-  // was saved): a refused target is recorded as a failed execution and
-  // nothing is dispatched. Completion is reported by the target service; this
-  // service has no result channel, so a dispatched run stays "running".
+  // FQ12 #38 is deliberately NOT implemented here: run-now records the run
+  // (history row + lastRunStatus) but dispatches nothing. Forwarding a stored
+  // job payload to an arbitrary admin.* command let a job forge the identity
+  // fields (tenantId / actorId / actorRoles) that several consumers trust
+  // (review of #2382). Firing jobs needs a designed job-runner with an
+  // explicit command registry and per-command payload schemas -- follow-up.
+  // A paused/disabled job is never started (the route answers 409; this
+  // WHERE clause is the race-safe backstop).
   queue.subscribe<ActionPayload>(COMMANDS.scheduledJobRunNow, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
-        const found = await tx.select().from(scheduledJobs)
-          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId))).limit(1);
-        const job = found[0];
-        if (!job) return;
-        const policy = checkTarget(job.targetService, job.targetCommand, job.payload);
         const now = new Date();
         const started = await (tx as any).update(scheduledJobs)
-          .set({
-            lastRunAt: now, lastRunStatus: policy.ok ? "running" : "failed",
-            updatedBy: msg.actorId, updatedAt: now, version: sql`${scheduledJobs.version} + 1`,
-          })
+          .set({ lastRunAt: now, lastRunStatus: "running", updatedBy: msg.actorId, updatedAt: now, version: sql`${scheduledJobs.version} + 1` })
           .where(and(
             eq(scheduledJobs.id, p.jobId),
             eq(scheduledJobs.tenantId, p.tenantId),
+            eq(scheduledJobs.enabled, true),
             // Debounce a double click / redelivered request: a job that started
             // running within the last RUN_NOW_DEBOUNCE_MS is not fired again.
             or(ne(scheduledJobs.lastRunStatus, "running"), isNull(scheduledJobs.lastRunAt), lt(scheduledJobs.lastRunAt, new Date(Date.now() - RUN_NOW_DEBOUNCE_MS))),
@@ -146,18 +136,9 @@ export function registerScheduledJobConsumers(queue: Queue): void {
           tenantId: p.tenantId,
           jobId: p.jobId,
           startedAt: now,
-          status: policy.ok ? "running" : "failed",
-          ...(policy.ok ? {} : { completedAt: now, durationMs: 0, errorMessage: `target refused by policy: ${policy.field}: ${policy.message}` }),
+          status: "running",
         });
-        if (policy.ok) {
-          await enqueue(tx as Parameters<typeof enqueue>[0], {
-            topic: job.targetCommand, eventType: job.targetCommand,
-            tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { ...(job.payload ?? {}), scheduledJobId: job.id, executionId, trigger: "run_now" },
-          });
-        }
-        await emit(tx, msg, "admin.scheduled_job.run_triggered",
-          { ...p, executionId, targetCommand: job.targetCommand, dispatched: policy.ok }, "run_now", p.jobId, p.reason);
+        await emit(tx, msg, "admin.scheduled_job.run_triggered", { ...p, executionId }, "run_now", p.jobId, p.reason);
       });
       await cache.invalidate(listKey(msg.payload.tenantId));
     } catch (err) {

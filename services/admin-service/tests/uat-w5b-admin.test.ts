@@ -20,6 +20,8 @@ import { featureFlags } from "../src/modules/feature-flags/schema.js";
 import { scheduledJobs, jobExecutionHistory } from "../src/modules/scheduled-jobs/schema.js";
 import { mapBounded, rolePermissionConcurrency } from "../src/modules/gap/routes.js";
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
+import { checkTarget } from "../src/modules/scheduled-jobs/targets.js";
+import { COMMANDS } from "../src/topics.js";
 
 const { buildApp } = await import("../src/app.js");
 
@@ -98,6 +100,48 @@ describe("PATCH /v1/admin/roles/:id/permissions (FQ12 #29: was serial -> 504)", 
     expect(res.statusCode).toBe(207);
     expect(res.json().granted).toEqual([KEYS[0], KEYS[2]]);
     expect(res.json().failed).toEqual([expect.objectContaining({ key: KEYS[1], action: "grant", status: 502, code: "UPSTREAM_UNAVAILABLE" })]);
+  });
+
+  it("a refusal arriving after other changes applied still answers 403 but reports and audits what DID apply", async () => {
+    process.env.ROLE_PERMISSION_CONCURRENCY = "1"; // deterministic: k0, k1 apply, k2 is refused
+    let posts = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { method?: string }) => {
+      if (url.endsWith(`/identity/rbac/roles/${ROLE}`)) return jsonResponse(200, { id: ROLE, permissions: [] });
+      if (url.includes("/identity/rbac/permissions?")) return jsonResponse(200, perms);
+      if (init?.method === "POST") {
+        posts++;
+        return posts <= 2 ? jsonResponse(202, { status: "accepted" }) : jsonResponse(403, { code: "SYSTEM_ROLE_READONLY", message: "system role" });
+      }
+      throw new Error(`unexpected ${url}`);
+    }));
+    const publish = vi.spyOn(queue, "publish");
+    try {
+      const res = await app.inject({ method: "PATCH", url: `/v1/admin/roles/${ROLE}/permissions`, headers: auth(), payload: { permissionKeys: KEYS.slice(0, 5), reason: "partial then refused" } });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ code: "SYSTEM_ROLE_READONLY", status: "refused", granted: [KEYS[0], KEYS[1]] });
+      expect(posts).toBe(3); // stopped scheduling after the refusal
+      const audit = publish.mock.calls.find(([topic]) => topic === COMMANDS.rolePermissionsChanged);
+      expect(audit, "applied changes must be audited").toBeDefined();
+      expect((audit![1] as { payload: { granted: string[] } }).payload.granted).toEqual([KEYS[0], KEYS[1]]);
+    } finally {
+      publish.mockRestore();
+      delete process.env.ROLE_PERMISSION_CONCURRENCY;
+    }
+  });
+
+  it("an unexpected (non-HTTP) error on one change is reported in failed, not a 5xx", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
+      if (url.endsWith(`/identity/rbac/roles/${ROLE}`)) return jsonResponse(200, { id: ROLE, permissions: [] });
+      if (url.includes("/identity/rbac/permissions?")) return jsonResponse(200, perms);
+      if (init?.method === "POST" && init.body?.includes(perms[0]!.id)) {
+        return { ok: true, status: 202, text: async () => { throw new RangeError("boom"); } };
+      }
+      return jsonResponse(202, { status: "accepted" });
+    }));
+    const res = await app.inject({ method: "PATCH", url: `/v1/admin/roles/${ROLE}/permissions`, headers: auth(), payload: { permissionKeys: KEYS.slice(0, 2) } });
+    expect(res.statusCode).toBe(207);
+    expect(res.json().granted).toEqual([KEYS[1]]);
+    expect(res.json().failed).toEqual([expect.objectContaining({ key: KEYS[0], status: 502, code: "UPSTREAM_ERROR" })]);
   });
 
   it("a system-role refusal still answers 403 for the whole request and stops scheduling further changes", async () => {
@@ -210,38 +254,70 @@ describe("FQ12: version column is bumped on update", () => {
   });
 });
 
-// ── FQ12 #38: run-now actually dispatches the job ────────────────────────────
-describe("FQ12 #38: scheduled job run-now dispatches the target command", () => {
+// ── FQ12 #38 / review of #2382: run-now records the run but dispatches NOTHING ──
+describe("scheduled job run-now: bookkeeping only, privileged targets refused, paused jobs refused", () => {
   async function createJob(name: string, targetService: string, targetCommand: string, payload?: Record<string, unknown>) {
     const res = await app.inject({ method: "POST", url: "/v1/admin/scheduled-jobs", headers: auth(),
       payload: { name, cronExpression: "0 8 * * *", targetService, targetCommand, ...(payload ? { payload } : {}) } });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode, res.body).toBe(202);
     return until(async () => (await asT((tx) => tx.select().from(scheduledJobs).where(eq(scheduledJobs.name, name))))[0]);
   }
-  const dispatched = (topic: string) => asT((tx) => tx.select().from(outboxMessages)
-    .where(and(eq(outboxMessages.tenantId, T), eq(outboxMessages.topic, topic))));
   const history = (jobId: string) => asT((tx) => tx.select().from(jobExecutionHistory).where(eq(jobExecutionHistory.jobId, jobId)));
+  const FORGED = "5eb5f0f0-0000-4000-8000-00000000f0f0";
+  const OTHER_TENANT = "5eb50000-0000-4000-8000-0000000000b2";
 
-  it("publishes targetCommand with the job payload via the outbox, in the same tx as the history row", async () => {
-    const job = await createJob("w5b-dispatch", "report-service", "report.w5b.generate", { month: "2026-10" });
+  it("a job targeting a privileged command (admin.breakglass.open etc.) is refused at create and update", async () => {
+    for (const cmd of ["admin.breakglass.open", "admin.tenant_lifecycle.decide", "admin.tenant_lifecycle.execute_due",
+      "admin.change.request.approve", "admin.f3.route_write", "admin.scheduled_job.run_now", "admin.role.assign", "admin.api_key.rotate"]) {
+      expect(checkTarget("admin-service", cmd), cmd).toMatchObject({ ok: false, field: "targetCommand" });
+    }
+    // whole-segment match: ordinary commands that merely contain the letters stay schedulable
+    expect(checkTarget("report-service", "report.processor.run").ok).toBe(true);
+    expect(checkTarget("admin-service", "admin.noop").ok).toBe(true);
+    const bad = await app.inject({ method: "POST", url: "/v1/admin/scheduled-jobs", headers: auth(),
+      payload: { name: "w5b-bg", cronExpression: "0 8 * * *", targetService: "admin-service", targetCommand: "admin.breakglass.open",
+        payload: { tenantId: OTHER_TENANT, actorId: FORGED } } });
+    expect(bad.statusCode).toBe(422);
+    expect(bad.json().code ?? bad.json().error?.code).toBe("TARGET_NOT_ALLOWED");
+    const job = await createJob("w5b-upd-priv", "admin-service", "admin.noop");
+    const upd = await app.inject({ method: "PUT", url: `/v1/admin/scheduled-jobs/${job.id}`, headers: auth(), payload: { targetCommand: "admin.breakglass.open" } });
+    expect(upd.statusCode).toBe(422);
+  });
+
+  it("run-now records the run and never forwards the stored payload (actorId/tenantId/actorRoles never reach the outbox)", async () => {
+    const job = await createJob("w5b-forge", "admin-service", "admin.noop",
+      { tenantId: OTHER_TENANT, actorId: FORGED, actorRoles: ["super_admin"], actorTenantId: OTHER_TENANT });
+    // Only what run-now itself writes counts (the job's own "created" event
+    // legitimately describes its stored definition).
+    const outbox = () => asT((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T)));
+    const before = new Set((await outbox()).map((r) => r.id));
     expect((await app.inject({ method: "POST", url: `/v1/admin/scheduled-jobs/${job.id}/run-now`, headers: auth() })).statusCode).toBe(202);
     const [run] = await until(async () => { const h = await history(job.id); return h.length === 1 ? h : undefined; });
     expect(run!.status).toBe("running");
-    const rows = await until(async () => { const r = await dispatched("report.w5b.generate"); return r.length === 1 ? r : undefined; });
-    expect(rows[0]!.payload).toMatchObject({ month: "2026-10", scheduledJobId: job.id, executionId: run!.id, trigger: "run_now" });
+    await new Promise((r) => setTimeout(r, 300));
+    const rows = (await outbox()).filter((r) => !before.has(r.id));
+    expect(rows.map((r) => r.topic).sort()).toEqual(["admin.scheduled_job.run_triggered", "audit.event.record"]);
+    expect(rows.filter((r) => r.topic === "admin.noop")).toHaveLength(0);
+    for (const r of rows) {
+      const body = JSON.stringify(r.payload);
+      expect(body, r.topic).not.toContain(FORGED);
+      expect(body, r.topic).not.toContain(OTHER_TENANT);
+      expect(body, r.topic).not.toContain("actorRoles");
+    }
   });
 
-  it("re-checks the target policy at fire time: a target no longer allowed is a failed run and nothing is dispatched", async () => {
-    process.env.ADMIN_SCHEDULED_JOB_TARGETS = JSON.stringify({ "finance-service": ["finance\\.report\\..+"] });
-    const job = await createJob("w5b-refused", "finance-service", "finance.report.w5b");
-    delete process.env.ADMIN_SCHEDULED_JOB_TARGETS; // allow-list withdrawn after the job was saved
-    expect((await app.inject({ method: "POST", url: `/v1/admin/scheduled-jobs/${job.id}/run-now`, headers: auth(), payload: { reason: "month-end re-run" } })).statusCode).toBe(202);
-    const [run] = await until(async () => { const h = await history(job.id); return h.length === 1 ? h : undefined; });
-    expect(run!.status).toBe("failed");
-    expect(run!.errorMessage).toMatch(/target refused by policy/);
-    await new Promise((r) => setTimeout(r, 300));
-    expect(await dispatched("finance.report.w5b")).toHaveLength(0);
-    const after = (await asT((tx) => tx.select().from(scheduledJobs).where(eq(scheduledJobs.id, job.id))))[0]!;
-    expect(after.lastRunStatus).toBe("failed");
+  it("run-now of a paused job is refused with 409 and records nothing (and the consumer backstops a raced command)", async () => {
+    const job = await createJob("w5b-paused", "report-service", "report.generate");
+    expect((await app.inject({ method: "POST", url: `/v1/admin/scheduled-jobs/${job.id}/pause`, headers: auth(), payload: { reason: "freeze it" } })).statusCode).toBe(202);
+    await until(async () => (await asT((tx) => tx.select().from(scheduledJobs).where(eq(scheduledJobs.id, job.id))))[0]?.enabled === false);
+    const res = await app.inject({ method: "POST", url: `/v1/admin/scheduled-jobs/${job.id}/run-now`, headers: auth() });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code ?? res.json().error?.code).toBe("JOB_DISABLED");
+    await queue.publish("admin.scheduled_job.run_now", {
+      messageId: randomUUID(), type: "admin.scheduled_job.run_now", tenantId: T, actorId: ACTOR,
+      correlationId: "w5b-race", schemaVersion: "1.0", payload: { jobId: job.id, tenantId: T },
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(await history(job.id)).toHaveLength(0);
   });
 });

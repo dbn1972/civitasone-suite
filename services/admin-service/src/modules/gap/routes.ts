@@ -796,16 +796,17 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
           ? await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions`, { permissionId: c.permId })
           : await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions/${c.permId}`);
       } catch (err) {
-        // A transport failure (timeout / connection) on ONE change is reported
-        // as that change failing, not as a 502 that hides what already applied.
-        if (!(err instanceof HttpError)) throw err;
-        res = { status: err.status, body: { code: err.code, message: err.message } };
+        // Any failure on ONE change (timeout, connection, unexpected throw) is
+        // reported as that change failing -- never a 5xx that hides what already
+        // applied in parallel.
+        res = err instanceof HttpError
+          ? { status: err.status, body: { code: err.code, message: err.message } }
+          : { status: 502, body: { code: "UPSTREAM_ERROR", message: (err as Error)?.message ?? "upstream call failed" } };
       }
       const refused = systemRoleRefusal(res);
       if (refused) { refusal ??= refused; stop(); }
       return res;
     });
-    if (refusal) { const r = refusal as { status: number; payload: unknown }; return reply.code(r.status).send(r.payload); }
     // Report in request order (grants, then revokes), exactly as the serial loop did.
     changes.forEach((c, i) => {
       const res = results[i];
@@ -816,9 +817,17 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       }
       (c.action === "grant" ? applied.granted : applied.revoked).push(c.key);
     });
-    // ROLES-03: the mandatory UI reason is audited, not dropped.
+    // ROLES-03: the mandatory UI reason is audited, not dropped. Audited in
+    // EVERY outcome -- including a system-role refusal that arrived after other
+    // in-flight changes had already applied (review of #2382).
     if (applied.granted.length > 0 || applied.revoked.length > 0) {
       await rolePermissionAuditCommands.recordRolePermissionsChange(ctx, id, applied.granted, applied.revoked, changeReason);
+    }
+    if (refusal) {
+      // identity-service's 403 stays the answer, carrying what DID apply.
+      const r = refusal as { status: number; payload: unknown };
+      const base = r.payload && typeof r.payload === "object" ? r.payload as Record<string, unknown> : {};
+      return reply.code(r.status).send({ ...base, roleId: id, status: "refused", ...applied });
     }
     const status = applied.failed.length > 0 ? "partial" : "accepted";
     return reply.code(applied.failed.length > 0 ? 207 : 202).send({ roleId: id, status, ...applied });

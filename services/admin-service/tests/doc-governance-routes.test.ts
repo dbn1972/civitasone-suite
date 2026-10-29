@@ -224,6 +224,7 @@ async function upsertRequirement(
   // FQ12: a requirement is an upsert -- a first set reports the new row's id, a
   // re-set reports the EXISTING requirement's id (never a fresh, dangling one).
   expect(row.id).toBe(res.json().data.id);
+  expect(row.id).toBe(res.json().id); // top-level id is the resource id too (review of #2382)
   return row;
 }
 
