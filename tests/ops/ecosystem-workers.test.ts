@@ -63,6 +63,24 @@ describe("ecosystem scanner DSN wiring (court/visitor/works/procurement/contract
   });
 });
 
+describe("ecosystem PII_ENC_KEY wiring (works) — worker never subscribed (UAT g4)", () => {
+  const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
+
+  it("generates a dedicated WORKS_PII_KEY via the piiKey() factory", () => {
+    expect(eco).toMatch(/piiKey\(\s*"WORKS_PII_KEY"/);
+  });
+
+  it("wires PII_ENC_KEY into svc(\"works\", ...)", () => {
+    const m = eco.match(/^\s*svc\("works"[^\n]*/m);
+    expect(m?.[0]).toContain("PII_ENC_KEY: WORKS_PII_KEY");
+  });
+
+  it("wires PII_ENC_KEY into worker(\"works\", ...) — worker.ts assertPiiKeyConfigured() throws without it", () => {
+    const m = eco.match(/^\s*worker\("works"[^\n]*/m);
+    expect(m?.[0]).toContain("PII_ENC_KEY: WORKS_PII_KEY");
+  });
+});
+
 describe("ecosystem PII_ENC_KEY wiring (procurement) — 117-restart-loop regression", () => {
   const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
 

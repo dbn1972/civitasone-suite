@@ -61,6 +61,7 @@ export function registerEntryConsumers(queue: Queue): void {
       }));
       await repo.insertEntryItems(tx, entryItemRows);
 
+      const inboundUnitCost = new Map<string, bigint>();
       for (const item of p.items) {
         const isReceipt   = p.entryType === "receipt";
         const isIssue     = p.entryType === "issue";
@@ -70,13 +71,24 @@ export function registerEntryConsumers(queue: Queue): void {
         // Update valuation + ledger for destination warehouse
         if (isReceipt || isAdjustment || (isTransfer && p.toWarehouseId)) {
           const dest = isTransfer ? (p.toWarehouseId ?? warehouseId) : warehouseId;
+          // UAT g4: a transfer carries the SOURCE warehouse's valuation rate to the destination
+          // (weighted-averaged with any stock already there). It previously kept the destination's
+          // existing rate, i.e. 0 for a first-time destination, so transferred stock was valued at 0.
+          let transferRate = BigInt(item.rateMinor);
+          if (isTransfer && p.fromWarehouseId) {
+            const srcCur = await repo.lockValuationRateTx(tx, p.tenantId, item.itemId, p.fromWarehouseId);
+            if (srcCur.rateMinor > 0n) transferRate = srcCur.rateMinor;
+          }
+          inboundUnitCost.set(item.itemId, transferRate);
           const current = await repo.lockValuationRateTx(tx, p.tenantId, item.itemId, dest);
           const newRate = isReceipt
             ? weightedAvgRate(
                 { qty: current.qty, rateMinor: current.rateMinor },
                 item.qty, BigInt(item.rateMinor)
               )
-            : (isAdjustment ? BigInt(item.rateMinor) : current.rateMinor);
+            : (isAdjustment
+                ? BigInt(item.rateMinor)
+                : weightedAvgRate({ qty: current.qty, rateMinor: current.rateMinor }, item.qty, transferRate));
           const newQty = current.qty + item.qty;
           await repo.upsertValuationRate(tx, p.tenantId, item.itemId, dest, newQty, newRate, item.currency ?? "INR");
           const ledgerRow: LedgerInsert = {
@@ -115,7 +127,7 @@ export function registerEntryConsumers(queue: Queue): void {
             id: randomUUID(), tenantId: p.tenantId, itemId: item.itemId,
             warehouseId: dest, entryId: p.id,
             quantity: item.qty, remainingQty: item.qty,
-            unitCostMinor: BigInt(item.rateMinor), currency: item.currency ?? "INR",
+            unitCostMinor: inboundUnitCost.get(item.itemId) ?? BigInt(item.rateMinor), currency: item.currency ?? "INR",
           });
         }
       }
