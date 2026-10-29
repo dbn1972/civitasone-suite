@@ -44,6 +44,37 @@ describe("findLiveDbDefaults(): flags live-DB defaults", () => {
   });
 });
 
+describe("findLiveDbDefaults(): widened patterns (review of #2387)", () => {
+  it("flags a connection-object port, same line or multi-line", () => {
+    expect(findLiveDbDefaults(`const c = { host: HOST, port: ${PG}, user: "u" };`)[0]?.rule).toBe(
+      "connection-object-live-port",
+    );
+    const multi = ["const conn = {", "  host: process.env.PGHOST,", `  port: "${BOUNCER}",`, "};"].join("\n");
+    expect(findLiveDbDefaults(multi).map((v) => v.line)).toEqual([3]);
+  });
+
+  it("flags a template-literal host joined to a live port", () => {
+    const src = "const dsn = `postgres://u:p@${host}:" + PG + "/db`;";
+    expect(findLiveDbDefaults(src)[0]?.rule).toBe("template-host-live-port");
+  });
+
+  it("flags a port constant, quoted or numeric", () => {
+    expect(findLiveDbDefaults(`const PORT = ${PG};`)[0]?.rule).toBe("constant-live-port");
+    expect(findLiveDbDefaults(`let pgPort: string = "${BOUNCER}";`)[0]?.rule).toBe("constant-live-port");
+  });
+
+  it("leaves a display-only mock port and a refusal constant alone", () => {
+    const mock = [
+      `  database: { host: "db-host", port: 5432 },`,
+      `  redis: { url: "redis://r:6379" },`,
+      `  auth: { provider: "Keycloak" },`,
+      `  pgbouncer: { configured: true, port: ${BOUNCER}, poolMode: "transaction" },`,
+    ].join("\n");
+    expect(findLiveDbDefaults(mock)).toEqual([]);
+    expect(findLiveDbDefaults(`const SHARED_INSTANCE_PORT = "${PG}";`)).toEqual([]);
+  });
+});
+
 describe("findLiveDbDefaults(): leaves legitimate uses alone", () => {
   it("ignores comment lines", () => {
     const src = [
@@ -79,6 +110,15 @@ describe("isInScope()", () => {
     expect(isInScope("tests/cross-service-live/harness.ts")).toBe(true);
     expect(isInScope("vitest.config.mjs")).toBe(true);
     expect(isInScope("vitest.testdb.ts")).toBe(true);
+  });
+
+  it("covers service-level setup files and named vitest configs", () => {
+    expect(isInScope("apps/web/vitest.setup.ts")).toBe(true);
+    expect(isInScope("packages/ocr/vitest.cer.config.ts")).toBe(true);
+    expect(isInScope("vitest.mutation.config.ts")).toBe(true);
+    expect(isInScope("services/location-service/tests/setup.ts")).toBe(true);
+    expect(isInScope("apps/web/e2e/global-setup.ts")).toBe(true);
+    expect(isInScope("apps/web/src/app/(app)/setup/setupSkipApi.ts")).toBe(false);
   });
 
   it("explicitly allows CI workflow YAML only, and skips non-test source", () => {

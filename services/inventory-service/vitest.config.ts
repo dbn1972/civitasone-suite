@@ -1,7 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
-import { testDbFromEnv } from "../../vitest.testdb";
-import { testDbHostPort } from "../../vitest.testdb";
+import { testDbFromEnv, testDbHostPort } from "../../vitest.testdb";
 
 // CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Turbo 2 strict mode strips undeclared env — see turbo.json
