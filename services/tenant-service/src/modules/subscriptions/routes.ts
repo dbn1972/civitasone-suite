@@ -46,7 +46,7 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     const { subscriptionId } = subscriptionIdParam.parse(req.params);
     const view = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, subscriptionId),
-      async () => repo.findById(subscriptionId),
+      async () => repo.findById(subscriptionId, ctx.tenantId),
     );
     if (!view) throw new HttpError(404, "NOT_FOUND", "subscription not found");
     return reply.send(view);

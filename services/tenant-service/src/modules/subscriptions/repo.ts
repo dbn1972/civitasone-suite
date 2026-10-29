@@ -41,8 +41,13 @@ function toView(r: SubscriptionRow): SubscriptionView {
 }
 
 // ── reads (query path) ───────────────────────────────────────────────
-export async function findById(id: string): Promise<SubscriptionView | null> {
-  const rows = await db.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1);
+// FQ12 (#139-#144, #147): subscriptions.subscriptions is FORCE RLS
+// (tenant_id = tenant.current_tenant_id()). A bare db.select() never sets the
+// app.tenant_id GUC, so these reads returned nothing for every tenant. They
+// now run through runWithTenant + db.transaction like findByTenantIdScoped.
+export async function findById(id: string, tenantId: string): Promise<SubscriptionView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(subscriptions)
+    .where(and(eq(subscriptions.id, id), eq(subscriptions.tenantId, tenantId))).limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -53,8 +58,7 @@ export async function findByTenantIdScoped(tenantId: string): Promise<Subscripti
 }
 
 export async function findByTenantId(tenantId: string): Promise<SubscriptionView | null> {
-  const rows = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
-  return rows[0] ? toView(rows[0]) : null;
+  return findByTenantIdScoped(tenantId);
 }
 
 // ── downgrade requests (owner decision #24) ─────────────────────────────

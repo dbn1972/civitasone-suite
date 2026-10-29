@@ -14,6 +14,8 @@ export const vigilanceCases = vigilanceSchema.table("vigilance_cases", {
   complaintSource: text("complaint_source"),
   confidential:    boolean("confidential").notNull().default(true),
   screeningStatus: varchar("screening_status", { length: 24 }).notNull().default("pending"),
+  /** FQ12 (#57): the screener's remarks on admit/reject (migration 0035). */
+  screeningRemarks: text("screening_remarks"),
   assignedIo:      text("assigned_io"),
   findings:        text("findings"),
   stage:           varchar("stage", { length: 24 }).notNull().default("intake"),

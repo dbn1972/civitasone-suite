@@ -1,5 +1,5 @@
 import type { Queue } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { withTenant } from "../../shared/scope.js";
 import { COMMANDS } from "../../topics.js";
@@ -32,7 +32,8 @@ export function registerLayoutConsumers(q: Queue): void {
     };
     await withTenant(p.tenantId, async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      // FQ12 (#98-#104): bump version on update, as records/consumer.ts does.
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${layoutDefinitions.version} + 1` };
       if (p.sections !== undefined) set.sections = p.sections;
       if (p.isDefault !== undefined) set.isDefault = p.isDefault;
       await tx.update(layoutDefinitions).set(set)

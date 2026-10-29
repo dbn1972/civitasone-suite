@@ -49,12 +49,15 @@ export function registerVigilanceConsumers(queue: Queue): void {
       assertCanScreen(c.stage as VigilanceStage);
       const nextStage: VigilanceStage = p.decision === "rejected" ? "closed" : "screening";
       const n = await repo.updateCaseVersioned(tx, p.caseId, p.tenantId, c.version ?? 1, {
-        screeningStatus: p.decision, stage: nextStage,
+        // FQ12 (#57): the remarks were accepted by the route and then dropped here.
+        screeningStatus: p.decision, stage: nextStage, screeningRemarks: p.remarks ?? null,
         ...(p.decision === "rejected" ? { outcome: "closed", closedAt: new Date() } : {}),
         updatedBy: msg.actorId, version: (c.version ?? 1) + 1,
       });
       if (n !== 1) throw new StaleWriteError("vigilance_case", p.caseId);
-      await audit(tx, msg, "screen", "vigilance_case", p.caseId, { decision: p.decision });
+      await audit(tx, msg, "screen", "vigilance_case", p.caseId, {
+        decision: p.decision, ...(p.remarks !== undefined ? { remarks: p.remarks } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "vigilance", p.caseId));
   });
