@@ -10,6 +10,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { customDomains, type CustomDomainRow } from "./schema.js";
 import { checkDomainOwnership } from "./dns-verify.js";
+import { normalizeDomain } from "./validators.js";
 import { eq, and } from "drizzle-orm";
 
 const log = pino({ name: "admin-custom-domains-consumer" });
@@ -30,7 +31,9 @@ export function registerCustomDomainConsumers(queue: Queue): void {
         await (tx as any).insert(customDomains).values({
           id: p.id,
           tenantId: p.tenantId,
-          domain: p.domain,
+          // FQ12-SEC: canonical lower-case form (also covers in-flight
+          // commands published before the validator normalised).
+          domain: normalizeDomain(p.domain),
           status: "pending_verification",
           verificationToken: p.verificationToken,
           verificationMethod: p.verificationMethod,

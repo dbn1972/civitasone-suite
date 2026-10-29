@@ -19,8 +19,10 @@ import {
   checkDomainOwnership, setDnsResolver, challengeHost, CNAME_CHALLENGE_TARGET, type DnsResolver,
 } from "../src/modules/custom-domains/dns-verify.js";
 import { COMMANDS } from "../src/topics.js";
+import { normalizeDomain, registerDomainBody } from "../src/modules/custom-domains/validators.js";
 
 const T = randomUUID();
+const T2 = randomUUID();
 const ACTOR = randomUUID();
 const TOKEN = `civitasone-verify-${randomUUID().replace(/-/g, "")}`;
 
@@ -153,6 +155,10 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
       await tx.delete(customDomains).where(eq(customDomains.tenantId, T));
       await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T));
     }));
+    await runWithTenant(T2, () => db.transaction(async (tx) => {
+      await tx.delete(customDomains).where(eq(customDomains.tenantId, T2));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T2));
+    }));
     await q.stop();
     await sqlClient.end();
   });
@@ -202,5 +208,51 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
     expect(row.status).toBe("verified");
     expect(row.verifiedAt).not.toBeNull();
     expect(out.map((m) => m.eventType)).toContain("admin.custom_domain.verified");
+  });
+
+  // ── Review of PR #2372, item 1: case variants must not let a second tenant
+  // claim (and verify) the same host.
+  it("validator canonicalises the domain (trim, lower-case, strip root dot)", () => {
+    expect(normalizeDomain("  Victim.Example.TEST. ")).toBe("victim.example.test");
+    expect(registerDomainBody.parse({ domain: "VICTIM.EXAMPLE.TEST." }).domain).toBe("victim.example.test");
+    expect(registerDomainBody.safeParse({ domain: "vïctim.example.test" }).success).toBe(false); // U-labels: use punycode
+    expect(registerDomainBody.parse({ domain: "xn--vctim-6qa.example.test" }).domain).toBe("xn--vctim-6qa.example.test");
+  });
+
+  it("two tenants: an upper-case / trailing-dot variant of a registered host is rejected, so only the owner can verify it", async () => {
+    const host = `victim-${randomUUID().slice(0, 8)}.example.test`;
+    const ownerId = await register(host, "dns_cname");
+
+    // Tenant B tries the same host with different case and a root dot (consumer path).
+    const attackerId = randomUUID();
+    await q.publish(COMMANDS.customDomainRegister, {
+      messageId: randomUUID(), type: COMMANDS.customDomainRegister, tenantId: T2, actorId: ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: attackerId, tenantId: T2, domain: `${host.toUpperCase()}.`, verificationMethod: "dns_cname", verificationToken: TOKEN },
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    const t2Rows = await runWithTenant(T2, () => db.transaction((tx) => tx.select().from(customDomains).where(eq(customDomains.tenantId, T2))));
+    expect(t2Rows).toEqual([]);
+
+    // And the database itself refuses a raw case variant (migration 0057 index).
+    let code: string | undefined;
+    try {
+      await runWithTenant(T2, () => db.transaction((tx) => tx.insert(customDomains).values({
+        id: randomUUID(), tenantId: T2, domain: host.toUpperCase(), status: "pending_verification",
+        verificationToken: TOKEN, verificationMethod: "dns_cname", sslStatus: "pending",
+        createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+      })));
+    } catch (e) {
+      code = (e as { code?: string }).code;
+    }
+    expect(code).toBe("23505");
+
+    // The shared CNAME challenge now verifies only the owner's single row.
+    setDnsResolver(fakeResolver({}, { [challengeHost("dns_cname", host)]: [CNAME_CHALLENGE_TARGET] }));
+    const corr = await verify(ownerId);
+    await waitFor(() => auditFor(corr), (r) => r.length >= 2);
+    expect((await readRow(ownerId))[0]!.status).toBe("verified");
+    const all = await runWithTenant(T2, () => db.transaction((tx) => tx.select().from(customDomains).where(eq(customDomains.id, attackerId))));
+    expect(all).toEqual([]);
   });
 });

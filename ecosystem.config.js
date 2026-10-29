@@ -399,18 +399,13 @@ function scannerDbUrl(scannerUser, dbName, envName) {
 // (migrations 0020/0023, shared/scanner-db.ts). That DSN was never wired, so
 // scanner-db.ts fell back to the NOBYPASSRLS identity_svc DATABASE_URL and
 // FORCE RLS hid every row: POST /identity/api-keys/verify answered
-// "unknown key" for every live key. The worker uses the same pool for the
-// session-reaper / break-glass sweeps. Production must inject
-// IDENTITY_SCANNER_DATABASE_URL; if it is absent there, identity keeps
-// booting (the rest of the ecosystem must still load) and verify stays fail
-// closed (no row visible -> invalid), exactly as before this wiring.
-const IDENTITY_SCANNER_ENV = (() => {
-  try {
-    return { IDENTITY_SCANNER_DATABASE_URL: scannerDbUrl("identity_scanner", "civitas_identity", "IDENTITY_SCANNER_DATABASE_URL") };
-  } catch (e) {
-    return {};
-  }
-})();
+// "unknown key" for every live key, and the worker's session-reaper /
+// break-glass sweeps silently no-op'd. Same contract as every other
+// scannerDbUrl() call site: production refuses to start without an injected
+// IDENTITY_SCANNER_DATABASE_URL (a silent fallback reproduces the defect).
+const IDENTITY_SCANNER_ENV = {
+  IDENTITY_SCANNER_DATABASE_URL: scannerDbUrl("identity_scanner", "civitas_identity", "IDENTITY_SCANNER_DATABASE_URL"),
+};
 
 const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");

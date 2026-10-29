@@ -130,3 +130,62 @@ describe("API key lifecycle through the HTTP routes (fresh key)", () => {
     expect((await row(id))[0]!.status).toBe("active");
   });
 });
+
+describe("verify does not leak or touch another tenant's key (review of PR #2372)", () => {
+  const auditRows = (id: string) => runWithTenant(T, () => db.transaction((tx) =>
+    tx.select().from(apiKeyAudit).where(eq(apiKeyAudit.apiKeyId, id))));
+
+  async function issue(name: string): Promise<{ id: string; key: string }> {
+    const res = await app.inject({ method: "POST", url: "/identity/api-keys", headers: h(), payload: { name, scopes: ["users:read"] } });
+    expect(res.statusCode).toBe(202);
+    const out = res.json() as { id: string; key: string };
+    await waitFor(() => row(out.id), (r) => r.length === 1);
+    return out;
+  }
+
+  it("a random key and another tenant's key get the SAME generic answer", async () => {
+    const { key } = await issue("fq12-oracle");
+    const random = await app.inject({ method: "POST", url: "/identity/api-keys/verify", headers: h(OTHER), payload: { key: `ck_${randomUUID()}${randomUUID()}` } });
+    const foreign = await app.inject({ method: "POST", url: "/identity/api-keys/verify", headers: h(OTHER), payload: { key } });
+    expect(foreign.statusCode).toBe(200);
+    expect(foreign.json()).toEqual({ valid: false, reason: "unknown key" });
+    expect(foreign.json()).toEqual(random.json());
+  });
+
+  it("other-tenant key with a missing scope: generic answer, no ids/scopes, no lastUsedAt, no audit in the owner tenant", async () => {
+    const { id, key } = await issue("fq12-scope-leak");
+    const before = (await row(id))[0]!;
+    const auditBefore = (await auditRows(id)).length;
+    const res = await app.inject({ method: "POST", url: "/identity/api-keys/verify", headers: h(OTHER), payload: { key, requiredScope: "rbac:write" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ valid: false, reason: "unknown key" });
+    expect(res.body).not.toContain(id);
+    expect(res.body).not.toContain(T);
+    expect(res.body).not.toContain("users:read");
+    const after = (await row(id))[0]!;
+    expect(after.lastUsedAt).toEqual(before.lastUsedAt);
+    expect((await auditRows(id)).length).toBe(auditBefore);
+  });
+
+  it("other-tenant REVOKED key: generic answer, no side effect", async () => {
+    const { id, key } = await issue("fq12-revoked-leak");
+    const rev = await app.inject({ method: "DELETE", url: `/identity/api-keys/${id}`, headers: h(), payload: {} });
+    expect(rev.statusCode).toBe(202);
+    await waitFor(() => row(id), (r) => r[0]?.status === "revoked");
+    const auditBefore = (await auditRows(id)).length;
+    const res = await app.inject({ method: "POST", url: "/identity/api-keys/verify", headers: h(OTHER), payload: { key } });
+    expect(res.json()).toEqual({ valid: false, reason: "unknown key" });
+    expect((await auditRows(id)).length).toBe(auditBefore);
+  });
+
+  it("same-tenant key with a missing scope keeps its specific (own-tenant) error", async () => {
+    const { id, key } = await issue("fq12-own-scope");
+    const res = await app.inject({ method: "POST", url: "/identity/api-keys/verify", headers: h(), payload: { key, requiredScope: "rbac:write" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { valid: boolean; apiKeyId?: string; tenantId?: string; reason?: string };
+    expect(body.valid).toBe(false);
+    expect(body.apiKeyId).toBe(id);
+    expect(body.tenantId).toBe(T);
+    expect(body.reason).not.toBe("unknown key");
+  });
+});
