@@ -40,6 +40,7 @@
  * validator can be slotted in without changing callers when FF-02 WP1 lands.
  */
 import { randomUUID } from "node:crypto";
+import { requireTestDb } from "../../vitest.testdb";
 import { MemoryQueue } from "@civitasone/queue";
 import { relayOnce, type DrizzleTx } from "@civitasone/outbox";
 import { withTenantScope, sql } from "@civitasone/db";
@@ -75,13 +76,13 @@ const PASSWORD_FOR = (role: string): string => `${role.replace(/_svc$/, "")}_dev
 /** The Postgres TCP port the harness connects to. */
 export function harnessPgPort(): string {
   // bootstrap-postgres.sh and ci.yml both key off PGPORT; the shared long-lived
-  // dev instance is 5435 (see assertFresh()).
-  return process.env.PGPORT ?? "5435";
+  // dev instance is 5435 (see assertFresh()). FQ15: no default -- an unset PGPORT throws.
+  return requireTestDb().port;
 }
 
 /** The host the harness connects to (127.0.0.1 avoids a Unix-socket fallback). */
 export function harnessPgHost(): string {
-  return process.env.PGHOST ?? "127.0.0.1";
+  return requireTestDb().host;
 }
 
 /** Build the per-service DSN as the NON-SUPERUSER service role. */

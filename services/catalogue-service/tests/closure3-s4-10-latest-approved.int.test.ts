@@ -3,15 +3,16 @@
  * non-superuser catalogue_svc role (RLS enforced). Fails loudly when Postgres is unreachable (CI bootstraps it).
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
 import type { ScopedTx } from "../src/shared/db.js";
 
 const EXPECTED_DB = "civitas_catalogue";
-const DEFAULT_DSN = `postgres://catalogue_svc:catalogue_dev_pw@localhost:5435/${EXPECTED_DB}`;
+const defaultDsn = (): string => `postgres://catalogue_svc:catalogue_dev_pw@${testDbHostPort()}/${EXPECTED_DB}`;
 const inherited = process.env["DATABASE_URL"];
-const DSN = inherited?.includes(EXPECTED_DB) === true ? inherited : DEFAULT_DSN;
+const DSN = inherited?.includes(EXPECTED_DB) === true ? inherited : defaultDsn();
 process.env["DATABASE_URL"] = DSN;
 
 async function probe(): Promise<boolean> {

@@ -30,6 +30,7 @@
  * single-tenant chain this test exercises.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import type { CommandEnvelope, Handler, Queue, QueueDriver } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
@@ -61,7 +62,7 @@ const ADMIN_PW =
     : "civitas_dev_pw");
 const RUNNER_DSN =
   process.env.PROVISIONING_RUNNER_DSN ??
-  `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${process.env.PGHOST ?? "localhost"}:${process.env.PGPORT ?? "5435"}/civitas_install`;
+  `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${testDbHostPort()}/civitas_install`;
 
 /** Same capturing tenant-aware queue pattern as provisioning-consumer.test.ts. */
 class CapturingTenantAwareQueue implements Queue {

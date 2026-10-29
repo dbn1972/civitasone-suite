@@ -7,8 +7,11 @@ set -euo pipefail
 export LC_ALL=C
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5435}"
+# FQ15: no default host/port. This script runs DDL, migrations and role changes,
+# and on the shared dev/UAT host 5435 is the LIVE database (6432 its pgbouncer).
+# CI sets both at job level; anyone else must point them at a disposable Postgres.
+PGHOST="${PGHOST:?PGHOST must be set (refusing to default to a live database)}"
+PGPORT="${PGPORT:?PGPORT must be set (refusing to default to a live database)}"
 PGUSER="${PGUSER:-civitas}"
 # Default (throwaway CI/dev database only) applied only when the caller did not set one.
 : "${PGPASSWORD:=civitas_test}"

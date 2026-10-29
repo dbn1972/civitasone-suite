@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbFromEnv, testDbHostPort } from "../../vitest.testdb";
 
 // CI bootstrap sets civitas_admin's password from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Local compose defaults to civitas_dev_pw. Silo provisioning
@@ -13,11 +14,18 @@ const adminPw =
   (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
     ? "civitas_test"
     : "civitas_dev_pw");
-const pgHost = process.env.PGHOST ?? "localhost";
-const pgPort = process.env.PGPORT ?? "5435";
+// FQ15: PGHOST/PGPORT and the runner DSN are injected ONLY when the caller set
+// them. Never a default host/port: on the shared host 5435 is the LIVE database.
+const testDb = testDbFromEnv();
 const provisioningRunnerDsn =
   process.env.PROVISIONING_RUNNER_DSN ??
-  `postgres://civitas_admin:${encodeURIComponent(adminPw)}@${pgHost}:${pgPort}/civitas_install`;
+  (testDb
+    ? `postgres://civitas_admin:${encodeURIComponent(adminPw)}@${testDb.host}:${testDb.port}/civitas_install`
+    : undefined);
+const testDbEnv = {
+  ...(provisioningRunnerDsn ? { PROVISIONING_RUNNER_DSN: provisioningRunnerDsn } : {}),
+  ...(testDb ? { PGHOST: testDb.host, PGPORT: testDb.port } : {}),
+};
 
 export default defineConfig({
   test: {
@@ -28,17 +36,15 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://install_svc:install_dev_pw@localhost:5435/civitas_install"
+          ? `postgres://install_svc:install_dev_pw@${testDbHostPort()}/civitas_install`
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
               );
             })()),
-      PROVISIONING_RUNNER_DSN: provisioningRunnerDsn,
+      ...testDbEnv,
       POSTGRES_ADMIN_PASSWORD: adminPw,
       PGPASSWORD: adminPw,
-      PGHOST: pgHost,
-      PGPORT: pgPort,
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

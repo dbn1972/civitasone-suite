@@ -8,6 +8,7 @@
  *  - CAREERS-DETAIL-03: the public apply stores category (lower case) and date of birth
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
@@ -47,7 +48,7 @@ async function asTenant<T>(fn: (tx: postgres.TransactionSql) => Promise<T>): Pro
 
 beforeAll(async () => {
   await seedHrmsCoreFixtures();
-  db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  db = postgres(process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`, { max: 5 });
   app = await buildApp();
   await asTenant((tx) => tx`delete from recruitment.hrms_recruitment_settings where tenant_id = ${TENANT}`);
 });

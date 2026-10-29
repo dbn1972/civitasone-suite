@@ -18,6 +18,7 @@
  * 03-designs/FF-01.md §2.3 — every added column nullable or defaulted.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { NonRetryableError } from "@civitasone/queue";
@@ -216,21 +217,31 @@ describe("COMMAND_RESULT_RETENTION (D-20)", () => {
 // ---------------------------------------------------------------------------
 // Live Postgres: the §2.4 guarded upsert against a real driver.
 // ---------------------------------------------------------------------------
-// NOT skipped: these suites always run. CI's `Tests` job provisions Postgres on
-// localhost:5435 (civitas/civitas_test, DB civitas_test — no service owns that DB or
-// its `_inbox` schema), so the default below works there with no extra env. Locally,
-// point COMMAND_RESULT_PG_URL at a disposable Postgres. A separate var from
-// DATABASE_URL on purpose: setting DATABASE_URL would also switch on the unrelated
-// *-live-pg suites, which need their own schema. A missing database fails loudly in
-// beforeAll instead of silently skipping (flaky-skip-guard / REL-014).
-const COMMAND_RESULT_PG_URL =
-  process.env.COMMAND_RESULT_PG_URL ?? "postgres://civitas:civitas_test@localhost:5435/civitas_test";
-const client = postgres(COMMAND_RESULT_PG_URL, { max: 4 });
-const db = drizzle(client) as unknown as DrizzleTx;
+// NOT skipped: these suites always run. CI's `Tests` job provisions Postgres
+// (civitas/civitas_test, DB civitas_test — no service owns that DB or its `_inbox`
+// schema) and exports PGHOST/PGPORT, so the URL below works there with no extra env.
+// Locally, point COMMAND_RESULT_PG_URL (or PGHOST/PGPORT) at a disposable Postgres. A
+// separate var from DATABASE_URL on purpose: setting DATABASE_URL would also switch on
+// the unrelated *-live-pg suites, which need their own schema. A missing database fails
+// loudly in beforeAll instead of silently skipping (flaky-skip-guard / REL-014).
+// FQ15: the client is created lazily in the live describes' beforeAll (never a default
+// host/port), so the pure unit tests above still run when no DB is configured.
+let client: ReturnType<typeof postgres> | undefined;
+let db: DrizzleTx;
+function connectLive(): ReturnType<typeof postgres> {
+  if (!client) {
+    const url =
+      process.env.COMMAND_RESULT_PG_URL ?? `postgres://civitas:civitas_test@${testDbHostPort()}/civitas_test`;
+    client = postgres(url, { max: 4 });
+    db = drizzle(client) as unknown as DrizzleTx;
+  }
+  return client;
+}
 
 const TENANT = "99999999-9999-9999-9999-999999999999";
 
 async function ensureSchema(): Promise<void> {
+  const client = connectLive();
   // The evolved _inbox.command_results shape (index.ts / 03-designs/FF-01.md
   // §2.3). Every FF-01-added column is nullable or defaulted.
   await client`CREATE SCHEMA IF NOT EXISTS _inbox`;
@@ -261,6 +272,7 @@ async function ensureSchema(): Promise<void> {
 // and drops the table afterwards so ensureSchema() recreates the evolved shape.
 describe("recordCommandOutcome - legacy 6-column table (live Postgres, 0039/0048 shape)", () => {
   beforeAll(async () => {
+    const client = connectLive();
     await client`CREATE SCHEMA IF NOT EXISTS _inbox`;
     await client`DROP TABLE IF EXISTS _inbox.command_results`;
     await client`
@@ -274,7 +286,7 @@ describe("recordCommandOutcome - legacy 6-column table (live Postgres, 0039/0048
       )`;
   });
   afterAll(async () => {
-    await client`DROP TABLE IF EXISTS _inbox.command_results`;
+    if (client) await client`DROP TABLE IF EXISTS _inbox.command_results`;
   });
 
   it("records and reads back an outcome without referencing any FF-01 column", async () => {
@@ -306,7 +318,7 @@ describe("recordCommandResult — guarded upsert (live Postgres, §2.4)", () => 
     await ensureSchema();
   });
   afterAll(async () => {
-    await client.end({ timeout: 0 });
+    await client?.end({ timeout: 0 });
   });
 
   it("rejected then succeeded flips the row and increments attempts; a late rejected cannot downgrade", async () => {

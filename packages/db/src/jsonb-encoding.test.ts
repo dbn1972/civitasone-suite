@@ -14,11 +14,16 @@ import { pgTable, text, jsonb } from "drizzle-orm/pg-core";
 import type postgres from "postgres";
 import { createSqlClient, serializeJsonParam } from "./pool.js";
 
+// FQ15: never default to a host/port (5435 is the LIVE database on the shared host).
+// Unset JSONB_TEST_DATABASE_URL and PGHOST/PGPORT -> no URL -> probe false -> skip.
 const DEV_URL =
   process.env.JSONB_TEST_DATABASE_URL
-  ?? "postgres://civitas_admin:civitas_dev_pw@localhost:5435/civitas_cdp";
+  ?? (process.env.PGHOST && process.env.PGPORT
+    ? `postgres://civitas_admin:civitas_dev_pw@${process.env.PGHOST}:${process.env.PGPORT}/civitas_cdp`
+    : undefined);
 
 async function probeReachable(): Promise<boolean> {
+  if (!DEV_URL) return false;
   let client: postgres.Sql<{}> | undefined;
   try {
     client = createSqlClient(DEV_URL, { max: 1, connect_timeout: 3, idle_timeout: 1 });
@@ -142,7 +147,8 @@ describe.skipIf(!reachable)("jsonb encoding — live Postgres round-trip", () =>
 
   /** max:1 pins every statement to one connection, which TEMP tables require. */
   beforeAll(async () => {
-    client = createSqlClient(DEV_URL, { max: 1, connect_timeout: 5 });
+    // Only reached when probeReachable() succeeded, i.e. DEV_URL is set.
+    client = createSqlClient(DEV_URL as string, { max: 1, connect_timeout: 5 });
     db = drizzle(client);
     await client`create temporary table jsonb_probe (id text primary key, data jsonb)`;
   });

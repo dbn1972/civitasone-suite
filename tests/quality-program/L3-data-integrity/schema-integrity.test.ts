@@ -40,10 +40,11 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { describe, it, expect } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { execFileSync } from "child_process";
 
-const PGHOST = process.env.PGHOST ?? "localhost";
-const PGPORT = process.env.PGPORT ?? "5435";
+const PGHOST = requireTestDb().host;
+const PGPORT = requireTestDb().port;
 const ADMIN_USER = process.env.POSTGRES_ADMIN_USER ?? "civitas_admin";
 // D2: was hardcoded to a password that does not exist.
 const ADMIN_PW = process.env.POSTGRES_ADMIN_PASSWORD ?? "civitas_dev_pw";

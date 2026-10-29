@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbFromEnv, testDbHostPort } from "../../vitest.testdb";
 
 // CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Turbo 2 strict mode strips undeclared env — see turbo.json
@@ -10,6 +11,9 @@ const adminPw =
   (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
     ? "civitas_test"
     : "civitas_dev_pw");
+
+const testDb = testDbFromEnv();
+const testDbEnv = testDb ? { PGHOST: testDb.host, PGPORT: testDb.port } : {};
 
 export default defineConfig({
   test: {
@@ -22,7 +26,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://inventory_svc:inventory_dev_pw@localhost:5435/civitas_inventory"
+          ? `postgres://inventory_svc:inventory_dev_pw@${testDbHostPort()}/civitas_inventory`
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
@@ -33,8 +37,10 @@ export default defineConfig({
       // Surface CI admin password into the vitest worker (DQ suite uses civitas_admin).
       POSTGRES_ADMIN_PASSWORD: adminPw,
       PGPASSWORD: adminPw,
-      PGHOST: process.env.PGHOST ?? "localhost",
-      PGPORT: process.env.PGPORT ?? "5435",
+      // FQ15: forward PGHOST/PGPORT only when the caller set them. Never inject a
+      // default: on the shared host 5435 is the LIVE database. data-quality.test.ts
+      // then fails fast via requireTestDb() instead of connecting anywhere.
+      ...testDbEnv,
     },
     coverage: {
       provider: "v8",

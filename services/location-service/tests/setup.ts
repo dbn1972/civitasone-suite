@@ -6,12 +6,13 @@
  * geo-points) are skipped if PostGIS is not available.
  */
 import { readdir, readFile } from "node:fs/promises";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { join } from "node:path";
 import postgres from "postgres";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgres://location_svc:location_dev_pw@localhost:5435/civitas_location";
+  `postgres://location_svc:location_dev_pw@${testDbHostPort()}/civitas_location`;
 
 /** Migrations that require PostGIS (geom columns, spatial indexes, ST_* functions). */
 const POSTGIS_MIGRATIONS = new Set([

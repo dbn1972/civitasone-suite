@@ -11,6 +11,7 @@
  * or an honest non-2xx is returned instead of a fabricated 2xx.
  */
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -775,7 +776,7 @@ describe("GET /v1/admin/org-hierarchy", () => {
       const savedDbUrl = process.env.DATABASE_URL;
       process.env.DATABASE_URL =
         process.env.TENANT_DATABASE_URL_FOR_TEST ??
-        "postgres://tenant_svc:tenant_dev_pw@localhost:5435/civitas_tenant";
+        `postgres://tenant_svc:tenant_dev_pw@${testDbHostPort()}/civitas_tenant`;
       try {
         tenantDb = await import("../../tenant-service/src/shared/db.js");
         const { queue: tenantQueue } = await import("../../tenant-service/src/shared/infra.js");

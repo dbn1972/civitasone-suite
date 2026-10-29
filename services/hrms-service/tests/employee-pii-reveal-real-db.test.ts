@@ -10,6 +10,7 @@
  *  - redelivery of the same command messageId writes the audit row once (markProcessed in the same tx).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
@@ -62,7 +63,7 @@ const body = (field: string, reason = "verify payroll bank details") => ({ resou
 
 beforeAll(async () => {
   await seedHrmsCoreFixtures();
-  db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  db = postgres(process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`, { max: 5 });
   await asTenant((tx) => tx`
     insert into employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining,
       employee_type, status, basic_minor, currency, pan, mobile, bank_account_no, bank_ifsc, created_at, updated_at, created_by, updated_by, version)

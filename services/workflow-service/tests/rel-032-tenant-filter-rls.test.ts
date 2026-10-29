@@ -31,11 +31,13 @@
  * services/catalogue-service/tests/integration/catalogue-locking.int.test.ts.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { hasTestDb, testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
 const EXPECTED_DB = "civitas_workflow";
-const DEFAULT_DSN = `postgres://workflow_svc:workflow_dev_pw@localhost:5435/${EXPECTED_DB}`;
+// FQ15: no live default. Unset PGHOST/PGPORT -> DSN undefined -> probe() false -> skip.
+const DEFAULT_DSN = hasTestDb() ? `postgres://workflow_svc:workflow_dev_pw@${testDbHostPort()}/${EXPECTED_DB}` : undefined;
 // Only honour an inherited DSN when it actually addresses this service's
 // database -- a vitest config further up the tree can otherwise point
 // DATABASE_URL at a different service's DB.
@@ -44,6 +46,7 @@ const DSN = inheritedDsn?.includes(EXPECTED_DB) === true ? inheritedDsn : DEFAUL
 
 /** Cheap connectivity probe on a throwaway client, used only to decide skip vs run. */
 async function probe(): Promise<boolean> {
+  if (!DSN) return false;
   const client = postgres(DSN, { max: 1, connect_timeout: 2, idle_timeout: 1, onnotice: () => {} });
   try {
     await client`SELECT 1`;

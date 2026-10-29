@@ -23,6 +23,7 @@
  * within vacancy limits) still works end-to-end.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
@@ -62,7 +63,7 @@ let db: postgres.Sql;
 beforeAll(async () => {
   await seedHrmsCoreFixtures();
   app = await buildApp();
-  db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  db = postgres(process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`, { max: 5 });
   // This suite exercises the legacy single-step offer shortcut (PATCH .../offer). Since GAP-RECRUITMENT-DETAIL-05 that
   // shortcut is refused by default (offers must go through the approval workflow), so the tenant opts out here --
   // the policy itself is covered by its own describe block below.

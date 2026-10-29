@@ -49,6 +49,7 @@
  *   pnpm vitest run tests/integration/perf-001-pgbouncer-pooling.test.ts
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../vitest.testdb";
 
 // Dynamic import ONLY (no top-level `import type ... from "postgres"`
 // either — Vite's import scanner tries to resolve even type-only top-level
@@ -62,7 +63,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 let postgresModule: typeof import("postgres") | null = null;
 
 const PGBOUNCER_TEST_URL = process.env.PGBOUNCER_TEST_URL;
-const ADMIN_DSN = process.env.ADMIN_DSN ?? "postgres://civitas_admin:civitas_dev_pw@localhost:5435/civitas_finance";
+// FQ15: resolved lazily (inside the env-gated suite) and never defaulted to a live host/port.
+const adminDsn = (): string =>
+  process.env.ADMIN_DSN ?? `postgres://civitas_admin:civitas_dev_pw@${testDbHostPort()}/civitas_finance`;
 const N_TENANTS = Number(process.env.PERF001_N_TENANTS ?? 30);
 // Matches ecosystem.config.js's PGBOUNCER_ENV.DB_POOL_MAX — the real
 // per-process client-side cap this test's client pool should mirror.
@@ -91,7 +94,7 @@ describe.skipIf(!PGBOUNCER_TEST_URL)("PERF-001 — PgBouncer transaction-pooling
     const postgresEntry = require.resolve("postgres");
     postgresModule = await import(/* @vite-ignore */ postgresEntry);
     const postgres = postgresModule!.default;
-    admin = postgres(ADMIN_DSN, { max: 1, prepare: false });
+    admin = postgres(adminDsn(), { max: 1, prepare: false });
     // A real FORCE-RLS tenant table, using the EXACT policy shape every
     // tenant-scoped table in the fleet uses (see docs on
     // packages/db/src/wrap-tenant-db.ts) — not a mock, so this exercises real
@@ -169,7 +172,7 @@ describe.skipIf(!PGBOUNCER_TEST_URL)("PERF-001 — PgBouncer transaction-pooling
   });
 
   it("real connection count under this load stays within a small, explicit ceiling (corroborates the static budget)", async () => {
-    const adminForStats = postgresModule!.default(ADMIN_DSN, { max: 1, prepare: false });
+    const adminForStats = postgresModule!.default(adminDsn(), { max: 1, prepare: false });
     try {
       // Fire the same concurrent load again while sampling pg_stat_activity.
       const loadPromise = Promise.all(

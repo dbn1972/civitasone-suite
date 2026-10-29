@@ -99,10 +99,11 @@
  * every caller instead of assuming a fixed id anywhere.
  */
 import postgres from "postgres";
+import { testDbHostPort } from "../../../../vitest.testdb";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+  `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 
 const T = "00000000-0000-0000-0000-000000000001"; // tenant_id (demo-tenant)
 const A = "00000000-0000-0000-0000-000000000099"; // actor (admin/system — also the

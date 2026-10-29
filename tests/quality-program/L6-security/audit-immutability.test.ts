@@ -15,20 +15,21 @@
  * gap did (0014 shipped for months before this pass caught it).
  */
 import { describe, it, expect } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { runPsql } from "./psql-exec";
 
-const PGHOST = process.env.PGHOST ?? "localhost";
-const PGPORT = process.env.PGPORT ?? "5435";
 const DB = "civitas_audit";
 const ROLE = "audit_svc";
 const PW = "audit_dev_pw";
 
 const TENANT = "00000000-0000-0000-0000-000000000001";
 
-const CONN = { host: PGHOST, port: PGPORT, user: ROLE, db: DB, password: PW };
+// FQ15: resolved per call (never a default host/port), so the tests that never touch
+// the database still run when PGHOST/PGPORT are unset; DB-backed ones fail fast.
+const conn = () => ({ ...requireTestDb(), user: ROLE, db: DB, password: PW });
 
 function psqlResult(query: string): { ok: boolean; output: string } {
-  return runPsql(CONN, [query]);
+  return runPsql(conn(), [query]);
 }
 
 /** An audit row inserted inside the probe transaction, so row-level triggers have a target. */
@@ -70,7 +71,7 @@ function psqlScopedMutation(
     statement,
     "ROLLBACK",
   ];
-  return runPsql(CONN, sql, { onErrorStop: true });
+  return runPsql(conn(), sql, { onErrorStop: true });
 }
 
 /**
@@ -82,7 +83,7 @@ function psqlScopedMutation(
  * the guard under test has regressed and the statement "succeeds".
  */
 function psqlScopedStatement(statement: string): { ok: boolean; output: string } {
-  return runPsql(CONN, ["BEGIN", `SET LOCAL app.tenant_id = '${TENANT}'`, statement, "ROLLBACK"], {
+  return runPsql(conn(), ["BEGIN", `SET LOCAL app.tenant_id = '${TENANT}'`, statement, "ROLLBACK"], {
     onErrorStop: true,
   });
 }

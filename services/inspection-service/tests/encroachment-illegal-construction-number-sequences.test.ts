@@ -27,6 +27,7 @@
  * cache or leaking connections from the app's own pool.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import postgres from "postgres";
 import { db } from "../src/shared/db.js";
 import { formatComplaintNumber, formatNoticeNumber } from "../src/modules/encroachment/domain.js";
@@ -36,7 +37,7 @@ import { nextCaseNumber, nextActionNumber } from "../src/modules/illegal-constru
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgres://inspection_svc:inspection_dev_pw@localhost:5435/civitas_inspection";
+  `postgres://inspection_svc:inspection_dev_pw@${testDbHostPort()}/civitas_inspection`;
 
 describe("reference-number formatters (pure, no DB/IO)", () => {
   const year = new Date().getFullYear();

@@ -38,6 +38,7 @@
  * DATABASE_URL once at import time.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -121,7 +122,7 @@ async function drainRelay(db: unknown, q: MemoryQueue, service: string): Promise
 
 const NOTIFICATION_URL =
   process.env.REFUND_TEST_NOTIFICATION_DATABASE_URL ??
-  "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
+  `postgres://notification_svc:notification_dev_pw@${testDbHostPort()}/civitas_notification`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let notification: any;
