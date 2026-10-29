@@ -68,10 +68,12 @@ export async function softDelete(tx: Writer, tenantId: string, id: string, actor
     .where(and(eq(files.tenantId, tenantId), eq(files.id, id)));
 }
 
-export async function updateTags(tx: Writer, tenantId: string, id: string, tags: string[], actorId: string): Promise<void> {
-  await tx.update(files)
+export async function updateTags(tx: Writer, tenantId: string, id: string, tags: string[], actorId: string): Promise<boolean> {
+  const rows = await tx.update(files)
     .set({ tags, updatedBy: actorId, updatedAt: new Date() })
-    .where(and(eq(files.tenantId, tenantId), eq(files.id, id)));
+    .where(and(eq(files.tenantId, tenantId), eq(files.id, id)))
+    .returning({ id: files.id });
+  return rows.length > 0;
 }
 
 export async function updateFolder(tx: Writer, tenantId: string, id: string, folderId: string | null, actorId: string): Promise<void> {

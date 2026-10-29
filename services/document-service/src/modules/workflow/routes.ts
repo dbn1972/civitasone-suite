@@ -74,7 +74,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = forwardDakBody.parse(req.body);
     await loadHandleable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx), body.remarks));
   });
 
   app.post("/v1/documents/daks/:id/acknowledge", async (req, reply) => {
