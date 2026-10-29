@@ -18,6 +18,7 @@
  * 03-designs/FF-01.md §2.3 — every added column nullable or defaulted.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { NonRetryableError } from "@civitasone/queue";
@@ -224,7 +225,7 @@ describe("COMMAND_RESULT_RETENTION (D-20)", () => {
 // *-live-pg suites, which need their own schema. A missing database fails loudly in
 // beforeAll instead of silently skipping (flaky-skip-guard / REL-014).
 const COMMAND_RESULT_PG_URL =
-  process.env.COMMAND_RESULT_PG_URL ?? "postgres://civitas:civitas_test@localhost:5435/civitas_test";
+  process.env.COMMAND_RESULT_PG_URL ?? `postgres://civitas:civitas_test@${testDbHostPort()}/civitas_test`;
 const client = postgres(COMMAND_RESULT_PG_URL, { max: 4 });
 const db = drizzle(client) as unknown as DrizzleTx;
 

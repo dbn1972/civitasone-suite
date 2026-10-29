@@ -29,6 +29,7 @@
  * this test only proves the road-cutting fee itself is wired correctly.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { eq, and, isNotNull } from "drizzle-orm";
@@ -64,7 +65,7 @@ async function drainOutbox(db: unknown, queue: MemoryQueue, service: string): Pr
 // Matches the CI/nightly convention (.github/workflows/nightly.yml uses
 // finance_svc@.../civitas_finance on the standing dev container's port);
 // this test's own bootstrap container is addressed via ROADCUT_TEST_PGPORT.
-const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5435";
+const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? requireTestDb().port;
 const ROADCUT_DSN = `postgres://roadcut_svc:roadcut_dev_pw@localhost:${PGPORT}/civitas_roadcut`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
 

@@ -22,10 +22,11 @@
  * one process.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
 
-const PGPORT = process.env.PARKS_TEST_PGPORT ?? "5435";
+const PGPORT = process.env.PARKS_TEST_PGPORT ?? requireTestDb().port;
 const PARKS_DSN = `postgres://parks_svc:parks_dev_pw@localhost:${PGPORT}/civitas_parks`;
 const NOTIFICATION_DSN = `postgres://notification_svc:notification_dev_pw@localhost:${PGPORT}/civitas_notification`;
 

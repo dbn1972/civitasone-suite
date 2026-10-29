@@ -56,6 +56,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
@@ -69,8 +70,8 @@ const ADMIN_PW =
   (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
     ? "civitas_test"
     : "civitas_dev_pw");
-const HOST = process.env.PGHOST ?? "localhost";
-const PORT = Number(process.env.PGPORT ?? "5435");
+const HOST = requireTestDb().host;
+const PORT = Number(requireTestDb().port);
 
 // SECURITY: this is the read-only, hardcoded-credential evidence suite
 // itself — never a path any client input reaches. Rather than setting

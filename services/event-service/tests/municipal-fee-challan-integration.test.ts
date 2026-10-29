@@ -26,6 +26,7 @@
  * challanCreate + GL-posting consumers against finance's REAL database.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
@@ -62,7 +63,7 @@ async function relayToCompletion(db: unknown, queue: unknown, batchLimit: number
   }
 }
 
-const PGPORT = process.env.PGPORT ?? "5435";
+const PGPORT = requireTestDb().port;
 const EVENT_DSN = `postgres://event_svc:event_dev_pw@localhost:${PGPORT}/civitas_event`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
 

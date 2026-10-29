@@ -17,6 +17,7 @@
  *            itself) silently dropped most fields on job-opening creation.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import postgres from "postgres";
@@ -71,7 +72,7 @@ async function asTenant<T>(fn: (tx: postgres.TransactionSql) => Promise<T>): Pro
 
 beforeAll(async () => {
   await seedHrmsCoreFixtures();
-  db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  db = postgres(process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`, { max: 5 });
 
   await asTenant(async (tx) => {
     await tx`DELETE FROM employee.hrms_employees WHERE id IN (${FIN_MGR_EMP}, ${PWD_MGR_EMP})`;

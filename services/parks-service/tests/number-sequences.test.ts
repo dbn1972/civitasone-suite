@@ -14,6 +14,7 @@
  * the old Date.now() scheme was vulnerable to.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import postgres from "postgres";
 import { db } from "../src/shared/db.js";
 import { formatComplaintNumber } from "../src/modules/complaints/domain.js";
@@ -25,7 +26,7 @@ import { nextAssetCode } from "../src/modules/assets/repo.js";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgres://parks_svc:parks_dev_pw@localhost:5435/civitas_parks";
+  `postgres://parks_svc:parks_dev_pw@${testDbHostPort()}/civitas_parks`;
 
 describe("reference-number formatters (pure, no DB/IO)", () => {
   it("formatComplaintNumber uses the PRK- prefix", () => {

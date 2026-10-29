@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbHostPort } from "../../vitest.testdb";
 
 export default defineConfig({
   test: {
@@ -13,7 +14,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://swm_svc:swm_dev_pw@localhost:5435/civitas_swm"
+          ? `postgres://swm_svc:swm_dev_pw@${testDbHostPort()}/civitas_swm`
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",

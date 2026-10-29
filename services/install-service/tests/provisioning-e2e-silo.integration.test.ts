@@ -30,6 +30,7 @@
  *      the actuator's idempotent-error tolerance — zero duplicate objects.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import postgres from "postgres";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,7 +48,7 @@ const ADMIN_PW =
     : "civitas_dev_pw");
 const RUNNER_DSN =
   process.env.PROVISIONING_RUNNER_DSN ??
-  `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${process.env.PGHOST ?? "localhost"}:${process.env.PGPORT ?? "5435"}/postgres`;
+  `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${testDbHostPort()}/postgres`;
 
 describe("provisionSiloDatabase — end-to-end (real Postgres)", () => {
   let fixtureRoot: string;

@@ -16,6 +16,7 @@
  * one process.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
 
@@ -38,7 +39,7 @@ async function relayToCompletion(db: unknown, queue: unknown, batchLimit: number
   }
 }
 
-const PGPORT = process.env.PGPORT ?? "5435";
+const PGPORT = requireTestDb().port;
 const EVENT_DSN = `postgres://event_svc:event_dev_pw@localhost:${PGPORT}/civitas_event`;
 const NOTIFICATION_DSN = `postgres://notification_svc:notification_dev_pw@localhost:${PGPORT}/civitas_notification`;
 

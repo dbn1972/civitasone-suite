@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbHostPort } from "../../vitest.testdb";
 
 export default defineConfig({
   test: {
@@ -10,7 +11,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://meeting_svc:meeting_dev_pw@localhost:5435/civitas_meeting"
+          ? `postgres://meeting_svc:meeting_dev_pw@${testDbHostPort()}/civitas_meeting`
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
@@ -20,7 +21,7 @@ export default defineConfig({
         process.env.DB_URL ??
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://meeting_svc:meeting_dev_pw@localhost:5435/civitas_meeting"
+          ? `postgres://meeting_svc:meeting_dev_pw@${testDbHostPort()}/civitas_meeting`
           : (() => {
               throw new Error(
                 "REL-035: DB_URL (or DATABASE_URL) is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DB_URL (or DATABASE_URL) explicitly (point it at your own disposable Postgres) before running tests.",

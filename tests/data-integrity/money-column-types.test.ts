@@ -18,10 +18,11 @@
  * atypically typed; not a precision FINDING because text cannot round-float.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { requireTestDb } from "../../vitest.testdb";
 import { createSqlClient } from "../../packages/db/src/index.js";
 
-const HOST = process.env.PGHOST ?? "localhost";
-const PORT = process.env.PGPORT ?? "5435";
+const HOST = requireTestDb().host;
+const PORT = requireTestDb().port;
 const ADMIN_USER = process.env.PGADMIN_USER ?? "civitas_admin";
 const ADMIN_PW = process.env.PGADMIN_PW ?? "civitas_dev_pw";
 

@@ -38,6 +38,7 @@
  * (PR #1022), both merged.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -87,12 +88,12 @@ function tenantWrappedQueue(): MemoryQueue {
 }
 
 const FINANCE_URL = process.env.PARKING_TEST_FINANCE_DATABASE_URL
-  ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+  ?? `postgres://finance_svc:finance_dev_pw@${testDbHostPort()}/civitas_finance`;
 
 // Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
 serializeFinanceOutboxRelay(FINANCE_URL);
 const NOTIFICATION_URL = process.env.PARKING_TEST_NOTIFICATION_DATABASE_URL
-  ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
+  ?? `postgres://notification_svc:notification_dev_pw@${testDbHostPort()}/civitas_notification`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let finance: any;

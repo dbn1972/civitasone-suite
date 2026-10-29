@@ -46,6 +46,7 @@
  * SEC-009 — flagged separately.)
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
@@ -79,8 +80,8 @@ const ADMIN_PW =
   (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
     ? "civitas_test"
     : "civitas_dev_pw");
-const HOST = process.env.PGHOST ?? "localhost";
-const PORT = Number(process.env.PGPORT ?? "5435");
+const HOST = requireTestDb().host;
+const PORT = Number(requireTestDb().port);
 
 const adminSql = postgres({
   host: HOST,

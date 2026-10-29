@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
+import { testDbHostPort } from "../../vitest.testdb";
 
 // Wave 3 cross-events wiring added tests/municipal-status-notification-integration.test.ts,
 // which flips process.env.DATABASE_URL between two real cross-service DB
@@ -26,7 +27,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://parks_svc:parks_dev_pw@localhost:5435/civitas_parks"
+          ? `postgres://parks_svc:parks_dev_pw@${testDbHostPort()}/civitas_parks`
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",

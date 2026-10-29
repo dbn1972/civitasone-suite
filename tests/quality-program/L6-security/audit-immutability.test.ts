@@ -15,10 +15,11 @@
  * gap did (0014 shipped for months before this pass caught it).
  */
 import { describe, it, expect } from "vitest";
+import { requireTestDb } from "../../../vitest.testdb";
 import { runPsql } from "./psql-exec";
 
-const PGHOST = process.env.PGHOST ?? "localhost";
-const PGPORT = process.env.PGPORT ?? "5435";
+const PGHOST = requireTestDb().host;
+const PGPORT = requireTestDb().port;
 const DB = "civitas_audit";
 const ROLE = "audit_svc";
 const PW = "audit_dev_pw";

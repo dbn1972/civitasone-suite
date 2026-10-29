@@ -27,6 +27,7 @@
  * runs never collide.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import {
@@ -37,7 +38,7 @@ import {
 } from "../src/modules/workforce-core/backfill.js";
 
 const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
+  process.env.DATABASE_URL ?? `postgres://hrms_svc:hrms_dev_pw@${testDbHostPort()}/civitas_hrms`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pg: any;

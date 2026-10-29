@@ -15,6 +15,7 @@
  * infra is running.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { testDbHostPort } from "../../vitest.testdb";
 import { randomUUID } from "node:crypto";
 import { SqsQueue } from "../../packages/queue/dist/index.js";
 import type { CommandEnvelope } from "../../packages/queue/dist/index.js";
@@ -23,7 +24,9 @@ import type { CommandEnvelope } from "../../packages/queue/dist/index.js";
 // Gate: skip when LocalStack / infra is not available
 // ---------------------------------------------------------------------------
 const localstackUp = Boolean(process.env.AWS_ENDPOINT_URL);
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+// FQ15: resolved lazily (inside the env-gated suite) and never defaulted to a live host/port.
+const databaseUrl = (): string =>
+  process.env.DATABASE_URL ?? `postgres://finance_svc:finance_dev_pw@${testDbHostPort()}/civitas_finance`;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -49,7 +52,7 @@ describe.skipIf(!localstackUp)("Payroll→GL Live SQS Integration", () => {
     // Connect to PostgreSQL to poll for journal entries
     try {
       const postgres = await import("postgres");
-      pgClient = postgres.default(DATABASE_URL, { max: 2 });
+      pgClient = postgres.default(databaseUrl(), { max: 2 });
       await pgClient`SELECT 1`;
     } catch {
       pgClient = null;
