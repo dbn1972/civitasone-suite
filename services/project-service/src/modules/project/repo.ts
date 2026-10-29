@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray, gt, asc } from "drizzle-orm";
+import { eq, and, desc, inArray, gt, asc, sql } from "drizzle-orm";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { db } from "../../shared/db.js";
 import {
@@ -186,7 +186,8 @@ export async function updateProjectTx(
   patch: Partial<ProjectInsert>,
 ): Promise<void> {
   await tx.update(projectProjects)
-    .set({ ...patch, updatedAt: new Date() })
+    // version bumps on every applied PATCH (UAT g4: it stayed at 1 after an update).
+    .set({ ...patch, updatedAt: new Date(), version: sql`${projectProjects.version} + 1` })
     .where(and(eq(projectProjects.id, id), eq(projectProjects.tenantId, tenantId)));
 }
 

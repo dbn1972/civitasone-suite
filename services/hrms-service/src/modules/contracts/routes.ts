@@ -10,6 +10,7 @@ import { hrmsContractConfig } from "./schema.js";
 import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import * as employeeRepo from "../employee/repo.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
@@ -85,6 +86,14 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createContractBody.parse(req.body);
+    // Pre-check what the consumer would reject silently (NonRetryableError after a 202).
+    const employee = await employeeRepo.findById(body.employeeId, ctx.tenantId);
+    if (!employee) throw new HttpError(404, "EMPLOYEE_NOT_FOUND", "employee not found");
+    if (employee.employeeType !== "contract") {
+      throw new HttpError(422, "EMPLOYEE_NOT_CONTRACT_TYPE", `employee is type '${employee.employeeType}'; a contract can only be created for an employee of type 'contract'`);
+    }
+    const existing = await repo.getActiveContractForEmployee(ctx.tenantId, body.employeeId);
+    if (existing) throw new HttpError(409, "ACTIVE_CONTRACT_EXISTS", "an active contract already exists for this employee");
     const result = await commands.createContract(ctx, body);
     return reply.code(202).send(result);
   });
@@ -94,6 +103,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = activateContractBody.parse(req.body);
+    if (!(await repo.getContractById(ctx.tenantId, id))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
     const result = await commands.activateContract(ctx, id, body);
     return reply.code(202).send(result);
   });
@@ -143,6 +153,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = terminateContractBody.parse(req.body);
+    if (!(await repo.getContractById(ctx.tenantId, id))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
     const result = await commands.terminateContract(ctx, id, body);
     return reply.code(202).send(result);
   });
@@ -273,7 +284,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
     }
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });

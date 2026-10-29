@@ -76,17 +76,10 @@ describe("COMP-007: ai-ml/document-ocr.ts -- POST /v1/hrms/ai/ocr/extract", () =
     expect(typeof body.data.confidence).toBe("number");
   });
 
-  // KNOWN ISSUE (found by this smoke test, not fixed here -- out of COMP-007's
-  // scope, which is adding missing tests, not fixing bugs the new tests turn
-  // up): unlike every other hrms-service module, none of the 5 ai-ml route
-  // files register their own `app.setErrorHandler`, and empirically the
-  // top-level `registerSchemaErrorHandler(app, HttpError)` set in app.ts does
-  // NOT end up mapping this route's thrown ZodError to 400 the way it does
-  // for e.g. leave/employee routes -- it falls through to the generic 500
-  // handler instead. Asserting the real, current behavior here (not the
-  // "should be" behavior) so this stays a true characterization test; a fix
-  // should be tracked as its own follow-up gap.
-  it("KNOWN ISSUE: an invalid documentType currently 500s instead of 400ing", async () => {
+  // Previously a characterization of a bug (the ai-ml route files set no error handler of their own and
+  // app.ts registered registerSchemaErrorHandler AFTER the route plugins, so a ZodError became a 500).
+  // The handler is now registered before the routes, so this answers 400.
+  it("FIXED (UAT API sweep 2026-10-29): an invalid documentType answers 400, not 500", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -95,7 +88,7 @@ describe("COMP-007: ai-ml/document-ocr.ts -- POST /v1/hrms/ai/ocr/extract", () =
       payload: { imageKey: "uploads/x.jpg", documentType: "not_a_real_type" },
     });
     await app.close();
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -122,16 +115,10 @@ describe("COMP-007: ai-ml/nlu-chatbot.ts -- POST /v1/hrms/ai/chat", () => {
     expect(typeof body.text).toBe("string");
   });
 
-  // KNOWN ISSUE (found by this smoke test, not fixed here): a leave-balance
-  // query 500s with `relation "hrms.leave_allocations" does not exist` --
-  // real, reproducible against real migrations, not a fixture gap. Migration
-  // 0124_schema_integrity_fk_indexes.sql documents that `hrms_leave_allocations`
-  // (note: singular `hrms_` prefix, not this route's `hrms.leave_allocations`)
-  // was never created by any migration in this service ("does not yet exist").
-  // The AI HR assistant's leave-balance intent has therefore likely never
-  // worked. Flagged as a real finding for a separate follow-up gap; asserting
-  // current behavior here so this test documents, rather than hides, it.
-  it("KNOWN ISSUE: a leave-balance query 500s (hrms.leave_allocations does not exist)", async () => {
+  // Previously a characterization of a bug: the leave-balance intent queried hrms.leave_allocations, which no
+  // migration ever created. It now reads leave.hrms_leave_allocs; this token's user has no employee row, so the
+  // bot answers that no allocation was found (200) instead of 500.
+  it("FIXED (UAT API sweep 2026-10-29): a leave-balance query answers 200 from leave.hrms_leave_allocs", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -140,7 +127,8 @@ describe("COMP-007: ai-ml/nlu-chatbot.ts -- POST /v1/hrms/ai/chat", () => {
       payload: { message: "How many casual leave days do I have left?" },
     });
     await app.close();
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(res.json())).toContain("leave allocation");
   });
 });
 
@@ -170,10 +158,10 @@ describe("COMP-007: ai-ml/recruitment-ai.ts -- POST /v1/hrms/ai/recruitment/scor
     expect(res.statusCode).toBe(200);
   });
 
-  // KNOWN ISSUE: same class of bug as document-ocr's above -- a thrown ZodError
-  // 500s instead of 400ing (ai-ml routes don't register their own error
-  // handler and don't end up under the root's). See that test's comment.
-  it("KNOWN ISSUE: a JD description below the minimum length currently 500s instead of 400ing", async () => {
+  // Previously a characterization of a bug (the ai-ml route files set no error handler of their own and
+  // app.ts registered registerSchemaErrorHandler AFTER the route plugins, so a ZodError became a 500).
+  // The handler is now registered before the routes, so this answers 400.
+  it("FIXED (UAT API sweep 2026-10-29): a JD description below the minimum length answers 400, not 500", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -188,7 +176,7 @@ describe("COMP-007: ai-ml/recruitment-ai.ts -- POST /v1/hrms/ai/recruitment/scor
       },
     });
     await app.close();
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -200,8 +188,10 @@ describe("COMP-007: ai-ml/face-verification.ts -- POST /v1/hrms/ai/face/enroll",
     expect(res.statusCode).toBe(401);
   });
 
-  // KNOWN ISSUE: same class of bug as the other two above.
-  it("KNOWN ISSUE: a malformed employeeId currently 500s instead of 400ing", async () => {
+  // Previously a characterization of a bug (the ai-ml route files set no error handler of their own and
+  // app.ts registered registerSchemaErrorHandler AFTER the route plugins, so a ZodError became a 500).
+  // The handler is now registered before the routes, so this answers 400.
+  it("FIXED (UAT API sweep 2026-10-29): a malformed employeeId answers 400, not 500", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -210,6 +200,6 @@ describe("COMP-007: ai-ml/face-verification.ts -- POST /v1/hrms/ai/face/enroll",
       payload: { employeeId: "not-a-uuid", photoKey: "uploads/comp007-smoke-selfie.jpg" },
     });
     await app.close();
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(400);
   });
 });

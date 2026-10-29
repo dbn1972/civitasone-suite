@@ -52,10 +52,11 @@ import { withRawTenantGuc } from "@civitasone/db";
  * wrap, so the tenant-scoping half is already correct once this gets its own
  * dedicated fix. Flagged in full in the PR description; not fixed here.
  *
- * leave_balance and holiday_next below have a *different* pre-existing bug
- * (hrms.leave_allocations and hrms.holidays do not exist under any schema in
- * this service at all; confirmed against the live dev DB) and are left
- * untouched here too; not the same gap either, out of scope for this fix.
+ * leave_balance / holiday_next / manager_info used to query hrms.leave_allocations,
+ * hrms.holidays and non-existent employee columns (user_id, reporting_to, first_name);
+ * fixed in the UAT API sweep (2026-10-29) to read leave.hrms_leave_allocs +
+ * leave.hrms_leave_types, leave.hrms_holidays and employee.hrms_employees
+ * (user_ref / manager_id / full_name).
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -209,12 +210,20 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
 
     switch (intent) {
       case "leave_balance": {
-        const rows = await sqlClient.query(
-          `SELECT leave_type_code, leave_type_name, total_days, balance_days
-           FROM hrms.leave_allocations
-           WHERE tenant_id = $1 AND employee_id = (SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
+        const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+          `WITH me AS (
+             SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2 LIMIT 1
+           )
+           SELECT t.code AS leave_type_code, t.name AS leave_type_name, a.total_days,
+                  COALESCE(a.balance_days_exact, a.balance_days) AS balance_days
+           FROM leave.hrms_leave_allocs a
+           JOIN me ON me.id = a.employee_id
+           JOIN leave.hrms_leave_types t ON t.id = a.leave_type_id AND t.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $2
+             AND a.fy = (SELECT MAX(a2.fy) FROM leave.hrms_leave_allocs a2 WHERE a2.tenant_id = $2 AND a2.employee_id = me.id)
+           ORDER BY t.code`,
           [ctx.actorId, ctx.tenantId],
-        );
+        ));
         if (rows.rowCount && rows.rowCount > 0) {
           const summary = rows.rows.map((r: any) => `• ${r.leave_type_name}: **${r.balance_days}** of ${r.total_days} days`).join("\n");
           response = { text: `Here's your leave balance:\n\n${summary}`, data: rows.rows, action: "show_leave_balance", suggestions: ["Apply for leave", "Leave history", "Leave policy"] };
@@ -230,10 +239,10 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
       }
 
       case "holiday_next": {
-        const holidays = await sqlClient.query(
-          `SELECT name, date, type FROM hrms.holidays WHERE tenant_id = $1 AND date >= CURRENT_DATE ORDER BY date LIMIT 3`,
+        const holidays = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+          `SELECT name, date, type FROM leave.hrms_holidays WHERE tenant_id = $1 AND date >= CURRENT_DATE ORDER BY date LIMIT 3`,
           [ctx.tenantId],
-        );
+        ));
         if (holidays.rowCount && holidays.rowCount > 0) {
           const list = holidays.rows.map((h: any) => `• **${h.name}** — ${h.date} (${h.type})`).join("\n");
           response = { text: `Upcoming holidays:\n\n${list}`, data: holidays.rows, suggestions: ["Holiday calendar", "Apply leave before holiday"] };
@@ -245,15 +254,16 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
 
       case "manager_info": {
         const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-          `SELECT e2.first_name, e2.last_name, e2.designation, e2.email, e2.phone
+          `SELECT e2.full_name, ds.name AS designation, e2.email
            FROM employee.hrms_employees e1
-           JOIN employee.hrms_employees e2 ON e2.id = e1.reporting_to AND e2.tenant_id = e1.tenant_id
-           WHERE e1.user_id = $1 AND e1.tenant_id = $2`,
+           JOIN employee.hrms_employees e2 ON e2.id = e1.manager_id AND e2.tenant_id = e1.tenant_id
+           LEFT JOIN employee.hrms_designations ds ON ds.id = e2.designation_id AND ds.tenant_id = e2.tenant_id
+           WHERE e1.user_ref = $1 AND e1.tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
         ));
         if (emp.rowCount && emp.rowCount > 0) {
           const m = emp.rows[0];
-          response = { text: `Your reporting manager is **${m.first_name} ${m.last_name}** (${m.designation}).\n\n📧 ${m.email ?? '—'}\n📱 ${m.phone ?? '—'}`, suggestions: ["Team directory", "Org chart"] };
+          response = { text: `Your reporting manager is **${m.full_name}** (${m.designation ?? '—'}).\n\n📧 ${m.email ?? '—'}`, suggestions: ["Team directory", "Org chart"] };
         } else {
           response = { text: "I couldn't find your reporting manager details.", suggestions: ["View org chart", "Contact HR"] };
         }

@@ -168,7 +168,7 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
 function errHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
     return;
   }
   if (err instanceof HttpError) {

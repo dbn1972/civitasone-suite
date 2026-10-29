@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import { findProjectByIdTx } from "./repo.js";
+import { computeRiskScore } from "./risk-score.js";
 import {
   projectIdParam, billParam, extParam, riskParam,
   createRiskBody, updateRiskBody, computeEvmBody, createRaBillBody, createTimeExtBody,
@@ -425,11 +426,6 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
   // ─── Error handler ──────────────────────────────────────────────────────────
 
   app.setErrorHandler(errorHandler);
-}
-
-function computeRiskScore(probability: string, impact: string): number {
-  const levels: Record<string, number> = { low: 1, medium: 2, high: 3, critical: 4 };
-  return (levels[probability] ?? 2) * (levels[impact] ?? 2);
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

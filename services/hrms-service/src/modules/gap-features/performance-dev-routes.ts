@@ -37,29 +37,9 @@ function isHr(ctx: { roles: string[] }): boolean {
  * (hrms.goals is FORCE ROW LEVEL SECURITY too) and have now been wrapped
  * the same way.
  *
- * The learning-paths gaps query (below) is NOT the same simple case -- flagging
- * rather than forcing a fix (see PR description for the full writeup):
- *  1. It joins `employee.role_requirements`, which does not exist under any
- *     schema (confirmed against the live dev DB). Two real tables are
- *     plausible replacements and neither is an obvious drop-in: `competency.
- *     role_requirements` (schema-adjacent name, but required_level is
- *     `integer`) and `employee.role_competency_map` (schema-matching,
- *     required_level is `varchar` defaulting to 'intermediate' -- matching
- *     `skill_assessments.assessed_level`'s type, used by the sibling
- *     gap-features/routes.ts for this exact competency-gap concept).
- *  2. Independently of (1): `employee.skill_assessments.assessed_level` is
- *     itself a qualitative varchar (beginner/intermediate/advanced/expert --
- *     matching `competencies.proficiency_levels` and how gap-features/
- *     routes.ts already treats it: display/group-by only, never arithmetic).
- *     This query does `GREATEST(required_level - assessed_level, 0)`, which
- *     fails with "COALESCE types character varying and integer cannot be
- *     matched" against EITHER candidate table above -- confirmed live.
- * Picking a join target without also inventing a levels-to-numbers mapping
- * (there is no established one in this codebase) would still 500; inventing
- * one would be a product decision, not a tenant-scoping fix. Left the join
- * and the arithmetic exactly as they were; wrapped the query in the same
- * withTenantGuc regardless, since that gap is real and independent of this
- * one -- it just means end-to-end verification isn't possible here yet.
+ * The learning-paths gaps query (below) used to join `employee.role_requirements` (never existed) and do
+ * integer arithmetic on the varchar `assessed_level` (500 in the UAT API sweep, 2026-10-29). It now reads
+ * `employee.role_competency_map` and derives numeric levels from each competency's `proficiency_levels`.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -221,18 +201,39 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(403, "FORBIDDEN", "Cannot view another employee's learning path");
 
     // Identify competency gaps
+    // Levels are qualitative (employee.competencies.proficiency_levels, ordered low -> high; e.g.
+    // beginner < intermediate < advanced < expert). The numeric level is the 1-based position of the
+    // level name in that competency's own proficiency_levels array, so no mapping is invented here.
+    // Requirement = employee.role_competency_map (highest required level across roles); an
+    // un-assessed competency counts as level 0; a competency with no requirement defaults to 3.
     const { rows: gaps } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT c.id AS "competencyId", c.name AS skill, c.category,
-              COALESCE(sa.assessed_level, 0) AS "currentLevel",
-              COALESCE(rr.required_level, 3) AS "requiredLevel",
-              GREATEST(COALESCE(rr.required_level, 3) - COALESCE(sa.assessed_level, 0), 0) AS gap
+      `WITH lv AS (
+         SELECT c.id AS cid, t.lvl, t.ord
+         FROM employee.competencies c
+         CROSS JOIN LATERAL jsonb_array_elements_text(c.proficiency_levels) WITH ORDINALITY AS t(lvl, ord)
+         WHERE c.tenant_id = $1
+       ), req AS (
+         SELECT rcm.competency_id, MAX(lv.ord) AS ord
+         FROM employee.role_competency_map rcm
+         JOIN lv ON lv.cid = rcm.competency_id AND lv.lvl = rcm.required_level
+         WHERE rcm.tenant_id = $1
+         GROUP BY rcm.competency_id
+       ), cur AS (
+         SELECT DISTINCT ON (sa.competency_id) sa.competency_id, lv.ord
+         FROM employee.skill_assessments sa
+         JOIN lv ON lv.cid = sa.competency_id AND lv.lvl = sa.assessed_level
+         WHERE sa.tenant_id = $1 AND sa.employee_id = $2
+         ORDER BY sa.competency_id, sa.assessed_at DESC
+       )
+       SELECT c.id AS "competencyId", c.name AS skill, c.category,
+              COALESCE(cur.ord, 0)::int AS "currentLevel",
+              COALESCE(req.ord, 3)::int AS "requiredLevel",
+              GREATEST(COALESCE(req.ord, 3) - COALESCE(cur.ord, 0), 0)::int AS gap
        FROM employee.competencies c
-       LEFT JOIN employee.skill_assessments sa
-         ON sa.competency_id = c.id AND sa.employee_id = $2 AND sa.tenant_id = $1
-       LEFT JOIN employee.role_requirements rr
-         ON rr.competency_id = c.id AND rr.tenant_id = $1
+       LEFT JOIN cur ON cur.competency_id = c.id
+       LEFT JOIN req ON req.competency_id = c.id
        WHERE c.tenant_id = $1
-         AND GREATEST(COALESCE(rr.required_level,3) - COALESCE(sa.assessed_level,0), 0) > 0
+         AND GREATEST(COALESCE(req.ord, 3) - COALESCE(cur.ord, 0), 0) > 0
        ORDER BY gap DESC LIMIT 10`,
       [ctx.tenantId, targetId],
     ));
@@ -270,7 +271,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
   // Error handler
   app.setErrorHandler((err, req, reply) => {
     const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError)  return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid, retryable: false });
+    if (err instanceof ZodError)  return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid, retryable: false });
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid, retryable: true });

@@ -63,6 +63,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "project-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
+  // MUST be registered BEFORE any app.register(<routes>) below: Fastify child (encapsulated)
+  // contexts copy the parent error handler when created, so a handler set after the routes only
+  // covers the root context and ZodErrors thrown in route modules fell through to a 500.
+  registerSchemaErrorHandler(app, HttpError);
+
   await app.register(projectRoutes);
   await app.register(schemeRoutes);
   await app.register(progressRoutes);
@@ -90,8 +95,6 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const { delayForecastRoutes } = await import("./modules/delay-forecast/routes.js");
   await app.register(delayForecastRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

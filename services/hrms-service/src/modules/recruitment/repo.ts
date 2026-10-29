@@ -404,6 +404,14 @@ export async function findJobOpeningById(id: string): Promise<JobOpeningRow | nu
   return rows[0] ?? null;
 }
 
+/** Tenant-scoped lookup by the human reference number (unique per tenant: hrms_job_openings_tenant_id_ref_no_key). */
+export async function findJobOpeningByRefNo(tenantId: string, refNo: string): Promise<JobOpeningRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.refNo, refNo)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function findJobOpeningByIdTx(tx: Writer, id: string, tenantId: string): Promise<JobOpeningRow | null> {
   const rows = await (tx as typeof db).select().from(hrmsJobOpenings)
     .where(and(eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.tenantId, tenantId)))

@@ -59,6 +59,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
 
+  // MUST be registered BEFORE any app.register(<routes>) below: Fastify child (encapsulated)
+  // contexts copy the parent error handler when created, so a handler set after the routes only
+  // covers the root context and ZodErrors thrown in route modules fell through to a 500.
+  registerSchemaErrorHandler(app, HttpError);
+
   // Native routes kept for stock-specific functionality
   await app.register(dashboardRoutes);
   await app.register(ewayBillRoutes);
@@ -71,8 +76,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(warehouseRoutes);
   await app.register(entryRoutes);
   await app.register(proxyRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

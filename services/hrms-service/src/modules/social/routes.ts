@@ -1161,7 +1161,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/hrms/expenses/:id/receipt", async (req, reply) => {
     const ctx = resolveContext(req);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const claim = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT employee_id, receipt_key FROM claims.hrms_expense_claims WHERE id = $1 AND tenant_id = $2`,

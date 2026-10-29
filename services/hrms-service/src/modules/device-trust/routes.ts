@@ -217,15 +217,19 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
     if (status) { where += ` AND d.trust_status = $${idx++}`; params.push(status); }
     if (platform) { where += ` AND d.platform = $${idx++}`; params.push(platform); }
-    if (search) { where += ` AND (d.device_name ILIKE $${idx} OR e.first_name ILIKE $${idx} OR e.last_name ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
+    if (search) { where += ` AND (d.device_name ILIKE $${idx} OR e.full_name ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT d.id, d.device_id, d.device_name, d.platform, d.os_version, d.app_version,
               d.is_rooted, d.has_screen_lock, d.biometric_available, d.trust_status,
               d.flagged_reason, d.first_seen_at, d.last_seen_at, d.last_ip, d.login_count,
-              e.first_name, e.last_name, e.employee_code, e.department
+              e.full_name, e.employee_no AS employee_code, dp.name AS department
        FROM hrms.trusted_devices d
-       LEFT JOIN employee.hrms_employees e ON e.user_id = d.user_id AND e.tenant_id = d.tenant_id
+       -- employee.hrms_employees has no user_id / first_name / last_name / employee_code / department
+       -- columns (UAT sweep 2026-10-29 -> 500 "column e.user_id does not exist"): the IdP subject is
+       -- stored in user_ref (text), the display name in full_name, the code in employee_no.
+       LEFT JOIN employee.hrms_employees e ON e.user_ref = d.user_id::text AND e.tenant_id = d.tenant_id
+       LEFT JOIN employee.hrms_departments dp ON dp.id = e.department_id AND dp.tenant_id = e.tenant_id
        ${where}
        ORDER BY d.last_seen_at DESC LIMIT 200`,
       params,
@@ -248,7 +252,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
         lastSeen: r.last_seen_at,
         lastIp: r.last_ip,
         loginCount: r.login_count,
-        employeeName: r.first_name ? `${r.first_name} ${r.last_name}`.trim() : "Unknown",
+        employeeName: r.full_name ? String(r.full_name).trim() : "Unknown",
         employeeCode: r.employee_code,
         department: r.department,
       })),
