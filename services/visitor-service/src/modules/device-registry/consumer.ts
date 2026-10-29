@@ -12,13 +12,14 @@
  */
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { devices, deviceAuditLog, deviceConfigs } from "./schema.js";
 import { generateDeviceToken, canTransition, getAuthType } from "./domain.js";
+import { blindIndex } from "../../shared/pii-crypto.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -38,6 +39,11 @@ export interface DeviceRegisterPayload {
   locationId: string;
   gateId: string | null;
   capabilities: Record<string, string[]>;
+  /**
+   * SHA-256 of the device bearer token minted on the request path (commands.ts). Absent on a
+   * message published before UAT FQ9 #31 — see the deviceRegister handler.
+   */
+  tokenHash?: string | null;
 }
 
 export interface DeviceActivatePayload {
@@ -60,6 +66,18 @@ export interface DeviceDeregisterPayload {
 export interface DeviceRotateCredentialPayload {
   deviceId: string;
   tenantId: string;
+  /** SHA-256 of the new token minted on the request path (UAT FQ9 #31); absent on legacy messages. */
+  tokenHash?: string | null;
+}
+
+/** Postgres foreign_key_violation. */
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
+function isForeignKeyViolation(err: unknown): boolean {
+  for (let e: unknown = err, i = 0; e && i < 5; e = (e as { cause?: unknown }).cause, i++) {
+    if ((e as { code?: unknown }).code === PG_FOREIGN_KEY_VIOLATION) return true;
+  }
+  return false;
 }
 
 export interface DeviceConfigPushPayload {
@@ -89,6 +107,25 @@ export interface DeviceFirmwareSchedulePayload {
   firmwareChecksum: string;
 }
 
+/** Device metadata carried by a `_metadataUpdate` config push (PATCH /v1/visitor/devices/:deviceId). */
+interface DeviceMetadataUpdate {
+  name?: string;
+  capabilities?: Record<string, string[]>;
+  gateId?: string | null;
+}
+
+/** Returns the metadata fields of a `_metadataUpdate` config push, or null for a real config push. */
+function parseMetadataUpdate(config: Record<string, unknown> | null | undefined): DeviceMetadataUpdate | null {
+  if (!config || config._metadataUpdate !== true) return null;
+  const meta: DeviceMetadataUpdate = {};
+  if (typeof config.name === "string") meta.name = config.name;
+  if (config.capabilities && typeof config.capabilities === "object") {
+    meta.capabilities = config.capabilities as Record<string, string[]>;
+  }
+  if (config.gateId === null || typeof config.gateId === "string") meta.gateId = config.gateId as string | null;
+  return meta;
+}
+
 // ── Consumer Registration ─────────────────────────────────────────────────
 
 export function registerDeviceRegistryConsumers(queue: Queue): void {
@@ -97,18 +134,28 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
     const p = msg.payload;
     const authType = getAuthType(p.deviceType);
 
-    // Generate credentials based on auth type
+    // UAT FQ9 #31: the credential is minted on the request path and only its hash arrives here, so
+    // the raw token never reaches this process, the outbox or an event. A message published by the
+    // pre-fix route carries no hash: mint one so the device row is still valid, but its raw token is
+    // discarded (never persisted) — an admin must rotate the credential to obtain a usable token.
     let tokenHash: string | null = null;
-    let rawToken: string | null = null;
     if (authType === "bearer_token") {
-      const cred = generateDeviceToken();
-      tokenHash = cred.hash;
-      rawToken = cred.token;
+      if (p.tokenHash) {
+        tokenHash = p.tokenHash;
+      } else {
+        tokenHash = generateDeviceToken().hash;
+        log.warn({ tenantId: msg.tenantId, deviceId: p.id, event: "device_register_legacy_no_token_hash" },
+          "legacy deviceRegister message without tokenHash; credential must be rotated to obtain a token");
+      }
     }
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
 
+      // UAT FQ9 #8: the route now rejects an unknown location/gate synchronously; this keeps the
+      // consumer defensive for anything that slips past it (a gate deleted in between, a replayed
+      // legacy message): a dangling FK can never succeed on retry, so dead-letter it at once with a
+      // clear reason instead of burning the receive count on the same PostgresError.
       await tx.insert(devices).values({
         id: p.id,
         tenantId: msg.tenantId,
@@ -120,9 +167,17 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         status: "pending_activation",
         authType,
         deviceTokenHash: tokenHash,
+        deviceTokenLookup: tokenHash ? blindIndex(tokenHash) : null,
         capabilities: p.capabilities,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
+      }).catch((err: unknown) => {
+        if (isForeignKeyViolation(err)) {
+          throw new NonRetryableError(
+            `device '${p.id}' references an unknown location '${p.locationId}' or gate '${p.gateId ?? "(none)"}'`,
+          );
+        }
+        throw err;
       });
 
       // Audit log
@@ -150,9 +205,10 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           locationId: p.locationId,
           authType,
           status: "pending_activation",
-          // Include raw token in event so the caller (via webhook/notification)
-          // can deliver it to the device. This event is INTERNAL only.
-          ...(rawToken ? { token: rawToken } : {}),
+          // UAT FQ9 #31 (SECURITY): NO credential material in the event. The outbox row is readable by
+          // any DB reader and retained until purge; the raw token is returned once to the admin by
+          // the register route instead. `credentialIssued` tells subscribers a bearer token exists.
+          credentialIssued: tokenHash !== null,
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.id, outcome: "success" } });
@@ -344,6 +400,8 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         set: {
           status: "deregistered",
           deviceTokenHash: null,
+          deviceTokenLookup: null,
+          oldTokenLookup: null,
           certificateFingerprint: null,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
@@ -410,8 +468,15 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         throw new Error(`device '${p.deviceId}' not found for tenant '${msg.tenantId}'`);
       }
 
-      // Generate new token
-      const { token: newToken, hash: newHash } = generateDeviceToken();
+      // UAT FQ9 #31: the new token was minted on the request path; only its hash is here. A legacy
+      // message (no hash) still rotates — the old token enters its grace window — but the new raw
+      // token is discarded (never persisted), so the admin must rotate again to obtain one.
+      let newHash = p.tokenHash ?? null;
+      if (!newHash) {
+        newHash = generateDeviceToken().hash;
+        log.warn({ tenantId: msg.tenantId, deviceId: p.deviceId, event: "device_rotate_legacy_no_token_hash" },
+          "legacy deviceRotateCredential message without tokenHash; rotate again to obtain a token");
+      }
 
       await versionedUpdate(tx, devices, {
         id: p.deviceId,
@@ -419,7 +484,9 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         expectedVersion: device.version,
         set: {
           oldTokenHash: device.deviceTokenHash,
+          oldTokenLookup: device.deviceTokenLookup,
           deviceTokenHash: newHash,
+          deviceTokenLookup: blindIndex(newHash),
           tokenRotatedAt: new Date(),
           updatedAt: new Date(),
           updatedBy: msg.actorId,
@@ -447,8 +514,8 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           id: p.deviceId,
           tenantId: msg.tenantId,
           authType: device.authType,
-          // Raw token included for delivery to the device (internal event only)
-          token: newToken,
+          // UAT FQ9 #31 (SECURITY): no credential material in the event (see deviceRegister).
+          credentialIssued: true,
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
@@ -478,6 +545,42 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
       const device = rows[0];
       if (!device) {
         throw new Error(`device '${p.deviceId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      // UAT FQ9 #27: PATCH /v1/visitor/devices/:deviceId publishes its metadata through this command
+      // flagged `_metadataUpdate`. It used to be stored as a pending device CONFIG (and pushed to the
+      // device on its next heartbeat) while name/capabilities never changed. Apply it to the row.
+      const meta = parseMetadataUpdate(p.config);
+      if (meta) {
+        await versionedUpdate(tx, devices, {
+          id: p.deviceId,
+          tenantId: msg.tenantId,
+          expectedVersion: device.version,
+          set: {
+            ...(meta.name !== undefined ? { name: meta.name } : {}),
+            ...(meta.capabilities !== undefined ? { capabilities: meta.capabilities } : {}),
+            ...(meta.gateId !== undefined ? { gateId: meta.gateId } : {}),
+            updatedAt: new Date(),
+            updatedBy: msg.actorId,
+          },
+          entity: "device",
+        }).catch((err: unknown) => {
+          if (isForeignKeyViolation(err)) {
+            throw new NonRetryableError(`device '${p.deviceId}' update references an unknown gate '${meta.gateId ?? "(none)"}'`);
+          }
+          throw err;
+        });
+
+        // device_audit_log.action has a CHECK constraint; a metadata edit is a config update.
+        await tx.insert(deviceAuditLog).values({
+          tenantId: msg.tenantId,
+          deviceId: p.deviceId,
+          action: "config_updated",
+          details: { metadataUpdate: true, fields: Object.keys(meta) },
+          actorId: msg.actorId,
+        });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "update", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
+        return;
       }
 
       const newConfigVersion = device.configVersion + 1;

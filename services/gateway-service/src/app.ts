@@ -20,6 +20,7 @@ import {
   createInMemoryQuotaStore,
 } from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
+import { connectWithin, redisRetryStrategy, REDIS_CONNECT_TIMEOUT_MS } from "./redis-connect.js";
 import { registerApiMetrics } from "./api-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
 import { registerSearchRoute } from "./search-route.js";
@@ -378,12 +379,24 @@ async function proxyHandler(
   headers["x-gateway-request"] = "1";
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  // Webhook paths carry the raw string captured by the scoped parser; everything else is re-serialised JSON.
-  const body = hasBody
-    ? (isBillingWebhook || isTelephonyWebhook) && typeof req.body === "string"
-      ? req.body
-      : JSON.stringify(req.body ?? {})
-    : null;
+  // Webhook paths carry the raw string captured by the scoped parser; multipart uploads carry the raw
+  // bytes captured by the multipart parser below (forwarded with the client's own content-type, which
+  // holds the boundary); everything else is re-serialised JSON.
+  let body: string | Buffer | null = null;
+  if (hasBody) {
+    if ((isBillingWebhook || isTelephonyWebhook) && typeof req.body === "string") {
+      body = req.body;
+    } else if (Buffer.isBuffer(req.body)) {
+      body = req.body;
+    } else {
+      body = JSON.stringify(req.body ?? {});
+      // UAT FQ9 #15: a bodyless DELETE/POST arrives with no content-type, so this "{}" used to leave
+      // with none either and fetch() labelled it text/plain — the upstream then parsed a STRING and
+      // its z.object() body schema 400'd ("Expected object, received string"). The bytes sent are JSON,
+      // so say so.
+      headers["content-type"] = "application/json";
+    }
+  }
 
   // ── Per-upstream circuit breaker + timeout ──────────────────────────────────
   const result = await proxyFetch({
@@ -519,8 +532,13 @@ export async function buildApp(): Promise<FastifyInstance> {
       rateLimitClient = new Redis(rateLimitRedisUrl, {
         maxRetriesPerRequest: 2,
         lazyConnect: true,
+        retryStrategy: redisRetryStrategy,
       });
-      await rateLimitClient.connect();
+      // UAT FQ9 boot-order: an unbounded `await connect()` here held the gateway before listen() when
+      // it booted ahead of Redis. Wait a bounded time, then use the in-process store (below).
+      if (!(await connectWithin(rateLimitClient))) {
+        throw new Error(`Redis not ready within ${REDIS_CONNECT_TIMEOUT_MS}ms`);
+      }
       app.log.info(
         { redisUrl: rateLimitRedisUrl },
         "rate-limit: Redis store connected",
@@ -530,6 +548,8 @@ export async function buildApp(): Promise<FastifyInstance> {
         { err, redisUrl: rateLimitRedisUrl },
         "rate-limit: Redis connection failed — falling back to in-process store",
       );
+      // Stop the background reconnect loop of the client we are not going to use.
+      rateLimitClient?.disconnect?.();
       rateLimitClient = undefined;
     }
   }
@@ -756,6 +776,16 @@ export async function buildApp(): Promise<FastifyInstance> {
         done(syntaxErr, undefined);
       }
     },
+  );
+
+  // UAT FQ9 #16: multipart uploads (e.g. POST /api/v1/visitor/scans/upload) had no parser here, so
+  // Fastify answered 415 before the proxy ran. The gateway never inspects the parts: it captures the
+  // raw bytes (still bounded by the global bodyLimit) and proxyHandler forwards them unchanged with the
+  // client's content-type, so the upstream's own multipart plugin enforces its file/size/type limits.
+  app.addContentTypeParser(
+    "multipart/form-data",
+    { parseAs: "buffer" },
+    (_req, body, done) => done(null, body),
   );
 
   // SEC REM-08: Per-IP auth rate limit (10 req/min). Primary brute-force defense is

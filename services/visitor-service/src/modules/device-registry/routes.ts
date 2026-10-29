@@ -11,10 +11,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import { deviceAuth } from "./device-auth.js";
 import { deviceRouteRateLimit } from "./device-route-rate-limit.js";
+import { assertLocationExists, assertGateExists } from "../location/references.js";
 import {
   registerDeviceBody,
   updateDeviceBody,
@@ -70,6 +72,10 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const body = registerDeviceBody.parse(req.body);
 
+    // UAT FQ9 #8: reject an unknown location / gate now, not as a silent dead-letter after the 202.
+    await assertLocationExists(ctx.tenantId, body.locationId);
+    if (body.gateId) await assertGateExists(ctx.tenantId, body.gateId, body.locationId);
+
     const accepted = await publishDeviceRegister(ctx, {
       deviceType: body.deviceType,
       name: body.name,
@@ -78,7 +84,9 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
       gateId: body.gateId ?? null,
       capabilities: body.capabilities,
     });
-    return reply.code(202).send({ data: accepted });
+    // UAT FQ9 #31: `data.deviceToken` (bearer-token devices only) is the ONLY copy of the raw device
+    // credential — it is not persisted or emitted anywhere. Never cache this response.
+    return reply.code(202).header("cache-control", "no-store").send({ data: accepted });
   });
 
   /**
@@ -200,7 +208,12 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     }, { actorId: deviceCtx.deviceId, correlationId });
 
     // 3. Check for pending config and return it in the response.
-    const device = await getDeviceById(deviceCtx.tenantId, deviceCtx.deviceId);
+    // UAT FQ9 #37: this route is config:{public:true} (device-authenticated), so no user JWT populated
+    // the request's tenant context and getDeviceById's scopedRead ran with an EMPTY app.tenant_id GUC —
+    // the RLS policy's `current_setting('app.tenant_id', true)::uuid` then failed with
+    // `invalid input syntax for type uuid: ""` (500). The tenant is the one deviceAuth resolved from
+    // the device record, so scope the read to it explicitly.
+    const device = await runWithTenant(deviceCtx.tenantId, () => getDeviceById(deviceCtx.tenantId, deviceCtx.deviceId));
     if (device?.pendingConfig) {
       return reply.code(200).send({
         data: {
@@ -243,9 +256,11 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
     const body = updateDeviceBody.parse(req.body);
+    // UAT FQ9 #8: an unknown gate is a 422 now rather than a dead-letter later.
+    if (body.gateId) await assertGateExists(ctx.tenantId, body.gateId);
 
-    // Publish a config/metadata update command via the register command
-    // reusing the config push mechanism for metadata updates.
+    // Metadata update rides the config-push command, flagged `_metadataUpdate`; the consumer applies
+    // name / capabilities / gateId to the device row itself (UAT FQ9 #27) instead of pending_config.
     const accepted = await publishDeviceConfigPush(ctx, {
       deviceId,
       config: { _metadataUpdate: true, ...body } as unknown as Record<string, unknown>,
@@ -298,7 +313,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     const { deviceId } = deviceIdParams.parse(req.params);
 
     const accepted = await publishDeviceRotateCredential(ctx, { deviceId });
-    return reply.code(202).send({ data: accepted });
+    // UAT FQ9 #31: `data.deviceToken` is the only copy of the new credential. Never cache it.
+    return reply.code(202).header("cache-control", "no-store").send({ data: accepted });
   });
 
   /**

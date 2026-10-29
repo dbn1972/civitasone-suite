@@ -118,6 +118,9 @@ describe("gateway contract", () => {
       // registry.ts) so e-Office-branded clients and the document-management
       // UI share one backend. Not an accidental routing collision.
       ["documents", "eoffice"],
+      // legal-service: /api/v1/legal + the contract-document intelligence sub-tree
+      // /api/v1/contract/documents, which legal-service serves (UAT FQ9 #6, registry.ts)
+      ["legal", "contract-documents"],
     ];
 
     const byUpstream = new Map<string, string[]>();

@@ -9,6 +9,10 @@
  * falls back to per-process in-memory maps (same as before but explicitly labeled).
  */
 import type { QuotaCheckStore } from "@civitasone/db";
+import { pino } from "pino";
+import { connectWithin, redisRetryStrategy, REDIS_CONNECT_TIMEOUT_MS } from "./redis-connect.js";
+
+const log = pino({ name: "gateway-quota-store" });
 
 // ── In-memory (dev/single-pod fallback) ───────────────────────────
 
@@ -31,19 +35,40 @@ export async function createRedisQuotaStore(url: string): Promise<QuotaCheckStor
   // Dynamic import — ioredis is an optional runtime dep for the gateway.
   // At runtime, ioredis must be installed when REDIS_URL is set.
   // We use a type-only cast here since the dep is optional.
-  const mod = await import("ioredis" as string) as { default: new (url: string, opts: object) => { connect(): Promise<void>; get(k: string): Promise<string | null>; set(k: string, v: string, mode: string, ttl: number): Promise<unknown>; incr(k: string): Promise<number>; expire(k: string, s: number): Promise<unknown>; eval(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown> } };
+  const mod = await import("ioredis" as string) as { default: new (url: string, opts: object) => { connect(): Promise<void>; on?(event: string, fn: () => void): unknown; get(k: string): Promise<string | null>; set(k: string, v: string, mode: string, ttl: number): Promise<unknown>; incr(k: string): Promise<number>; expire(k: string, s: number): Promise<unknown>; eval(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown> } };
   const Redis = mod.default;
-  const redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: true });
-  await redis.connect();
+  const redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: true, retryStrategy: redisRetryStrategy });
+
+  // UAT FQ9 boot-order: never hold buildApp()/listen on Redis. Until Redis is ready (or while it is
+  // reconnecting) quota counters use a per-process in-memory store — the same store a Redis-less
+  // deployment uses — and switch to Redis as soon as it reports ready.
+  let ready = false;
+  redis.on?.("ready", () => {
+    if (!ready) log.info("quota-store: Redis ready; using fleet-wide counters");
+    ready = true;
+  });
+  redis.on?.("close", () => {
+    if (ready) log.warn("quota-store: Redis connection closed; using in-memory counters until it reconnects");
+    ready = false;
+  });
+  if (await connectWithin(redis)) {
+    ready = true;
+  } else {
+    log.warn({ timeoutMs: REDIS_CONNECT_TIMEOUT_MS }, "quota-store: Redis not reachable at boot; using in-memory counters until it is ready");
+  }
+  const fallback = createInMemoryQuotaStore();
 
   return {
     async get(k: string): Promise<string | null> {
+      if (!ready) return fallback.get(k);
       return redis.get(`gw:quota:${k}`);
     },
     async set(k: string, v: string, ttlSeconds: number): Promise<void> {
+      if (!ready) return fallback.set(k, v, ttlSeconds);
       await redis.set(`gw:quota:${k}`, v, "EX", ttlSeconds);
     },
     async incr(k: string, ttlSeconds: number): Promise<number> {
+      if (!ready) return fallback.incr(k, ttlSeconds);
       const key = `gw:quota:ctr:${k}`;
       // Single atomic round trip: INCR and (re)arm the TTL together. Setting the TTL only when the
       // key has none (first hit, or a key orphaned by a crash between INCR and EXPIRE) means the

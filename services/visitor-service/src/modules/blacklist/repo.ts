@@ -15,7 +15,9 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { pino } from "pino";
+import { decryptPii, PiiDecryptError } from "../../shared/pii-crypto.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
@@ -95,16 +97,53 @@ export interface ListBlacklistFilter extends PageOpts {
   locationId?: string | undefined;
 }
 
-export async function listBlacklistEntries(tenantId: string, filter: ListBlacklistFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<BlacklistEntryRow>> {
+const log = pino({ name: "blacklist-repo" });
+
+/** Placeholder returned in place of a person_name that cannot be decrypted. Never plaintext. */
+export const UNDECRYPTABLE_PII_PLACEHOLDER = "[undecryptable]";
+
+/**
+ * A list row. `piiDecryptFailed` is set (and `personName` is the placeholder) when the stored
+ * person_name envelope could not be decrypted with the current keyring.
+ */
+export type BlacklistListRow = BlacklistEntryRow & { piiDecryptFailed?: true };
+
+// person_name is selected as the RAW stored envelope (mapWith(String) bypasses encryptedText's
+// fromDriver) so decryption can be isolated per row below.
+const { personName: _encryptedPersonName, ...blacklistPlainColumns } = getTableColumns(blacklistEntries);
+const blacklistListColumns = {
+  ...blacklistPlainColumns,
+  personNameStored: sql<string>`${blacklistEntries.personName}`.mapWith(String),
+};
+
+export async function listBlacklistEntries(tenantId: string, filter: ListBlacklistFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<BlacklistListRow>> {
   const conditions = [eq(blacklistEntries.tenantId, tenantId)];
   if (filter.status !== undefined) conditions.push(eq(blacklistEntries.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(blacklistEntries.locationId, filter.locationId));
   // CLOS3-S6-16: bounded, deterministically ordered, +1 sentinel row for hasMore.
   const { limit, offset } = resolvePage(filter);
-  const fetched = await scopedRead((tx) =>
-    tx.select().from(blacklistEntries).where(and(...conditions))
+  const raw = await scopedRead((tx) =>
+    tx.select(blacklistListColumns).from(blacklistEntries).where(and(...conditions))
       .orderBy(desc(blacklistEntries.createdAt), desc(blacklistEntries.id))
       .limit(limit + 1).offset(offset));
+  // UAT FQ9 #29: decryption used to happen inside the driver mapping of the whole result, so ONE row
+  // whose envelope the current keyring cannot open (legacy key / tampered) threw PiiDecryptError and
+  // 500'd the entire list. Decrypt per row instead: a failing row is still returned — its personName
+  // replaced by a placeholder and flagged — and logged (id only, never the value). Any other error
+  // still propagates; nothing is swallowed and no ciphertext/plaintext is returned in its place.
+  const fetched: BlacklistListRow[] = raw.map(({ personNameStored, ...rest }) => {
+    try {
+      // person_name is NOT NULL; the guard only keeps a malformed row from becoming a TypeError.
+      return { ...rest, personName: typeof personNameStored === "string" ? decryptPii(personNameStored) : personNameStored };
+    } catch (err) {
+      if (!(err instanceof PiiDecryptError)) throw err;
+      log.error(
+        { tenantId, blacklistEntryId: rest.id, err: err.message, event: "blacklist_pii_decrypt_failed" },
+        "blacklist entry person_name could not be decrypted; returned masked",
+      );
+      return { ...rest, personName: UNDECRYPTABLE_PII_PLACEHOLDER, piiDecryptFailed: true as const };
+    }
+  });
   const { rows, hasMore } = splitPage(fetched, limit);
 
   // Requirement 18.6: log PII access for each row containing decrypted personName

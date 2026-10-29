@@ -70,6 +70,8 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   estab: "establishment",
   establishment: "establishment",
   contract: "contracts",
+  // UAT FQ9 #6: served by legal-service (contract-document intelligence); gated by the legal module.
+  "contract-documents": "legal",
   // Municipal Sec5 (17 services) - route name matches gateway registry.ts
   // "name" field exactly for each; module key mirrors that 1:1.
   shop: "shop",
@@ -134,7 +136,16 @@ type EnforcementMode = "off" | "shadow" | "enforce";
 // effective enforcement mode so the decision and the mode come from one fetch.
 // `outage` is true when the allow-list is unknown because admin-service could not
 // be reached (vs. a reachable admin reporting configured:false).
-type CacheEntry = { modules: Set<string> | null; mode: EnforcementMode; configured: boolean; expires: number; outage?: boolean; stale?: boolean };
+type CacheEntry = {
+  modules: Set<string> | null;
+  mode: EnforcementMode;
+  configured: boolean;
+  expires: number;
+  outage?: boolean;
+  stale?: boolean;
+  /** Outage only: the allow-list last fetched successfully (≤ STALE_IF_ERROR_MS old). Deny-only input. */
+  lastKnownModules?: Set<string>;
+};
 const moduleCache = new Map<string, CacheEntry>();
 // This cache is per gateway HTTP app process and is NOT invalidated by the
 // queue-driven gateway worker (a separate process). A module toggle, composition
@@ -152,6 +163,19 @@ const CACHE_TTL_MS = 60_000;
 // up). Bounded by the tenant count (one small string per tenant); fail-closed
 // safety outweighs the memory.
 const lastKnownMode = new Map<string, EnforcementMode>();
+
+// UAT FQ9 (module-guard fail-open, SECURITY): last-known allow-list per tenant, kept for a short
+// stale-if-error window past the cache TTL. Before this, an admin-service outage (or an admin-service
+// that 401s the guard) made the allow-list `null` for EVERY tenant on the next cache miss, and in
+// mode `off` that null fails OPEN — so a module the guard had just seen as NOT licensed for a tenant
+// became reachable for as long as admin-service stayed unreachable. With this, an outage within the
+// window still DENIES a module the last successful fetch omitted (off: 403, shadow: would-deny). It is
+// deny-only: it never allows anything the existing outage handling would refuse (enforce stays 503).
+// Past the window, or for a tenant never fetched, the pre-existing per-mode behaviour (D-ST-24) applies
+// unchanged — off-mode cold-start fail-open on an outage is an owner decision and is reported, not changed.
+const STALE_IF_ERROR_MS = 5 * 60_000;
+type LastKnownAllowList = { modules: Set<string> | null; configured: boolean; mode: EnforcementMode; at: number };
+const lastKnownAllowList = new Map<string, LastKnownAllowList>();
 
 // would-deny counter for shadow mode (ops visibility; a Prometheus counter is
 // scraped from /metrics by response-metrics.ts in a follow-up — here we keep a
@@ -273,6 +297,16 @@ export async function checkModuleEnabled(
     if (mode === "enforce") {
       return resolved?.outage ? sendGuardUnavailable(req, reply) : sendModuleDisabled(req, reply, moduleKey);
     }
+    // UAT FQ9 (SECURITY): an outage must not turn a KNOWN-disabled module into an allowed one.
+    // If the allow-list fetched moments ago omits this module, keep denying it (off) / counting it
+    // (shadow), exactly as the normal path below would with that allow-list.
+    if (resolved?.outage && resolved.lastKnownModules && !resolved.lastKnownModules.has(moduleKey)) {
+      if (mode === "shadow") {
+        recordWouldDeny(req, routeName, "module_disabled_last_known");
+        return true;
+      }
+      return sendModuleDisabled(req, reply, moduleKey);
+    }
     if (mode === "shadow") {
       recordWouldDeny(req, routeName, resolved?.outage ? "admin_outage" : "unconfigured_tenant");
     }
@@ -389,6 +423,7 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
       const entry: CacheEntry = { modules: null, mode, configured: false, expires: Date.now() + CACHE_TTL_MS };
       if (!current()) return { ...entry, stale: true };
       moduleCache.set(tenantId, entry);
+      lastKnownAllowList.set(tenantId, { modules: null, configured: false, mode, at: Date.now() });
       return entry;
     }
 
@@ -396,6 +431,7 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
     const entry: CacheEntry = { modules, mode, configured: true, expires: Date.now() + CACHE_TTL_MS };
     if (!current()) return { ...entry, stale: true };
     moduleCache.set(tenantId, entry);
+    lastKnownAllowList.set(tenantId, { modules, configured: true, mode, at: Date.now() });
     return entry;
   } catch (err) {
     // Admin outage (including CircuitBreakerOpenError): the module allow-list is
@@ -408,6 +444,18 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
     // trade for a genuine cold start, which the grandfather backfill + an
     // explicit mode set are expected to precede in production.
     const mode = lastKnownMode.get(tenantId) ?? "off";
+    const known = lastKnownAllowList.get(tenantId);
+    if (known?.modules && Date.now() - known.at <= STALE_IF_ERROR_MS) {
+      // The allow-list itself stays `null` (unknown NOW), so every existing outage contract holds
+      // (enforce → 503); checkModuleEnabled consults lastKnownModules ONLY to deny a module this
+      // tenant was just seen NOT to have — it never grants anything. Not cached: the next request
+      // retries admin-service.
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err), breakerOpen: err instanceof CircuitBreakerOpenError, tenantId, mode, ageMs: Date.now() - known.at },
+        "module-guard: admin-service unreachable; deciding known-disabled modules from last-known allow-list",
+      );
+      return { modules: null, mode, configured: false, expires: 0, outage: true, lastKnownModules: known.modules };
+    }
     log.warn(
       { err: err instanceof Error ? err.message : String(err), breakerOpen: err instanceof CircuitBreakerOpenError, tenantId, mode },
       "module-guard: admin-service unreachable; allow-list unknown",
@@ -425,6 +473,7 @@ export function invalidateModuleCache(tenantId: string): void {
   moduleGen.set(tenantId, (moduleGen.get(tenantId) ?? 0) + 1);
   moduleCache.delete(tenantId);
   lastKnownMode.delete(tenantId);
+  lastKnownAllowList.delete(tenantId);
 }
 
 /** Exposed for testing — access to internals */
@@ -434,7 +483,9 @@ export const _test = {
   PLATFORM_ROUTES,
   moduleCache,
   lastKnownMode,
+  lastKnownAllowList,
   CACHE_TTL_MS,
+  STALE_IF_ERROR_MS,
   get shadowWouldDenyCount() {
     return shadowWouldDenyCount;
   },

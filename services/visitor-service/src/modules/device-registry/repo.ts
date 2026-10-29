@@ -18,6 +18,7 @@ import { scannerDb } from "../../shared/scanner-db.js";
 import { cache } from "../../shared/infra.js";
 import { devices, deviceAuditLog, type DeviceRow, type DeviceAuditLogRow } from "./schema.js";
 import { setDeviceLoader, type DeviceRecord } from "./device-auth.js";
+import { blindIndex } from "../../shared/pii-crypto.js";
 
 /**
  * A device row safe to serialize in API responses: the device authentication
@@ -28,7 +29,7 @@ import { setDeviceLoader, type DeviceRecord } from "./device-auth.js";
  */
 export type PublicDeviceRow = Omit<
   DeviceRow,
-  "deviceTokenHash" | "oldTokenHash" | "certificateFingerprint"
+  "deviceTokenHash" | "oldTokenHash" | "certificateFingerprint" | "deviceTokenLookup" | "oldTokenLookup"
 >;
 
 /** Strip device auth secrets from a device row before it leaves the service. */
@@ -37,6 +38,8 @@ export function toPublicDevice(row: DeviceRow): PublicDeviceRow {
     deviceTokenHash: _t,
     oldTokenHash: _o,
     certificateFingerprint: _c,
+    deviceTokenLookup: _dl,
+    oldTokenLookup: _ol,
     ...rest
   } = row;
   return rest;
@@ -85,10 +88,14 @@ export async function getDeviceById(tenantId: string, deviceId: string): Promise
  *   resolved device.tenantId with the primary `db` under runWithTenant/scopedRead.
  */
 export async function getDeviceByTokenHash(hash: string): Promise<DeviceRecord | null> {
+  // UAT FQ9 #37: match on the deterministic blind index. device_token_hash / old_token_hash are
+  // encryptedText (random-IV AES-GCM): `eq(devices.deviceTokenHash, hash)` encrypted the parameter
+  // afresh and could never equal the stored ciphertext, so every bearer device was 401'd.
+  const lookup = blindIndex(hash);
   const rows = await scannerDb
     .select()
     .from(devices)
-    .where(or(eq(devices.deviceTokenHash, hash), eq(devices.oldTokenHash, hash)))
+    .where(or(eq(devices.deviceTokenLookup, lookup), eq(devices.oldTokenLookup, lookup)))
     .limit(1);
 
   const row = rows[0];

@@ -18,6 +18,7 @@ import {
   boolean,
   timestamp,
   jsonb,
+  text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { encryptedText } from "../../shared/pii-crypto.js";
@@ -52,6 +53,11 @@ export const devices = visitorSchema.table("devices", {
   tokenExpiresAt:        timestamp("token_expires_at", { withTimezone: true }),
   tokenRotatedAt:        timestamp("token_rotated_at", { withTimezone: true }),
   oldTokenHash:          encryptedText("old_token_hash"),  // grace period during rotation
+  // UAT FQ9 #37 (migration 0019): deterministic keyed blind index (pii-crypto blindIndex = HMAC-SHA256)
+  // of the token hash. device_token_hash / old_token_hash are AES-GCM with a RANDOM IV, so an equality
+  // lookup on them can never match; device auth looks the device up by these columns instead.
+  deviceTokenLookup:     text("device_token_lookup"),
+  oldTokenLookup:        text("old_token_lookup"),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:             uuid("created_by").notNull(),

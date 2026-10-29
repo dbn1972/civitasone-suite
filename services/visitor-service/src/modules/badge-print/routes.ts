@@ -158,9 +158,10 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ROLES);
     const { templateId } = templateIdParams.parse(req.params);
 
-    // Archive is modeled as an update command that sets status to archived
+    // UAT FQ9 #32: an explicit archive op (a field-less "update" used to clone the row instead).
     const accepted = await publishBadgeTemplateUpdate(ctx, {
       templateId,
+      op: "archive",
     });
     return reply.code(202).send({ data: accepted });
   });
@@ -184,9 +185,12 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
       throw new HttpError(422, "NO_PREVIOUS_VERSION", "no previous version available for rollback");
     }
 
-    // Publish update command targeting the previous version to reactivate it
+    // UAT FQ9 #32: roll the SAME template id back — the consumer restores the previous version's
+    // content onto this row. (Targeting previousVersionId used to clone the archived snapshot into a
+    // second live row and leave this one active too.)
     const accepted = await publishBadgeTemplateUpdate(ctx, {
-      templateId: template.previousVersionId,
+      templateId,
+      op: "rollback",
     });
     return reply.code(202).send({ data: accepted });
   });
