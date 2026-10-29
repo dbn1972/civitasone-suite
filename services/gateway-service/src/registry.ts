@@ -30,6 +30,9 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   // versioned upstream path. Legacy /api/notification → /notifications rewrite
   // cannot reach them; longest-prefix match keeps the two prefixes distinct.
   { name: "notification-v1", prefix: "/api/v1/notification", upstream: upstream("notification", 3006), upstreamPath: "/v1/notification" },
+  // UAT #31: the web campaign composer calls /api/v1/segments (apps/web lib/notifications/campaigns.ts);
+  // notification-service serves it at /v1/segments. Its other un-prefixed v1 modules have no web caller.
+  { name: "notification-segments", prefix: "/api/v1/segments", upstream: upstream("notification", 3006), upstreamPath: "/v1/segments" },
   { name: "finance",      prefix: "/api/v1/finance",   upstream: upstream("finance", 3007) },
   { name: "procurement",  prefix: "/api/v1/procurement", upstream: upstream("procurement", 3008) },
   { name: "contract",     prefix: "/api/v1/contract",  upstream: upstream("contract", 3009) },

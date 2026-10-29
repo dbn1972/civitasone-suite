@@ -196,9 +196,10 @@ describe("COMP-007: cycle-count -- bug #1 FIXED: create actually lands now (see 
   it("a large variance (pending_approval): 202, GET /:id returns the persisted row awaiting approval, no DLQ entry", async () => {
     const tid = randomUUID();
     const h = authHeaders(["store_keeper"], tid);
+    const storeId = await seedStore(tid); // the route now pre-checks that warehouseId is a real inventory store
     const create = await app.inject({
       method: "POST", url: "/v1/inventory/cycle-counts", headers: h,
-      payload: basePayload({ physicalQty: 80 }), // variance 80, above the 10-unit floor -> 'pending_approval' (no reconciliation write on this path, so no real store needed here)
+      payload: basePayload({ warehouseId: storeId, physicalQty: 80 }), // variance 80, above the 10-unit floor -> 'pending_approval' (no reconciliation write on this path)
     });
     expect(create.statusCode).toBe(202);
     const { id } = create.json();

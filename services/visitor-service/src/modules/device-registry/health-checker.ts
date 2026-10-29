@@ -249,7 +249,7 @@ async function transitionToOnline(
  * Check if an offline device has exceeded the alert delay threshold (2 minutes).
  * If so, send a critical alert to facility operations via NOTIFICATION_SEND.
  */
-async function checkOfflineAlert(
+export async function checkOfflineAlert(
   tenantId: string,
   device: typeof devices.$inferSelect,
   now: Date,
@@ -271,10 +271,12 @@ async function checkOfflineAlert(
 
     // Send critical alert via NOTIFICATION_SEND
     await queue.publish(NOTIFICATION_SEND, {
-      // Stable id keyed on the same per-device offline-alert key the Redis TTL
-      // flag above dedups on, so a retried publish within the alert window
-      // reuses it and the consumer dedups rather than re-notifying.
-      messageId: stableUuid(alertKey),
+      // Stable per ALERT EPISODE: device + the moment it was last seen (the start of this offline
+      // period). A retried publish of the same episode's alert reuses the id and notification-service
+      // dedups it; but a device that recovers and goes offline again has a new lastSeenAt, hence a
+      // new id, so its next outage is alerted. (Keyed on the device alone, only the first outage
+      // ever alerted: every later one was dropped by the inbox.)
+      messageId: stableUuid(`${alertKey}:${device.lastSeenAt.toISOString()}`),
       type: NOTIFICATION_SEND,
       tenantId,
       actorId: SYSTEM_ACTOR_ID,

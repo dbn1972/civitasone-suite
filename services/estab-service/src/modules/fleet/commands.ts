@@ -9,9 +9,12 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>): Promise<void> {
+// `messageId` is the idempotency key markProcessed() dedups on. Defaults to the entity id (fresh on
+// create); follow-up commands on an existing entity MUST pass a per-command id or they collide with
+// the create's inbox row and are silently dropped.
+async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>, messageId: string = id): Promise<void> {
   await queue.publish(type, {
-    messageId: id, type,
+    messageId, type,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload,
   });
@@ -30,7 +33,7 @@ export async function createTripLog(ctx: RequestContext, body: CreateTripLogBody
 }
 
 export async function completeTrip(ctx: RequestContext, tripId: string, body: CompleteTripBody): Promise<Accepted> {
-  await publish(COMMANDS.tripLogComplete, ctx, tripId, { id: tripId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.tripLogComplete, ctx, tripId, { id: tripId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: tripId, status: "accepted", correlationId: ctx.correlationId };
 }
 

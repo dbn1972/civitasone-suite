@@ -107,3 +107,22 @@ describe("getOrLoad vs invalidate race", () => {
     expect(await cache.getOrLoad(key, async () => "reloaded")).toBe("v");
   });
 });
+
+describe("listOrLoad vs invalidateResource race", () => {
+  it("does not write a pre-write list back after invalidateResource; next read reloads", async () => {
+    const cache = mk();
+    let source = ["old"];
+    let loads = 0;
+    const g = gate<void>();
+    const first = cache.listOrLoad("t1", "item", "h", async () => { loads++; const v = source; await g.p; return { data: v }; });
+    await Promise.resolve(); await Promise.resolve();
+    source = ["new"];
+    await cache.invalidateResource("t1", "item");
+    g.release();
+    expect((await first).data).toEqual(["old"]); // the in-flight caller keeps what it read
+
+    const second = await cache.listOrLoad("t1", "item", "h", async () => { loads++; return { data: source }; });
+    expect(second.data).toEqual(["new"]);
+    expect(loads).toBe(2);
+  });
+});

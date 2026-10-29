@@ -83,10 +83,14 @@ export async function updateStatus(
   status: string,
   updatedBy: string,
   allowedFromStatuses: string[],
+  extra: { disbursementRef?: string } = {},
 ): Promise<boolean> {
   const result = await tx.update(refundDisbursements)
     .set({
       status,
+      // UAT g3 #5: the bank/UTR reference supplied on /complete was accepted by
+      // the route and published but never written; persist it with the status.
+      ...(extra.disbursementRef !== undefined ? { disbursementRef: extra.disbursementRef } : {}),
       updatedBy,
       updatedAt: new Date(),
       ...(status === "completed" ? { disbursedAt: new Date() } : {}),

@@ -35,7 +35,12 @@ export async function scoreApplication(ctx: RequestContext, id: string, body: Sc
     throw new HttpError(403, "SOD_VIOLATION", "the reviewer must be someone other than the submitter (separation of duties)");
   }
   await queue.publish(COMMANDS.applicationScore, {
-    messageId: idempotentId({ idempotencyKey: `application-score:${id}:${ctx.actorId}`, tenantId: ctx.tenantId }),
+    // Per-command (or the client's X-Idempotency-Key, scoped to this application + command). The old
+    // key (application + actor) made a reviewer's second score on the same application a silent no-op.
+    messageId: idempotentId({
+      ...(ctx.idempotencyKey ? { idempotencyKey: `application-score:${id}:${ctx.idempotencyKey}` } : {}),
+      tenantId: ctx.tenantId,
+    }),
     type: COMMANDS.applicationScore,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },

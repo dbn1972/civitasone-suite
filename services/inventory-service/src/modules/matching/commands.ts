@@ -10,9 +10,13 @@ import type { CreateMatchBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>): Promise<void> {
+// `messageId` is the idempotency key the consumer's markProcessed() dedups on. It defaults to the
+// entity id (fine for a create, whose id is fresh), but a follow-up command on an existing entity
+// MUST pass a per-command id: reusing the entity id collides with the create's inbox row and the
+// command is silently dropped (202, nothing happens).
+async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>, messageId: string = id): Promise<void> {
   await queue.publish(type, {
-    messageId: id,
+    messageId,
     type,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -43,6 +47,6 @@ export async function createMatch(ctx: RequestContext, body: CreateMatchBody): P
 }
 
 export async function resolveMatch(ctx: RequestContext, id: string, version: number, resolutionNote: string): Promise<Accepted> {
-  await publish(COMMANDS.threeWayMatchResolve, ctx, id, { id, tenantId: ctx.tenantId, version, resolutionNote });
+  await publish(COMMANDS.threeWayMatchResolve, ctx, id, { id, tenantId: ctx.tenantId, version, resolutionNote }, randomUUID());
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -33,6 +33,24 @@ export type ConsentLookup = (
 ) => Promise<MarketingConsent>;
 
 /**
+ * Headers for an authenticated internal call to crm-service (`@civitasone/auth` internal path:
+ * x-internal + x-service-secret + x-internal-caller). Null when INTERNAL_SERVICE_SECRET is
+ * unset -- the call cannot be authenticated, so callers must not send it blind.
+ */
+export function crmInternalHeaders(tenantId: string, correlationId: string): Record<string, string> | null {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) return null;
+  return {
+    "x-internal": "1",
+    "x-service-secret": secret,
+    "x-internal-caller": "notification-service",
+    "x-tenant-id": tenantId,
+    "x-correlation-id": correlationId,
+    "content-type": "application/json",
+  };
+}
+
+/**
  * Read `marketing_consent` for a CRM contact. Never throws — every failure
  * mode collapses to `"unknown"`, which the gate treats as "do not send".
  */
@@ -43,8 +61,8 @@ export const fetchMarketingConsent: ConsentLookup = async (
 ) => {
   if (!UUID_RE.test(contactId)) return "unknown";
 
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (!secret) {
+  const headers = crmInternalHeaders(tenantId, correlationId);
+  if (!headers) {
     // Without the shared secret the internal call cannot be authenticated, so
     // consent can never be established. Refuse rather than send blind.
     log.warn({ tenantId, correlationId }, "INTERNAL_SERVICE_SECRET unset — marketing consent unverifiable");
@@ -56,14 +74,7 @@ export const fetchMarketingConsent: ConsentLookup = async (
   try {
     const res = await fetch(`${CRM_SERVICE_URL}/v1/crm/contacts/${contactId}`, {
       method: "GET",
-      headers: {
-        "x-internal": "1",
-        "x-service-secret": secret,
-        "x-internal-caller": "notification-service",
-        "x-tenant-id": tenantId,
-        "x-correlation-id": correlationId,
-        "content-type": "application/json",
-      },
+      headers,
       signal: controller.signal,
     });
 

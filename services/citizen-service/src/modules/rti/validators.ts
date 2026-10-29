@@ -24,6 +24,7 @@ export const appealRtiBody = z.object({
 export type AppealRtiBody = z.infer<typeof appealRtiBody>;
 
 export const transferRtiBody = z.object({
-  toAuthority: safeText({ max: 200 }),
+  // Shape + directory membership are checked in the route (422), not here (400).
+  toAuthority: z.string().min(1).max(200),
 });
 export type TransferRtiBody = z.infer<typeof transferRtiBody>;

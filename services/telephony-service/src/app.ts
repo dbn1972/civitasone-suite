@@ -49,6 +49,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
 
+  // MUST be registered BEFORE any app.register(<routes>): Fastify encapsulated route contexts copy the
+  // parent error handler at creation, so a handler set afterwards only covered the root context and
+  // every ZodError / FastifyError thrown inside a route module became a 500 (UAT API sweep 2026-10-28).
+  registerSchemaErrorHandler(app, HttpError, { delegateFrameworkClientErrors: true });
+
   registerOpsRoutes(app, { service: "telephony-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(callRoutes);
@@ -79,7 +84,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(transcriptionRoutes);
   // CH-11: Voice broadcast
   await app.register(broadcastRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

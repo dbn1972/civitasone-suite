@@ -1,6 +1,7 @@
 import { and, eq, sql, inArray, notInArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
+import { financeHeads } from "../budget/schema.js";
 import { financeBills, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -232,10 +233,12 @@ export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<Pay
 
 // ── Sample data ("try it") — clearly-marked example bills, safe to clear ──────
 
+// UAT g3 #16: stages must satisfy finance_bills_stage_check ('section','accounts','pay');
+// the old 'audit'/'paid' names violated it and made POST /bills/sample-data 500.
 const SAMPLE_BILLS: Array<{ billNo: string; grossMinor: bigint; status: string; stage: string }> = [
   { billNo: "[SAMPLE] BILL-001", grossMinor: 1500000n, status: "pending", stage: "section" },
-  { billNo: "[SAMPLE] BILL-002", grossMinor: 4200000n, status: "under_review", stage: "audit" },
-  { billNo: "[SAMPLE] BILL-003", grossMinor: 980000n, status: "paid", stage: "paid" },
+  { billNo: "[SAMPLE] BILL-002", grossMinor: 4200000n, status: "under_review", stage: "accounts" },
+  { billNo: "[SAMPLE] BILL-003", grossMinor: 980000n, status: "paid", stage: "pay" },
 ];
 
 export async function countSampleBills(tenantId: string): Promise<number> {
@@ -244,16 +247,30 @@ export async function countSampleBills(tenantId: string): Promise<number> {
   return rows.length;
 }
 
+/** The tenant has no budget head to hang example bills on (finance_bills.head_id is a real FK). */
+export class NoBudgetHeadError extends Error {
+  readonly code = "NO_BUDGET_HEAD";
+  constructor() {
+    super("create at least one budget head before adding sample bills");
+    this.name = "NoBudgetHeadError";
+  }
+}
+
 /** Add example bills for a tenant (idempotent). Returns number added. */
 export async function seedSampleBills(tenantId: string, actorId: string): Promise<number> {
   if ((await countSampleBills(tenantId)) > 0) return 0;
+  // UAT g3 #16: head_id has a FK to budget.finance_heads (fk_fbills_head); a random UUID made the
+  // insert fail with a 500. Hang the examples on one of the tenant's own existing heads.
+  const [head] = await scopedRead((tx) => tx.select({ id: financeHeads.id }).from(financeHeads)
+    .where(eq(financeHeads.tenantId, tenantId)).limit(1));
+  if (!head) throw new NoBudgetHeadError();
   const now = new Date();
   const rows: BillInsert[] = SAMPLE_BILLS.map((b) => ({
     id: randomUUID(),
     tenantId,
     billNo: b.billNo,
     vendorId: randomUUID(),
-    headId: randomUUID(),
+    headId: head.id,
     grossMinor: b.grossMinor,
     netMinor: b.grossMinor,
     stage: b.stage,

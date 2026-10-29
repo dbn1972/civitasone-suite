@@ -67,8 +67,8 @@ export function registerWebhookConsumers(q: Queue): void {
         throw new NonRetryableError("INVALID_URL", "Webhook endpoint URL must use HTTPS");
       }
 
-      const { eq, and } = await import("drizzle-orm");
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      const { eq, and, sql } = await import("drizzle-orm");
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${webhookEndpoints.version} + 1` };
       if (p.name !== undefined) set.name = p.name;
       if (p.url !== undefined) set.url = p.url;
       if (p.secret !== undefined) set.secret = p.secret;

@@ -4,6 +4,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as reqRepo from "../requests/repo.js";
+import { isPiiKeyConfigured, maskAccountNumber } from "../../shared/pii-crypto.js";
+import type { DisbursementRow } from "./schema.js";
 import { canComplete, canFail, canReconcile } from "./domain.js";
 
 const ADMIN_ROLES = ["refund_admin", "refund_approver", "super_admin"];
@@ -16,7 +18,11 @@ const MINOR_AMOUNT = z.string().regex(/^[1-9]\d{0,17}$/, "must be a positive int
 const initiateBody = z.object({
   requestId: z.string().uuid(),
   bankAccountDetails: z.object({
-    accountNumber: z.string().min(1),
+    // Reject a client-supplied envelope: commands.ts skips sealing anything that already looks
+    // encrypted, so an "enc:" value would be stored as-is (and could not be decrypted/masked).
+    accountNumber: z.string().min(1).refine((v) => !v.trim().toLowerCase().startsWith("enc:"), {
+      message: "accountNumber must be a plain account number",
+    }),
     ifscCode: z.string().min(1),
     accountHolderName: z.string().min(1),
     bankName: z.string().optional(),
@@ -26,6 +32,14 @@ const initiateBody = z.object({
 
 const completeBody = z.object({ disbursementRef: z.string().min(1) });
 const failBody = z.object({ reason: z.string().min(1) });
+
+/** Never return the bank account number: callers get the last 4 digits only. */
+function redactDisbursement(row: DisbursementRow): DisbursementRow {
+  return {
+    ...row,
+    bankAccountDetails: { ...row.bankAccountDetails, accountNumber: maskAccountNumber(row.bankAccountDetails.accountNumber) },
+  };
+}
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -76,6 +90,10 @@ export async function reconciliationRoutes(app: FastifyInstance): Promise<void> 
       );
     }
 
+    if (!isPiiKeyConfigured()) {
+      // Fail closed: never fall back to storing the account number in cleartext.
+      throw new HttpError(503, "ENCRYPTION_UNAVAILABLE", "PII encryption key is not configured; disbursement cannot be initiated");
+    }
     return reply.code(202).send(
       await commands.initiateDisbursement(ctx, body.requestId, body.bankAccountDetails, body.disbursedAmountMinor),
     );
@@ -87,7 +105,7 @@ export async function reconciliationRoutes(app: FastifyInstance): Promise<void> 
     const { id } = idParam.parse(req.params);
     const row = await repo.findById(id, ctx.tenantId);
     if (!row) throw new HttpError(404, "DISBURSEMENT_NOT_FOUND", "Disbursement not found");
-    return reply.send({ data: row });
+    return reply.send({ data: redactDisbursement(row) });
   });
 
   app.post("/v1/refund/disbursements/:id/complete", async (req, reply) => {

@@ -24,7 +24,7 @@ export async function insertItem(tx: Writer, row: BillingInvoiceItemInsert): Pro
 }
 
 export async function updateInvoice(tx: Writer, id: string, patch: Partial<BillingInvoiceInsert>): Promise<void> {
-  await tx.update(billingInvoices).set({ ...patch, updatedAt: new Date() }).where(eq(billingInvoices.id, id));
+  await tx.update(billingInvoices).set({ ...patch, updatedAt: new Date(), version: sql`${billingInvoices.version} + 1` }).where(eq(billingInvoices.id, id));
 }
 
 export async function findByIdTx(tx: Writer, id: string): Promise<BillingInvoiceRow | undefined> {
@@ -34,6 +34,17 @@ export async function findByIdTx(tx: Writer, id: string): Promise<BillingInvoice
 
 export async function findById(id: string): Promise<BillingInvoiceRow | undefined> {
   const rows = await scopedRead((tx) => tx.select().from(billingInvoices).where(eq(billingInvoices.id, id)).limit(1));
+  return rows[0];
+}
+
+/**
+ * UAT g3 #7: invoices are unique per (tenant_id, period_month). The create/generate routes use this
+ * to refuse a second invoice for the same month synchronously (409) instead of accepting it (202)
+ * and letting the consumer's INSERT die on the unique index with no row and no feedback.
+ */
+export async function findByPeriod(tenantId: string, periodMonth: string): Promise<BillingInvoiceRow | undefined> {
+  const rows = await scopedRead((tx) => tx.select().from(billingInvoices)
+    .where(and(eq(billingInvoices.tenantId, tenantId), eq(billingInvoices.periodMonth, periodMonth))).limit(1));
   return rows[0];
 }
 

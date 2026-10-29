@@ -732,8 +732,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const run = await repo.findRunByIdTx(tx, p.id);
+      const run = await repo.findRunByIdForUpdateTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
+      // Duplicate approve (double-click / retry): the run is already approved or beyond -> no-op.
+      // This state guard (under the row lock above) replaces the old stable-messageId inbox dedup.
+      if (run.status === "approved" || run.status === "disbursed") return;
       // Iter2: maker-checker — the approver must differ from the run creator.
       if (run.createdBy === p.approvedBy) {
         throw new DomainError("SELF_APPROVAL_FORBIDDEN", "payroll run approver must differ from its creator");
@@ -794,8 +797,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const run = await repo.findRunByIdTx(tx, p.id);
+      const run = await repo.findRunByIdForUpdateTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
+      // NEVER double-disburse: the row lock serialises racing disburse commands and this guard makes
+      // every one after the first a no-op (no second status write, EFT_INITIATE or audit). Only a run
+      // in `approved` proceeds (assertRunStatusTransition below). Replaces the stable-messageId dedup.
+      if (run.status === "disbursed") return;
       // GAP-PAYROLL-DETAIL-02: maker-checker -- whoever approved the run cannot
       // be the one who releases the money. commands.ts rejects this
       // synchronously (403); this re-asserts it under the transaction so a
@@ -843,8 +850,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; revertedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const run = await repo.findRunByIdTx(tx, p.id);
+      const run = await repo.findRunByIdForUpdateTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
+      // Duplicate revert: already back in draft -> no-op.
+      if (run.status === "draft") return;
       assertRunStatusTransition(run.status, "draft");
       await repo.updateRun(tx, p.id, { status: "draft", updatedBy: msg.actorId });
       await audit(tx, msg, "revert", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);

@@ -90,8 +90,13 @@ export function registerApplicationConsumers(queue: Queue): void {
         await audit(tx, msg, "score", "grant_application", p.id, "failure");
         return;
       }
-      assertTransition(app.status, "under_review");
-      await repo.updateApplication(tx, p.id, { status: "under_review", updatedBy: msg.actorId });
+      // First score moves submitted -> under_review. An application already under review can be
+      // scored again (another panel reviewer, or a reviewer revising): append the score without a
+      // status change. Terminal states still fail assertTransition.
+      if (app.status !== "under_review") {
+        assertTransition(app.status, "under_review");
+        await repo.updateApplication(tx, p.id, { status: "under_review", updatedBy: msg.actorId });
+      }
       const totalScore = (p.technicalScore + p.financialScore) / 2;
       await repo.insertScore(tx, {
         tenantId: p.tenantId,

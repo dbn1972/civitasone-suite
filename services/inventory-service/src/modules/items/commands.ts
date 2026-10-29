@@ -33,7 +33,10 @@ export async function createItem(ctx: RequestContext, body: CreateItemBody): Pro
 }
 
 export async function updateItem(ctx: RequestContext, id: string, body: UpdateItemBody): Promise<Accepted> {
-  await publish(COMMANDS.itemUpdate, ctx, id, { id, tenantId: ctx.tenantId, ...body });
+  // Fresh messageId per command: the item id is already recorded in the idempotency inbox as the
+  // messageId of item.create (and of every earlier update), so reusing it made markProcessed()
+  // dedupe -- silently drop -- every PATCH. The target item id lives in the payload.
+  await publish(COMMANDS.itemUpdate, ctx, randomUUID(), { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

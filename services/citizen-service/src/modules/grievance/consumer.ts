@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
-  assertGrievanceTransition, inferPriority, inferDepartmentRef,
+  assertGrievanceTransition, assertGrievanceAssignable, inferPriority, inferDepartmentRef,
   shouldAutoEscalate, GRIEVANCE_ESCALATION_SLA_DAYS,
 } from "./domain.js";
 
@@ -67,7 +67,7 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const g = await repo.findGrievanceByIdTx(tx, p.id, msg.tenantId);
       if (!g) return;
-      assertGrievanceTransition(g.status, "assigned");
+      assertGrievanceAssignable(g.status);
       await repo.updateGrievance(tx, p.id, msg.tenantId, {
         status: "assigned", assignedTo: p.assignedTo,
         departmentRef: p.departmentRef ?? g.departmentRef,

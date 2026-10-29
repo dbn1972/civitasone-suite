@@ -5,6 +5,23 @@ export class DomainError extends Error {
   }
 }
 
+/** D5 (UAT g4-procurement): a bid is only valid while the auction is active and inside its window. */
+export function assertAuctionAcceptsBids(
+  auction: { status: string | null; startAt?: Date | string | null; endAt?: Date | string | null },
+  now: Date = new Date(),
+): void {
+  const status = auction.status ?? "draft";
+  if (status !== "active") {
+    throw new DomainError("AUCTION_NOT_ACTIVE", `auction is ${status}; bids are only accepted while it is active`);
+  }
+  if (auction.startAt && now.getTime() < new Date(auction.startAt).getTime()) {
+    throw new DomainError("AUCTION_NOT_STARTED", "auction has not started yet");
+  }
+  if (auction.endAt && now.getTime() > new Date(auction.endAt).getTime()) {
+    throw new DomainError("AUCTION_ENDED", "auction bidding window has ended");
+  }
+}
+
 export interface BidInput {
   id: string;
   vendorId: string;

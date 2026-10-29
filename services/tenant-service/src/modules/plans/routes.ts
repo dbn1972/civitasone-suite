@@ -10,6 +10,7 @@ import { createPlanBody, updatePlanBody, planIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { jsonSafe } from "../../shared/json-safe.js";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 // GAP-TENANT-PLANS-04: plan catalogue + entitlements are tenant governance
@@ -33,7 +34,7 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); // auth required
     requireRole(ctx, PLAN_READ);
     const plans = await repo.findAll();
-    return reply.send(plans);
+    return reply.send(jsonSafe(plans));
   });
 
   // GET single plan by id (cache-first)
@@ -46,7 +47,7 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
       async () => repo.findById(planId),
     );
     if (!view) throw new HttpError(404, "NOT_FOUND", "plan not found");
-    return reply.send(view);
+    return reply.send(jsonSafe(view));
   });
 
   // UPDATE plan — platform admin only

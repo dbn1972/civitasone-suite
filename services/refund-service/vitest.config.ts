@@ -19,6 +19,9 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       QUEUE_DRIVER: "memory",
+      // UAT g3 #6: disbursement bank account numbers are sealed with PII_ENC_KEY; the route fails
+      // closed (503) without one. Test-only placeholder, not a credential.
+      PII_ENC_KEY: "refund-service-test-pii-key-placeholder",
       CACHE_DRIVER: "memory",
       DATABASE_URL:
         process.env.DATABASE_URL ??

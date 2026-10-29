@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { idParam } from "../../shared/params.js";
 import { createDakBody, forwardDakBody, createNotingBody, approvalDecisionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -63,14 +64,14 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/documents/daks/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     return reply.send(await loadReadable(ctx, id));
   });
 
   app.post("/v1/documents/daks/:id/forward", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = forwardDakBody.parse(req.body);
     await loadHandleable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
@@ -79,7 +80,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/documents/daks/:id/acknowledge", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     await loadHandleable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.acknowledgeDak(ctx, id, isAdmin(ctx)));
   });
@@ -88,7 +89,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/documents/daks/:id/notings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     await loadReadable(ctx, id);
     const data = await repo.listNotings(ctx.tenantId, id);
     return reply.send({ data });
@@ -97,7 +98,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/documents/daks/:id/notings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = createNotingBody.parse(req.body);
     await loadReadable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createNoting(ctx, id, body.body));
@@ -107,7 +108,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/documents/daks/:id/approval", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     await loadReadable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitApproval(ctx, id));
   });
@@ -115,7 +116,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/documents/approvals/:id/decide", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = approvalDecisionBody.parse(req.body);
     // Approver scoping: only an admin or the current holder of the underlying dak may decide, and never the
     // submitter (segregation of duties). 404 for unknown/out-of-scope approvals so existence is not disclosed.

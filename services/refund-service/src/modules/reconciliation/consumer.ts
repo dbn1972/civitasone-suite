@@ -126,7 +126,7 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       // zero rows. Safe as a plain `return false` here specifically: this is
       // the FIRST write in the transaction, so nothing is committed yet if
       // it fails.
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId, ["initiated", "processing"]);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId, ["initiated", "processing"], { disbursementRef: p.disbursementRef });
       if (!ok) {
         log.warn({ id: p.id }, "duplicate/stale disbursement completion ignored: disbursement is no longer initiated/processing");
         return false;

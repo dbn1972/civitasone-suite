@@ -26,6 +26,19 @@ function userToken(tenantId = TENANT) {
 
 afterAll(async () => { await sqlClient.end(); });
 
+/**
+ * The calendar month containing "today" (UTC, the same clock checkQuota uses), first to LAST day. A fixed
+ * "...-28" end date made the quota stop covering today on the 29th-31st, so checkQuota found no row and
+ * returned passed:true -- these tests then failed only on those days.
+ */
+function currentMonthPeriod(): { periodStart: string; periodEnd: string } {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { periodStart: iso(new Date(Date.UTC(y, m, 1))), periodEnd: iso(new Date(Date.UTC(y, m + 1, 0))) };
+}
+
 // ---------- Route tests: quota CRUD ----------
 
 describe("Quota routes", () => {
@@ -273,9 +286,7 @@ describe("checkQuota — unlimited status always passes", () => {
     const { runWithTenant } = await import("@civitasone/db");
     // Create quota with unlimited status via route (RLS-safe)
     const app = await buildApp();
-    const today = new Date().toISOString().slice(0, 10);
-    const periodStart = today.slice(0, 8) + "01";
-    const periodEnd = today.slice(0, 8) + "28";
+    const { periodStart, periodEnd } = currentMonthPeriod();
     const res = await app.inject({
       method: "POST",
       url: "/notifications/channel-quotas",
@@ -313,9 +324,7 @@ describe("checkQuota — exhausted when used >= limit", () => {
     const { runWithTenant } = await import("@civitasone/db");
     // Create a quota via route first, then manually set used = monthlyLimit in DB
     const app = await buildApp();
-    const today = new Date().toISOString().slice(0, 10);
-    const periodStart = today.slice(0, 8) + "01";
-    const periodEnd = today.slice(0, 8) + "28";
+    const { periodStart, periodEnd } = currentMonthPeriod();
     const createRes = await app.inject({
       method: "POST",
       url: "/notifications/channel-quotas",

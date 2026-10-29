@@ -136,9 +136,29 @@ describe("SRN — creation gated on GRN acceptance", () => {
       method: "POST", url: "/v1/inventory/srn", headers: hdr(TENANT_A, ACTOR_A),
       payload: { grnId },
     });
-    expect(res.statusCode).toBe(202); // route accepts; the domain guard runs in the consumer
+    // The route pre-checks the GRN status synchronously: 409, not a 202 the consumer later fails.
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("GRN_NOT_ACCEPTED");
     await drain();
+    expect(mq.dlq.length).toBe(before);
 
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(storeReceiptNotes).where(eq(storeReceiptNotes.grnId, grnId))));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("consumer defence in depth: a srn.create command for a non-accepted GRN (bypassing the route) is dead-lettered", async () => {
+    const grnId = "cccccccc-0000-4000-8000-00000000a012";
+    stubGrnFetch({ [grnId]: "under_inspection" });
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    const id = randomUUID();
+    await queue.publish(COMMANDS.srnCreate, {
+      messageId: id, type: COMMANDS.srnCreate, tenantId: TENANT_A, actorId: ACTOR_A,
+      correlationId: "c-defence", schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, grnId, storeOfficerId: ACTOR_A },
+    });
+    await drain();
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
       tx.select().from(storeReceiptNotes).where(eq(storeReceiptNotes.grnId, grnId))));
     expect(rows).toHaveLength(0);
@@ -151,16 +171,18 @@ describe("SRN — creation gated on GRN acceptance", () => {
 
     const mq = queue as unknown as MemoryQueue;
     const before = mq.dlq.length;
-    await app.inject({
+    const res = await app.inject({
       method: "POST", url: "/v1/inventory/srn", headers: hdr(TENANT_A, ACTOR_A),
       payload: { grnId },
     });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("GRN_NOT_FOUND");
     await drain();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
       tx.select().from(storeReceiptNotes).where(eq(storeReceiptNotes.grnId, grnId))));
     expect(rows).toHaveLength(0);
-    expect(mq.dlq.slice(before).some((d) => d.error.includes("GRN_NOT_FOUND"))).toBe(true);
+    expect(mq.dlq.length).toBe(before);
   });
 });
 

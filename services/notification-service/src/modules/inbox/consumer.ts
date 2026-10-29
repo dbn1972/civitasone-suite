@@ -23,6 +23,7 @@ import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
+import { crmInternalHeaders } from "../deliveries/crm-consent-client.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -185,13 +186,18 @@ export function registerInboxConsumers(q: Queue): void {
     let crmMatched = false;
     try {
       const CRM_BASE = process.env.CRM_SERVICE_URL ?? "http://localhost:3024";
+      // UAT #12: crm-service authenticates the internal path with the FULL header set
+      // (x-internal + x-service-secret + x-internal-caller); x-internal alone is a 401.
+      const crmHeaders = crmInternalHeaders(p.tenantId, msg.correlationId);
+      if (!crmHeaders) throw new Error("INTERNAL_SERVICE_SECRET unset - CRM lookup cannot be authenticated");
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5_000);
       const lookupRes = await fetch(`${CRM_BASE}/v1/crm/contacts?phone=${encodeURIComponent(p.from)}&limit=2`, {
         signal: controller.signal,
-        headers: { "x-tenant-id": p.tenantId, "x-internal": "true" },
+        headers: crmHeaders,
       });
       clearTimeout(timeout);
+      if (!lookupRes.ok) log.warn({ status: lookupRes.status, channel: p.channel }, "CRM contact lookup returned non-OK - proceeding without match");
       if (lookupRes.ok) {
         const lookupJson = await lookupRes.json() as { data?: Array<{ id: string }> };
         const matches = lookupJson.data ?? [];

@@ -5,6 +5,7 @@ export const cycleCountStatus = z.enum(["pending", "auto_posted", "pending_appro
 
 export const createCycleCountBody = z.object({
   itemId:       z.string().uuid(),
+  // NOTE: despite the name this is an inventory.stores id, not a warehouses-master id (validated in the route).
   warehouseId:  z.string().uuid(),
   physicalQty:  z.number().int().nonnegative().max(10_000_000),
   reasonCode:   z.string().min(1).max(64),

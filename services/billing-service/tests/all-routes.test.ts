@@ -140,6 +140,7 @@ vi.mock("../src/modules/usage/repo.js", () => ({
 vi.mock("../src/modules/invoices/repo.js", () => ({
   listByTenant: async () => mockState.queryResult,
   findById: async () => mockState.queryResult[0] ?? undefined,
+  findByPeriod: async () => undefined,
   itemsByInvoice: async () => [],
   approvalsByInvoice: async () => [],
   outstandingByTenant: async () => ({ billedMinor: 0n, paidMinor: 0n, outstandingMinor: 0n, openCount: 0 }),

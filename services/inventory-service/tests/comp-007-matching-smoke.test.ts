@@ -33,27 +33,12 @@
  * app.inject() bypassing the gateway, like this test, does not, unless it
  * adds the header itself).
  *
- * REAL BUG (found while writing this test, not fixed here -- see PR
- * description): POST /v1/inventory/matches/:id/resolve never actually
- * resolves anything, for ANY match, regardless of the `version` sent.
- * Root cause, confirmed directly (see the KNOWN ISSUE test below): commands.ts's
- * shared `publish()` helper is called by BOTH createMatch() and
- * resolveMatch() with the MATCH's own id as the queue message's `messageId`
- * (`publish(type, ctx, id, payload)` -- the third positional arg is reused
- * for both the domain id and the transport-level idempotency key). create's
- * consumer handler already inserts `_inbox.processed` with
- * message_id = <matchId> to dedupe ITSELF; when resolve's message for that
- * SAME matchId arrives, `markProcessed(tx, msg.messageId)` (the very first
- * line of the resolve handler, before the version-gated UPDATE is ever
- * reached) finds that message_id already present and returns false, so the
- * handler bails immediately -- indistinguishable, from the outside, from a
- * genuine duplicate redelivery. The route still replies 202 "accepted"
- * (createMatch/resolveMatch never touch the DB; only the consumer does), so
- * nothing in the HTTP response reveals the failure. A direct consequence:
- * this also makes the optimistic-locking version check in resolve's own
- * WHERE clause dead code today -- it can never be reached to reject a stale
- * version, because every resolve attempt (correct version or not) is
- * already rejected one line earlier by the reused-messageId collision.
+ * FIXED (UAT messageId scan): POST /v1/inventory/matches/:id/resolve used to 202 without ever
+ * resolving anything, because commands.ts reused the match's own id as the resolve command's
+ * messageId, which createMatch had already put in `_inbox.processed` (markProcessed keys on
+ * message_id alone), so the consumer bailed on the very first line. resolveMatch now publishes a
+ * per-command messageId; the tests below assert the corrected behaviour (a correct-version resolve
+ * applies, a wrong version is genuinely rejected by the optimistic lock).
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
@@ -223,7 +208,7 @@ describe("COMP-007: matching -- POST /v1/inventory/matches/:id/resolve", () => {
     expect(resolve.statusCode).toBe(403);
   });
 
-  it("KNOWN ISSUE (see file header): resolve with the CORRECT version still never applies -- the route 202s but the real DB row never changes", async () => {
+  it("resolve with the CORRECT version applies: the row becomes resolved and the version is bumped (regression: used to be silently dropped)", async () => {
     const tid = randomUUID();
     const create = await app.inject({
       method: "POST",
@@ -240,10 +225,6 @@ describe("COMP-007: matching -- POST /v1/inventory/matches/:id/resolve", () => {
       headers: authHeaders(["inventory_admin"], tid),
       payload: { version: 1, resolutionNote: "Verified with vendor; short-shipment credit note issued." },
     });
-    // NOT proof of success -- createMatch/resolveMatch never touch the DB,
-    // only publish a command; this 202 is the same "accepted" createMatch
-    // itself already returned and reveals nothing about whether the
-    // consumer's update actually applied.
     expect(resolve.statusCode).toBe(202);
     await appQueue.drain();
 
@@ -253,26 +234,16 @@ describe("COMP-007: matching -- POST /v1/inventory/matches/:id/resolve", () => {
       headers: authHeaders(["inventory_admin"], tid),
     });
     const row = get.json().data;
-    // This is the bug, asserted directly: a version-1 resolve of a version-1
-    // row is NOT rejected by the optimistic lock (a real conflict would look
-    // exactly like this too) -- it silently never runs at all.
-    expect(row.status).toBe("exception"); // NOT "resolved" -- documents the bug
-    expect(row.version).toBe(1); // NOT bumped to 2
+    expect(row.status).toBe("resolved");
+    expect(row.version).toBe(2);
 
-    // Prove WHY, rather than merely asserting an absence: resolveMatch's
-    // publish() call reused the match's own `id` as the queue message's
-    // messageId (see commands.ts), the exact same messageId createMatch's
-    // message already used for THIS match. `_inbox.processed` -- this
-    // service's real, disposable-Postgres-backed idempotency ledger, not a
-    // mock -- shows exactly one row for it, meaning the resolve command was
-    // consumed by markProcessed() as if it were a *duplicate delivery of
-    // create*, and its handler returned before ever reaching the
-    // version-gated UPDATE.
+    // The create command's inbox row (messageId = match id) is still the only row keyed on the
+    // match id: the resolve command carried its own per-command messageId.
     const inboxRows = await db.select().from(processed).where(eq(processed.messageId, id));
     expect(inboxRows).toHaveLength(1);
   });
 
-  it("KNOWN ISSUE (see file header): because of the same messageId-reuse bug, a WRONG version is also never rejected -- the version check is unreachable dead code today", async () => {
+  it("a WRONG version is rejected by the optimistic lock: the row is left unchanged", async () => {
     const tid = randomUUID();
     const create = await app.inject({
       method: "POST",
@@ -298,11 +269,8 @@ describe("COMP-007: matching -- POST /v1/inventory/matches/:id/resolve", () => {
       headers: authHeaders(["inventory_admin"], tid),
     });
     const row = get.json().data;
-    // Today, this looks identical to a correctly-enforced optimistic lock
-    // (unchanged row) -- but see the test above: a CORRECT version is
-    // rejected exactly the same way, for an unrelated reason. This test
-    // alone cannot and does not prove the version check works; it only
-    // shows that a wrong version does not crash anything.
+    // The resolve command now reaches the version-gated UPDATE (see the test above, where the
+    // correct version applies), so an unchanged row here is the optimistic lock doing its job.
     expect(row.status).toBe("exception");
     expect(row.version).toBe(1);
   });

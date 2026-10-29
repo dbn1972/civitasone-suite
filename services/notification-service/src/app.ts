@@ -73,6 +73,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (tid) tenantStorage.enterWith({ tenantId: tid });
   });
 
+  // MUST be registered BEFORE any app.register(<routes>): Fastify encapsulated route contexts copy the
+  // parent error handler at creation, so a handler set afterwards only covered the root context and
+  // every ZodError / FastifyError thrown inside a route module became a 500 (UAT API sweep 2026-10-28).
+  registerSchemaErrorHandler(app, HttpError, { delegateFrameworkClientErrors: true });
+
   registerOpsRoutes(app, { service: "notification-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -117,7 +122,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reviewQueueRoutes);
   // CH-19: attachment upload/download with MIME validation + malware scan
   await app.register(attachmentRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

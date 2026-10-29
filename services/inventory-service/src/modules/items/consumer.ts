@@ -32,8 +32,14 @@ export function registerItemConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, name: p.name, sku: p.sku ?? null,
         status: "active", categoryId: p.categoryId ?? null, uomId: p.uomId ?? null,
         itemType: p.itemType, reorderLevel: p.reorderLevel, reorderQty: p.reorderQty,
+        reorderMax: p.reorderMax,
         valuationMethod: p.valuationMethod, unitCostMinor: BigInt(p.unitCostMinor),
-        currency: p.currency, isActive: true, createdBy: msg.actorId, updatedBy: msg.actorId,
+        currency: p.currency, isActive: true,
+        hsnCode: p.hsnCode ?? null, gstRate: p.gstRate ?? null, taxClass: p.taxClass ?? null,
+        shelfLifeDays: p.shelfLifeDays ?? null,
+        requiresBatchTracking: p.requiresBatchTracking,
+        requiresSerialTracking: p.requiresSerialTracking,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await emit(tx, msg, EVENTS.itemCreated, { itemId: p.id, name: p.name }, "create", "item", p.id);
     });
@@ -52,6 +58,13 @@ export function registerItemConsumers(rawQueue: Queue): void {
       if (p.uomId !== undefined) patch.uomId = p.uomId;
       if (p.reorderLevel !== undefined) patch.reorderLevel = p.reorderLevel;
       if (p.reorderQty !== undefined) patch.reorderQty = p.reorderQty;
+      if (p.reorderMax !== undefined) patch.reorderMax = p.reorderMax;
+      if (p.hsnCode !== undefined) patch.hsnCode = p.hsnCode;
+      if (p.gstRate !== undefined) patch.gstRate = p.gstRate;
+      if (p.taxClass !== undefined) patch.taxClass = p.taxClass;
+      if (p.shelfLifeDays !== undefined) patch.shelfLifeDays = p.shelfLifeDays;
+      if (p.requiresBatchTracking !== undefined) patch.requiresBatchTracking = p.requiresBatchTracking;
+      if (p.requiresSerialTracking !== undefined) patch.requiresSerialTracking = p.requiresSerialTracking;
       if (p.valuationMethod !== undefined) patch.valuationMethod = p.valuationMethod;
       if (p.unitCostMinor !== undefined) patch.unitCostMinor = BigInt(p.unitCostMinor);
       if (p.isActive !== undefined) patch.isActive = p.isActive;

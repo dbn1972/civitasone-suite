@@ -4,6 +4,8 @@
  */
 import { eq, ne, and, sql, asc, desc, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { INTEGRATION } from "../../topics.js";
 import { DomainError } from "../../shared/domain.js";
 import {
   items,
@@ -154,14 +156,24 @@ export async function updateCategory(
   tenantId: string,
   patch: Partial<Omit<CategoryInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
+  correlationId: string,
 ): Promise<CategoryRow> {
-  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
-  const rows = await db.transaction(async (tx) =>
-    (tx as unknown as typeof db).update(categories)
+  // One transaction: the UPDATE and its audit outbox row commit (or roll back) together.
+  // db.transaction() also sets the app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) => {
+    const updated = await (tx as unknown as typeof db).update(categories)
       .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${categories.version} + 1` })
       .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId)))
-      .returning(),
-  );
+      .returning();
+    if (updated.length > 0) {
+      await enqueue(tx as unknown as Parameters<typeof enqueue>[0], {
+        topic: INTEGRATION.audit, eventType: INTEGRATION.audit,
+        tenantId, actorId, correlationId,
+        payload: { service: "inventory", action: "update", resourceType: "category", resourceId: id, outcome: "success", changes: Object.keys(patch) },
+      });
+    }
+    return updated;
+  });
   if (rows.length === 0) throw new DomainError("NOT_FOUND", `category ${id} not found for tenant`);
   return rows[0]!;
 }
@@ -189,14 +201,24 @@ export async function updateUom(
   tenantId: string,
   patch: Partial<Omit<UomInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
+  correlationId: string,
 ): Promise<UomRow> {
-  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
-  const rows = await db.transaction(async (tx) =>
-    (tx as unknown as typeof db).update(uoms)
+  // One transaction: the UPDATE and its audit outbox row commit (or roll back) together.
+  // db.transaction() also sets the app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) => {
+    const updated = await (tx as unknown as typeof db).update(uoms)
       .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${uoms.version} + 1` })
       .where(and(eq(uoms.id, id), eq(uoms.tenantId, tenantId)))
-      .returning(),
-  );
+      .returning();
+    if (updated.length > 0) {
+      await enqueue(tx as unknown as Parameters<typeof enqueue>[0], {
+        topic: INTEGRATION.audit, eventType: INTEGRATION.audit,
+        tenantId, actorId, correlationId,
+        payload: { service: "inventory", action: "update", resourceType: "uom", resourceId: id, outcome: "success", changes: Object.keys(patch) },
+      });
+    }
+    return updated;
+  });
   if (rows.length === 0) throw new DomainError("NOT_FOUND", `uom ${id} not found for tenant`);
   return rows[0]!;
 }
@@ -298,6 +320,12 @@ export async function releaseReservation(
     .where(and(eq(reservations.id, id), eq(reservations.tenantId, tenantId), eq(reservations.version, expectedVersion), eq(reservations.status, "active")))
     .returning();
   if (updated.length === 0) throw new DomainError("RESERVATION_RELEASE_FAILED", `reservation ${id} not found, already released, or version conflict`);
+}
+
+export async function findReservation(tenantId: string, id: string): Promise<ReservationRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(reservations)
+    .where(and(eq(reservations.id, id), eq(reservations.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
 }
 
 export async function listReservations(tenantId: string, limit: number, offset: number): Promise<ReservationRow[]> {

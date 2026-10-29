@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { publishCommand, type Accepted } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";
+import { encryptPii, isEncrypted } from "../../shared/pii-crypto.js";
 
 export type { Accepted };
 
@@ -12,10 +13,19 @@ export async function initiateDisbursement(
   disbursedAmountMinor: string,
 ): Promise<Accepted> {
   const id = randomUUID();
+  // SECURITY (UAT g3 #6): the account number is encrypted HERE, before it is
+  // published, so neither the queue payload nor refund_disbursements.
+  // bank_account_details ever holds it in cleartext.
+  const sealed = {
+    ...bankAccountDetails,
+    accountNumber: isEncrypted(bankAccountDetails.accountNumber)
+      ? bankAccountDetails.accountNumber
+      : encryptPii(bankAccountDetails.accountNumber),
+  };
   return publishCommand(ctx, COMMANDS.initiateDisbursement, id, {
     id,
     requestId,
-    bankAccountDetails,
+    bankAccountDetails: sealed,
     disbursedAmountMinor,
   });
 }
