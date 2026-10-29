@@ -244,7 +244,7 @@ async function findStuckViaScanner(cutoff: Date): Promise<StuckRef[]> {
   const { scannerSqlClient } = await import("../../shared/scanner-db.js");
   const rows = await scannerSqlClient<{ id: string; tenant_id: string }[]>`
     SELECT id, tenant_id FROM payments.finance_pfms
-    WHERE submission_status = 'processing' AND channel = 'treasury_batch' AND COALESCE(release_started_at, updated_at) < ${cutoff}
+    WHERE submission_status = 'processing' AND channel = 'treasury_batch' AND COALESCE(release_started_at, updated_at) < ${cutoff.toISOString()}::timestamptz
     ORDER BY COALESCE(release_started_at, updated_at) ASC LIMIT 200`;
   return rows.map((r) => ({ id: r.id, tenantId: r.tenant_id }));
 }

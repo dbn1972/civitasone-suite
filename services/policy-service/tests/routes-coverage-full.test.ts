@@ -456,6 +456,20 @@ describe("POST /v1/policy/evaluate", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // FQ12 (#88): a key that is long enough but has fewer than three dot-separated
+  // parts used to reach domain.parsePermissionKey and surface as a 500.
+  for (const permissionKey of ["nodots:read", "hrms.leave", "abc"]) {
+    it(`returns 400 VALIDATION_FAILED (not 500) for malformed permissionKey ${permissionKey}`, async () => {
+      const res = await app.inject({
+        method: "POST", url: "/v1/policy/evaluate",
+        headers: headers(["employee"]),
+        payload: { permissionKey },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe("VALIDATION_FAILED");
+    });
+  }
+
   it("returns 400 with empty body", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/evaluate",

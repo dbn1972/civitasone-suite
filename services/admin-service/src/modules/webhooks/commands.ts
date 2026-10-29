@@ -5,6 +5,7 @@
 import { randomUUID, randomBytes, createHmac } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
+import { sealSecret } from "../../shared/secret-crypto.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -61,6 +62,10 @@ export function verifySignature(secret: string, body: string, signature: string)
 export async function webhookCreate(ctx: RequestContext, payload: WebhookCreatePayload): Promise<Accepted & { secret: string }> {
   const id = randomUUID();
   const secret = generateSecret();
+  // FQ12-SEC: seal BEFORE publishing so the plaintext never sits in the queue
+  // or the DB. Throws SecretKeyUnavailableError (route -> 503) with no key:
+  // fail closed, nothing is published.
+  const sealed = sealSecret(secret);
   await queue.publish(CMD_CREATE, {
     messageId: id,
     type: CMD_CREATE,
@@ -68,8 +73,9 @@ export async function webhookCreate(ctx: RequestContext, payload: WebhookCreateP
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, url: payload.url, events: payload.events, secret, description: payload.description ?? "" },
+    payload: { id, tenantId: ctx.tenantId, url: payload.url, events: payload.events, secret: sealed, description: payload.description ?? "" },
   });
+  // The plaintext is returned exactly once, here, and never readable again.
   return { id, status: "accepted", correlationId: ctx.correlationId, secret };
 }
 
@@ -143,7 +149,8 @@ export async function webhookRotateRequest(
   reason?: string,
 ): Promise<Accepted & { rotationId: string }> {
   const rotationId = randomUUID();
-  const newSecret = generateSecret();
+  // FQ12-SEC: the pending secret is sealed before it is queued / stored.
+  const newSecret = sealSecret(generateSecret());
   await queue.publish(CMD_ROTATE_REQUEST, {
     messageId: rotationId,
     type: CMD_ROTATE_REQUEST,

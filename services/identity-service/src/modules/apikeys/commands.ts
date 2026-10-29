@@ -125,11 +125,26 @@ export type VerifyResult = {
  * under runWithTenant(row.tenantId, ...) below, now that the tenant is
  * known -- RLS still governs the mutation.
  */
-export async function verifyApiKey(presented: string, requiredScope?: string): Promise<VerifyResult> {
+export const UNKNOWN_KEY: VerifyResult = Object.freeze({ valid: false, reason: "unknown key" }) as VerifyResult;
+
+export async function verifyApiKey(
+  presented: string,
+  requiredScope?: string,
+  /**
+   * FQ12-SEC: when the caller is tenant-bound (POST /identity/api-keys/verify),
+   * a key owned by ANY other tenant is answered exactly like a non-existent
+   * key, BEFORE any side effect: no lastUsedAt touch and no audit row in the
+   * other tenant, and no apiKeyId / tenantId / scopes in the response.
+   * Omitted only by the internal gateway introspection route, whose job is to
+   * discover the key's tenant.
+   */
+  expectedTenantId?: string,
+): Promise<VerifyResult> {
   const hash = sha256Hex(presented);
 
   const row = await repo.findBySecretHash(scannerDb, hash);
-  if (!row) return { valid: false, reason: "unknown key" };
+  if (!row) return { ...UNKNOWN_KEY };
+  if (expectedTenantId !== undefined && row.tenantId !== expectedTenantId) return { ...UNKNOWN_KEY };
 
   return runWithTenant(row.tenantId, () => db.transaction(async (tx) => {
     if (!isUsable(row.status as ApiKeyStatus, row.expiresAt ?? null)) {

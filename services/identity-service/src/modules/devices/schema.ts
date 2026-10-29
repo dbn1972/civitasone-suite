@@ -9,7 +9,9 @@ export const registeredDevices = devicesSchema.table("registered_devices", {
   platform:    varchar("platform", { length: 16 }).notNull(),
   label:       text("label").notNull(),
   fingerprint: text("fingerprint").notNull(),
-  trustToken:  text("trust_token").notNull(),
+  // FQ12-SEC: SHA-256 (hex) of the bearer trust token. The token itself is
+  // returned once at registration and never stored (migration 0031).
+  trustTokenHash: text("trust_token_hash").notNull(),
   trustLevel:  varchar("trust_level", { length: 24 }).notNull().default("recognized"),
   lastSeenAt:  timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

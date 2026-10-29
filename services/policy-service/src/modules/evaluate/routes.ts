@@ -20,7 +20,12 @@ const DECISION_EVENT = "policy.decision";
 const EVAL_SUBJECT_ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
 const evaluateBody = z.object({
-  permissionKey: z.string().min(3),
+  // FQ12 (#88): a key domain.parsePermissionKey cannot split (<resource>.<action>, at
+  // least three dot-separated parts) threw a plain Error deep in evaluation -> 500.
+  // Reject it here as a 400 VALIDATION_FAILED instead.
+  permissionKey: z.string().min(3).refine((k) => k.split(".").length >= 3, {
+    message: "permissionKey must be <module>.<resource>.<action>",
+  }),
   actor: z.object({
     userId: z.string().uuid(),
     tenantId: z.string().uuid(),

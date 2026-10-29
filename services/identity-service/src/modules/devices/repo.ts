@@ -1,4 +1,4 @@
-import { randomBytes, createHmac } from "node:crypto";
+import { randomBytes, createHmac, createHash, timingSafeEqual } from "node:crypto";
 import { eq, and, gt, asc, desc, or, isNull } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { registeredDevices, mailboxCursors, entityChangelog, processedMutations } from "./schema.js";
@@ -15,6 +15,23 @@ export function mintTrustToken(deviceId: string, userId: string): string {
   return createHmac("sha256", trustSecret()).update(`${deviceId}:${userId}`).digest("hex");
 }
 
+/**
+ * FQ12-SEC: device trust tokens are bearer secrets used only for comparison,
+ * so only their SHA-256 is persisted. The token is a 256-bit HMAC output
+ * (mintTrustToken), so an unsalted digest is not brute-forceable.
+ */
+export function hashTrustToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** Constant-time check of a presented token against the stored hash. */
+export function trustTokenMatches(storedHash: string | null | undefined, presented: string | null | undefined): boolean {
+  if (typeof storedHash !== "string" || typeof presented !== "string" || presented.length === 0) return false;
+  const a = Buffer.from(hashTrustToken(presented), "hex");
+  const b = Buffer.from(storedHash, "hex");
+  return a.length === b.length && a.length === 32 && timingSafeEqual(a, b);
+}
+
 export async function upsertDevice(
   tx: Writer,
   row: typeof registeredDevices.$inferInsert,
@@ -28,7 +45,7 @@ export async function upsertDevice(
   if (existing[0]) {
     await tx.update(registeredDevices).set({
       label: row.label,
-      trustToken: row.trustToken,
+      trustTokenHash: row.trustTokenHash,
       trustLevel: row.trustLevel ?? "recognized",
       lastSeenAt: new Date(),
       updatedAt: new Date(),

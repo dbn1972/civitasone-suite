@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { TemplateView } from "./schema.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "template";
@@ -13,7 +14,10 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerTemplateConsumers(queue: Queue): void {
+export function registerTemplateConsumers(rawQueue: Queue): void {
+  // RLS: run handlers inside the message's tenant context (same as the tokens
+  // consumer) instead of relying solely on worker.ts's subscribe wrapper.
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<TemplateView>(COMMANDS.createTemplate, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

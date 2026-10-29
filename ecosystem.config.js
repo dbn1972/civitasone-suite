@@ -394,6 +394,19 @@ function scannerDbUrl(scannerUser, dbName, envName) {
   return `postgres://${scannerUser}:${scannerUser}_dev_pw@${DB_HOST}/${dbName}`;
 }
 
+// FQ12-SEC (UAT items #69-#72): identity-service discovers an API key's tenant
+// from the presented secret via the identity_scanner BYPASSRLS role
+// (migrations 0020/0023, shared/scanner-db.ts). That DSN was never wired, so
+// scanner-db.ts fell back to the NOBYPASSRLS identity_svc DATABASE_URL and
+// FORCE RLS hid every row: POST /identity/api-keys/verify answered
+// "unknown key" for every live key, and the worker's session-reaper /
+// break-glass sweeps silently no-op'd. Same contract as every other
+// scannerDbUrl() call site: production refuses to start without an injected
+// IDENTITY_SCANNER_DATABASE_URL (a silent fallback reproduces the defect).
+const IDENTITY_SCANNER_ENV = {
+  IDENTITY_SCANNER_DATABASE_URL: scannerDbUrl("identity_scanner", "civitas_identity", "IDENTITY_SCANNER_DATABASE_URL"),
+};
+
 const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
 const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
@@ -545,7 +558,7 @@ function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js",
 module.exports = {
   apps: [
     // ── Core platform ──────────────────────────────────────────────────────────
-    svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, { graceful: true }), // PERF-003
+    svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY, ...IDENTITY_SCANNER_ENV }, { graceful: true }), // PERF-003
     svc("tenant",       3002, "tenant_svc",        "civitas_tenant", {}, { graceful: true }), // PERF-015
     svc("policy",       3003, "policy_svc",        "civitas_policy", {}, { graceful: true }), // PERF-015
     svc("audit",        3004, "audit_svc",         "civitas_audit", {}, { graceful: true }), // PERF-015
@@ -621,7 +634,9 @@ module.exports = {
       CRM_PII_KEY,
       CRM_SCANNER_DATABASE_URL: scannerDbUrl("crm_scanner", "civitas_crm", "CRM_SCANNER_DATABASE_URL"),
     }),
-    worker("admin",        "admin_svc",        "civitas_admin"),
+    // FQ12-SEC: the admin worker seals webhook HMAC secrets (and re-seals legacy
+    // in-flight plaintext command payloads) with the same key as the API.
+    worker("admin",        "admin_svc",        "civitas_admin", { ...ADMIN_PII_ENV }),
     worker("billing",      "billing_svc",      "civitas_billing"),
     worker("contract",     "contract_svc",     "civitas_contract", {
       CONTRACT_SCANNER_DATABASE_URL: scannerDbUrl("contract_scanner", "civitas_contract", "CONTRACT_SCANNER_DATABASE_URL"),
@@ -630,7 +645,7 @@ module.exports = {
     // ── EVT-1 (04-T1): previously-missing workers now wired. Each ships a real
     //    src/worker.ts (consumers + outbox relay); without these entries their
     //    HTTP commands returned 202 but the async write never applied. ──────────
-    worker("identity",     "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, "dist/worker.js", { graceful: true }), // PERF-003
+    worker("identity",     "identity_svc",     "civitas_identity", { MFA_ENC_KEY, ...IDENTITY_SCANNER_ENV }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("tenant",       "tenant_svc",       "civitas_tenant"),
     worker("policy",       "policy_svc",       "civitas_policy"),
     worker("install",      "install_svc",      "civitas_install"),

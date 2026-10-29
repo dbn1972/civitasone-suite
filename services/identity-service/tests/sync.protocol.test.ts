@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
@@ -167,7 +167,7 @@ describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", ()
       await tx.insert(registeredDevices).values({
         id: deviceId, tenantId: tenant, userId: serviceActor,
         platform: "ios", label: "test-device", fingerprint: randomUUID(),
-        trustToken: "test-token", trustLevel: "recognized",
+        trustTokenHash: createHash("sha256").update(randomUUID()).digest("hex"), trustLevel: "recognized",
         createdBy: serviceActor, updatedBy: serviceActor,
       });
     }));

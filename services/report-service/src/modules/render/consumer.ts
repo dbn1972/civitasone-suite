@@ -20,6 +20,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { applyPdfWatermark, applyCsvWatermark } from "../../shared/watermark.js";
 import { maskAllPii } from "../../shared/mask.js";
 import { jobStorageKey } from "../../shared/download.js";
+import { withRenderSandbox } from "../../shared/report-html.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -86,9 +87,11 @@ export function registerRenderConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        // Mark job as running
+        // Mark job as in progress. jobs_status_check (migration 0008) allows
+        // queued/processing/completed/failed only; writing 'running' violated it,
+        // rolled this tx back and sent every job straight to 'failed' (UAT #62).
         await tx.update(jobs)
-          .set({ status: "running", updatedAt: new Date(), updatedBy: msg.actorId })
+          .set({ status: "processing", updatedAt: new Date(), updatedBy: msg.actorId })
           .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId)));
         await enqueue(tx, {
           topic: AUDIT_TOPIC,
@@ -121,7 +124,9 @@ export function registerRenderConsumers(queue: Queue): void {
 
       switch (p.format) {
         case "pdf": {
-          const result = await renderPdf({ html: p.templateHtml });
+          // Defence in depth: no-network / no-script CSP on whatever HTML arrives
+          // (the payload comes off the queue; producers also escape their values).
+          const result = await renderPdf({ html: withRenderSandbox(p.templateHtml) });
           buffer = p.watermark
             ? applyPdfWatermark(result.buffer, { text: p.watermark })
             : result.buffer;
@@ -157,7 +162,7 @@ export function registerRenderConsumers(queue: Queue): void {
         }
         case "html":
         default: {
-          buffer = Buffer.from(p.templateHtml, "utf-8");
+          buffer = Buffer.from(withRenderSandbox(p.templateHtml), "utf-8");
           contentType = "text/html";
           ext = "html";
           break;

@@ -3,7 +3,7 @@
  * BBPS enabled paths, billing GET /assessees/:id/bills,
  * error handler 500 path on all route modules.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
 
@@ -41,6 +41,14 @@ vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
       };
     }),
   };
+});
+
+// POST /assessees runs a synchronous duplicate-identifier lookup before publishing. The db mock
+// below cannot serve a real select, so stub the lookup ("no duplicate") to let the request reach
+// the publish step in the "queue publish fails -> 500" case.
+vi.mock("../src/modules/assessee/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/assessee/repo.js")>();
+  return { ...original, findAssesseeByIdentifier: vi.fn(async () => null) };
 });
 
 vi.mock("../src/shared/db.js", () => ({
@@ -106,6 +114,12 @@ beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
   await app.ready();
+});
+
+// No queued mockRejectedValueOnce may leak from one test into the next.
+afterEach(async () => {
+  const { queue } = await import("../src/shared/infra.js");
+  vi.mocked(queue.publish).mockReset().mockResolvedValue(undefined as never);
 });
 
 afterAll(async () => {
@@ -299,14 +313,21 @@ describe("Route 500 error handlers", () => {
 
   it("assessee route returns 500 on unexpected error", async () => {
     const { queue } = await import("../src/shared/infra.js");
-    (queue.publish as any).mockRejectedValueOnce(new Error("Unexpected failure"));
+    vi.mocked(queue.publish).mockReset().mockRejectedValueOnce(new Error("Unexpected failure"));
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/assessees",
       headers: AUTH,
-      payload: { name: "Test Owner" },
+      // A VALID body; the duplicate lookup is stubbed (no duplicate), so the request reaches
+      // createAssessee -> queue.publish, whose rejection is the unexpected error under test. The
+      // previous payload ({ name }) was invalid and only produced a 500 because the schema error
+      // handler was registered after the routes (UAT FQ10b-1); invalid input now answers 400.
+      payload: { assesseeType: "property", identifierNo: "PROP-500", ownerName: "Test Owner", address: "1 Main St" },
     });
+    expect(queue.publish).toHaveBeenCalledTimes(1);
     expect(res.statusCode).toBe(500);
+    // The assessee module has no handler of its own: the app-level shared envelope is flat.
+    expect(res.json().code).toBe("INTERNAL");
   });
 
   it("bbps route returns 500 on unexpected error", async () => {

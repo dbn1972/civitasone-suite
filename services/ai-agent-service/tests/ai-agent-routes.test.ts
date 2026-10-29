@@ -255,6 +255,35 @@ describe("POST /v1/ai/chat", () => {
         expect(H.chatInsertMock).not.toHaveBeenCalled();
     await app.close();});
 
+  // FQ12 (#47): the 202 used to carry only the message (command) id, so a caller
+  // starting a conversation could not address it afterwards.
+  it("202 — a new conversation returns its conversationId alongside the message id", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { channelId: CHANNEL, message: "hello there" },
+    });
+    expect(r.statusCode).toBe(202);
+    const body = r.json();
+    expect(body.conversationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.messageId).toBe(body.id);
+    expect(body.conversationId).not.toBe(body.id);
+    await app.close();
+  });
+
+  it("202 — continuing a conversation returns that conversationId", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeConversation());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { conversationId: CONV_ID, channelId: CHANNEL, message: "again" },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().conversationId).toBe(CONV_ID);
+    expect(r.json().messageId).toBe(r.json().id);
+    await app.close();
+  });
+
   it("422 — guardrail-blocked message is rejected", async () => {
     H.ruleListActiveMock.mockResolvedValue([BLOCKING_PII_RULE]);
     const app = await buildApp();

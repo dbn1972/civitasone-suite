@@ -54,15 +54,19 @@ export function projectedOverageDate(
 }
 
 // ── reads (query path) ───────────────────────────────────────────────
-export async function findById(id: string): Promise<QuotaView | null> {
-  const rows = await db.select().from(quotas).where(eq(quotas.id, id)).limit(1);
+// FQ12 (#139): quotas.quotas is FORCE RLS (tenant_id = tenant.current_tenant_id()).
+// Every read below carries the tenant GUC (runWithTenant + db.transaction);
+// a bare db.select() returned nothing for every tenant.
+export async function findById(id: string, tenantId: string): Promise<QuotaView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(quotas)
+    .where(and(eq(quotas.id, id), eq(quotas.tenantId, tenantId))).limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findByTenantAndResource(tenantId: string, resource: QuotaResource): Promise<QuotaView | null> {
-  const rows = await db.select().from(quotas)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(quotas)
     .where(and(eq(quotas.tenantId, tenantId), eq(quotas.resource, resource)))
-    .limit(1);
+    .limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -73,8 +77,7 @@ export async function findAllByTenantScoped(tenantId: string): Promise<QuotaView
 }
 
 export async function findAllByTenant(tenantId: string): Promise<QuotaView[]> {
-  const rows = await db.select().from(quotas).where(eq(quotas.tenantId, tenantId));
-  return rows.map(toView);
+  return findAllByTenantScoped(tenantId);
 }
 
 // ── writes (consumer only, within a tx) ──────────────────────────────

@@ -21,6 +21,7 @@ import { webhooks, webhookDeliveries, secretRotations } from "../src/modules/web
 import { registerWebhookConsumers } from "../src/modules/webhooks/consumer.js";
 import { signPayload } from "../src/modules/webhooks/commands.js";
 import { verifyWithRotation } from "../src/modules/webhooks/rotation.js";
+import { isSealed, openSecret } from "../src/shared/secret-crypto.js";
 import { queue as sharedQueue } from "../src/shared/infra.js";
 import type { FastifyInstance } from "fastify";
 
@@ -174,19 +175,24 @@ describe("CAP-054 secret rotation (maker-checker)", () => {
 
     const wh = await waitFor(
       () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(webhooks).where(eq(webhooks.id, id)))),
-      (r) => r.length > 0 && r[0]!.secret !== oldSecret,
+      (r) => r.length > 0 && openSecret(r[0]!.secret) !== oldSecret,
     );
     const row = wh[0]!;
-    expect(row.secret).not.toBe(oldSecret);
-    expect(row.previousSecret).toBe(oldSecret);
+    // FQ12-SEC: both slots are sealed at rest; compare the opened values.
+    expect(isSealed(row.secret)).toBe(true);
+    expect(isSealed(row.previousSecret!)).toBe(true);
+    const current = openSecret(row.secret);
+    const previous = openSecret(row.previousSecret!);
+    expect(current).not.toBe(oldSecret);
+    expect(previous).toBe(oldSecret);
     expect(row.secretRotatedAt).not.toBeNull();
 
     // Grace window: a signature made with the OLD secret still verifies.
     const body = JSON.stringify({ event: "tenant.updated" });
     const oldSig = signPayload(oldSecret, body);
-    expect(verifyWithRotation(row.secret, row.previousSecret, body, oldSig)).toBe(true);
+    expect(verifyWithRotation(current, previous, body, oldSig)).toBe(true);
     // And the new secret verifies too.
-    expect(verifyWithRotation(row.secret, row.previousSecret, body, signPayload(row.secret, body))).toBe(true);
+    expect(verifyWithRotation(current, previous, body, signPayload(current, body))).toBe(true);
 
     const rot = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(secretRotations).where(eq(secretRotations.id, rotationId))));
     expect(rot[0]!.status).toBe("approved");
@@ -214,7 +220,7 @@ describe("CAP-054 secret rotation (maker-checker)", () => {
     );
     expect(rot[0]!.status).toBe("rejected");
     const wh = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(webhooks).where(eq(webhooks.id, id))));
-    expect(wh[0]!.secret).toBe(oldSecret);
+    expect(openSecret(wh[0]!.secret)).toBe(oldSecret);
     expect(wh[0]!.previousSecret).toBeNull();
   });
 
@@ -309,10 +315,10 @@ describe("CAP-054 secret rotation — concurrent decide TOCTOU", () => {
     const wh = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(webhooks).where(eq(webhooks.id, id))));
     const row = wh[0]!;
     if (finalStatus === "approved") {
-      expect(row.secret).not.toBe(oldSecret);
-      expect(row.previousSecret).toBe(oldSecret); // exactly one application: old -> grace slot
+      expect(openSecret(row.secret)).not.toBe(oldSecret);
+      expect(openSecret(row.previousSecret!)).toBe(oldSecret); // exactly one application: old -> grace slot
     } else {
-      expect(row.secret).toBe(oldSecret); // reject won: secret untouched
+      expect(openSecret(row.secret)).toBe(oldSecret); // reject won: secret untouched
       expect(row.previousSecret).toBeNull();
     }
     // winnerMsgId did NOT dead-letter.

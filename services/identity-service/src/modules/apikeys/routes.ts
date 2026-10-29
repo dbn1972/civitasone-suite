@@ -71,9 +71,12 @@ export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const body = verifyApiKeyBody.parse(req.body);
-    const result = await commands.verifyApiKey(body.key, body.requiredScope);
-    if (result.valid && result.tenantId && result.tenantId !== ctx.tenantId) {
-      return reply.send({ valid: false, reason: "cross-tenant key" });
+    // FQ12-SEC: the tenant is decided inside verifyApiKey before any side
+    // effect. Belt and braces: never return another tenant's identifiers,
+    // whatever the result (valid, revoked, expired, out of scope).
+    const result = await commands.verifyApiKey(body.key, body.requiredScope, ctx.tenantId);
+    if (result.tenantId !== undefined && result.tenantId !== ctx.tenantId) {
+      return reply.send({ ...commands.UNKNOWN_KEY });
     }
     return reply.send(result);
   });
