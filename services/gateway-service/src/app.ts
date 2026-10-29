@@ -11,7 +11,8 @@ import rateLimit from "@fastify/rate-limit";
 import { Redis } from "ioredis";
 import { quotaCheckPlugin } from "@civitasone/db";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { verifyInternalSecret, requireOpsCaller } from "./ops-auth.js";
 import { resolveRoute, SERVICE_ROUTES } from "./registry.js";
 import { checkModuleEnabled, invalidateModuleCache } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
@@ -28,7 +29,12 @@ import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { BILLING_WEBHOOK_PREFIX, TELEPHONY_WEBHOOK_PREFIX, PUBLIC_PREFIXES } from "./public-prefixes.js";
+import {
+  BILLING_WEBHOOK_PREFIX,
+  TELEPHONY_WEBHOOK_PREFIX,
+  PUBLIC_PREFIXES,
+  isPublicRoute,
+} from "./public-prefixes.js";
 import {
   getConfig,
   applyConfig,
@@ -70,18 +76,6 @@ const STRIP_HEADERS = [
   "x-gateway-request",
 ] as const;
 
-
-/** Verify the internal service-to-service secret (timing-safe). */
-function verifyInternalSecret(req: FastifyRequest): boolean {
-  const secret = req.headers["x-internal-secret"] as string | undefined;
-  const expected = process.env.INTERNAL_SERVICE_SECRET;
-  if (!expected || expected.length === 0) return false;
-  if (!secret || secret.length !== expected.length) return false;
-  return timingSafeEqual(
-    Buffer.from(secret, "utf8"),
-    Buffer.from(expected, "utf8"),
-  );
-}
 
 /**
  * Service-to-service guard for internal-only routes: replies 403 and returns
@@ -185,9 +179,11 @@ async function proxyHandler(
   // set it directly. An already-verified api-key request therefore now
   // satisfies this gate on its own; a request with NEITHER a verified api key
   // NOR a Bearer header is still rejected exactly as before.
-  const isPublic = PUBLIC_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
+  // UAT W6-G: exact (method, path) anonymous verify routes — see PUBLIC_ROUTES.
+  const isPublicExactRoute = isPublicRoute(req.method, pathname);
+  const isPublic =
+    isPublicExactRoute ||
+    PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
   if (!isPublic) {
     const apiKeyAuthenticated = (
       req as FastifyRequest & { apiKeyAuthenticated?: boolean }
@@ -306,6 +302,14 @@ async function proxyHandler(
       delete (headers as Record<string, string | undefined>)[h];
     }
   }
+  // UAT W6-G: the exact anonymous verify routes carry no identity upstream, whatever the client sent
+  // (also covers GATEWAY_JWT_EDGE_VERIFY=off, where jwtEdgeVerify returns before dropping them).
+  if (isPublicExactRoute) {
+    for (const h of ["authorization", "x-tenant-id", "x-actor-id"]) {
+      delete (headers as Record<string, string | undefined>)[h];
+    }
+  }
+
   // GAP2-SHELL-PROXY-01: authoritatively re-derive the tenant/actor identity headers
   // from a SERVER-VERIFIED source here, unconditionally, rather than relying on
   // jwtEdgeVerify to have overwritten them. jwtEdgeVerify only reaches its
@@ -611,7 +615,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     shadowMode: process.env.QUOTA_SHADOW_MODE === "true",
   });
 
-  registerResponseMetrics(app);
+  // UAT W6-G: /metrics/prom and /metrics/latency are ops-only (see ops-auth.ts).
+  registerResponseMetrics(app, { preHandler: requireOpsCaller });
   // GAP-ADMIN-API-MONITORING-06: per-tenant request rollups, batched and published off the request path.
   // The queue is imported on first flush so a gateway that never flushes (tests, metrics off) opens no connection.
   registerApiMetrics(app, async (topic, envelope) => {
@@ -632,7 +637,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook("preHandler", jwtEdgeVerify);
 
   // ── Circuit breaker state endpoint (ops visibility) ─────────────────────────
-  app.get("/ops/breakers", async (_req, reply) => {
+  // UAT W6-G: was anonymous (route names + breaker state of every proxied upstream). Now requires an
+  // internal service secret or a verified platform_admin JWT — see ops-auth.ts.
+  app.get("/ops/breakers", { preHandler: requireOpsCaller }, async (_req, reply) => {
     return reply.send({ breakers: getBreakerStates() });
   });
 

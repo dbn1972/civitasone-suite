@@ -12,7 +12,7 @@
  * Env vars:
  *   GATEWAY_METRICS_PREFIX — metric name prefix (default: "civitasone_gateway")
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, preHandlerAsyncHookHandler } from "fastify";
 import {
   Registry,
   Histogram,
@@ -111,8 +111,17 @@ export function resetMetrics(): void {
 
 // ── Fastify Plugin ─────────────────────────────────────────────────────────────
 
-/** Register the response-time hook on Fastify. */
-export function registerResponseMetrics(app: FastifyInstance): void {
+/**
+ * Register the response-time hook on Fastify.
+ *
+ * `opts.preHandler` guards the two read endpoints below (UAT W6-G: they were anonymous; app.ts passes
+ * requireOpsCaller). Optional so a bare test harness can still mount the hook alone.
+ */
+export function registerResponseMetrics(
+  app: FastifyInstance,
+  opts: { preHandler?: preHandlerAsyncHookHandler } = {},
+): void {
+  const routeOpts = opts.preHandler ? { preHandler: opts.preHandler } : {};
   app.addHook("onResponse", (req, reply, done) => {
     const route = req.url.split("?")[0] ?? "/";
     // Resolve to module-level prefix for grouping (e.g., /api/v1/finance/*)
@@ -125,13 +134,13 @@ export function registerResponseMetrics(app: FastifyInstance): void {
 
   // ── Prometheus text format endpoint (moved off /metrics to avoid colliding
   //    with the guarded fleet-wide /metrics from @civitasone/observability) ────
-  app.get("/metrics/prom", async (_req, reply) => {
+  app.get("/metrics/prom", routeOpts, async (_req, reply) => {
     reply.header("content-type", metricsRegistry.contentType);
     return reply.send(await metricsRegistry.metrics());
   });
 
   // ── JSON summary endpoint (backward-compatible, deprecated) ─────────────────
-  app.get("/metrics/latency", async (_req, reply) => {
+  app.get("/metrics/latency", routeOpts, async (_req, reply) => {
     return reply.send({
       message: "Use GET /metrics for Prometheus-format histograms. This endpoint is deprecated.",
       globalP50: 0,

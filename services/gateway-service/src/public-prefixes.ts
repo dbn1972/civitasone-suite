@@ -84,6 +84,33 @@ export const PUBLIC_PREFIXES = [
 ];
 
 /**
+ * UAT W6-G — anonymous licence / NOC / permit QR verification, as exact (method, canonical path) pairs.
+ *
+ * fire-service `GET /v1/fire/nocs/verify`, shop-service `GET /v1/shop/permits/verify` and trade-service
+ * `GET /v1/trade/licences/verify` are each declared `config:{public:true}` upstream, take only a
+ * `?code=` query (zod, 1-64 chars), read a non-RLS public directory and return non-PII attestation
+ * fields; each service also registers @civitasone/rate-limit. A citizen scanning a printed QR has no
+ * token, but the gateway bearer pre-check 401'd every one of them.
+ *
+ * Deliberately NOT prefixes (unlike the older advertisement/building entries in PUBLIC_PREFIXES):
+ * only GET on the exact path is anonymous. `/verify/x`, `/verifyx`, `/nocs/:id`, other methods (POST,
+ * HEAD, ...) and every sibling route keep the bearer requirement and edge JWT verification. On a match
+ * the client-supplied identity headers are dropped (jwt-edge.ts and app.ts), so an anonymous caller
+ * cannot present a tenant or actor to the upstream.
+ */
+export const PUBLIC_ROUTES: ReadonlyArray<{ method: string; path: string }> = [
+  { method: "GET", path: "/api/v1/fire/nocs/verify" },
+  { method: "GET", path: "/api/v1/shop/permits/verify" },
+  { method: "GET", path: "/api/v1/trade/licences/verify" },
+];
+
+/** Exact (method, canonical path) match against PUBLIC_ROUTES — no prefix matching, no wildcards. */
+export function isPublicRoute(method: string, pathname: string): boolean {
+  const m = (method ?? "").toUpperCase();
+  return PUBLIC_ROUTES.some((r) => r.method === m && r.path === pathname);
+}
+
+/**
  * UAT FQ9 #16 — device-credential routes.
  *
  * A visitor-service hardware device (printer / scanner / kiosk) holds a device bearer token minted by
