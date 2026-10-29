@@ -27,6 +27,7 @@ import { registerScanLinkConsumers } from "./modules/scan-link/consumer.js";
 import { registerBookingConsumers } from "./modules/booking/consumer.js";
 import { registerCitizenLeaseConsumers } from "./modules/citizen-lease/consumer.js";
 import { registerQuarterConsumers } from "./modules/quarters/consumer.js";
+import { registerFleetConsumers } from "./modules/fleet/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -67,6 +68,9 @@ registerCitizenLeaseConsumers(queue);
 // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: the allotment lifecycle commands (apply/allot/occupy/vacate/cancel)
 // were published by the routes but no worker ever subscribed, so none was ever applied.
 registerQuarterConsumers(queue);
+// UAT FQ9 #17: fuel/trip logs, vehicle documents and driver roster were published by the fleet routes
+// (202) but no worker subscribed, so every one was dropped with queue_publish_no_subscribers.
+registerFleetConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
