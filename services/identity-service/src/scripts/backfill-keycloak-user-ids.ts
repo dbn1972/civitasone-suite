@@ -10,7 +10,9 @@
  * admin creds). Reads Keycloak only; writes only keycloak_user_id. One tenant
  * per invocation. Prints a JSON report.
  * Exit codes: 0 ok, 1 error, 2 finished but some users need a human
- * (unmatched / tid missing / conflicting / lookup errors).
+ * (unmatched / tid missing / conflicting / lookup errors), 3 no users of this
+ * tenant were visible at all (wrong tenant id, or an empty tenant): nothing
+ * was checked, so this is never reported as success (FQ16).
  */
 import { backfillKeycloakUserIds } from "../modules/users/keycloak-link.js";
 import { sqlClient } from "../shared/db.js";
@@ -30,6 +32,11 @@ async function main(): Promise<number> {
   }
   const report = await backfillKeycloakUserIds({ tenantId, apply: process.argv.includes("--apply") });
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  if (report.tenantUsers === 0) {
+    // FQ16: an empty scan is not success. Nothing for this tenant was readable.
+    process.stderr.write(`no users visible for tenant ${tenantId} (wrong tenant id, or the tenant has no users); nothing was checked\n`);
+    return 3;
+  }
   return report.unmatched.length + report.tidMissing.length + report.conflicts.length + report.errors.length > 0 ? 2 : 0;
 }
 
