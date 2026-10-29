@@ -13,6 +13,8 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "./scoped-read.js";
 
+const idParam = z.object({ id: z.string().uuid() });
+
 const ADMIN_ROLES = ["telephony_admin", "super_admin"];
 const LIST_ROLES = ["telephony_admin", "telephony_user", "super_admin"];
 
@@ -106,7 +108,7 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/telephony/broadcasts/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LIST_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
 
     const rows = await scopedRead(ctx.tenantId, (tx) => tx.execute(sql`
       SELECT id, name, status, flow_id AS "flowId", audio_url AS "audioUrl",
@@ -143,7 +145,7 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/telephony/broadcasts/:id/start", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
 
     // Fetch broadcast
     const rows = await scopedRead(ctx.tenantId, (tx) => tx.execute(sql`
@@ -188,7 +190,7 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/telephony/broadcasts/:id/cancel", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
 
     const result = await scopedRead(ctx.tenantId, (tx) => tx.execute(sql`
       UPDATE telephony.voice_broadcasts
@@ -209,7 +211,7 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/telephony/broadcasts/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = z.object({
       status: z.enum(["active", "paused"]),
     }).parse(req.body);
@@ -252,7 +254,7 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/telephony/broadcasts/:id/outcomes", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LIST_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const q = listQuery.parse(req.query);
 
     // Verify broadcast exists
