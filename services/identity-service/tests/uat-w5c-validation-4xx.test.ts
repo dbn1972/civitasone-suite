@@ -131,6 +131,18 @@ describe("FQ12 #68: SCIM bearer + application/scim+json", () => {
     expect(one.json().id).toBe(SCIM_USER);
   });
 
+  it("the SCIM rate limit cannot be reset by changing ?tenantId (review #2380)", async () => {
+    // Off-loopback peer: the shared limiter allow-lists 127.0.0.1, the default inject address.
+    const remoteAddress = "203.0.113.77";
+    const hit = (qs = "") => app.inject({ method: "GET", url: `/v1/identity/scim/Users${qs}`, remoteAddress });
+    for (let i = 0; i < 300; i++) expect((await hit()).statusCode).toBe(401); // no bearer: refused, but counted
+    expect((await hit()).statusCode).toBe(429);
+    expect((await hit(`?tenantId=${randomUUID()}`)).statusCode).toBe(429);
+    expect((await hit(`?tenantId=${OTHER_TENANT}`)).statusCode).toBe(429);
+    // another client is unaffected
+    expect((await app.inject({ method: "GET", url: "/v1/identity/scim/Users", remoteAddress: "203.0.113.78" })).statusCode).toBe(401);
+  });
+
   it("a malformed SCIM user id is a 400, not a 500", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/identity/scim/Users/not-a-uuid", headers: scimHeaders() });
     expect(res.statusCode).toBe(400);

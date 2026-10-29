@@ -12,7 +12,7 @@
  * provision/deprovision users in ANY tenant. See
  * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-007.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { HttpError, resolveContext, requireRole } from "../../shared/context.js";
@@ -231,7 +231,14 @@ function toScimTokenView(row: ScimTokenRow) {
  * because the route is reachable without a JWT. ServiceProviderConfig keeps the JWT gate (it never
  * calls resolveScimTenant).
  */
-const SCIM_BEARER_ROUTE = { config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute" } } } as const;
+// Review #2380 (Medium): the shared limiter keys by `tenant:<ctx.tenantId>:<ip>`, and on a public route
+// authPlugin fills ctx.tenantId from the client's ?tenantId -- a fresh value per request was a fresh bucket.
+// Key these routes by the connection IP only (identity-service sets no trustProxy, so req.ip is the socket
+// peer and cannot be spoofed with X-Forwarded-For). Nothing client-supplied goes into the key.
+const scimRateLimitKey = (req: FastifyRequest): string => `scim:${req.ip}`;
+const SCIM_BEARER_ROUTE = {
+  config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: scimRateLimitKey } },
+} as const;
 
 /**
  * Pin the request's RLS tenant to the one the SCIM token is bound to. On a public route authPlugin
