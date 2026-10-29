@@ -1080,7 +1080,6 @@
     "recommendation-service|recommendation.nba.generated",
     "report-service|reports.job.failed",
     "report-service|reports.scheduled.failed",
-    "report-service|reports.template.executed",
     "stock-service|stock.stock.negative_rejected",
     "telephony-service|telephony.call.transcription_completed",
     "tenant-service|tenant.deleted",

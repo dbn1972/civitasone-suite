@@ -86,9 +86,11 @@ export function registerRenderConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        // Mark job as running
+        // Mark job as in progress. jobs_status_check (migration 0008) allows
+        // queued/processing/completed/failed only; writing 'running' violated it,
+        // rolled this tx back and sent every job straight to 'failed' (UAT #62).
         await tx.update(jobs)
-          .set({ status: "running", updatedAt: new Date(), updatedBy: msg.actorId })
+          .set({ status: "processing", updatedAt: new Date(), updatedBy: msg.actorId })
           .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId)));
         await enqueue(tx, {
           topic: AUDIT_TOPIC,

@@ -3,9 +3,20 @@
  *
  * Database access layer for the per-tenant per-plugin key-value store.
  * Uses cache.getOrLoad pattern for reads.
+ *
+ * RLS: store.plugin_stores is FORCE ROW LEVEL SECURITY (tenant_id =
+ * current_tenant_id()). A bare db.select() carries no app.tenant_id GUC under
+ * the NOBYPASSRLS plugin_svc role and matched ZERO rows, so GET/DELETE answered
+ * 404 for a key PUT had just stored and the quota sum was always 0
+ * (UAT FQ12 #64 #65). Reads run inside runWithTenant + db.transaction, the same
+ * pattern as marketplace/routes.ts.
  */
+function scoped<T>(tenantId: string, fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
 
 import { eq, and, sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { pluginStores } from "./schema.js";
@@ -20,7 +31,7 @@ export async function getEntry(
 ) {
   const cacheKey = cache.makeKey(tenantId, "plugin-store", `${pluginId}:${key}`);
   return cache.getOrLoad(cacheKey, async () => {
-    const rows = await db
+    const rows = await scoped(tenantId, (tx) => tx
       .select()
       .from(pluginStores)
       .where(
@@ -29,7 +40,7 @@ export async function getEntry(
           eq(pluginStores.pluginId, pluginId),
           eq(pluginStores.key, key),
         ),
-      );
+      ));
     return rows[0] ?? null;
   });
 }
@@ -41,7 +52,7 @@ export async function getTotalUsageBytes(
   tenantId: string,
   pluginId: string,
 ): Promise<number> {
-  const result = await db
+  const result = await scoped(tenantId, (tx) => tx
     .select({ total: sql<number>`COALESCE(SUM(${pluginStores.sizeBytes}), 0)` })
     .from(pluginStores)
     .where(
@@ -49,7 +60,7 @@ export async function getTotalUsageBytes(
         eq(pluginStores.tenantId, tenantId),
         eq(pluginStores.pluginId, pluginId),
       ),
-    );
+    ));
   return Number(result[0]?.total ?? 0);
 }
 

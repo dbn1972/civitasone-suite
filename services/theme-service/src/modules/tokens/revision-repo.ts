@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { setTenantGuc } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { readScoped } from "../../shared/tenant-read.js";
 import { enqueue } from "../../shared/outbox.js";
 import { tokens, revisions, type RevisionRow } from "./schema.js";
 
@@ -38,12 +39,12 @@ function toView(r: RevisionRow): PublishedRevision {
 
 /** The latest published revision for a tenant, or null when none exists. */
 export async function latestPublished(tenantId: string): Promise<PublishedRevision | null> {
-  const rows = await db
+  const rows = await readScoped(tenantId, (tx) => tx
     .select()
     .from(revisions)
     .where(and(eq(revisions.tenantId, tenantId), eq(revisions.status, "published")))
     .orderBy(desc(revisions.version))
-    .limit(1);
+    .limit(1));
   const row = rows[0];
   return row ? toView(row) : null;
 }

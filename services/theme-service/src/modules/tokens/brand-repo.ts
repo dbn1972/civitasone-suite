@@ -19,11 +19,30 @@ export async function findByTenant(tenantId: string): Promise<BrandConfigRow | n
 // Atomic insert-or-update so a stale isCreate (two first saves racing, or a
 // redelivered command) cannot violate the brand_config primary key and roll
 // back the consumer transaction - which would silently drop the save.
+/**
+ * The projected row reaches the consumer through the queue as JSON, so
+ * createdAt/updatedAt arrive as ISO strings. drizzle's timestamp column calls
+ * .toISOString() on the value, which threw inside the consumer transaction:
+ * every brand save / apply-preset dead-lettered with nothing persisted
+ * (UAT FQ12 #152 #153). Coerce them back to Dates before writing.
+ */
+function withDates<T extends { createdAt?: unknown; updatedAt?: unknown }>(row: T): T {
+  const out = { ...row };
+  if (out.createdAt !== undefined && out.createdAt !== null && !(out.createdAt instanceof Date)) {
+    out.createdAt = new Date(out.createdAt as string);
+  }
+  if (out.updatedAt !== undefined && out.updatedAt !== null && !(out.updatedAt instanceof Date)) {
+    out.updatedAt = new Date(out.updatedAt as string);
+  }
+  return out;
+}
+
 export async function insert(tx: Writer, row: BrandConfigInsert): Promise<void> {
-  const { tenantId, ...rest } = row;
-  await tx.insert(brandConfig).values(row).onConflictDoUpdate({ target: brandConfig.tenantId, set: rest });
+  const values = withDates(row);
+  const { tenantId: _tenantId, ...rest } = values;
+  await tx.insert(brandConfig).values(values).onConflictDoUpdate({ target: brandConfig.tenantId, set: rest });
 }
 
 export async function update(tx: Writer, tenantId: string, patch: Partial<BrandConfigInsert>): Promise<void> {
-  await tx.update(brandConfig).set(patch).where(eq(brandConfig.tenantId, tenantId));
+  await tx.update(brandConfig).set(withDates(patch)).where(eq(brandConfig.tenantId, tenantId));
 }

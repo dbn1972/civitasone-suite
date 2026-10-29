@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { readScoped } from "../../shared/tenant-read.js";
 import { tenantBranding, type TenantBrandingRow, type TenantBrandingInsert, type TenantBrandingView } from "./schema.js";
 
 function toView(r: TenantBrandingRow): TenantBrandingView {
@@ -17,7 +18,7 @@ function toView(r: TenantBrandingRow): TenantBrandingView {
 }
 
 export async function findByTenant(tenantId: string): Promise<TenantBrandingView | null> {
-  const rows = await db.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(1);
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(1));
   const row = rows[0];
   if (!row) return null;
   return toView(row);
@@ -31,19 +32,20 @@ export async function findByTenant(tenantId: string): Promise<TenantBrandingView
  * (TenantBrandingView) is unaffected.
  */
 export async function findRowByTenant(tenantId: string): Promise<TenantBrandingRow | null> {
-  const rows = await db.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(1);
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(1));
   return rows[0] ?? null;
 }
 
 export async function findById(id: string, tenantId: string): Promise<TenantBrandingView | null> {
-  const rows = await db.select().from(tenantBranding).where(eq(tenantBranding.id, id)).limit(1);
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(tenantBranding).where(eq(tenantBranding.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TenantBrandingView[]> {
-  const rows = await db.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(limit).offset(offset);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(tenantBranding).where(eq(tenantBranding.tenantId, tenantId)).limit(limit).offset(offset));
   return rows.map(toView);
 }
 
@@ -72,7 +74,23 @@ export async function update(tx: Writer, tenantId: string, patch: Partial<Tenant
  * the would-be-inserted row; we deliberately do NOT overwrite the original
  * identity/creation audit columns).
  */
-export async function upsertByTenant(tx: Writer, row: TenantBrandingInsert): Promise<void> {
+/**
+ * The projected row arrives through the queue as JSON, so createdAt/updatedAt
+ * are ISO strings; drizzle's timestamp column calls .toISOString() on them and
+ * the consumer transaction threw, dead-lettering every branding save
+ * (UAT FQ12 #154). Coerce them back to Dates before writing.
+ */
+function asDate(v: unknown): Date | undefined {
+  if (v === undefined || v === null) return undefined;
+  return v instanceof Date ? v : new Date(v as string);
+}
+
+export async function upsertByTenant(tx: Writer, input: TenantBrandingInsert): Promise<void> {
+  const row: TenantBrandingInsert = { ...input };
+  const createdAt = asDate(input.createdAt);
+  const updatedAt = asDate(input.updatedAt);
+  if (createdAt) row.createdAt = createdAt; else delete row.createdAt;
+  if (updatedAt) row.updatedAt = updatedAt; else delete row.updatedAt;
   // Columns to carry onto an existing row on conflict. Omit `undefined` values
   // (exactOptionalPropertyTypes) — a projected row always fills these, but the
   // Insert type marks defaulted columns optional. id/tenantId/created* are

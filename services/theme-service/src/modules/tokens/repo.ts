@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { readScoped } from "../../shared/tenant-read.js";
 import { tokens, type TokenRow, type TokenInsert, type TokenView } from "./schema.js";
 
 function toView(r: TokenRow): TokenView {
@@ -15,14 +16,15 @@ function toView(r: TokenRow): TokenView {
 }
 
 export async function findById(id: string, tenantId: string): Promise<TokenView | null> {
-  const rows = await db.select().from(tokens).where(eq(tokens.id, id)).limit(1);
+  const rows = await readScoped(tenantId, (tx) => tx.select().from(tokens).where(eq(tokens.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
   return toView(row);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TokenView[]> {
-  const rows = await db.select().from(tokens).where(eq(tokens.tenantId, tenantId)).limit(limit).offset(offset);
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(tokens).where(eq(tokens.tenantId, tenantId)).limit(limit).offset(offset));
   return rows.map(toView);
 }
 

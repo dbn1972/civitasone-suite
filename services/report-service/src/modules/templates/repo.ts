@@ -63,6 +63,15 @@ export async function countByTenant(tenantId: string): Promise<number> {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+/** In-transaction read (consumer path: the tx already carries the tenant GUC). */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<TemplateView | null> {
+  const rows = await tx.select().from(reportTemplates)
+    .where(and(eq(reportTemplates.id, id), eq(reportTemplates.tenantId, tenantId)))
+    .limit(1);
+  const row = rows[0];
+  return row ? toView(row) : null;
+}
+
 export async function insert(tx: Writer, row: TemplateInsert): Promise<void> {
   await tx.insert(reportTemplates).values(row);
 }

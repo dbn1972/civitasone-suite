@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { UpsertBrandingPayload } from "./commands.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "branding";
@@ -13,7 +14,10 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerBrandingConsumers(queue: Queue): void {
+export function registerBrandingConsumers(rawQueue: Queue): void {
+  // RLS: run the handler inside the message's tenant context (same as the
+  // tokens/templates consumers) instead of relying on worker.ts's wrapper.
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<UpsertBrandingPayload>(COMMANDS.upsertBranding, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
