@@ -4,6 +4,27 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { idParam, createCourtBody, listCourtsQuery, createBenchBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import * as configRepo from "../config-registry/repo.js";
+import { effectiveAllowed } from "../config-registry/domain.js";
+import { DEFAULT_COURT_TYPES, assertCourtTypeAllowed } from "./domain.js";
+import { scopedRead } from "../../shared/db.js";
+
+/**
+ * FQ9 #8: validate courtType against the SAME effective allowed set the
+ * consumer uses (tenant `court_type` config when present — authoritative —
+ * else DEFAULT_COURT_TYPES) before publishing, so an invalid type is a 422
+ * instead of 202 + a dead-lettered INVALID_COURT_TYPE. The consumer keeps its
+ * own check (config can change between publish and consume).
+ */
+async function assertCourtTypeAllowedForTenant(tenantId: string, courtType: string): Promise<void> {
+  const configured = await scopedRead((tx) => configRepo.listActiveKeys(tx, tenantId, "court_type"));
+  const allowed = effectiveAllowed(configured, DEFAULT_COURT_TYPES);
+  try {
+    assertCourtTypeAllowed(courtType, allowed);
+  } catch (e) {
+    throw new HttpError(422, "INVALID_COURT_TYPE", (e as Error).message.replace(/^INVALID_COURT_TYPE:\s*/, ""));
+  }
+}
 
 /** Roles permitted to create/mutate the court registry (court administration). */
 const COURT_ADMIN_ROLES = ["court_admin", "super_admin"];
@@ -16,6 +37,7 @@ export async function courtRegistryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_ADMIN_ROLES);
     const body = createCourtBody.parse(req.body);
+    await assertCourtTypeAllowedForTenant(ctx.tenantId, body.courtType);
     const result = await commands.createCourt(ctx, body);
     return reply.code(202).send(result);
   });

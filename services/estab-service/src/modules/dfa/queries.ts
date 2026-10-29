@@ -36,6 +36,15 @@ export type DfaDto = {
   createdByName: string | null;
 };
 
+/**
+ * UAT FQ9 #18/#38: a DfaRow read through the cache is a JSON round-trip, so its timestamps arrive as
+ * ISO strings, not Dates; calling .toISOString() on them threw a TypeError (500 on approve/sign, which
+ * read the DFA after a GET had warmed the cache). Accept either shape.
+ */
+function iso(v: Date | string): string {
+  return typeof v === "string" ? new Date(v).toISOString() : v.toISOString();
+}
+
 function toDto(r: DfaRow, employees: Map<string, EmployeeDisplay> = new Map(), fileNos: Map<string, string> = new Map()): DfaDto {
   return {
     id: r.id,
@@ -52,16 +61,16 @@ function toDto(r: DfaRow, employees: Map<string, EmployeeDisplay> = new Map(), f
     status: r.status,
     editable: isEditable(r.status),
     approvedBy: r.approvedBy,
-    approvedAt: r.approvedAt?.toISOString() ?? null,
+    approvedAt: r.approvedAt ? iso(r.approvedAt) : null,
     decisionModality: r.decisionModality,
     decisionConditions: r.decisionConditions,
     returnedReason: r.returnedReason,
     signedBy: r.signedBy,
-    signedAt: r.signedAt?.toISOString() ?? null,
+    signedAt: r.signedAt ? iso(r.signedAt) : null,
     signatureRef: r.signatureRef,
     dispatchId: r.dispatchId,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
+    createdAt: iso(r.createdAt),
+    updatedAt: iso(r.updatedAt),
     createdBy: r.createdBy,
     createdByName: employees.get(r.createdBy)?.fullName ?? null,
   };

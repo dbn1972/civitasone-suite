@@ -41,6 +41,13 @@ vi.mock("../src/modules/location/repo.js", () => ({
   listAreas: vi.fn(async () => [fakeArea]),
   listParkingSlots: vi.fn(async () => []),
 }));
+// UAT FQ9 #8: write routes now check gate/location references synchronously (real DB lookup).
+// This file exercises route wiring with fake ids, so the reference check is stubbed like the other
+// repos above; the 422 paths are covered in uat-fq9a-visitor.integration.test.ts.
+vi.mock("../src/modules/location/references.js", () => ({
+  assertLocationExists: vi.fn(async () => undefined),
+  assertGateExists: vi.fn(async () => undefined),
+}));
 vi.mock("../src/modules/location/commands.js", () => ({
   locationCreate: vi.fn(async () => fakeAccepted),
   areaCreate: vi.fn(async () => fakeAccepted),

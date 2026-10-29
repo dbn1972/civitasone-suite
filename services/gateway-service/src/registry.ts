@@ -36,6 +36,11 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "finance",      prefix: "/api/v1/finance",   upstream: upstream("finance", 3007) },
   { name: "procurement",  prefix: "/api/v1/procurement", upstream: upstream("procurement", 3008) },
   { name: "contract",     prefix: "/api/v1/contract",  upstream: upstream("contract", 3009) },
+  // UAT FQ9 #6: contract-document intelligence (POST /v1/contract/documents/:id/extract) is served by
+  // legal-service (modules/intelligence/routes.ts); contract-service registers no /v1/contract/documents
+  // route at all, so the generic /api/v1/contract prefix 404'd it. Longest-prefix match sends only this
+  // sub-tree to legal; every other /api/v1/contract path still reaches contract-service.
+  { name: "contract-documents", prefix: "/api/v1/contract/documents", upstream: upstream("legal", 3021), upstreamPath: "/v1/contract/documents" },
   { name: "estab",        prefix: "/api/v1/estab",     upstream: upstream("estab", 3010) },
   { name: "establishment", prefix: "/api/v1/establishment", upstream: upstream("estab", 3010) },
   { name: "stock",        prefix: "/api/v1/stock",     upstream: upstream("stock", 3011) },

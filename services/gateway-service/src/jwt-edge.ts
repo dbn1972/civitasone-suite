@@ -22,7 +22,7 @@ import { verifyJwt, type CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 import { configValue } from "./runtime-config.js";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { PUBLIC_PREFIXES } from "./public-prefixes.js";
+import { PUBLIC_PREFIXES, isDeviceAuthRoute, isDeviceBearer } from "./public-prefixes.js";
 
 const log = pino({ name: "gateway-jwt-edge" });
 
@@ -77,6 +77,16 @@ export async function jwtEdgeVerify(
   }
 
   const token = authHeader.slice(7); // strip "Bearer "
+
+  // UAT FQ9 #16: a visitor-service device token on one of the exact device-auth routes is not a JWT;
+  // visitor-service's deviceAuth authenticates it. Skip ONLY the signature check, and carry no
+  // client-supplied identity: tenant/actor come from the device record upstream, never from headers.
+  if (isDeviceBearer(authHeader) && isDeviceAuthRoute(req.method ?? "", pathname)) {
+    const headers = req.headers as Record<string, string | undefined>;
+    delete headers["x-tenant-id"];
+    delete headers["x-actor-id"];
+    return;
+  }
 
   try {
     const payload = await verifyJwt(token);

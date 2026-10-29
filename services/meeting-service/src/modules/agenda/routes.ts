@@ -48,6 +48,7 @@ import {
   agendaLockSchema,
 } from "./validators.js";
 import * as repo from "./repo.js";
+import { assertAgendaLockTransition } from "./domain.js";
 import * as commands from "./commands.js";
 
 // ─── RBAC (design § Access Control Matrix) ──────────────────────────────────
@@ -121,6 +122,17 @@ async function assertMeetingExists(tenantId: string, meetingId: string): Promise
   if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
 }
 
+/**
+ * FQ9 #12: 404 unless the meeting exists, then 422 unless the lock/unlock is an allowed
+ * transition from its CURRENT state (validated synchronously instead of 202 + a consumer
+ * that applied any source state, e.g. draft → agenda_locked).
+ */
+async function assertLockAllowed(tenantId: string, meetingId: string, locked: boolean): Promise<void> {
+  const meeting = await repo.getMeetingStatus(tenantId, meetingId);
+  if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+  assertAgendaLockTransition(meeting.status, locked);
+}
+
 export async function agendaRoutes(app: FastifyInstance): Promise<void> {
   // ── Submit an agenda item (Req 3.1) ──────────────────────────────────────
   app.post("/v1/meetings/:meetingId/agenda", async (req, reply) => {
@@ -185,7 +197,7 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LOCK_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const body = agendaLockSchema.parse({ ...(req.body as object), locked: true });
-    await assertMeetingExists(ctx.tenantId, meetingId);
+    await assertLockAllowed(ctx.tenantId, meetingId, true);
     const accepted = await commands.agendaLock(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -196,7 +208,7 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, UNLOCK_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const body = agendaLockSchema.parse({ ...(req.body as object), locked: false });
-    await assertMeetingExists(ctx.tenantId, meetingId);
+    await assertLockAllowed(ctx.tenantId, meetingId, false);
     const accepted = await commands.agendaLock(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });

@@ -82,3 +82,43 @@ export const PUBLIC_PREFIXES = [
   // UAT G2 #28: carrier webhooks; telephony-service verifies the Twilio signature / Exotel token.
   TELEPHONY_WEBHOOK_PREFIX,
 ];
+
+/**
+ * UAT FQ9 #16 — device-credential routes.
+ *
+ * A visitor-service hardware device (printer / scanner / kiosk) holds a device bearer token minted by
+ * visitor-service (`device_<base64url>`), never a Keycloak JWT, so jwtEdgeVerify 401'd it
+ * ("Invalid JWT structure") before visitor-service could authenticate it.
+ *
+ * This is NOT a public prefix and NOT a general bypass. It is an exact (method, path) allow-list of the
+ * routes visitor-service ITSELF authenticates with its deviceAuth preHandler (hash lookup of the device
+ * token, status / expiry / rotation-grace / rate-limit checks) AND marks config:{public:true} so its
+ * user-JWT auth plugin does not run first. The gateway skips ONLY its JWT signature check, and only when
+ * the presented bearer carries the device-token prefix; the bearer is still required, the tenant/actor
+ * headers are still stripped (no verified identity at the edge), and every other route — and any
+ * non-device bearer on this route — keeps full edge verification.
+ *
+ * Deliberately excluded:
+ *   - /v1/visitor/scans/upload and /scans/:sessionId/result: deviceAuth-guarded but NOT
+ *     config:{public:true}, so visitor-service's auth plugin rejects a device token before deviceAuth
+ *     runs. Listing them here would forward requests the upstream cannot accept.
+ *   - /v1/visitor/turnstiles/*: mTLS devices; a client certificate cannot traverse this proxy.
+ *   - /v1/visitor/badges/jobs/*: deviceAuth-guarded but not public upstream (same as scans).
+ */
+export const DEVICE_TOKEN_PREFIX = "device_";
+
+export const DEVICE_AUTH_ROUTES: ReadonlyArray<{ method: string; path: string }> = [
+  { method: "POST", path: "/api/v1/visitor/devices/heartbeat" },
+];
+
+/** Exact (method, canonical path) match — no prefix matching, no wildcards. */
+export function isDeviceAuthRoute(method: string, pathname: string): boolean {
+  const m = (method ?? "").toUpperCase();
+  return DEVICE_AUTH_ROUTES.some((r) => r.method === m && r.path === pathname);
+}
+
+/** True when `authorization` is `Bearer device_...` (a visitor-service device token, not a JWT). */
+export function isDeviceBearer(authorization: string | undefined): boolean {
+  if (!authorization || !authorization.toLowerCase().startsWith("bearer ")) return false;
+  return authorization.slice(7).startsWith(DEVICE_TOKEN_PREFIX);
+}

@@ -29,6 +29,8 @@ import {
   findPackageById,
   findCursorsByInspector,
 } from "./repo.js";
+import { publishInstanceSubmitResponse } from "../checklist/commands.js";
+import { findInstanceById } from "../checklist/repo.js";
 
 // ─── RBAC role groups ────────────────────────────────────────────────────────
 
@@ -179,18 +181,20 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, SYNC_ROLES);
     const body = partialResponseSchema.parse(req.body);
-    const result = await publishSyncUpload(
+    // UAT FQ9 #36: this used to republish the partial save as a sync upload keyed by the INSTANCE id
+    // with sequenceNumber = Date.now(), which the sync consumer dead-letters as a sequence gap — the
+    // responses were never stored. A partial save is a merge of answers into the checklist instance,
+    // which is exactly what the checklist submit_response command does (merge + rescore).
+    const instance = await findInstanceById(ctx.tenantId, body.instanceId);
+    if (!instance) throw new HttpError(404, "NOT_FOUND", "checklist instance not found");
+    const result = await publishInstanceSubmitResponse(
       {
-        inspectorId: body.inspectorId,
-        inspectionId: body.instanceId,
-        deviceId: body.deviceId,
-        sequenceNumber: Date.now(),
-        payload: {
-          responses: body.responses as Record<string, { value: unknown; answeredAt: string }>,
-          evidence: [],
-        },
-        sha256Hash: "",
-        networkState: "online",
+        instanceId: body.instanceId,
+        responses: Object.entries(body.responses).map(([questionId, r]) => ({
+          questionId,
+          value: r.value,
+          capturedAt: r.answeredAt,
+        })),
       },
       ctx,
     );

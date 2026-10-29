@@ -91,7 +91,8 @@ export function registerFindingsConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           findingNumber,
           inspectionId: p.inspectionId,
-          questionId: p.questionId ?? "",
+          // UAT FQ9 #24: absent questionId is NULL (the column is nullable), never "" (not a valid id).
+          questionId: p.questionId ?? null,
           provisionId: p.provisionId,
           severity,
           description: p.description,

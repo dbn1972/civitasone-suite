@@ -740,7 +740,7 @@ module.exports = {
     svc("ml",           3032, "ml_svc",           "civitas_ml", {}, { graceful: true }), // PERF-015
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }, { graceful: true }), // PERF-015
     svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
-    svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }, { graceful: true }), // PERF-015
+    svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }, { graceful: true }), // PERF-015
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
     svc("works",        3036, "works_svc",        "civitas_works", { PII_ENC_KEY: WORKS_PII_KEY }, { graceful: true }), // PERF-015

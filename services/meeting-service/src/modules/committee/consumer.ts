@@ -101,6 +101,7 @@ interface MemberUpdatePayload {
   patch: {
     role?: string;
     tenureEnd?: string | null;
+    appointingAuthority?: string;
     votingRight?: boolean;
     status?: MembershipStatus;
   };
@@ -385,6 +386,9 @@ async function handleMemberUpdate(msg: CommandEnvelope<MemberUpdatePayload>): Pr
     const set: Record<string, unknown> = { updatedBy: msg.actorId, updatedAt: new Date() };
     if (p.patch.role !== undefined) set.role = p.patch.role;
     if (p.patch.tenureEnd !== undefined) set.tenureEnd = p.patch.tenureEnd;
+    // FQ9 #9: updateMemberBody accepts appointingAuthority and the route forwards it in
+    // `patch`, but it was never applied — the field was silently dropped.
+    if (p.patch.appointingAuthority !== undefined) set.appointingAuthority = p.patch.appointingAuthority;
     if (p.patch.votingRight !== undefined) set.votingRight = p.patch.votingRight;
     if (p.patch.status !== undefined) set.status = p.patch.status;
 

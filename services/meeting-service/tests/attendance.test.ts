@@ -157,7 +157,9 @@ describe("POST /v1/meetings/:id/attendance/check-in", () => {
       method: "POST",
       url: `/v1/meetings/${MEETING}/attendance/check-in`,
       headers: { ...auth(["committee_member"]), ...idem },
-      payload: { participantId: P2, method: "biometric" },
+      // FQ9 #8: the route now enforces the consumer's ±24h-of-scheduledAt window, so a valid
+      // check-in must sit inside it (defaulting to "now" would be months past START).
+      payload: { participantId: P2, method: "biometric", checkInAt: new Date(START.getTime() + 5 * 60_000).toISOString() },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -238,7 +240,8 @@ describe("POST /v1/meetings/:id/attendance/check-out", () => {
       method: "POST",
       url: `/v1/meetings/${MEETING}/attendance/check-out`,
       headers: { ...auth(["committee_member"]), ...idem },
-      payload: { participantId: P1 },
+      // FQ9 #8: check-out inside the meeting's ±24h window (see the check-in case above).
+      payload: { participantId: P1, checkOutAt: new Date(START.getTime() + 60 * 60_000).toISOString() },
     });
     await app.close();
     expect(res.statusCode).toBe(202);

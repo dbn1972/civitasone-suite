@@ -16,7 +16,7 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
  */
 import { httpError } from "../../shared/context.js";
-import { TERMINAL_STATES } from "../meeting-core/domain.js";
+import { TERMINAL_STATES, canTransition, isMeetingState } from "../meeting-core/domain.js";
 
 // ─── Domain vocabularies (mirror the migration CHECK-able value sets) ────────
 
@@ -182,6 +182,31 @@ export function assertAgendaNotLocked(meetingStatus: string): void {
     throw httpError("MEETING_AGENDA_LOCKED", "agenda is locked or the meeting is in a terminal state; cannot modify", {
       meetingStatus,
     });
+  }
+}
+
+/**
+ * FQ9 #12: guard agenda lock/unlock against the meeting lifecycle state machine
+ * (meeting-core/domain.ts BASE_TRANSITIONS). Lock is `scheduled → agenda_locked`
+ * (`lock_agenda`); unlock is `agenda_locked → scheduled` (`unlock`) — `draft → scheduled`
+ * is `schedule`, NOT an unlock, so unlock is only valid from `agenda_locked`. A request
+ * whose target equals the current state is an idempotent no-op and is allowed. Previously
+ * neither the route nor the consumer checked the source state, so locking a DRAFT meeting
+ * was accepted and recorded `draft → agenda_locked`. Throws `MEETING_INVALID_TRANSITION`
+ * (422, the service-wide mapping for an invalid lifecycle transition).
+ */
+export function assertAgendaLockTransition(meetingStatus: string, locked: boolean): void {
+  const toState = locked ? "agenda_locked" : "scheduled";
+  if (meetingStatus === toState) return;
+  const allowed = locked
+    ? isMeetingState(meetingStatus) && canTransition(meetingStatus, "agenda_locked")
+    : meetingStatus === "agenda_locked";
+  if (!allowed) {
+    throw httpError(
+      "MEETING_INVALID_TRANSITION",
+      `cannot ${locked ? "lock" : "unlock"} the agenda of a meeting in state "${meetingStatus}"`,
+      { from: meetingStatus, to: toState },
+    );
   }
 }
 

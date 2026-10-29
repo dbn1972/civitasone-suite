@@ -702,7 +702,7 @@ describe("Court Registry Routes", () => {
       const res = await app.inject({
         method: "POST", url: "/v1/court/courts",
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
-        payload: { name: "Delhi HC", courtType: "high_court", jurisdiction: "Delhi" },
+        payload: { name: "Delhi HC", courtType: "civil_court", jurisdiction: "Delhi" },
       });
       expect(res.statusCode).toBe(202);
     });
@@ -714,6 +714,19 @@ describe("Court Registry Routes", () => {
         payload: { name: "Test", courtType: "district", jurisdiction: "Test" },
       });
       expect(res.statusCode).toBe(403);
+    });
+
+    // FQ9 #8: an invalid courtType was 202'd then dead-lettered INVALID_COURT_TYPE by the
+    // consumer; it is now rejected synchronously against the same effective allowed set
+    // (no tenant court_type config here → DEFAULT_COURT_TYPES, which has no "district").
+    it("returns 422 INVALID_COURT_TYPE for a courtType outside the effective allowed set", async () => {
+      const res = await app.inject({
+        method: "POST", url: "/v1/court/courts",
+        headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
+        payload: { name: "District Court", courtType: "district", jurisdiction: "Test" },
+      });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe("INVALID_COURT_TYPE");
     });
   });
 

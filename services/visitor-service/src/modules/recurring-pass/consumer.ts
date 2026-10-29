@@ -30,14 +30,18 @@
  * recorded in Postgres, and the revocation set is a best-effort mirror that
  * self-heals on the next suspend/revoke or gate-sync refresh.
  */
+import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { recurringPasses } from "./schema.js";
+import { visitRequests } from "../visit-request/schema.js";
+import { digitalPasses } from "../digital-pass/schema.js";
+import { generatePass } from "../digital-pass/domain.js";
 import { validateValidityWindow, suspend, revoke, type RecurringPassStatus } from "./domain.js";
 import { addToRevocationSet } from "./revocation-store.js";
 // BUG FIX: gate verification (check-in/routes.ts) checks ONLY
@@ -53,6 +57,28 @@ import { addToRevokedSet as addToDigitalPassRevokedSet } from "../digital-pass/r
 const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "recurring-pass-consumer" });
+
+/** Postgres foreign_key_violation. */
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
+function isForeignKeyViolation(err: unknown): boolean {
+  for (let e: unknown = err, i = 0; e && i < 5; e = (e as { cause?: unknown }).cause, i++) {
+    if ((e as { code?: unknown }).code === PG_FOREIGN_KEY_VIOLATION) return true;
+  }
+  return false;
+}
+
+/**
+ * Service-level pass-QR signing key — the same source visit-request/consumer.ts uses for every other
+ * digital pass (VISITOR_TENANT_SIGNING_KEY_PEM). A missing key can never succeed on retry.
+ */
+function passSigningKeyPem(): string {
+  const pem = process.env.VISITOR_TENANT_SIGNING_KEY_PEM;
+  if (!pem) {
+    throw new NonRetryableError("VISITOR_TENANT_SIGNING_KEY_PEM is not configured — cannot sign the recurring pass QR");
+  }
+  return pem;
+}
 
 // ── Payload Types ────────────────────────────────────────────────────────
 
@@ -94,9 +120,70 @@ export function registerRecurringPassConsumers(queue: Queue): void {
     const validFrom = new Date(p.validFrom);
     const validUntil = new Date(p.validUntil);
     validateValidityWindow(validFrom, validUntil);
+    const signingKey = passSigningKeyPem();
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // UAT FQ9 #28: recurring_passes.pass_id is NOT NULL REFERENCES digital_passes(id), but this
+      // handler inserted a freshly minted passId that no digital pass carried, so EVERY create died on
+      // recurring_passes_pass_id_fkey and dead-lettered after the 202. The pass holder's gate QR is a
+      // real digital pass (gate verification, revocation and gate-sync are all keyed on
+      // digital_passes.id = recurring_passes.pass_id), and a digital pass hangs off a visit request.
+      // Issue both here, in the same transaction, the way group-visit/consumer.ts does for members:
+      // a pre-approved `recurring` visit request hosted by the issuing manager, then the digital pass
+      // with the pre-minted passId, then the recurring_passes row that references it.
+      const visitRequestId = randomUUID();
+      try {
+        await tx.insert(visitRequests).values({
+          id: visitRequestId,
+          tenantId: msg.tenantId,
+          locationId: p.locationId,
+          hostEmployeeId: msg.actorId,
+          status: "pre_approved",
+          purpose: "Recurring pass",
+          passType: "recurring",
+          visitorName: p.visitorName,
+          visitorPhone: p.visitorPhone,
+          source: "portal",
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+        const passData = await generatePass(
+          {
+            visitId: visitRequestId,
+            visitorId: p.id,
+            tenantId: msg.tenantId,
+            locationId: p.locationId,
+            validFrom,
+            validUntil,
+            permittedAreas: [],
+            passType: "recurring",
+          },
+          signingKey,
+        );
+        await tx.insert(digitalPasses).values({
+          id: p.passId,
+          tenantId: msg.tenantId,
+          visitRequestId,
+          locationId: p.locationId,
+          passNumber: passData.passNumber,
+          status: "active",
+          passType: "recurring",
+          qrJwt: passData.qrJwt,
+          validFrom: passData.validFrom,
+          validUntil: passData.validUntil,
+          permittedAreas: [],
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        // An unknown location can never succeed on retry — dead-letter at once with the reason.
+        if (isForeignKeyViolation(err)) {
+          throw new NonRetryableError(`recurring pass '${p.id}' references an unknown location '${p.locationId}'`);
+        }
+        throw err;
+      }
 
       await tx.insert(recurringPasses).values({
         id: p.id,

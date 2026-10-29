@@ -37,6 +37,7 @@ import * as commands from "./commands.js";
 import { listActiveVisitors } from "./repo.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
 import { loadGateSyncSnapshot } from "./gate-sync.js";
+import { assertGateExists } from "../location/references.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
 // Gate-terminal roles: security personnel operating gates + admin staff. The plain
@@ -192,6 +193,8 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = checkInBody.parse(req.body);
+    // UAT FQ9 #8: an unknown gate is a 422 here, not a 202 followed by a silent dead-letter.
+    await assertGateExists(ctx.tenantId, body.gateId);
 
     const accepted = await commands.checkInRecord(ctx, {
       passId: body.passId,
@@ -214,6 +217,8 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = checkOutBody.parse(req.body);
+    // UAT FQ9 #8: an unknown gate is a 422 here, not a 202 followed by a silent dead-letter.
+    await assertGateExists(ctx.tenantId, body.gateId);
 
     const accepted = await commands.checkOutRecord(ctx, {
       passId: body.passId,
