@@ -64,6 +64,19 @@ describe("MFA — auth boundary", () => {
   });
 });
 
+describe("MFA — accept-nonexistent (UAT W6 P1)", () => {
+  it("POST /identity/users/:id/mfa for a user that does not exist in this tenant → 404, nothing queued", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/identity/users/c6c6c6c6-0000-4000-8000-0000000000f1/mfa",
+      headers: headers(["super_admin"]),
+      payload: { method: "totp" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+});
+
 describe("MFA — validation (400)", () => {
   it("POST /identity/mfa/verify with non-6-digit code → 400", async () => {
     const res = await app.inject({

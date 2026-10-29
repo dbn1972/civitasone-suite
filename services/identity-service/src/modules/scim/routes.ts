@@ -12,11 +12,12 @@
  * provision/deprovision users in ANY tenant. See
  * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-007.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { HttpError, resolveContext, requireRole } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
+import { tenantStorage } from "@civitasone/db";
 import { users } from "../users/schema.js";
 import { eq, and, ilike } from "drizzle-orm";
 import * as commands from "./commands.js";
@@ -221,8 +222,42 @@ function toScimTokenView(row: ScimTokenRow) {
   };
 }
 
+/**
+ * UAT FQ12 #68: the SCIM /Users endpoints are authenticated by the per-tenant SCIM bearer
+ * (resolveScimTenant), an opaque secret -- not a Keycloak JWT. Without `public: true` the global
+ * authPlugin tried to verify that secret as a JWT and answered 401 before the SCIM gate ever ran, so a
+ * real IdP could never provision. `public` only skips the JWT check: every /Users handler below calls
+ * resolveScimTenant FIRST and 401s on a missing / unknown / revoked / expired token. Rate-limited
+ * because the route is reachable without a JWT. ServiceProviderConfig keeps the JWT gate (it never
+ * calls resolveScimTenant).
+ */
+// Review #2380 (Medium): the shared limiter keys by `tenant:<ctx.tenantId>:<ip>`, and on a public route
+// authPlugin fills ctx.tenantId from the client's ?tenantId -- a fresh value per request was a fresh bucket.
+// Key these routes by the connection IP only (identity-service sets no trustProxy, so req.ip is the socket
+// peer and cannot be spoofed with X-Forwarded-For). Nothing client-supplied goes into the key.
+const scimRateLimitKey = (req: FastifyRequest): string => `scim:${req.ip}`;
+const SCIM_BEARER_ROUTE = {
+  config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: scimRateLimitKey } },
+} as const;
+
+/**
+ * Pin the request's RLS tenant to the one the SCIM token is bound to. On a public route authPlugin
+ * derives ctx.tenantId from the (client-supplied) ?tenantId query, and the x-internal path from the
+ * x-tenant-id header; neither may decide which tenant's rows a SCIM read sees (SEC-007). Called inline
+ * in each handler right after resolveScimTenant so the AsyncLocalStorage store applies to the rest of
+ * that handler's async continuation (scopedRead's GUC).
+ */
+function pinScimTenant(tid: string): void {
+  tenantStorage.enterWith({ tenantId: tid });
+}
+
 export async function scimRoutes(app: FastifyInstance): Promise<void> {
   await bootstrapLegacyScimToken();
+
+  // UAT FQ12 #68: RFC 7644 s3.1 -- SCIM clients send application/scim+json. Fastify only parses
+  // application/json by default and answered 415 FST_ERR_CTP_INVALID_MEDIA_TYPE. Same parser (incl.
+  // prototype-poisoning protection) as application/json; scoped to this plugin's routes only.
+  app.addContentTypeParser("application/scim+json", { parseAs: "string" }, app.getDefaultJsonParser("error", "error"));
 
   app.get("/v1/identity/scim/ServiceProviderConfig", async (_req, reply) => {
     return reply.send({
@@ -239,8 +274,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get("/v1/identity/scim/Users", async (req, reply) => {
+  app.get("/v1/identity/scim/Users", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const query = req.query as { filter?: string; startIndex?: string; count?: string };
     const startIndex = Math.max(1, Number(query.startIndex) || 1);
     const count = Math.min(200, Math.max(1, Number(query.count) || 50));
@@ -278,8 +314,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get("/v1/identity/scim/Users/:id", async (req, reply) => {
+  app.get("/v1/identity/scim/Users/:id", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const [row] = await scopedRead((tx) =>
       tx
@@ -298,8 +335,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(toScimUser(row));
   });
 
-  app.post("/v1/identity/scim/Users", async (req, reply) => {
+  app.post("/v1/identity/scim/Users", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const body = req.body as {
       userName?: string;
       name?: { formatted?: string; givenName?: string; familyName?: string };
@@ -326,8 +364,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
-  app.put("/v1/identity/scim/Users/:id", async (req, reply) => {
+  app.put("/v1/identity/scim/Users/:id", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = req.body as {
       userName?: string;
@@ -376,8 +415,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
-  app.patch("/v1/identity/scim/Users/:id", async (req, reply) => {
+  app.patch("/v1/identity/scim/Users/:id", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = req.body as { Operations?: Array<{ op: string; path?: string; value?: unknown }> };
 
@@ -426,8 +466,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
-  app.delete("/v1/identity/scim/Users/:id", async (req, reply) => {
+  app.delete("/v1/identity/scim/Users/:id", SCIM_BEARER_ROUTE, async (req, reply) => {
     const tid = await resolveScimTenant(req);
+    pinScimTenant(tid);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const [existing] = await scopedRead((tx) =>

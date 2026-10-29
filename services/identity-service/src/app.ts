@@ -57,6 +57,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   // config { config: { rateLimit: { max, timeWindow } } } is honoured.
   await registerRateLimit(app);
 
+  // MUST run BEFORE any app.register(<routes>) below: Fastify encapsulated route contexts copy the
+  // parent error handler when they are created, so a handler set after the routes only covered the
+  // root context and every ZodError thrown inside a route module without its own handler (sessions,
+  // sync, devices, saml, scim-tokens, webauthn) surfaced as a 500 (UAT API sweep 2026-10-29; same root
+  // cause as hrms #2361). delegateFrameworkClientErrors: module-local handlers that map unknown errors
+  // to 500 still answer Fastify's own 4xx (malformed JSON, empty JSON body, ...) with the shared envelope.
+  registerSchemaErrorHandler(app, HttpError, { delegateFrameworkClientErrors: true });
+
   registerOpsRoutes(app, { service: "identity-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -80,7 +88,6 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const { govIntegrationRoutes } = await import("./modules/gov-integrations/routes.js");
   await app.register(govIntegrationRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }
