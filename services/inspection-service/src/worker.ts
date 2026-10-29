@@ -58,6 +58,8 @@ import { registerTelemetryConsumers } from "./modules/telemetry/consumer.js";
 // silently discarded. See this PR for the full story.
 import { registerEncroachmentConsumers } from "./modules/encroachment/consumer.js";
 import { registerIllegalConstructionConsumers } from "./modules/illegal-construction/consumer.js";
+// UAT FQ9 #23: POST /v1/inspection/reports published inspection.report.create with no subscriber.
+import { registerReportsConsumers } from "./modules/reports/consumer.js";
 
 // Tenant-scoped queue: enters runWithTenant(msg.tenantId) before each handler so
 // wrapWithTenantGuc sets the app.tenant_id GUC and RLS-forced writes/reads succeed.
@@ -80,6 +82,7 @@ registerSurveyConsumers(scopedQueue);
 registerTelemetryConsumers(scopedQueue);
 registerEncroachmentConsumers(scopedQueue);
 registerIllegalConstructionConsumers(scopedQueue);
+registerReportsConsumers(scopedQueue);
 
 // ── DLQ handling ─────────────────────────────────────────────────────────────
 // No per-topic DLQ pollers here. Native SQS RedrivePolicy already dead-letters

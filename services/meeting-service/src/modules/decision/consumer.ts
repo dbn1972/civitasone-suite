@@ -79,6 +79,8 @@ import {
 const AUDIT_TOPIC = "audit.event.record";
 const DECISION_RESOURCE = "decision";
 const RESOLUTION_RESOURCE = "resolution";
+/** Open state of a circulation resolution (mirrors voting/consumer.ts STATUS_CIRCULATING). */
+export const CIRCULATION_OPEN_STATUS = "circulating";
 
 /**
  * Cross-service command topic to start a Workflow_Service approval instance (Req 11.7). Hard-coded
@@ -964,7 +966,12 @@ async function handleResolutionCirculationInit(msg: CommandEnvelope<CirculationI
       majorityRule: p.majorityRule,
       // Provisional until the deadline/close computes the final outcome (Req 12.4).
       result: "invalid",
-      status: "effective",
+      // FQ9 #10: open for responses. Was "effective", which the voting module's
+      // circulation-respond handler treats as TERMINAL (already concluded) and silently
+      // no-ops on — so every vote was 202'd and never recorded. "circulating" is the
+      // open state voting/consumer.ts (STATUS_CIRCULATING) and voting/repo.ts expect;
+      // the respond handler moves it to effective/rejected/invalid on conclusion.
+      status: CIRCULATION_OPEN_STATUS,
       isCirculation: true,
       circulationDeadline: new Date(p.deadline),
       createdBy: msg.actorId,

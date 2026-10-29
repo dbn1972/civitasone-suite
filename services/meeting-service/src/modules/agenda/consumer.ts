@@ -20,7 +20,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, gt, asc, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
@@ -34,6 +34,7 @@ import {
   validateReorderBijection,
   applyReorder,
   assertAgendaNotLocked,
+  assertAgendaLockTransition,
   assertSubmissionAllowed,
   buildCarryForward,
   type ReorderEntry,
@@ -493,6 +494,13 @@ async function handleAgendaLock(msg: CommandEnvelope): Promise<void> {
 
     const toState = p.locked ? "agenda_locked" : "scheduled";
     if (meeting.status === toState) return; // idempotent no-op
+    // FQ9 #12: enforce the state machine's allowed source states (the route checks too;
+    // this covers a status change between publish and consume). Permanent → DLQ now.
+    try {
+      assertAgendaLockTransition(meeting.status, p.locked);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
 
     await versionedUpdate(tx, meetings, {
       id: p.meetingId,

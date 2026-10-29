@@ -58,6 +58,8 @@ export interface BadgeTemplateCreateInput {
 
 export interface BadgeTemplateUpdateInput {
   templateId: string;
+  /** UAT FQ9 #32: update (default) versions in place; rollback restores the previous version; archive archives. */
+  op?: "update" | "rollback" | "archive";
   name?: string;
   templateBody?: string;
   badgeWidthMm?: number;
@@ -193,7 +195,7 @@ export async function publishBadgeTemplateCreate(ctx: RequestContext, input: Bad
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-/** Update an existing badge template (creates a new version, archives previous). */
+/** Update / roll back / archive a badge template; the template id is stable (versioned in place). */
 export async function publishBadgeTemplateUpdate(ctx: RequestContext, input: BadgeTemplateUpdateInput): Promise<Accepted> {
   const messageId = randomUUID();
   await queue.publish(COMMANDS.badgeTemplateUpdate, {
@@ -211,6 +213,7 @@ export async function publishBadgeTemplateUpdate(ctx: RequestContext, input: Bad
       badgeWidthMm: input.badgeWidthMm ?? null,
       badgeHeightMm: input.badgeHeightMm ?? null,
       visitorCategory: input.visitorCategory ?? null,
+      op: input.op ?? "update",
     },
   });
   return { id: input.templateId, status: "accepted", correlationId: ctx.correlationId };

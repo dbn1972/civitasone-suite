@@ -42,7 +42,8 @@ export interface UpstreamResponse {
 export interface ProxyRequestInit {
   method: string;
   headers: Record<string, string>;
-  body?: string | null;
+  /** JSON/raw-string body, or raw bytes for a multipart passthrough (UAT FQ9 #16). */
+  body?: string | Buffer | null;
   /** Logical upstream service name (used to key the circuit breaker) */
   serviceName: string;
   /** Full target URL */

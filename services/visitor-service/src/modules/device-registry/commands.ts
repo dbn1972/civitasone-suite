@@ -11,8 +11,22 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { generateDeviceToken, getAuthType } from "./domain.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
+
+/**
+ * UAT FQ9 #31 (SECURITY): a bearer-token device credential is minted HERE, on the request path, so the
+ * raw token can be handed to the authenticated admin exactly once in the 202 response (the API-key
+ * pattern). Only its SHA-256 hash travels in the command and is persisted; the raw token never enters
+ * the queue, the outbox (`_outbox.messages`) or any event. Before this, the consumer minted the token
+ * and put it in the `visitor.device.registered` / `visitor.device.credential_rotated` outbox payloads,
+ * where any DB reader could take it (and no consumer of either topic exists to "deliver" it).
+ */
+export type AcceptedWithCredential = Accepted & {
+  /** Raw device bearer token — present only for bearer-token devices; shown once, never stored. */
+  deviceToken?: string;
+};
 
 // ── Payload input types ───────────────────────────────────────────────────
 
@@ -66,8 +80,9 @@ export interface DeviceFirmwareScheduleInput {
  * Register a new device. Mints the device id client-side so the caller
  * gets the id in the 202 response before the consumer processes it.
  */
-export async function publishDeviceRegister(ctx: RequestContext, input: DeviceRegisterInput): Promise<Accepted> {
+export async function publishDeviceRegister(ctx: RequestContext, input: DeviceRegisterInput): Promise<AcceptedWithCredential> {
   const id = randomUUID();
+  const cred = getAuthType(input.deviceType) === "bearer_token" ? generateDeviceToken() : null;
   await queue.publish(COMMANDS.deviceRegister, {
     messageId: id,
     type: COMMANDS.deviceRegister,
@@ -84,9 +99,10 @@ export async function publishDeviceRegister(ctx: RequestContext, input: DeviceRe
       locationId: input.locationId,
       gateId: input.gateId ?? null,
       capabilities: input.capabilities ?? {},
+      tokenHash: cred?.hash ?? null,
     },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, ...(cred ? { deviceToken: cred.token } : {}) };
 }
 
 /** Activate a device (pending_activation → active). */
@@ -142,9 +158,13 @@ export async function publishDeviceDeregister(ctx: RequestContext, input: Device
   return { id: input.deviceId, status: "accepted", correlationId: ctx.correlationId };
 }
 
-/** Rotate device credentials (generate new token, keep old in grace period). */
-export async function publishDeviceRotateCredential(ctx: RequestContext, input: DeviceRotateCredentialInput): Promise<Accepted> {
+/**
+ * Rotate device credentials (new token, old one kept for the grace period). As with registration
+ * (UAT FQ9 #31), the new raw token is minted here and returned once; only its hash is published.
+ */
+export async function publishDeviceRotateCredential(ctx: RequestContext, input: DeviceRotateCredentialInput): Promise<AcceptedWithCredential> {
   const messageId = randomUUID();
+  const cred = generateDeviceToken();
   await queue.publish(COMMANDS.deviceRotateCredential, {
     messageId,
     type: COMMANDS.deviceRotateCredential,
@@ -152,9 +172,9 @@ export async function publishDeviceRotateCredential(ctx: RequestContext, input: 
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { deviceId: input.deviceId, tenantId: ctx.tenantId },
+    payload: { deviceId: input.deviceId, tenantId: ctx.tenantId, tokenHash: cred.hash },
   });
-  return { id: input.deviceId, status: "accepted", correlationId: ctx.correlationId };
+  return { id: input.deviceId, status: "accepted", correlationId: ctx.correlationId, deviceToken: cred.token };
 }
 
 /** Push configuration to a single device. */

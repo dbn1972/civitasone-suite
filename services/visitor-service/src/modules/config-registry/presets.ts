@@ -87,9 +87,14 @@ export async function applyPreset(ctx: RequestContext, presetName: string, reaso
   if (!entries) {
     throw new HttpError(400, "UNKNOWN_PRESET", `no vertical preset '${presetName}' (known: ${PRESET_NAMES.join(", ")})`);
   }
-  for (const e of entries) {
+  // UAT FQ9 #7: these publishes were awaited one after another, so a preset's latency was the SUM of
+  // its per-message broker round trips (~1.7s each on UAT SQS) and the gateway's 15s upstream timeout
+  // 504'd the call. The commands are independent and individually idempotent (deterministic config
+  // id per (tenant, namespace, key)), so publish them concurrently: latency ≈ one round trip. If any
+  // publish fails the call still fails (Promise.all) and a retry is a clean upsert.
+  await Promise.all(entries.map((e) => {
     const configId = deriveConfigId(ctx.tenantId, e.namespace, e.configKey);
-    await queue.publish(COMMANDS.setConfig, {
+    return queue.publish(COMMANDS.setConfig, {
       // Per-command messageId (see commands.setConfig): the entry id is stable per
       // key, so reusing it as the messageId made re-applying a different preset a no-op.
       messageId: randomUUID(),
@@ -109,6 +114,6 @@ export async function applyPreset(ctx: RequestContext, presetName: string, reaso
         reason: `preset ${presetName}: ${reason}`,
       },
     });
-  }
+  }));
   return { accepted: true, preset: presetName, entries: entries.length };
 }

@@ -43,6 +43,7 @@ import {
   generateQrSchema,
   meetingIdParam,
   attendanceQueryParams,
+  assertWithinMeetingWindow,
 } from "./validators.js";
 import { generateMeetingQrToken, verifyMeetingQrToken, participantDisplayName } from "./domain.js";
 import * as commands from "./commands.js";
@@ -110,8 +111,14 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireIdempotencyKey(req);
     const { meetingId } = meetingIdParam.parse(req.params);
     const body = attendanceCheckInSchema.parse(req.body);
-    await requireMeeting(ctx.tenantId, meetingId);
-    const accepted = await commands.attendanceCheckIn(ctx, meetingId, body);
+    const meeting = await requireMeeting(ctx.tenantId, meetingId);
+    // FQ9 #8: the consumer rejects a check-in more than 24h from the meeting's scheduled
+    // time (ATTENDANCE_INVALID_TIMESTAMP) — validate it here too so the caller gets a 422
+    // instead of 202 + a silently dead-lettered command. Resolve the default timestamp once
+    // so the value checked is exactly the value published.
+    const checkInAt = body.checkInAt ?? new Date();
+    assertWithinMeetingWindow(checkInAt, meeting.scheduledAt, "checkInAt");
+    const accepted = await commands.attendanceCheckIn(ctx, meetingId, { ...body, checkInAt });
     return reply.code(202).send({ data: accepted });
   });
 
@@ -122,8 +129,11 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireIdempotencyKey(req);
     const { meetingId } = meetingIdParam.parse(req.params);
     const body = attendanceCheckOutSchema.parse(req.body);
-    await requireMeeting(ctx.tenantId, meetingId);
-    const accepted = await commands.attendanceCheckOut(ctx, meetingId, body);
+    const meeting = await requireMeeting(ctx.tenantId, meetingId);
+    // FQ9 #8: same synchronous window check as check-in (consumer-side bound, now 422 up front).
+    const checkOutAt = body.checkOutAt ?? new Date();
+    assertWithinMeetingWindow(checkOutAt, meeting.scheduledAt, "checkOutAt");
+    const accepted = await commands.attendanceCheckOut(ctx, meetingId, { ...body, checkOutAt });
     return reply.code(202).send({ data: accepted });
   });
 

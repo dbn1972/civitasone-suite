@@ -98,7 +98,7 @@ describe.skipIf(!RUN)("court-service e2e smoke (real DB, RLS through HTTP)", () 
       method: "POST",
       url: "/v1/court/courts",
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}`, "content-type": "application/json" },
-      payload: { name: "E2E Created Court", courtType: "revenue" },
+      payload: { name: "E2E Created Court", courtType: "revenue_court" },
     });
     expect(res.statusCode).toBe(202);
   });

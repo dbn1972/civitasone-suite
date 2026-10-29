@@ -28,7 +28,7 @@ export const findings = findingsSchema.table("findings", {
   tenantId:         uuid("tenant_id").notNull(),
   findingNumber:    text("finding_number").notNull(), // FND-{YYYY}-{SEQ:6}
   inspectionId:     uuid("inspection_id").notNull(),
-  questionId:       text("question_id").notNull(), // checklist question reference
+  questionId:       text("question_id"), // checklist question id ("q-{section}-{question}"); null when not tied to a question
   provisionId:      uuid("provision_id").notNull(),
   severity:         varchar("severity", { length: 16 }).notNull(), // critical|major|minor|observation
   description:      text("description").notNull(),

@@ -35,6 +35,7 @@ function mockFetch(payload: unknown, ok = true): void {
 beforeEach(() => {
   _test.moduleCache.clear();
   _test.lastKnownMode.clear();
+  _test.lastKnownAllowList.clear();
   _test.resetShadowCount();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -339,5 +340,87 @@ describe("field module entitlement under composition enforcement", () => {
     expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(false);
     expect(reply._code).toBe(403);
     expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// UAT FQ9 (SECURITY): an admin-service outage must not turn a KNOWN-disabled
+// module into an allowed one. Before the fix, once the 60s cache expired an
+// outage made the allow-list null and off mode failed OPEN for every module.
+// ─────────────────────────────────────────────────────────────────────────
+describe("admin outage after a successful fetch (last-known allow-list, deny-only)", () => {
+  const outage = () => vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("admin-service 401"); }));
+
+  it("legacy/off: a module the last fetch omitted stays 403 during the outage", async () => {
+    mockFetch({ data: [{ name: "finance" }] });
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+    _test.moduleCache.clear(); // TTL elapsed
+    outage();
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "procurement")).toBe(false);
+    expect(reply._code).toBe(403);
+    expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+
+  it("legacy/off: a module the last fetch included stays reachable during the outage", async () => {
+    mockFetch({ data: [{ name: "finance" }] });
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+    _test.moduleCache.clear();
+    outage();
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+  });
+
+  it("composition/off: same deny-only rule", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "off", data: [{ name: "finance" }] });
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+    _test.moduleCache.clear();
+    outage();
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "payroll")).toBe(false);
+    expect(reply._code).toBe(403);
+  });
+
+  it("shadow: records the would-deny but allows (shadow never blocks)", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "shadow", data: [{ name: "finance" }] });
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+    _test.moduleCache.clear();
+    outage();
+    const before = _test.shadowWouldDenyCount;
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "payroll")).toBe(true);
+    expect(_test.shadowWouldDenyCount).toBe(before + 1);
+  });
+
+  it("enforce: outage stays a 503 even for a last-known-enabled module (unchanged contract)", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "finance" }] });
+    expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+    _test.moduleCache.clear();
+    outage();
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "finance")).toBe(false);
+    expect(reply._code).toBe(503);
+  });
+
+  it("the last-known allow-list expires after STALE_IF_ERROR_MS and is dropped by invalidateModuleCache", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFetch({ data: [{ name: "finance" }] });
+      expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance")).toBe(true);
+      expect(_test.lastKnownAllowList.has(TID)).toBe(true);
+      _test.moduleCache.clear();
+      outage();
+      vi.advanceTimersByTime(_test.STALE_IF_ERROR_MS + 1);
+      // Past the window: pre-existing off-mode outage behaviour (owner decision D-ST-24).
+      expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "procurement")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+    const { invalidateModuleCache } = await import("../src/module-guard.js");
+    mockFetch({ data: [{ name: "finance" }] });
+    await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance");
+    invalidateModuleCache(TID);
+    expect(_test.lastKnownAllowList.has(TID)).toBe(false);
   });
 });

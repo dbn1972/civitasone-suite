@@ -58,7 +58,8 @@ const idParam = z.object({
 /** POST /v1/inspection/findings — create finding (Req 9.1, 9.2). */
 const createFindingSchema = z.object({
   inspectionId: z.string().uuid("inspectionId must be a valid UUID"),
-  questionId: z.string().optional(),
+  // Checklist question ids are generated as "q-{section}-{question}" (checklist consumer), not UUIDs.
+  questionId: z.string().trim().min(1, "questionId must not be empty").max(64, "questionId is too long").optional(),
   provisionId: z.string().uuid("provisionId must be a valid UUID"),
   description: z.string().min(1, "description is required"),
   evidenceIds: z.array(z.string().uuid()).optional(),

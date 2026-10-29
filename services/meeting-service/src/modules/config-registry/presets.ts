@@ -68,6 +68,32 @@ export function getPreset(name: string): readonly PresetEntry[] | undefined {
   return VERTICAL_PRESETS[name];
 }
 
+/**
+ * FQ9 #7: max config.set publishes in flight while applying a preset. The previous serial
+ * `for … await queue.publish` paid one broker round trip per entry back to back (SQS
+ * ListQueues + SendMessage each), which on UAT exceeded the gateway's 15s upstream timeout
+ * (504). The queue client has no batch-publish API, so entries are published with bounded
+ * concurrency instead: every entry is independent and idempotent (deterministic ids), so
+ * ordering does not matter, and the bound keeps a large preset from flooding the broker.
+ */
+export const PRESET_PUBLISH_CONCURRENCY = 8;
+
+/** Run `fn` over `items` with at most `limit` calls in flight; rejects on the first failure. */
+export async function forEachBounded<T>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<unknown>,
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++] as T;
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
 export type ApplyPresetResult = { accepted: true; preset: string; entries: number };
 
 /**
@@ -80,7 +106,7 @@ export async function applyPreset(ctx: RequestContext, presetName: string): Prom
   if (!entries) {
     throw new HttpError(400, "UNKNOWN_PRESET", `no vertical preset '${presetName}' (known: ${PRESET_NAMES.join(", ")})`);
   }
-  for (const e of entries) {
+  await forEachBounded(entries, PRESET_PUBLISH_CONCURRENCY, async (e) => {
     const configId = deriveConfigId(ctx.tenantId, e.namespace, e.configKey);
     await queue.publish(COMMANDS.setConfig, {
       // Deterministic per (tenant, preset, entry) and DISTINCT from the configId used as the
@@ -101,6 +127,6 @@ export async function applyPreset(ctx: RequestContext, presetName: string): Prom
         tenantId: ctx.tenantId,
       },
     });
-  }
+  });
   return { accepted: true, preset: presetName, entries: entries.length };
 }

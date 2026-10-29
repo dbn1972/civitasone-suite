@@ -25,7 +25,7 @@ import { badgeTemplates, printJobs } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { renderBadge, validateTemplatePlaceholders } from "./renderer.js";
-import { computeJobScore, shouldRetry, computeNextRetryAt, createNewVersion } from "./domain.js";
+import { computeJobScore, shouldRetry, computeNextRetryAt } from "./domain.js";
 import type { PlaceholderKey } from "./renderer.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -111,6 +111,8 @@ export interface BadgeTemplateUpdatePayload {
   badgeWidthMm: number | null;
   badgeHeightMm: number | null;
   visitorCategory: string | null;
+  /** UAT FQ9 #32: what to do with the template; absent ⇒ "update" (pre-fix messages). */
+  op?: "update" | "rollback" | "archive";
 }
 
 // ── Consumer Registration ─────────────────────────────────────────────────
@@ -644,14 +646,26 @@ export function registerBadgePrintConsumers(queue: Queue): void {
     }
   });
 
-  // ─── badgeTemplateUpdate ──────────────────────────────────────────────
+  // ─── badgeTemplateUpdate (update | rollback | archive) ────────────────
+  //
+  // UAT FQ9 #32: an update used to INSERT a brand-new row (new id) and archive the one the client
+  // named, so the template id the client holds stopped being the live template (GET showed the old
+  // name, archived) and rollback on it 422'd NO_PREVIOUS_VERSION — the version chain hung off an id
+  // the client never saw. Archive and rollback were also both modelled as a field-less "update",
+  // which just cloned the row again (rollback even left two active versions).
+  //
+  // Now the template id is STABLE: the live row is versioned in place (templateVersion + 1) and the
+  // content it replaces is kept as an archived snapshot row that the live row's previousVersionId
+  // points at. Rollback restores the snapshot's content onto the live row and pops the chain;
+  // archive archives the live row.
   queue.subscribe<BadgeTemplateUpdatePayload>(COMMANDS.badgeTemplateUpdate, async (msg) => {
     const p = msg.payload;
+    const op = p.op ?? "update";
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Load current template
+      // Load current (live) template
       const rows = await tx
         .select()
         .from(badgeTemplates)
@@ -662,48 +676,103 @@ export function registerBadgePrintConsumers(queue: Queue): void {
         throw new Error(`badge template '${p.templateId}' not found for tenant '${msg.tenantId}'`);
       }
 
-      // If template body is being updated, validate placeholders
-      const newBody = p.templateBody ?? current.templateBody;
-      if (p.templateBody) {
-        const validation = validateTemplatePlaceholders(p.templateBody);
-        if (!validation.valid) {
-          throw new Error(
-            `badge template contains invalid placeholders: ${validation.invalidPlaceholders.join(", ")}`,
-          );
-        }
+      if (op === "archive") {
+        await versionedUpdate(tx, badgeTemplates, {
+          id: p.templateId,
+          tenantId: msg.tenantId,
+          expectedVersion: current.version,
+          set: { status: "archived", updatedAt: new Date(), updatedBy: msg.actorId },
+          entity: "badge_template",
+        });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "archive", resourceType: "badge_template", resourceId: p.templateId, outcome: "success" } });
+        return;
       }
 
-      // Create new version using domain logic
-      const { templateVersion, previousVersionId } = createNewVersion({
-        templateVersion: current.templateVersion,
-        id: current.id,
-      });
+      // The content the live row will carry after this command.
+      let next: {
+        name: string;
+        templateBody: string;
+        badgeWidthMm: number;
+        badgeHeightMm: number;
+        visitorCategory: string;
+        previousVersionId: string | null;
+      };
 
-      // Insert new template row (new version)
-      const newId = crypto.randomUUID();
+      if (op === "rollback") {
+        if (!current.previousVersionId) {
+          throw new NonRetryableError(`badge template '${p.templateId}' has no previous version to roll back to`);
+        }
+        const prevRows = await tx
+          .select()
+          .from(badgeTemplates)
+          .where(and(eq(badgeTemplates.id, current.previousVersionId), eq(badgeTemplates.tenantId, msg.tenantId)))
+          .limit(1);
+        const prev = prevRows[0];
+        if (!prev) {
+          throw new NonRetryableError(`previous version '${current.previousVersionId}' of badge template '${p.templateId}' not found`);
+        }
+        next = {
+          name: prev.name,
+          templateBody: prev.templateBody,
+          badgeWidthMm: prev.badgeWidthMm,
+          badgeHeightMm: prev.badgeHeightMm,
+          visitorCategory: prev.visitorCategory,
+          previousVersionId: prev.previousVersionId, // pop the chain
+        };
+      } else {
+        // If template body is being updated, validate placeholders
+        if (p.templateBody) {
+          const validation = validateTemplatePlaceholders(p.templateBody);
+          if (!validation.valid) {
+            throw new Error(
+              `badge template contains invalid placeholders: ${validation.invalidPlaceholders.join(", ")}`,
+            );
+          }
+        }
+        next = {
+          name: p.name ?? current.name,
+          templateBody: p.templateBody ?? current.templateBody,
+          badgeWidthMm: p.badgeWidthMm ?? current.badgeWidthMm,
+          badgeHeightMm: p.badgeHeightMm ?? current.badgeHeightMm,
+          visitorCategory: p.visitorCategory ?? current.visitorCategory,
+          previousVersionId: null, // set to the snapshot below
+        };
+      }
+
+      // Archived snapshot of the content being replaced (audit trail; the rollback target on update).
+      const snapshotId = crypto.randomUUID();
       await tx.insert(badgeTemplates).values({
-        id: newId,
+        id: snapshotId,
         tenantId: msg.tenantId,
-        name: p.name ?? current.name,
+        name: current.name,
         printerLanguage: current.printerLanguage,
-        templateBody: newBody,
-        badgeWidthMm: p.badgeWidthMm ?? current.badgeWidthMm,
-        badgeHeightMm: p.badgeHeightMm ?? current.badgeHeightMm,
-        visitorCategory: p.visitorCategory ?? current.visitorCategory,
-        status: "active",
-        templateVersion,
-        previousVersionId,
+        templateBody: current.templateBody,
+        badgeWidthMm: current.badgeWidthMm,
+        badgeHeightMm: current.badgeHeightMm,
+        visitorCategory: current.visitorCategory,
+        status: "archived",
+        templateVersion: current.templateVersion,
+        previousVersionId: current.previousVersionId,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
 
-      // Archive the previous version
+      const templateVersion = current.templateVersion + 1;
+      const previousVersionId = op === "update" ? snapshotId : next.previousVersionId;
+
+      // Version the live row IN PLACE — its id never changes.
       await versionedUpdate(tx, badgeTemplates, {
         id: p.templateId,
         tenantId: msg.tenantId,
         expectedVersion: current.version,
         set: {
-          status: "archived",
+          name: next.name,
+          templateBody: next.templateBody,
+          badgeWidthMm: next.badgeWidthMm,
+          badgeHeightMm: next.badgeHeightMm,
+          visitorCategory: next.visitorCategory,
+          templateVersion,
+          previousVersionId,
           updatedAt: new Date(),
           updatedBy: msg.actorId,
         },
@@ -718,16 +787,17 @@ export function registerBadgePrintConsumers(queue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: {
-          id: newId,
+          id: p.templateId,
           previousVersionId,
           tenantId: msg.tenantId,
-          name: p.name ?? current.name,
+          name: next.name,
           printerLanguage: current.printerLanguage,
-          visitorCategory: p.visitorCategory ?? current.visitorCategory,
+          visitorCategory: next.visitorCategory,
           templateVersion,
+          ...(op === "rollback" ? { rolledBack: true } : {}),
         },
       });
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "update", resourceType: "badge_template", resourceId: newId, outcome: "success" } });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: op === "rollback" ? "rollback" : "update", resourceType: "badge_template", resourceId: p.templateId, outcome: "success" } });
     });
 
     // Post-commit: invalidate cache (best-effort)
