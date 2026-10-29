@@ -88,13 +88,18 @@ export function registerFleetConsumers(queue: Queue): void {
         if (!trip) throw new Error("TRIP_NOT_FOUND");
         assertOdometerProgression(trip.startOdometer, p.endOdometer);
 
-        await tx.update(tripLogs)
+        const completed = await tx.update(tripLogs)
           .set({
             endOdometer: p.endOdometer, endTime: new Date(p.endTime),
             status: "completed", updatedBy: msg.actorId, updatedAt: new Date(),
             version: sql`${tripLogs.version} + 1`,
           })
-          .where(and(eq(tripLogs.id, p.id), eq(tripLogs.version, p.version)));
+          .where(and(eq(tripLogs.id, p.id), eq(tripLogs.version, p.version)))
+          .returning({ id: tripLogs.id });
+        // The completion command now carries a per-command messageId (no inbox dedup of a repeat), so
+        // the optimistic lock is the duplicate guard: a stale/repeated completion matches no row and
+        // must not touch the vehicle odometer either.
+        if (completed.length === 0) return;
 
         // Update vehicle odometer
         await tx.update(estabVehicles)

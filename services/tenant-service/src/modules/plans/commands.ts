@@ -9,6 +9,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreatePlanBody, UpdatePlanBody } from "./validators.js";
 import type { PlanView } from "./repo.js";
+import { jsonSafe } from "../../shared/json-safe.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -31,7 +32,7 @@ export async function planCreate(ctx: RequestContext, body: CreatePlanBody): Pro
     version: 1,
   };
   // read-your-writes: prime cache
-  await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), projected);
+  await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), jsonSafe(projected));
 
   await queue.publish(COMMANDS.planCreate, {
     messageId: id,
@@ -40,7 +41,7 @@ export async function planCreate(ctx: RequestContext, body: CreatePlanBody): Pro
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: projected,
+    payload: jsonSafe(projected),
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

@@ -148,14 +148,14 @@ describe("Reservations / Allocations (SVC-054)", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/inventory/reservations/:id/release → 202", async () => {
+  it("PATCH /v1/inventory/reservations/:id/release of an unknown reservation → 404 (synchronous pre-check)", async () => {
     const fakeId = "66666666-aaaa-4000-8000-000000000001";
     const res = await app.inject({
       method: "PATCH", url: `/v1/inventory/reservations/${fakeId}/release`,
       headers: authHeader(),
       payload: { version: 1 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("GET /v1/inventory/reservations → 200", async () => {

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { parseGeoJson, parseKml, MAX_BYTES } from "./parse.js";
@@ -60,12 +61,9 @@ export async function spatialExchangeRoutes(app: FastifyInstance): Promise<void>
     return reply.header("content-type", "application/geo+json").send(repo.toGeoJson(features));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
-    req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (a local
+  // copy missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }
 
 function safeJson(s: string): unknown {

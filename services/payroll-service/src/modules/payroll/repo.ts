@@ -56,7 +56,7 @@ export async function insertRun(tx: Writer, row: PayrollRunInsert): Promise<void
 }
 
 export async function updateRun(tx: Writer, id: string, patch: Partial<PayrollRunInsert>): Promise<void> {
-  await tx.update(payrollRuns).set({ ...patch, updatedAt: new Date() }).where(eq(payrollRuns.id, id));
+  await tx.update(payrollRuns).set({ ...patch, updatedAt: new Date(), version: sql`${payrollRuns.version} + 1` }).where(eq(payrollRuns.id, id));
 }
 
 export async function insertSlip(tx: Writer, row: typeof payrollSlips.$inferInsert): Promise<void> {
@@ -121,6 +121,17 @@ export async function listSlipsByTenant(
     .offset(opts.offset ?? 0)
   );
   return rows.map(r => ({ ...r, month: r.month ?? "", runDeptId: r.runDeptId ?? null }));
+}
+
+/**
+ * Same read, but takes a row lock (SELECT ... FOR UPDATE) for the rest of the transaction. The
+ * approve / disburse / revert consumers use it as their duplicate guard: command messageIds are
+ * per-invocation, so two racing identical commands are NOT deduped by markProcessed(); the second
+ * one blocks here until the first commits and then sees the already-advanced status.
+ */
+export async function findRunByIdForUpdateTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
+  const rows = await (tx as typeof db).select().from(payrollRuns).where(eq(payrollRuns.id, id)).limit(1).for("update");
+  return rows[0] ?? null;
 }
 
 export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {

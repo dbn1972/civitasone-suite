@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateCaseBody, DisposeCaseBody, CreateCaseTypeBody } from "./validators.js";
@@ -53,16 +54,15 @@ export async function createCase(ctx: RequestContext, body: ResolvedCreateCase):
 
 export async function disposeCase(ctx: RequestContext, caseId: string, body: DisposeCaseBody): Promise<Accepted> {
   await queue.publish(COMMANDS.caseDispose, {
-    // Unlike createCase above, this had no messageId at all -- envelope()
-    // defaults to a fresh random UUID per publish (bus.ts), so the
-    // consumer's markProcessed() dedup could never recognize a retried
-    // dispose as a duplicate: a client retry after a timeout would reach
-    // assertCanDispose() a second time and throw INVALID_STATUS (already
-    // disposed) instead of being idempotently absorbed as a no-op. A case
-    // can only ever be meaningfully disposed once (no "reopen" action
-    // exists in the domain model), so the case id itself is a safe,
-    // deterministic dedup key for this specific command.
-    messageId: caseId,
+    // Per-command id (or the caller's X-Idempotency-Key, scoped to this case). It must NOT be the
+    // case id: createCase publishes with messageId = caseId, so markProcessed() already holds that
+    // id in _inbox.processed and a dispose keyed on it was ALWAYS silently dropped (202, case never
+    // disposed). Retry/double-click protection now lives in the consumer: a case that is already
+    // disposed absorbs a repeated dispose as a no-op (see caseDispose consumer).
+    messageId: idempotentId({
+      ...(ctx.idempotencyKey ? { idempotencyKey: `case-dispose:${caseId}:${ctx.idempotencyKey}` } : {}),
+      tenantId: ctx.tenantId,
+    }),
     type: COMMANDS.caseDispose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, caseId, tenantId: ctx.tenantId },

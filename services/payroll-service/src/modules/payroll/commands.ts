@@ -237,10 +237,23 @@ async function assertRunMakerChecker(
   throw new HttpError(403, MAKER_CHECKER_VIOLATION, denial);
 }
 
+/**
+ * messageId for a run lifecycle command (approve / disburse / revert). It is PER INVOCATION: the old
+ * deterministicUuid(`payroll-<action>:<runId>`) was stable for the run's whole life, and
+ * markProcessed() keys _inbox.processed on message_id alone, so a second approve after a revert (or a
+ * retried disburse) was silently dropped (202, nothing happened). Duplicate protection now lives in
+ * the consumers (row lock + status guard); a client that wants wire-level dedupe can send
+ * X-Idempotency-Key, which maps to a stable id scoped to tenant + action + run + key.
+ */
+function runCommandMessageId(ctx: RequestContext, action: "approve" | "disburse" | "revert", runId: string): string {
+  if (!ctx.idempotencyKey) return randomUUID();
+  return deterministicUuid(`payroll-${action}:${ctx.tenantId}:${runId}:${ctx.idempotencyKey}`);
+}
+
 export async function approveRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "approve", id, reason);
   await queue.publish(COMMANDS.runApprove, {
-    messageId: deterministicUuid(`payroll-approve:${id}`),
+    messageId: runCommandMessageId(ctx, "approve", id),
     type: COMMANDS.runApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}) },
@@ -252,7 +265,7 @@ export async function approveRun(ctx: RequestContext, id: string, reason?: strin
 export async function disburseRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "disburse", id, reason);
   await queue.publish(COMMANDS.runDisburse, {
-    messageId: deterministicUuid(`payroll-disburse:${id}`),
+    messageId: runCommandMessageId(ctx, "disburse", id),
     type: COMMANDS.runDisburse,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
@@ -263,7 +276,7 @@ export async function disburseRun(ctx: RequestContext, id: string, reason?: stri
 
 export async function revertRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.runRevert, {
-    messageId: deterministicUuid(`payroll-revert:${id}`),
+    messageId: runCommandMessageId(ctx, "revert", id),
     type: COMMANDS.runRevert,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId, ...(reason ? { reason } : {}) },

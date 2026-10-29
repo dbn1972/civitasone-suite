@@ -283,8 +283,19 @@ describe("POST /v1/grants/schemes/:id/applications (submit)", () => {
 
 describe("PATCH /v1/grants/applications/:id/reject", () => {
   it("202 — rejects an application", async () => {
+    // UAT g3 #9: only an under_review application can be rejected (the route now refuses the
+    // impossible transition synchronously), so this test rejects its own under_review application
+    // rather than the shared, already-approved APP.
+    const REVIEW_APP = "eeeeeeee-cccc-4000-8000-0000000000f1";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantApplications).values({
+        id: REVIEW_APP, tenantId: TENANT, grantNo: "G-CB-REVIEW", schemeId: SCHEME, beneficiaryId: BEN,
+        purpose: "coverage reject test", amountRequestedMinor: 50_000n, currency: "INR", status: "under_review",
+        submittedBy: ACTOR, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
     const res = await app.inject({
-      method: "PATCH", url: `/v1/grants/applications/${APP}/reject`,
+      method: "PATCH", url: `/v1/grants/applications/${REVIEW_APP}/reject`,
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: { reason: "insufficient documentation" },
     });

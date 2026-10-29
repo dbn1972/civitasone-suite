@@ -88,7 +88,9 @@ export async function supersedeTemplate(tx: Writer, oldId: string, newId: string
   const current = rows[0];
   if (!current) return;
   await tx.update(notificationTemplates).set({
-    supersededBy: newId, status: "superseded", updatedBy: actorId,
+    // chk_template_status (0020/0027) has no 'superseded' value; the superseded signal is
+    // superseded_by IS NOT NULL, and the retired version is 'archived' (UAT #10).
+    supersededBy: newId, status: "archived", updatedBy: actorId,
     updatedAt: new Date(), version: current.version,
   }).where(eq(notificationTemplates.id, oldId));
 }

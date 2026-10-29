@@ -12,6 +12,8 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
+import { assertCanDispatch, DomainError as PoDomainError } from "./domain.js";
+import * as poRepo from "./repo.js";
 
 // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
 const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
@@ -97,6 +99,15 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
     const body = dispatchBody.parse(req.body ?? {});
+    // D6: 404 for an unknown PO and 409 for a non-approved one, instead of a 202 the consumer then rejects.
+    const po = await poRepo.findPoById(id, ctx.tenantId);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    try {
+      assertCanDispatch(po.status ?? "draft");
+    } catch (err) {
+      if (err instanceof PoDomainError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.dispatchPo(ctx, id, body));
   });
 

@@ -20,7 +20,7 @@
  * that service for the full root-cause writeup: Fastify's plugin
  * encapsulation binds each route's error handler at registration time, so a
  * handler set on the parent AFTER a child route is registered never applies
- * to it). Confirmed below: a bad zod body 500s instead of 400.
+ * to it). FIXED (UAT API sweep 2026-10-29, app-level handler now registered before the routes): a bad zod body is 400.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
@@ -63,14 +63,15 @@ describe("COMP-007: folders -- POST /v1/documents/folders (create)", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("KNOWN ISSUE (see file header): an invalid body 500s instead of 400 -- no local error handler catches the ZodError", async () => {
+  it("an invalid body answers 400 VALIDATION_FAILED (was a 500: the app-level error handler was registered after the routes)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "POST", url: "/v1/documents/folders",
       headers: authHeaders(["document_user"], tid),
       payload: { name: "" }, // fails min(1)
     });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("creates a real row via the queue + consumer round trip, then reads it back", async () => {

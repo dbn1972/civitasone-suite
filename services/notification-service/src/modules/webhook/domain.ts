@@ -4,6 +4,13 @@
 import { createHmac } from "node:crypto";
 
 /** Compute HMAC-SHA256 hex signature for a webhook payload body. */
+/** Fixed-width mask: the stored signing secret is never returned by any read route. */
+export const SECRET_MASK = "********";
+
+export function maskEndpoint<T extends { secret?: unknown }>(row: T): Omit<T, "secret"> & { secret: string } {
+  return { ...row, secret: SECRET_MASK };
+}
+
 export function signPayload(body: string, secret: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
 }

@@ -76,6 +76,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 // 3. Payroll repo — controlled responses.
 vi.mock("../src/modules/payroll/repo.js", () => ({
   findRunByIdTx: (...args: any[]) => findRunByIdTxMock(...args),
+  findRunByIdForUpdateTx: (...args: any[]) => findRunByIdTxMock(...args),
   listSlipsByRun: (...args: any[]) => listSlipsByRunMock(...args),
   // Consumer now reads slips through the caller's already-open tx
   // (nested-transaction deadlock fix -- see

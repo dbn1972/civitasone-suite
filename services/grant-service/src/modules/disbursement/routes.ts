@@ -9,6 +9,7 @@ import { createInstallmentsBody, disburseBody, pfmsReconcileBody, idParam, appId
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import * as applicationRepo from "../application/repo.js";
 
 const GRANT_ROLES  = ["grant_officer", "grant_admin", "super_admin", "finance_officer"];
 const READER_ROLES = [...GRANT_ROLES, "audit_officer"];
@@ -19,6 +20,13 @@ export async function disbursementRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, GRANT_ROLES);
     const { id: applicationId } = idParam.parse(req.params);
     const body = createInstallmentsBody.parse(req.body);
+    // UAT g3 #10: installments may only be scheduled against an approved application with an
+    // approved amount; previously a 'submitted' application (approved amount 0) accepted them.
+    const application = await applicationRepo.findApplicationById(applicationId, ctx.tenantId);
+    if (!application) throw new HttpError(404, "APPLICATION_NOT_FOUND", "application not found");
+    if (application.status !== "approved" || application.amountApprovedMinor <= 0n) {
+      throw new HttpError(422, "APPLICATION_NOT_APPROVED", "installments can only be created for an approved application with a positive approved amount");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createInstallments(ctx, applicationId, body));
   });
 

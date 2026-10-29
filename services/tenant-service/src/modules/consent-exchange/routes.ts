@@ -5,8 +5,9 @@
  * (200) or a 403 with the deny reason, and is always written to the ledger.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply, RouteHandlerMethod } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
@@ -167,12 +168,9 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
     return reply.send({ data, meta: { total: data.length } });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
-    req.log.error({ err }, "unhandled"); return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
-  });
+  // Shared envelope: ZodError->400, HttpError, malformed JSON->400 MALFORMED_BODY, Fastify 4xx passthrough (was a local
+  // copy that missed JSON parse errors and answered 500).
+  registerSchemaErrorHandler(app, HttpError);
 }
 
 // messageId is a fresh id per command (NOT the resource id): several commands

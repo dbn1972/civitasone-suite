@@ -161,6 +161,12 @@ describe("maxPixels / maxImageSize", () => {
 });
 
 describe("pageConcurrency: bounded window, results in page order", () => {
+  // Upper bound on how long a gated page waits for its sibling to enter OCR. It is a failure bound, not a
+  // timing assumption: the gate releases the moment the overlap happens, so on a healthy run it costs nothing.
+  // 10 s was shorter than what a starved shared CI runner (2 vitest workers + turbo fan-out) needs to render
+  // and preprocess a second page, which left max() at 1 although the pipeline overlaps correctly.
+  const OVERLAP_CAP_MS = 60_000;
+
   /** Chain whose OCR takes a while and records the max number of pages in OCR at once. */
   function slowChain(delays: (n: number) => number, waitForOverlap = false) {
     let active = 0;
@@ -168,9 +174,9 @@ describe("pageConcurrency: bounded window, results in page order", () => {
     const provider = fakeProvider("tesseract", async (_c, ps) => {
       active++; maxActive = Math.max(maxActive, active);
       if (waitForOverlap) {
-        // Deterministic overlap: hold every page until a second page is in OCR (10 s safety cap). A fixed sleep
+        // Deterministic overlap: hold every page until a second page is in OCR (OVERLAP_CAP_MS safety cap). A fixed sleep
         // raced page rendering on a loaded CI host, so a second page was never in flight and max() stayed 1.
-        const deadline = Date.now() + 10_000;
+        const deadline = Date.now() + OVERLAP_CAP_MS;
         while (maxActive < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
       }
       await new Promise((r) => setTimeout(r, delays(ps[0]!.pageNumber)));
@@ -181,7 +187,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
   }
 
   it("default window is 2: OCR overlaps (pool is used again) but never exceeds the window; order is preserved even when page 1 is slowest", async () => {
-    // Deterministic overlap: page 1's OCR does not finish until page 2's OCR has STARTED (10 s safety cap). A fixed
+    // Deterministic overlap: page 1's OCR does not finish until page 2's OCR has STARTED (OVERLAP_CAP_MS safety cap). A fixed
     // sleep raced the page-2 render on a loaded host. If pages stop overlapping, page 1 times out and max() stays 1.
     let page2Started!: () => void;
     const page2 = new Promise<void>((r) => { page2Started = r; });
@@ -191,7 +197,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
       const n = ps[0]!.pageNumber;
       active++; maxActive = Math.max(maxActive, active);
       if (n === 2) page2Started();
-      if (n === 1) await Promise.race([page2, new Promise((r) => setTimeout(r, 10_000))]);
+      if (n === 1) await Promise.race([page2, new Promise((r) => setTimeout(r, OVERLAP_CAP_MS))]);
       else await new Promise((r) => setTimeout(r, 10));
       active--;
       return ps.map((p) => pageResult(p, 0.9, "tesseract", `page ${p.pageNumber}`));
@@ -203,7 +209,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
     expect(order).toEqual([1, 2, 3, 4, 5]);
     expect(out.result.pages.map((p) => p.pageNumber)).toEqual([1, 2, 3, 4, 5]);
     expect(max()).toBe(2);
-  }, 60_000);
+  }, 120_000);
 
   it("pageConcurrency 1 is strictly sequential; 3 never exceeds 3; invalid values clamp to 1", async () => {
     for (const [conc, lo, hi] of [[1, 1, 1], [3, 2, 3], [0, 1, 1], [-4, 1, 1]] as const) {
@@ -212,7 +218,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
       expect(max()).toBeGreaterThanOrEqual(lo);
       expect(max()).toBeLessThanOrEqual(hi);
     }
-  }, 60_000);
+  }, 240_000);
 
   it("never more than pageConcurrency rasterised pages are alive (rendered but not yet released by the consumer)", async () => {
     const { chain } = slowChain(() => 20);

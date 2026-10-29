@@ -99,6 +99,7 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
       if (vendor) {
         await vendorRepo.updateVendor(tx, p.vendorId, {
           vendorType: "registered",
+          blacklistReason: null,
           updatedBy: msg.actorId,
           version: (vendor.version ?? 1) + 1,
         });

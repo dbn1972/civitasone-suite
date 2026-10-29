@@ -170,7 +170,7 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
       if (!po) throw new Error(`PO ${p.poId} not found`);
       const milestones = await amendRepo.listMilestonesByPoTx(tx, p.poId, p.tenantId);
       assertClosable(po.status, milestones.map((m) => m.status));
-      await poRepo.updatePo(tx, p.poId, { status: "closed", updatedBy: msg.actorId, version: (po.version ?? 1) + 1 });
+      await poRepo.updatePo(tx, p.poId, { status: "closed", closedAt: new Date(), closureReason: p.notes ?? null, updatedBy: msg.actorId, version: (po.version ?? 1) + 1 });
       await enqueue(tx, {
         topic: EVENTS.poClosed, eventType: EVENTS.poClosed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

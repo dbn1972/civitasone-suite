@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { citizenProfiles, citizenServices } from "./schema.js";
 import type { ProfileInsert, ProfileRow, ServiceRow } from "./schema.js";
@@ -32,7 +32,7 @@ export async function anonymiseProfile(tx: Writer, id: string, tenantId: string,
 /** P1-2: tenant-scoped partial update; returns rows affected (0 = not found / wrong tenant). */
 export async function updateProfile(tx: Writer, id: string, tenantId: string, patch: Partial<ProfileInsert>): Promise<number> {
   const updated = await (tx as typeof db).update(citizenProfiles)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: new Date(), version: sql`${citizenProfiles.version} + 1` })
     .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId)))
     .returning({ id: citizenProfiles.id });
   return updated.length;

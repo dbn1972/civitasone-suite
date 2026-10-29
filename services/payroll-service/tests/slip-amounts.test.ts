@@ -37,6 +37,7 @@ vi.mock("../src/modules/payroll/repo.js", () => ({
   findSlipById: vi.fn(),
   findRunById: vi.fn(),
   findRunByIdTx: vi.fn(),
+  findRunByIdForUpdateTx: vi.fn(),
   insertRun: vi.fn(),
   insertSlip: vi.fn(),
   insertStructure: vi.fn(),

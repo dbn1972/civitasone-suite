@@ -88,6 +88,10 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    // Fastify's own 4xx (e.g. FST_ERR_CTP_EMPTY_JSON_BODY: JSON content-type with no body) is a
+    // client error, not a 500 (UAT #13).
+    const sc = (err as { statusCode?: number }).statusCode;
+    if (typeof sc === "number" && sc >= 400 && sc < 500) return reply.code(sc).send({ code: sc === 400 ? "BAD_REQUEST" : "CLIENT_ERROR", message: "invalid request", correlationId, retryable: false });
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });

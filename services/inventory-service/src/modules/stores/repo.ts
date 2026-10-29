@@ -1,5 +1,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { INTEGRATION } from "../../topics.js";
 import { stores, type StoreInsert, type StoreRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -25,14 +27,24 @@ export async function updateStore(
   tenantId: string,
   patch: Partial<Omit<StoreInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
+  correlationId: string,
 ): Promise<StoreRow | null> {
-  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
-  const rows = await db.transaction(async (tx) =>
-    (tx as unknown as typeof db).update(stores)
+  // One transaction: the UPDATE and its audit outbox row commit (or roll back) together.
+  // db.transaction() also sets the app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) => {
+    const updated = await (tx as unknown as typeof db).update(stores)
       .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${stores.version} + 1` })
       .where(and(eq(stores.id, id), eq(stores.tenantId, tenantId)))
-      .returning(),
-  );
+      .returning();
+    if (updated.length > 0) {
+      await enqueue(tx as unknown as Parameters<typeof enqueue>[0], {
+        topic: INTEGRATION.audit, eventType: INTEGRATION.audit,
+        tenantId, actorId, correlationId,
+        payload: { service: "inventory", action: "update", resourceType: "store", resourceId: id, outcome: "success", changes: Object.keys(patch) },
+      });
+    }
+    return updated;
+  });
   return rows[0] ?? null;
 }
 

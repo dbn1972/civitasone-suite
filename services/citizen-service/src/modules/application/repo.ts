@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenApplications, citizenAppDocuments, citizenStatusHistory,
@@ -47,7 +47,7 @@ export async function insertApplication(tx: Writer, row: ApplicationInsert): Pro
 
 export async function updateApplication(tx: Writer, id: string, tenantId: string, patch: Partial<ApplicationInsert>): Promise<void> {
   // P1-2: tenant-scoped update prevents cross-tenant writes via a forged id.
-  await tx.update(citizenApplications).set({ ...patch, updatedAt: new Date() })
+  await tx.update(citizenApplications).set({ ...patch, updatedAt: new Date(), version: sql`${citizenApplications.version} + 1` })
     .where(and(eq(citizenApplications.id, id), eq(citizenApplications.tenantId, tenantId)));
 }
 

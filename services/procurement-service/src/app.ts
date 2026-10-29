@@ -63,6 +63,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
+  // MUST precede every app.register(<routes>): encapsulated child contexts copy the parent error handler at creation,
+  // so a handler set after the routes never reached modules without their own (ZodError -> 500; UAT sweep 2026-10-28).
+  registerSchemaErrorHandler(app, HttpError);
+
   registerOpsRoutes(app, { service: "procurement-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -101,8 +105,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cpppRoutes);
   const { gepnicRoutes } = await import("./modules/gepnic/routes.js");
   await app.register(gepnicRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

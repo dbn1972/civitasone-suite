@@ -9,9 +9,12 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>): Promise<void> {
+// `messageId` is the idempotency key markProcessed() dedups on. Defaults to the entity id (fresh on
+// create/apply); every allotment lifecycle step after `apply` MUST pass a per-command id or it
+// collides with quarterApply's inbox row (messageId = allotmentId) and is silently dropped.
+async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>, messageId: string = id): Promise<void> {
   await queue.publish(type, {
-    messageId: id, type,
+    messageId, type,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload,
   });
@@ -30,29 +33,29 @@ export async function applyForAllotment(ctx: RequestContext, body: ApplyAllotmen
 }
 
 export async function allotQuarter(ctx: RequestContext, allotmentId: string, body: AllotBody): Promise<Accepted> {
-  await publish(COMMANDS.quarterAllot, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.quarterAllot, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function occupyQuarter(ctx: RequestContext, allotmentId: string, body: OccupyBody): Promise<Accepted> {
-  await publish(COMMANDS.quarterOccupy, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.quarterOccupy, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function issueVacationNotice(ctx: RequestContext, allotmentId: string, body: VacationNoticeBody): Promise<Accepted> {
-  await publish(COMMANDS.quarterVacationNotice, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.quarterVacationNotice, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function vacateQuarter(ctx: RequestContext, allotmentId: string, body: VacateBody): Promise<Accepted> {
-  await publish(COMMANDS.quarterVacate, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.quarterVacate, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-05: cancel/reject an applied,
 // waitlisted or allotted application (reason required; audited server-side).
 export async function cancelAllotment(ctx: RequestContext, allotmentId: string, body: CancelBody): Promise<Accepted> {
-  await publish(COMMANDS.quarterCancel, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.quarterCancel, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body }, randomUUID());
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 

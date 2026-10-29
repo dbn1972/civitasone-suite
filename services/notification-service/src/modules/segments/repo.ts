@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { recipientSegments } from "./schema.js";
 import { buildSegmentQuery, type SegmentCriteria, type SegmentFilter } from "./domain.js";
@@ -23,6 +23,7 @@ export async function updateSegmentById(
   await tx.update(recipientSegments).set({
     ...data,
     updatedAt: new Date(),
+    version: sql`${recipientSegments.version} + 1`,
   }).where(and(
     eq(recipientSegments.id, id),
     eq(recipientSegments.tenantId, tenantId),

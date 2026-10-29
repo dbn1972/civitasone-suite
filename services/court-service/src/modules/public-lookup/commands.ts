@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -45,8 +46,10 @@ export async function publishEstablishment(
   // same call by fanning out a config.set for public_lookup/access_mode.
   if (body.accessMode) {
     const configId = deriveConfigId(ctx.tenantId, "public_lookup", "access_mode");
+    // messageId is per-command: markProcessed() dedups on it, so the stable configId would drop every
+    // access-mode change after the first (the entry id stays configId; only the dedup key varies).
     await queue.publish(COMMANDS.setConfig, {
-      messageId: configId,
+      messageId: randomUUID(),
       type: COMMANDS.setConfig,
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,

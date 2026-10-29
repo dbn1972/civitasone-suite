@@ -25,12 +25,14 @@ export async function transcriptionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ROLES);
 
+    // Validate the path id first so a malformed id is a 400 even while the feature is off.
+    const { callId } = callIdParam.parse(req.params);
+
     // Fail-closed: if transcription is disabled, return 503.
     if (!isEnabled()) {
       throw new HttpError(503, "TRANSCRIPTION_DISABLED", "Transcription feature is not enabled");
     }
 
-    const { callId } = callIdParam.parse(req.params);
     const transcript = await repo.findByCallId(ctx.tenantId, callId);
 
     if (!transcript) {

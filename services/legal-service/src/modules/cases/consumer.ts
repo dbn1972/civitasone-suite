@@ -91,6 +91,9 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const legalCase = await repo.findCaseByIdTx(tx, p.caseId);
       if (!legalCase) throw new Error(`case ${p.caseId} not found`);
+      // Duplicate dispose (double-click / client retry): the case is already disposed -> no-op,
+      // not an INVALID_STATUS error. Replaces the old stable-messageId inbox dedup.
+      if (legalCase.status === "disposed") return;
       assertCanDispose(legalCase.status ?? "pending");
       await repo.updateCase(tx, p.caseId, {
         status: "disposed", disposition: p.disposition,

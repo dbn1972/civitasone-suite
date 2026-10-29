@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createAuctionBody, submitBidBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { assertAuctionAcceptsBids, DomainError } from "./domain.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer"];
@@ -35,6 +36,15 @@ export async function auctionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...PROC_ROLES, "vendor_portal"]);
     const { id } = idParam.parse(req.params);
     const body = submitBidBody.parse(req.body);
+    // D5/D6: reject synchronously (404/409) instead of a 202 that the consumer would silently drop.
+    const auction = await queries.getAuction(id, ctx.tenantId);
+    if (!auction) throw new HttpError(404, "NOT_FOUND", "auction not found");
+    try {
+      assertAuctionAcceptsBids(auction);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(409, err.code, err.message.replace(/^\[[A-Z_]+\] /, ""));
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitBid(ctx, id, body));
   });
 

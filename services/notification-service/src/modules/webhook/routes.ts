@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { validateEndpointUrl } from "./domain.js";
+import { validateEndpointUrl, maskEndpoint } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -43,7 +43,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/webhooks", async (req, reply) => {
     const ctx = resolveContext(req);
     const endpoints = await repo.listEndpoints(ctx.tenantId);
-    return reply.send({ data: endpoints, meta: { total: endpoints.length } });
+    return reply.send({ data: endpoints.map(maskEndpoint), meta: { total: endpoints.length } });
   });
 
   // Update a webhook endpoint

@@ -67,14 +67,15 @@ describe("COMP-007: workflow -- POST /v1/documents/daks (create)", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("KNOWN ISSUE (see file header): an invalid body 500s instead of 400", async () => {
+  it("an invalid body answers 400 VALIDATION_FAILED (was a 500: the app-level error handler was registered after the routes)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "POST", url: "/v1/documents/daks",
       headers: authHeaders(["document_user"], tid),
       payload: { subject: "" }, // fails min(1)
     });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("creates a real row with default priority/status, via the queue + consumer round trip", async () => {

@@ -13,6 +13,7 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
+import { findStore } from "../stores/repo.js";
 
 const WRITE_ROLES    = ["inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
 const APPROVE_ROLES  = ["inventory_manager", "inventory_admin", "super_admin"];
@@ -24,6 +25,13 @@ export async function cycleCountRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createCycleCountBody.parse(req.body);
+    // `warehouseId` is, despite its name, an inventory.stores id (movements / stock_balances are keyed and
+    // FK'd on stores; the consumer posts the correction there). Reject anything else now rather than
+    // returning 202 and dead-lettering on fk_inv_mov_to_store.
+    if (!(await findStore(ctx.tenantId, body.warehouseId))) {
+      throw new HttpError(422, "INVALID_STORE",
+        "warehouseId must be the id of an inventory store (GET /v1/inventory/stores); no such store exists for this tenant. A warehouse-master id is not accepted.");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createCycleCount(ctx, body));
   });
 

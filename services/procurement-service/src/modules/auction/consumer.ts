@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeEffectivePrice, rankBids } from "./domain.js";
+import { assertAuctionAcceptsBids, computeEffectivePrice, DomainError, rankBids } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { allocateDocNo } from "../../shared/numbering.js";
@@ -41,6 +41,16 @@ export function registerAuctionConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const auction = await repo.findAuctionByIdTx(tx, p.auctionId, p.tenantId);
       if (!auction || auction.tenantId !== p.tenantId) throw new Error(`UNKNOWN_AUCTION: ${p.auctionId} not found for tenant`);
+      // D5: defence in depth against a close racing the 202 -- a bid on a non-active auction is never stored.
+      try {
+        assertAuctionAcceptsBids({ status: auction.status });
+      } catch (err) {
+        if (err instanceof DomainError) {
+          await audit(tx, msg, "bid_rejected_" + err.code.toLowerCase(), "auction", p.auctionId);
+          return;
+        }
+        throw err;
+      }
       const effectiveMinor = computeEffectivePrice(BigInt(p.bidMinor), p.isMse, auction.msePreference ?? true);
       await repo.insertBid(tx, {
         id: p.id, auctionId: p.auctionId, tenantId: p.tenantId,
