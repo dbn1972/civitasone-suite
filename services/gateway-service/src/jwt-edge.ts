@@ -22,7 +22,7 @@ import { verifyJwt, type CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 import { configValue } from "./runtime-config.js";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { PUBLIC_PREFIXES, isDeviceAuthRoute, isDeviceBearer } from "./public-prefixes.js";
+import { PUBLIC_PREFIXES, isDeviceAuthRoute, isDeviceBearer, isPublicRoute } from "./public-prefixes.js";
 
 const log = pino({ name: "gateway-jwt-edge" });
 
@@ -68,6 +68,15 @@ export async function jwtEdgeVerify(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
   if (isPublic) return;
+
+  // UAT W6-G: exact anonymous verify routes. No verification (a stale browser token must not 401 a
+  // public lookup), and no client-supplied identity survives: tenant/actor are dropped, never trusted.
+  if (isPublicRoute(req.method ?? "", pathname)) {
+    const headers = req.headers as Record<string, string | undefined>;
+    delete headers["x-tenant-id"];
+    delete headers["x-actor-id"];
+    return;
+  }
 
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
