@@ -5,7 +5,7 @@
  *  #10 resolution.circulation_init stored status "effective", which the voting module treats
  *      as TERMINAL → every circulation vote was 202'd and silently no-op'd (0 votes rows).
  *  #12 agenda lock had no source-state guard → a DRAFT meeting recorded draft → agenda_locked.
- *      Now 409 at the route and a permanent (NonRetryable) rejection in the consumer.
+ *      Now 422 at the route and a permanent (NonRetryable) rejection in the consumer.
  *  #8  attendance check-in/out outside the 24h window: 202 then dead-letter → now 422 up front.
  *  #7  POST /config/presets/:preset published entries serially (504 on UAT) → bounded concurrency.
  */
@@ -156,12 +156,12 @@ describe("FQ9 #12 — agenda lock enforces the meeting state machine", () => {
     expect(t).toHaveLength(0);
   });
 
-  it("route: lock / unlock of a DRAFT meeting → 409; lock of a SCHEDULED meeting → 202", async () => {
+  it("route: lock / unlock of a DRAFT meeting → 422; lock of a SCHEDULED meeting → 202", async () => {
     const lockDraft = await app.inject({ method: "POST", url: `/v1/meetings/${DRAFT_MEETING}/agenda/lock`, headers: H(), payload: { version: 1 } });
-    expect(lockDraft.statusCode).toBe(409);
+    expect(lockDraft.statusCode).toBe(422);
     expect(lockDraft.body).toContain("MEETING_INVALID_TRANSITION");
     const unlockDraft = await app.inject({ method: "POST", url: `/v1/meetings/${DRAFT_MEETING}/agenda/unlock`, headers: H(["committee_chairperson"]), payload: { version: 1 } });
-    expect(unlockDraft.statusCode).toBe(409);
+    expect(unlockDraft.statusCode).toBe(422);
     const lockScheduled = await app.inject({ method: "POST", url: `/v1/meetings/${SCHEDULED_MEETING}/agenda/lock`, headers: H(), payload: { version: 1 } });
     expect(lockScheduled.statusCode).toBe(202);
   });

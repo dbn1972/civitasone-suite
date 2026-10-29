@@ -123,7 +123,7 @@ async function assertMeetingExists(tenantId: string, meetingId: string): Promise
 }
 
 /**
- * FQ9 #12: 404 unless the meeting exists, then 409 unless the lock/unlock is an allowed
+ * FQ9 #12: 404 unless the meeting exists, then 422 unless the lock/unlock is an allowed
  * transition from its CURRENT state (validated synchronously instead of 202 + a consumer
  * that applied any source state, e.g. draft → agenda_locked).
  */
