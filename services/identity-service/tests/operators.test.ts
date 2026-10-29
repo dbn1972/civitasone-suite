@@ -194,6 +194,22 @@ describe("requesting a change", () => {
     expect((await req(asSuper(A), P, { kind: "role_change", reason: "same role", toRole: "platform_admin" })).json().code).toBe("INVALID_ROLE");
   });
 
+  it("FQ12 #73: a maker who is not an active platform operator in the identity DB gets a 403 up front, not a 202 the consumer refuses", async () => {
+    const ghost = id(98); // platform role in the token, no users.users row
+    const before = (await audits(T, "request_refused")).length;
+    for (const headers of [hdr(T, PLAIN, ["platform_admin"]), hdr(T, ghost, ["super_admin"])]) {
+      const r = await req(headers, B, { kind: "suspend", reason: "maker is not an operator" });
+      expect(r.statusCode).toBe(403);
+      expect(r.json().code).toBe("NOT_AN_OPERATOR");
+    }
+    await asTenant(T, async (q) => { await q`UPDATE users.users SET status = 'suspended' WHERE id = ${P}`; });
+    const suspended = await req(asPlat(P), B, { kind: "suspend", reason: "maker is suspended" });
+    expect(suspended.statusCode).toBe(403);
+    expect(suspended.json().code).toBe("NOT_AN_OPERATOR");
+    expect(await asTenant(T, async (q) => (await q`SELECT 1 FROM users.operator_change_requests WHERE tenant_id = ${T}`).length)).toBe(0);
+    expect((await audits(T, "request_refused")).length).toBe(before); // nothing was published
+  });
+
   it("creates a PENDING request, changes nothing, and audits the request", async () => {
     const r = await req(asPlat(P), B, { kind: "suspend", reason: "left the platform team" });
     expect(r.statusCode).toBe(202);

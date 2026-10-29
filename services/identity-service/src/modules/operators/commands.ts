@@ -36,6 +36,14 @@ export async function requestChange(
   ctx: RequestContext, targetUserId: string, body: { kind: RequestKind; reason: string; toRole?: string | undefined },
 ): Promise<Accepted> {
   if (sameId(targetUserId, ctx.actorId)) refuse("SELF_ACTION");
+  // UAT FQ12 #73: the consumer refuses (NOT_AN_OPERATOR, audit only) any request whose maker is not an ACTIVE
+  // platform operator in this tenant's identity DB -- a platform role in the token alone is not enough. Without
+  // this pre-check the route answered 202 for a command that could never land. Same check, same order as
+  // consumer.ts (self -> maker -> target); the consumer still re-checks it inside its transaction.
+  const maker = await repo.loadOperatorScoped(ctx.tenantId, ctx.actorId);
+  if (!maker || maker.status !== "active") {
+    throw new HttpError(403, "NOT_AN_OPERATOR", "Your account is not an active platform operator in this tenant, so it cannot request operator changes.");
+  }
   const target = await repo.loadAccountScoped(ctx.tenantId, targetUserId);
   if (!target) throw new HttpError(404, "NOT_FOUND", "user not found");
   const bad = validateChange(body.kind, target, body.toRole);
