@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { getTableColumns } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -90,6 +92,37 @@ describe("D1: central debarments for distinct PANs are all stored", () => {
     const v = randomUUID();
     await mk(v, "tenant", null);
     await expect(mk(v, "tenant", null)).rejects.toThrow();
+  });
+});
+
+describe("D1 migration: two tenants already holding an active central row for one PAN", () => {
+  it("0046 still applies fully (idempotent) and keeps both legal records", async () => {
+    const T2 = "5e7c0000-0000-4000-8000-0000000000e4";
+    const nil = "00000000-0000-0000-0000-000000000000";
+    await sqlClient.unsafe("DROP INDEX IF EXISTS procurement.uq_vendor_blacklist_central_pan_active");
+    const seed = (tenant: string) => runWithTenant(tenant, () => db.transaction((t) => blRepo.insertBlacklistTx(t, {
+      tenantId: tenant, vendorId: nil, scope: "central", pan: "DUPPA9999D", reason: "pre-0040 central row",
+      blacklistedBy: ACTOR, createdBy: ACTOR, status: "active",
+    })));
+    await seed(T); await seed(T2);
+    try {
+      const file = readFileSync(join(__dirname, "../migrations/0046_uat_g4_procurement_defects.sql"), "utf8");
+      await sqlClient.unsafe(file);
+      await sqlClient.unsafe(file); // idempotent
+      const idx = await sqlClient`SELECT 1 FROM pg_indexes WHERE schemaname = 'procurement' AND indexname = 'uq_vendor_blacklist_central_pan_active'`;
+      expect(idx).toHaveLength(1);
+      const cols = await sqlClient`SELECT 1 FROM information_schema.columns WHERE table_schema = 'procurement' AND table_name = 'three_way_match' AND column_name = 'tolerance_pct'`;
+      expect(cols).toHaveLength(1);
+      for (const tenant of [T, T2]) {
+        const rows = await runWithTenant(tenant, () => db.transaction((t) => t.select().from(vendorBlacklist).where(and(eq(vendorBlacklist.tenantId, tenant), eq(vendorBlacklist.pan, "DUPPA9999D")))));
+        expect(rows).toHaveLength(1);
+        expect(rows[0].status).toBe("active");
+      }
+    } finally {
+      for (const tenant of [T, T2]) {
+        await runWithTenant(tenant, () => db.transaction((t) => t.delete(vendorBlacklist).where(and(eq(vendorBlacklist.tenantId, tenant), eq(vendorBlacklist.pan, "DUPPA9999D")))));
+      }
+    }
   });
 });
 

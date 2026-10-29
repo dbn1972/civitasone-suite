@@ -10,9 +10,7 @@ DROP INDEX IF EXISTS procurement.uq_vendor_blacklist_active;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_vendor_blacklist_active
   ON procurement.vendor_blacklist (tenant_id, vendor_id)
   WHERE status = 'active' AND scope <> 'central';
-CREATE UNIQUE INDEX IF NOT EXISTS uq_vendor_blacklist_central_pan_active
-  ON procurement.vendor_blacklist (upper(pan))
-  WHERE status = 'active' AND scope = 'central' AND pan IS NOT NULL;
+-- (the per-PAN central index is created at the END of this file, after D2-D4, so it can never block them)
 
 -- D2: the POST /debit-notes consumer inserts status = 'issued' but 0015 only allowed 'draft', so the
 -- row was never stored. A created debit note is an issued one; also allow cancellation.
@@ -38,6 +36,22 @@ ALTER TABLE procurement.three_way_match
 ALTER TABLE po.procurement_pos
   ADD COLUMN IF NOT EXISTS closed_at      TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS closure_reason TEXT;
+
+-- D1 (cont.): one ACTIVE central row per (tenant, PAN). Deliberately per-tenant, NOT global: before 0040 central
+-- rows were tenant-isolated, so two tenants may already hold an active central row for the same PAN, and a global
+-- index would fail on that data (or force us to rewrite legal debarment records; the status CHECK has no suitable
+-- non-active value other than 'reinstated', which would misstate a debarment). Existing data cannot violate
+-- (tenant_id, upper(pan)): the old (tenant_id, vendor_id = NIL) index allowed at most one active central row per tenant.
+-- Cross-tenant de-duplication of NEW rows is done by the consumer (findActiveCentralByPanTx sees every tenant central row).
+-- Guarded so that, were an in-tenant duplicate ever present, the migration still completes (NOTICE) instead of aborting.
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_vendor_blacklist_central_pan_active
+    ON procurement.vendor_blacklist (tenant_id, upper(pan))
+    WHERE status = 'active' AND scope = 'central' AND pan IS NOT NULL;
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE '0046: skipped uq_vendor_blacklist_central_pan_active - duplicate active central PANs within a tenant; dedupe manually and re-run';
+END $$;
 
 -- ROLLBACK (manual):
 --   ALTER TABLE po.procurement_pos DROP COLUMN IF EXISTS closed_at, DROP COLUMN IF EXISTS closure_reason;
