@@ -20,7 +20,10 @@ export async function insert(tx: Writer, row: ShareInsert): Promise<void> {
   await tx.insert(fileShares).values(row);
 }
 
-export async function revoke(tx: Writer, tenantId: string, id: string, actorId: string): Promise<void> {
-  await tx.update(fileShares).set({ revokedAt: new Date() })
-    .where(and(eq(fileShares.tenantId, tenantId), eq(fileShares.id, id)));
+/** Revoke a share; returns the revoked row (for the audit trail) or null when none matched. */
+export async function revoke(tx: Writer, tenantId: string, id: string, _actorId: string): Promise<ShareRow | null> {
+  const rows = await tx.update(fileShares).set({ revokedAt: new Date() })
+    .where(and(eq(fileShares.tenantId, tenantId), eq(fileShares.id, id)))
+    .returning();
+  return rows[0] ?? null;
 }
