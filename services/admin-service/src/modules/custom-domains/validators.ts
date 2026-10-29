@@ -13,13 +13,22 @@ const domainRegex = /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2
  * domainRegex; internationalised names must be submitted as punycode (xn--).
  */
 export function normalizeDomain(raw: string): string {
-  return raw.trim().toLowerCase().replace(/\.$/, "");
+  // ALL trailing dots ("host..", "host..."), matching migration 0057's
+  // lower(rtrim(domain, '.')) index expression exactly.
+  return raw.trim().toLowerCase().replace(/\.+$/, "");
 }
 
+/**
+ * Canonical, validated domain. Empty / dots-only input normalises to "" and
+ * fails min(4) + domainRegex, so it is a validation error, never stored.
+ * Used by the register route AND the register consumer (same rule on every path).
+ */
+export const canonicalDomain = z.string()
+  .transform(normalizeDomain)
+  .pipe(z.string().min(4).max(253).regex(domainRegex, "Invalid domain name"));
+
 export const registerDomainBody = z.object({
-  domain: z.string()
-    .transform(normalizeDomain)
-    .pipe(z.string().min(4).max(253).regex(domainRegex, "Invalid domain name")),
+  domain: canonicalDomain,
   verificationMethod: z.enum(["dns_txt", "dns_cname"]).default("dns_txt"),
 });
 export type RegisterDomainBody = z.infer<typeof registerDomainBody>;

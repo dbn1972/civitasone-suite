@@ -7,7 +7,7 @@
  * network. Hostnames use the reserved .test TLD.
  */
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
@@ -19,6 +19,9 @@ import {
   checkDomainOwnership, setDnsResolver, challengeHost, CNAME_CHALLENGE_TARGET, type DnsResolver,
 } from "../src/modules/custom-domains/dns-verify.js";
 import { COMMANDS } from "../src/topics.js";
+import { signToken } from "@civitasone/auth";
+import { buildApp } from "../src/app.js";
+import { queue as sharedQueue } from "../src/shared/infra.js";
 import { normalizeDomain, registerDomainBody } from "../src/modules/custom-domains/validators.js";
 
 const T = randomUUID();
@@ -254,5 +257,56 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
     expect((await readRow(ownerId))[0]!.status).toBe("verified");
     const all = await runWithTenant(T2, () => db.transaction((tx) => tx.select().from(customDomains).where(eq(customDomains.id, attackerId))));
     expect(all).toEqual([]);
+  });
+
+  // ── Delta review: ALL trailing dots are stripped (matches 0057's rtrim),
+  // and empty / dots-only names are rejected, on the route AND consumer paths.
+  it("validator: host.. and host... canonicalise; dots-only and empty are validation errors", () => {
+    expect(normalizeDomain("Host-A.Example.Test..")).toBe("host-a.example.test");
+    expect(normalizeDomain("host-a.example.test...")).toBe("host-a.example.test");
+    for (const bad of ["...", ".", "", "   ", " .. "]) {
+      expect(registerDomainBody.safeParse({ domain: bad }).success).toBe(false);
+    }
+  });
+
+  it("route: POST with host.. / host... publishes the canonical name; dots-only is 400 and publishes nothing", async () => {
+    const app = await buildApp();
+    const spy = vi.spyOn(sharedQueue, "publish");
+    try {
+      const jwt = signToken({ sub: ACTOR, tid: T, roles: ["super_admin"], sid: "sess-fq12-dots" } as never, process.env.JWT_SECRET as string, 3600);
+      const headers = { authorization: `Bearer ${jwt}` };
+      const tag = randomUUID().slice(0, 8);
+      for (const suffix of ["..", "..."]) {
+        spy.mockClear();
+        const res = await app.inject({ method: "POST", url: "/v1/admin/custom-domains", headers, payload: { domain: `Route-${tag}.Example.Test${suffix}` } });
+        expect(res.statusCode).toBe(202);
+        const call = spy.mock.calls.find((c) => c[0] === COMMANDS.customDomainRegister);
+        expect((call?.[1] as { payload: { domain: string } }).payload.domain).toBe(`route-${tag}.example.test`);
+      }
+      spy.mockClear();
+      const bad = await app.inject({ method: "POST", url: "/v1/admin/custom-domains", headers, payload: { domain: "..." } });
+      expect(bad.statusCode).toBe(400);
+      expect(spy.mock.calls.some((c) => c[0] === COMMANDS.customDomainRegister)).toBe(false);
+    } finally {
+      spy.mockRestore();
+      await app.close();
+    }
+  });
+
+  it("consumer: host.. and host... published straight onto the queue are stored canonical; dots-only stores nothing", async () => {
+    const tag = randomUUID().slice(0, 8);
+    const two = await register(`Two-${tag}.Example.Test..`);
+    const three = await register(`three-${tag}.example.test...`);
+    expect((await readRow(two))[0]!.domain).toBe(`two-${tag}.example.test`);
+    expect((await readRow(three))[0]!.domain).toBe(`three-${tag}.example.test`);
+
+    const dotsId = randomUUID();
+    await q.publish(COMMANDS.customDomainRegister, {
+      messageId: randomUUID(), type: COMMANDS.customDomainRegister, tenantId: T, actorId: ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: dotsId, tenantId: T, domain: "...", verificationMethod: "dns_txt", verificationToken: TOKEN },
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(await readRow(dotsId)).toEqual([]);
   });
 });

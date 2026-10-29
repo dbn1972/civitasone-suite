@@ -10,7 +10,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { customDomains, type CustomDomainRow } from "./schema.js";
 import { checkDomainOwnership } from "./dns-verify.js";
-import { normalizeDomain } from "./validators.js";
+import { canonicalDomain } from "./validators.js";
 import { eq, and } from "drizzle-orm";
 
 const log = pino({ name: "admin-custom-domains-consumer" });
@@ -28,12 +28,20 @@ export function registerCustomDomainConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
+        // FQ12-SEC: same canonicalisation + validation as the route, so a
+        // command published straight onto the queue ("HOST..", "...", "")
+        // can never store a non-canonical or invalid host.
+        const domain = canonicalDomain.safeParse(p.domain);
+        if (!domain.success) {
+          log.warn({ messageId: msg.messageId, id: p.id }, "register: rejected non-canonical/invalid domain; nothing stored");
+          return;
+        }
         await (tx as any).insert(customDomains).values({
           id: p.id,
           tenantId: p.tenantId,
           // FQ12-SEC: canonical lower-case form (also covers in-flight
           // commands published before the validator normalised).
-          domain: normalizeDomain(p.domain),
+          domain: domain.data,
           status: "pending_verification",
           verificationToken: p.verificationToken,
           verificationMethod: p.verificationMethod,
