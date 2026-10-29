@@ -33,7 +33,8 @@ export async function storeRoutes(app: FastifyInstance): Promise<void> {
         key: entry.key,
         value: entry.value,
         sizeBytes: entry.sizeBytes,
-        updatedAt: entry.updatedAt.toISOString(),
+        // A cached entry is JSON-serialised (updatedAt comes back as a string).
+        updatedAt: new Date(entry.updatedAt).toISOString(),
       },
     });
   });

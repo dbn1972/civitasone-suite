@@ -46,6 +46,7 @@ export async function getCaseFile(tenantId: string, caseId: string) {
   return {
     ...mapSummary(row),
     complaintSource: row.complaintSource ?? undefined,
+    screeningRemarks: row.screeningRemarks ?? undefined,
     findings: row.findings ?? undefined,
     closedAt: row.closedAt?.toISOString(),
     evidence: evidence.map((e) => ({

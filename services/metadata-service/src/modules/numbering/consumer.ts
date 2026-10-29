@@ -1,5 +1,5 @@
 import type { Queue } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { withTenant } from "../../shared/scope.js";
 import { COMMANDS } from "../../topics.js";
@@ -28,7 +28,8 @@ export function registerNumberingConsumers(q: Queue): void {
     const p = msg.payload as Record<string, any>;
     await withTenant(p.tenantId, async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      // FQ12 (#98-#104): bump version on update, as records/consumer.ts does.
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${numberFormats.version} + 1` };
       for (const k of ["label", "prefix", "embedFinancialYear", "fyStartMonth", "counterWidth", "separator", "resetPolicy"]) {
         if (p[k] !== undefined) set[k] = p[k];
       }

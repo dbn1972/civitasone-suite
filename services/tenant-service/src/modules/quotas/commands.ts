@@ -23,9 +23,16 @@ export interface QuotaCheckResult {
 }
 
 export async function quotaSet(ctx: RequestContext, body: QuotaSetBody): Promise<Accepted> {
-  const id = randomUUID();
+  // FQ12 (g): SET is an upsert on (tenantId, resource). The 202 carries the
+  // quota row id (like plans/subscriptions), so for an existing row it is that
+  // row's id, not a fresh one the consumer never writes. Read under the target
+  // tenant's GUC (quotas.quotas is FORCE RLS).
+  const existing = await readScoped(body.tenantId, (tx) =>
+    repo.findByTenantAndResourceTx(tx as unknown as repo.Writer, body.tenantId, body.resource),
+  );
+  const id = existing?.id ?? randomUUID();
   await queue.publish(COMMANDS.quotaSet, {
-    messageId: id,
+    messageId: existing ? randomUUID() : id,
     type: COMMANDS.quotaSet,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

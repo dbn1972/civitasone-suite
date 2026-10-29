@@ -1,4 +1,5 @@
 import { eq, and } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import {
   wizardDefinitions,
@@ -14,6 +15,15 @@ import {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// FQ12 (#130-#134): db.transaction() only carries the app.tenant_id GUC when an
+// AsyncLocalStorage tenant context is active, and createTenantTxHook sets one only
+// from an x-tenant-id header the gateway does not send. Bind the tenant explicitly,
+// same as stages/repo.ts tenantScoped().
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+function tenantTx<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction(fn)) as Promise<T>;
+}
+
 // --- Wizard ---
 
 export async function getWizard(wizardId: string, tenantId: string): Promise<WizardRow | null> {
@@ -24,7 +34,7 @@ export async function getWizard(wizardId: string, tenantId: string): Promise<Wiz
   // createTenantTxHook, in app.ts). Every RLS-protected read in this module
   // was failing with "unrecognized configuration parameter \"app.tenant_id\""
   // (live-reproduced) because none of them went through db.transaction().
-  const rows = await db.transaction(async (tx) => {
+  const rows = await tenantTx(tenantId, async (tx) => {
     return tx
       .select()
       .from(wizardDefinitions)
@@ -36,7 +46,7 @@ export async function getWizard(wizardId: string, tenantId: string): Promise<Wiz
 
 export async function listWizards(tenantId: string, limit: number, offset: number): Promise<WizardRow[]> {
   // See TENANT-SCOPING FIX note on getWizard() above -- same root cause.
-  return db.transaction(async (tx) => {
+  return tenantTx(tenantId, async (tx) => {
     return tx
       .select()
       .from(wizardDefinitions)
@@ -54,7 +64,7 @@ export async function insertWizard(tx: Writer, row: WizardInsert): Promise<void>
 
 export async function getStepDefinitions(wizardId: string, tenantId: string): Promise<StepDefRow[]> {
   // See TENANT-SCOPING FIX note on getWizard() above -- same root cause.
-  return db.transaction(async (tx) => {
+  return tenantTx(tenantId, async (tx) => {
     return tx
       .select()
       .from(stepDefinitions)
@@ -89,7 +99,7 @@ export async function insertStepDefinitions(tx: Writer, rows: StepDefInsert[]): 
 
 export async function getStepExecutions(wizardId: string, tenantId: string): Promise<StepExecRow[]> {
   // See TENANT-SCOPING FIX note on getWizard() above -- same root cause.
-  return db.transaction(async (tx) => {
+  return tenantTx(tenantId, async (tx) => {
     return tx
       .select()
       .from(stepExecutions)

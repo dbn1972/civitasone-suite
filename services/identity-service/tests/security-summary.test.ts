@@ -46,8 +46,8 @@ async function session(tenant: string, userId: string, status: string, expiresIn
 }
 async function device(tenant: string, userId: string, trust: string) {
   await asTenant(tenant, (sql) => sql`
-    INSERT INTO devices.registered_devices (id, tenant_id, user_id, platform, label, fingerprint, trust_token, trust_level, created_by, updated_by)
-    VALUES (${randomUUID()}, ${tenant}, ${userId}, 'android', 'phone', ${randomUUID()}, 'tt', ${trust}, ${ACTOR}, ${ACTOR})`);
+    INSERT INTO devices.registered_devices (id, tenant_id, user_id, platform, label, fingerprint, trust_token_hash, trust_level, created_by, updated_by)
+    VALUES (${randomUUID()}, ${tenant}, ${userId}, 'android', 'phone', ${randomUUID()}, encode(sha256(convert_to(${randomUUID()}, 'UTF8')), 'hex'), ${trust}, ${ACTOR}, ${ACTOR})`);
 }
 
 beforeAll(async () => {

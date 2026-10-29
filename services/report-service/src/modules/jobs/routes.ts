@@ -28,6 +28,17 @@ import { DOWNLOAD_LINK_TTL_SECONDS, jobStorageKey } from "../../shared/download.
 // with the scheduled routes' ["report_viewer", ...].
 import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES, REPORT_PII_UNMASK_ROLES, isReportAdmin, ownerScope } from "../../shared/roles.js";
 import type { RequestContext } from "@civitasone/types";
+
+type ScreenJobStatus = "queued" | "running" | "completed" | "failed";
+/**
+ * DB status -> screen status. The DB stores 'processing' (jobs_status_check);
+ * the screen contract calls the same state 'running'. Without the mapping an
+ * in-progress job read back as 'queued'.
+ */
+function screenStatus(status: string): ScreenJobStatus {
+  if (status === "processing" || status === "running") return "running";
+  return (["queued", "completed", "failed"].includes(status) ? status : "queued") as ScreenJobStatus;
+}
 import type { JobView } from "./schema.js";
 
 /**
@@ -108,7 +119,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       requestedAt: new Date(job.createdAt as unknown as string).toISOString(),
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
-      status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
+      status: screenStatus(job.status),
       downloadUrl: job.downloadUrl ? downloadPath(job.id) : undefined,
       rowCount: job.rowCount ?? undefined,
     })));
@@ -130,7 +141,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       requestedAt: new Date(job.createdAt as unknown as string).toISOString(),
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
-      status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
+      status: screenStatus(job.status),
       downloadUrl: job.downloadUrl ? downloadPath(job.id) : undefined,
       rowCount: job.rowCount ?? undefined,
       parameters: job.parameters,

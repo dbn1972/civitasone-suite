@@ -11,6 +11,8 @@ import * as commands from "./commands.js";
 import { webhooks, webhookDeliveries, secretRotations } from "./schema.js";
 import { canReplay, type DeliveryStatus } from "./delivery.js";
 import { scopedRead } from "../../shared/db.js";
+import { SecretKeyUnavailableError } from "../../shared/secret-crypto.js";
+import { SECRET_MASK } from "./secret-store.js";
 import { eq, and, desc } from "drizzle-orm";
 
 const RESOURCE = "webhook";
@@ -58,6 +60,21 @@ function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T
   return result.data;
 }
 
+/**
+ * FQ12-SEC: webhook secrets are sealed before they are queued. With no
+ * PII_ENC_KEY configured that fails closed: 503, nothing published or stored.
+ */
+async function withSecretKey<R>(fn: () => Promise<R>): Promise<R> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof SecretKeyUnavailableError) {
+      throw new HttpError(503, err.code, "Secret storage is not configured. Contact your platform administrator.");
+    }
+    throw err;
+  }
+}
+
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   // LIST webhooks for tenant
   app.get("/v1/admin/webhooks", async (req, reply) => {
@@ -68,10 +85,17 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       // Wrapped in scopedRead() (db.transaction) so wrapWithTenantGuc injects
       // app.tenant_id before this read — a bare db.select() under FORCE RLS
       // returns zero rows with no GUC set.
-      async () => scopedRead((tx) => tx.select().from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId))),
+      // FQ12-SEC: never SELECT the secret columns on a read path, so neither
+      // the response nor the read cache ever holds secret material (sealed or not).
+      async () => scopedRead((tx) => tx.select({
+        id: webhooks.id, tenantId: webhooks.tenantId, url: webhooks.url, events: webhooks.events,
+        secretRotatedAt: webhooks.secretRotatedAt, active: webhooks.active, description: webhooks.description,
+        createdAt: webhooks.createdAt, updatedAt: webhooks.updatedAt, createdBy: webhooks.createdBy,
+        updatedBy: webhooks.updatedBy, version: webhooks.version,
+      }).from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId))),
     )) ?? [];
-    // Strip secret from list response
-    const sanitized = rows.map(({ secret, previousSecret, ...rest }) => ({ ...rest, secretMasked: `${secret.slice(0, 10)}...` }));
+    // The secret is shown once at create; reads carry a fixed mask only.
+    const sanitized = rows.map((r) => ({ ...r, secretMasked: SECRET_MASK }));
     return reply.send({ data: sanitized });
   });
 
@@ -85,11 +109,11 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "SSRF_BLOCKED", "URL resolves to a private/loopback/link-local address");
     }
     // exactOptionalPropertyTypes: only include description when provided.
-    const result = await commands.webhookCreate(ctx, {
+    const result = await withSecretKey(() => commands.webhookCreate(ctx, {
       url: body.url,
       events: body.events,
       ...(body.description !== undefined ? { description: body.description } : {}),
-    });
+    }));
     // Return secret only on creation (one-time)
     return reply.code(202).send(result);
   });
@@ -132,7 +156,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     // Verify ownership. Wrapped in scopedRead() (db.transaction) so
     // wrapWithTenantGuc injects app.tenant_id before these reads — a bare
     // db.select() under FORCE RLS returns zero rows with no GUC set.
-    const wh = await scopedRead((tx) => tx.select().from(webhooks)
+    const wh = await scopedRead((tx) => tx.select({ id: webhooks.id }).from(webhooks)
       .where(and(eq(webhooks.id, id), eq(webhooks.tenantId, ctx.tenantId)))
       .limit(1));
     if (!wh[0]) throw new HttpError(404, "NOT_FOUND", "webhook not found");
@@ -175,10 +199,10 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const { id } = safeParse(idParam, req.params);
     const body = safeParse(rotateBody, req.body ?? {});
-    const wh = await scopedRead((tx) => tx.select().from(webhooks)
+    const wh = await scopedRead((tx) => tx.select({ id: webhooks.id }).from(webhooks)
       .where(and(eq(webhooks.id, id), eq(webhooks.tenantId, ctx.tenantId))).limit(1));
     if (!wh[0]) throw new HttpError(404, "NOT_FOUND", "webhook not found");
-    const result = await commands.webhookRotateRequest(ctx, id, body.reason);
+    const result = await withSecretKey(() => commands.webhookRotateRequest(ctx, id, body.reason));
     return reply.code(202).send(result);
   });
 

@@ -65,6 +65,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (tid) tenantStorage.enterWith({ tenantId: tid });
   });
 
+  // MUST run BEFORE any app.register(<routes>) below: Fastify encapsulated route contexts copy the
+  // parent error handler when they are created, so a handler set after the routes only covered the
+  // root context and every ZodError thrown inside a route module without its own handler surfaced
+  // as a 500 (UAT API sweep 2026-10-29, same root cause as hrms #2361 / payroll af21c820e).
+  // delegateFrameworkClientErrors: module-local handlers that map unknown errors to 500 still answer
+  // Fastify's own 4xx (malformed JSON, empty JSON body, ...) with the shared 4xx envelope.
+  registerSchemaErrorHandler(app, HttpError, { delegateFrameworkClientErrors: true });
+
   registerOpsRoutes(app, { service: "billing-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -81,7 +89,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(gatewayRoutes);
   await app.register(churnRoutes);
 
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

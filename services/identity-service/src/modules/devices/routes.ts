@@ -31,7 +31,9 @@ export async function deviceRoutes(app: FastifyInstance): Promise<void> {
         platform: body.platform,
         label: body.label,
         fingerprint: body.fingerprint,
-        trustToken,
+        // FQ12-SEC: only the hash travels on the queue and reaches the DB;
+        // the token itself is returned to the device once, below.
+        trustTokenHash: repo.hashTrustToken(trustToken),
         trustLevel: "recognized",
       },
     });
@@ -54,7 +56,7 @@ export async function deviceRoutes(app: FastifyInstance): Promise<void> {
       "x-device-trust-token": req.headers["x-device-trust-token"],
     });
     const device = await repo.findDevice(ctx.tenantId, headers["x-device-id"], ctx.actorId);
-    if (!device || device.trustToken !== headers["x-device-trust-token"]) {
+    if (!device || !repo.trustTokenMatches(device.trustTokenHash, headers["x-device-trust-token"])) {
       return reply.code(403).send({ code: "DEVICE_NOT_TRUSTED", message: "device verification failed" });
     }
     const stepUpToken = randomUUID();

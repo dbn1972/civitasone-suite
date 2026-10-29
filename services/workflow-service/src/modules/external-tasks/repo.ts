@@ -23,6 +23,17 @@ function toWorkerUuid(workerId: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
+/**
+ * Raw db.execute() rows come back with timestamptz columns as strings (the
+ * typed drizzle mapper is bypassed), so `r.fire_at.toISOString()` threw AFTER
+ * the lock UPDATE had committed: fetch-and-lock answered 500 while the tasks
+ * stayed locked to the worker (UAT FQ12 #158). Normalise to a Date first.
+ */
+function toDate(v: Date | string | null): Date | null {
+  if (v === null || v === undefined) return null;
+  return v instanceof Date ? v : new Date(v);
+}
+
 export interface ExternalTaskView {
   id: string;
   instanceId: string;
@@ -74,7 +85,7 @@ export async function fetchAndLock(
   `)) as unknown as Array<{
     id: string; instance_id: string; name: string;
     node_key: string | null; ref_type: string | null; ref_id: string | null;
-    fire_at: Date;
+    fire_at: Date | string;
   }>;
 
   return rows.map((r) => ({
@@ -84,7 +95,7 @@ export async function fetchAndLock(
     nodeKey: r.node_key,
     refType: r.ref_type,
     refId: r.ref_id,
-    lockedUntil: r.fire_at.toISOString(),
+    lockedUntil: (toDate(r.fire_at) ?? new Date(lockExpiresIso)).toISOString(),
   }));
 }
 
@@ -107,7 +118,7 @@ export async function completeExternalTask(
   `)) as unknown as Array<{
     id: string; instance_id: string; name: string; node_key: string | null;
     ref_type: string | null; ref_id: string | null;
-    assignee_id: string | null; fire_at: Date | null; status: string;
+    assignee_id: string | null; fire_at: Date | string | null; status: string;
   }>;
 
   const task = rows[0];
@@ -115,14 +126,22 @@ export async function completeExternalTask(
   if (task.status !== "pending") throw new HttpError(409, "ALREADY_COMPLETED", "task is no longer pending");
   const workerUuid = toWorkerUuid(workerId);
   if (task.assignee_id !== workerUuid) throw new HttpError(403, "NOT_LOCKED", "task is not locked by this worker");
-  if (task.fire_at && task.fire_at < new Date()) throw new HttpError(409, "LOCK_EXPIRED", "lock has expired; re-fetch the task");
+  // fire_at arrives as a string from the raw execute: comparing it to a Date was
+  // always false, so an expired lock was never detected.
+  const lockExpiresAt = toDate(task.fire_at);
+  if (lockExpiresAt && lockExpiresAt < new Date()) throw new HttpError(409, "LOCK_EXPIRED", "lock has expired; re-fetch the task");
 
-  // Publish completeTask command (standard engine path)
+  // Publish completeTask command (standard engine path).
+  // actorId MUST be a uuid: the consumer writes it to tasks.completed_by and
+  // transition_history.actor_id (uuid columns). Publishing the free-form
+  // workerId made every completion fail in the consumer and dead-letter while
+  // this route had already answered 200 "completed" (UAT FQ12 #159). The lock
+  // owner's uuid (the same value stored in assignee_id) is the actor.
   await queue.publish(COMMANDS.completeTask, {
     messageId: randomUUID(),
     type: COMMANDS.completeTask,
     tenantId,
-    actorId: workerId,
+    actorId: workerUuid,
     correlationId: randomUUID(),
     schemaVersion: "1.0",
     payload: {
@@ -181,7 +200,7 @@ export async function failExternalTask(
       messageId: randomUUID(),
       type: COMMANDS.completeTask,
       tenantId,
-      actorId: workerId,
+      actorId: workerUuidFail, // uuid column downstream; see completeExternalTask
       correlationId: randomUUID(),
       schemaVersion: "1.0",
       payload: {

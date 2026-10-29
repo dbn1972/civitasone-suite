@@ -18,6 +18,7 @@ import {
 } from "./adapter.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
 export async function tracesRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -77,7 +78,9 @@ export async function tracesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
 
     const { pan } = z.object({
-      pan: z.string().min(1).max(10),
+      // Validated at the boundary (UAT sweep: a non-PAN reached the adapter and answered 503).
+      // Same convention as finance masters (vendor PAN): uppercase, then AAAAA9999A.
+      pan: z.string().length(10).transform((v) => v.toUpperCase()).refine((v) => PAN_RE.test(v), "invalid PAN format (expect AAAAA9999A)"),
     }).parse(req.params);
 
     try {

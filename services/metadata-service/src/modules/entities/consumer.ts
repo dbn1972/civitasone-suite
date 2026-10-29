@@ -2,7 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { withTenant } from "../../shared/scope.js";
 import { entityDefinitions } from "./schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 export function registerEntityConsumers(rawQueue: Queue): void {
@@ -62,7 +62,8 @@ export function registerEntityConsumers(rawQueue: Queue): void {
     };
     await withTenant(p.tenantId, async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId };
+      // FQ12 (#98-#104): bump version on update, as records/consumer.ts does.
+      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${entityDefinitions.version} + 1` };
       if (p.label !== undefined) set.label = p.label;
       if (p.pluralLabel !== undefined) set.pluralLabel = p.pluralLabel;
       if (p.description !== undefined) set.description = p.description;

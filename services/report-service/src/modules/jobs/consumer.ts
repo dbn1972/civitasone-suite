@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { JobView } from "./schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { buildJobReportHtml } from "../../shared/report-html.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -77,7 +78,8 @@ export function registerJobConsumers(queue: Queue): void {
         payload: {
           jobId: p.id,
           tenantId: msg.tenantId,
-          templateHtml: `<html><body><h1>${p.name}</h1><p>Report type: ${p.reportType ?? "general"}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
+          // Job names are user input: escaped (SSRF via the headless renderer).
+          templateHtml: buildJobReportHtml(p.name, p.reportType, new Date()),
           format: (p.format ?? "pdf") as "pdf" | "xlsx" | "csv" | "html",
           // grantedBy is the AUTHENTICATED actor of this command, never a client-supplied id.
           ...(unmaskReason ? { piiUnmask: { reason: unmaskReason, grantedBy: msg.actorId } } : {}),

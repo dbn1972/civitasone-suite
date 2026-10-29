@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig } from "vitest/config";
 import { sharedTestTimeouts } from "../../vitest.shared";
 
@@ -30,6 +31,10 @@ export default defineConfig({
             })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // FQ12-SEC: webhook HMAC secrets are sealed at rest; the suite needs a
+      // key. Generated per run (never a committed literal); an explicitly
+      // exported PII_ENC_KEY wins. Suites that test the no-key path delete it.
+      PII_ENC_KEY: process.env.PII_ENC_KEY ?? randomBytes(24).toString("hex"),
     },
     coverage: {
       provider: "v8",

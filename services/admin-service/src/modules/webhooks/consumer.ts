@@ -18,6 +18,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { webhooks, webhookDeliveries, secretRotations } from "./schema.js";
 import { applyRotation, assertCanDecide, decidedStatus, RotationError } from "./rotation.js";
 import { canReplay, type DeliveryStatus } from "./delivery.js";
+import { ensureSealed } from "./secret-store.js";
 import { eq, and } from "drizzle-orm";
 
 const log = pino({ name: "admin-webhooks-consumer" });
@@ -41,7 +42,10 @@ export function registerWebhookConsumers(queue: Queue): void {
           tenantId: p.tenantId,
           url: p.url,
           events: p.events,
-          secret: p.secret,
+          // FQ12-SEC: stored sealed. Commands seal before publishing; a legacy
+          // in-flight plaintext payload is sealed here (throws with no key, so
+          // the message retries/DLQs instead of persisting plaintext).
+          secret: ensureSealed(p.secret),
           description: p.description,
           active: true,
           createdBy: msg.actorId,
@@ -182,7 +186,7 @@ export function registerWebhookConsumers(queue: Queue): void {
           id: p.rotationId,
           tenantId: p.tenantId,
           webhookId: p.webhookId,
-          newSecret: p.newSecret,
+          newSecret: ensureSealed(p.newSecret),
           status: "pending",
           reason: p.reason,
           requestedBy: msg.actorId,
@@ -249,7 +253,8 @@ export function registerWebhookConsumers(queue: Queue): void {
             .where(and(eq(webhooks.id, request.webhookId), eq(webhooks.tenantId, p.tenantId)))
             .limit(1);
           if (!wh[0]) throw new NonRetryableError("NOT_FOUND", "webhook not found");
-          const applied = applyRotation(wh[0].secret, request.newSecret, now);
+          // Both slots stay sealed (legacy plaintext rows are sealed on the way through).
+          const applied = applyRotation(ensureSealed(wh[0].secret), ensureSealed(request.newSecret), now);
           await (tx as any).update(webhooks)
             .set({
               secret: applied.secret,

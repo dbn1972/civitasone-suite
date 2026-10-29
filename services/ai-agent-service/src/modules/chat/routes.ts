@@ -159,8 +159,13 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       handoff,
     });
 
+    // FQ12 (#47): `id` stays the command/message id (the G-ASYNC-1 command-status key),
+    // but the caller also needs the conversation it just created or continued --
+    // the next turn and GET /v1/ai/chat/:conversationId are keyed by it.
     return reply.code(202).send({
       ...accepted,
+      conversationId,
+      messageId,
       handoff: handoff ? { triggered: true, reasonCode: handoff.reasonCode } : { triggered: false },
     });
   });

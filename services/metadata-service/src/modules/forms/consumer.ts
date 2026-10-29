@@ -66,7 +66,7 @@ export function registerFormConsumers(q: Queue): void {
       } else if (op === "reject_version") {
         await tx.update(formVersions).set({
           status: "draft", submittedBy: null, submittedAt: null,
-          updatedAt: new Date(), updatedBy: msg.actorId,
+          updatedAt: new Date(), updatedBy: msg.actorId, version: sql`${formVersions.version} + 1`,
         }).where(and(eq(formVersions.id, p.id), eq(formVersions.tenantId, p.tenantId)));
       } else if (op === "create_public_endpoint") {
         await tx.insert(formPublicEndpoints).values({
@@ -77,7 +77,12 @@ export function registerFormConsumers(q: Queue): void {
       await enqueue(tx, {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "metadata", action: `form_${op}`, resourceType: "form_version", resourceId: p.id, outcome: "success" },
+        // FQ12 (#108): the reject reason was accepted by the route and dropped; it now
+        // rides on the audit event (the maker-checker trail) as newValue.reason.
+        payload: {
+          service: "metadata", action: `form_${op}`, resourceType: "form_version", resourceId: p.id, outcome: "success",
+          ...(op === "reject_version" && typeof p.reason === "string" ? { newValue: { reason: p.reason } } : {}),
+        },
       });
     });
   });
