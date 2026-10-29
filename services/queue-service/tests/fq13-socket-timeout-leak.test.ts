@@ -21,11 +21,15 @@ import type { AddressInfo, Socket } from "node:net";
 
 /** Longer than the handler's 3 s listener-defer window. */
 const SLOW_RESPONSE_MS = 3_500;
+/** Well past the 6 s requestTimeout used by the fail-fast test. */
+const HANG_RESPONSE_MS = 12_000;
 
 type BusModule = typeof import("../src/bus.js");
 let bus: BusModule;
-let server: Server;
-let port: number;
+let slowServer: Server;
+let hangServer: Server;
+let slowPort: number;
+let hangPort: number;
 const savedEnv = { ...process.env };
 
 beforeAll(async () => {
@@ -38,31 +42,46 @@ beforeAll(async () => {
   delete process.env.SQS_CONNECTION_TIMEOUT_MS;
   bus = await import("../src/bus.js");
 
-  server = createServer((req, res) => {
-    const delay = Number(req.headers["x-delay-ms"] ?? SLOW_RESPONSE_MS);
+  slowServer = await startDelayedServer(SLOW_RESPONSE_MS);
+  slowPort = (slowServer.address() as AddressInfo).port;
+  hangServer = await startDelayedServer(HANG_RESPONSE_MS);
+  hangPort = (hangServer.address() as AddressInfo).port;
+});
+
+/**
+ * Local server that answers every request after a FIXED delay. The delay is a
+ * constant chosen per server and is never derived from request data.
+ */
+async function startDelayedServer(delayMs: number): Promise<Server> {
+  const srv = createServer((req, res) => {
     req.resume();
     const t = setTimeout(() => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end("{}");
-    }, delay);
+    }, delayMs);
     res.on("close", () => clearTimeout(t));
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  port = (server.address() as AddressInfo).port;
-});
+  await new Promise<void>((resolve) => srv.listen(0, "127.0.0.1", resolve));
+  return srv;
+}
+
+async function stopServer(srv: Server | undefined): Promise<void> {
+  if (!srv) return;
+  srv.closeAllConnections();
+  await new Promise<void>((resolve) => srv.close(() => resolve()));
+}
 
 afterEach(() => {
   delete process.env.SQS_REQUEST_TIMEOUT_MS;
 });
 
 afterAll(async () => {
-  if (!server) return;
-  server.closeAllConnections();
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await stopServer(slowServer);
+  await stopServer(hangServer);
   process.env = savedEnv;
 });
 
-function request(delayMs: number = SLOW_RESPONSE_MS) {
+function request(port: number) {
   return {
     protocol: "http:",
     hostname: "127.0.0.1",
@@ -70,7 +89,7 @@ function request(delayMs: number = SLOW_RESPONSE_MS) {
     method: "POST",
     path: "/",
     query: {},
-    headers: { "content-type": "application/json", "x-delay-ms": String(delayMs) },
+    headers: { "content-type": "application/json" },
     body: "{}",
   };
 }
@@ -91,7 +110,7 @@ describe("FQ13: SQS request handler does not leak socket timeout listeners", () 
       for (let i = 0; i < 5; i++) {
         // Handler signature differs slightly across 3.x/4.x; a plain request
         // object is what both versions actually read.
-        const { response } = await handler.handle(request() as never);
+        const { response } = await handler.handle(request(slowPort) as never);
         const body = response.body as IncomingMessage;
         const socket = body.socket as Socket;
         sockets.add(socket);
@@ -121,8 +140,8 @@ describe("FQ13: fail-fast requestTimeout is preserved", () => {
     const handler = bus.buildRequestHandler(1);
     try {
       const started = Date.now();
-      // Server would answer at 12 s; the 6 s requestTimeout must abort first.
-      const outcome = await handler.handle(request(12_000) as never).then(
+      // hangServer answers at 12 s; the 6 s requestTimeout must abort first.
+      const outcome = await handler.handle(request(hangPort) as never).then(
         () => ({ ok: true as const, err: undefined }),
         (err: unknown) => ({ ok: false as const, err: err as Error }),
       );
