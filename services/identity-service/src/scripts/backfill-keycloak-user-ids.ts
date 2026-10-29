@@ -10,7 +10,7 @@
  * admin creds). Reads Keycloak only; writes only keycloak_user_id. One tenant
  * per invocation. Prints a JSON report.
  * Exit codes: 0 ok, 1 error, 2 finished but some users need a human
- * (unmatched / conflicting / lookup errors).
+ * (unmatched / tid missing / conflicting / lookup errors).
  */
 import { backfillKeycloakUserIds } from "../modules/users/keycloak-link.js";
 import { sqlClient } from "../shared/db.js";
@@ -30,7 +30,7 @@ async function main(): Promise<number> {
   }
   const report = await backfillKeycloakUserIds({ tenantId, apply: process.argv.includes("--apply") });
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  return report.unmatched.length + report.conflicts.length + report.errors.length > 0 ? 2 : 0;
+  return report.unmatched.length + report.tidMissing.length + report.conflicts.length + report.errors.length > 0 ? 2 : 0;
 }
 
 main()

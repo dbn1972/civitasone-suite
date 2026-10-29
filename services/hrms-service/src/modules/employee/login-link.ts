@@ -1,4 +1,4 @@
-import { and, eq, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { RequestContext } from "@civitasone/types";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -6,7 +6,7 @@ import { enqueue } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { fetchUserStatus } from "../../shared/identity-client.js";
 import { hrmsEmployees } from "./schema.js";
-import { EXITED_STATUSES, isExitedStatus } from "./status.js";
+import { isLinkIneligibleStatus, lockLogin, findOtherHolder } from "./login-holder.js";
 import type { LoginLinkBody } from "./validators.js";
 
 const AUDIT = "audit.event.record";
@@ -37,12 +37,16 @@ export type LoginLinkResult = {
  * the change does.
  *
  * Rules:
- *  - one serving (not terminated/separated/retired) employee per login per
- *    tenant: 409 LOGIN_ALREADY_LINKED otherwise. Serialised per (tenant, login)
- *    with a transaction-scoped advisory lock so two concurrent links of the
- *    same login to two employees cannot both pass the check.
- *  - linking an exited employee is refused (409 EMPLOYEE_EXITED); unlinking one
- *    is allowed, so a stale link can always be cleared.
+ *  - one employee record per login per tenant: 409 LOGIN_ALREADY_LINKED if
+ *    any other record (exited ones included -- self-service would otherwise
+ *    see two rows and lock the login out) holds it. Serialised per
+ *    (tenant, login) with the advisory lock in login-holder.ts, the SAME lock
+ *    and holder check the email auto-link in actor-link.ts uses, so neither
+ *    path can race the other into a duplicate link. Backed in the database by
+ *    the partial unique index of migration 0253 (serving rows) once existing
+ *    duplicates are cleaned.
+ *  - linking an exited/no_show employee is refused (409 EMPLOYEE_EXITED);
+ *    unlinking one is allowed, so a stale link can always be cleared.
  *  - the login must be a real, ACTIVE user of this tenant per identity-service
  *    (which resolves both identity ids and Keycloak subs). Fails CLOSED: an
  *    unverifiable login is a 503, never a silent link.
@@ -79,21 +83,12 @@ export async function setEmployeeLoginLink(
     const previousUserRef = emp.userRef ?? null;
 
     if (userId !== null) {
-      if (isExitedStatus(emp.status)) {
-        throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}'; a login cannot be linked to an exited employee`);
+      if (isLinkIneligibleStatus(emp.status)) {
+        throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}'; a login cannot be linked to an exited or no-show employee`);
       }
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`hrms.login-link:${tenantId}:${userId}`}, 0))`);
-      const holders = await tx.select({ id: hrmsEmployees.id })
-        .from(hrmsEmployees)
-        .where(and(
-          eq(hrmsEmployees.tenantId, tenantId),
-          eq(hrmsEmployees.userRef, userId),
-          ne(hrmsEmployees.id, employeeId),
-          notInArray(hrmsEmployees.status, [...EXITED_STATUSES]),
-        ))
-        .limit(1);
-      if (holders[0]) {
-        throw new HttpError(409, "LOGIN_ALREADY_LINKED", "this login is already linked to another serving employee; unlink it there first");
+      await lockLogin(tx, tenantId, userId);
+      if (await findOtherHolder(tx, tenantId, userId, employeeId)) {
+        throw new HttpError(409, "LOGIN_ALREADY_LINKED", "this login is already linked to another employee record; unlink it there first");
       }
     }
 

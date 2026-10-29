@@ -22,7 +22,10 @@ export async function findById(tenantId: string, id: string): Promise<UserView |
  * FQ14: tenant-scoped point lookup by identity id OR Keycloak user id (the JWT
  * sub other services hold). Both predicates sit under tenant_id = tenantId, so
  * a sub belonging to another tenant's user never resolves. An exact identity-id
- * match is preferred over a Keycloak-id match.
+ * match is preferred over a Keycloak-id match. (A row whose id equals another
+ * row's keycloak_user_id needs a UUIDv4 collision or a hand-written row:
+ * keycloak_user_id is only ever written from ids the Keycloak admin API
+ * returned, so this ordering is not caller-controllable.)
  */
 export async function findByIdOrKeycloakId(tenantId: string, id: string): Promise<UserView | null> {
   const rows = await scopedRead((tx) => tx.select().from(users)

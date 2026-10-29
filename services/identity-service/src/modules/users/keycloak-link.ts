@@ -53,6 +53,8 @@ export type BackfillReport = {
   linked: number;
   wouldLink: number;
   unmatched: string[];
+  /** realm user found but without a `tid` equal to this tenant: never mapped. */
+  tidMissing: string[];
   conflicts: string[];
   errors: string[];
 };
@@ -67,7 +69,7 @@ export type BackfillReport = {
 export async function backfillKeycloakUserIds(opts: { tenantId: string; apply: boolean; pageSize?: number }): Promise<BackfillReport> {
   const { tenantId, apply } = opts;
   const pageSize = opts.pageSize ?? 200;
-  const report: BackfillReport = { tenantId, apply, scanned: 0, linked: 0, wouldLink: 0, unmatched: [], conflicts: [], errors: [] };
+  const report: BackfillReport = { tenantId, apply, scanned: 0, linked: 0, wouldLink: 0, unmatched: [], tidMissing: [], conflicts: [], errors: [] };
   let after: string | null = null;
   for (;;) {
     const cursor: string | null = after;
@@ -85,7 +87,8 @@ export async function backfillKeycloakUserIds(opts: { tenantId: string; apply: b
       const r = await keycloak.lookupUserId({ tenantId, email: u.email, identityUserId: u.id });
       if (!r.ok) { report.errors.push(u.id); continue; }
       if (r.skipped) throw new Error("keycloak admin creds not configured; nothing to backfill from");
-      if (!r.kcUserId) { report.unmatched.push(u.id); continue; }
+      if (r.reason?.startsWith("tid_missing")) { report.tidMissing.push(u.id); continue; }
+      if (!r.kcUserId || !r.tenantVerified) { report.unmatched.push(u.id); continue; }
       if (!apply) { report.wouldLink++; continue; }
       const outcome = await persistKeycloakUserId(tenantId, u.id, r.kcUserId);
       if (outcome === "linked") report.linked++;

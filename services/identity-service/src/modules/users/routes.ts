@@ -125,8 +125,10 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     );
     // FQ14: also (re)record the identity -> Keycloak id mapping, so this route
     // doubles as the per-user backfill for users created before migration 0033.
+    // Recorded only when the realm user's `tid` equals this tenant; a realm
+    // user without it is reported (tid_missing), never mapped.
     const keycloakUserIdLink = result.ok && result.kcUserId
-      ? await persistKeycloakUserId(ctx.tenantId, view.id, result.kcUserId)
+      ? (result.tenantVerified ? await persistKeycloakUserId(ctx.tenantId, view.id, result.kcUserId) : "tid_missing")
       : undefined;
     return reply.send({ userId: id, keycloak: result, ...(keycloakUserIdLink ? { keycloakUserIdLink } : {}) });
   });

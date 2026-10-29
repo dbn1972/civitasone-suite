@@ -48,6 +48,12 @@ const READER_ROLES = [...HR_ROLES, "manager"];
 // tenant-wide on the list route below -- otherwise a payroll officer
 // with no direct reports would get an empty picker.
 const PAYROLL_DIRECTORY_ROLES = ["payroll_admin", "payroll_officer"];
+// FQ14 (security review of PR #2379, finding 4): binding a login to an
+// employee record decides whose payslips, leave and approvals a person sees --
+// an identity action, not an HR-data edit -- so it is held to HR admins only.
+// hr_officer (the day-to-day HR role) is deliberately excluded; tenant_admin /
+// platform_admin are not employee-record roles anywhere in this file.
+const LOGIN_LINK_ROLES = ["hr_admin", "super_admin"];
 const DIRECTORY_ROLES = [...READER_ROLES, "employee", ...PAYROLL_DIRECTORY_ROLES];
 
 /**
@@ -347,13 +353,13 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // FQ14: HR links (userId) or unlinks (null) the login an employee record
-  // belongs to, so self-service resolves "me" (actor-link.ts). Same HR_ROLES
-  // gate as every other employee mutation here. Synchronous and audited; see
+  // belongs to, so self-service resolves "me" (actor-link.ts). HR admins only
+  // (LOGIN_LINK_ROLES above). Synchronous and audited; see
   // login-link.ts for the rules (one serving employee per login, 404 for an
   // employee outside the caller's tenant, login verified with identity).
   app.patch("/v1/hrms/employees/:id/login-link", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, HR_ROLES);
+    requireRole(ctx, LOGIN_LINK_ROLES);
     const { id } = idParam.parse(req.params);
     const body = loginLinkBody.parse(req.body);
     return reply.send(await setEmployeeLoginLink(ctx, id, body));

@@ -20,7 +20,10 @@
  */
 import { captureError } from "@civitasone/observability";
 
-export type KcResult = { ok: boolean; skipped?: boolean; reason?: string; kcUserId?: string };
+// tenantVerified (FQ14): the realm user carries a `tid` attribute equal to the
+// target tenant. Only then may kcUserId be recorded as the identity user's
+// Keycloak id (users.users.keycloak_user_id).
+export type KcResult = { ok: boolean; skipped?: boolean; reason?: string; kcUserId?: string; tenantVerified?: boolean };
 
 type KcConfig = {
   url: string;
@@ -105,18 +108,26 @@ function kcUsername(tenantId: string, email: string): string {
  * never resolve by realm-wide email, and we defensively confirm the `tid`
  * attribute matches the tenant so a cross-tenant match can never be acted on.
  */
-async function findUser(cfg: KcConfig, token: string, tenantId: string, email: string): Promise<{ id: string; enabled: boolean } | null> {
+async function findUser(cfg: KcConfig, token: string, tenantId: string, email: string): Promise<{ id: string; enabled: boolean; tenantVerified: boolean } | null> {
   const username = kcUsername(tenantId, email);
   const res = await kcFetch(
-    `${cfg.url}/admin/realms/${cfg.realm}/users?username=${encodeURIComponent(username)}&exact=true`,
+    `${cfg.url}/admin/realms/${cfg.realm}/users?username=${encodeURIComponent(username)}&exact=true&briefRepresentation=false`,
     { headers: { authorization: `Bearer ${token}` } },
   );
   if (!res.ok) throw new Error(`keycloak user lookup failed: ${res.status}`);
   const arr = (await res.json()) as Array<{ id: string; enabled: boolean; username?: string; attributes?: { tid?: string[] } }>;
   // Exact-username match, and (when present) tid must match the tenant. Never
   // fall back to a different tenant's record.
+  // (Lifecycle actions -- disable, enable, reset -- keep accepting a realm user
+  // with no tid, as before: the username is tenant-namespaced. Recording a
+  // Keycloak id as an identity mapping additionally requires tenantVerified.)
   const hit = arr.find((u) => u.username === username && (!u.attributes?.tid || u.attributes.tid.includes(tenantId)));
-  return hit ? { id: hit.id, enabled: hit.enabled } : null;
+  return hit ? { id: hit.id, enabled: hit.enabled, tenantVerified: hasTenantTid(hit.attributes?.tid, tenantId) } : null;
+}
+
+/** FQ14: `tid` is present and equals the tenant (fail closed when absent). */
+function hasTenantTid(tid: string[] | undefined, tenantId: string): boolean {
+  return Array.isArray(tid) && tid.length > 0 && tid.every((t) => t === tenantId);
 }
 
 /**
@@ -133,7 +144,7 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
   try {
     const token = await getAdminToken(cfg);
     const existing = await findUser(cfg, token, u.tenantId, u.email);
-    if (existing) return { ok: true, kcUserId: existing.id, reason: "already exists" };
+    if (existing) return { ok: true, kcUserId: existing.id, tenantVerified: existing.tenantVerified, reason: "already exists" };
     const [firstName, ...rest] = u.name.trim().split(/\s+/);
     const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users`, {
       method: "POST",
@@ -157,7 +168,7 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
       throw new Error(`keycloak user create failed: ${res.status} ${await res.text()}`);
     }
     const created = await findUser(cfg, token, u.tenantId, u.email);
-    return { ok: true, ...(created ? { kcUserId: created.id } : {}) };
+    return { ok: true, ...(created ? { kcUserId: created.id, tenantVerified: created.tenantVerified } : {}) };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_provision_failed", userId: u.id });
     log?.warn({ userId: u.id, err: String(err) }, "keycloak provisioning failed (degraded)");
@@ -179,16 +190,23 @@ export async function lookupUserId(u: { tenantId: string; email: string; identit
   try {
     const token = await getAdminToken(cfg);
     const byName = await findUser(cfg, token, u.tenantId, u.email);
-    if (byName) return { ok: true, kcUserId: byName.id, reason: "username" };
+    if (byName) {
+      return byName.tenantVerified
+        ? { ok: true, kcUserId: byName.id, tenantVerified: true, reason: "username" }
+        : { ok: true, reason: "tid_missing: realm user has no tid attribute for this tenant" };
+    }
     const res = await kcFetch(
       `${cfg.url}/admin/realms/${cfg.realm}/users?q=${encodeURIComponent(`identity_user_id:${u.identityUserId}`)}&exact=true&briefRepresentation=false`,
       { headers: { authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error(`keycloak attribute lookup failed: ${res.status}`);
     const arr = (await res.json()) as Array<{ id: string; attributes?: { tid?: string[]; identity_user_id?: string[] } }>;
-    const hits = arr.filter((k) => (k.attributes?.identity_user_id ?? []).includes(u.identityUserId)
-      && (!k.attributes?.tid || k.attributes.tid.includes(u.tenantId)));
-    if (hits.length === 1) return { ok: true, kcUserId: hits[0]!.id, reason: "identity_user_id attribute" };
+    const hits = arr.filter((k) => (k.attributes?.identity_user_id ?? []).includes(u.identityUserId));
+    if (hits.length === 1) {
+      return hasTenantTid(hits[0]!.attributes?.tid, u.tenantId)
+        ? { ok: true, kcUserId: hits[0]!.id, tenantVerified: true, reason: "identity_user_id attribute" }
+        : { ok: true, reason: "tid_missing: realm user has no tid attribute for this tenant" };
+    }
     if (hits.length > 1) return { ok: true, reason: "ambiguous: several realm users carry this identity_user_id" };
     return { ok: true, reason: "user not present in keycloak" };
   } catch (err) {
@@ -333,9 +351,9 @@ export async function deactivateUser(tenantId: string, email: string, log?: { wa
         body: JSON.stringify({ enabled: u.active }),
       });
       if (!upd.ok && upd.status !== 204) throw new Error(`keycloak reconcile update failed: ${upd.status}`);
-      return { ok: true, kcUserId: existing.id, reason: `enabled set to ${u.active}` };
+      return { ok: true, kcUserId: existing.id, tenantVerified: existing.tenantVerified, reason: `enabled set to ${u.active}` };
     }
-    return { ok: true, kcUserId: existing.id, reason: "already in sync" };
+    return { ok: true, kcUserId: existing.id, tenantVerified: existing.tenantVerified, reason: "already in sync" };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_reconcile_failed", userId: u.id });
     log?.warn({ userId: u.id, err: String(err) }, "keycloak reconcile failed (degraded)");

@@ -112,14 +112,17 @@ describe("keycloak_user_id mapping writes", () => {
 
   it("backfill: dry run writes nothing; --apply maps matched users and reports the unmatched", async () => {
     vi.mocked(keycloak.lookupUserId).mockImplementation(async (u) =>
-      u.identityUserId === USER_A2 ? { ok: true, kcUserId: KC_A2 } : { ok: true, reason: "user not present in keycloak" });
+      u.identityUserId === USER_A2 ? { ok: true, kcUserId: KC_A2, tenantVerified: true }
+        : u.identityUserId === USER_A3 ? { ok: true, reason: "tid_missing: realm user has no tid attribute for this tenant" }
+          : { ok: true, reason: "user not present in keycloak" });
 
     const dry = await backfillKeycloakUserIds({ tenantId: TA, apply: false });
-    expect(dry).toMatchObject({ scanned: 2, wouldLink: 1, linked: 0, unmatched: [USER_A3] });
+    expect(dry).toMatchObject({ scanned: 2, wouldLink: 1, linked: 0, unmatched: [], tidMissing: [USER_A3] });
     expect(await kcOf(TA, USER_A2)).toBeNull();
 
     const real = await backfillKeycloakUserIds({ tenantId: TA, apply: true });
-    expect(real).toMatchObject({ scanned: 2, linked: 1, unmatched: [USER_A3], conflicts: [] });
+    expect(real).toMatchObject({ scanned: 2, linked: 1, unmatched: [], tidMissing: [USER_A3], conflicts: [] });
+    expect(await kcOf(TA, USER_A3)).toBeNull();
     expect(await kcOf(TA, USER_A2)).toBe(KC_A2);
     // Only this tenant's users were looked at.
     expect(vi.mocked(keycloak.lookupUserId).mock.calls.every(([u]) => u.tenantId === TA)).toBe(true);
@@ -128,9 +131,21 @@ describe("keycloak_user_id mapping writes", () => {
     expect(res.json()).toEqual({ id: USER_A2, status: "active" });
   });
 
+  it("POST /identity/users/:id/keycloak-reconcile never maps a realm user without this tenant's tid", async () => {
+    const KC_A3 = "f0141000-0000-4000-8000-00000000cc04";
+    vi.mocked(keycloak.reconcileUser).mockResolvedValueOnce({ ok: true, kcUserId: KC_A3, tenantVerified: false, reason: "already in sync" });
+    const res = await app.inject({
+      method: "POST", url: `/identity/users/${USER_A3}/keycloak-reconcile`,
+      headers: { authorization: `Bearer ${signToken({ sub: BY, tid: TA, roles: ["super_admin"], sid: "s-fq14b" }, SECRET, 3600)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().keycloakUserIdLink).toBe("tid_missing");
+    expect(await kcOf(TA, USER_A3)).toBeNull();
+  });
+
   it("POST /identity/users/:id/keycloak-reconcile records the mapping", async () => {
     const KC_A3 = "f0141000-0000-4000-8000-00000000cc04";
-    vi.mocked(keycloak.reconcileUser).mockResolvedValueOnce({ ok: true, kcUserId: KC_A3, reason: "already in sync" });
+    vi.mocked(keycloak.reconcileUser).mockResolvedValueOnce({ ok: true, kcUserId: KC_A3, tenantVerified: true, reason: "already in sync" });
     const res = await app.inject({
       method: "POST", url: `/identity/users/${USER_A3}/keycloak-reconcile`,
       headers: { authorization: `Bearer ${signToken({ sub: BY, tid: TA, roles: ["super_admin"], sid: "s-fq14a" }, SECRET, 3600)}` },

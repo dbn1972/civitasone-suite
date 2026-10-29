@@ -56,7 +56,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
       // FQ14: remember the realm user's id (= the login's JWT sub) so internal
       // lookups keyed by a sub resolve this user. Best-effort like the rest of
       // this chain; the keycloak-reconcile route / backfill repair a miss.
-      if (r.ok && r.kcUserId) {
+      if (r.ok && r.kcUserId && r.tenantVerified) {
         await persistKeycloakUserId(msg.payload.tenantId, msg.payload.id, r.kcUserId)
           .then((outcome) => { if (outcome === "conflict") kcLog.warn({ userId: msg.payload.id, kcUserId: r.kcUserId }, "keycloak user id already mapped differently"); })
           .catch((err: unknown) => kcLog.warn({ userId: msg.payload.id, err: String(err) }, "persisting keycloak user id failed"));

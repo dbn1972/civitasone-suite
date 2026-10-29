@@ -130,7 +130,10 @@ async function seedProfilePhoto(employeeId: string): Promise<void> {
  * "relieved" is what /join requires — see lifecycle/routes.ts.
  */
 async function seedTransfer(status: "requested" | "ordered" | "relieved"): Promise<string> {
-  const employeeId = await seedEmployeeForMe();
+  // Each transfer gets its own employee with its own login: the transfer routes
+  // do not need the caller linked to it, and migration 0253 forbids two serving
+  // employees sharing one user_ref (this used to link every one to UUID).
+  const employeeId = await seedEmployeeForMe(randomUUID());
   const id = randomUUID();
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsTransfers).values({
     id, tenantId: TENANT, employeeId, fromDeptId: randomUUID(), toDeptId: randomUUID(),

@@ -43,6 +43,7 @@ const LOGIN_1 = "f0140000-0000-4000-8000-00000000c001"; // a Keycloak sub
 const LOGIN_2 = "f0140000-0000-4000-8000-00000000c002";
 
 const hr = { authorization: `Bearer ${signToken({ sub: HR_SUB, tid: TENANT, roles: ["hr_admin"], sid: "s-fq14" }, SECRET)}` };
+const hrOfficer = { authorization: `Bearer ${signToken({ sub: HR_SUB, tid: TENANT, roles: ["hr_officer"], sid: "s-fq14o" }, SECRET)}` };
 const employee = { authorization: `Bearer ${signToken({ sub: LOGIN_2, tid: TENANT, roles: ["employee"], sid: "s-fq14e" }, SECRET)}` };
 
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -159,15 +160,35 @@ describe("PATCH /v1/hrms/employees/:id/login-link (FQ14)", () => {
     expect(await userRefOf(TENANT, EMP_B)).toBe(LOGIN_1);
   });
 
-  it("an exited employee holding the login does not block a link, and cannot itself be linked", async () => {
+  it("an exited employee still holding the login blocks a second link until HR unlinks it (no AMBIGUOUS lockout), and cannot itself be linked", async () => {
     await asTenant(TENANT, (tx) => tx`UPDATE employee.hrms_employees SET user_ref = ${LOGIN_2} WHERE id = ${EMP_EXIT}`);
+    const blocked = await link(EMP_A, { userId: LOGIN_2, reason: "rejoined under new record" });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().code).toBe("LOGIN_ALREADY_LINKED");
+    expect(await userRefOf(TENANT, EMP_A)).toBeNull();
+
+    // Unlinking the exited record is allowed; then the new record can be linked.
+    expect((await link(EMP_EXIT, { userId: null, reason: "employee rejoined under a new record" })).statusCode).toBe(200);
     const ok = await link(EMP_A, { userId: LOGIN_2, reason: "rejoined under new record" });
     expect(ok.statusCode).toBe(200);
     expect(await userRefOf(TENANT, EMP_A)).toBe(LOGIN_2);
+    expect((await resolveEmployeeForActor(TENANT, LOGIN_2))?.id).toBe(EMP_A);
 
     const refused = await link(EMP_EXIT, { userId: LOGIN_1, reason: "should not link" });
     expect(refused.statusCode).toBe(409);
     expect(refused.json().code).toBe("EMPLOYEE_EXITED");
+  });
+
+  it("403 for hr_officer: binding a login is restricted to hr_admin / super_admin", async () => {
+    const res = await link(EMP_B, { userId: LOGIN_2, reason: "officer link attempt" }, hrOfficer);
+    expect(res.statusCode).toBe(403);
+    expect(await userRefOf(TENANT, EMP_B)).toBe(LOGIN_1);
+  });
+
+  it("the database refuses two serving employees holding one login (migration 0253 unique index)", async () => {
+    await expect(asTenant(TENANT, (tx) => tx`UPDATE employee.hrms_employees SET user_ref = ${LOGIN_1} WHERE id = ${EMP_A}`))
+      .rejects.toMatchObject({ code: "23505" });
+    expect(await userRefOf(TENANT, EMP_A)).toBe(LOGIN_2);
   });
 
   it("403 for a non-HR caller, and nothing changes", async () => {

@@ -258,7 +258,11 @@ describe("#1780 GET /v1/hrms/id-cards/me -- actor-link resolver", () => {
     const a = randomUUID(), b = randomUUID();
     await seedEmployee(a, `DUP-${a.slice(0, 8)}`, "Dup One", dupUser);
     await new Promise((r) => setTimeout(r, 15));
-    await seedEmployee(b, `DUP-${b.slice(0, 8)}`, "Dup Two", dupUser);
+    // Migration 0253 makes two SERVING rows with one user_ref impossible; the
+    // duplicate that can still exist (legacy data, e.g. on UAT) is a serving
+    // row plus an exited one -- the resolver must still fail closed on it.
+    await seedEmployee(b, `DUP-${b.slice(0, 8)}`, "Dup Two", null);
+    await asTenant((tx) => tx`UPDATE employee.hrms_employees SET status = 'separated', user_ref = ${dupUser} WHERE id = ${b}`);
     const cardB = await seedCard(b, `T1780D/${randomUUID().slice(0, 8)}`);
     for (let i = 0; i < 3; i++) {
       const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards/me", headers: auth(dupUser) });
