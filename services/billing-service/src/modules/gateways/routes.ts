@@ -270,6 +270,9 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
     // Reject a non-object body up front so the authentication predicate below is ONLY the
     // reverse-hash check (no user-controlled shape short-circuit inside the security condition).
     if (typeof body !== "object" || body === null) throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
+    // No reverse hash = no credential presented: 401 before the credential check, which answers 503
+    // when the gateway is unconfigured (UAT sweep: an empty / malformed callback got a 5xx).
+    if (typeof body["hash"] !== "string" || body["hash"] === "") throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
     authenticate(() => verifyPayuWebhookHash(body));
     const status = body?.["status"];
     const txnId = body?.["txnid"] ?? "";
@@ -297,6 +300,8 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/billing/webhooks/ccavenue", { config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => `webhook:${r.ip}` } } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const encResp = body?.["encResp"] ?? "";
+    // No encResp = no credential presented: 401 before the credential check (503 when unconfigured).
+    if (typeof encResp !== "string" || encResp === "") throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
     let fields: Record<string, string> | null = null;
     authenticate(() => (fields = decryptCcavenueCallback(encResp)) !== null);
 

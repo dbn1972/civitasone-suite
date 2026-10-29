@@ -77,7 +77,8 @@ export async function tracesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
 
     const { pan } = z.object({
-      pan: z.string().min(1).max(10),
+      // Validated at the boundary (UAT sweep: a non-PAN reached the adapter and answered 503).
+      pan: z.string().regex(/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/, "pan must be a 10-character PAN (AAAAA9999A)"),
     }).parse(req.params);
 
     try {

@@ -304,7 +304,10 @@ describe("Route 500 error handlers", () => {
       method: "POST",
       url: "/v1/revenue/assessees",
       headers: AUTH,
-      payload: { name: "Test Owner" },
+      // A VALID body, so the queue failure is what reaches the 500 handler. The previous payload
+      // ({ name }) is invalid and only produced a 500 because the schema error handler was
+      // registered after the routes (UAT FQ10b-1); invalid input now correctly answers 400.
+      payload: { assesseeType: "property", identifierNo: "PROP-500", ownerName: "Test Owner", address: "1 Main St" },
     });
     expect(res.statusCode).toBe(500);
   });
