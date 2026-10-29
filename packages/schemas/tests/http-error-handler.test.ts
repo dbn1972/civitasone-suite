@@ -152,3 +152,102 @@ describe("registerSchemaErrorHandler", () => {
     expect(h.code).toHaveBeenCalledWith(500);
   });
 });
+
+describe("registerSchemaErrorHandler delegateFrameworkClientErrors", () => {
+  class AppHttpError extends Error {
+    constructor(public status: number, public code: string, message: string) { super(message); }
+  }
+  type Handler = (err: unknown, req: unknown, reply: unknown) => unknown;
+
+  /** Minimal Fastify stand-in: a root with addHook("onRegister") and a child created via Object.create. */
+  function fakeApp() {
+    const hooks: Array<(instance: Record<string, unknown>) => void> = [];
+    const root: Record<string, unknown> = {
+      handlers: [] as Handler[],
+      setErrorHandler(this: { handlers: Handler[] }, h: Handler) { this.handlers.push(h); },
+      addHook(name: string, fn: (instance: Record<string, unknown>) => void) { if (name === "onRegister") hooks.push(fn); },
+    };
+    function child(localHandler: Handler) {
+      const instance = Object.create(root) as Record<string, unknown> & { handlers: Handler[] };
+      instance.handlers = [];
+      for (const hook of hooks) hook(instance);
+      (instance.setErrorHandler as (h: Handler) => void).call(instance, localHandler);
+      return instance.handlers[instance.handlers.length - 1]!;
+    }
+    return { root: root as unknown as Parameters<typeof registerSchemaErrorHandler>[0], rootHandlers: root.handlers as Handler[], child };
+  }
+
+  const local = () => vi.fn(() => "local");
+  const clientFw = (code: string) => Object.assign(new Error("fw"), { code, statusCode: 400 });
+
+  it("flag off: installs only the shared handler and does not hook child contexts", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError);
+    expect(a.rootHandlers).toHaveLength(1);
+    const l = local();
+    const wired = a.child(l);
+    expect(wired).toBe(l); // untouched: framework 4xx would still reach the local handler
+  });
+
+  it("flag on: a SyntaxError with statusCode inside a locally-handled child gets the shared 400 MALFORMED_BODY", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError, { delegateFrameworkClientErrors: true });
+    const l = local();
+    const wired = a.child(l);
+    const h = harness();
+    wired(Object.assign(new SyntaxError("bad json"), { statusCode: 400 }), h.req, h.reply);
+    expect(l).not.toHaveBeenCalled();
+    expect(h.code).toHaveBeenCalledWith(400);
+    expect(h.send.mock.calls[0][0]).toMatchObject({ code: "MALFORMED_BODY" });
+  });
+
+  it("flag on: FST_ERR_* 4xx is delegated to the shared handler (keeps its status and code)", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError, { delegateFrameworkClientErrors: true });
+    const l = local();
+    const wired = a.child(l);
+    const h = harness();
+    wired(clientFw("FST_ERR_CTP_EMPTY_JSON_BODY"), h.req, h.reply);
+    expect(l).not.toHaveBeenCalled();
+    expect(h.code).toHaveBeenCalledWith(400);
+    expect(h.send.mock.calls[0][0]).toMatchObject({ code: "FST_ERR_CTP_EMPTY_JSON_BODY" });
+  });
+
+  it("flag on: ZodError, the app HttpError and a generic Error still reach the local handler", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError, { delegateFrameworkClientErrors: true });
+    const l = local();
+    const wired = a.child(l);
+    const zod = (z.object({ a: z.string() }).safeParse({}) as unknown as { error: ZodError }).error;
+    for (const err of [zod, new AppHttpError(409, "CONFLICT", "dup"), new Error("boom")]) {
+      const h = harness();
+      wired(err, h.req, h.reply);
+      expect(h.code).not.toHaveBeenCalled();
+    }
+    expect(l).toHaveBeenCalledTimes(3);
+  });
+
+  it("flag on: a 5xx (even an FST_ERR_* or SyntaxError one) is never delegated", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError, { delegateFrameworkClientErrors: true });
+    const l = local();
+    const wired = a.child(l);
+    const fw5xx = Object.assign(new Error("fw"), { code: "FST_ERR_SOMETHING", statusCode: 500 });
+    const syntax5xx = Object.assign(new SyntaxError("x"), { statusCode: 503 });
+    for (const err of [fw5xx, syntax5xx]) {
+      const h = harness();
+      wired(err, h.req, h.reply);
+      expect(h.code).not.toHaveBeenCalled();
+    }
+    expect(l).toHaveBeenCalledTimes(2);
+  });
+
+  it("flag on: a 4xx without FST_ERR_ code and not a SyntaxError is not delegated", () => {
+    const a = fakeApp();
+    registerSchemaErrorHandler(a.root, AppHttpError, { delegateFrameworkClientErrors: true });
+    const l = local();
+    const wired = a.child(l);
+    wired(Object.assign(new Error("custom"), { statusCode: 404, code: "MODULE_NOT_FOUND" }), harness().req, harness().reply);
+    expect(l).toHaveBeenCalledTimes(1);
+  });
+});

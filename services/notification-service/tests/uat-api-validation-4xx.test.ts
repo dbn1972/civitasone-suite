@@ -65,28 +65,47 @@ const ROUTES: Array<[string, string]> = [
 const url = (p: string) => p.replace(/:[A-Za-z]+/g, "not-a-uuid");
 const JSON_CT = { ...headers, "content-type": "application/json" };
 
-describe("notification-service validation probes answer 4xx, never 5xx", () => {
+/**
+ * Every probe is authenticated with a role that passes the route's role gate, so the expected status is exact:
+ * 400 VALIDATION_FAILED for a bad query / invalid fields, 400 for an empty or malformed body.
+ * The few routes whose outcome legitimately differs are listed here with the reason.
+ */
+type Expected = { status: number; code: string };
+const OVERRIDES: Record<string, Expected & { why: string }> = {
+  "POST /notifications/publish invalid": { status: 403, code: "FORBIDDEN", why: "internal-service-only route: a user token is refused by the role gate before validation, so 403 is the correct outcome" },
+  "GET /notifications/segments query": { status: 200, code: "", why: "route declares no query schema, so the junk query is ignored and the list succeeds" },
+  "GET /notifications/stream/unread query": { status: 200, code: "", why: "route declares no query schema, so the junk query is ignored and the list succeeds" },
+};
+const expected = (key: string, dflt: Expected): Expected => OVERRIDES[key] ?? dflt;
+
+function check(res: { statusCode: number; body: string; json: () => { code?: string } }, want: Expected) {
+  expect(res.statusCode, res.body).toBe(want.status);
+  expect(res.json().code ?? "", res.body).toBe(want.code);
+}
+
+describe("notification-service validation probes answer the specific 4xx, never 5xx", () => {
   for (const [method, path] of ROUTES) {
     const u = url(path);
     if (method === "GET" || method === "DELETE") {
-      it(`${method} ${path} with bad query + malformed id`, async () => {
+      it(`${method} ${path} with bad query + malformed id -> 400 VALIDATION_FAILED`, async () => {
         const res = await app.inject({ method: method as "GET", url: `${u}?limit=abc&offset=-5&page=zzz&from=not-a-date`, headers });
-        expect(res.statusCode, res.body).toBeLessThan(500);
+        check(res, expected(`${method} ${path} query`, { status: 400, code: "VALIDATION_FAILED" }));
       });
       continue;
     }
-    it(`${method} ${path} with an empty body`, async () => {
+    it(`${method} ${path} with an empty body -> 400`, async () => {
       const res = await app.inject({ method: method as "POST", url: u, headers: JSON_CT, payload: "" });
-      expect(res.statusCode, res.body).toBeLessThan(500);
-    });
-    it(`${method} ${path} with malformed JSON -> 400`, async () => {
-      const res = await app.inject({ method: method as "POST", url: u, headers: JSON_CT, payload: "{\"a\":" });
       expect(res.statusCode, res.body).toBe(400);
+      // Fastify rejects an empty JSON body itself; the shared handler keeps its FST_ERR code (or MALFORMED_BODY).
+      expect(["MALFORMED_BODY", "FST_ERR_CTP_EMPTY_JSON_BODY"], res.body).toContain(res.json().code);
     });
-    it(`${method} ${path} with invalid fields`, async () => {
+    it(`${method} ${path} with malformed JSON -> 400 MALFORMED_BODY`, async () => {
+      const res = await app.inject({ method: method as "POST", url: u, headers: JSON_CT, payload: "{\"a\":" });
+      check(res, { status: 400, code: "MALFORMED_BODY" });
+    });
+    it(`${method} ${path} with invalid fields -> 400 VALIDATION_FAILED`, async () => {
       const res = await app.inject({ method: method as "POST", url: u, headers, payload: { unexpected: 123, id: 42 } });
-      expect(res.statusCode, res.body).toBeGreaterThanOrEqual(400);
-      expect(res.statusCode, res.body).toBeLessThan(500);
+      check(res, expected(`${method} ${path} invalid`, { status: 400, code: "VALIDATION_FAILED" }));
     });
   }
 });
