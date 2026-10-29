@@ -272,7 +272,12 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: this route had zero employee scoping — self-service employees
     // see only their own allocations, managers see their direct reports', HR
     // keeps full tenant access (unchanged).
-    const employeeIds = await resolveLeaveReadScope(ctx, req, undefined);
+    // FQ14 (UAT): ?employeeId= was ignored, so an HR caller asking for one
+    // employee's allocations got every employee's. It now narrows the scope the
+    // same way empId does on the leave application lists (HR: that employee;
+    // manager: that report if it is one; bare employee: still only their own).
+    const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).passthrough().parse(req.query);
+    const employeeIds = await resolveLeaveReadScope(ctx, req, employeeId);
     const allocs = await queries.listLeaveAllocations(ctx.tenantId, 50, employeeIds);
     return reply.send({ data: allocs });
   });

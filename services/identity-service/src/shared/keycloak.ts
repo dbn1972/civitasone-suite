@@ -166,6 +166,38 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
 }
 
 /**
+ * FQ14: find (never create) the realm user for an identity user, for the
+ * keycloak_user_id backfill. First by the tenant-namespaced username (how
+ * provisionUser creates it), then by the identity_user_id attribute
+ * provisionUser stamps on it. Either hit must carry this tenant's `tid`
+ * attribute when it has one, so another tenant's realm user is never returned.
+ * Read-only and best-effort: never throws.
+ */
+export async function lookupUserId(u: { tenantId: string; email: string; identityUserId: string }): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const byName = await findUser(cfg, token, u.tenantId, u.email);
+    if (byName) return { ok: true, kcUserId: byName.id, reason: "username" };
+    const res = await kcFetch(
+      `${cfg.url}/admin/realms/${cfg.realm}/users?q=${encodeURIComponent(`identity_user_id:${u.identityUserId}`)}&exact=true&briefRepresentation=false`,
+      { headers: { authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error(`keycloak attribute lookup failed: ${res.status}`);
+    const arr = (await res.json()) as Array<{ id: string; attributes?: { tid?: string[]; identity_user_id?: string[] } }>;
+    const hits = arr.filter((k) => (k.attributes?.identity_user_id ?? []).includes(u.identityUserId)
+      && (!k.attributes?.tid || k.attributes.tid.includes(u.tenantId)));
+    if (hits.length === 1) return { ok: true, kcUserId: hits[0]!.id, reason: "identity_user_id attribute" };
+    if (hits.length > 1) return { ok: true, reason: "ambiguous: several realm users carry this identity_user_id" };
+    return { ok: true, reason: "user not present in keycloak" };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_lookup_failed", userId: u.identityUserId });
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
  * Map realm ROLES (by name) onto an already-federated user.
  *
  * provisionUser() deliberately never does this itself: it only creates the

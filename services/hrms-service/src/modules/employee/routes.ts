@@ -6,9 +6,10 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
+import { setEmployeeLoginLink } from "./login-link.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
@@ -343,6 +344,19 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       );
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEmployee(ctx, id, body));
+  });
+
+  // FQ14: HR links (userId) or unlinks (null) the login an employee record
+  // belongs to, so self-service resolves "me" (actor-link.ts). Same HR_ROLES
+  // gate as every other employee mutation here. Synchronous and audited; see
+  // login-link.ts for the rules (one serving employee per login, 404 for an
+  // employee outside the caller's tenant, login verified with identity).
+  app.patch("/v1/hrms/employees/:id/login-link", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = loginLinkBody.parse(req.body);
+    return reply.send(await setEmployeeLoginLink(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);

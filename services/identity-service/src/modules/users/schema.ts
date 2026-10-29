@@ -10,6 +10,8 @@ export const users = usersSchema.table("users", {
   empCode:    varchar("emp_code", { length: 64 }),
   status:     varchar("status", { length: 24 }).notNull().default("active"),
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  // FQ14 (migration 0033): the Keycloak user id (= every service's JWT sub) for this identity user.
+  keycloakUserId: uuid("keycloak_user_id"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),

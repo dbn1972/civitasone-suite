@@ -19,6 +19,20 @@ export async function findById(tenantId: string, id: string): Promise<UserView |
 }
 
 /**
+ * FQ14: tenant-scoped point lookup by identity id OR Keycloak user id (the JWT
+ * sub other services hold). Both predicates sit under tenant_id = tenantId, so
+ * a sub belonging to another tenant's user never resolves. An exact identity-id
+ * match is preferred over a Keycloak-id match.
+ */
+export async function findByIdOrKeycloakId(tenantId: string, id: string): Promise<UserView | null> {
+  const rows = await scopedRead((tx) => tx.select().from(users)
+    .where(and(eq(users.tenantId, tenantId), or(eq(users.id, id), eq(users.keycloakUserId, id))))
+    .orderBy(sql`(${users.id} = ${id}) DESC`)
+    .limit(1));
+  return rows[0] ? toView(rows[0]) : null;
+}
+
+/**
  * GAP-TENANT-ADMIN-USERS-07: is this email already in the tenant's directory?
  * Case-insensitive, so "Asha@dept.gov.in" cannot be invited alongside
  * "asha@dept.gov.in" (the unique index itself is case-sensitive).

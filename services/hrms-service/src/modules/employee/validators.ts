@@ -141,6 +141,17 @@ export type ProbationExtensionBody = z.infer<typeof probationExtensionBody>;
 export const idParam = z.object({ id: z.string().uuid() });
 
 /**
+ * FQ14: PATCH /v1/hrms/employees/:id/login-link. userId is the login (identity
+ * user id or Keycloak sub) to link, or null to unlink; reason is required and
+ * lands in the audit event.
+ */
+export const loginLinkBody = z.object({
+  userId: z.string().uuid().nullable(),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+export type LoginLinkBody = z.infer<typeof loginLinkBody>;
+
+/**
  * GAP-HR-EMPLOYEES-DETAIL-EDIT-02: GET masks mobile / bank account ("******7890"),
  * so a client that echoes a field back -- untouched, or half-edited -- sends
  * asterisks. No genuine phone number, account number or IFSC ever contains one,
