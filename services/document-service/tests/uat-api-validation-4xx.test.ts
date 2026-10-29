@@ -74,3 +74,62 @@ describe("document-service: malformed id / bad query -> 400 VALIDATION_FAILED", 
     });
   }
 });
+
+/**
+ * UAT API sweep 2026-10-29, W5-A: the 35 bulk-scan rows recorded as "defect-5xx" were never sent. The route
+ * extractor kept the literal `${P}` prefix (const P = "/v1/documents/bulk-scan"), so every probe failed with
+ * "nonnumeric port: '3049${P}'" (got 0). These pin the sweep's probes, against the resolved paths, to 4xx.
+ */
+describe("document-service bulk-scan: sweep probes -> 4xx, never 5xx", () => {
+  const B = "/v1/documents/bulk-scan";
+  const R = "5e7c0000-0000-4000-8000-00000000dead";
+  const INVALID = { id: "x".repeat(5000), amount: -1, email: "not-an-email", date: "31-31-2026" };
+  const reads = ["/search", "/providers", "/links", "/link-lookup", "/review-queue", "/batches", "/settings", "/settings/change-requests", "/profiles"];
+  const idReads = ["/files/:a/download", "/files/:a/pages/1/image", "/batches/:a/files/:b/review", "/batches/:a", "/batches/:a/files", "/batches/:a/files/:b", "/profiles/:a"];
+  const writes: Probe[] = [
+    ["POST", "/links/:a/approve"], ["POST", "/links/:a/reject"], ["POST", "/links/:a/unlink-request"],
+    ["POST", "/batches/:a/files/:b/review/edit"], ["POST", "/batches/:a/files/:b/review/approve"], ["POST", "/batches/:a/files/:b/review/reject"],
+    ["POST", "/batches"], ["POST", "/batches/:a/cancel"], ["POST", "/batches/:a/files/upload-urls"], ["POST", "/batches/:a/files/complete"],
+    ["POST", "/batches/:a/files/:b/upload-url"], ["POST", "/batches/:a/files/:b/retry"], ["POST", "/batches/:a/files/:b/skip"],
+    ["PUT", "/settings"], ["POST", "/settings/change-requests/:a/approve"], ["POST", "/settings/change-requests/:a/reject"],
+    ["POST", "/profiles"], ["PUT", "/profiles/:a"],
+  ];
+  const at = (p: string, id: string): string => B + p.replace(":a", id).replace(":b", id);
+
+  for (const p of [...reads, ...idReads]) {
+    it(`GET ${p}: no token 401, bad query / malformed id 400, unknown id 404`, async () => {
+      expect((await app.inject({ method: "GET", url: at(p, R) })).statusCode).toBe(401);
+      if (p.includes(":a")) {
+        expect((await app.inject({ method: "GET", url: at(p, R), headers })).statusCode).toBe(404);
+        const bad = await app.inject({ method: "GET", url: at(p, BAD), headers });
+        expect(bad.statusCode).toBe(400);
+        expect(bad.json().code).toBe("VALIDATION_FAILED");
+      } else {
+        const q = await app.inject({ method: "GET", url: `${B}${p}?limit=abc&offset=-5`, headers });
+        expect([200, 400]).toContain(q.statusCode);
+      }
+    });
+  }
+
+  for (const [method, p] of writes) {
+    it(`${method} ${p}: no token 401; empty, malformed and invalid bodies 4xx`, async () => {
+      expect((await app.inject({ method, url: at(p, R), headers: { "content-type": "application/json" }, payload: {} })).statusCode).toBe(401);
+      const empty = await app.inject({ method, url: at(p, R), headers: jsonHeaders, payload: {} });
+      expect(is4xx(empty.statusCode)).toBe(true);
+      const malformed = await app.inject({ method, url: at(p, R), headers: jsonHeaders, payload: "{not json" });
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().code).toBe("MALFORMED_BODY");
+      const invalid = await app.inject({ method, url: at(p, R), headers: jsonHeaders, payload: INVALID });
+      expect(is4xx(invalid.statusCode)).toBe(true);
+      if (p.includes(":a")) {
+        expect((await app.inject({ method, url: at(p, BAD), headers: jsonHeaders, payload: INVALID })).statusCode).toBe(400);
+      }
+    });
+  }
+
+  it("DELETE /profiles/:id: no token 401, unknown id 404, malformed id 400", async () => {
+    expect((await app.inject({ method: "DELETE", url: at("/profiles/:a", R) })).statusCode).toBe(401);
+    expect((await app.inject({ method: "DELETE", url: at("/profiles/:a", R), headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: "DELETE", url: at("/profiles/:a", BAD), headers })).statusCode).toBe(400);
+  });
+});

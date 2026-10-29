@@ -71,7 +71,13 @@ export function registerFilesConsumers(rawQueue: Queue): void {
   queue.subscribe<{ fileId: string; tags: string[] }>(COMMANDS.fileTag, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateTags(tx, msg.tenantId, msg.payload.fileId, msg.payload.tags, msg.actorId);
+      if (await repo.updateTags(tx, msg.tenantId, msg.payload.fileId, msg.payload.tags, msg.actorId)) {
+        // #122: a tag change is audited like every other file mutation (no domain event exists for it).
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "document", action: "tag", resourceType: "file", resourceId: msg.payload.fileId, outcome: "success", details: { tags: msg.payload.tags } },
+        });
+      }
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });

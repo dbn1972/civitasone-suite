@@ -34,6 +34,9 @@ export async function folderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const body = createFolderBody.parse(req.body);
+    if (body.parentId && !(await repo.getById(ctx.tenantId, body.parentId))) {
+      throw new HttpError(422, "PARENT_NOT_FOUND", "parent folder not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createFolder(ctx, body));
   });
 
@@ -79,6 +82,14 @@ export async function folderRoutes(app: FastifyInstance): Promise<void> {
     const id = parseFolderId(req, reply);
     if (id === null) return reply;
     const body = moveFolderBody.parse(req.body);
+    // #112: a folder may not be moved under itself or one of its descendants (re-checked in the consumer under a tree lock).
+    if (!(await repo.getById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "folder not found");
+    if (body.parentId !== null) {
+      if (body.parentId === id) throw new HttpError(422, "FOLDER_CYCLE", "a folder cannot be moved into itself or one of its subfolders");
+      const parent = await repo.lineageRead(ctx.tenantId, body.parentId);
+      if (!parent) throw new HttpError(422, "PARENT_NOT_FOUND", "parent folder not found");
+      if (parent.includes(id)) throw new HttpError(422, "FOLDER_CYCLE", "a folder cannot be moved into itself or one of its subfolders");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFolder(ctx, id, body.parentId));
   });
 }
