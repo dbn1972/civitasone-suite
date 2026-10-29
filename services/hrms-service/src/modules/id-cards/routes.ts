@@ -541,7 +541,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/id-cards/:id/suspend", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = (req.body as any) ?? {};
 
     const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
@@ -571,7 +571,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/id-cards/:id/revoke", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = (req.body as any) ?? {};
 
     const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
@@ -597,7 +597,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/id-cards/:id/reactivate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
       tx,

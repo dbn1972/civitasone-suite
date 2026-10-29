@@ -187,6 +187,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     done();
   });
 
+  // MUST be registered BEFORE any app.register(<routes>) below: Fastify child (encapsulated)
+  // contexts copy the parent error handler when they are created, so a handler set after the
+  // routes only covers the root context and every ZodError / HttpError thrown inside a route
+  // module without its own handler fell through to the default 500 (UAT API sweep 2026-10-28).
+  registerSchemaErrorHandler(app, HttpError);
+
   registerOpsRoutes(app, { service: "hrms-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
@@ -430,8 +436,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Supplements the central audit-service outbox events with a co-located trail.
   const { createAuditHook } = await import("./shared/audit-log.js");
   app.addHook("onResponse", createAuditHook());
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

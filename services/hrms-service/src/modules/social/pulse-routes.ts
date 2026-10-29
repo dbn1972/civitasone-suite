@@ -190,7 +190,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/pulse-surveys/:id/results", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const stats = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT COUNT(*) AS total, AVG(score)::numeric(3,1) AS avg_score,
@@ -335,7 +335,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/goals/:id/checkins", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const goal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
@@ -466,16 +466,22 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     let response: { text: string; data?: any; action?: string } | null = null;
 
     // ─── Leave balance query ──────────────────────────────────────────
-    // NOT wrapped in withTenantGuc: hrms.leave_allocations does not exist under
-    // any schema in this service (confirmed against the live dev DB) -- a
-    // separate, pre-existing, unrelated bug, not the RLS gap this fix targets.
+    // Reads leave.hrms_leave_allocs (+ hrms_leave_types); hrms.leave_allocations never existed (UAT sweep 2026-10-29).
     if (query.includes("leave") && (query.includes("balance") || query.includes("how much") || query.includes("how many"))) {
-      const bal = await sqlClient.query(
-        `SELECT leave_type_code, leave_type_name, total_days, balance_days
-         FROM hrms.leave_allocations
-         WHERE tenant_id = $1 AND employee_id = (SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
+      const bal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+        `WITH me AS (
+           SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2 LIMIT 1
+         )
+         SELECT t.code AS leave_type_code, t.name AS leave_type_name, a.total_days,
+                COALESCE(a.balance_days_exact, a.balance_days) AS balance_days
+         FROM leave.hrms_leave_allocs a
+         JOIN me ON me.id = a.employee_id
+         JOIN leave.hrms_leave_types t ON t.id = a.leave_type_id AND t.tenant_id = a.tenant_id
+         WHERE a.tenant_id = $2
+           AND a.fy = (SELECT MAX(a2.fy) FROM leave.hrms_leave_allocs a2 WHERE a2.tenant_id = $2 AND a2.employee_id = me.id)
+         ORDER BY t.code`,
         [ctx.actorId, ctx.tenantId],
-      );
+      ));
       if (bal.rowCount && bal.rowCount > 0) {
         const summary = bal.rows.map((r: any) => `${r.leave_type_name}: ${r.balance_days}/${r.total_days} days`).join("\n");
         response = { text: `Here's your leave balance:\n\n${summary}`, data: bal.rows, action: "show_leave_balance" };
@@ -488,17 +494,14 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       response = { text: "You can view your latest payslip in the Payslips section. Would you like me to navigate there?", action: "navigate_payslips" };
     }
     // ─── Holiday query ────────────────────────────────────────────────
-    // NOT wrapped in withTenantGuc: hrms.holidays does not exist under any
-    // schema in this service either (real table is leave.hrms_holidays,
-    // different name and schema) -- same class of separate, pre-existing,
-    // unrelated bug as the leave-balance branch above.
+    // Reads leave.hrms_holidays; hrms.holidays never existed (UAT sweep 2026-10-29).
     else if (query.includes("holiday") || query.includes("next holiday") || query.includes("public holiday")) {
-      const holidays = await sqlClient.query(
-        `SELECT name, date, type FROM hrms.holidays
+      const holidays = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+        `SELECT name, date, type FROM leave.hrms_holidays
          WHERE tenant_id = $1 AND date >= CURRENT_DATE
          ORDER BY date LIMIT 3`,
         [ctx.tenantId],
-      );
+      ));
       if (holidays.rowCount && holidays.rowCount > 0) {
         const list = holidays.rows.map((h: any) => `• ${h.name} — ${h.date}`).join("\n");
         response = { text: `Upcoming holidays:\n\n${list}`, data: holidays.rows };
@@ -513,7 +516,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     // ─── Manager / reporting ──────────────────────────────────────────
     else if (query.includes("manager") || query.includes("reporting to") || query.includes("who is my")) {
       const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-        `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+        `SELECT manager_id AS reporting_to FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
         [ctx.actorId, ctx.tenantId],
       ));
       if (emp.rows[0]?.reporting_to) {
@@ -522,11 +525,13 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
         // from a tenant-scoped lookup just above), but inconsistent and
         // one copy-paste away from a real cross-tenant read.
         const mgr = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-          `SELECT first_name, last_name, designation FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
+          `SELECT e.full_name, ds.name AS designation FROM employee.hrms_employees e
+           LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
+           WHERE e.id = $1 AND e.tenant_id = $2`,
           [emp.rows[0].reporting_to, ctx.tenantId],
         ));
         if (mgr.rows[0]) {
-          response = { text: `Your reporting manager is ${mgr.rows[0].first_name} ${mgr.rows[0].last_name} (${mgr.rows[0].designation}).` };
+          response = { text: `Your reporting manager is ${mgr.rows[0].full_name} (${mgr.rows[0].designation ?? '—'}).` };
         }
       }
       response = response ?? { text: "I couldn't find your reporting manager details." };

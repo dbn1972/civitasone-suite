@@ -56,6 +56,11 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     if ((await editionPolicyRepo.resolvePolicy(ctx.tenantId)).requisitionRequired) {
       throw new HttpError(409, "REQUISITION_REQUIRED", REQUISITION_REQUIRED_MESSAGE);
     }
+    // A duplicate refNo used to be accepted (202) and then dead-lettered by the consumer on the
+    // (tenant_id, ref_no) unique key, so the caller never learned. Pre-check synchronously.
+    if (await repo.findJobOpeningByRefNo(ctx.tenantId, body.refNo)) {
+      throw new HttpError(409, "DUPLICATE_REF_NO", `A job opening with refNo "${body.refNo}" already exists`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createJobOpening(ctx, body));
   });
 
@@ -67,7 +72,11 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     // status + deadline, but NOT public-published (HR may record against internal
     // / unpublished openings). requirePublished=false.
     const vacancy = await repo.findJobOpeningById(body.jobOpeningId);
-    if (vacancy && !isApplicationOpen(vacancy as never, Date.now(), false)) {
+    // A nonexistent opening used to be accepted (202) and dead-lettered on fk_applications_job_opening.
+    if (!vacancy || vacancy.tenantId !== ctx.tenantId) {
+      throw new HttpError(404, "JOB_OPENING_NOT_FOUND", "Job opening not found");
+    }
+    if (!isApplicationOpen(vacancy as never, Date.now(), false)) {
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
     const dedupKey = deriveDedupKey(vacancy, body.email);

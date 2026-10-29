@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { computeRiskScore } from "./risk-score.js";
 
 const log = pino({ name: "project-f3-world-class" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -28,7 +29,7 @@ export function registerF3ProjectConsumers(queue: Queue): void {
     const p = msg.payload as Record<string, unknown>;
     const op = String(p.op ?? "");
     const ops = new Set([
-      "risk_create", "evm_compute", "ra_bill_create", "ra_bill_approve",
+      "risk_create", "risk_update", "evm_compute", "ra_bill_create", "ra_bill_approve",
       "time_ext_create", "time_ext_approve", "penalty_create", "resource_allocate",
     ]);
     if (!ops.has(op)) return;
@@ -44,6 +45,34 @@ export function registerF3ProjectConsumers(queue: Queue): void {
             `);
             const rid = (rows[0] as { id: string }).id;
             await audit(tx, msg, "create", "project_risk", rid);
+            break;
+          }
+          case "risk_update": {
+            // PATCH /risks/:riskId was accepted (202) but this op had no handler, so the
+            // update was silently dropped (UAT g4). Merge onto the stored row; risk_score is
+            // recomputed from the effective probability x impact.
+            const cur = await tx.execute(sql`
+              SELECT probability, impact FROM project.project_risks
+              WHERE id = ${p.riskId} AND tenant_id = ${p.tenantId} AND project_id = ${p.projectId}
+              FOR UPDATE
+            `);
+            if (cur.length === 0) return;
+            const c = cur[0] as { probability: string; impact: string };
+            const score = computeRiskScore((p.probability as string | undefined) ?? c.probability, (p.impact as string | undefined) ?? c.impact);
+            await tx.execute(sql`
+              UPDATE project.project_risks SET
+                title = COALESCE(${p.title ?? null}, title),
+                description = COALESCE(${p.description ?? null}, description),
+                category = COALESCE(${p.category ?? null}, category),
+                probability = COALESCE(${p.probability ?? null}, probability),
+                impact = COALESCE(${p.impact ?? null}, impact),
+                risk_score = ${score},
+                mitigation_plan = COALESCE(${p.mitigationPlan ?? null}, mitigation_plan),
+                owner_id = COALESCE(${p.ownerId ?? null}::uuid, owner_id),
+                status = COALESCE(${p.status ?? null}, status)
+              WHERE id = ${p.riskId} AND tenant_id = ${p.tenantId} AND project_id = ${p.projectId}
+            `);
+            await audit(tx, msg, "update", "project_risk", p.riskId as string);
             break;
           }
           case "evm_compute": {

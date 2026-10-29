@@ -448,6 +448,12 @@ const REFUND_PII_ENV = (() => {
   }
 })();
 
+// works-service (shared/pii-crypto.ts, contractor PAN / DPDP) reads the generic `PII_ENC_KEY` and
+// worker.ts calls assertPiiKeyConfigured() at boot. Neither svc("works") nor worker("works") supplied it,
+// so works-worker crash-looped, never subscribed, and every works CQRS write was accepted (202)
+// but never applied (UAT DB sweep 2026-10-28: 73 write routes blocked). Same shape as PROCUREMENT_PII_KEY.
+const WORKS_PII_KEY = piiKey("WORKS_PII_KEY", "works", "works-service");
+
 // NOTE on inspection-service: it validates a required-env allowlist at boot
 // (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
 // app.ts). All four are ALREADY supplied by its svc()/worker() entries below.
@@ -662,7 +668,7 @@ module.exports = {
     // the same compiled entrypoint the "pnpm worker" script uses.
     worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_TENANT_SIGNING_KEY_PEM, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
-    worker("works",        "works_svc",        "civitas_works", { WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
+    worker("works",        "works_svc",        "civitas_works", { PII_ENC_KEY: WORKS_PII_KEY, WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
     worker("revenue",      "revenue_svc",      "civitas_revenue", {}, "dist/worker.js", { graceful: true }), // PERF-003
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
@@ -737,7 +743,7 @@ module.exports = {
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }, { graceful: true }), // PERF-015
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
-    svc("works",        3036, "works_svc",        "civitas_works", {}, { graceful: true }), // PERF-015
+    svc("works",        3036, "works_svc",        "civitas_works", { PII_ENC_KEY: WORKS_PII_KEY }, { graceful: true }), // PERF-015
     svc("metadata",     3039, "metadata_svc",     "civitas_metadata", {}, { graceful: true }), // PERF-015
     svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent", {}, { graceful: true }), // PERF-015
     svc("field",        3046, "field_svc",        "civitas_field", {}, { graceful: true }), // PERF-015
