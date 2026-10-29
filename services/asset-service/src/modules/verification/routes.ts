@@ -5,6 +5,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import * as registerRepo from "../register/repo.js";
 import { isRealDateNotAfterToday } from "../../shared/dates.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
@@ -71,6 +72,10 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ remarks: z.string().optional() }).parse(req.body ?? {});
+    // UAT W6-A: tenant-scoped existence read; the consumer stays the race-safe check.
+    if (!(await registerRepo.findAssetById(id, ctx.tenantId))) {
+      throw new HttpError(404, "NOT_FOUND", "asset not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.requestWriteoff(ctx, id, body.remarks));
   });
 

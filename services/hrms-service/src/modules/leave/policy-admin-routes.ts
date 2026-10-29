@@ -137,6 +137,10 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updatePolicyBody.parse(req.body);
+    // UAT W6-A: tenant-scoped existence read; an unknown policy answers 404, not 202.
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsLeavePolicyRules.id }).from(hrmsLeavePolicyRules)
+      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))).limit(1));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "leave policy not found");
 
     // GAP-HR-LEAVE-POLICIES-03: same 200-"updated"-for-a-queued-write issue
     // as POST above — the client's toast/refetch could precede the actual

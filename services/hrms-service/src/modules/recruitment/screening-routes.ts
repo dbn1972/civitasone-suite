@@ -49,7 +49,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/job-openings/:id/auto-screen", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const { id } = idParam.parse(req.params);
+    const { id } = idParam.parse(req.params); await mustVacancy(ctx.tenantId, id); // UAT W6-A: 404 for an unknown vacancy
     const applications = await repo.listApplicationsForVacancy(ctx.tenantId, id);
     // Was a literal `let screened = 0, skipped = 0;` that never got
     // incremented — the actual classification loop only ran inside the async
@@ -235,6 +235,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
+    await mustVacancy(ctx.tenantId, id); // UAT W6-A: 404 for an unknown vacancy, not a 200 that froze nothing
     const all = await repo.listApplicationsForVacancy(ctx.tenantId, id);
     const shortlisted = all.filter((a) => a.screeningDecision === "shortlisted" && !a.shortlistFrozen);
     await publishF3Write(ctx, "recruitment_screening_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -276,5 +277,10 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const a = await repo.findApplication(tenantId, id);
     if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
     return a;
+  }
+
+  /** UAT W6-A: tenant-scoped existence read before a vacancy-level screening command. */
+  async function mustVacancy(tenantId: string, id: string): Promise<void> {
+    if (!(await repo.jobOpeningExists(tenantId, id))) throw new HttpError(404, "NOT_FOUND", "job opening not found");
   }
 }

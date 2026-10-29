@@ -44,6 +44,8 @@ export async function srnRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = signSrnBody.parse(req.body ?? {});
+    // UAT W6-A: tenant-scoped existence read; unknown SRN answers 404, not 202.
+    if (!(await repo.getSrn(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "SRN not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.signSrn(ctx, id, body));
   });
 

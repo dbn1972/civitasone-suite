@@ -374,13 +374,15 @@ describe("Maintenance routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/assets/:id/maintenance → 202", async () => {
+  // UAT W6-A: FAKE_UUID is not a real asset, so the plan can never apply: 404, not 202.
+  // The 202 path on a real asset is covered by tests/uat-w6a-accept-nonexistent.test.ts.
+  it("POST /v1/assets/assets/:id/maintenance → 404 for an asset that does not exist", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/assets/${FAKE_UUID}/maintenance`,
       headers: authHeader(),
       payload: { frequency: "quarterly", nextDue: "2024-04-01" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/assets/:id/maintenance → 400 bad uuid", async () => {
@@ -676,13 +678,14 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/assets/:id/writeoff-request → 202", async () => {
+  // UAT W6-A: FAKE_UUID is not a real asset: 404, not 202 (real-asset 202 is in uat-w6a-accept-nonexistent.test.ts).
+  it("POST /v1/assets/assets/:id/writeoff-request → 404 for an asset that does not exist", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/assets/${FAKE_UUID}/writeoff-request`,
       headers: authHeader(),
       payload: { remarks: "beyond economical repair" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/assets/:id/writeoff-request → 400 bad uuid", async () => {

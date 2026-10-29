@@ -37,6 +37,9 @@ const deviceReportSchema = z.object({
   biometricAvailable: z.boolean().optional(),
 });
 
+/** Device identifiers are opaque client strings (min 5, as deviceReportSchema; column is TEXT). */
+const deviceIdParam = z.object({ deviceId: z.string().min(5).max(256) });
+
 const policyUpdateSchema = z.object({
   minOsVersionAndroid: z.string().max(10).optional(),
   minOsVersionIos: z.string().max(10).optional(),
@@ -338,7 +341,14 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/devices/:deviceId/activity", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
-    const { deviceId } = req.params as { deviceId: string };
+    // UAT W6-A: validate the device identifier like the report body does (400), and
+    // answer 404 for a device this tenant has never registered instead of 200 [].
+    const { deviceId } = deviceIdParam.parse(req.params);
+    const known = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT 1 FROM hrms.trusted_devices WHERE tenant_id = $1 AND device_id = $2 LIMIT 1`,
+      [ctx.tenantId, deviceId],
+    ));
+    if (known.rows.length === 0) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT event_type, metadata, ip_address, created_at

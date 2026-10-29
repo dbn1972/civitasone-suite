@@ -80,6 +80,8 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
       odometerKm:     z.number().int().nonnegative().optional(),
       status:         z.enum(["active", "in_maintenance", "decommissioned"]).optional(),
     }).parse(req.body);
+    // UAT W6-A: an update for an unknown vehicle can never apply; 404 instead of 202.
+    if (!(await repo.findVehicleById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "vehicle not found");
     if (body.registrationNo !== undefined) {
       const clash = await repo.findVehicleByRegistration(ctx.tenantId, body.registrationNo, id);
       if (clash) throw new HttpError(409, "DUPLICATE_REGISTRATION", "a vehicle with this registration number is already registered");

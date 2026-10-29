@@ -21,6 +21,7 @@ const H = vi.hoisted(() => ({
   setByIdMock: vi.fn(),
   insertEventMock: vi.fn(),
   listEventsMock: vi.fn(),
+  vacancyExistsMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", async (io) => {
@@ -46,6 +47,7 @@ vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   setScreeningById: (...a: unknown[]) => H.setByIdMock(...a),
   insertEvent: (...a: unknown[]) => H.insertEventMock(...a),
   listEvents: (...a: unknown[]) => H.listEventsMock(...a),
+  jobOpeningExists: (...a: unknown[]) => H.vacancyExistsMock(...a),
 }));
 
 import { buildApp } from "../src/app.js";
@@ -76,6 +78,7 @@ const appRow = (over = {}) => ({ id: APP, tenantId: TENANT, jobOpeningId: VAC, a
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.vacancyExistsMock.mockResolvedValue(true);
   H.setScreeningMock.mockResolvedValue(undefined);
   H.setScreeningIfPendingMock.mockResolvedValue(true);
   H.setByIdMock.mockResolvedValue(undefined);
@@ -96,6 +99,21 @@ describe("screening routes", () => {
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/auto-screen`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ screened: 2, skipped: 2 });
+    await app.close();
+  });
+
+  it("UAT W6-A: auto-screen and freeze answer 404 for a vacancy that does not exist, and publish nothing", async () => {
+    H.vacancyExistsMock.mockResolvedValue(false);
+    const spy = vi.spyOn(queue, "publish");
+    const app = await buildApp();
+    for (const url of [`/v1/hrms/job-openings/${VAC}/auto-screen`, `/v1/hrms/job-openings/${VAC}/shortlist/freeze`]) {
+      const r = await injectF3(app, { method: "POST", url, headers: auth(["hr_admin"]) });
+      expect(r.statusCode).toBe(404);
+    }
+    expect(H.vacancyExistsMock).toHaveBeenCalledWith(TENANT, VAC);
+    expect(H.listForVacMock).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
     await app.close();
   });
 

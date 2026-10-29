@@ -96,7 +96,10 @@ describe("POST /v1/projects/:id/escalation/* — authz (GAP-PROJECTS-ESCALATIONS
     expect(res.statusCode).toBe(400);
   });
 
-  it("202 for an authorised actor acknowledging (command accepted)", async () => {
+  // UAT W6-A: PROJECT is a random id, so an authorised actor now passes authz and
+  // reaches the existence check (404) instead of a 202 for a project that does not
+  // exist. The 202 path on a real project is in uat-w6a-accept-nonexistent.test.ts.
+  it("an authorised actor passes authz (404 for an unknown project, not 401/403)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/projects/${PROJECT}/escalation/acknowledge`,
@@ -104,6 +107,6 @@ describe("POST /v1/projects/:id/escalation/* — authz (GAP-PROJECTS-ESCALATIONS
       payload: { severity: "blocked", issue: "Critical blocker" },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });

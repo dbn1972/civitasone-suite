@@ -27,6 +27,17 @@ const idParam = z.object({ id: z.string().uuid() });
 const taskParam = z.object({ taskId: z.string().uuid() });
 const idDocTypeParam = z.object({ id: z.string().uuid(), docType: z.string().min(1).max(64) });
 
+/**
+ * UAT W6-A: the onboarding-document row is upserted per (employee, docType) by
+ * design, but the employee itself must exist in this tenant: 404, not a 200 for
+ * a row that can never be linked to anyone.
+ */
+async function requireEmployee(tenantId: string, id: string): Promise<void> {
+  const rows = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.id, id))).limit(1));
+  if (!rows[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
+}
+
 // ── Document checklist (COMP-015) ───────────────────────────────────────────
 //
 // Platform-default catalogue, used whenever a tenant has configured no
@@ -238,6 +249,10 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/onboarding-tasks/:taskId/complete", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { taskId } = taskParam.parse(req.params);
+    // UAT W6-A: tenant-scoped existence read; an unknown task answers 404, not "completed".
+    const task = await scopedRead((tx) => tx.select({ id: hrmsOnboardingTasks.id }).from(hrmsOnboardingTasks)
+      .where(and(eq(hrmsOnboardingTasks.id, taskId), eq(hrmsOnboardingTasks.tenantId, ctx.tenantId))).limit(1));
+    if (!task[0]) throw new HttpError(404, "NOT_FOUND", "onboarding task not found");
     await publishF3Write(ctx, "lifecycle_onboarding_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id: taskId, status: "completed" }) as any;
   });
@@ -306,6 +321,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       storageKey: z.string().min(1).max(1024).optional(),
       fileName: z.string().min(1).max(255).optional(),
     }).parse(req.body ?? {});
+    await requireEmployee(ctx.tenantId, id);
     await publishF3Write(ctx, "lifecycle_onboarding_routes__3", randomUUID(), { body: body as Record<string, unknown>, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ employeeId: id, docType, status: "uploaded" }) as any;
   });
@@ -320,6 +336,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({
       status: z.enum(["verified", "rejected"]).default("verified"),
     }).parse(req.body ?? {});
+    await requireEmployee(ctx.tenantId, id);
     await publishF3Write(ctx, "lifecycle_onboarding_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ employeeId: id, docType, status: body.status }) as any;
   });

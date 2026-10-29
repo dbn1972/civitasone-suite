@@ -133,6 +133,9 @@ vi.mock("../src/modules/execution/repo.js", async (importOriginal) => {
     getWorkScope: vi.fn(async (_t: string, id: string) => ({ id, targetValue: null })),
     // Sentinel: a work id starting 00000000-9999- is already closed (GAP-WORKS-EXECUTION-WORKID-07).
     hasWorkClosure: vi.fn(async (_t: string, id: string) => id.startsWith("00000000-9999-")),
+    // UAT W6-A: same sentinel as getProposal: an issue id starting 00000000-0000- does not exist.
+    getIssue: vi.fn(async (_t: string, id: string) =>
+      id.startsWith("00000000-0000-") ? null : { id, status: "open" }),
   };
 });
 
@@ -314,6 +317,17 @@ describe("Masters CRUD routes", () => {
       const res = await app.inject({ method: "GET", url: `/v1/works/masters/${prefix}`, headers: authHeader() });
       // Auth passed — should not be 401 or 403; may be 200 or 500 depending on DB mock
       expect([200, 500]).toContain(res.statusCode);
+    });
+
+    // UAT W6-A: a malformed :id is a 400 (it used to reach Postgres and 500 on the uuid cast).
+    it(`GET /v1/works/masters/${prefix}/:id → 400 for a malformed id`, async () => {
+      const res = await app.inject({ method: "GET", url: `/v1/works/masters/${prefix}/not-a-uuid`, headers: authHeader() });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it(`PATCH /v1/works/masters/${prefix}/:id → 400 for a malformed id`, async () => {
+      const res = await app.inject({ method: "PATCH", url: `/v1/works/masters/${prefix}/not-a-uuid`, headers: authHeader(["works_admin"]), payload: { version: 1, name: "x" } });
+      expect(res.statusCode).toBe(400);
     });
 
     it(`POST /v1/works/masters/${prefix} → 401 no token`, async () => {
@@ -820,6 +834,17 @@ describe("Execution routes", () => {
       payload: { resolution: "Re-grouted and inspected." },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  // UAT W6-A: closing an issue that does not exist answers 404 instead of a 202 that can never apply.
+  it("POST /v1/works/execution/issues/:id/close → 404 for an unknown issue", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/works/execution/issues/00000000-0000-4000-8000-000000000009/close",
+      headers: authHeader(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/works/execution/issues/:id/close → 403 for a read-only role", async () => {

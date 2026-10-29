@@ -280,10 +280,20 @@ describe("POST /v1/hrms/lms/courses/:id/enroll", () => {
 
 describe("POST /v1/hrms/lms/enrollments/:id/complete", () => {
   it("completes enrollment (200)", async () => {
+    // UAT W6-A: the UPDATE ... RETURNING id finds the enrollment.
+    H.poolQuery.mockResolvedValueOnce({ rows: [{ id: ID1 }] });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/lms/enrollments/${ID1}/complete`, headers: auth(), payload: { score: 85 } });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("completed");
+    await app.close();
+  });
+
+  it("UAT W6-A: returns 404 when no enrollment with that id exists in the tenant", async () => {
+    H.poolQuery.mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/lms/enrollments/${ID1}/complete`, headers: auth(), payload: {} });
+    expect(r.statusCode).toBe(404);
     await app.close();
   });
 

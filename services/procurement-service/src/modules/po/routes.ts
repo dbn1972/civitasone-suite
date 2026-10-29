@@ -118,6 +118,8 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W6-A: tenant-scoped existence read; unknown PO answers 404, not 202.
+    if (!(await poRepo.findPoById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitPoForApproval(ctx, id));
   });
 

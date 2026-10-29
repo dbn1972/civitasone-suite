@@ -763,7 +763,10 @@ describe("HRMS routes — Device Trust", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/devices/${FAKE}/activity`, headers: { authorization: `Bearer ${token()}` } });
     await app.close();
-    expect(r.statusCode).not.toBe(404);
+    // UAT W6-A: an unregistered device is a domain 404 (DEVICE_NOT_FOUND), not a
+    // 200 []; the route itself is still matched (not Fastify's route-not-found).
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("DEVICE_NOT_FOUND");
   });
 
   it("GET /v1/hrms/devices/policy", async () => {

@@ -42,6 +42,10 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = maintenancePlanBody.parse(req.body);
+    // UAT W6-A: a plan for an unknown asset can never apply; answer 404 now instead of 202.
+    if (!(await registerRepo.findAssetById(id, ctx.tenantId))) {
+      throw new HttpError(404, "NOT_FOUND", "asset not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createMaintenancePlan(ctx, id, body));
   });
 

@@ -9,7 +9,7 @@ const TENANT = "aaaaaaaa-bbbb-4000-8000-000000000abb";
 const USER = "aaaaaaaa-7777-4000-8000-000000000abb";
 const JOB = "cccccccc-bbbb-4000-8000-00000000cabb";
 
-const H = vi.hoisted(() => ({ findByJob: vi.fn(), insertRequirement: vi.fn(), updateRequirement: vi.fn() }));
+const H = vi.hoisted(() => ({ findByJob: vi.fn(), insertRequirement: vi.fn(), updateRequirement: vi.fn(), findJobOpening: vi.fn() }));
 
 vi.mock("../src/shared/db.js", async (io) => {
   // markProcessed() in the F3 consumer runs
@@ -21,6 +21,11 @@ vi.mock("../src/shared/db.js", async (io) => {
     db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
   };
 });
+// UAT W6-A: PUT checks the job opening exists (tenant-scoped) before publishing.
+vi.mock("../src/modules/recruitment/repo.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  findJobOpeningByTenant: (...a: unknown[]) => H.findJobOpening(...a),
+}));
 vi.mock("../src/modules/recruitment/qualification-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findByJob: (...a: unknown[]) => H.findByJob(...a),
@@ -60,6 +65,7 @@ beforeEach(() => {
   H.insertRequirement.mockResolvedValue(undefined);
   H.updateRequirement.mockResolvedValue(undefined);
   H.findByJob.mockResolvedValue(null);
+  H.findJobOpening.mockResolvedValue({ id: JOB, tenantId: TENANT });
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -69,6 +75,17 @@ describe("qualification requirement + validate routes", () => {
     const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/qualification-requirement`, headers: auth, payload: { minTotalYears: 3, minRelevantYears: 1, minEducationLevel: "bachelor", requiredDisciplines: ["Computer Science"] } });
     expect(r.statusCode).toBe(200);
     expect(H.insertRequirement).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("UAT W6-A: 404 for a job opening that does not exist, and nothing is written", async () => {
+    H.findJobOpening.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/qualification-requirement`, headers: auth, payload: { minTotalYears: 3 } });
+    expect(r.statusCode).toBe(404);
+    expect(H.findJobOpening).toHaveBeenCalledWith(JOB, TENANT);
+    expect(H.insertRequirement).not.toHaveBeenCalled();
+    expect(H.updateRequirement).not.toHaveBeenCalled();
     await app.close();
   });
 

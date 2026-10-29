@@ -198,6 +198,9 @@ const ML_PLUGINS = [
   },
 ];
 
+/** Plugin ids are kebab-case slugs (see ML_PLUGINS). */
+const pluginIdParam = z.object({ pluginId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) });
+
 const configUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   mode: z.enum(["active", "shadow", "disabled"]).optional(),
@@ -365,7 +368,12 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
   /** GET /v1/hrms/ai/plugins/:pluginId/stats — detailed stats for a plugin */
   app.get("/v1/hrms/ai/plugins/:pluginId/stats", async (req, reply) => {
     const ctx = resolveContext(req);
-    const { pluginId } = req.params as { pluginId: string };
+    // UAT W6-A: validate the slug (400) and answer 404 for a plugin that is not in
+    // the registry, like PATCH /plugins/:pluginId, instead of 200 with empty stats.
+    const parsedParams = pluginIdParam.safeParse(req.params);
+    if (!parsedParams.success) throw new HttpError(400, "VALIDATION_FAILED", "pluginId must be a plugin slug");
+    const { pluginId } = parsedParams.data;
+    if (!ML_PLUGINS.some((p) => p.id === pluginId)) throw new HttpError(404, "NOT_FOUND", `Unknown AI plugin: ${pluginId}`);
 
     // Daily prediction counts (last 30 days)
     const daily = await withTenantGuc(ctx.tenantId, (pool) => pool.query(

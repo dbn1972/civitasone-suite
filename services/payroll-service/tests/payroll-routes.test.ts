@@ -352,7 +352,8 @@ describe("PATCH /v1/payroll/runs/:id/approve", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("PATCH /v1/payroll/runs/:id/disburse", () => {
-  it("returns 202 for valid request", async () => {
+  // UAT W6-A: UNKNOWN_ID is not a run: 404, not 202 (real-run 202 is in run-maker-checker-real-db.test.ts).
+  it("returns 404 for an unknown run", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -360,7 +361,7 @@ describe("PATCH /v1/payroll/runs/:id/disburse", () => {
       headers: authHeader(["payroll_officer"]),
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 401 without auth", async () => {
@@ -390,7 +391,8 @@ describe("PATCH /v1/payroll/runs/:id/disburse", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("PATCH /v1/payroll/runs/:id/revert", () => {
-  it("returns 202 for valid request", async () => {
+  // UAT W6-A: UNKNOWN_ID is not a run: 404, not 202 (real-run 202 is in run-maker-checker-real-db.test.ts).
+  it("returns 404 for an unknown run", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -398,7 +400,7 @@ describe("PATCH /v1/payroll/runs/:id/revert", () => {
       headers: authHeader(["super_admin"]),
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 401 without auth", async () => {

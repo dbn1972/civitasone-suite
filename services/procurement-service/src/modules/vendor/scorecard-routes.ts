@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./scorecard-commands.js";
 import * as repo from "./scorecard-repo.js";
+import * as vendorRepo from "./repo.js";
 import {
   recomputeScorecardBody, issueShowCauseBody, respondShowCauseBody,
   appealShowCauseBody, decideShowCauseBody, vendorIdParam, showCauseIdParam,
@@ -29,6 +30,8 @@ export async function vendorScorecardRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, WRITE_ROLES);
     const { vendorId } = vendorIdParam.parse(req.params);
     const body = recomputeScorecardBody.parse(req.body ?? {});
+    // UAT W6-A: the scorecard is per vendor; an unknown vendor answers 404, not 202.
+    if (!(await vendorRepo.findVendorById(vendorId, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "vendor not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.recomputeScorecard(ctx, vendorId, body));
   });
 

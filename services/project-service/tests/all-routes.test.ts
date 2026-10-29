@@ -529,12 +529,14 @@ describe("Project Routes", () => {
   });
 
   describe("PATCH /v1/projects/:id/milestones/:mId/complete", () => {
-    it("returns 202 for valid complete", async () => {
+    // UAT W6-A: MILESTONE_ID is not a real milestone of PROJECT_ID: 404, not 202.
+    // The 202 path on a real milestone is in uat-w6a-accept-nonexistent.test.ts.
+    it("returns 404 for a milestone that does not exist", async () => {
       const res = await app.inject({
         method: "PATCH", url: `/v1/projects/${PROJECT_ID}/milestones/${MILESTONE_ID}/complete`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
       });
-      expect(res.statusCode).toBe(202);
+      expect(res.statusCode).toBe(404);
     });
 
     it("returns 400 for invalid mId", async () => {

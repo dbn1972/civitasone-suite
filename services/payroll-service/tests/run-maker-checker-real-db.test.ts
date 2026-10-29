@@ -203,13 +203,22 @@ describe("payroll run maker-checker (GAP-PAYROLL-DETAIL-02)", () => {
     expect(row?.disbursedAt).not.toBeNull();
   });
 
-  it("an unknown run is still not rejected up front (nothing to compare): 202 as before, the consumer fails it", async () => {
-    const res = await app.inject({
-      method: "PATCH", url: `/v1/payroll/runs/${randomUUID()}/disburse`,
-      headers: bearer(MAKER, ["payroll_admin"]), payload: {},
-    });
-    expect(res.statusCode).toBe(202);
-    await memQueue.drain();
+  // UAT W6-A: the route now reads the run (tenant-scoped) before publishing, so an
+  // unknown run is refused up front with 404 and no command is queued.
+  it("an unknown run is rejected up front with 404 and nothing is published", async () => {
+    const spy = vi.spyOn(queue, "publish");
+    try {
+      for (const verb of ["approve", "disburse", "revert"]) {
+        const res = await app.inject({
+          method: "PATCH", url: `/v1/payroll/runs/${randomUUID()}/${verb}`,
+          headers: bearer(CHECKER, ["super_admin"]), payload: {},
+        });
+        expect(res.statusCode).toBe(404);
+      }
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
