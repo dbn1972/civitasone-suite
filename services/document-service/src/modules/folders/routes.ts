@@ -11,6 +11,17 @@ const ROLES = ["document_user", "document_admin", "super_admin"];
 
 const idParam = z.object({ id: z.string().uuid() });
 
+/** #112: the same tree checks the consumer re-runs under the tree lock, answered synchronously as a 4xx. */
+function rejectPlan(outcome: repo.TreeOutcome): void {
+  switch (outcome) {
+    case "ok": return;
+    case "not_found": throw new HttpError(404, "NOT_FOUND", "folder not found");
+    case "parent_not_found": throw new HttpError(422, "PARENT_NOT_FOUND", "parent folder not found");
+    case "cycle": throw new HttpError(422, "FOLDER_CYCLE", "a folder cannot be moved into itself or one of its subfolders");
+    case "path_too_long": throw new HttpError(422, "PATH_TOO_LONG", `the folder path would exceed ${repo.MAX_PATH_LENGTH} characters`);
+  }
+}
+
 /**
  * CLOS-S4-01: folders.id is a uuid column, so a malformed :id used to reach
  * Postgres (22P02 -> retryable 500) or, on the CQRS PATCH routes, be accepted
@@ -34,9 +45,7 @@ export async function folderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const body = createFolderBody.parse(req.body);
-    if (body.parentId && !(await repo.getById(ctx.tenantId, body.parentId))) {
-      throw new HttpError(422, "PARENT_NOT_FOUND", "parent folder not found");
-    }
+    rejectPlan((await repo.planRead(ctx.tenantId, null, body.parentId ?? null, body.name)).outcome);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createFolder(ctx, body));
   });
 
@@ -73,6 +82,7 @@ export async function folderRoutes(app: FastifyInstance): Promise<void> {
     const id = parseFolderId(req, reply);
     if (id === null) return reply;
     const body = renameFolderBody.parse(req.body);
+    rejectPlan((await repo.planRead(ctx.tenantId, id, undefined, body.name)).outcome);
     return sendAccepted(reply, acceptedResponseSchema, await commands.renameFolder(ctx, id, body.name));
   });
 
@@ -83,13 +93,7 @@ export async function folderRoutes(app: FastifyInstance): Promise<void> {
     if (id === null) return reply;
     const body = moveFolderBody.parse(req.body);
     // #112: a folder may not be moved under itself or one of its descendants (re-checked in the consumer under a tree lock).
-    if (!(await repo.getById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "folder not found");
-    if (body.parentId !== null) {
-      if (body.parentId === id) throw new HttpError(422, "FOLDER_CYCLE", "a folder cannot be moved into itself or one of its subfolders");
-      const parent = await repo.lineageRead(ctx.tenantId, body.parentId);
-      if (!parent) throw new HttpError(422, "PARENT_NOT_FOUND", "parent folder not found");
-      if (parent.includes(id)) throw new HttpError(422, "FOLDER_CYCLE", "a folder cannot be moved into itself or one of its subfolders");
-    }
+    rejectPlan((await repo.planRead(ctx.tenantId, id, body.parentId, null)).outcome);
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFolder(ctx, id, body.parentId));
   });
 }

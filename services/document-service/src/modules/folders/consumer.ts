@@ -20,14 +20,12 @@ export function registerFoldersConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
-      // #112: the path is computed here from the parent's lineage (the command's `path` is ignored).
-      let path = "/";
-      if (p.parentId) {
-        await repo.lockTree(tx, msg.tenantId);
-        const parent = await repo.lineage(tx, msg.tenantId, p.parentId);
-        if (parent) path = repo.childPathOf(parent);
+      // #112: the name path is computed here under the tree lock (the command's `path` is ignored).
+      const outcome = await repo.create(tx, { id: p.id, tenantId: p.tenantId, name: p.name, parentId: p.parentId, createdBy: msg.actorId, updatedBy: msg.actorId });
+      if (outcome !== "ok") {
+        await audit(tx as TxParam, msg, "create", p.id, "denied", { parentId: p.parentId, reason: outcome });
+        return;
       }
-      await repo.insert(tx, { id: p.id, tenantId: p.tenantId, name: p.name, parentId: p.parentId, path, createdBy: msg.actorId, updatedBy: msg.actorId });
       await enqueue(tx as never, { topic: EVENTS.folderCreated, eventType: EVENTS.folderCreated, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { folderId: p.id } });
       await audit(tx as TxParam, msg, "create", p.id, "success");
     });
@@ -36,9 +34,9 @@ export function registerFoldersConsumers(rawQueue: Queue): void {
   queue.subscribe<{ folderId: string; name: string }>(COMMANDS.folderRename, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      if (await repo.rename(tx, msg.tenantId, msg.payload.folderId, msg.payload.name, msg.actorId)) {
-        await audit(tx as TxParam, msg, "rename", msg.payload.folderId, "success", { name: msg.payload.name });
-      }
+      const outcome = await repo.rename(tx, msg.tenantId, msg.payload.folderId, msg.payload.name, msg.actorId);
+      if (outcome === "ok") await audit(tx as TxParam, msg, "rename", msg.payload.folderId, "success", { name: msg.payload.name });
+      else if (outcome !== "not_found") await audit(tx as TxParam, msg, "rename", msg.payload.folderId, "denied", { name: msg.payload.name, reason: outcome });
     });
   });
 
@@ -47,7 +45,7 @@ export function registerFoldersConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const outcome = await repo.move(tx, msg.tenantId, msg.payload.folderId, msg.payload.parentId, msg.actorId);
       const details = { parentId: msg.payload.parentId };
-      if (outcome === "moved") await audit(tx as TxParam, msg, "move", msg.payload.folderId, "success", details);
+      if (outcome === "ok") await audit(tx as TxParam, msg, "move", msg.payload.folderId, "success", details);
       else await audit(tx as TxParam, msg, "move", msg.payload.folderId, "denied", { ...details, reason: outcome });
     });
   });

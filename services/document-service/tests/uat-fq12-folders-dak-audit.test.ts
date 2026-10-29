@@ -1,6 +1,7 @@
 /**
  * UAT FQ12 runner, document-service (real DB, via the queue + consumers):
  *  #112 folder move accepted a self/descendant parent (cycle) and `path` was never computed (always "/").
+ *       `path` is the human-readable name path the web shows ("/Budget/2026"), kept for the whole subtree on rename and move.
  *  #111 #122 #126 #127 folder rename/move, file tags, noting create and approval submit/decide wrote no audit event.
  *  #125 dak forward validated `remarks` and then dropped them.
  */
@@ -43,13 +44,53 @@ async function folder(tid: string, actor: string, id: string): Promise<{ parentI
 const move = (tid: string, actor: string, id: string, parentId: string | null) =>
   app.inject({ method: "PATCH", url: `/v1/documents/folders/${id}/move`, headers: as(tid, actor), payload: { parentId } });
 
+const rename = (tid: string, actor: string, id: string, name: string) =>
+  app.inject({ method: "PATCH", url: `/v1/documents/folders/${id}/rename`, headers: as(tid, actor), payload: { name } });
+const paths = async (tid: string, u: string, ids: string[]): Promise<string[]> => Promise.all(ids.map(async (id) => (await folder(tid, u, id)).path));
+
 describe("#112 folder move: no cycles, path maintained", () => {
-  it("create computes the ancestor path", async () => {
+  it("create computes the name path (root included, as the web fixtures expect: /Budget)", async () => {
+    const tid = randomUUID(); const u = randomUUID();
+    const a = await mkFolder(tid, u, "Budget"); const b = await mkFolder(tid, u, "2026", a); const c = await mkFolder(tid, u, "Q1 Bills", b);
+    expect(await paths(tid, u, [a, b, c])).toEqual(["/Budget", "/Budget/2026", "/Budget/2026/Q1 Bills"]);
+  });
+
+  it("renaming a middle folder rewrites its own path and every descendant's; unknown folder 404", async () => {
     const tid = randomUUID(); const u = randomUUID();
     const a = await mkFolder(tid, u, "A"); const b = await mkFolder(tid, u, "B", a); const c = await mkFolder(tid, u, "C", b);
-    expect((await folder(tid, u, a)).path).toBe("/");
-    expect((await folder(tid, u, b)).path).toBe(`/${a}/`);
-    expect((await folder(tid, u, c)).path).toBe(`/${a}/${b}/`);
+    const d = await mkFolder(tid, u, "D", c); const sib = await mkFolder(tid, u, "Sib", a);
+    expect((await rename(tid, u, b, "Bee")).statusCode).toBe(202);
+    await appQueue.drain();
+    expect(await paths(tid, u, [a, b, c, d, sib])).toEqual(["/A", "/A/Bee", "/A/Bee/C", "/A/Bee/C/D", "/A/Sib"]);
+    expect((await rename(tid, u, randomUUID(), "x")).statusCode).toBe(404);
+  });
+
+  it("a folder name containing '/' is rejected on create and rename (400), so the name path stays unambiguous", async () => {
+    const tid = randomUUID(); const u = randomUUID();
+    const a = await mkFolder(tid, u, "A");
+    const create = await app.inject({ method: "POST", url: "/v1/documents/folders", headers: as(tid, u), payload: { name: "a/b" } });
+    expect(create.statusCode).toBe(400);
+    expect(create.json().code).toBe("VALIDATION_FAILED");
+    expect((await rename(tid, u, a, "x/y")).statusCode).toBe(400);
+    await appQueue.drain();
+    expect((await folder(tid, u, a)).name).toBe("A");
+  });
+
+  it("a create, rename or move whose path would exceed 2000 chars is refused synchronously (422 PATH_TOO_LONG)", async () => {
+    const tid = randomUUID(); const u = randomUUID(); const long = (ch: string) => ch.repeat(500);
+    const a = await mkFolder(tid, u, long("a")); const b = await mkFolder(tid, u, long("b"), a); const c = await mkFolder(tid, u, long("c"), b);
+    const leaf = await mkFolder(tid, u, "d", c);                     // path length 1505
+    const tooDeep = await app.inject({ method: "POST", url: "/v1/documents/folders", headers: as(tid, u), payload: { name: long("e"), parentId: c } });
+    expect(tooDeep.statusCode).toBe(422);
+    expect(tooDeep.json().code).toBe("PATH_TOO_LONG");
+    expect((await rename(tid, u, leaf, long("d"))).json().code).toBe("PATH_TOO_LONG");
+    const x = await mkFolder(tid, u, long("x"));
+    const mv = await move(tid, u, x, c);
+    expect(mv.statusCode).toBe(422);
+    expect(mv.json().code).toBe("PATH_TOO_LONG");
+    await appQueue.drain();
+    expect((await folder(tid, u, leaf)).name).toBe("d");
+    expect((await folder(tid, u, x)).parentId).toBeNull();
   });
 
   it("rejects moving a folder under itself or under its own descendant (422 FOLDER_CYCLE); nothing changes", async () => {
@@ -82,14 +123,13 @@ describe("#112 folder move: no cycles, path maintained", () => {
     const d = await mkFolder(tid, u, "D");
     expect((await move(tid, u, a, d)).statusCode).toBe(202);
     await appQueue.drain();
-    expect(await folder(tid, u, a)).toMatchObject({ parentId: d, path: `/${d}/` });
-    expect((await folder(tid, u, b)).path).toBe(`/${d}/${a}/`);
-    expect((await folder(tid, u, c)).path).toBe(`/${d}/${a}/${b}/`);
+    expect(await folder(tid, u, a)).toMatchObject({ parentId: d });
+    expect(await paths(tid, u, [d, a, b, c])).toEqual(["/D", "/D/A", "/D/A/B", "/D/A/B/C"]);
 
     expect((await move(tid, u, b, null)).statusCode).toBe(202);
     await appQueue.drain();
-    expect(await folder(tid, u, b)).toMatchObject({ parentId: null, path: "/" });
-    expect((await folder(tid, u, c)).path).toBe(`/${b}/`);
+    expect(await folder(tid, u, b)).toMatchObject({ parentId: null, path: "/B" });
+    expect(await paths(tid, u, [a, c])).toEqual(["/D/A", "/B/C"]);
   });
 
   it("a cyclic move that slips past the route (race) is refused by the consumer and audited as denied", async () => {
