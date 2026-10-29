@@ -9,7 +9,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { featureFlags } from "./schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 const log = pino({ name: "admin-feature-flags-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -68,6 +68,7 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
         if (p.targetSegments !== undefined) updates.targetSegments = p.targetSegments;
         if (p.owner !== undefined) updates.owner = p.owner;
         if (p.expiresAt !== undefined) updates.expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
+        updates.version = sql`${featureFlags.version} + 1`;
         await (tx as any).update(featureFlags).set(updates)
           .where(and(eq(featureFlags.id, p.flagId), eq(featureFlags.tenantId, p.tenantId)));
         await emit(tx, msg, "admin.feature_flag.updated", p, "update", p.flagId);
@@ -83,7 +84,7 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
-        await (tx as any).update(featureFlags).set({ killSwitch: true, updatedBy: msg.actorId, updatedAt: new Date() })
+        await (tx as any).update(featureFlags).set({ killSwitch: true, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${featureFlags.version} + 1` })
           .where(and(eq(featureFlags.id, p.flagId), eq(featureFlags.tenantId, p.tenantId)));
         // GAP-ADMIN-FEATURE-FLAGS-01: the operator's stated reason is part of
         // the audit record (actor comes from msg.actorId). Older in-flight

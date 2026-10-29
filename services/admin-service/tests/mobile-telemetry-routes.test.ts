@@ -399,9 +399,12 @@ describe("GET /v1/admin/mobile-telemetry — raw events", () => {
     expect(body.meta.page).toBe(2);
   });
 
-  it("400 without limit and 400 above the limit ceiling", async () => {
+  it("a missing limit defaults to one bounded page; 400 above the limit ceiling", async () => {
     const none = await app.inject({ method: "GET", url: "/v1/admin/mobile-telemetry", headers: auth() });
-    expect(none.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(none.statusCode).toBe(200);
+    expect((none.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
     const over = await app.inject({ method: "GET", url: "/v1/admin/mobile-telemetry?limit=500", headers: auth() });
     expect(over.statusCode).toBe(400);
   });
@@ -485,9 +488,12 @@ describe("GET /v1/admin/mobile-telemetry/aggregate", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("400 without limit", async () => {
+  it("a missing limit defaults to one bounded page", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/mobile-telemetry/aggregate", headers: auth() });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 
   it("does not aggregate another tenant's telemetry", async () => {
@@ -556,8 +562,11 @@ describe("GET /v1/admin/mobile-telemetry/screens", () => {
     expect((res.json() as ListBody<ScreenBucket>).meta.total).toBe(0);
   });
 
-  it("400 without limit", async () => {
+  it("a missing limit defaults to one bounded page", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/mobile-telemetry/screens", headers: auth() });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 });

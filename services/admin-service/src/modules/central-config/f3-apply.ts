@@ -19,6 +19,8 @@ import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
+import { configChangeRequests } from "./schema.js";
+import { resourceExists, withResourceId } from "../../shared/f3-resource.js";
 import {
   assertApproverDistinct,
   assertPending,
@@ -52,14 +54,17 @@ async function audit(tx: Tx, ctx: { tenantId: string; actorId: string; correlati
   });
 }
 
-export async function apply_central_config_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_central_config_0(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/central-config/changes"
     const body = proposeBody.parse(req.body);
     const { stored, encrypted } = sealForStorage(body.value, body.sensitive, configKey());
 
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, configChangeRequests, req.resourceId)) return;
       const existing = await repo.findEntryByKeyTx(tx as repo.Writer, ctx.tenantId, body.key);
       const row = await repo.insertChange(tx as repo.Writer, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         key: body.key,
         proposedValue: stored,
@@ -81,7 +86,7 @@ export async function apply_central_config_0(ctx: any, req: { body: unknown; par
   
 }
 
-export async function apply_central_config_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_central_config_1(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/central-config/changes/:id/approve"
     const { id } = idParam.parse(req.params);
 
@@ -149,7 +154,7 @@ export async function apply_central_config_1(ctx: any, req: { body: unknown; par
   
 }
 
-export async function apply_central_config_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_central_config_2(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/central-config/changes/:id/reject"
     const { id } = idParam.parse(req.params);
     const body = rejectBody.parse(req.body);

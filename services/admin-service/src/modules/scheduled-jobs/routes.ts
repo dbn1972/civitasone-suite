@@ -125,6 +125,7 @@ export async function scheduledJobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(jobIdParam, req.params);
     const { reason } = safeParse(actionBody, req.body ?? {});
+    if (!(await findJob(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "scheduled job not found");
     const result = await commands.jobPause(ctx, id, reason);
     return reply.code(202).send(result);
   });
@@ -135,6 +136,7 @@ export async function scheduledJobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(jobIdParam, req.params);
     const { reason } = safeParse(actionBody, req.body ?? {});
+    if (!(await findJob(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "scheduled job not found");
     const result = await commands.jobResume(ctx, id, reason);
     return reply.code(202).send(result);
   });

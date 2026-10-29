@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { adminApiKeys, type ApiKeyRow } from "./schema.js";
 
@@ -28,7 +28,7 @@ export async function revokeKey(id: string, tenantId: string, actorId: string): 
 /** Tx-scoped twin of revokeKey for callers already inside an open transaction. */
 export async function revokeKeyTx(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
   await tx.update(adminApiKeys)
-    .set({ status: "revoked", updatedAt: new Date(), updatedBy: actorId })
+    .set({ status: "revoked", updatedAt: new Date(), updatedBy: actorId, version: sql`${adminApiKeys.version} + 1` })
     .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId)));
 }
 
@@ -43,6 +43,6 @@ export async function rotateKey(
   actorId: string,
 ): Promise<void> {
   await tx.update(adminApiKeys)
-    .set({ keyPrefix, keyHash, status: "active", updatedAt: new Date(), updatedBy: actorId })
+    .set({ keyPrefix, keyHash, status: "active", updatedAt: new Date(), updatedBy: actorId, version: sql`${adminApiKeys.version} + 1` })
     .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId)));
 }

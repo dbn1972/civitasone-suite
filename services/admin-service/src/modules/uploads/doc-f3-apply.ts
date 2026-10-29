@@ -4,6 +4,8 @@ import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { HttpError } from "../../shared/context.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./doc-repo.js";
+import { documentTypes, documents } from "./doc-schema.js";
+import { resourceExists, withResourceId } from "../../shared/f3-resource.js";
 import {
   classifyExpiry,
   daysUntil,
@@ -25,15 +27,18 @@ function iso(d: Date | null | undefined): string | null {
   return d ? d.toISOString() : null;
 }
 
-type Req = { body: any; params: any; query: any };
+type Req = { body: any; params: any; query: any; resourceId?: string | undefined };
 
 export async function apply_uploads_0(ctx: any, req: Req): Promise<void> {
   const body = req.body;
   await db.transaction(async (tx) => {
+    // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+    if (await resourceExists(tx, documentTypes, req.resourceId)) return;
     const w = tx as repo.Writer;
     const clash = await repo.findTypeByCodeTx(w, ctx.tenantId, body.code);
     if (clash) throw new HttpError(409, "TYPE_EXISTS", `document type '${body.code}' already exists`);
     const row = await repo.insertType(w, {
+      ...withResourceId(req.resourceId),
       tenantId: ctx.tenantId,
       code: body.code,
       name: body.name,
@@ -77,6 +82,7 @@ export async function apply_uploads_2(ctx: any, req: Req): Promise<void> {
     if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
     assertTypeActive(type.status);
     const row = await repo.upsertRequirement(w, {
+      ...withResourceId(req.resourceId),
       tenantId: ctx.tenantId,
       contextType: body.contextType,
       contextKey: body.contextKey,
@@ -94,6 +100,8 @@ export async function apply_uploads_2(ctx: any, req: Req): Promise<void> {
 export async function apply_uploads_3(ctx: any, req: Req): Promise<void> {
   const body = req.body;
   await db.transaction(async (tx) => {
+    // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+    if (await resourceExists(tx, documents, req.resourceId)) return;
     const w = tx as repo.Writer;
     const type = await repo.findTypeByCodeTx(w, ctx.tenantId, body.documentTypeCode);
     if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
@@ -104,6 +112,7 @@ export async function apply_uploads_3(ctx: any, req: Req): Promise<void> {
     const expiresAt = body.expiresAt !== undefined ? new Date(body.expiresAt) : null;
     const status = classifyExpiry("active", expiresAt, type.expiryWarnDays);
     const row = await repo.insertDocument(w, {
+      ...withResourceId(req.resourceId),
       tenantId: ctx.tenantId,
       documentTypeCode: body.documentTypeCode,
       contextType: body.contextType,

@@ -26,6 +26,8 @@ import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { parseOrThrow } from "../../shared/envelope.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./artefact-repo.js";
+import { configArtefacts, configPromotions } from "./artefact-schema.js";
+import { resourceExists, withResourceId } from "../../shared/f3-resource.js";
 import {
   ENVIRONMENTS,
   checksumOf,
@@ -79,7 +81,7 @@ function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: stri
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
 }
 
-export async function apply_config_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_config_0(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/config-artefacts"
     const body = parseOrThrow(snapshotBody, req.body);
 
@@ -94,6 +96,8 @@ export async function apply_config_0(ctx: any, req: { body: unknown; params: unk
     const checksum = checksumOf(entries);
 
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, configArtefacts, req.resourceId)) return;
       const w = tx as repo.Writer;
       const currentMax = await repo.maxArtefactVersionTx(w, ctx.tenantId, body.setKey);
       if (currentMax !== null) {
@@ -107,6 +111,7 @@ export async function apply_config_0(ctx: any, req: { body: unknown; params: unk
       }
       const artefactVersion = nextArtefactVersion(currentMax);
       const row = await repo.insertArtefact(w, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         setKey: body.setKey,
         artefactVersion,
@@ -128,15 +133,18 @@ export async function apply_config_0(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_config_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_config_1(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/config-artefacts/promotions"
     const body = parseOrThrow(promoteBody, req.body);
 
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, configPromotions, req.resourceId)) return;
       const w = tx as repo.Writer;
       const artefact = await repo.findArtefactByVersionTx(w, ctx.tenantId, body.setKey, body.artefactVersion);
       if (!artefact) throw new HttpError(404, "NOT_FOUND", "config artefact version not found");
       const row = await repo.insertPromotion(w, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         setKey: body.setKey,
         artefactId: artefact.id,
@@ -161,7 +169,7 @@ export async function apply_config_1(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_config_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_config_2(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/config-artefacts/promotions/:id/approve"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
@@ -239,7 +247,7 @@ export async function apply_config_2(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_config_3(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_config_3(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/config-artefacts/promotions/:id/reject"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
@@ -269,7 +277,7 @@ export async function apply_config_3(ctx: any, req: { body: unknown; params: unk
   
 }
 
-export async function apply_config_4(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_config_4(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/config-artefacts/environments/:env/rollback"
     const { env } = parseOrThrow(envParam, req.params);
     const body = parseOrThrow(rollbackBody, req.body);

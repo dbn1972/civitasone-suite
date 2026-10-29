@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { ChangeRequestRow } from "./schema.js";
+import { acceptedCreate } from "../../shared/f3-resource.js";
 import {
   ChangeError,
   assertTransition,
@@ -77,12 +78,13 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_0",
+      resourceId: __f3Id,
       body: (req.body as Record<string, unknown>),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   app.get("/v1/admin/change/requests/:id", async (req, reply) => {
@@ -294,12 +296,13 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_8",
+      resourceId: __f3Id,
       body: (req.body as Record<string, unknown>),
       params: req.params as Record<string, unknown>,
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
+    return reply.code(202).send(acceptedCreate(ctx, __f3Id, __f3Id));
   });
 
   app.setErrorHandler((err, req, reply) => {

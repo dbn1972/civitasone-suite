@@ -97,6 +97,9 @@ async function propose(body: Record<string, unknown>, actor = PROPOSER, tenantId
   const rows = list.json().data as Array<{ id: string; key: string }>;
   const match = rows.find((r) => r.key === (body.key as string));
   if (!match) throw new Error(`proposed change for key '${body.key}' never landed`);
+  // FQ12: the route now pre-mints the row id and the consumer inserts with it, so the
+  // 202's data.id names the persisted resource (the lookup above stays as a cross-check).
+  expect(match.id).toBe(res.json().data.id);
   return match.id;
 }
 

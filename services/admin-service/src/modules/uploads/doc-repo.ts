@@ -83,6 +83,16 @@ export async function updateType(
 
 // ── requirements ────────────────────────────────────────────────────────────
 
+export async function findRequirementTx(
+  tx: Writer, tenantId: string, contextType: string, contextKey: string, documentTypeCode: string,
+): Promise<DocumentRequirementRow | undefined> {
+  const rows = await tx.select().from(documentRequirements).where(and(
+    eq(documentRequirements.tenantId, tenantId), eq(documentRequirements.contextType, contextType),
+    eq(documentRequirements.contextKey, contextKey), eq(documentRequirements.documentTypeCode, documentTypeCode),
+  )).limit(1);
+  return rows[0];
+}
+
 export async function upsertRequirement(tx: Writer, row: DocumentRequirementInsert): Promise<DocumentRequirementRow> {
   const rows = await (tx.insert(documentRequirements).values(row)
     .onConflictDoUpdate({

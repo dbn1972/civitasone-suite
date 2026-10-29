@@ -45,7 +45,8 @@ const INGEST_ROLES = [
 ];
 const READ_ROLES = [...TENANT_ADMIN_ROLES];
 
-const limitSchema = z.coerce.number().int().min(1).max(200);
+// W6 P9b: list GETs without ?limit answered 400; default like the service's other lists.
+const limitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
 
 const ingestBody = z.object({

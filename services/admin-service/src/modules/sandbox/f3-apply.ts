@@ -25,6 +25,8 @@ import { enqueue } from "../../shared/outbox.js";
 import { parseOrThrow } from "../../shared/envelope.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { sandboxEnvironments } from "./schema.js";
+import { resourceExists, withResourceId } from "../../shared/f3-resource.js";
 import {
   SOURCE_ENVIRONMENTS,
   MASKING_STRATEGIES,
@@ -92,11 +94,13 @@ function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: stri
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
 }
 
-export async function apply_sandbox_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_sandbox_0(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/sandboxes"
     const body = parseOrThrow(registerBody, req.body);
 
     await db.transaction(async (tx) => {
+      // FQ12: a redelivered create whose pre-minted id already committed is a no-op.
+      if (await resourceExists(tx, sandboxEnvironments, req.resourceId)) return;
       // `uq_sandbox_env_code` would otherwise raise a driver-level unique
       // violation, which the error handler can only report as 500 INTERNAL. A
       // duplicate code is a client error, so answer it as one.
@@ -105,6 +109,7 @@ export async function apply_sandbox_0(ctx: any, req: { body: unknown; params: un
         throw new HttpError(409, "SANDBOX_EXISTS", `a sandbox with code '${body.code}' already exists`);
       }
       const row = await repo.insertSandbox(tx as repo.Writer, {
+        ...withResourceId(req.resourceId),
         tenantId: ctx.tenantId,
         code: body.code,
         name: body.name,
@@ -124,7 +129,7 @@ export async function apply_sandbox_0(ctx: any, req: { body: unknown; params: un
   
 }
 
-export async function apply_sandbox_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_sandbox_1(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/sandboxes/:id/masking-rules"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(ruleBody, req.body);
@@ -154,7 +159,7 @@ export async function apply_sandbox_1(ctx: any, req: { body: unknown; params: un
   
 }
 
-export async function apply_sandbox_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_sandbox_2(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/sandboxes/:id/refreshes"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(refreshBody, req.body);
@@ -192,7 +197,7 @@ export async function apply_sandbox_2(ctx: any, req: { body: unknown; params: un
   
 }
 
-export async function apply_sandbox_3(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_sandbox_3(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/sandbox-refreshes/:id/approve"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
@@ -243,7 +248,7 @@ export async function apply_sandbox_3(ctx: any, req: { body: unknown; params: un
   
 }
 
-export async function apply_sandbox_4(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+export async function apply_sandbox_4(ctx: any, req: { body: unknown; params: unknown; query: unknown; resourceId?: string | undefined }): Promise<void> {
   // post:"/v1/admin/sandbox-refreshes/:id/reject"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);

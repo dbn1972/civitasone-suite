@@ -118,6 +118,38 @@ function pageMeta(limit: number, offset: number, total: number) {
 const NOT_IMPLEMENTED = (message: string) => ({ code: "NOT_IMPLEMENTED", message });
 
 /**
+ * FQ12 #29: PATCH roles/:id/permissions issued one identity-service call per
+ * grant/revoke strictly in series, so a role edit touching a few dozen keys
+ * outlived the gateway timeout (504) even at low load. Changes now run with
+ * bounded concurrency (ROLE_PERMISSION_CONCURRENCY, default 8, max 32):
+ * fast, without stampeding identity-service. `stop()` lets a worker halt
+ * scheduling further items (in-flight ones still finish).
+ */
+export function rolePermissionConcurrency(raw: string | undefined = process.env.ROLE_PERMISSION_CONCURRENCY): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, 32) : 8;
+}
+
+export async function mapBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, stop: () => void) => Promise<R>,
+): Promise<Array<R | undefined>> {
+  const out: Array<R | undefined> = new Array(items.length);
+  let next = 0;
+  let stopped = false;
+  const stop = () => { stopped = true; };
+  const worker = async () => {
+    while (!stopped && next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i] as T, stop);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return out;
+}
+
+/**
  * Routes for screens that previously had no real backing (COMP-001).
  *
  * Every route below either (a) reads/writes a real store — either one of this
@@ -706,12 +738,15 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const roleRes = await callUpstream<{ permissions?: string[] } & Record<string, unknown>>(req, ctx, "GET", identityBaseUrl(), `/identity/rbac/roles/${id}`);
+    // The two reads are independent: fetch them together (role errors still win).
+    const [roleRes, permsRes] = await Promise.all([
+      callUpstream<{ permissions?: string[] } & Record<string, unknown>>(req, ctx, "GET", identityBaseUrl(), `/identity/rbac/roles/${id}`),
+      callUpstream<Array<{ id: string; key: string }>>(req, ctx, "GET", identityBaseUrl(), "/identity/rbac/permissions?limit=200&offset=0"),
+    ]);
     if (roleRes.status < 200 || roleRes.status >= 300) { const r = relayError(roleRes.status, roleRes.body); return reply.code(r.status).send(r.payload); }
     const roleBody = (roleRes.body ?? {}) as { permissions?: string[] };
     const current = new Set(roleBody.permissions ?? []);
 
-    const permsRes = await callUpstream<Array<{ id: string; key: string }>>(req, ctx, "GET", identityBaseUrl(), "/identity/rbac/permissions?limit=200&offset=0");
     if (permsRes.status < 200 || permsRes.status >= 300) { const r = relayError(permsRes.status, permsRes.body); return reply.code(r.status).send(r.payload); }
     const idByKey = new Map((Array.isArray(permsRes.body) ? permsRes.body : []).map((p) => [p.key, p.id]));
 
@@ -741,30 +776,46 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       return r.status === 403 && p?.code === "SYSTEM_ROLE_READONLY" ? r : null;
     };
 
+    type Change = { key: string; action: "grant" | "revoke"; permId: string };
+    const changes: Change[] = [];
     for (const key of toGrant) {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
-      const res = await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions`, { permissionId: permId });
-      const refusedGrant = systemRoleRefusal(res);
-      if (refusedGrant) return reply.code(refusedGrant.status).send(refusedGrant.payload);
-      if (res.status < 200 || res.status >= 300) {
-        applied.failed.push({ key, action: "grant", ...describeFailure(res) });
-        continue;
-      }
-      applied.granted.push(key);
+      changes.push({ key, action: "grant", permId });
     }
     for (const key of toRevoke) {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
-      const res = await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions/${permId}`);
-      const refusedRevoke = systemRoleRefusal(res);
-      if (refusedRevoke) return reply.code(refusedRevoke.status).send(refusedRevoke.payload);
-      if (res.status < 200 || res.status >= 300) {
-        applied.failed.push({ key, action: "revoke", ...describeFailure(res) });
-        continue;
-      }
-      applied.revoked.push(key);
+      changes.push({ key, action: "revoke", permId });
     }
+    let refusal: { status: number; payload: unknown } | null = null;
+    const results = await mapBounded(changes, rolePermissionConcurrency(), async (c, stop) => {
+      let res: { status: number; body: unknown };
+      try {
+        res = c.action === "grant"
+          ? await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions`, { permissionId: c.permId })
+          : await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions/${c.permId}`);
+      } catch (err) {
+        // A transport failure (timeout / connection) on ONE change is reported
+        // as that change failing, not as a 502 that hides what already applied.
+        if (!(err instanceof HttpError)) throw err;
+        res = { status: err.status, body: { code: err.code, message: err.message } };
+      }
+      const refused = systemRoleRefusal(res);
+      if (refused) { refusal ??= refused; stop(); }
+      return res;
+    });
+    if (refusal) { const r = refusal as { status: number; payload: unknown }; return reply.code(r.status).send(r.payload); }
+    // Report in request order (grants, then revokes), exactly as the serial loop did.
+    changes.forEach((c, i) => {
+      const res = results[i];
+      if (!res) return;
+      if (res.status < 200 || res.status >= 300) {
+        applied.failed.push({ key: c.key, action: c.action, ...describeFailure(res) });
+        return;
+      }
+      (c.action === "grant" ? applied.granted : applied.revoked).push(c.key);
+    });
     // ROLES-03: the mandatory UI reason is audited, not dropped.
     if (applied.granted.length > 0 || applied.revoked.length > 0) {
       await rolePermissionAuditCommands.recordRolePermissionsChange(ctx, id, applied.granted, applied.revoked, changeReason);

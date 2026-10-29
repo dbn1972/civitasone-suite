@@ -297,9 +297,12 @@ describe("POST /v1/admin/sandboxes — register", () => {
     expect(body.meta.total).toBeGreaterThan(0);
   });
 
-  it("400 when the list omits limit", async () => {
+  it("the list defaults an omitted limit to one bounded page", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/sandboxes", headers: auth(CHECKER) });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 
   it("reads one sandbox by id, 404 for an unknown id, 400 for a non-uuid", async () => {
@@ -405,12 +408,15 @@ describe("sandbox masking rules", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("400 when listing rules without limit", async () => {
+  it("listing rules without limit serves one bounded page", async () => {
     const s = await register(nextCode("nolimit"));
     const res = await app.inject({
       method: "GET", url: `/v1/admin/sandboxes/${s.id}/masking-rules`, headers: auth(CHECKER),
     });
-    expect(res.statusCode).toBe(400);
+    // W6 P9b: a missing ?limit now defaults to 50 (the 200 cap is unchanged), so the
+    // list is still never unbounded -- it is served one bounded page instead of a 400.
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { meta: { pageSize: number } }).meta.pageSize).toBe(50);
   });
 });
 
