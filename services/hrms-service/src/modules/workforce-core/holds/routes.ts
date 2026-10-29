@@ -80,6 +80,7 @@ export async function holdsReadRoutes(app: FastifyInstance): Promise<void> {
           code: "VALIDATION_FAILED",
           message: "invalid request",
           correlationId,
+          fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
         });
     if (err instanceof HttpError)
       return reply

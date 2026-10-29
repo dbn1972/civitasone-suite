@@ -110,3 +110,17 @@ export function validateRelationshipDeclaration(d: RelationshipDeclaration): str
   }
   return errors;
 }
+
+/**
+ * The value persisted in candidate.hrms_candidates.category. The DB CHECK
+ * (migration 0079) allows GEN/OBC/SC/ST/EWS, while this domain also accepts "UR" (the
+ * reservation-shortlist module normalises GEN and UR to the same unreserved bucket).
+ * Storing the validated "UR" used to violate the CHECK in the worker after the route had
+ * answered 200, silently losing the write. The canonical stored value for the
+ * unreserved category is the schema's "GEN"; every reader normalises it (CATEGORY_SYNONYMS).
+ */
+export function toStoredCategory(category: string | null | undefined): string | null {
+  const c = (category ?? "").trim().toUpperCase();
+  if (c === "") return null;
+  return c === "UR" ? "GEN" : c;
+}

@@ -271,7 +271,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
   // Error handler
   app.setErrorHandler((err, req, reply) => {
     const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError)  return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid, retryable: false });
+    if (err instanceof ZodError)  return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid, retryable: false });
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid, retryable: true });

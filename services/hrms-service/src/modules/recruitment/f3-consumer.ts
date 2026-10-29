@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { toStoredCategory } from "./reference-domain.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -1284,7 +1285,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_reference_routes__0": {
             // Restored: the NORMALISED (uppercase) reservation category, so the
             // reservation-shortlist module never mis-buckets a lowercase "obc".
-            const category = body.category ? String(body.category).trim().toUpperCase() : null;
+            const category = toStoredCategory(body.category ? String(body.category) : null);
             await referenceRepo.updateCandidateFields(tx, p.tenantId, id, {
                   category, subCategory: body.subCategory ?? null, disability: body.disability ?? false,
                   disabilityType: body.disability ? (body.disabilityType ?? null) : null,

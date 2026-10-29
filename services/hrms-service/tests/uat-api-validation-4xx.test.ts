@@ -26,6 +26,7 @@ describe("bad query -> 400 VALIDATION_FAILED", () => {
   for (const url of [
     "/v1/hrms/ai/risk-scores?limit=abc&offset=-5",
     "/v1/hrms/attendance/face-log",
+    "/v1/hrms/pay-matrix/lookup?level=abc",
     `/v1/hrms/employee-types/${OK_ID}/policy`,
   ]) {
     it(`GET ${url}`, async () => {
@@ -63,6 +64,7 @@ describe("empty body -> 400 VALIDATION_FAILED naming the missing field", () => {
     ["POST", "/v1/hrms/ai/face/enroll", "employeeId"],
     ["POST", "/v1/hrms/ai/recruitment/score-jd", "title"],
     ["POST", `/v1/hrms/employees/${OK_ID}/profile-photo`, "photoKey"],
+    ["POST", "/v1/hrms/ai/recruitment/interview-summary", "candidateId"],
   ] as const) {
     it(`${method} ${url} {}`, async () => {
       const res = await app.inject({ method, url, headers, payload: {} });

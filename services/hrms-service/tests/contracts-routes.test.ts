@@ -167,6 +167,11 @@ afterAll(async () => {
 
 describe("POST /v1/hrms/contracts (create)", () => {
   it("creates a contract (202)", async () => {
+    // The route now pre-checks the employee (exists, type 'contract') and that no active contract exists,
+    // instead of accepting and letting the consumer silently reject (UAT DB report g1-hrms, item 6).
+    // The mock chain invokes selectFrom at both .where() and .limit(), hence two Once values for the one lookup.
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP_ID, tenantId: TENANT, employeeType: "contract" }]);
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP_ID, tenantId: TENANT, employeeType: "contract" }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -245,6 +250,7 @@ describe("POST /v1/hrms/contracts (create)", () => {
 
 describe("POST /v1/hrms/contracts/:id/activate", () => {
   it("activates a contract (202)", async () => {
+    H.selectFrom.mockResolvedValue([{ id: CONTRACT_ID, tenantId: TENANT, employeeId: EMP_ID, status: "draft" }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -495,6 +501,7 @@ describe("GET /v1/hrms/contracts/employee/:employeeId/history", () => {
 
 describe("POST /v1/hrms/contracts/:id/terminate", () => {
   it("terminates a contract (202)", async () => {
+    H.selectFrom.mockResolvedValue([{ id: CONTRACT_ID, tenantId: TENANT, employeeId: EMP_ID, status: "active" }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",

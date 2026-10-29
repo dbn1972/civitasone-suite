@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
 import { hrmsDepartments, hrmsDesignations, hrmsEmployees } from "../src/modules/employee/schema.js";
+import { hrmsJobOpenings } from "../src/modules/recruitment/schema.js";
 import { hrmsAttendance } from "../src/modules/attendance/schema.js";
 import { hrmsTrainings } from "../src/modules/training/schema.js";
 
@@ -35,6 +36,9 @@ const DESIG_ID = randomUUID();
 // harness) so no training row exists for 5.2's nomination to point at, and
 // createNomination 404s on an unknown training.
 const TRAINING_ID = randomUUID();
+// Seeded directly for the same reason (no consumer runs here): POST /applications now 404s on an opening
+// that does not exist instead of accepting it and dead-lettering on the FK.
+const JOB_ID = randomUUID();
 
 function tok(p: { id: string; roles: string[] }) {
   return signToken({ sub: p.id, tid: TENANT, roles: p.roles, sid: `s-${p.id.slice(0,6)}` }, SECRET, 7200);
@@ -93,6 +97,10 @@ beforeAll(async () => {
       fromDate: "2025-01-15", toDate: "2025-01-20", maxParticipants: 30,
       createdBy: PRIYA.id, updatedBy: PRIYA.id,
     });
+    await tx.insert(hrmsJobOpenings).values({
+      id: JOB_ID, tenantId: TENANT, refNo: `DIC/SEED/${JOB_ID.slice(0, 8)}`, title: "Senior Software Engineer",
+      departmentId: DEPT_ID, createdBy: PRIYA.id, updatedBy: PRIYA.id,
+    });
     await tx.insert(hrmsAttendance).values({
       id: randomUUID(), tenantId: TENANT, employeeId: ARJUN.id, attendanceDate: "2024-11-04",
       status: "present", createdBy: PRIYA.id, updatedBy: PRIYA.id,
@@ -104,6 +112,7 @@ afterAll(async () => {
     // hrms_attendance.employee_id FKs to hrms_employees.id -- must go first.
     await tx.delete(hrmsAttendance).where(eq(hrmsAttendance.tenantId, TENANT));
     await tx.delete(hrmsTrainings).where(eq(hrmsTrainings.tenantId, TENANT));
+    await tx.delete(hrmsJobOpenings).where(eq(hrmsJobOpenings.tenantId, TENANT));
     await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
     await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
     await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
@@ -152,7 +161,7 @@ describe("Phase 1: Recruitment", () => {
 
   it("1.4 HR creates application (walk-in candidate Arjun Nair)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/applications", headers: h(PRIYA), payload: {
-      jobOpeningId: state.jobId || randomUUID(),
+      jobOpeningId: JOB_ID,
       applicantName: "Arjun Nair", email: "arjun.nair@gmail.com", mobile: "9876543210",
       qualification: "B.Tech IIT Delhi", experienceYears: 7, skills: ["TypeScript","Node.js","React"],
       source: "walk_in",
