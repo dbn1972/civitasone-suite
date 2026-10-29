@@ -67,6 +67,45 @@ describe("estab_inward_status_check drift (UAT FQ9 #20)", () => {
       await tx`SAVEPOINT s2`;
       await expect(tx`UPDATE files.estab_inward SET status = 'bogus' WHERE id = ${id}`).rejects.toThrow(/estab_inward_status_check/);
       await tx`ROLLBACK TO SAVEPOINT s2`;
+      const [c] = await tx`SELECT convalidated FROM pg_constraint
+                           WHERE conname = 'estab_inward_status_check' AND conrelid = 'files.estab_inward'::regclass`;
+      expect(c?.convalidated).toBe(true);
     });
+  });
+
+  it("with a row that violates the new CHECK, 0060 never leaves the table constraint-less (NOT VALID + NOTICE)", async () => {
+    const ddl = readFileSync(MIGRATION, "utf8");
+    await inDriftedDb(async (tx) => {
+      // A legacy row outside the set, tolerated by an old NOT VALID constraint.
+      await tx`ALTER TABLE files.estab_inward DROP CONSTRAINT estab_inward_status_check`;
+      const id = await insertInward(tx);
+      await tx`UPDATE files.estab_inward SET status = 'legacy_x' WHERE id = ${id}`;
+      await tx`ALTER TABLE files.estab_inward ADD CONSTRAINT estab_inward_status_check
+               CHECK (status IN ('received', 'acknowledged', 'attached', 'detached')) NOT VALID`;
+
+      await tx.unsafe(ddl);
+      await tx.unsafe(ddl);
+
+      const cons = await tx`SELECT convalidated, pg_get_constraintdef(oid) AS def FROM pg_constraint
+                            WHERE conname = 'estab_inward_status_check' AND conrelid = 'files.estab_inward'::regclass`;
+      expect(cons).toHaveLength(1);
+      expect(cons[0]?.convalidated).toBe(false);
+      expect(cons[0]?.def).toContain("file_opened");
+      // Still enforced for new writes.
+      const other = await insertInward(tx);
+      await tx`SAVEPOINT s3`;
+      await expect(tx`UPDATE files.estab_inward SET status = 'bogus' WHERE id = ${other}`).rejects.toThrow(/estab_inward_status_check/);
+      await tx`ROLLBACK TO SAVEPOINT s3`;
+    });
+  });
+
+  it("drops and re-adds inside one DO block, so a failed ADD rolls the DROP back (psql runs without --single-transaction)", () => {
+    const ddl = readFileSync(MIGRATION, "utf8").replace(/^\s*--.*$/gm, "");
+    expect(ddl).toMatch(/SET lock_timeout\s*=\s*'5s'/);
+    const body = /DO \$\$([\s\S]*?)\$\$;/.exec(ddl)?.[1] ?? "";
+    expect(body).toMatch(/DROP CONSTRAINT IF EXISTS estab_inward_status_check/);
+    expect(body).toMatch(/ADD CONSTRAINT estab_inward_status_check/);
+    // Nothing touches the constraint outside that block.
+    expect(ddl.replace(/DO \$\$[\s\S]*?\$\$;/, "")).not.toMatch(/estab_inward_status_check/);
   });
 });

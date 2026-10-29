@@ -34,7 +34,7 @@ export const evidenceArtifacts = evidenceSchema.table("evidence_artifacts", {
   s3Key:            text("s3_key").notNull(),
   mimeType:         varchar("mime_type", { length: 64 }).notNull(),
   fileSizeBytes:    integer("file_size_bytes").notNull(),
-  integrityStatus:  varchar("integrity_status", { length: 16 }).notNull().default("valid"), // valid|tampered
+  integrityStatus:  varchar("integrity_status", { length: 16 }).notNull().default("valid"), // valid|tampered|unverified (unverified: stored object could not be re-hashed)
   captureLatitude:  numeric("capture_latitude", { precision: 10, scale: 7 }),
   captureLongitude: numeric("capture_longitude", { precision: 10, scale: 7 }),
   captureTimestamp: timestamp("capture_timestamp", { withTimezone: true }).notNull(),

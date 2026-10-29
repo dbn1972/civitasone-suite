@@ -31,7 +31,20 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE evidence.evidence_artifacts DROP CONSTRAINT IF EXISTS evidence_artifacts_integrity_status_check;
-ALTER TABLE evidence.evidence_artifacts
-  ADD CONSTRAINT evidence_artifacts_integrity_status_check
-  CHECK (integrity_status IN ('valid', 'tampered', 'unverified'));
+-- Drop + re-add in ONE statement (DO block): a lock timeout or any error rolls both back, so the
+-- table is never left without the CHECK (migrate-all runs psql without --single-transaction).
+-- Added NOT VALID, then validated in a guarded sub-block: a violating existing row leaves it
+-- NOT VALID (still enforced for new writes) with a NOTICE instead of failing.
+DO $$
+BEGIN
+  ALTER TABLE evidence.evidence_artifacts DROP CONSTRAINT IF EXISTS evidence_artifacts_integrity_status_check;
+  ALTER TABLE evidence.evidence_artifacts
+    ADD CONSTRAINT evidence_artifacts_integrity_status_check
+    CHECK (integrity_status IN ('valid', 'tampered', 'unverified'))
+    NOT VALID;
+  BEGIN
+    ALTER TABLE evidence.evidence_artifacts VALIDATE CONSTRAINT evidence_artifacts_integrity_status_check;
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'evidence_artifacts_integrity_status_check left NOT VALID: existing rows violate it (%)', SQLERRM;
+  END;
+END $$;
