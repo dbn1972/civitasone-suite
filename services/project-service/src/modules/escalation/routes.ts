@@ -9,6 +9,12 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
+import * as projectRepo from "../project/repo.js";
+
+/** UAT W6-A: tenant-scoped existence read so an unknown project answers 404, not 202. */
+async function requireProject(id: string, tenantId: string): Promise<void> {
+  if (!(await projectRepo.findProjectById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "project not found");
+}
 
 // Acting on an escalation (acknowledge/reassign/clear) is a supervisory
 // control, not a read — restricted to the roles that own the escalation queue.
@@ -45,6 +51,7 @@ export async function escalationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESCALATION_ACTION_ROLES);
     const { id } = projectIdParam.parse(req.params);
     const body = acknowledgeBody.parse(req.body ?? {});
+    await requireProject(id, ctx.tenantId);
     return reply.code(202).send(await commands.actOnEscalation(ctx, id, "acknowledge", body));
   });
 
@@ -53,6 +60,7 @@ export async function escalationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESCALATION_ACTION_ROLES);
     const { id } = projectIdParam.parse(req.params);
     const body = reassignBody.parse(req.body ?? {});
+    await requireProject(id, ctx.tenantId);
     return reply.code(202).send(await commands.actOnEscalation(ctx, id, "reassign", body));
   });
 
@@ -62,6 +70,7 @@ export async function escalationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = projectIdParam.parse(req.params);
     // Clearing an escalation requires a reason (recorded on the audit event).
     const body = clearBody.parse(req.body ?? {});
+    await requireProject(id, ctx.tenantId);
     return reply.code(202).send(await commands.actOnEscalation(ctx, id, "clear", body));
   });
 

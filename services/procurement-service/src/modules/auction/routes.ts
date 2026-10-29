@@ -52,6 +52,8 @@ export async function auctionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W6-A: tenant-scoped existence read; unknown auction answers 404, not 202.
+    if (!(await queries.getAuction(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "auction not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeAuction(ctx, id));
   });
 

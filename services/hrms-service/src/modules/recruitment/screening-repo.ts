@@ -1,6 +1,7 @@
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsApplications, hrmsScreeningEvents, type ScreeningEventRow } from "./schema.js";
+import { findJobOpeningByTenant } from "./repo.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type ApplicationRow = typeof hrmsApplications.$inferSelect;
@@ -121,4 +122,12 @@ export async function listEvents(tenantId: string, applicationId: string): Promi
   return scopedRead((tx) => tx.select().from(hrmsScreeningEvents)
     .where(and(eq(hrmsScreeningEvents.tenantId, tenantId), eq(hrmsScreeningEvents.applicationId, applicationId)))
     .orderBy(hrmsScreeningEvents.createdAt));
+}
+
+/**
+ * UAT W6-A: does this job opening exist in the tenant? (tenant-scoped read). The
+ * screening routes check it before publishing so an unknown vacancy is a 404.
+ */
+export async function jobOpeningExists(tenantId: string, id: string): Promise<boolean> {
+  return (await findJobOpeningByTenant(id, tenantId)) !== null;
 }

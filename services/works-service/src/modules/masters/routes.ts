@@ -53,7 +53,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     app.get(`/v1/works/masters/${master.prefix}/:id`, async (req, reply) => {
       const ctx = resolveContext(req);
       requireRole(ctx, READ_ROLES);
-      const { id } = req.params as { id: string };
+      const { id } = v.idParamSchema.parse(req.params);
       const row = await getMaster(master.table, ctx.tenantId, id);
       if (!row) throw new HttpError(404, "NOT_FOUND", `${master.prefix} not found`);
       return reply.send({ data: row });
@@ -80,7 +80,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     app.patch(`/v1/works/masters/${master.prefix}/:id`, async (req, reply) => {
       const ctx = resolveContext(req);
       requireRole(ctx, ADMIN_ROLES);
-      const { id } = req.params as { id: string };
+      const { id } = v.idParamSchema.parse(req.params);
       const body = v.patchMasterSchema.parse(req.body);
       const existing = await getMaster(master.table, ctx.tenantId, id);
       if (!existing) throw new HttpError(404, "NOT_FOUND", `${master.prefix} not found`);

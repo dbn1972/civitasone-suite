@@ -11,6 +11,15 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().default(0),
 });
 
+/**
+ * UAT W6-A: tenant-scoped existence read before publishing a command on an application,
+ * so an unknown id answers 404 instead of a 202 that can never apply. The consumer stays
+ * the race-safe authority.
+ */
+async function requireApplication(id: string, tenantId: string): Promise<void> {
+  if (!(await repo.findApplicationById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "application not found");
+}
+
 export async function waterConnectionRoutes(app: FastifyInstance): Promise<void> {
   // ── applications ───────────────────────────────────────────────────────
   app.post("/v1/assets/water/applications", async (req, reply) => {
@@ -43,6 +52,7 @@ export async function waterConnectionRoutes(app: FastifyInstance): Promise<void>
   app.post("/v1/assets/water/applications/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await requireApplication(id, ctx.tenantId);
     const result = await commands.submitApplication(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -58,6 +68,7 @@ export async function waterConnectionRoutes(app: FastifyInstance): Promise<void>
   app.post("/v1/assets/water/applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await requireApplication(id, ctx.tenantId);
     const result = await commands.approveApplication(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -74,6 +85,7 @@ export async function waterConnectionRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ meterId: z.string().optional(), pipeSize: z.string().optional() }).parse(req.body);
+    await requireApplication(id, ctx.tenantId);
     const result = await commands.installConnection(ctx, id, body);
     return reply.code(202).send({ data: result });
   });
@@ -81,6 +93,8 @@ export async function waterConnectionRoutes(app: FastifyInstance): Promise<void>
   app.post("/v1/assets/water/applications/:id/activate", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // :id here is the CONNECTION id (see commands.activateConnection), despite the URL.
+    if (!(await repo.findConnectionById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "connection not found");
     const result = await commands.activateConnection(ctx, id);
     return reply.code(202).send({ data: result });
   });

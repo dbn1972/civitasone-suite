@@ -291,7 +291,8 @@ vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
 });
 vi.mock("../src/modules/execution/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/execution/repo.js")>();
-  return { ...orig, countClosures };
+  // UAT W6-A: the close route reads the issue first; this suite's issue ids exist.
+  return { ...orig, countClosures, getIssue: vi.fn(async (_t: string, id: string) => ({ id, status: "open" })) };
 });
 vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/tender/repo.js")>();

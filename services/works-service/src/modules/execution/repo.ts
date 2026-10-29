@@ -36,6 +36,13 @@ export async function listIssues(tenantId: string, workId: string) {
   });
 }
 
+/** UAT W6-A: one issue by id (tenant-scoped), for the close route's pre-accept existence check. */
+export async function getIssue(tenantId: string, id: string) {
+  const rows = await scopedRead(async (tx) => tx.select().from(workIssues)
+    .where(and(eq(workIssues.tenantId, tenantId), eq(workIssues.id, id))).limit(1));
+  return rows[0] ?? null;
+}
+
 /** GAP-WORKS-EXECUTION-WORKID-07: has this work already been closed? (close must be idempotent.) */
 export async function hasWorkClosure(tenantId: string, workId: string): Promise<boolean> {
   return scopedRead(async (tx) => {

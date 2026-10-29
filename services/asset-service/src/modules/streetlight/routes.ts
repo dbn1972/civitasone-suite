@@ -112,6 +112,8 @@ export async function streetlightRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/streetlight-requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // UAT W6-A: tenant-scoped existence read before publishing (consumer stays the race-safe check).
+    if (!(await repo.findRequestById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "streetlight request not found");
     const result = await commands.approveRequest(ctx, id);
     return reply.code(202).send({ data: result });
   });

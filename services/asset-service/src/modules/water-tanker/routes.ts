@@ -11,6 +11,11 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().default(0),
 });
 
+/** UAT W6-A: tenant-scoped existence read so an unknown booking answers 404, not 202. */
+async function requireBooking(id: string, tenantId: string): Promise<void> {
+  if (!(await repo.findBookingById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "booking not found");
+}
+
 export async function waterTankerRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/water/tanker-bookings", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
@@ -53,6 +58,7 @@ export async function waterTankerRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/water/tanker-bookings/:id/dispatch", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await requireBooking(id, ctx.tenantId);
     const result = await commands.dispatchBooking(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -60,6 +66,7 @@ export async function waterTankerRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/water/tanker-bookings/:id/deliver", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await requireBooking(id, ctx.tenantId);
     const result = await commands.deliverBooking(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -67,6 +74,7 @@ export async function waterTankerRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/water/tanker-bookings/:id/cancel", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await requireBooking(id, ctx.tenantId);
     const result = await commands.cancelBooking(ctx, id);
     return reply.code(202).send({ data: result });
   });

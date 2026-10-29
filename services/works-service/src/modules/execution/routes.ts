@@ -7,7 +7,7 @@ import * as commands from "./commands.js";
 import {
   listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures, countClosures,
   getWorkScope, listScopeProgress, hasPhysicalCompletion, hasWorkClosure,
-  countExecutionProgress, countAllIssues, getClosureFacts,
+  countExecutionProgress, countAllIssues, getClosureFacts, getIssue,
 } from "./repo.js";
 import { getAward, finalizedAgreementByWorkIds } from "../tender/repo.js";
 import { listSplits, getWorkHeaders, getProposal } from "../proposal/repo.js";
@@ -204,6 +204,8 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.closeIssueSchema.parse({ id: (req.params as { id: string }).id, ...(req.body as object ?? {}) });
+    // UAT W6-A: tenant-scoped existence read; unknown issue answers 404, not 202.
+    if (!(await getIssue(ctx.tenantId, body.id))) throw new HttpError(404, "NOT_FOUND", "issue not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeIssueCommand(ctx, body.id, body.resolution));
   });
 
