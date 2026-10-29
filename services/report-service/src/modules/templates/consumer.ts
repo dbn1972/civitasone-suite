@@ -13,6 +13,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as jobsRepo from "../jobs/repo.js";
 import type { TemplateInsert } from "./schema.js";
+import { buildTemplateReportHtml } from "../../shared/report-html.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -106,7 +107,8 @@ export async function handleExecuteTemplate(messageId: string, ctx: Ctx, payload
       payload: {
         jobId: payload.jobId,
         tenantId: ctx.tenantId,
-        templateHtml: `<html><body><h1>${template.name}</h1><p>Data source: ${template.dataSourceId}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
+        // Names/data sources are user input: escaped (SSRF via the headless renderer).
+        templateHtml: buildTemplateReportHtml(template.name, template.dataSourceId, new Date()),
         format,
         title: template.name,
         ...(template.watermark ? { watermark: template.watermark } : {}),

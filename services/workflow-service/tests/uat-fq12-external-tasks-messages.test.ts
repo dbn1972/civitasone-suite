@@ -240,3 +240,51 @@ describe("UAT FQ12 #161 POST /v1/workflow/signals/broadcast resumes each subscri
     }
   });
 });
+
+describe("PR #2374 review: messages consumers take the tenant from the envelope", () => {
+  it("a deliver/signal/correlate command whose payload tenant differs from the envelope is dropped", async () => {
+    const tenantId = newTenant();
+    const otherTenant = newTenant();
+    const actorId = randomUUID();
+    const q = new TestQueue();
+    registerInstancesConsumers(q);
+    registerTasksConsumers(q);
+    registerMessagesConsumers(q);
+    const { instanceId, taskId } = await seedInstanceWithPendingTask(q, tenantId, actorId);
+
+    const msgSub = randomUUID();
+    const sigSub = randomUUID();
+    await asTenant(tenantId, () => db.transaction(async (tx) => {
+      await tx.insert(messageSubscriptions).values({
+        id: msgSub, tenantId, instanceId, taskId, messageName: "fq12.x", correlationKey: "K-1", nodeKey: "start", status: "active",
+      });
+      await tx.insert(signalSubscriptions).values({
+        id: sigSub, tenantId, instanceId, taskId, signalName: "fq12.x.sig", nodeKey: "start", status: "active",
+      });
+    }));
+
+    const env = { tenantId, actorId };
+    await q.deliver(COMMANDS.deliverMessage, {
+      tenantId: otherTenant, subscriptionId: msgSub, messageName: "fq12.x", correlationKey: "K-1", messagePayload: {},
+    }, { ...env, messageId: randomUUID() });
+    await q.deliver(COMMANDS.correlateMessage, {
+      tenantId: otherTenant, messageName: "fq12.x", correlationKey: "K-1", payload: {},
+    }, { ...env, messageId: randomUUID() });
+    await q.deliver(COMMANDS.broadcastSignal, {
+      tenantId: otherTenant, signalName: "fq12.x.sig", subscriptionId: sigSub,
+    }, { ...env, messageId: randomUUID() });
+
+    const m = await sqlAsTenant<{ status: string }>(tenantId, sql`SELECT status FROM workflow.message_subscriptions WHERE id = ${msgSub}`);
+    const s = await sqlAsTenant<{ status: string }>(tenantId, sql`SELECT status FROM workflow.signal_subscriptions WHERE id = ${sigSub}`);
+    expect(m[0]!.status).toBe("active");
+    expect(s[0]!.status).toBe("active");
+    expect(await completeTaskEnqueued(tenantId, taskId)).toBe(0);
+
+    // Same commands with a matching (or absent) payload tenant DO take effect.
+    await q.deliver(COMMANDS.deliverMessage, {
+      tenantId, subscriptionId: msgSub, messageName: "fq12.x", correlationKey: "K-1", messagePayload: {},
+    }, { ...env, messageId: randomUUID() });
+    const m2 = await sqlAsTenant<{ status: string }>(tenantId, sql`SELECT status FROM workflow.message_subscriptions WHERE id = ${msgSub}`);
+    expect(m2[0]!.status).toBe("matched");
+  });
+});

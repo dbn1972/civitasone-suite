@@ -17,7 +17,7 @@ const AUDIT_TOPIC = "audit.event.record";
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000a1";
 
 interface CorrelatePayload {
-  tenantId: string;
+  tenantId?: string;
   messageName: string;
   correlationKey: string;
   payload?: Record<string, unknown>;
@@ -150,6 +150,23 @@ async function applyMessageMatch(
   return true;
 }
 
+/**
+ * The tenant comes from the authenticated message ENVELOPE (as in every other
+ * workflow consumer; tenantScoped() already runs the handler under it). A
+ * payload copy of the tenant is informational only: when present and
+ * different, the message is dropped rather than acted on cross-tenant.
+ */
+function envelopeTenant(msg: { tenantId: string; messageId: string; type?: string }, payloadTenant: string | undefined): string | null {
+  if (payloadTenant && payloadTenant !== msg.tenantId) {
+    log.warn(
+      { messageId: msg.messageId, topic: msg.type, envelopeTenant: msg.tenantId, payloadTenant },
+      "payload tenant differs from envelope tenant; dropping message",
+    );
+    return null;
+  }
+  return msg.tenantId;
+}
+
 export function registerMessagesConsumers(q: Queue): void {
   // RLS (#146): run every handler inside the message's tenant context so
   // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
@@ -165,7 +182,8 @@ export function registerMessagesConsumers(q: Queue): void {
   // (UAT FQ12 #160). It now performs the actual match.
   subscribeWithDlq<DeliverPayload>(q, COMMANDS.deliverMessage, async (msg) => {
     const p = msg.payload;
-    const tenantId = p.tenantId ?? msg.tenantId;
+    const tenantId = envelopeTenant(msg, p.tenantId);
+    if (!tenantId) return;
     let matched = false;
 
     await db.transaction(async (tx) => {
@@ -203,7 +221,9 @@ export function registerMessagesConsumers(q: Queue): void {
 
   // --- workflow.message.correlate ---
   subscribeWithDlq<CorrelatePayload>(q, "workflow.message.correlate", async (msg) => {
-    const { tenantId, messageName, correlationKey, payload } = msg.payload;
+    const { messageName, correlationKey, payload } = msg.payload;
+    const tenantId = envelopeTenant(msg, msg.payload.tenantId);
+    if (!tenantId) return;
 
     const subscription = await repo.findActiveMessageSubscription(tenantId, messageName, correlationKey);
     if (!subscription) {
@@ -225,8 +245,9 @@ export function registerMessagesConsumers(q: Queue): void {
     const { signalName, subscriptionId } = msg.payload;
     // tenantId was read from the payload only; the HTTP producer never put it
     // there, so the lookup bound `undefined` (UNDEFINED_VALUE) and every
-    // broadcast dead-lettered (UAT FQ12 #161).
-    const tenantId = msg.payload.tenantId ?? msg.tenantId;
+    // broadcast dead-lettered (UAT FQ12 #161). It now comes from the envelope.
+    const tenantId = envelopeTenant(msg, msg.payload.tenantId);
+    if (!tenantId) return;
 
     const active = await repo.findActiveSignalSubscriptions(tenantId, signalName);
     // A per-subscription command must only resume ITS subscriber; otherwise N

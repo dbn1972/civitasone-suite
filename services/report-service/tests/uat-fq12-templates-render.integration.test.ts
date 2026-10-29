@@ -140,6 +140,29 @@ describe("UAT FQ12 #59-#63 report templates are persisted by a subscribed consum
   });
 });
 
+describe("PR #2374 review: template execute escapes the template name in the render HTML", () => {
+  it("a name carrying an <img> tag reaches the renderer escaped", async () => {
+    const create = await app.inject({
+      method: "POST", url: "/v1/reports/templates", headers: auth,
+      payload: { name: "<img src=http://127.0.0.1:1/x>", dataSourceId: "finance.budget" },
+    });
+    expect(create.statusCode).toBe(202);
+    const id = create.json().data?.id ?? create.json().id;
+    await until(() => templateRow(id));
+    const exec = await app.inject({ method: "POST", url: `/v1/reports/templates/${id}/execute`, headers: auth, payload: {} });
+    expect(exec.statusCode).toBe(202);
+    const jobId = exec.json().data?.id ?? exec.json().id;
+    const rows = await until(async () => {
+      const r = await asTenant((tx) => tx.execute(
+        sql`SELECT payload->>'templateHtml' AS html FROM _outbox.messages WHERE topic = ${COMMANDS.renderJob} AND payload->>'jobId' = ${jobId}`,
+      )) as unknown as Array<{ html: string }>;
+      return r.length ? r : null;
+    });
+    expect(rows[0]!.html).toContain("&lt;img src=http://127.0.0.1:1/x&gt;");
+    expect(rows[0]!.html).not.toContain("<img");
+  });
+});
+
 describe("UAT FQ12 #62 render marks the job with a status the CHECK constraint allows", () => {
   it("job moves queued -> processing -> completed, never failed", async () => {
     const jobId = randomUUID();
