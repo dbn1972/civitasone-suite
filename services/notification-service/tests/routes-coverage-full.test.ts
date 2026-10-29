@@ -78,7 +78,7 @@ describe("GET /notifications/templates", () => {
 });
 
 describe("PATCH /notifications/templates/:id", () => {
-  it("returns 202 with valid body (admin)", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -87,7 +87,7 @@ describe("PATCH /notifications/templates/:id", () => {
       payload: { name: "Updated Name" },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 400 for invalid uuid param", async () => {
@@ -501,7 +501,7 @@ describe("POST /notifications/alert-rules", () => {
 });
 
 describe("PATCH /notifications/alert-rules/:id/enable", () => {
-  it("returns 202 with valid uuid (admin)", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -509,7 +509,7 @@ describe("PATCH /notifications/alert-rules/:id/enable", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("rejects invalid uuid", async () => {
@@ -525,7 +525,7 @@ describe("PATCH /notifications/alert-rules/:id/enable", () => {
 });
 
 describe("PATCH /notifications/alert-rules/:id/disable", () => {
-  it("returns 202 with valid uuid (admin)", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -533,7 +533,7 @@ describe("PATCH /notifications/alert-rules/:id/disable", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("rejects invalid uuid", async () => {
@@ -683,7 +683,7 @@ describe("PATCH /notifications/campaigns/:id/send", () => {
 });
 
 describe("PATCH /notifications/campaigns/:id/cancel", () => {
-  it("returns 202 with valid uuid (admin)", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -691,7 +691,7 @@ describe("PATCH /notifications/campaigns/:id/cancel", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("rejects invalid uuid", async () => {

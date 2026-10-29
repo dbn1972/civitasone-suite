@@ -20,6 +20,18 @@ export async function findVariant(
   return rows[0] ?? null;
 }
 
+/** Find a locale variant by id within a tenant. */
+export async function findVariantById(
+  tenantId: string, id: string,
+): Promise<typeof localeVariants.$inferSelect | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(localeVariants)
+      .where(and(eq(localeVariants.id, id), eq(localeVariants.tenantId, tenantId)))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 /**
  * Same lookup as `findVariant`, but reads through an ALREADY-OPEN transaction
  * instead of opening a second one via `scopedRead`. `createLocaleVariant`'s

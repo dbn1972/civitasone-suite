@@ -65,9 +65,15 @@ export async function i18nRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/templates/:templateId/locales/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
-    templateIdParam.parse(req.params);
+    const { templateId } = templateIdParam.parse(req.params);
     const { id } = variantIdParam.parse(req.params);
     const body = updateVariantBody.parse(req.body);
+    // UAT W6 P1: the variant must exist in this tenant AND belong to the template in
+    // the path; anything else is a 404 rather than a queued no-op.
+    const variant = await repo.findVariantById(ctx.tenantId, id);
+    if (!variant || variant.templateId !== templateId) {
+      throw new HttpError(404, "NOT_FOUND", "locale variant not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateLocaleVariant(ctx, id, body));
   });
 

@@ -30,6 +30,18 @@ export async function accumulateItem(
   }).where(eq(digestBuckets.id, bucketId));
 }
 
+/** One digest rule by id within a tenant (null when absent or another tenant's). */
+export async function findRuleById(
+  tenantId: string, id: string,
+): Promise<typeof digestRules.$inferSelect | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(digestRules)
+      .where(and(eq(digestRules.id, id), eq(digestRules.tenantId, tenantId)))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 /** List all digest rules for a tenant. */
 export async function listRules(tenantId: string): Promise<typeof digestRules.$inferSelect[]> {
   return scopedRead((tx) =>

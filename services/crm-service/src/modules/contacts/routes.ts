@@ -166,12 +166,14 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = updateContactBody.parse(req.body);
     await assertAccountLinkable(ctx.tenantId, body.accountId);
+    // UAT W6 P1: tenant-scoped existence read for EVERY caller (admins included) before
+    // publishing; an unknown / deleted contact is a 404, not a queued no-op.
+    const existing = await queries.getContact(id, ctx.tenantId, true);
+    if (!existing || existing.status === "inactive") {
+      throw new HttpError(404, "NOT_FOUND", "contact not found");
+    }
     // P1-3 ownership authz: a non-admin may only modify contacts they own.
     if (!isAdmin(ctx.roles)) {
-      const existing = await queries.getContact(id, ctx.tenantId, true);
-      if (!existing || existing.status === "inactive") {
-        throw new HttpError(404, "NOT_FOUND", "contact not found");
-      }
       if (existing.ownerId && existing.ownerId !== ctx.actorId) {
         throw new HttpError(403, "FORBIDDEN", "only the owner or an admin may modify this contact");
       }
@@ -261,6 +263,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateAccountBody.parse(req.body);
+    // UAT W6 P1: unknown / other-tenant / merged-away account is a 404 (same rule as
+    // GET /v1/crm/accounts/:id), not a queued no-op.
+    if (!(await queries.getAccount(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "account not found");
     // The new owner must be a real member of this tenant's agent directory -
     // never an arbitrary UUID (null clears the owner and needs no check).
     if (body.ownerId && !(await repo.agentInDirectory(ctx.tenantId, body.ownerId))) {

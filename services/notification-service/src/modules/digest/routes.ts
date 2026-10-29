@@ -26,6 +26,12 @@ const updateRuleBody = z.object({
 
 const ruleIdParam = z.object({ id: z.string().uuid() });
 
+// UAT W6 P1: tenant-scoped existence read before publishing; an unknown id is a
+// 404 instead of a 202 for a command the consumer can only drop.
+async function requireDigestRule(tenantId: string, id: string): Promise<void> {
+  if (!(await repo.findRuleById(tenantId, id))) throw new HttpError(404, "NOT_FOUND", "digest rule not found");
+}
+
 export async function digestRoutes(app: FastifyInstance): Promise<void> {
   // Create a digest rule
   app.post("/v1/digest-rules", async (req, reply) => {
@@ -48,6 +54,7 @@ export async function digestRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = ruleIdParam.parse(req.params);
     const body = updateRuleBody.parse(req.body);
+    await requireDigestRule(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDigestRule(ctx, id, body));
   });
 
@@ -56,6 +63,7 @@ export async function digestRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = ruleIdParam.parse(req.params);
+    await requireDigestRule(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDigestRule(ctx, id, { enabled: false }));
   });
 

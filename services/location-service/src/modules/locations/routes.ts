@@ -12,6 +12,23 @@ import { wouldCreateCycle } from "./domain.js";
 import { RESOURCE } from "../../topics.js";
 import { countActiveEmployeesAt } from "../../shared/hrms-client.js";
 
+/**
+ * UAT W6 P7: POST/DELETE /v1/locations/sample-data are a developer "try it" aid
+ * (they insert / remove example offices in the caller's tenant) and were live in
+ * UAT. Gated like revenue-service's BBPS manual pay-bill test aid
+ * (isBbpsManualPayBillEnabled): opt in with ENABLE_SAMPLE_DATA_ROUTES=true, and
+ * never available when NODE_ENV=production, whatever the flag says. Disabled →
+ * 404, as if the route did not exist. Read per request so ops can flip the flag
+ * without a rebuild.
+ */
+export function isSampleDataRoutesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENABLE_SAMPLE_DATA_ROUTES === "true" && env.NODE_ENV !== "production";
+}
+
+function requireSampleDataRoutes(): void {
+  if (!isSampleDataRoutesEnabled()) throw new HttpError(404, "NOT_FOUND", "route not found");
+}
+
 const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 // GAP-HR-LOCATIONS-06: the web /hr layout (apps/web's hr/layout.tsx HR_ROLES)
@@ -75,6 +92,7 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
   // Sample data ("try it"): add clearly-marked example offices, or clear them.
   // Tenant-scoped; clearing removes ONLY this tenant's sample rows (R15).
   app.post("/v1/locations/sample-data", async (req, reply) => {
+    requireSampleDataRoutes();
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);
     const added = await repo.seedSamples(ctx.tenantId, ctx.actorId);
@@ -83,6 +101,7 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/v1/locations/sample-data", async (req, reply) => {
+    requireSampleDataRoutes();
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);
     const removed = await repo.clearSamples(ctx.tenantId);

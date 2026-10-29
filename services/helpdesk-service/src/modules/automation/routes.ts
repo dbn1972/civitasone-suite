@@ -102,6 +102,8 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateRuleBody.parse(req.body);
+    // UAT W6 P1: unknown / other-tenant / deleted rule is a 404 (same rule as the GET).
+    if (!(await queries.getRule(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "automation rule not found");
     return reply.code(202).send(await commands.updateRule(ctx, id, body));
   });
 

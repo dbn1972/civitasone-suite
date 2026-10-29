@@ -55,6 +55,8 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const id = pathUuid(req.params);
     const body = updateCategoryBody.parse(req.body);
+    // UAT W6 P1: tenant-scoped existence read before publishing (consumer stays race-safe).
+    if (!(await repo.getById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "category not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateCategory(ctx, id, body));
   });
 

@@ -101,6 +101,21 @@ export async function viewsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = viewIdParam.parse(req.params);
     const body = updateViewBody.parse(req.body);
 
+    // UAT W6 P1: tenant-scoped existence read before publishing. A view the caller
+    // cannot see (unknown, another tenant's, or someone else's private view: the same
+    // visibility as the list above) is a 404, not a 202 the consumer can only drop.
+    // The consumer remains the race-safe authority for owner/admin enforcement.
+    const [visible] = await scopedRead((tx) =>
+      tx.select({ id: savedViews.id }).from(savedViews)
+        .where(and(
+          eq(savedViews.id, id),
+          eq(savedViews.tenantId, ctx.tenantId),
+          or(eq(savedViews.ownerId, ctx.actorId), eq(savedViews.shared, true)),
+        ))
+        .limit(1),
+    );
+    if (!visible) throw new HttpError(404, "NOT_FOUND", "view not found");
+
     const commandId = randomUUID();
     await queue.publish(VIEW_COMMANDS.update, {
       messageId: commandId,

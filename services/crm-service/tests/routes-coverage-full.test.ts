@@ -359,13 +359,15 @@ describe("GET /v1/crm/contacts/:id", () => {
 });
 
 describe("PATCH /v1/crm/contacts/:id", () => {
-  it("returns 202 with valid update body (admin)", async () => {
+  // UAT W6 P1: an admin PATCH on a contact that does not exist is a 404 (it used to be
+  // queued and answered 202). The real-contact 202 path is pinned in uat-w6b-p1-existence.test.ts.
+  it("returns 404 for a non-existent contact (admin)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/crm/contacts/${VALID_UUID}`,
       headers: authHeader(["crm_admin"]),
       payload: { name: "Updated Name", ownerId: VALID_UUID2, status: "inactive" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 404 for non-admin updating non-owned contact", async () => {

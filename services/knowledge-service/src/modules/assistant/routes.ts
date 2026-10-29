@@ -56,6 +56,8 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const id = pathUuid(req.params);
     const body = updateFaqBody.parse(req.body);
+    // UAT W6 P1: tenant-scoped existence read before publishing (consumer stays race-safe).
+    if (!(await queries.getFaq(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "faq not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateFaq(ctx, id, body));
   });
 
@@ -99,6 +101,8 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const id = pathUuid(req.params);
     const body = updateFlowBody.parse(req.body);
+    // UAT W6 P1: tenant-scoped existence read before publishing (consumer stays race-safe).
+    if (!(await queries.getFlow(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "guided flow not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateFlow(ctx, id, body));
   });
 

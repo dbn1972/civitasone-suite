@@ -30,7 +30,14 @@ const bookBody = z.object({
   // below additionally requires ADMIN_ROLES to actually supply a value —
   // see the comment there for why.
   feeMinor: zMoneyMinorStringNonNeg.optional(),
-});
+}).refine(
+  // UAT W6 P2: every field is optional, but an EMPTY body used to book a desludging
+  // with no address, capacity, date or slot. Require at least one of them (feeMinor
+  // alone does not describe a booking).
+  (b) => (b.address !== undefined && Object.keys(b.address).length > 0) || b.tankCapacityLitres !== undefined
+    || Boolean(b.requestedDate) || Boolean(b.requestedSlot),
+  { message: "a desludging booking needs at least one of address, tankCapacityLitres, requestedDate or requestedSlot" },
+);
 
 const scheduleBody = z.object({ vehicleId: z.string().min(1), version: z.number().int().positive() });
 const transitionBody = z.object({ version: z.number().int().positive() });

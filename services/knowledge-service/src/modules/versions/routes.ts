@@ -74,6 +74,12 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     await assertDocumentVisible(ctx, documentId);
     const rawBody = (req.body ?? {}) as Record<string, unknown>;
     const body = restoreVersionBody.parse({ documentId, versionId, ...rawBody });
+    // UAT W6 P1: the version must exist in this tenant AND belong to the document in
+    // the path (same rule as the GET above); otherwise 404, nothing is published.
+    const version = await repo.getById(ctx.tenantId, versionId);
+    if (!version || version.documentId !== documentId) {
+      throw new HttpError(404, "NOT_FOUND", "version not found");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.versionRestore(ctx, body));
   });
 }

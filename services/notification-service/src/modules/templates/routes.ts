@@ -41,6 +41,10 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = templateIdParam.parse(req.params);
     const body = updateTemplateBody.parse(req.body);
+    // UAT W6 P1: unknown / other-tenant template is a 404, not a queued no-op
+    // (findTemplateById is not tenant-filtered, hence the tenant comparison).
+    const existing = await queries.getTemplate(ctx.tenantId, id);
+    if (!existing || existing.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "template not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateTemplate(ctx, id, body));
   });
 

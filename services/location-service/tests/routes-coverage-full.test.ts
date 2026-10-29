@@ -2,7 +2,7 @@
  * Comprehensive route + domain coverage tests for location-service.
  * Uses buildApp + inject pattern with HS256 tokens for auth.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -310,6 +310,11 @@ describe("GET /v1/locations/tree", () => {
 // POST /v1/locations/sample-data — Seed Samples
 // ══════════════════════════════════════════════════════════════════════════════
 describe("POST /v1/locations/sample-data", () => {
+  // UAT W6 P7: the sample-data routes are dev-only (ENABLE_SAMPLE_DATA_ROUTES); these
+  // tests exercise them with the flag on. The flag-off 404 is pinned in
+  // uat-w6b-p7-sample-data-gate.test.ts.
+  beforeAll(() => { vi.stubEnv("ENABLE_SAMPLE_DATA_ROUTES", "true"); });
+  afterAll(() => { vi.unstubAllEnvs(); });
   it("→ 200 seeds sample data", async () => {
     const res = await app.inject({
       method: "POST",
@@ -359,6 +364,11 @@ describe("POST /v1/locations/sample-data", () => {
 // DELETE /v1/locations/sample-data — Clear Samples
 // ══════════════════════════════════════════════════════════════════════════════
 describe("DELETE /v1/locations/sample-data", () => {
+  // UAT W6 P7: the sample-data routes are dev-only (ENABLE_SAMPLE_DATA_ROUTES); these
+  // tests exercise them with the flag on. The flag-off 404 is pinned in
+  // uat-w6b-p7-sample-data-gate.test.ts.
+  beforeAll(() => { vi.stubEnv("ENABLE_SAMPLE_DATA_ROUTES", "true"); });
+  afterAll(() => { vi.unstubAllEnvs(); });
   it("→ 200 clears sample data", async () => {
     const res = await app.inject({
       method: "DELETE",
