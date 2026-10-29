@@ -176,7 +176,13 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/bills/sample-data", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const added = await repo.seedSampleBills(ctx.tenantId, ctx.actorId);
+    let added: number;
+    try {
+      added = await repo.seedSampleBills(ctx.tenantId, ctx.actorId);
+    } catch (err) {
+      if (err instanceof repo.NoBudgetHeadError) throw new HttpError(422, err.code, err.message);
+      throw err;
+    }
     await cache.invalidateResource(ctx.tenantId, "bills");
     return reply.send({ added });
   });

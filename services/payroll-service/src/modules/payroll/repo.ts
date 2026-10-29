@@ -56,7 +56,7 @@ export async function insertRun(tx: Writer, row: PayrollRunInsert): Promise<void
 }
 
 export async function updateRun(tx: Writer, id: string, patch: Partial<PayrollRunInsert>): Promise<void> {
-  await tx.update(payrollRuns).set({ ...patch, updatedAt: new Date() }).where(eq(payrollRuns.id, id));
+  await tx.update(payrollRuns).set({ ...patch, updatedAt: new Date(), version: sql`${payrollRuns.version} + 1` }).where(eq(payrollRuns.id, id));
 }
 
 export async function insertSlip(tx: Writer, row: typeof payrollSlips.$inferInsert): Promise<void> {

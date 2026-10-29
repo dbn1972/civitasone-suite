@@ -9,6 +9,7 @@ import { submitApplicationBody, scoreApplicationBody, approveApplicationBody, re
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as applicationRepo from "./repo.js";
+import { assertTransition } from "./domain.js";
 
 const GRANT_ROLES   = ["grant_officer", "grant_admin", "super_admin"];
 const REVIEW_ROLES  = ["grant_reviewer", ...GRANT_ROLES];
@@ -44,6 +45,15 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, GRANT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectApplicationBody.parse(req.body);
+    // UAT g3 #9: the consumer's state machine only allows under_review -> rejected. Refuse an
+    // impossible rejection here (422) instead of accepting 202 and dead-lettering after 5 retries.
+    const existing = await applicationRepo.findApplicationById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "APPLICATION_NOT_FOUND", "application not found");
+    try {
+      assertTransition(existing.status, "rejected");
+    } catch {
+      throw new HttpError(422, "INVALID_TRANSITION", `cannot reject an application in status '${existing.status}'`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectApplication(ctx, id, body));
   });
 

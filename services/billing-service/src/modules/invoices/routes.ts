@@ -10,12 +10,20 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import { renderInvoicePdf } from "./pdf.js";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
 const BILLING_ROLES = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 const PDF_STATUSES = new Set(["issued", "partially_paid", "paid", "overdue"]);
+
+async function assertPeriodFree(tenantId: string, periodMonth: string): Promise<void> {
+  const existing = await repo.findByPeriod(tenantId, periodMonth);
+  if (existing) {
+    throw new HttpError(409, "INVOICE_PERIOD_EXISTS", `an invoice (${existing.id}, status ${existing.status}) already exists for ${periodMonth}`);
+  }
+}
 
 export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
   // Legacy: auto-generate a usage bill from plan + usage.
@@ -24,6 +32,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const body = generateBody.parse(req.body);
     if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice generation is not permitted");
+    await assertPeriodFree(body.tenantId, body.periodMonth);
     return sendAccepted(reply, acceptedResponseSchema, await commands.generateInvoice(ctx, body.tenantId, body.periodMonth));
   });
 
@@ -33,6 +42,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const body = createInvoiceBody.parse(req.body);
     if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice creation is not permitted");
+    await assertPeriodFree(body.tenantId, body.periodMonth);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items, body.gst));
   });
 

@@ -434,6 +434,20 @@ const FINANCE_PII_KEY = piiKey("FINANCE_PII_KEY", "finance", "finance-service");
 // prod. Rotating it requires PII_ENC_KEYRING to keep old ciphertext readable.
 const PAYROLL_PII_KEY = piiKey("PAYROLL_PII_KEY", "payroll", "payroll-service");
 
+// refund-service seals the disbursement bank account number (UAT g3 #6) with the
+// fleet PII envelope, read from the generic `PII_ENC_KEY`. Like ADMIN_PII_ENV, a
+// missing key must NOT stop the whole ecosystem loading: refund-service then has
+// no key and POST /v1/refund/disbursements answers 503 ENCRYPTION_UNAVAILABLE
+// (fail closed, nothing stored in cleartext). Provision REFUND_PII_KEY or
+// ~/.civitasone-refund-pii-key to enable disbursements.
+const REFUND_PII_ENV = (() => {
+  try {
+    return { PII_ENC_KEY: piiKey("REFUND_PII_KEY", "refund", "refund-service") };
+  } catch (e) {
+    return {};
+  }
+})();
+
 // NOTE on inspection-service: it validates a required-env allowlist at boot
 // (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
 // app.ts). All four are ALREADY supplied by its svc()/worker() entries below.
@@ -677,7 +691,7 @@ module.exports = {
     worker("market",        "market_svc",        "civitas_market"),
     worker("parking",       "parking_svc",       "civitas_parking"),
     worker("parks",         "parks_svc",         "civitas_parks"),
-    worker("refund",        "refund_svc",        "civitas_refund"),
+    worker("refund",        "refund_svc",        "civitas_refund", { ...REFUND_PII_ENV }),
     worker("roadcut",       "roadcut_svc",       "civitas_roadcut"),
     worker("sewerage",      "sewerage_svc",      "civitas_sewerage"),
     worker("shop",          "shop_svc",          "civitas_shop"),
@@ -781,7 +795,7 @@ module.exports = {
     svc("market",        3085, "market_svc",        "civitas_market", {}, { graceful: true }), // PERF-015
     svc("parking",       3084, "parking_svc",       "civitas_parking", {}, { graceful: true }), // PERF-015
     svc("parks",         3081, "parks_svc",         "civitas_parks", {}, { graceful: true }), // PERF-015
-    svc("refund",        3077, "refund_svc",        "civitas_refund", {}, { graceful: true }), // PERF-015
+    svc("refund",        3077, "refund_svc",        "civitas_refund", { ...REFUND_PII_ENV }, { graceful: true }), // PERF-015
     svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut", {}, { graceful: true }), // PERF-015
     svc("sewerage",      3078, "sewerage_svc",      "civitas_sewerage", {}, { graceful: true }), // PERF-015
     svc("shop",          3060, "shop_svc",          "civitas_shop", {}, { graceful: true }), // PERF-015

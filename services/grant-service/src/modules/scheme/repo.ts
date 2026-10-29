@@ -28,7 +28,7 @@ export async function findSchemeByIdTx(tx: Writer, id: string, tenantId: string)
 }
 
 export async function updateScheme(tx: Writer, id: string, patch: Partial<SchemeInsert>): Promise<void> {
-  await (tx as typeof db).update(grantSchemes).set({ ...patch, updatedAt: new Date() })
+  await (tx as typeof db).update(grantSchemes).set({ ...patch, updatedAt: new Date(), version: sql`${grantSchemes.version} + 1` })
     .where(eq(grantSchemes.id, id));
 }
 

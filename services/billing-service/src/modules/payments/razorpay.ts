@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { HttpError } from "../../shared/context.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,21 +26,30 @@ export interface RazorpayPayment {
 // Config helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * UAT g3 #17: an unset RAZORPAY_* var used to surface as an unhandled 500. It is an
+ * operator/config condition, not a server bug: answer 503 with a stable code so callers
+ * (and monitoring) can tell "gateway not configured" from a crash. Fails closed.
+ */
+export function notConfigured(envName: string): HttpError {
+  return new HttpError(503, "PAYMENT_GATEWAY_NOT_CONFIGURED", `${envName} is not set`);
+}
+
 function getKeyId(): string {
   const key = process.env.RAZORPAY_KEY_ID;
-  if (!key) throw new Error("RAZORPAY_KEY_ID is not set");
+  if (!key) throw notConfigured("RAZORPAY_KEY_ID");
   return key;
 }
 
 function getKeySecret(): string {
   const secret = process.env.RAZORPAY_KEY_SECRET;
-  if (!secret) throw new Error("RAZORPAY_KEY_SECRET is not set");
+  if (!secret) throw notConfigured("RAZORPAY_KEY_SECRET");
   return secret;
 }
 
 function getWebhookSecret(): string {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!secret) throw new Error("RAZORPAY_WEBHOOK_SECRET is not set");
+  if (!secret) throw notConfigured("RAZORPAY_WEBHOOK_SECRET");
   return secret;
 }
 

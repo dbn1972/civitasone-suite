@@ -55,7 +55,7 @@ export async function insertTrial(tx: Writer, row: BillingTrialInsert): Promise<
 }
 
 export async function updateStatus(tx: Writer, id: string, status: string, actorId: string): Promise<void> {
-  await tx.update(billingSubscriptions).set({ status, updatedBy: actorId, updatedAt: new Date() }).where(eq(billingSubscriptions.id, id));
+  await tx.update(billingSubscriptions).set({ status, ...(status === "cancelled" ? { endsAt: sql`COALESCE(${billingSubscriptions.endsAt}, now())` } : {}), updatedBy: actorId, updatedAt: new Date(), version: sql`${billingSubscriptions.version} + 1` }).where(eq(billingSubscriptions.id, id));
 }
 
 export async function findByIdTx(tx: Writer, id: string) {
