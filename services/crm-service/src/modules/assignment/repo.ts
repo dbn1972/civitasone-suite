@@ -244,6 +244,14 @@ export async function persistRoundRobinCursor(
   `);
 }
 
+/** True when `leadId` is an active contact/lead in this tenant (the markAccepted predicate). */
+export async function isActiveLead(tenantId: string, leadId: string): Promise<boolean> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT 1 FROM crm.contacts WHERE id = ${leadId} AND tenant_id = ${tenantId} AND status = 'active' LIMIT 1
+  `))) as unknown as Row[];
+  return rows.length > 0;
+}
+
 export async function markAccepted(tx: Tx, tenantId: string, leadId: string): Promise<number> {
   const rows = (await tx.execute(sql`
     UPDATE crm.contacts

@@ -16,6 +16,9 @@ const ACTOR = "00000000-aaaa-4000-8000-000000000001";
 const UUID1 = "11111111-1111-4000-8000-000000000001";
 // A real call for the ivr-hits routes (UUID1 must stay nonexistent for the 404 tests).
 const IVR_CALL = "11111111-1111-4000-8000-0000000000a1";
+// UAT W6 P1: call lifecycle commands now 404 on a call that does not exist, so the
+// 202-path lifecycle tests run against a real seeded call (404 path: uat-w6b-p1-existence.test.ts).
+const LIFECYCLE_CALL = "11111111-1111-4000-8000-0000000000b1";
 const UUID2 = "22222222-2222-4000-8000-000000000002";
 const UUID3 = "33333333-3333-4000-8000-000000000003";
 
@@ -53,7 +56,7 @@ function noRoleAuthHeader() {
 
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); await seedCall(TENANT, IVR_CALL); });
+beforeAll(async () => { app = await buildApp(); await seedCall(TENANT, IVR_CALL); await seedCall(TENANT, LIFECYCLE_CALL); });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -433,10 +436,19 @@ describe("Calls routes — create", () => {
       expect(res.statusCode).toBe(202);
     });
 
-    it("returns 202 with minimal body (defaults to inbound)", async () => {
+    // UAT W6 P2: an empty body used to queue a call with no party at all.
+    it("returns 400 for an empty body (a call needs a party number)", async () => {
       const res = await app.inject({
         method: "POST", url: "/v1/telephony/calls", headers: userAuthHeader(),
         payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("returns 202 with minimal inbound body (callerNumber only, defaults to inbound)", async () => {
+      const res = await app.inject({
+        method: "POST", url: "/v1/telephony/calls", headers: userAuthHeader(),
+        payload: { callerNumber: "+919876543210" },
       });
       expect(res.statusCode).toBe(202);
     });
@@ -444,7 +456,7 @@ describe("Calls routes — create", () => {
     it("returns 202 with helpdesk_ticket link", async () => {
       const res = await app.inject({
         method: "POST", url: "/v1/telephony/calls", headers: authHeader(),
-        payload: { linkedRefType: "helpdesk_ticket", linkedRefId: UUID1 },
+        payload: { callerNumber: "+919876543210", linkedRefType: "helpdesk_ticket", linkedRefId: UUID1 },
       });
       expect(res.statusCode).toBe(202);
     });
@@ -452,7 +464,7 @@ describe("Calls routes — create", () => {
     it("returns 202 with citizen_request link", async () => {
       const res = await app.inject({
         method: "POST", url: "/v1/telephony/calls", headers: authHeader(),
-        payload: { linkedRefType: "citizen_request", linkedRefId: UUID2 },
+        payload: { callerNumber: "+919876543210", linkedRefType: "citizen_request", linkedRefId: UUID2 },
       });
       expect(res.statusCode).toBe(202);
     });
@@ -654,7 +666,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/ring", () => {
     it("returns 202 with valid body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ring`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/ring`, headers: authHeader(),
         payload: { agentId: UUID2, queueId: UUID3 },
       });
       expect(res.statusCode).toBe(202);
@@ -663,7 +675,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with empty body (optional fields)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ring`, headers: userAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/ring`, headers: userAuthHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(202);
@@ -671,7 +683,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with expectedVersion", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ring`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/ring`, headers: authHeader(),
         payload: { expectedVersion: 1 },
       });
       expect(res.statusCode).toBe(202);
@@ -687,7 +699,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/ring`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/ring`, headers: noRoleAuthHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(403);
@@ -697,7 +709,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/answer", () => {
     it("returns 202 with valid body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/answer`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/answer`, headers: authHeader(),
         payload: { agentId: UUID2 },
       });
       expect(res.statusCode).toBe(202);
@@ -706,7 +718,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with expectedVersion", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/answer`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/answer`, headers: authHeader(),
         payload: { agentId: UUID2, expectedVersion: 2 },
       });
       expect(res.statusCode).toBe(202);
@@ -714,7 +726,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 without agentId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/answer`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/answer`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(400);
@@ -722,7 +734,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid agentId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/answer`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/answer`, headers: authHeader(),
         payload: { agentId: "not-uuid" },
       });
       expect(res.statusCode).toBe(400);
@@ -738,7 +750,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/answer`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/answer`, headers: noRoleAuthHeader(),
         payload: { agentId: UUID2 },
       });
       expect(res.statusCode).toBe(403);
@@ -748,7 +760,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/complete", () => {
     it("returns 202 with valid disposition", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
         payload: { disposition: "resolved", talkSeconds: 120 },
       });
       expect(res.statusCode).toBe(202);
@@ -759,7 +771,7 @@ describe("Calls routes — lifecycle transitions", () => {
       const dispositions = ["resolved", "callback_scheduled", "escalated", "transferred", "information_provided", "wrong_number", "voicemail", "no_resolution"];
       for (const disposition of dispositions) {
         const res = await app.inject({
-          method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+          method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
           payload: { disposition },
         });
         expect(res.statusCode).toBe(202);
@@ -768,7 +780,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with expectedVersion", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
         payload: { disposition: "escalated", expectedVersion: 3 },
       });
       expect(res.statusCode).toBe(202);
@@ -776,7 +788,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 without disposition", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(400);
@@ -784,7 +796,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid disposition", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
         payload: { disposition: "banana" },
       });
       expect(res.statusCode).toBe(400);
@@ -792,7 +804,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with talkSeconds out of range", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: authHeader(),
         payload: { disposition: "resolved", talkSeconds: 999999 },
       });
       expect(res.statusCode).toBe(400);
@@ -800,7 +812,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/complete`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/complete`, headers: noRoleAuthHeader(),
         payload: { disposition: "resolved" },
       });
       expect(res.statusCode).toBe(403);
@@ -810,7 +822,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/miss", () => {
     it("returns 202 with empty body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/miss`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/miss`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(202);
@@ -818,14 +830,14 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with null body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/miss`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/miss`, headers: authHeader(),
       });
       expect(res.statusCode).toBe(202);
     });
 
     it("returns 202 with expectedVersion", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/miss`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/miss`, headers: authHeader(),
         payload: { expectedVersion: 2 },
       });
       expect(res.statusCode).toBe(202);
@@ -841,7 +853,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/miss`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/miss`, headers: noRoleAuthHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(403);
@@ -851,7 +863,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/abandon", () => {
     it("returns 202 with empty body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/abandon`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/abandon`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(202);
@@ -859,14 +871,14 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with null body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/abandon`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/abandon`, headers: authHeader(),
       });
       expect(res.statusCode).toBe(202);
     });
 
     it("returns 202 with expectedVersion", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/abandon`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/abandon`, headers: authHeader(),
         payload: { expectedVersion: 1 },
       });
       expect(res.statusCode).toBe(202);
@@ -874,7 +886,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/abandon`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/abandon`, headers: noRoleAuthHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(403);
@@ -884,7 +896,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/assign", () => {
     it("returns 202 with queueId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: supervisorAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: supervisorAuthHeader(),
         payload: { queueId: UUID2 },
       });
       expect(res.statusCode).toBe(202);
@@ -892,7 +904,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with agentId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: authHeader(),
         payload: { agentId: UUID3 },
       });
       expect(res.statusCode).toBe(202);
@@ -900,7 +912,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with both queueId and agentId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: authHeader(),
         payload: { queueId: UUID2, agentId: UUID3, expectedVersion: 1 },
       });
       expect(res.statusCode).toBe(202);
@@ -908,7 +920,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 without queueId or agentId (refine)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(400);
@@ -916,7 +928,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid queueId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: authHeader(),
         payload: { queueId: "bad" },
       });
       expect(res.statusCode).toBe(400);
@@ -924,7 +936,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for telephony_user (supervisor+ required)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: userAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: userAuthHeader(),
         payload: { queueId: UUID2 },
       });
       expect(res.statusCode).toBe(403);
@@ -932,7 +944,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/assign`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/assign`, headers: noRoleAuthHeader(),
         payload: { queueId: UUID2 },
       });
       expect(res.statusCode).toBe(403);
@@ -992,7 +1004,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/link", () => {
     it("returns 202 with grievance link", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: { refType: "grievance", refId: UUID2 },
       });
       expect(res.statusCode).toBe(202);
@@ -1000,7 +1012,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with helpdesk_ticket link", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: { refType: "helpdesk_ticket", refId: UUID3 },
       });
       expect(res.statusCode).toBe(202);
@@ -1008,7 +1020,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with citizen_request link", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: { refType: "citizen_request", refId: UUID1 },
       });
       expect(res.statusCode).toBe(202);
@@ -1016,7 +1028,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid refType", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: { refType: "invalid", refId: UUID2 },
       });
       expect(res.statusCode).toBe(400);
@@ -1024,7 +1036,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid refId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: { refType: "grievance", refId: "bad" },
       });
       expect(res.statusCode).toBe(400);
@@ -1032,7 +1044,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with empty body", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(400);
@@ -1040,7 +1052,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/link`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/link`, headers: noRoleAuthHeader(),
         payload: { refType: "grievance", refId: UUID2 },
       });
       expect(res.statusCode).toBe(403);
@@ -1050,7 +1062,7 @@ describe("Calls routes — lifecycle transitions", () => {
   describe("POST /v1/telephony/calls/:id/recording", () => {
     it("returns 202 with valid body (supervisor+)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: supervisorAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: supervisorAuthHeader(),
         payload: { recordingId: "rec-001", recordingUrl: "https://s3.example.com/rec.mp3", durationSec: 300, format: "mp3" },
       });
       expect(res.statusCode).toBe(202);
@@ -1058,7 +1070,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 202 with minimal body (admin)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
         payload: { recordingId: "rec-002" },
       });
       expect(res.statusCode).toBe(202);
@@ -1067,7 +1079,7 @@ describe("Calls routes — lifecycle transitions", () => {
     it("returns 202 with all formats", async () => {
       for (const format of ["mp3", "wav", "ogg", "opus"]) {
         const res = await app.inject({
-          method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+          method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
           payload: { recordingId: `rec-${format}`, format },
         });
         expect(res.statusCode).toBe(202);
@@ -1076,7 +1088,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 without recordingId", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
         payload: {},
       });
       expect(res.statusCode).toBe(400);
@@ -1084,7 +1096,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid format", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
         payload: { recordingId: "rec-x", format: "flac" },
       });
       expect(res.statusCode).toBe(400);
@@ -1092,7 +1104,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with invalid recordingUrl", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
         payload: { recordingId: "rec-x", recordingUrl: "not-a-url" },
       });
       expect(res.statusCode).toBe(400);
@@ -1100,7 +1112,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 400 with durationSec out of range", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: authHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: authHeader(),
         payload: { recordingId: "rec-x", durationSec: 999999 },
       });
       expect(res.statusCode).toBe(400);
@@ -1108,7 +1120,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for telephony_user (supervisor+ required)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: userAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: userAuthHeader(),
         payload: { recordingId: "rec-001" },
       });
       expect(res.statusCode).toBe(403);
@@ -1116,7 +1128,7 @@ describe("Calls routes — lifecycle transitions", () => {
 
     it("returns 403 for wrong role", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/telephony/calls/${UUID1}/recording`, headers: noRoleAuthHeader(),
+        method: "POST", url: `/v1/telephony/calls/${LIFECYCLE_CALL}/recording`, headers: noRoleAuthHeader(),
         payload: { recordingId: "rec-001" },
       });
       expect(res.statusCode).toBe(403);

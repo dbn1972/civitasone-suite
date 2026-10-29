@@ -21,6 +21,16 @@ export const createCallBody = z.object({
   agentId: z.string().uuid().optional(),
   linkedRefType: z.enum(["grievance", "helpdesk_ticket", "citizen_request"]).optional(),
   linkedRefId: z.string().uuid().optional(),
+}).superRefine((b, ctx) => {
+  // UAT W6 P2: an empty body used to queue a call with no party at all. A call needs
+  // at least one party number: an outbound call must say whom it dials (without it
+  // the carrier is never invoked and a phantom outbound call is recorded); an inbound
+  // call needs the caller's number or, when the CLI is withheld, the dialled number.
+  if (b.direction === "outbound" && !b.calleeNumber) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["calleeNumber"], message: "calleeNumber is required for an outbound call" });
+  } else if (b.direction === "inbound" && !b.callerNumber && !b.calleeNumber) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["callerNumber"], message: "callerNumber or calleeNumber is required for an inbound call" });
+  }
 });
 export type CreateCallBody = z.infer<typeof createCallBody>;
 

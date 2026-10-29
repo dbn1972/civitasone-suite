@@ -37,7 +37,12 @@ const fieldTaskBody = z.object({
   assignedTo: z.string().uuid().optional(),
   taskDate: z.string().optional(),
   assetRefs: z.array(z.string()).optional(),
-});
+}).refine(
+  // UAT W6 P2: an empty body used to queue a blank field task. A field task must say
+  // where the work is: a route, a zone or at least one asset reference.
+  (b) => Boolean(b.routeId) || Boolean(b.zoneId) || (b.assetRefs?.length ?? 0) > 0,
+  { message: "a field task needs a routeId, a zoneId or at least one assetRef", path: ["routeId"] },
+);
 
 const completeTaskBody = z.object({
   notes: z.string().max(4000).optional(),

@@ -10,6 +10,9 @@ import { describe, it, expect, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import * as categoriesRepo from "../src/modules/categories/repo.js";
+import * as retentionRepo from "../src/modules/retention/repo.js";
+import * as versionsRepo from "../src/modules/versions/repo.js";
 
 // Mock repos to avoid hitting DB tables that may not exist in test DB
 vi.mock("../src/modules/categories/repo.js", () => ({
@@ -177,6 +180,9 @@ describe("categories routes", () => {
   });
 
   it("PUT /v1/knowledge/categories/:id returns 202 accepted", async () => {
+    // UAT W6 P1: the route now reads the row before publishing (404 path pinned in
+    // uat-w6b-p1-existence.test.ts); the mocked repo returns one so 202 is still exercised.
+    vi.mocked(categoriesRepo.getById).mockResolvedValueOnce({ id: "00000000-0000-4000-8000-000000000099" } as never);
     const app = await buildApp();
     const res = await app.inject({
       method: "PUT",
@@ -335,6 +341,9 @@ describe("retention routes", () => {
   });
 
   it("PUT /v1/knowledge/retention-policies/:id returns 202 accepted", async () => {
+    // UAT W6 P1: the route now reads the row before publishing (404 path pinned in
+    // uat-w6b-p1-existence.test.ts); the mocked repo returns one so 202 is still exercised.
+    vi.mocked(retentionRepo.getById).mockResolvedValueOnce({ id: "00000000-0000-4000-8000-000000000099" } as never);
     const app = await buildApp();
     const res = await app.inject({
       method: "PUT",
@@ -350,6 +359,9 @@ describe("retention routes", () => {
   });
 
   it("POST /v1/knowledge/retention-policies/:id/apply returns 202 accepted", async () => {
+    // UAT W6 P1: the route now reads the row before publishing (404 path pinned in
+    // uat-w6b-p1-existence.test.ts); the mocked repo returns one so 202 is still exercised.
+    vi.mocked(retentionRepo.getById).mockResolvedValueOnce({ id: "00000000-0000-4000-8000-000000000099" } as never);
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -632,6 +644,9 @@ describe("versions routes", () => {
   });
 
   it("POST /v1/knowledge/documents/:docId/versions/:versionId/restore returns 202 accepted", async () => {
+    // UAT W6 P1: the route now reads the row before publishing (404 path pinned in
+    // uat-w6b-p1-existence.test.ts); the mocked repo returns one so 202 is still exercised.
+    vi.mocked(versionsRepo.getById).mockResolvedValueOnce({ id: VERSION_ID, documentId: DOC_ID } as never);
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",

@@ -255,13 +255,16 @@ describe("GET /v1/notification/push/subscriptions", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("400 when limit is omitted", async () => {
+  // UAT W6 P9b: a bare list GET uses the bounded default page size (50, still capped
+  // at 200 — see the over-max test below), so the list is never unbounded.
+  it("200 with the bounded default page size when limit is omitted", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/notification/push/subscriptions", headers: bearer(["employee"]),
     });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().meta.pageSize).toBe(50);
   });
 
   it("400 for a non-uuid userId", async () => {
@@ -511,13 +514,16 @@ describe("GET /v1/notification/in-app/messages", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("400 when limit is omitted", async () => {
+  // UAT W6 P9b: a bare list GET uses the bounded default page size (50, still capped
+  // at 200 — see the over-max test below), so the list is never unbounded.
+  it("200 with the bounded default page size when limit is omitted", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/notification/in-app/messages", headers: bearer(["employee"]),
     });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().meta.pageSize).toBe(50);
   });
 
   it("401 without a token", async () => {

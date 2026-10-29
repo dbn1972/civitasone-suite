@@ -182,7 +182,7 @@ describe("GET /v1/digest-rules", () => {
 });
 
 describe("PATCH /v1/digest-rules/:id", () => {
-  it("returns 202 with valid update", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH", url: `/v1/digest-rules/${randomUUID()}`,
@@ -190,19 +190,19 @@ describe("PATCH /v1/digest-rules/:id", () => {
       payload: { accumulationWindowMinutes: 60 },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });
 
 describe("DELETE /v1/digest-rules/:id", () => {
-  it("returns 202 (soft-disable)", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "DELETE", url: `/v1/digest-rules/${randomUUID()}`,
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -550,7 +550,7 @@ describe("GET /v1/templates/:templateId/locales", () => {
 });
 
 describe("PATCH /v1/templates/:templateId/locales/:id", () => {
-  it("returns 202 with valid update", async () => {
+  it("returns 404 for a non-existent id (UAT W6 P1; real-id 202 path: uat-w6b-p1-existence.test.ts)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH", url: `/v1/templates/${randomUUID()}/locales/${randomUUID()}`,
@@ -558,7 +558,7 @@ describe("PATCH /v1/templates/:templateId/locales/:id", () => {
       payload: { body: "Updated body" },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });
 

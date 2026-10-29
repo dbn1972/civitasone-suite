@@ -9,6 +9,12 @@ import * as repo from "./repo.js";
 
 const ROLES = ["knowledge_admin", "super_admin"];
 
+// UAT W6 P1: tenant-scoped existence read before publishing; an unknown id is a 404
+// rather than a 202 for a command the consumer can only drop.
+async function requireRetentionPolicy(tenantId: string, id: string): Promise<void> {
+  if (!(await repo.getById(tenantId, id))) throw new HttpError(404, "NOT_FOUND", "retention policy not found");
+}
+
 export async function retentionRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/retention-policies", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -47,6 +53,7 @@ export async function retentionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const id = pathUuid(req.params);
     const body = updateRetentionPolicyBody.parse(req.body);
+    await requireRetentionPolicy(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.retentionPolicyUpdate(ctx, id, body));
   });
 
@@ -54,6 +61,7 @@ export async function retentionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const id = pathUuid(req.params);
+    await requireRetentionPolicy(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.retentionPolicyApply(ctx, id));
   });
 

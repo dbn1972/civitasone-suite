@@ -32,6 +32,17 @@ function isAdmin(roles: string[]): boolean {
   return roles.some((r) => ADMIN_ROLES.includes(r));
 }
 
+/**
+ * UAT W6 P1: tenant-scoped existence read before publishing a call command; an
+ * unknown / other-tenant call id is a 404 instead of a 202 the consumer can only
+ * drop. createCall primes the read cache with the projected view, so a command
+ * sent right after create still finds the call before the consumer has written
+ * the row. The consumer remains the race-safe authority for state transitions.
+ */
+async function requireCall(tenantId: string, id: string): Promise<void> {
+  if (!(await queries.getCall(id, tenantId, true))) throw new HttpError(404, "NOT_FOUND", "call not found");
+}
+
 export async function callRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/telephony/calls", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -87,6 +98,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = ringCallBody.parse(req.body ?? {});
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.ringCall(ctx, id, body));
   });
 
@@ -95,6 +107,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = answerCallBody.parse(req.body);
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.answerCall(ctx, id, body));
   });
 
@@ -103,6 +116,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = completeCallBody.parse(req.body);
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeCall(ctx, id, body));
   });
 
@@ -111,6 +125,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = endCallBody.parse(req.body ?? {});
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.missCall(ctx, id, body));
   });
 
@@ -119,6 +134,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = endCallBody.parse(req.body ?? {});
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.abandonCall(ctx, id, body));
   });
 
@@ -127,6 +143,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SUPERVISOR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignCallBody.parse(req.body);
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignCall(ctx, id, body));
   });
 
@@ -135,6 +152,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TELEPHONY_ROLES);
     const { id } = idParam.parse(req.params);
     const body = linkCallBody.parse(req.body);
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.linkCall(ctx, id, body));
   });
 
@@ -143,6 +161,7 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SUPERVISOR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recordingBody.parse(req.body);
+    await requireCall(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.attachRecording(ctx, id, body));
   });
 

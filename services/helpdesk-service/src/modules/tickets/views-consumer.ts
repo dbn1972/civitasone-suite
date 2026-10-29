@@ -21,7 +21,7 @@ const AUDIT_TOPIC = "audit.event.record";
  * HELPDESK_ADMIN_ROLES pattern used for internal notes / transfers). */
 const VIEW_ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
 
-function isViewAdmin(roles: string[] | undefined): boolean {
+export function isViewAdmin(roles: string[] | undefined): boolean {
   return (roles ?? []).some((r) => VIEW_ADMIN_ROLES.includes(r));
 }
 

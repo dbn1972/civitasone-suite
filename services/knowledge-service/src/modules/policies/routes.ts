@@ -102,6 +102,11 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const id = pathUuid(req.params);
     const body = ackReportBody.parse(req.body);
+    // UAT W6 P1: a report over a policy that does not exist (in this tenant) is a 404,
+    // not an empty 200 that reads as "nobody acknowledged".
+    if (!(await queries.getPolicy(ctx.tenantId, id, viewerOf(ctx)))) {
+      throw new HttpError(404, "NOT_FOUND", "policy not found");
+    }
     const report = await queries.acknowledgementReport(ctx.tenantId, id, body.expectedEmployeeIds);
     return reply.send({ policyId: id, ...report });
   });

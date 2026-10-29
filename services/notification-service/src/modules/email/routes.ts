@@ -44,7 +44,8 @@ const authCheckBody = z.object({
 });
 
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200),
+  // UAT W6 P9b: default page size so a bare list GET is not a 400 (cap unchanged).
+  limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
 

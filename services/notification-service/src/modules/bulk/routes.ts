@@ -47,6 +47,9 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = campaignIdParam.parse(req.params);
+    // UAT W6 P1: unknown / other-tenant campaign is a 404, not a queued no-op.
+    const existing = await queries.getCampaign(ctx.tenantId, id);
+    if (!existing || existing.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "campaign not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelCampaign(ctx, id));
   });
 
