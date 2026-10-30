@@ -1,11 +1,13 @@
-import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
-import { queue } from "../../shared/infra.js";
+import { PgDatabase, PgDialect } from "drizzle-orm/pg-core";
+import { PostgresJsSession } from "drizzle-orm/postgres-js";
+import { enqueue, type DrizzleTx } from "../../shared/outbox.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -184,55 +186,32 @@ function generateCardNumber(tenantPrefix: string, seq: number): string {
 
 /**
  * F72 (UAT W7): POST /v1/hrms/id-cards 504'd at the gateway (15 s upstream
- * budget) although the card row was committed in milliseconds. After the
- * INSERT the handler awaited TWO queue publishes back-to-back (the audit
- * command, then notification.send). On the SQS driver each publish is a
- * ListQueues round-trip plus one SendMessage per subscriber queue, and against
- * the loaded UAT LocalStack (~3.6 s per call) the sequential chain took
- * 15-18 s, so the gateway gave up and the caller never learned the card id.
+ * budget) although the card row committed in milliseconds. After the INSERT
+ * the handler awaited two direct queue.publish() calls back-to-back (the
+ * audit command, then notification.send); on the SQS driver each is a
+ * ListQueues + SendMessage round-trip, and against the loaded UAT LocalStack
+ * (~3.6 s per call) the chain took 15-18 s. It was also a dual write: the
+ * card could commit while the audit command was lost (or the route 500'd
+ * for a card that existed).
  *
- * These publishes are post-commit side effects (audit trail + holder push);
- * the response does not depend on them. They now start concurrently, and the
- * handler waits at most ID_CARD_PUBLISH_BUDGET_MS for them. A publish that
- * REJECTS inside the budget still fails the request exactly as before. One
- * still in flight when the budget runs out is NOT cancelled -- the SDK call
- * keeps going and normally lands -- but the handler replies instead of
- * holding the request open past the gateway timeout, and a late failure is
- * logged loudly rather than lost.
+ * Every side-effect message of this module now goes through the
+ * transactional outbox, enqueued in the SAME transaction as the card write,
+ * so the route never touches the bus; the hrms worker's relay (startRelay)
+ * publishes it, and registerIdCardConsumers is unchanged. Commit => outbox
+ * row; rollback => neither.
+ *
+ * This module writes through the raw postgres.js client inside
+ * withRawTenantGuc (see above), not Drizzle, so `tx` is a postgres.js
+ * TransactionSql. outboxTx() views that SAME transaction through Drizzle so
+ * the shared `enqueue(tx, ...)` is used verbatim. It is built exactly the
+ * way Drizzle builds its own postgres-js transaction object (a
+ * PostgresJsSession over the TransactionSql that sql.begin() handed it), so
+ * every statement runs on this transaction's connection, under its tenant
+ * GUC, and commits or rolls back together with the card write.
  */
-const DEFAULT_PUBLISH_BUDGET_MS = 8_000;
-function resolvePublishBudgetMs(raw: string | undefined = process.env.ID_CARD_PUBLISH_BUDGET_MS): number {
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_PUBLISH_BUDGET_MS;
-}
-
-const PUBLISH_BUDGET_EXCEEDED = Symbol("publish-budget-exceeded");
-
-async function awaitPublishesWithinBudget(
-  log: FastifyBaseLogger,
-  correlationId: string,
-  publishes: Promise<unknown>[],
-): Promise<void> {
-  const budgetMs = resolvePublishBudgetMs();
-  const settled = Promise.all(publishes);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const budget = new Promise<typeof PUBLISH_BUDGET_EXCEEDED>((resolve) => {
-    timer = setTimeout(() => resolve(PUBLISH_BUDGET_EXCEEDED), budgetMs);
-  });
-  try {
-    const outcome = await Promise.race([settled, budget]);
-    if (outcome === PUBLISH_BUDGET_EXCEEDED) {
-      log.error(
-        { event: "id_card_publish_budget_exceeded", budgetMs, correlationId },
-        "id-card queue publish still in flight after budget; replying without waiting",
-      );
-      settled.catch((err: unknown) => {
-        log.error({ err, event: "id_card_publish_failed_late", correlationId }, "id-card queue publish failed after reply");
-      });
-    }
-  } finally {
-    clearTimeout(timer);
-  }
+function outboxTx(tx: typeof sqlClient): DrizzleTx {
+  const dialect = new PgDialect();
+  return new PgDatabase(dialect, new PostgresJsSession(tx, dialect, undefined), undefined) as unknown as DrizzleTx;
 }
 
 export async function idCardRoutes(app: FastifyInstance): Promise<void> {
@@ -261,103 +240,106 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     // card issued in production so far collided on "DIC/<year>/00001"
     // (masked because nothing else exercised the unique constraint until a
     // second concurrent issue).
-    const seqResult = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `SELECT COUNT(*)::int + 1 AS seq FROM hrms.id_cards WHERE tenant_id = $1`,
-      [ctx.tenantId],
-    ));
-    const seq = seqResult.rows[0]?.seq ?? 1;
-    const cardNumber = generateCardNumber("DIC", seq);
+    // F72: seq, issuer lookup, INSERT and the outbox rows share ONE
+    // transaction (see outboxTx above).
+    const { cardNumber, qrPayload } = await withTenantGuc(ctx.tenantId, async (tx) => {
+      const seqResult = await queryTx(
+        tx,
+        `SELECT COUNT(*)::int + 1 AS seq FROM hrms.id_cards WHERE tenant_id = $1`,
+        [ctx.tenantId],
+      );
+      const seq = seqResult.rows[0]?.seq ?? 1;
+      const cardNumber = generateCardNumber("DIC", seq);
 
-    // Generate QR payload (HMAC-signed)
-    const qrPayload = generateQrPayload(id, ctx.tenantId, cardNumber);
+      // Generate QR payload (HMAC-signed)
+      const qrPayload = generateQrPayload(id, ctx.tenantId, cardNumber);
 
-    // Get issuer name. employee.hrms_employees is ALSO RLS ENABLEd + FORCEd
-    // (migration 0026/0034_rls_*.sql) -- needed the same GUC wrap. This query
-    // additionally referenced first_name/last_name/user_id, none of which
-    // exist on that table (real columns: full_name, user_ref -- confirmed
-    // against src/modules/employee/schema.ts and the live schema; user_ref is
-    // the same actorId-linkage column self-service/routes.ts and
-    // employee/actor-link.ts already key employee lookups on). That was a
-    // hard "column does not exist" error independent of RLS, so this query
-    // 500'd before the missing-GUC gap could even manifest -- fixed here too
-    // since the GUC wrap alone would not have made this endpoint work.
-    const issuerRow = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
-      [ctx.actorId, ctx.tenantId],
-    ));
-    const issuerName = issuerRow.rows[0]?.full_name ?? "Admin";
+      // Get issuer name. employee.hrms_employees is ALSO RLS ENABLEd + FORCEd
+      // (migration 0026/0034_rls_*.sql) -- needed the same GUC wrap. This query
+      // additionally referenced first_name/last_name/user_id, none of which
+      // exist on that table (real columns: full_name, user_ref -- confirmed
+      // against src/modules/employee/schema.ts and the live schema; user_ref is
+      // the same actorId-linkage column self-service/routes.ts and
+      // employee/actor-link.ts already key employee lookups on). That was a
+      // hard "column does not exist" error independent of RLS, so this query
+      // 500'd before the missing-GUC gap could even manifest -- fixed here too
+      // since the GUC wrap alone would not have made this endpoint work.
+      const issuerRow = await queryTx(
+        tx,
+        `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
+        [ctx.actorId, ctx.tenantId],
+      );
+      const issuerName = issuerRow.rows[0]?.full_name ?? "Admin";
 
-    await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `INSERT INTO hrms.id_cards (id, tenant_id, holder_name, holder_photo_url, designation, department,
-        employee_id, employee_code, card_type, card_number, vendor_id, vendor_name, project_id, project_name,
-        contract_id, issued_date, valid_from, valid_until, status, access_zones, access_hours,
-        qr_payload, issued_by, issued_by_name, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CURRENT_DATE,$16,$17,'active',$18,$19,$20,$21,$22,$23,$23)`,
-      [
-        id, ctx.tenantId, body.holderName, body.holderPhotoUrl ?? null,
-        body.designation ?? "", body.department ?? "",
-        body.employeeId ?? null, body.employeeCode ?? null,
-        body.cardType, cardNumber,
-        body.vendorId ?? null, body.vendorName ?? null,
-        body.projectId ?? null, body.projectName ?? null,
-        body.contractId ?? null,
-        body.validFrom ?? new Date().toISOString().split("T")[0],
-        body.validUntil,
-        body.accessZones ?? [], body.accessHours ?? "09:00-18:00",
-        qrPayload, ctx.actorId, issuerName, now,
-      ],
-    ));
+      await queryTx(
+        tx,
+        `INSERT INTO hrms.id_cards (id, tenant_id, holder_name, holder_photo_url, designation, department,
+          employee_id, employee_code, card_type, card_number, vendor_id, vendor_name, project_id, project_name,
+          contract_id, issued_date, valid_from, valid_until, status, access_zones, access_hours,
+          qr_payload, issued_by, issued_by_name, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CURRENT_DATE,$16,$17,'active',$18,$19,$20,$21,$22,$23,$23)`,
+        [
+          id, ctx.tenantId, body.holderName, body.holderPhotoUrl ?? null,
+          body.designation ?? "", body.department ?? "",
+          body.employeeId ?? null, body.employeeCode ?? null,
+          body.cardType, cardNumber,
+          body.vendorId ?? null, body.vendorName ?? null,
+          body.projectId ?? null, body.projectName ?? null,
+          body.contractId ?? null,
+          body.validFrom ?? new Date().toISOString().split("T")[0],
+          body.validUntil,
+          body.accessZones ?? [], body.accessHours ?? "09:00-18:00",
+          qrPayload, ctx.actorId, issuerName, now,
+        ],
+      );
 
-    // HR-A deep-verify finding: registerIdCardConsumers (../id-cards/consumer.ts,
-    // registered in worker.ts) subscribes to COMMANDS.idCardIssue/Suspend/
-    // Revoke/Reactivate specifically to record the `audit.event.record` entry
-    // for each action -- but nothing anywhere in the codebase ever published
-    // those commands (this route did the real INSERT/UPDATE directly via SQL
-    // and only ever published the unrelated "notification.send" topic below).
-    // The consumer was fully built and registered, just never triggered, so
-    // id-card issue/suspend/revoke/reactivate left no audit trail. Publishing
-    // here wires up the existing consumer without changing this route's own
-    // synchronous DB write or response.
-    // F72: started, not awaited one by one -- see awaitPublishesWithinBudget.
-    const publishes: Promise<unknown>[] = [];
-    publishes.push(queue.publish(COMMANDS.idCardIssue, {
-      messageId: randomUUID(),
-      type: COMMANDS.idCardIssue,
-      schemaVersion: "1.0",
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      payload: {
-        id, tenantId: ctx.tenantId,
-        ...(body.employeeId ? { employeeId: body.employeeId } : {}),
-        holderName: body.holderName, cardType: body.cardType, validUntil: body.validUntil,
-      },
-    }));
-
-    // Notify holder if they're an employee
-    if (body.employeeId) {
-      publishes.push(queue.publish("notification.send", {
-        messageId: randomUUID(),
-        type: "hrms.id_card.issued",
-        schemaVersion: "1.0",
+      // HR-A deep-verify finding: registerIdCardConsumers (../id-cards/consumer.ts,
+      // registered in worker.ts) subscribes to COMMANDS.idCardIssue/Suspend/
+      // Revoke/Reactivate specifically to record the `audit.event.record` entry
+      // for each action -- but nothing anywhere in the codebase ever published
+      // those commands (this route did the real INSERT/UPDATE directly via SQL
+      // and only ever published the unrelated "notification.send" topic below).
+      // The consumer was fully built and registered, just never triggered, so
+      // id-card issue/suspend/revoke/reactivate left no audit trail. Publishing
+      // here wires up the existing consumer without changing this route's own
+      // synchronous DB write or response.
+      // F72: enqueued in the card's own transaction (was a direct publish).
+      const out = outboxTx(tx);
+      await enqueue(out, {
+        topic: COMMANDS.idCardIssue,
+        eventType: COMMANDS.idCardIssue,
         tenantId: ctx.tenantId,
-        correlationId: ctx.correlationId,
         actorId: ctx.actorId,
-        timestamp: now,
+        correlationId: ctx.correlationId,
         payload: {
-          templateId: "00000000-0000-4000-8001-000000000000",
-          recipient: body.employeeId,
-          recipientId: body.employeeId,
-          channel: "push",
-          eventType: "hrms.id_card.issued",
-          variables: { cardNumber, holderName: body.holderName },
+          id, tenantId: ctx.tenantId,
+          ...(body.employeeId ? { employeeId: body.employeeId } : {}),
+          holderName: body.holderName, cardType: body.cardType, validUntil: body.validUntil,
         },
-      }));
-    }
-    await awaitPublishesWithinBudget(req.log, ctx.correlationId, publishes);
+      });
+
+      // Notify holder if they're an employee (same outbox shape as
+      // social/consumer.ts's notification.send rows).
+      if (body.employeeId) {
+        await enqueue(out, {
+          topic: "notification.send",
+          eventType: "hrms.id_card.issued",
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          correlationId: ctx.correlationId,
+          payload: {
+            templateId: "00000000-0000-4000-8001-000000000000",
+            recipient: body.employeeId,
+            recipientId: body.employeeId,
+            channel: "push",
+            eventType: "hrms.id_card.issued",
+            variables: { cardNumber, holderName: body.holderName },
+          },
+        });
+      }
+
+      return { cardNumber, qrPayload };
+    });
 
     return reply.code(201).send({ id, cardNumber, qrPayload, status: "active" });
   });
@@ -600,12 +582,25 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = (req.body as any) ?? {};
 
-    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `UPDATE hrms.id_cards SET status = 'suspended', revoked_reason = $1, updated_at = NOW()
-       WHERE id = $2 AND tenant_id = $3 AND status = 'active'`,
-      [reason ?? "suspended by admin", id, ctx.tenantId],
-    ));
+    // F72: the audit command is enqueued in the SAME transaction as the
+    // status change (was a direct publish after it), and only when a row
+    // actually changed.
+    const result = await withTenantGuc(ctx.tenantId, async (tx) => {
+      const r = await queryTx(
+        tx,
+        `UPDATE hrms.id_cards SET status = 'suspended', revoked_reason = $1, updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3 AND status = 'active'`,
+        [reason ?? "suspended by admin", id, ctx.tenantId],
+      );
+      if (r.rowCount > 0) {
+        await enqueue(outboxTx(tx), {
+          topic: COMMANDS.idCardSuspend, eventType: COMMANDS.idCardSuspend,
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: { id, tenantId: ctx.tenantId, reason: reason ?? "suspended by admin" },
+        });
+      }
+      return r;
+    });
     // HR-A deep-verify finding: the UPDATE's WHERE clause silently matches
     // zero rows for an unknown id or a card that is not currently 'active'
     // (already suspended/revoked/expired) -- this used to still reply 200
@@ -613,12 +608,6 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     if (result.rowCount === 0) {
       throw new HttpError(404, "NOT_FOUND", "active id card not found");
     }
-
-    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardSuspend, {
-      messageId: randomUUID(), type: COMMANDS.idCardSuspend, schemaVersion: "1.0",
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-      payload: { id, tenantId: ctx.tenantId, reason: reason ?? "suspended by admin" },
-    })]);
 
     return reply.send({ id, status: "suspended" });
   });
@@ -630,21 +619,28 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = (req.body as any) ?? {};
 
-    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `UPDATE hrms.id_cards SET status = 'revoked', revoked_by = $1, revoked_reason = $2, revoked_at = NOW(), updated_at = NOW()
-       WHERE id = $3 AND tenant_id = $4 AND status IN ('active', 'suspended')`,
-      [ctx.actorId, reason ?? "revoked", id, ctx.tenantId],
-    ));
+    // F72: the audit command is enqueued in the SAME transaction as the
+    // status change (was a direct publish after it), and only when a row
+    // actually changed.
+    const result = await withTenantGuc(ctx.tenantId, async (tx) => {
+      const r = await queryTx(
+        tx,
+        `UPDATE hrms.id_cards SET status = 'revoked', revoked_by = $1, revoked_reason = $2, revoked_at = NOW(), updated_at = NOW()
+         WHERE id = $3 AND tenant_id = $4 AND status IN ('active', 'suspended')`,
+        [ctx.actorId, reason ?? "revoked", id, ctx.tenantId],
+      );
+      if (r.rowCount > 0) {
+        await enqueue(outboxTx(tx), {
+          topic: COMMANDS.idCardRevoke, eventType: COMMANDS.idCardRevoke,
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: { id, tenantId: ctx.tenantId, reason: reason ?? "revoked" },
+        });
+      }
+      return r;
+    });
     if (result.rowCount === 0) {
       throw new HttpError(404, "NOT_FOUND", "active or suspended id card not found");
     }
-
-    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardRevoke, {
-      messageId: randomUUID(), type: COMMANDS.idCardRevoke, schemaVersion: "1.0",
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-      payload: { id, tenantId: ctx.tenantId, reason: reason ?? "revoked" },
-    })]);
 
     return reply.send({ id, status: "revoked" });
   });
@@ -655,21 +651,28 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `UPDATE hrms.id_cards SET status = 'active', revoked_reason = NULL, updated_at = NOW()
-       WHERE id = $1 AND tenant_id = $2 AND status = 'suspended'`,
-      [id, ctx.tenantId],
-    ));
+    // F72: the audit command is enqueued in the SAME transaction as the
+    // status change (was a direct publish after it), and only when a row
+    // actually changed.
+    const result = await withTenantGuc(ctx.tenantId, async (tx) => {
+      const r = await queryTx(
+        tx,
+        `UPDATE hrms.id_cards SET status = 'active', revoked_reason = NULL, updated_at = NOW()
+         WHERE id = $1 AND tenant_id = $2 AND status = 'suspended'`,
+        [id, ctx.tenantId],
+      );
+      if (r.rowCount > 0) {
+        await enqueue(outboxTx(tx), {
+          topic: COMMANDS.idCardReactivate, eventType: COMMANDS.idCardReactivate,
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: { id, tenantId: ctx.tenantId },
+        });
+      }
+      return r;
+    });
     if (result.rowCount === 0) {
       throw new HttpError(404, "NOT_FOUND", "suspended id card not found");
     }
-
-    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardReactivate, {
-      messageId: randomUUID(), type: COMMANDS.idCardReactivate, schemaVersion: "1.0",
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-      payload: { id, tenantId: ctx.tenantId },
-    })]);
 
     return reply.send({ id, status: "active" });
   });
