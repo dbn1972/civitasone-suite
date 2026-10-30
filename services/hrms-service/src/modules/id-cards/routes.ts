@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
@@ -182,6 +182,59 @@ function generateCardNumber(tenantPrefix: string, seq: number): string {
   return `${tenantPrefix}/${year}/${String(seq).padStart(5, "0")}`;
 }
 
+/**
+ * F72 (UAT W7): POST /v1/hrms/id-cards 504'd at the gateway (15 s upstream
+ * budget) although the card row was committed in milliseconds. After the
+ * INSERT the handler awaited TWO queue publishes back-to-back (the audit
+ * command, then notification.send). On the SQS driver each publish is a
+ * ListQueues round-trip plus one SendMessage per subscriber queue, and against
+ * the loaded UAT LocalStack (~3.6 s per call) the sequential chain took
+ * 15-18 s, so the gateway gave up and the caller never learned the card id.
+ *
+ * These publishes are post-commit side effects (audit trail + holder push);
+ * the response does not depend on them. They now start concurrently, and the
+ * handler waits at most ID_CARD_PUBLISH_BUDGET_MS for them. A publish that
+ * REJECTS inside the budget still fails the request exactly as before. One
+ * still in flight when the budget runs out is NOT cancelled -- the SDK call
+ * keeps going and normally lands -- but the handler replies instead of
+ * holding the request open past the gateway timeout, and a late failure is
+ * logged loudly rather than lost.
+ */
+const DEFAULT_PUBLISH_BUDGET_MS = 8_000;
+function resolvePublishBudgetMs(raw: string | undefined = process.env.ID_CARD_PUBLISH_BUDGET_MS): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_PUBLISH_BUDGET_MS;
+}
+
+const PUBLISH_BUDGET_EXCEEDED = Symbol("publish-budget-exceeded");
+
+async function awaitPublishesWithinBudget(
+  log: FastifyBaseLogger,
+  correlationId: string,
+  publishes: Promise<unknown>[],
+): Promise<void> {
+  const budgetMs = resolvePublishBudgetMs();
+  const settled = Promise.all(publishes);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<typeof PUBLISH_BUDGET_EXCEEDED>((resolve) => {
+    timer = setTimeout(() => resolve(PUBLISH_BUDGET_EXCEEDED), budgetMs);
+  });
+  try {
+    const outcome = await Promise.race([settled, budget]);
+    if (outcome === PUBLISH_BUDGET_EXCEEDED) {
+      log.error(
+        { event: "id_card_publish_budget_exceeded", budgetMs, correlationId },
+        "id-card queue publish still in flight after budget; replying without waiting",
+      );
+      settled.catch((err: unknown) => {
+        log.error({ err, event: "id_card_publish_failed_late", correlationId }, "id-card queue publish failed after reply");
+      });
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
   // ─── ISSUE ID CARD (HR Admin) ─────────────────────────────────────────
@@ -268,7 +321,9 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     // id-card issue/suspend/revoke/reactivate left no audit trail. Publishing
     // here wires up the existing consumer without changing this route's own
     // synchronous DB write or response.
-    await queue.publish(COMMANDS.idCardIssue, {
+    // F72: started, not awaited one by one -- see awaitPublishesWithinBudget.
+    const publishes: Promise<unknown>[] = [];
+    publishes.push(queue.publish(COMMANDS.idCardIssue, {
       messageId: randomUUID(),
       type: COMMANDS.idCardIssue,
       schemaVersion: "1.0",
@@ -280,11 +335,11 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
         ...(body.employeeId ? { employeeId: body.employeeId } : {}),
         holderName: body.holderName, cardType: body.cardType, validUntil: body.validUntil,
       },
-    });
+    }));
 
     // Notify holder if they're an employee
     if (body.employeeId) {
-      await queue.publish("notification.send", {
+      publishes.push(queue.publish("notification.send", {
         messageId: randomUUID(),
         type: "hrms.id_card.issued",
         schemaVersion: "1.0",
@@ -300,8 +355,9 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
           eventType: "hrms.id_card.issued",
           variables: { cardNumber, holderName: body.holderName },
         },
-      });
+      }));
     }
+    await awaitPublishesWithinBudget(req.log, ctx.correlationId, publishes);
 
     return reply.code(201).send({ id, cardNumber, qrPayload, status: "active" });
   });
@@ -558,11 +614,11 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "active id card not found");
     }
 
-    await queue.publish(COMMANDS.idCardSuspend, {
+    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardSuspend, {
       messageId: randomUUID(), type: COMMANDS.idCardSuspend, schemaVersion: "1.0",
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: { id, tenantId: ctx.tenantId, reason: reason ?? "suspended by admin" },
-    });
+    })]);
 
     return reply.send({ id, status: "suspended" });
   });
@@ -584,11 +640,11 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "active or suspended id card not found");
     }
 
-    await queue.publish(COMMANDS.idCardRevoke, {
+    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardRevoke, {
       messageId: randomUUID(), type: COMMANDS.idCardRevoke, schemaVersion: "1.0",
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: { id, tenantId: ctx.tenantId, reason: reason ?? "revoked" },
-    });
+    })]);
 
     return reply.send({ id, status: "revoked" });
   });
@@ -609,11 +665,11 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "suspended id card not found");
     }
 
-    await queue.publish(COMMANDS.idCardReactivate, {
+    await awaitPublishesWithinBudget(req.log, ctx.correlationId, [queue.publish(COMMANDS.idCardReactivate, {
       messageId: randomUUID(), type: COMMANDS.idCardReactivate, schemaVersion: "1.0",
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: { id, tenantId: ctx.tenantId },
-    });
+    })]);
 
     return reply.send({ id, status: "active" });
   });
