@@ -56,10 +56,11 @@ let selectCallIdx = 0;
 
 // group-visit/consumer.ts's groupBulkCheckIn does, in order:
 //   1. .select().from(groupVisits).where(...).limit(1)
-//   2. .select().from(groupMembers).where(...)                    (no .limit)
-//   3. .select().from(digitalPasses).where(...)  [BUG FIX: new]    (no .limit)
-//   4. .select({...}).from(locations).where(...).limit(1)  [BUG FIX: new]
-// Model all four shapes so every await resolves correctly.
+//   2. .select({id}).from(gates).where(...).limit(1)  [F64: gate must exist]
+//   3. .select().from(groupMembers).where(...)                    (no .limit)
+//   4. .select().from(digitalPasses).where(...)  [BUG FIX: new]    (no .limit)
+//   5. .select({...}).from(locations).where(...).limit(1)  [BUG FIX: new]
+// Model all five shapes so every await resolves correctly.
 const fakeTx = {
   select: vi.fn(() => {
     selectCallIdx++;
@@ -67,9 +68,12 @@ const fakeTx = {
       return { from: () => ({ where: () => ({ limit: async () => (groupRow ? [groupRow] : []) }) }) };
     }
     if (selectCallIdx === 2) {
-      return { from: () => ({ where: async () => memberRows }) };
+      return { from: () => ({ where: () => ({ limit: async () => [{ id: "gate-1", locationId: LOCATION_ID }] }) }) };
     }
     if (selectCallIdx === 3) {
+      return { from: () => ({ where: async () => memberRows }) };
+    }
+    if (selectCallIdx === 4) {
       return { from: () => ({ where: async () => passRows }) };
     }
     return { from: () => ({ where: () => ({ limit: async () => (locationRow ? [locationRow] : []) }) }) };

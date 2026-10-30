@@ -745,6 +745,18 @@ describe("Group-visit routes — validation", () => {
     const res = await app.inject({ method: "POST", url: "/v1/visitor/group-visits/bad/bulk-checkin", headers: headers(["receptionist"]), payload: { actualHeadcount: 5 } });
     expect(res.statusCode).toBe(400);
   });
+  // F64 regression: gateId used to be optional, so this answered 202 and the
+  // consumer then failed writing "" into check_ins.gate_id (NOT NULL uuid FK),
+  // silently losing the whole bulk check-in.
+  it("POST /v1/visitor/group-visits/:id/bulk-checkin without gateId → 400 (F64)", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/visitor/group-visits/${FAKE_ID}/bulk-checkin`, headers: headers(["receptionist"]), payload: { actualHeadcount: 5 } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("gateId");
+  });
+  it("POST /v1/visitor/group-visits/:id/bulk-checkin with gateId null → 400 (F64)", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/visitor/group-visits/${FAKE_ID}/bulk-checkin`, headers: headers(["receptionist"]), payload: { actualHeadcount: 5, gateId: null } });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("Group-visit routes — happy paths", () => {
@@ -753,7 +765,7 @@ describe("Group-visit routes — happy paths", () => {
     expect(res.statusCode).toBe(202);
   });
   it("POST /v1/visitor/group-visits/:id/bulk-checkin → 202", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/visitor/group-visits/${FAKE_ID}/bulk-checkin`, headers: headers(["receptionist"]), payload: { actualHeadcount: 10 } });
+    const res = await app.inject({ method: "POST", url: `/v1/visitor/group-visits/${FAKE_ID}/bulk-checkin`, headers: headers(["receptionist"]), payload: { actualHeadcount: 10, gateId: GATE_ID } });
     expect(res.statusCode).toBe(202);
   });
 });

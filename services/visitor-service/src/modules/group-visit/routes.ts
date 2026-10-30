@@ -53,7 +53,7 @@ export async function groupVisitRoutes(app: FastifyInstance): Promise<void> {
     const accepted = await commands.groupBulkCheckIn(ctx, {
       groupVisitId: id,
       actualHeadcount: body.actualHeadcount,
-      ...(body.gateId !== undefined ? { gateId: body.gateId } : {}),
+      gateId: body.gateId,
     });
 
     return reply.code(202).send({ data: accepted });
