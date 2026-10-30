@@ -115,6 +115,11 @@ export const COMMANDS = {
   // same async CQRS shape as every other command in this file (routes must
   // not write to Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
   medicalClaimsListRead: "hrms.medical_claims.list_read",
+  // Medical insurance write path (HR only): route validates, encrypts the card
+  // number / scheme id and publishes; medical/insurance-consumer.ts upserts or
+  // deletes employee.medical_insurance + the audit event in one transaction.
+  medicalInsuranceUpsert: "hrms.medical_insurance.upsert",
+  medicalInsuranceDelete: "hrms.medical_insurance.delete",
   // GAP-LEARNING-MY-LEARNING-01 (DPDP): audit-on-read when HR or a manager reads
   // ANOTHER employee's learning enrolments / counts. Published from the route,
   // recorded to the audit outbox by learning/f3-consumer.ts (routes may not

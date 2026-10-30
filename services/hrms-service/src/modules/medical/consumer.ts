@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { registerMedicalInsuranceConsumers } from "./insurance-consumer.js";
 
 const log = pino({ name: "medical-consumer" });
 const AUDIT = "audit.event.record";
@@ -69,6 +70,9 @@ export function registerMedicalConsumers(queue: Queue): void {
     });
     log.info({ messageId: msg.messageId }, "medical claims list-read audit recorded");
   });
+
+  // Medical insurance write path (real business writes, tenant-scoped).
+  registerMedicalInsuranceConsumers(queue);
 
   log.info("medical consumers registered");
 }

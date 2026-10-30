@@ -454,6 +454,11 @@ const PAGE_GATES = [
   // profile page renders its "Login link" card only for this same tier.
   { area: "employee login-link (hr_admin/super_admin tier)", page: "../../../lib/auth/workRoles.ts", constName: "EMPLOYEE_LOGIN_LINK_ROLES",
     match: (r) => /\/modules\/employee\/routes\.ts$/.test(r.file) && r.method === "PATCH" && r.routePath === "/v1/hrms/employees/:id/login-link" },
+  // Medical insurance writes are the medical module's HR_ROLES tier (HR staff
+  // + finance_officer); the employee profile renders the edit form only for
+  // this same tier (MEDICAL_INSURANCE_EDIT_ROLES).
+  { area: "medical insurance write (HR medical tier)", page: "../../../lib/auth/workRoles.ts", constName: "MEDICAL_INSURANCE_EDIT_ROLES",
+    match: (r) => /\/modules\/medical\/routes\.ts$/.test(r.file) && (r.method === "PUT" || r.method === "DELETE") && r.routePath === "/v1/hrms/medical/insurance/:employeeId" },
   { area: "advances", page: "advances/page.tsx", constName: "ADVANCE_ROLES",
     match: (r) => /employee\/loans-routes\.ts$/.test(r.file) && r.routePath.includes("salary-advances") },
   // GAP-HR-SF09A-010 / GAP-HR-APAR-04 / GAP-HR-APAR-NEW-01: apar/routes.ts's

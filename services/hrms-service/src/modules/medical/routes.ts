@@ -6,7 +6,9 @@
  *  GET    /v1/hrms/medical/claims            — list my claims
  *  PATCH  /v1/hrms/medical/claims/:id/approve — HR approves/rejects
  *  GET    /v1/hrms/medical/hospitals         — empanelled hospital list
- *  GET    /v1/hrms/medical/insurance         — my insurance details (CGHS/state)
+ *  GET    /v1/hrms/medical/insurance         — insurance details (CGHS/state/mediclaim/ESIC)
+ *  PUT    /v1/hrms/medical/insurance/:employeeId — HR upserts (CQRS 202)
+ *  DELETE /v1/hrms/medical/insurance/:employeeId — HR removes (CQRS 202)
  *  GET    /v1/hrms/medical/history           — medical history timeline
  *
  * Schema: employee_id, claim_type (indoor/outdoor/reimbursement/advance), amount (paise),
@@ -24,6 +26,13 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveOwnEmployeeIdIfBareEmployee } from "../../shared/self-scope.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { pino } from "pino";
+import { buildUpsertPayload, toInsuranceView, upsertInsuranceBody, type InsuranceDbRow } from "./insurance.js";
+import * as insuranceCommands from "./insurance-commands.js";
+
+const insuranceLog = pino({ name: "hrms-medical-insurance" });
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -146,11 +155,14 @@ async function auditMedicalClaimsListRead(
  */
 async function auditMedicalEmployeeRead(
   ctx: RequestContext, targetEmployeeId: string, view: "insurance" | "history",
+  ownEmployeeId?: string | null,
 ): Promise<void> {
   const privileged = HR_ROLES.some((r) => ctx.roles.includes(r)) || ctx.roles.includes("manager");
   if (!privileged) return;
-  const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  if (own?.id === targetEmployeeId) return;
+  const ownId = ownEmployeeId !== undefined
+    ? ownEmployeeId
+    : (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id ?? null;
+  if (ownId === targetEmployeeId) return;
   await queue.publish(COMMANDS.medicalClaimsListRead, {
     messageId: randomUUID(),
     type: COMMANDS.medicalClaimsListRead,
@@ -512,7 +524,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       "empanelled hospital directory has not been implemented — no backing table exists yet");
   });
 
-  // My insurance details
+  // Insurance details (one employee's current record)
   app.get("/v1/hrms/medical/insurance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, SELF_ROLES);
@@ -523,20 +535,83 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // mandatory here, but a bare "employee" caller's value is still ignored
     // and replaced by their own linked id — an unresolvable link folds into
     // the same 404 a genuinely-missing record gets (never leaks whether the
-    // record exists for someone else).
+    // record exists for someone else). A manager is limited to self + direct
+    // reports (403 otherwise).
     const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
-    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "insurance");
 
-    const [row] = await sqlClient`
-      SELECT employee_id, scheme_type, scheme_id, card_number, validity_from,
-             validity_to, tier, dependants, annual_limit_minor::text
+    // Masking: full card number / scheme id for HR roles and for the employee
+    // themself; anyone else (a manager viewing a direct report) sees last 4.
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const isBareEmployee = !isHr && !ctx.roles.includes("manager");
+    const ownEmployeeId = isBareEmployee
+      ? effectiveEmployeeId // forced onto their own record above
+      : (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id ?? null;
+    const fullAccess = isHr || ownEmployeeId === effectiveEmployeeId;
+
+    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "insurance", ownEmployeeId);
+
+    // RLS-safe: runs inside the tenant GUC transaction (FORCE RLS on the table).
+    const [row] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT employee_id, scheme_type, scheme_id, card_number, validity_from::text AS validity_from,
+             validity_to::text AS validity_to, tier, dependants, annual_limit_minor::text,
+             version, updated_at
       FROM employee.medical_insurance
       WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${effectiveEmployeeId}
-    `;
+    `);
 
     if (!row) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
-    return reply.send({ data: row });
+    const view = toInsuranceView(row as unknown as InsuranceDbRow, fullAccess, () => {
+      // No value, no ciphertext — just which record needs attention.
+      insuranceLog.warn({ employeeId: effectiveEmployeeId, code: "PII_DECRYPT_FAILED" }, "medical insurance PII could not be decrypted; returned masked");
+    });
+    return reply.send({ data: view });
+  });
+
+  // HR upserts an employee's insurance record (CQRS: 202, written by
+  // insurance-consumer.ts). The card number / scheme id are encrypted here,
+  // before publishing, so plaintext never leaves this handler.
+  app.put("/v1/hrms/medical/insurance/:employeeId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+    const body = upsertInsuranceBody.parse(req.body);
+
+    const [target] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT e.id, mi.id AS insurance_id
+      FROM employee.hrms_employees e
+      LEFT JOIN employee.medical_insurance mi
+        ON mi.tenant_id = e.tenant_id AND mi.employee_id = e.id
+      WHERE e.tenant_id = ${ctx.tenantId} AND e.id = ${employeeId}
+    `);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    const existingId = (target.insurance_id as string | null) ?? null;
+    if (!existingId && !body.cardNumber) {
+      throw new HttpError(400, "CARD_NUMBER_REQUIRED", "cardNumber is required when creating an insurance record");
+    }
+
+    const payload = buildUpsertPayload(existingId ?? randomUUID(), ctx.tenantId, employeeId, body);
+    return sendAccepted(reply, acceptedResponseSchema, await insuranceCommands.upsertMedicalInsurance(ctx, payload));
+  });
+
+  // HR removes an employee's insurance record (CQRS: 202).
+  app.delete("/v1/hrms/medical/insurance/:employeeId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+
+    const [target] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT e.id, mi.id AS insurance_id
+      FROM employee.hrms_employees e
+      LEFT JOIN employee.medical_insurance mi
+        ON mi.tenant_id = e.tenant_id AND mi.employee_id = e.id
+      WHERE e.tenant_id = ${ctx.tenantId} AND e.id = ${employeeId}
+    `);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (!target.insurance_id) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+
+    return sendAccepted(reply, acceptedResponseSchema,
+      await insuranceCommands.deleteMedicalInsurance(ctx, target.insurance_id as string, employeeId));
   });
 
   // Medical history timeline
