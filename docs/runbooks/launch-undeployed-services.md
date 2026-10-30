@@ -23,11 +23,19 @@ passes; the L0 readiness lane lists them in `KNOWN_NOT_SERVING`.
 | ml | 3032 | — |
 | revenue | 3038 | — |
 | inspection | 3037 | — |
-| court | 3034 | `COURT_PII_KEY` |
+| court | 3034 | `COURT_PII_KEY`, `COURT_DSC_TRUST_STORE_PEM` (production; see below) |
 | meeting | 3033 | `MEETING_PII_KEY` |
 | visitor | 3035 | `VISITOR_PII_KEY` |
 
 Fleet-wide, all eight need `INTERNAL_SERVICE_SECRET` and `DEVICE_TRUST_SECRET`.
+
+**court — DSC trust store (UAT F65).** `COURT_DSC_TRUST_STORE_PEM` is the
+concatenated PEM of the trusted CCA/CA roots used to verify the DSC on judicial
+order issuance. In production (any `NODE_ENV` other than `development`/`test`)
+both `court` and `court-worker` **refuse to start** without it. `ecosystem.config.js`
+passes it, and the optional `COURT_DSC_REQUIRE_CHAIN_TRUST=true`, through from the
+launching shell only when set. On UAT/dev, leaving it unset keeps chain trust
+unenforced (self-signed DSCs accepted) with a WARN in the court logs.
 
 ## Why they fail without this procedure
 

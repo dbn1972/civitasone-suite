@@ -18,7 +18,6 @@ import { canonicalOrderContent, verifyOrderDsc } from "../src/modules/order-issu
 import {
   assertDscChainTrustConfigured,
   resolveDscChainTrustPolicy,
-  __resetDscStartupWarningForTests,
 } from "../src/modules/order-issuance/dsc-provider.js";
 import { buildApp } from "../src/app.js";
 
@@ -42,7 +41,6 @@ function spyLogger() {
 }
 
 beforeEach(() => {
-  __resetDscStartupWarningForTests();
   vi.stubEnv("COURT_DSC_TRUST_STORE_PEM", "");
   vi.stubEnv("COURT_DSC_REQUIRE_CHAIN_TRUST", "");
 });
@@ -122,13 +120,19 @@ describe("F65: development (UAT posture) + NO trust store — fail open with WAR
     expect(v.acceptedForIssue).toBe(true);
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(log.warn.mock.calls[0]![0]).toMatchObject({ orderId: order.id, trustStoreConfigured: false, chainTrusted: false });
+    // The signer CN is the judge's name (PII) and must not be logged.
+    expect(JSON.stringify(log.warn.mock.calls[0])).not.toContain(selfSigned.subjectCN);
+    expect(log.warn.mock.calls[0]![0]).not.toHaveProperty("signerCN");
     expect(String(log.warn.mock.calls[0]![1])).toMatch(/NOT enforced/);
   });
 
-  it("startup does not throw and warns exactly once per process", () => {
+  it("startup does not throw and warns exactly once per process", async () => {
+    // Fresh module instance so the once-per-process latch starts clear.
+    vi.resetModules();
+    const fresh = await import("../src/modules/order-issuance/dsc-provider.js");
     const log = spyLogger();
-    expect(assertDscChainTrustConfigured(undefined, log)).toMatchObject({ required: false });
-    assertDscChainTrustConfigured(undefined, log);
+    expect(fresh.assertDscChainTrustConfigured(undefined, log)).toMatchObject({ required: false });
+    fresh.assertDscChainTrustConfigured(undefined, log);
     expect(log.warn).toHaveBeenCalledTimes(1);
   });
 

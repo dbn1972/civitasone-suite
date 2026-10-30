@@ -51,10 +51,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Fail-fast if COURT_PII_KEY is absent/too short so we never boot fail-open
   // (party personal_email / personal_phone are PII-encrypted at rest).
   assertPiiKeyConfigured();
-  // UAT F65: fail fast in production when no DSC trust store is configured
-  // (court orders would otherwise be issued on self-signed DSCs); WARN once
-  // outside production.
-  assertDscChainTrustConfigured();
 
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
@@ -62,6 +58,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
+
+  // UAT F65: fail fast in production when no DSC trust store is configured
+  // (court orders would otherwise be issued on self-signed DSCs); WARN once
+  // outside production. Uses the app logger (its config + redaction).
+  assertDscChainTrustConfigured(undefined, app.log);
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 

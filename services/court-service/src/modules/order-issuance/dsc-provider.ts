@@ -70,8 +70,19 @@ export interface DscPolicyLogger {
   warn(obj: object, msg: string): void;
 }
 
-/** Module logger for DSC policy warnings. */
-export const dscPolicyLog: DscPolicyLogger = pino({ name: "court-dsc" });
+/**
+ * Logger for DSC policy warnings. The API (buildApp → app.log) and the worker
+ * (startWorker → its service logger) inject theirs via
+ * `assertDscChainTrustConfigured(provider, logger)` at startup, so the
+ * service's log config and redaction apply. The standalone pino fallback is only
+ * used by code paths that never ran the startup check (scripts, unit tests).
+ */
+let policyLogger: DscPolicyLogger | null = null;
+
+export function dscPolicyLog(): DscPolicyLogger {
+  policyLogger ??= pino({ name: "court-dsc" });
+  return policyLogger;
+}
 
 export type DscChainTrustReason =
   /** COURT_DSC_REQUIRE_CHAIN_TRUST=true|1 */
@@ -120,8 +131,10 @@ let startupWarned = false;
  */
 export function assertDscChainTrustConfigured(
   provider: DscTrustStoreProvider = defaultDscTrustStoreProvider,
-  logger: DscPolicyLogger = dscPolicyLog,
+  logger?: DscPolicyLogger,
 ): DscChainTrustPolicy {
+  if (logger) policyLogger = logger;
+  logger ??= dscPolicyLog();
   const policy = resolveDscChainTrustPolicy(provider);
   if (policy.required && !policy.trustStoreConfigured) {
     throw new Error(
@@ -141,9 +154,4 @@ export function assertDscChainTrustConfigured(
     );
   }
   return policy;
-}
-
-/** Test-only: reset the once-per-process startup warning latch. */
-export function __resetDscStartupWarningForTests(): void {
-  startupWarned = false;
 }

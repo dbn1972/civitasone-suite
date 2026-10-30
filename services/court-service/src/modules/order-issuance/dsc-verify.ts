@@ -113,10 +113,10 @@ export function verifyOrderDsc(
     (!requireChainTrust || base.chainTrusted);
 
   if (!requireChainTrust) {
-    (opts.logger ?? dscPolicyLog).warn(
+    (opts.logger ?? dscPolicyLog()).warn(
       {
+        // No signer CN/serial: the CN is the signing judge's name (PII).
         orderId: order.id,
-        signerCN: base.signerCN ?? null,
         chainTrusted: base.chainTrusted,
         trustStoreConfigured,
         acceptedForIssue,
