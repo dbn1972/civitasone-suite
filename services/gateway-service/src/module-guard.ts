@@ -123,6 +123,9 @@ const ROUTE_TO_MODULE: Record<string, string> = {
 const PLATFORM_ROUTES = new Set([
   "identity", "policy", "policy-v1", "audit-events", "audit",
   "notification", "notification-v1", "admin", "admin-users", "install", "plugin",
+  // UAT F61: notification-service template approval / locales tree (registry.ts). Same platform
+  // service as "notification" / "notification-v1", so the same never-gated treatment.
+  "notification-templates",
   "theme", "tenant", "tenant-singular", "sync", "devices", "queue", "locations",
   // UAT F30: the rest of tenant-service's surface (registry.ts). Same platform service as
   // "tenant" / "tenant-singular" above, so the same never-gated treatment.
