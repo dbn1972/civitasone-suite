@@ -5,7 +5,7 @@
  *
  * _Requirements: SVC-131, Requirement 7_
  */
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -294,6 +294,15 @@ export function registerAssessmentConsumers(queue: Queue): void {
         reason: string;
         remissionPercent: number;
       };
+
+      // UAT B8-F68 (P1): never write an orphan remission. The route 404s first; this guards a
+      // direct or raced publish (the tx runs in the tenant context, so the read is RLS-scoped).
+      const [target] = await tx
+        .select({ id: assessments.id })
+        .from(assessments)
+        .where(and(eq(assessments.tenantId, msg.tenantId), eq(assessments.id, assessmentId)))
+        .limit(1);
+      if (!target) throw new NonRetryableError("NOT_FOUND", `assessment ${assessmentId} not found`);
 
       // Insert remission in pending status
       await tx.insert(remissions).values({

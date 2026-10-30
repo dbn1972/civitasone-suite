@@ -168,6 +168,11 @@ describe("PATCH /v1/revenue/assessments/:id/revise", () => {
 describe("POST /v1/revenue/assessments/:id/remit", () => {
   const VALID_BODY = { reason: "Flood damage relief", remissionPercent: 50 };
 
+  beforeEach(() => {
+    // the route 404s an unknown assessment before publishing (UAT B8-F68)
+    vi.spyOn(assessmentRepo, "assessmentExists").mockResolvedValue(true);
+  });
+
   it("returns 202 with valid body", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/revenue/assessments/${ASSESSMENT_ID}/remit`, headers: AUTH, payload: VALID_BODY });
     expect(res.statusCode).toBe(202);
@@ -197,6 +202,7 @@ describe("PATCH /v1/revenue/assessments/:id/remit-decide", () => {
 
   beforeEach(() => {
     // the route pre-checks for a pending remission by a DIFFERENT maker (409 otherwise)
+    vi.spyOn(assessmentRepo, "assessmentExists").mockResolvedValue(true);
     vi.spyOn(assessmentRepo, "findPendingRemission").mockResolvedValue({ id: "rem-1", makerUserId: "someone-else" } as never);
   });
 
