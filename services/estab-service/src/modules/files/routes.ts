@@ -54,6 +54,14 @@ async function assertFileWritable(tenantId: string, fileId: string): Promise<voi
   }
 }
 
+/**
+ * UAT W8-A: tenant-scoped existence read before a file command is published, so an unknown
+ * file answers 404 instead of a 202 for a command the consumer silently drops.
+ */
+async function assertFileExists(tenantId: string, fileId: string): Promise<void> {
+  if (!(await queries.fileExists(tenantId, fileId))) throw new HttpError(404, "NOT_FOUND", "file not found");
+}
+
 /** 404 when the DAK entry does not exist, 409 when it is already linked to a file. */
 async function assertInwardAvailable(tenantId: string, inwardId: string): Promise<void> {
   const state = await queries.inwardLinkState(tenantId, inwardId);
@@ -123,6 +131,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = openVolumeBody.parse(req.body ?? {});
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.openVolume(ctx, id, body));
   });
 
@@ -131,6 +140,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = openPartFileBody.parse(req.body ?? {});
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.openPartFile(ctx, id, body));
   });
 
@@ -139,6 +149,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = linkFileBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
+    // UAT W8-A: the file being linked to must exist in this tenant too.
+    if (!(await queries.fileExists(ctx.tenantId, body.targetFileId))) {
+      throw new HttpError(404, "TARGET_FILE_NOT_FOUND", "the file to link does not exist");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.linkFile(ctx, id, body));
   });
 
@@ -147,6 +162,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = setFileTypeBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.setFileType(ctx, id, body));
   });
 
@@ -166,6 +182,10 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const { notingId } = z.object({ notingId: z.string().uuid() }).parse(req.params);
+    await assertFileExists(ctx.tenantId, id);
+    // UAT W8-A: the noting must exist in this tenant and belong to this file.
+    const noting = await queries.getNoting(ctx.tenantId, notingId);
+    if (!noting || noting.fileId !== id) throw new HttpError(404, "NOT_FOUND", "noting not found on this file");
     await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.signNoting(ctx, id, notingId));
   });
@@ -195,6 +215,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeFileBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeFile(ctx, id, body));
   });
 
@@ -204,6 +225,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recallFileBody.parse(req.body ?? {});
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recallFile(ctx, id, body));
   });
 
@@ -213,6 +235,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reopenFileBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.reopenFile(ctx, id, body));
   });
 
@@ -222,6 +245,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = attachInwardBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
+    // UAT W8-A: the DAK entry being attached must exist in this tenant.
+    if ((await queries.inwardLinkState(ctx.tenantId, body.inwardId)) === "missing") {
+      throw new HttpError(404, "INWARD_NOT_FOUND", "the DAK entry does not exist");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.attachInward(ctx, body, id));
   });
 
@@ -475,6 +503,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = addAttachmentBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addAttachment(ctx, id, body));
   });
 

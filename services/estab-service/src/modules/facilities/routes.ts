@@ -14,6 +14,12 @@ import {
   libraryBooksQuery, libraryIssuesQuery, renewIssueBody, returnIssueBody, editBookBody, withdrawBookBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
+import { findRoomBookingById } from "./repo.js";
+
+/** UAT W8-A: tenant-scoped existence read; an unknown room booking answers 404, not 202. */
+async function assertRoomBookingExists(tenantId: string, id: string): Promise<void> {
+  if (!(await findRoomBookingById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "room booking not found");
+}
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -37,6 +43,7 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertRoomBookingExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.checkin(ctx, id));
   });
 
@@ -45,6 +52,7 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = checkoutBody.parse(req.body);
+    await assertRoomBookingExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.checkout(ctx, id, body));
   });
 

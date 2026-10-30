@@ -1,7 +1,7 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { withRawTenantGuc } from "@civitasone/db";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -133,7 +133,8 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/files/:id/decision-log", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    // UAT W8-A: a malformed :id reached the uuid column and 500ed (22P02); it is a 400 now.
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     // files.module_decision_log is also RLS ENABLEd AND FORCEd — same gap as
     // above, see withRawTenantGuc.

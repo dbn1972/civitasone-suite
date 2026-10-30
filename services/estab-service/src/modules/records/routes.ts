@@ -12,6 +12,18 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { findFileById } from "../files/repo.js";
+
+/**
+ * UAT W8-A: tenant-scoped existence reads before a records command is published, so an
+ * unknown weed-out proposal or file answers 404 instead of a 202 the consumer drops.
+ */
+async function assertWeedoutExists(tenantId: string, id: string): Promise<void> {
+  if (!(await repo.findWeedoutById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "weed-out proposal not found");
+}
+async function assertFileExists(tenantId: string, fileId: string): Promise<void> {
+  if (!(await findFileById(fileId, tenantId))) throw new HttpError(404, "NOT_FOUND", "file not found");
+}
 
 const WRITE_ROLES = ["estab_admin", "super_admin", "records_officer"];
 const READ_ROLES  = [...WRITE_ROLES, "audit_officer"];
@@ -57,6 +69,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertWeedoutExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveWeedout(ctx, id));
   });
 
@@ -65,6 +78,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectWeedoutBody.parse(req.body);
+    await assertWeedoutExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectWeedout(ctx, id, body));
   });
 
@@ -73,6 +87,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = destroyWeedoutBody.parse(req.body);
+    await assertWeedoutExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.destroyWeedout(ctx, id, body));
   });
 
@@ -91,6 +106,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = transferToRecordRoomBody.parse(req.body ?? {});
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.transferToRecordRoom(ctx, id, body));
   });
 
@@ -123,6 +139,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = archiveFileBody.parse(req.body ?? {});
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.archiveFile(ctx, id, body));
   });
 

@@ -219,6 +219,11 @@ export async function inwardLinkState(
   return row.fileId ? "linked" : "available";
 }
 
+/** One noting by id (tenant-scoped, straight from the table), or null. UAT W8-A: sign pre-check. */
+export async function getNoting(tenantId: string, notingId: string) {
+  return repo.findNotingById(notingId, tenantId);
+}
+
 /** True when a file with this id exists in the tenant (used to validate a parent file id). */
 export async function fileExists(tenantId: string, fileId: string): Promise<boolean> {
   return (await repo.findFileById(fileId, tenantId)) !== null;

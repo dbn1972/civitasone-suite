@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { idParam, createVehicleBody, bookVehicleBody, returnVehicleBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { findBookingForTenant } from "./repo.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -31,6 +32,8 @@ export async function assetsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = returnVehicleBody.parse(req.body);
+    // UAT W8-A: tenant-scoped existence read; an unknown booking answers 404, not 202.
+    if (!(await findBookingForTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "vehicle booking not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.returnVehicle(ctx, id, body));
   });
 
