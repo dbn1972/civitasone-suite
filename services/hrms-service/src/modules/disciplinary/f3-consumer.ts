@@ -1,6 +1,6 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -8,8 +8,43 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsIccComplaints, hrmsIccHearings } from "./schema.js";
-import { hrmsSuspensions, type DisciplinaryCaseInsert } from "./schema.js";
+import { hrmsDisciplinaryCases, hrmsSuspensions, type DisciplinaryCaseInsert } from "./schema.js";
 const log = pino({ name: "hrms-f3-disciplinary" });
+
+const CASE_COLUMNS = getTableColumns(hrmsDisciplinaryCases) as Record<string, { columnType: string }>;
+
+/**
+ * Revive a case-transition `patch` that crossed the bus.
+ *
+ * The route's `transition()` builds `patch` in-process, so `close` / `drop`
+ * put a real `Date` in `closedAt`. On the SQS driver the envelope is
+ * JSON-serialised, so the consumer receives an ISO string instead, and
+ * Drizzle's `PgTimestamp.mapToDriverValue` calls `value.toISOString()` on it.
+ * The resulting TypeError retried every close/drop into the DLQ while the
+ * route had already answered 200. (MemoryQueue hands the payload over by
+ * reference, which is why the in-memory tests never saw it.)
+ *
+ * Every case transition funnels through `disciplinary_routes__0`, so this is
+ * done once here, keyed off the case table's own column types: any Date-mode
+ * timestamp column given a string/number becomes a Date. `date` columns are
+ * string-mode in Drizzle and pass through untouched. An unparseable value can
+ * never succeed on retry, so it is dead-lettered immediately.
+ */
+export function reviveCasePatch(patch: Record<string, unknown>): Partial<DisciplinaryCaseInsert> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (CASE_COLUMNS[key]?.columnType === "PgTimestamp" && value != null && !(value instanceof Date)) {
+      const d = new Date(value as string | number);
+      if (Number.isNaN(d.getTime())) {
+        throw new NonRetryableError(`INVALID_TIMESTAMP: disciplinary case patch field '${key}' is not a valid timestamp`);
+      }
+      out[key] = d;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as Partial<DisciplinaryCaseInsert>;
+}
 
 /**
  * F3 leftover write consumer for the disciplinary / vigilance module.
@@ -187,7 +222,8 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
             const to = String(p.to ?? "");
             const action = String(p.action ?? "");
             const notes = (p.notes ?? null) as string | null;
-            const patch = (p.patch ?? {}) as Partial<DisciplinaryCaseInsert>;
+            // JSON on the wire: revive timestamp columns (closedAt on close/drop).
+            const patch = reviveCasePatch((p.patch ?? {}) as Record<string, unknown>);
             const c = await repo.findCaseTx(tx, p.tenantId, caseId);
             if (!c) throw new HttpError(404, "NOT_FOUND", "disciplinary case not found");
             await repo.updateCase(tx, c.tenantId, c.id, { ...patch, status: to, updatedBy: actorId }, c.version);
