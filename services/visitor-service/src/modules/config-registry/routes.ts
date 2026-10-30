@@ -10,9 +10,8 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  configIdParam, namespaceParam, setConfigBody, deactivateConfigBody, applyPresetBody,
+  configIdParam, namespaceParam, configEntryQuery, setConfigBody, deactivateConfigBody, applyPresetBody,
 } from "./validators.js";
-import { assertValidNamespace, assertValidKey } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import * as presets from "./presets.js";
@@ -52,7 +51,6 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_READ_ROLES);
     const { namespace } = namespaceParam.parse(req.params);
-    assertValidNamespace(namespace);
     const activeOnly = (req.query as { active?: string }).active === "true";
     const items = await repo.listByNamespace(ctx.tenantId, namespace, activeOnly);
     return reply.send({ items, count: items.length, source: "db" });
@@ -63,12 +61,9 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
   app.get("/v1/visitor/config-entry", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_READ_ROLES);
-    const q = req.query as { namespace?: string; key?: string };
-    const namespace = namespaceParam.parse({ namespace: q.namespace }).namespace;
-    assertValidNamespace(namespace);
-    assertValidKey(q.key ?? "");
-    const item = await repo.getConfig(ctx.tenantId, namespace, q.key ?? "");
-    if (!item) throw new HttpError(404, "CONFIG_NOT_FOUND", `no config ${namespace}/${q.key}`);
+    const { namespace, key } = configEntryQuery.parse(req.query);
+    const item = await repo.getConfig(ctx.tenantId, namespace, key);
+    if (!item) throw new HttpError(404, "CONFIG_NOT_FOUND", `no config ${namespace}/${key}`);
     return reply.send({ item, source: "db" });
   });
 

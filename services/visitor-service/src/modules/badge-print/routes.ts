@@ -45,6 +45,7 @@ import {
 } from "./commands.js";
 import {
   getTemplateById,
+  getPrintJobById,
   listTemplates,
   getNextJobForDevice,
   listPrintJobs,
@@ -137,6 +138,8 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ROLES);
     const { templateId } = templateIdParams.parse(req.params);
     const body = updateTemplateBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getTemplateById(ctx.tenantId, templateId))) throw new HttpError(404, "TEMPLATE_NOT_FOUND", "badge template not found");
 
     const accepted = await publishBadgeTemplateUpdate(ctx, {
       templateId,
@@ -157,6 +160,9 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { templateId } = templateIdParams.parse(req.params);
+
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getTemplateById(ctx.tenantId, templateId))) throw new HttpError(404, "TEMPLATE_NOT_FOUND", "badge template not found");
 
     // UAT FQ9 #32: an explicit archive op (a field-less "update" used to clone the row instead).
     const accepted = await publishBadgeTemplateUpdate(ctx, {
@@ -298,6 +304,8 @@ export default async function badgePrintRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { jobId } = jobIdParams.parse(req.params);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getPrintJobById(ctx.tenantId, jobId))) throw new HttpError(404, "JOB_NOT_FOUND", "print job not found");
 
     const accepted = await publishPrintJobRequeue(ctx, {
       jobId,

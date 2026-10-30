@@ -80,6 +80,8 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     requireRole(ctx, TRANSITION_ROLES);
     const { id } = idParam.parse(req.params);
     const body = transitionSchema.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findInspectionById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "inspection not found");
     const result = await publishInspectionTransition(
       { inspectionId: id, targetState: body.targetState, remarks: body.remarks },
       ctx,
@@ -93,6 +95,8 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     requireRole(ctx, TRANSITION_ROLES);
     const { id } = idParam.parse(req.params);
     const body = submitReviewSchema.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findInspectionById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "inspection not found");
     const result = await publishInspectionSubmitReview(
       { inspectionId: id, reviewerId: body.reviewerId },
       ctx,
@@ -105,6 +109,8 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINALIZE_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findInspectionById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "inspection not found");
     const result = await publishInspectionFinalize(
       { inspectionId: id },
       ctx,

@@ -40,6 +40,8 @@ export async function limitationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateLimitationBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await queries.getLimitation(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "limitation rule not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateLimitation(ctx, id, body));
   });
 
