@@ -17,6 +17,15 @@
  *   User creation/deactivation in identity-service MUST NOT fail because
  *   Keycloak is unconfigured or unreachable — provisioning is best-effort and
  *   its failures are logged + captured, never propagated to the caller.
+ *
+ *   ADMIN ENDPOINT (FQ17): KEYCLOAK_ADMIN_URL (optional) is the base URL used
+ *   for EVERY call this client makes -- the admin token endpoint
+ *   (/realms/<adminRealm>/protocol/openid-connect/token) and the Admin REST
+ *   API (/admin/realms/...). Set it to an internal/private Keycloak URL when
+ *   KEYCLOAK_URL is the PUBLIC URL: packages/auth uses KEYCLOAK_URL for the
+ *   JWKS URI and the JWT issuer check, so it must stay public, while the
+ *   public reverse proxy does not expose /auth/admin/*. When KEYCLOAK_ADMIN_URL
+ *   is unset (or empty) it falls back to KEYCLOAK_URL (previous behaviour).
  */
 import { captureError } from "@civitasone/observability";
 
@@ -26,6 +35,7 @@ import { captureError } from "@civitasone/observability";
 export type KcResult = { ok: boolean; skipped?: boolean; reason?: string; kcUserId?: string; tenantVerified?: boolean };
 
 type KcConfig = {
+  /** Base URL for admin token + Admin REST API calls (KEYCLOAK_ADMIN_URL, else KEYCLOAK_URL). */
   url: string;
   realm: string;
   adminRealm: string;
@@ -35,7 +45,9 @@ type KcConfig = {
 };
 
 function readConfig(): KcConfig | null {
-  const url = process.env.KEYCLOAK_URL;
+  // FQ17: admin token + Admin REST API go to KEYCLOAK_ADMIN_URL when set;
+  // KEYCLOAK_URL (public, also used by packages/auth) is only the fallback.
+  const url = process.env.KEYCLOAK_ADMIN_URL || process.env.KEYCLOAK_URL;
   const realm = process.env.KEYCLOAK_REALM ?? "civitasone";
   const adminUser = process.env.KEYCLOAK_ADMIN_USER ?? process.env.KEYCLOAK_ADMIN;
   const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD;
