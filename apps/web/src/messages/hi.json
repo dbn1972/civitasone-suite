@@ -5192,6 +5192,7 @@
     "fieldDependants": "शामिल आश्रित",
     "noDependants": "कोई नहीं",
     "dependantRow": "{name} ({relation})",
+    "dependantUnreadable": "{relation} (विवरण पढ़ा नहीं जा सका)",
     "schemeType": {
       "cghs": "सीजीएचएस",
       "state_scheme": "राज्य स्वास्थ्य योजना",
@@ -5213,7 +5214,7 @@
     "cancelButton": "रद्द करें",
     "deleteButton": "रिकॉर्ड हटाएँ",
     "confirmDelete": "क्या इस कर्मचारी का चिकित्सा बीमा रिकॉर्ड हटाना है?",
-    "keepCurrentPlaceholder": "{current} बनाए रखने के लिए खाली छोड़ें",
+    "keepCurrentPlaceholder": "वर्तमान मान बनाए रखने के लिए खाली छोड़ें",
     "clearSchemeId": "योजना / लाभार्थी आईडी हटाएँ",
     "dependantName": "आश्रित {n} का नाम",
     "dependantRelation": "आश्रित {n} का संबंध",

@@ -8,12 +8,13 @@ export type InsuranceSchemeType = (typeof INSURANCE_SCHEME_TYPES)[number];
 export const INSURANCE_DEPENDANT_RELATIONS = ["spouse", "child", "parent", "other"] as const;
 export type InsuranceDependantRelation = (typeof INSURANCE_DEPENDANT_RELATIONS)[number];
 
-export type InsuranceDependant = { name?: string; relation?: string; dateOfBirth?: string };
+/** name / dateOfBirth are absent for callers who see relations only; null + decryptFailed when unreadable. */
+export type InsuranceDependant = { name?: string | null; relation?: string; dateOfBirth?: string | null; decryptFailed?: boolean };
 
 /**
  * GET /v1/hrms/medical/insurance, camelCased. cardNumber / schemeId arrive
- * already masked server-side for callers who may not see them in full
- * (cardNumberMasked); the UI never unmasks anything.
+ * masked server-side for everyone but the employee themself
+ * (cardNumberMasked); the only way to a clear value is the audited reveal.
  */
 export type MedicalInsurance = {
   employeeId: string;
@@ -43,7 +44,14 @@ export function mapInsuranceResponse(p: unknown): MedicalInsurance | null {
   const d = (p as { data?: Record<string, unknown> } | null)?.data;
   if (!d || typeof d !== "object" || typeof d.employee_id !== "string") return null;
   const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
-  const deps = Array.isArray(d.dependants) ? (d.dependants as InsuranceDependant[]) : [];
+  const deps: InsuranceDependant[] = Array.isArray(d.dependants)
+    ? (d.dependants as Array<Record<string, unknown>>).map((x) => ({
+        relation: typeof x.relation === "string" ? x.relation : undefined,
+        ...("name" in x ? { name: typeof x.name === "string" ? x.name : null } : {}),
+        ...("dateOfBirth" in x ? { dateOfBirth: typeof x.dateOfBirth === "string" ? x.dateOfBirth : null } : {}),
+        ...(x.decrypt_failed === true ? { decryptFailed: true } : {}),
+      }))
+    : [];
   return {
     employeeId: d.employee_id,
     schemeType: String(d.scheme_type ?? ""),

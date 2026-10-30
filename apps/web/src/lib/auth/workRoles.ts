@@ -79,19 +79,20 @@ export const EMPLOYEE_LOGIN_LINK_ROLES = [...HR_ADMIN_TIER_ROLES];
 export const EMPLOYEE_PHONE_REVEAL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 /**
- * Medical insurance (hrms-service medical/routes.ts): who may add / edit /
- * remove an employee's insurance record (PUT/DELETE
- * /v1/hrms/medical/insurance/:employeeId) -- mirrors that module's own
- * HR_ROLES exactly, which add finance_officer to the HR-staff tier. Those
- * roles also see the card number in full.
+ * Medical insurance (hrms-service medical/routes.ts). Mirrors that file's
+ * insurance-specific tiers exactly -- deliberately narrower than the medical
+ * module's claim-decision HR_ROLES (no finance_officer):
+ *  - EDIT: add / edit / remove the record (INSURANCE_WRITE_ROLES) -- the
+ *    employee-master PII write tier (HR staff), and the roles that see
+ *    dependant names;
+ *  - REVEAL: audited reveal of the clear card number / scheme id
+ *    (INSURANCE_REVEAL_ROLES) -- the SF-05a PAN / bank reveal tier;
+ *  - READ: who may open another employee's insurance card (backend
+ *    SELF_ROLES minus employee): values are masked for all of them.
  */
-export const MEDICAL_INSURANCE_EDIT_ROLES = [...HR_STAFF_ROLES, "finance_officer"];
-/**
- * Who may READ another employee's insurance card on their profile: the edit
- * tier plus manager (backend: self + direct reports only, card number masked
- * to the last 4).
- */
-export const MEDICAL_INSURANCE_READ_ROLES = [...MEDICAL_INSURANCE_EDIT_ROLES, "manager"];
+export const MEDICAL_INSURANCE_EDIT_ROLES = [...HR_STAFF_ROLES];
+export const MEDICAL_INSURANCE_REVEAL_ROLES = [...HR_ADMIN_TIER_ROLES];
+export const MEDICAL_INSURANCE_READ_ROLES = [...HR_STAFF_ROLES, "finance_officer", "manager"];
 
 export const PROPOSAL_WRITE_ROLES = [
   "works_admin",

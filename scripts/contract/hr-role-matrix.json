@@ -20,7 +20,7 @@
   ],
   "counts": {
     "DRIFT": 12,
-    "MATCH": 870,
+    "MATCH": 871,
     "NO_ROLE_CHECK": 19,
     "OUT_OF_SCOPE": 23,
     "DYNAMIC": 9
@@ -16228,7 +16228,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/medical/claims",
-      "line": 274,
+      "line": 294,
       "roleExprs": [
         "SELF_ROLES"
       ],
@@ -16271,7 +16271,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/medical/claims",
-      "line": 327,
+      "line": 347,
       "roleExprs": [
         "SELF_ROLES"
       ],
@@ -16314,7 +16314,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/medical/claims/:id/approve",
-      "line": 409,
+      "line": 429,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -16355,7 +16355,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/medical/hospitals",
-      "line": 514,
+      "line": 534,
       "roleExprs": [
         "SELF_ROLES"
       ],
@@ -16398,7 +16398,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/medical/insurance",
-      "line": 528,
+      "line": 548,
       "roleExprs": [
         "SELF_ROLES"
       ],
@@ -16441,22 +16441,20 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "PUT",
       "routePath": "/v1/hrms/medical/insurance/:employeeId",
-      "line": 574,
+      "line": 599,
       "roleExprs": [
-        "HR_ROLES"
+        "INSURANCE_WRITE_ROLES"
       ],
       "permKeys": [],
       "roles": [
-        "finance_officer",
         "hr_admin",
         "hr_officer",
         "super_admin"
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:medical insurance write (HR medical tier) (MEDICAL_INSURANCE_EDIT_ROLES)",
+      "comparator": "page:medical insurance write (HR staff tier) (MEDICAL_INSURANCE_EDIT_ROLES)",
       "comparatorRoles": [
-        "finance_officer",
         "hr_admin",
         "hr_officer",
         "super_admin"
@@ -16468,24 +16466,47 @@
     {
       "service": "hrms-service",
       "file": "services/hrms-service/src/modules/medical/routes.ts",
-      "method": "DELETE",
-      "routePath": "/v1/hrms/medical/insurance/:employeeId",
-      "line": 598,
+      "method": "POST",
+      "routePath": "/v1/hrms/medical/insurance/:employeeId/reveal",
+      "line": 636,
       "roleExprs": [
-        "HR_ROLES"
+        "INSURANCE_REVEAL_ROLES"
       ],
       "permKeys": [],
       "roles": [
-        "finance_officer",
+        "hr_admin",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "page:medical insurance reveal (PII reveal tier) (MEDICAL_INSURANCE_REVEAL_ROLES)",
+      "comparatorRoles": [
+        "hr_admin",
+        "super_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/medical/routes.ts",
+      "method": "DELETE",
+      "routePath": "/v1/hrms/medical/insurance/:employeeId",
+      "line": 675,
+      "roleExprs": [
+        "INSURANCE_WRITE_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
         "hr_admin",
         "hr_officer",
         "super_admin"
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:medical insurance write (HR medical tier) (MEDICAL_INSURANCE_EDIT_ROLES)",
+      "comparator": "page:medical insurance write (HR staff tier) (MEDICAL_INSURANCE_EDIT_ROLES)",
       "comparatorRoles": [
-        "finance_officer",
         "hr_admin",
         "hr_officer",
         "super_admin"
@@ -16499,7 +16520,7 @@
       "file": "services/hrms-service/src/modules/medical/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/medical/history",
-      "line": 618,
+      "line": 695,
       "roleExprs": [
         "SELF_ROLES"
       ],

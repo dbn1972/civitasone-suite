@@ -19,7 +19,8 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { medicalInsurance } from "./schema.js";
-import type { InsuranceUpsertPayload } from "./insurance.js";
+import { MEDICAL_INSURANCE_REVEAL_OP, type InsuranceUpsertPayload } from "./insurance.js";
+import { emitAudit } from "../recruitment/audit-emit.js";
 
 const log = pino({ name: "hrms-medical-insurance-consumer" });
 const AUDIT = "audit.event.record";
@@ -108,6 +109,29 @@ export function registerMedicalInsuranceConsumers(rawQueue: Queue): void {
         },
       });
     });
+  });
+
+  // Audit for the HR reveal of a card number / scheme id. The route published
+  // this BEFORE returning the value (fail closed); markProcessed + the audit
+  // outbox row are one transaction, so a redelivery never double-audits.
+  // NEVER put the revealed value in the payload.
+  queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
+    const p = msg.payload as { op?: unknown; tenantId?: unknown; params?: { employeeId?: unknown }; body?: { field?: unknown; reason?: unknown } };
+    if (String(p.op ?? "") !== MEDICAL_INSURANCE_REVEAL_OP) return;
+    const employeeId = String(p.params?.employeeId ?? "");
+    const auditCtx = { tenantId: String(p.tenantId), actorId: msg.actorId, correlationId: msg.correlationId };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await emitAudit(tx, auditCtx, "medical_insurance_pii_revealed", "medical_insurance", employeeId, {
+          field: p.body?.field, reason: p.body?.reason, subject: employeeId,
+        });
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, tenantId: auditCtx.tenantId, actorId: msg.actorId, employeeId, alert: "pii_reveal_audit_failed" },
+        "medical insurance reveal audit write failed: the reveal was served but is NOT yet on the audit trail; investigate / replay");
+      throw err;
+    }
   });
 
   queue.subscribe(COMMANDS.medicalInsuranceDelete, async (msg) => {

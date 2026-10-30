@@ -79,10 +79,14 @@ describe("MedicalInsuranceForm (HR)", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("edits: never pre-fills the card number; a blank card number / scheme id is omitted (kept), 'remove scheme id' sends null", async () => {
+  it("edits: never pre-fills or hints the card number; a blank card number / scheme id is omitted (kept), 'remove scheme id' sends null", async () => {
     renderForm(EXISTING);
     expect(field(m.fieldCardNumber)).toHaveValue("");
-    expect(field(m.fieldCardNumber)).toHaveAttribute("placeholder", "Leave blank to keep CGHS-TEST-77881234");
+    // Never prefilled, and the placeholder never embeds the stored value (not even masked).
+    expect(field(m.fieldCardNumber)).toHaveAttribute("placeholder", m.keepCurrentPlaceholder);
+    expect(field(m.fieldSchemeId)).toHaveValue("");
+    expect(document.body.innerHTML).not.toContain("77881234");
+    expect(document.body.innerHTML).not.toContain("445566");
     expect(field(m.fieldValidityFrom)).toHaveValue("2026-04-01");
     expect(field(m.fieldAnnualLimitRupees)).toHaveValue("500000.00");
     fireEvent.click(screen.getByLabelText(m.clearSchemeId));

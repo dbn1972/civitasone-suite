@@ -35,11 +35,25 @@ const insuranceCalls = () => fetchJsonMock.mock.calls.filter(([u]) => String(u).
 describe("EmployeeDetailPage medical insurance card", () => {
   beforeEach(() => { fetchJsonMock.mockReset(); getEmployeeByIdMock.mockReset(); });
 
-  it.each([["hr_admin"], ["hr_officer"], ["super_admin"], ["finance_officer"]])("%s sees the card and the edit control", async (role) => {
+  it.each([["hr_admin"], ["super_admin"]])("%s sees the masked card with the audited Reveal action, and the edit control", async (role) => {
     await renderPage([role]);
     expect(screen.getByText(m.title)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reveal" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: m.editButton })).toBeInTheDocument();
     expect(insuranceCalls()[0]![0]).toBe(`/api/v1/hrms/medical/insurance?employeeId=${EMP_ID}`);
+  });
+
+  it("hr_officer may edit but has no Reveal (reveal is the PAN / bank tier: hr_admin, super_admin)", async () => {
+    await renderPage(["hr_officer"]);
+    expect(screen.getByRole("button", { name: m.editButton })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+
+  it("finance_officer sees the masked card read-only: no edit control, no Reveal", async () => {
+    await renderPage(["finance_officer"]);
+    expect(screen.getByTestId("insurance-card-number")).toHaveTextContent("**************1234");
+    expect(screen.queryByRole("button", { name: m.editButton })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
   it("HR with no record on file gets 'add' instead of 'edit'", async () => {
@@ -52,6 +66,7 @@ describe("EmployeeDetailPage medical insurance card", () => {
     await renderPage(["manager"]);
     expect(screen.getByTestId("insurance-card-number")).toHaveTextContent("**************1234");
     expect(screen.queryByRole("button", { name: m.editButton })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
   it("roles the backend would refuse never fetch it and see no card", async () => {

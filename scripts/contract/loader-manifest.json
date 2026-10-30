@@ -807,10 +807,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/medical"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/office-locations"
     },
     {

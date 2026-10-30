@@ -2,19 +2,25 @@
  * Medical insurance — validation, PII handling and the read view.
  *
  * Kept free of Fastify / DB imports so the masking + decrypt-failure rules
- * are unit-testable on their own (see insurance.test.ts); routes.ts and
- * insurance-consumer.ts use these.
+ * are unit-testable on their own; routes.ts and insurance-consumer.ts use these.
  *
- * PII rules (card_number, scheme_id):
- *   - encrypted with the hrms envelope (shared/pii-crypto.ts) in the ROUTE,
+ * PII rules (owner decision on PR #2397):
+ *   - card_number, scheme_id and every dependant's name / date of birth are
+ *     encrypted with the hrms envelope (shared/pii-crypto.ts) in the ROUTE,
  *     before the command is published: plaintext never reaches the queue,
- *     the outbox, the table, the audit payload or a log line;
- *   - the read decrypts per row. Full value for HR roles and for the
- *     employee themself; everyone else (a manager viewing a direct report)
- *     gets maskValue()'s last-4 form;
+ *     the outbox, the table, the audit payload or a log line. A dependant's
+ *     relation stays plaintext.
+ *   - GET returns card_number / scheme_id in full ONLY to the employee
+ *     themself (owner-approved); everyone else, HR included, gets them
+ *     masked to the last 4. HR's clear value is the audited SF-05a-style
+ *     POST /v1/hrms/medical/insurance/:employeeId/reveal (hr_admin /
+ *     super_admin, the PAN / bank reveal tier).
+ *   - dependants: the HR write tier (hr_admin / hr_officer / super_admin)
+ *     and the employee themself see decrypted names / dates of birth; anyone
+ *     else (manager, finance_officer) sees the relation only.
  *   - a value that cannot be decrypted (tampered row, key-ring gap) never
  *     fails the request: it comes back as null with `decrypt_failed: true`
- *     and `card_number_masked: true`.
+ *     (per dependant as well as on the record).
  */
 import { z } from "zod";
 import { decryptPii, encryptPii } from "../../shared/pii-crypto.js";
@@ -43,6 +49,13 @@ const dependantSchema = z.object({
 }).strict();
 
 export type InsuranceDependant = z.infer<typeof dependantSchema>;
+
+/** A dependant as stored / carried on the command: name and dateOfBirth are ciphertext envelopes. */
+export interface StoredDependant {
+  relation: (typeof DEPENDANT_RELATIONS)[number];
+  name: string;
+  dateOfBirth?: string;
+}
 
 /**
  * PUT /v1/hrms/medical/insurance/:employeeId body.
@@ -78,7 +91,8 @@ export interface InsuranceUpsertPayload {
   validityFrom: string;
   validityTo: string | null;
   tier: string | null;
-  dependants: InsuranceDependant[];
+  /** Names / dates of birth already encrypted. */
+  dependants: StoredDependant[];
   /** Paise as a decimal string (bigint-safe on the wire), or null. */
   annualLimitMinor: string | null;
 }
@@ -96,7 +110,11 @@ export function buildUpsertPayload(
     validityFrom: body.validityFrom,
     validityTo: body.validityTo ?? null,
     tier: body.tier ?? null,
-    dependants: body.dependants,
+    dependants: body.dependants.map((d) => ({
+      relation: d.relation,
+      name: encryptPii(d.name),
+      ...(d.dateOfBirth ? { dateOfBirth: encryptPii(d.dateOfBirth) } : {}),
+    })),
     annualLimitMinor: body.annualLimitMinor == null ? null : String(body.annualLimitMinor),
   };
 }
@@ -116,19 +134,28 @@ export interface InsuranceDbRow {
   updated_at?: string | Date | null;
 }
 
+/** A dependant in the GET response. name / dateOfBirth only for full-access callers. */
+export interface DependantView {
+  relation: string;
+  name?: string | null;
+  dateOfBirth?: string | null;
+  decrypt_failed?: boolean;
+}
+
 export interface InsuranceView {
   employee_id: string;
   scheme_type: string;
+  /** Masked (last 4) unless the caller is the employee themself. */
   scheme_id: string | null;
+  /** Masked (last 4) unless the caller is the employee themself; HR uses the audited reveal. */
   card_number: string | null;
-  /** true when card_number / scheme_id are shown masked (or withheld). */
   card_number_masked: boolean;
-  /** true when the stored ciphertext could not be decrypted. */
+  /** true when any stored ciphertext on this record could not be decrypted. */
   decrypt_failed: boolean;
   validity_from: string | null;
   validity_to: string | null;
   tier: string | null;
-  dependants: Array<Partial<InsuranceDependant>>;
+  dependants: DependantView[];
   dependants_count: number;
   annual_limit_minor: string | null;
   version: number | null;
@@ -137,7 +164,7 @@ export interface InsuranceView {
 
 type DecryptResult = { ok: true; value: string | null } | { ok: false };
 
-function tryDecrypt(stored: string | null): DecryptResult {
+export function tryDecrypt(stored: string | null | undefined): DecryptResult {
   if (stored === null || stored === undefined || stored === "") return { ok: true, value: null };
   try {
     return { ok: true, value: decryptPii(stored) };
@@ -146,47 +173,72 @@ function tryDecrypt(stored: string | null): DecryptResult {
   }
 }
 
+const shown = (r: DecryptResult, inFull: boolean): string | null => {
+  if (!r.ok || r.value === null) return null;
+  return inFull ? r.value : (maskValue(r.value) ?? null);
+};
+
 /**
- * Build the response for one row. `fullAccess` = HR role or the employee
- * themself. Non-full-access callers also get dependants reduced to their
- * relation (no names / dates of birth of family members).
- * `onDecryptFailure` is called (once) with no value -- for a log line.
+ * Build the response for one row. Card number / scheme id are shown in full
+ * only when `cardInFull` (the employee themself), masked for everyone else.
+ * `dependantsFullAccess` = HR write tier or the employee themself: they
+ * get decrypted dependant names / dates of birth; everyone else gets the
+ * relation only. `onDecryptFailure` is called (once) with no value -- for a
+ * log line.
  */
 export function toInsuranceView(
   row: InsuranceDbRow,
-  fullAccess: boolean,
+  access: { cardInFull: boolean; dependantsFullAccess: boolean },
   onDecryptFailure?: () => void,
 ): InsuranceView {
+  const { cardInFull, dependantsFullAccess } = access;
   const card = tryDecrypt(row.card_number);
   const scheme = tryDecrypt(row.scheme_id);
-  const failed = !card.ok || !scheme.ok;
-  if (failed) onDecryptFailure?.();
+  let failed = !card.ok || !scheme.ok;
 
-  const show = (r: DecryptResult): string | null => {
-    if (!r.ok) return null;
-    if (r.value === null) return null;
-    return fullAccess ? r.value : (maskValue(r.value) ?? null);
-  };
-
-  const deps = Array.isArray(row.dependants) ? (row.dependants as InsuranceDependant[]) : [];
+  const raw = Array.isArray(row.dependants) ? (row.dependants as Array<Partial<StoredDependant>>) : [];
   const count = Array.isArray(row.dependants)
-    ? deps.length
+    ? raw.length
     : typeof row.dependants === "number" ? row.dependants : 0;
+
+  const dependants: DependantView[] = raw.map((d) => {
+    const relation = typeof d.relation === "string" ? d.relation : "other";
+    if (!dependantsFullAccess) return { relation };
+    const name = tryDecrypt(d.name ?? null);
+    const dob = tryDecrypt(d.dateOfBirth ?? null);
+    if (!name.ok || !dob.ok) {
+      failed = true;
+      return { relation, name: null, dateOfBirth: null, decrypt_failed: true };
+    }
+    return { relation, name: name.value, dateOfBirth: dob.value };
+  });
+
+  if (failed) onDecryptFailure?.();
 
   return {
     employee_id: row.employee_id,
     scheme_type: row.scheme_type,
-    scheme_id: show(scheme),
-    card_number: show(card),
-    card_number_masked: failed || !fullAccess,
+    scheme_id: shown(scheme, cardInFull),
+    card_number: shown(card, cardInFull),
+    card_number_masked: failed || !cardInFull,
     decrypt_failed: failed,
     validity_from: row.validity_from,
     validity_to: row.validity_to,
     tier: row.tier,
-    dependants: fullAccess ? deps : deps.map((d) => ({ relation: d.relation })),
+    dependants,
     dependants_count: count,
     annual_limit_minor: row.annual_limit_minor,
     version: row.version ?? null,
     updated_at: row.updated_at ?? null,
   };
 }
+
+/** API field name -> stored column, for the audited reveal (server-side allow-list). */
+export const REVEALABLE_INSURANCE_FIELDS = {
+  cardNumber: "card_number",
+  schemeId: "scheme_id",
+} as const;
+export type RevealableInsuranceField = keyof typeof REVEALABLE_INSURANCE_FIELDS;
+
+/** publishF3Write op for the audited reveal (same mechanism as employee/pii-reveal.ts). */
+export const MEDICAL_INSURANCE_REVEAL_OP = "medical_insurance_pii_reveal__0";

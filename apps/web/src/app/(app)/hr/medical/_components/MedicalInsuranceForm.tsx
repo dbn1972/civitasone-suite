@@ -22,13 +22,12 @@ export type InsuranceFormErrors = Partial<Record<"schemeType" | "cardNumber" | "
 
 /**
  * HR edit form for an employee's medical insurance: PUT (upsert) and DELETE
- * /v1/hrms/medical/insurance/:employeeId, both HR-only on the backend
- * (medical/routes.ts HR_ROLES == MEDICAL_INSURANCE_EDIT_ROLES). The page only
- * renders this for that tier.
+ * /v1/hrms/medical/insurance/:employeeId, both restricted on the backend to
+ * medical/routes.ts INSURANCE_WRITE_ROLES == MEDICAL_INSURANCE_EDIT_ROLES. The
+ * page only renders this for that tier.
  *
- * The card number / scheme id are never pre-filled: an existing record only
- * shows the current (possibly masked) value as a hint, and leaving the field
- * blank keeps what is stored. Writes are asynchronous (202), so success says
+ * The card number / scheme id are never pre-filled and never shown here, not
+ * even masked: leaving the field blank keeps what is stored. Writes are asynchronous (202), so success says
  * the change may take a moment to show.
  */
 export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: string; initial: MedicalInsurance | null }) {
@@ -158,7 +157,7 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
           value={cardNumber}
           onChange={(e) => setCardNumber(e.target.value)}
           autoComplete="off"
-          placeholder={isNew ? "" : t("keepCurrentPlaceholder", { current: initial?.cardNumber ?? "—" })}
+          placeholder={isNew ? "" : t("keepCurrentPlaceholder")}
         />
       </Field>
       <Field label={t("fieldSchemeId")} error={errors.schemeId}>
@@ -166,7 +165,7 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
           value={schemeId}
           onChange={(e) => setSchemeId(e.target.value)}
           autoComplete="off"
-          placeholder={!isNew && initial?.schemeId ? t("keepCurrentPlaceholder", { current: initial.schemeId }) : ""}
+          placeholder={!isNew && initial?.schemeId ? t("keepCurrentPlaceholder") : ""}
         />
       </Field>
       {!isNew && initial?.schemeId && (

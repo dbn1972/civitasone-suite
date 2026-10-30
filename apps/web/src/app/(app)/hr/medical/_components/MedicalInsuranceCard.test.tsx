@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -29,6 +29,12 @@ describe("MedicalInsuranceCard", () => {
     expect(screen.getByText("Semi-private ward")).toBeInTheDocument();
     expect(screen.getByText(/5,00,000/)).toBeInTheDocument();
     expect(screen.getByText(/Test Spouse \(Spouse\)/)).toBeInTheDocument();
+  });
+
+  it("an unreadable dependant is shown as unreadable, never as an empty name", () => {
+    const data: MedicalInsurance = { ...FULL, decryptFailed: true, dependants: [{ relation: "spouse", name: null, dateOfBirth: null, decryptFailed: true }] };
+    render(withIntl(<MedicalInsuranceCard result={{ source: "api", data }} />));
+    expect(screen.getByText("Spouse (details unreadable)")).toBeInTheDocument();
   });
 
   it("a masked card number (manager view) is labelled as masked and dependants show relation only", () => {
@@ -71,6 +77,47 @@ describe("MedicalInsuranceCard", () => {
   });
 });
 
+const MASKED: MedicalInsurance = {
+  ...FULL, cardNumber: "**************1234", schemeId: "***********5566", cardNumberMasked: true,
+};
+
+describe("MedicalInsuranceCard — audited reveal (reveal tier)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("without the reveal tier a masked value has no Reveal action", () => {
+    render(withIntl(<MedicalInsuranceCard result={{ source: "api", data: MASKED }} />));
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    expect(screen.getByText(m.maskedNote)).toBeInTheDocument();
+  });
+
+  it("the reveal tier gets Reveal on card number and scheme id; it asks for a reason and POSTs to the insurance reveal endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "CGHS-TEST-77881234" } }), { status: 200 }));
+    render(withIntl(<MedicalInsuranceCard result={{ source: "api", data: MASKED }} canReveal />));
+    const buttons = screen.getAllByRole("button", { name: "Reveal" });
+    expect(buttons).toHaveLength(2);
+    expect(screen.getByText("**************1234")).toBeInTheDocument();
+    fireEvent.click(buttons[0]!);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "hospital desk verification" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    expect(await screen.findByText("CGHS-TEST-77881234")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/hrms/medical/insurance/e1/reveal");
+    expect(JSON.parse(init.body as string)).toEqual({
+      resourceType: "medical_insurance", resourceId: "e1", field: "cardNumber", reason: "hospital desk verification",
+    });
+  });
+
+  it("a value the employee sees in full (not masked) or an unreadable one offers no Reveal", () => {
+    const { unmount } = render(withIntl(<MedicalInsuranceCard result={{ source: "api", data: FULL }} canReveal />));
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    unmount();
+    render(withIntl(<MedicalInsuranceCard result={{ source: "api", data: { ...MASKED, cardNumber: null, schemeId: null, decryptFailed: true } }} canReveal />));
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+});
+
 describe("mapInsuranceResponse", () => {
   it("camelCases the API record and rejects anything else", () => {
     const mapped = mapInsuranceResponse({ data: {
@@ -79,6 +126,11 @@ describe("mapInsuranceResponse", () => {
       dependants_count: 0, annual_limit_minor: null,
     } });
     expect(mapped).toMatchObject({ employeeId: "e1", schemeType: "esic", cardNumber: "****5678", cardNumberMasked: true, validityTo: null, dependantsCount: 0 });
+    const deps = mapInsuranceResponse({ data: {
+      employee_id: "e1", scheme_type: "cghs", card_number: "****5678",
+      dependants: [{ relation: "spouse" }, { relation: "child", name: null, dateOfBirth: null, decrypt_failed: true }],
+    } })!.dependants;
+    expect(deps).toEqual([{ relation: "spouse" }, { relation: "child", name: null, dateOfBirth: null, decryptFailed: true }]);
     expect(mapInsuranceResponse({ data: [] })).toBeNull();
     expect(mapInsuranceResponse(null)).toBeNull();
   });

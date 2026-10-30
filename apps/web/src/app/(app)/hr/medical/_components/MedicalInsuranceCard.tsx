@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Card } from "../../../../_components/ds";
+import { MaskedReveal } from "../../../../_components/ds/MaskedReveal";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import type { LoaderResult } from "@/app/_data/apiClient";
 import { isDependantRelation, isSchemeType, type MedicalInsurance } from "./insuranceTypes";
@@ -10,19 +11,24 @@ import { isDependantRelation, isSchemeType, type MedicalInsurance } from "./insu
  * ESIC) of one employee: on the HR employee profile and in the employee's own
  * "My medical insurance" self-service card.
  *
- * The card number arrives already masked by hrms-service for anyone who is
- * not HR or the employee themself; this component only renders what it is
- * given. A failed read is "unavailable" -- never "no record on file", which
+ * The card number / scheme id arrive masked by hrms-service for everyone but
+ * the employee themself. For the reveal tier (hr_admin / super_admin) a masked
+ * value gets the shared audited-reveal control (MaskedReveal -> POST
+ * /v1/hrms/medical/insurance/:employeeId/reveal, reason required, audited
+ * server-side before the value is returned -- the SF-05a PAN / bank pattern). A failed read is "unavailable" -- never "no record on file", which
  * would claim something we could not verify. `children` is where an HR edit
  * form goes (the caller decides who may edit).
  */
 export function MedicalInsuranceCard({
   result,
   title,
+  canReveal = false,
   children,
 }: {
   result: Pick<LoaderResult<MedicalInsurance | null>, "data" | "source" | "status">;
   title?: string;
+  /** MEDICAL_INSURANCE_REVEAL_ROLES: offer the audited reveal on masked values. */
+  canReveal?: boolean;
   children?: ReactNode;
 }) {
   const t = useTranslations("medicalInsurance");
@@ -49,6 +55,17 @@ export function MedicalInsuranceCard({
   }
 
   const schemeLabel = isSchemeType(d.schemeType) ? t(`schemeType.${d.schemeType}`) : d.schemeType;
+  const revealable = (value: string | null, field: "cardNumber" | "schemeId", label: string) =>
+    canReveal && d.cardNumberMasked && !d.decryptFailed && value ? (
+      <MaskedReveal
+        maskedText={value}
+        resourceType="medical_insurance"
+        resourceId={d.employeeId}
+        field={field}
+        label={label}
+        revealPath={`v1/hrms/medical/insurance/${encodeURIComponent(d.employeeId)}/reveal`}
+      />
+    ) : null;
   const relationLabel = (r?: string) => (isDependantRelation(r) ? t(`relation.${r}`) : "—");
 
   return (
@@ -64,16 +81,20 @@ export function MedicalInsuranceCard({
         <div className="fld">
           <span className="l">{t("fieldCardNumber")}</span>
           <span className="v" data-testid="insurance-card-number">
-            {d.cardNumber ?? "—"}
-            {d.cardNumberMasked && !d.decryptFailed && (
-              <span style={{ marginInlineStart: 8, color: "var(--mut)", fontSize: 12 }}>{t("maskedNote")}</span>
+            {revealable(d.cardNumber, "cardNumber", t("fieldCardNumber")) ?? (
+              <>
+                {d.cardNumber ?? "—"}
+                {d.cardNumberMasked && !d.decryptFailed && d.cardNumber && (
+                  <span style={{ marginInlineStart: 8, color: "var(--mut)", fontSize: 12 }}>{t("maskedNote")}</span>
+                )}
+              </>
             )}
           </span>
         </div>
         {d.schemeId && (
           <div className="fld">
             <span className="l">{t("fieldSchemeId")}</span>
-            <span className="v">{d.schemeId}</span>
+            <span className="v">{revealable(d.schemeId, "schemeId", t("fieldSchemeId")) ?? d.schemeId}</span>
           </div>
         )}
         <div className="fld">
@@ -102,9 +123,11 @@ export function MedicalInsuranceCard({
               <ul style={{ margin: 0, paddingInlineStart: 18 }}>
                 {d.dependants.map((dep, i) => (
                   <li key={`${dep.relation ?? "x"}-${i}`}>
-                    {dep.name
-                      ? t("dependantRow", { name: dep.name, relation: relationLabel(dep.relation) })
-                      : relationLabel(dep.relation)}
+                    {dep.decryptFailed
+                      ? t("dependantUnreadable", { relation: relationLabel(dep.relation) })
+                      : dep.name
+                        ? t("dependantRow", { name: dep.name, relation: relationLabel(dep.relation) })
+                        : relationLabel(dep.relation)}
                     {dep.dateOfBirth ? ` · ${formatIndianDate(dep.dateOfBirth)}` : ""}
                   </li>
                 ))}
