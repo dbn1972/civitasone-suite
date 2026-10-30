@@ -92,6 +92,8 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     if (body.isInternal && !hasAnyRole(ctx, STAFF_ROLES)) {
       throw new HttpError(403, "FORBIDDEN", "only staff may add internal notes");
     }
+    // UAT W8-D (P1): 404 for a ticket this tenant does not have, before publishing.
+    if (!(await repo.findTicketInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "ticket not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNote(ctx, id, body));
   });
 
@@ -100,6 +102,8 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignTicketBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a ticket this tenant does not have, before publishing.
+    if (!(await repo.findTicketInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "ticket not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignTicket(ctx, id, body));
   });
 

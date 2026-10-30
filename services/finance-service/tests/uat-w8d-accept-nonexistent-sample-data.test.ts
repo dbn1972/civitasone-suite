@@ -1,7 +1,7 @@
 /**
  * UAT W8-D, finance-service:
- *  - P1 accept-nonexistent: POST sanctions/:id/submit-approval and POST journals/:id/reverse
- *    published and answered 202 for ANY well-formed id (PATCH journals/:id/approve is pinned in
+ *  - P1 accept-nonexistent: POST sanctions/:id/submit-approval, POST journals/:id/reverse and
+ *    (sibling sweep) PATCH advances/:id/adjust published and answered 202 for ANY well-formed id (PATCH journals/:id/approve is pinned in
  *    journal-period-voucher-sync.test.ts). They now read the row tenant-scoped first: random id
  *    or another tenant's row -> 404, nothing published; a real row -> 202, published.
  *  - P7: POST/DELETE bills/sample-data (developer "try it" seeding) were live in UAT. They are
@@ -19,6 +19,7 @@ import { scoped } from "./_tenant.js";
 import { bearer } from "./_fp02.js";
 import { financeSanctions } from "../src/modules/budget/schema.js";
 import { financeJournals } from "../src/modules/gl/schema.js";
+import { financeAdvances } from "../src/modules/payments/schema.js";
 import * as paymentsRepo from "../src/modules/payments/repo.js";
 import { isSampleDataRoutesEnabled } from "../src/modules/payments/routes.js";
 
@@ -26,7 +27,7 @@ import { isSampleDataRoutesEnabled } from "../src/modules/payments/routes.js";
 const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();
 const ACTOR = randomUUID();
-const ids = { sanction: randomUUID(), journal: randomUUID() };
+const ids = { sanction: randomUUID(), journal: randomUUID(), advance: randomUUID() };
 const admin = (tenant = TENANT) => bearer(tenant, ACTOR, ["finance_admin"]);
 
 let app: FastifyInstance;
@@ -43,26 +44,34 @@ beforeAll(async () => {
       lines: [{ accountCode: "5100", debitMinor: "100", creditMinor: "0" }, { accountCode: "1100", debitMinor: "0", creditMinor: "100" }],
       createdBy: ACTOR, updatedBy: ACTOR,
     });
+    await tx.insert(financeAdvances).values({
+      id: ids.advance, tenantId: TENANT, advanceNo: `W8D-ADV-${ids.advance.slice(0, 8)}`, beneficiary: "W8D", createdBy: ACTOR, updatedBy: ACTOR,
+    });
   });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 afterAll(async () => {
-  await scoped(TENANT, (tx) => tx.delete(financeSanctions).where(eq(financeSanctions.id, ids.sanction))).catch(() => undefined);
+  await scoped(TENANT, async (tx) => {
+    await tx.delete(financeAdvances).where(eq(financeAdvances.id, ids.advance));
+    await tx.delete(financeSanctions).where(eq(financeSanctions.id, ids.sanction));
+  }).catch(() => undefined);
   await app.close();
   await sqlClient.end();
 });
 
-type Case = { name: string; url: (id: string) => string; realId: () => string; payload: Record<string, unknown> };
+type Case = { name: string; method?: "POST" | "PATCH"; url: (id: string) => string; realId: () => string; payload: Record<string, unknown> };
 const cases: Case[] = [
   { name: "sanction submit-approval", url: (id) => `/v1/finance/sanctions/${id}/submit-approval`, realId: () => ids.sanction, payload: {} },
   { name: "journal reverse", url: (id) => `/v1/finance/journals/${id}/reverse`, realId: () => ids.journal, payload: { reason: "w8d" } },
+  // sibling sweep: advances/:id/adjust had the same gap (202 for any id)
+  { name: "advance adjust", method: "PATCH", url: (id) => `/v1/finance/advances/${id}/adjust`, realId: () => ids.advance, payload: { adjustedMinor: "100", reason: "w8d adjust" } },
 ];
 
 describe("UAT W8-D: finance command routes answer 404 for a record that does not exist", () => {
   for (const c of cases) {
     it(`${c.name}: random id -> 404 NOT_FOUND, nothing published`, async () => {
       const publish = vi.spyOn(queue, "publish");
-      const res = await app.inject({ method: "POST", url: c.url(randomUUID()), headers: admin(), payload: c.payload });
+      const res = await app.inject({ method: c.method ?? "POST", url: c.url(randomUUID()), headers: admin(), payload: c.payload });
       expect(res.statusCode).toBe(404);
       expect(res.json().code).toBe("NOT_FOUND");
       expect(publish).not.toHaveBeenCalled();
@@ -70,14 +79,14 @@ describe("UAT W8-D: finance command routes answer 404 for a record that does not
 
     it(`${c.name}: another tenant's real id -> 404 (tenant-scoped read), nothing published`, async () => {
       const publish = vi.spyOn(queue, "publish");
-      const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: admin(OTHER_TENANT), payload: c.payload });
+      const res = await app.inject({ method: c.method ?? "POST", url: c.url(c.realId()), headers: admin(OTHER_TENANT), payload: c.payload });
       expect(res.statusCode).toBe(404);
       expect(publish).not.toHaveBeenCalled();
     });
 
     it(`${c.name}: a real row of this tenant -> 202 and the command is published`, async () => {
       const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
-      const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: admin(), payload: c.payload });
+      const res = await app.inject({ method: c.method ?? "POST", url: c.url(c.realId()), headers: admin(), payload: c.payload });
       expect(res.statusCode).toBe(202);
       expect(publish).toHaveBeenCalledTimes(1);
     });

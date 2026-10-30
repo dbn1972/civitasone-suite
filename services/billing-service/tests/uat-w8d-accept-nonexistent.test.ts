@@ -49,18 +49,20 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-type Case = { name: string; method: "PATCH" | "POST"; url: (id: string) => string; realId: () => string; roles: string[] };
+type Case = { name: string; method: "PATCH" | "POST"; url: (id: string) => string; realId: () => string; roles: string[]; payload?: Record<string, unknown> };
 const cases: Case[] = [
   { name: "subscription activate", method: "PATCH", url: (id) => `/v1/billing/subscriptions/${id}/activate`, realId: () => ids.subscription, roles: ["super_admin"] },
   { name: "subscription cancel", method: "PATCH", url: (id) => `/v1/billing/subscriptions/${id}/cancel`, realId: () => ids.subscription, roles: ["super_admin"] },
   { name: "invoice generate-irn", method: "POST", url: (id) => `/v1/billing/invoices/${id}/generate-irn`, realId: () => ids.invoice, roles: ["billing_admin"] },
+  // sibling sweep: cancel-irn had the same gap (202 for any id)
+  { name: "invoice cancel-irn", method: "POST", url: (id) => `/v1/billing/invoices/${id}/cancel-irn`, realId: () => ids.invoice, roles: ["billing_admin"], payload: { reason: "w8d" } },
 ];
 
 describe("UAT W8-D: billing command routes answer 404 for a record that does not exist", () => {
   for (const c of cases) {
     it(`${c.name}: random id -> 404 NOT_FOUND, nothing published`, async () => {
       const publish = vi.spyOn(queue, "publish");
-      const res = await app.inject({ method: c.method, url: c.url(randomUUID()), headers: bearer(TENANT, c.roles), payload: {} });
+      const res = await app.inject({ method: c.method, url: c.url(randomUUID()), headers: bearer(TENANT, c.roles), payload: c.payload ?? {} });
       expect(res.statusCode).toBe(404);
       expect(res.json().code).toBe("NOT_FOUND");
       expect(publish).not.toHaveBeenCalled();
@@ -68,14 +70,14 @@ describe("UAT W8-D: billing command routes answer 404 for a record that does not
 
     it(`${c.name}: another tenant's real id -> 404 (tenant-scoped read), nothing published`, async () => {
       const publish = vi.spyOn(queue, "publish");
-      const res = await app.inject({ method: c.method, url: c.url(c.realId()), headers: bearer(OTHER_TENANT, c.roles), payload: {} });
+      const res = await app.inject({ method: c.method, url: c.url(c.realId()), headers: bearer(OTHER_TENANT, c.roles), payload: c.payload ?? {} });
       expect(res.statusCode).toBe(404);
       expect(publish).not.toHaveBeenCalled();
     });
 
     it(`${c.name}: a real row of this tenant -> 202 and the command is published`, async () => {
       const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
-      const res = await app.inject({ method: c.method, url: c.url(c.realId()), headers: bearer(TENANT, c.roles), payload: {} });
+      const res = await app.inject({ method: c.method, url: c.url(c.realId()), headers: bearer(TENANT, c.roles), payload: c.payload ?? {} });
       expect(res.statusCode).toBe(202);
       expect(res.json().status).toBe("accepted");
       expect(publish).toHaveBeenCalledTimes(1);

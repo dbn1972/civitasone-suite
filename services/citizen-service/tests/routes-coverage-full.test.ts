@@ -217,13 +217,14 @@ describe("Grievance — POST /v1/citizen/grievances", () => {
 });
 
 describe("Grievance — PATCH /v1/citizen/grievances/:id/assign", () => {
-  it("202 valid body (officer)", async () => {
+  // UAT W8-D: UUID1 is not a real grievance: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a grievance that does not exist (valid body)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/grievances/${UUID1}/assign`,
       headers: auth(["citizen_officer"]),
       payload: { assignedTo: UUID2 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 missing assignedTo", async () => {
@@ -255,13 +256,14 @@ describe("Grievance — PATCH /v1/citizen/grievances/:id/assign", () => {
 });
 
 describe("Grievance — POST /v1/citizen/grievances/:id/actions", () => {
-  it("202 valid action", async () => {
+  // UAT W8-D: UUID1 is not a real grievance: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a grievance that does not exist (valid body)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/citizen/grievances/${UUID1}/actions`,
       headers: auth(["citizen_officer"]),
       payload: { actionType: "site_visit", note: "Inspected location" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 empty body", async () => {
@@ -314,13 +316,14 @@ describe("Grievance — PATCH /v1/citizen/grievances/:id/resolve", () => {
 });
 
 describe("Grievance — PATCH /v1/citizen/grievances/:id/escalate", () => {
-  it("202 valid", async () => {
+  // UAT W8-D: UUID1 is not a real grievance: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a grievance that does not exist (valid body)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/grievances/${UUID1}/escalate`,
       headers: auth(["citizen_officer"]),
       payload: { reason: "No progress for 7 days" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 missing reason", async () => {
@@ -871,13 +874,14 @@ describe("Helpdesk — GET /v1/citizen/tickets/analytics", () => {
 });
 
 describe("Helpdesk — POST /v1/citizen/tickets/:id/notes", () => {
-  it("202 valid (staff)", async () => {
+  // UAT W8-D: UUID1 is not a real ticket: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a ticket that does not exist (valid body)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/citizen/tickets/${UUID1}/notes`,
       headers: auth(["citizen_officer"]),
       payload: { body: "Internal note about the ticket" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 empty body", async () => {
@@ -900,13 +904,14 @@ describe("Helpdesk — POST /v1/citizen/tickets/:id/notes", () => {
 });
 
 describe("Helpdesk — PATCH /v1/citizen/tickets/:id/assign", () => {
-  it("202 valid", async () => {
+  // UAT W8-D: UUID1 is not a real ticket: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a ticket that does not exist (valid body)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/tickets/${UUID1}/assign`,
       headers: auth(["citizen_officer"]),
       payload: { assigneeId: UUID2 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 missing assigneeId", async () => {

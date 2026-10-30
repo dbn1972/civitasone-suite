@@ -40,6 +40,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignGrievanceBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a grievance this tenant does not have, before publishing.
+    if (!(await repo.findGrievanceInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "grievance not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignGrievance(ctx, id, body));
   });
 
@@ -48,6 +50,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = grievanceActionBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a grievance this tenant does not have, before publishing.
+    if (!(await repo.findGrievanceInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "grievance not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.addAction(ctx, id, body));
   });
 
@@ -66,6 +70,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = escalateGrievanceBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a grievance this tenant does not have, before publishing.
+    if (!(await repo.findGrievanceInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "grievance not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.escalateGrievance(ctx, id, body));
   });
 

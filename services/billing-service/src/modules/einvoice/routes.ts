@@ -29,6 +29,10 @@ export async function einvoiceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, BILLING_ROLES);
     const { id } = idParam.parse(req.params);
     const body = cancelIrnBody.parse(req.body);
+    // UAT W8-D (P1): same tenant-scoped invoice read as generate-irn; an IRN of an invoice this
+    // tenant does not have can never be cancelled, so 404 instead of 202.
+    const invoice = await invoiceRepo.findById(id);
+    if (!invoice || invoice.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "invoice not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelEInvoice(ctx, id, body.reason));
   });
 

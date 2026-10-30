@@ -382,6 +382,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = adjustAdvanceBody.parse(req.body);
+    // UAT W8-D (P1): 404 for an advance this tenant does not have, before publishing.
+    if (!(await repo.findAdvanceInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "advance not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.adjustAdvance(ctx, id, body));
   });
 
