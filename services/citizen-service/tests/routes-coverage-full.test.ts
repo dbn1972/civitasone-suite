@@ -284,22 +284,23 @@ describe("Grievance — POST /v1/citizen/grievances/:id/actions", () => {
 });
 
 describe("Grievance — PATCH /v1/citizen/grievances/:id/resolve", () => {
-  it("202 valid", async () => {
+  // UAT W8-D: UUID1 is not a real grievance: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a grievance that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/grievances/${UUID1}/resolve`,
       headers: auth(["citizen_officer"]),
       payload: { note: "Fixed the pipe" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
-  it("202 empty body is valid (note optional)", async () => {
+  it("empty body passes validation (note optional): 404 for the missing grievance, not 400", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/grievances/${UUID1}/resolve`,
       headers: auth(["citizen_officer"]),
       payload: {},
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("403 citizen role", async () => {
@@ -928,13 +929,14 @@ describe("Helpdesk — PATCH /v1/citizen/tickets/:id/assign", () => {
 });
 
 describe("Helpdesk — PATCH /v1/citizen/tickets/:id/resolve", () => {
-  it("202 valid", async () => {
+  // UAT W8-D: UUID1 is not a real ticket: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a ticket that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/tickets/${UUID1}/resolve`,
       headers: auth(["citizen_officer"]),
       payload: { note: "Resolved the login issue" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("403 citizen role", async () => {
@@ -948,13 +950,14 @@ describe("Helpdesk — PATCH /v1/citizen/tickets/:id/resolve", () => {
 });
 
 describe("Helpdesk — PATCH /v1/citizen/tickets/:id/close", () => {
-  it("202 valid", async () => {
+  // UAT W8-D: UUID1 is not a real ticket: 404, not 202 (the real-row 202 is in uat-w8d-accept-nonexistent.test.ts).
+  it("404 for a ticket that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/tickets/${UUID1}/close`,
       headers: auth(["citizen_officer"]),
       payload: { note: "Closed after resolution confirmation" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("403 citizen role", async () => {

@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { billingSubscriptions, billingTrials, type BillingSubscriptionInsert, type BillingTrialInsert } from "./schema.js";
 import type { SubscriptionView } from "./domain.js";
@@ -44,6 +44,17 @@ export async function findByTenantTx(tx: Writer, tenantId: string): Promise<Subs
   };
   if (trials[0]?.expiresAt) view.trialExpiresAt = trials[0].expiresAt.toISOString();
   return view;
+}
+
+/**
+ * UAT W8-D (P1): tenant-scoped existence read for the activate/cancel commands. The
+ * consumer updates by id inside the caller's tenant (RLS), so a subscription the
+ * caller's tenant cannot see can never change; the route answers 404 for it instead of 202.
+ */
+export async function findIdInTenant(id: string, tenantId: string): Promise<{ id: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: billingSubscriptions.id }).from(billingSubscriptions)
+    .where(and(eq(billingSubscriptions.id, id), eq(billingSubscriptions.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
 }
 
 export async function insertSub(tx: Writer, row: BillingSubscriptionInsert): Promise<void> {

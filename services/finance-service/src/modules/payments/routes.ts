@@ -19,6 +19,22 @@ import { scopedRead } from "../../shared/db.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { actorsQuery } from "./validators.js";
 
+/**
+ * UAT W8-D (P7): POST/DELETE /v1/finance/bills/sample-data are a developer "try it" aid
+ * (they insert / remove [SAMPLE] bills in the caller's tenant) and were live in UAT.
+ * Same gate as location-service's sample-data routes (isSampleDataRoutesEnabled): opt in
+ * with ENABLE_SAMPLE_DATA_ROUTES=true, never available when NODE_ENV=production whatever
+ * the flag says. Disabled -> 404, as if the route did not exist. Read per request so ops
+ * can flip the flag without a rebuild.
+ */
+export function isSampleDataRoutesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENABLE_SAMPLE_DATA_ROUTES === "true" && env.NODE_ENV !== "production";
+}
+
+function requireSampleDataRoutes(): void {
+  if (!isSampleDataRoutesEnabled()) throw new HttpError(404, "NOT_FOUND", "route not found");
+}
+
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
 const READER_ROLES   = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
@@ -173,9 +189,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
 
   // Sample data ("try it"): add clearly-marked [SAMPLE] bills, or clear them.
   // Tenant-scoped; clearing removes ONLY this tenant's sample bills (R15).
+  // UAT W8-D (P7): dev-only, gated like location-service's sample data (404 unless enabled).
   app.post("/v1/finance/bills/sample-data", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
+    requireSampleDataRoutes();
     let added: number;
     try {
       added = await repo.seedSampleBills(ctx.tenantId, ctx.actorId);
@@ -190,6 +208,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/finance/bills/sample-data", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
+    requireSampleDataRoutes();
     const removed = await repo.clearSampleBills(ctx.tenantId);
     await cache.invalidateResource(ctx.tenantId, "bills");
     return reply.send({ removed });

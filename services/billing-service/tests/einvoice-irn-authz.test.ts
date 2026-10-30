@@ -51,6 +51,10 @@ describe("e-invoice IRN routes authorization (GAP-BILLING-INVOICES-DETAIL-01)", 
   });
 
   it("generate-irn with an authorized role is accepted (202 CQRS)", async () => {
+    // UAT W8-D: the route now reads the invoice first (404 when missing, see uat-w8d-accept-nonexistent.test.ts),
+    // so this role check targets an invoice that exists in the caller's tenant.
+    const invoiceRepo = await import("../src/modules/invoices/repo.js");
+    vi.spyOn(invoiceRepo, "findById").mockResolvedValueOnce({ id: INV, tenantId: TENANT } as never);
     const res = await app.inject({ method: "POST", url: `/v1/billing/invoices/${INV}/generate-irn`, headers: auth(["billing_admin"]) });
     expect(res.statusCode).toBe(202);
     expect(res.json()).toMatchObject({ status: "accepted" });

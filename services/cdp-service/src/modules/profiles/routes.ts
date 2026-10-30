@@ -31,6 +31,10 @@ const createBody = z.object({
     timestamp: z.string().datetime(),
     attributes: z.array(z.string().min(1).max(64)).max(100).optional(),
   })).default([]),
+}).refine((b) => Object.keys(b.attributes).length > 0 || b.sourceLineage.length > 0, {
+  // UAT W8-D (P2): every field defaults, so an empty body created a blank profile.
+  message: "a profile needs at least one attribute or source-lineage entry",
+  path: ["attributes"],
 });
 
 const updateBody = z.object({

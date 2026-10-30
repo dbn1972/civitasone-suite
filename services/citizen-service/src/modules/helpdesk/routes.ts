@@ -11,6 +11,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const STAFF_ROLES = [
   "helpdesk_user", "helpdesk_agent", "helpdesk_admin",
@@ -107,6 +108,8 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = resolveTicketBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a ticket this tenant does not have, before publishing.
+    if (!(await repo.findTicketInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "ticket not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.resolveTicket(ctx, id, body));
   });
 
@@ -115,6 +118,8 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeTicketBody.parse(req.body);
+    // UAT W8-D (P1): 404 for a ticket this tenant does not have, before publishing.
+    if (!(await repo.findTicketInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "ticket not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeTicket(ctx, id, body));
   });
 

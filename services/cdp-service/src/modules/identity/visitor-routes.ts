@@ -48,8 +48,9 @@ const trackBody = z.object({
   attributes: z.record(z.unknown()).default({}),
 });
 
+// UAT W8-D (P9b): limit defaults to 50 (cap 200) so a bare GET lists instead of 400.
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["anonymous", "merged"]).optional(),
 });

@@ -22,6 +22,11 @@ export async function findTicketByIdTx(tx: Writer, id: string, tenantId: string)
   return rows[0] ?? null;
 }
 
+/** UAT W8-D (P1): tenant-scoped existence read (in the tenant transaction, RLS-safe) for command routes. */
+export async function findTicketInTenant(id: string, tenantId: string): Promise<TicketRow | null> {
+  return db.transaction((tx) => findTicketByIdTx(tx, id, tenantId));
+}
+
 export async function listNotes(ticketId: string, includeInternal = false) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

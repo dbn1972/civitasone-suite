@@ -222,6 +222,40 @@ describe("POST /v1/cdp/profiles (create)", () => {
     expect(r.statusCode).toBe(403);
     await app.close();
   });
+
+  // UAT W8-D (P2): every field defaulted, so an empty body created a blank profile.
+  it("400 — empty body (no attributes, no source lineage), nothing published", async () => {
+    const app = await buildApp();
+    H.publishMock.mockClear();
+    const r = await app.inject({ method: "POST", url: "/v1/cdp/profiles", headers: auth(), payload: {} });
+    expect(r.statusCode).toBe(400);
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("400 — only unknown fields (stripped) and an empty attributes object, nothing published", async () => {
+    const app = await buildApp();
+    H.publishMock.mockClear();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/profiles", headers: auth(),
+      payload: { id: "x", amount: 5, email: "a@b.c", profileType: "individual", attributes: {} },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("202 — source lineage alone is enough to create a profile", async () => {
+    const app = await buildApp();
+    H.publishMock.mockClear();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/profiles", headers: auth(),
+      payload: { sourceLineage: [{ source: "crm", sourceId: "c-1", timestamp: "2026-10-01T00:00:00.000Z" }] },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
 });
 
 describe("GET /v1/cdp/profiles (list)", () => {
