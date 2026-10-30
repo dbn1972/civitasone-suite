@@ -49,7 +49,7 @@ import { isBlacklisted } from "../blacklist/screening-store.js";
 // the exact same building blocks that path uses.
 import { checkIns } from "../check-in/schema.js";
 import { locations, gates } from "../location/schema.js";
-import { checkIn as domainCheckIn, type CheckInStatus } from "../check-in/domain.js";
+import { checkIn as domainCheckIn, isLocationScopeValid, type CheckInStatus } from "../check-in/domain.js";
 import { isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 
@@ -289,14 +289,15 @@ export function registerGroupVisitConsumers(q: Queue): void {
         .limit(1);
       const group = groupRows[0];
       if (!group) {
-        throw new Error(`group visit '${p.groupVisitId}' not found for tenant '${p.tenantId}'`);
+        // Permanent: retrying cannot make a missing group appear.
+        throw new NonRetryableError(`group visit '${p.groupVisitId}' not found for tenant '${p.tenantId}'`);
       }
 
       // F64: the gate must exist for this tenant (check_ins.gate_id FK). An
       // unknown gate is permanent, so dead-letter instead of retrying an FK
       // violation (same convention as check-in/consumer.ts).
       const gateRows = await tx
-        .select({ id: gates.id })
+        .select({ id: gates.id, locationId: gates.locationId })
         .from(gates)
         .where(and(eq(gates.id, gateId), eq(gates.tenantId, p.tenantId)))
         .limit(1);
@@ -307,6 +308,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
         );
         throw new NonRetryableError(`gate '${gateId}' not found for tenant '${p.tenantId}'`);
       }
+      const gateLocationId = gateRows[0].locationId;
 
       // Headcount reconciliation (Requirement 9.6, domain logic).
       const reconciliation = confirmBulkCheckIn(group.memberCount, p.actualHeadcount);
@@ -330,6 +332,30 @@ export function registerGroupVisitConsumers(q: Queue): void {
             .where(and(inArray(digitalPasses.id, passIds), eq(digitalPasses.tenantId, p.tenantId)))
         : [];
       const passById = new Map(passRows.map((row) => [row.id, row]));
+
+      // F64 review: gate/location scope (Property 26), the same check the
+      // single check-in path makes (check-in/consumer.ts) before writing.
+      // A gate at another site would otherwise write check_ins and roster
+      // rows for the wrong location. Whole-batch refusal, not per-member
+      // skip: the single path dead-letters the whole command on a scope
+      // violation, and a group's member passes all come from one visit
+      // request at one location, so a mismatch means the guard used the
+      // wrong gate for the group, not that one member is ineligible.
+      // Checked before any write, so nothing is committed.
+      const outOfScope = passRows.filter((row) => !isLocationScopeValid(row.locationId, gateLocationId));
+      if (outOfScope.length > 0) {
+        log.error(
+          {
+            tenantId: p.tenantId, groupVisitId: p.groupVisitId, gateId, gateLocationId,
+            passIds: outOfScope.map((row) => row.id), passLocationIds: [...new Set(outOfScope.map((row) => row.locationId))],
+            messageId: msg.messageId, event: "group_bulk_checkin_gate_location_mismatch",
+          },
+          "group bulk check-in rejected: gate is not at the group's pass location",
+        );
+        throw new NonRetryableError(
+          `gate '${gateId}' is at location '${gateLocationId}', but ${outOfScope.length} member pass(es) of group '${p.groupVisitId}' are scoped to location '${outOfScope[0]!.locationId}'`,
+        );
+      }
 
       const now = new Date();
       const checkedInMembers: Array<{ passId: string; visitorName: string; checkInTime: string }> = [];

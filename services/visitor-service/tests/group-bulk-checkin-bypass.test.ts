@@ -68,7 +68,7 @@ const fakeTx = {
       return { from: () => ({ where: () => ({ limit: async () => (groupRow ? [groupRow] : []) }) }) };
     }
     if (selectCallIdx === 2) {
-      return { from: () => ({ where: () => ({ limit: async () => [{ id: "gate-1" }] }) }) };
+      return { from: () => ({ where: () => ({ limit: async () => [{ id: "gate-1", locationId: LOCATION_ID }] }) }) };
     }
     if (selectCallIdx === 3) {
       return { from: () => ({ where: async () => memberRows }) };

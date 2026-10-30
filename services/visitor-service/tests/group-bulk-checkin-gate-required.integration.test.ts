@@ -16,7 +16,7 @@
  * a clear reason and writes nothing; a valid gate writes one check_ins row
  * per member carrying that gate.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { createQueue, type MemoryQueue } from "@civitasone/queue";
@@ -33,6 +33,9 @@ import { groupVisits, groupMembers } from "../src/modules/group-visit/schema.js"
 const TENANT = randomUUID();
 const LOCATION = randomUUID();
 const GATE = randomUUID();
+// Same tenant, different site: real gate, wrong location for the group.
+const OTHER_LOCATION = randomUUID();
+const OTHER_GATE = randomUUID();
 const ACTOR = randomUUID();
 const HOST = randomUUID();
 const VISIT_REQUEST_ID = randomUUID();
@@ -97,6 +100,14 @@ beforeAll(async () => {
         id: GATE, tenantId: TENANT, locationId: LOCATION, name: "F64 Main Gate",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
+      await tx.insert(locations).values({
+        id: OTHER_LOCATION, tenantId: TENANT, name: "F64 Other Site",
+        businessHours: BUSINESS_HOURS, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(gates).values({
+        id: OTHER_GATE, tenantId: TENANT, locationId: OTHER_LOCATION, name: "F64 Other Site Gate",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
       await tx.insert(visitRequests).values({
         id: VISIT_REQUEST_ID, tenantId: TENANT, locationId: LOCATION,
         hostEmployeeId: HOST, status: "pre_approved",
@@ -121,12 +132,15 @@ afterAll(async () => {
   await runWithTenant(TENANT, () =>
     db.transaction(async (tx) => {
       await tx.delete(checkIns).where(eq(checkIns.locationId, LOCATION));
+      await tx.delete(checkIns).where(eq(checkIns.gateId, OTHER_GATE));
       await tx.delete(groupMembers).where(eq(groupMembers.groupVisitId, GROUP_VISIT_ID));
       await tx.delete(groupVisits).where(eq(groupVisits.id, GROUP_VISIT_ID));
       await tx.delete(digitalPasses).where(eq(digitalPasses.visitRequestId, VISIT_REQUEST_ID));
       await tx.delete(visitRequests).where(eq(visitRequests.id, VISIT_REQUEST_ID));
       await tx.delete(gates).where(eq(gates.id, GATE));
+      await tx.delete(gates).where(eq(gates.id, OTHER_GATE));
       await tx.delete(locations).where(eq(locations.id, LOCATION));
+      await tx.delete(locations).where(eq(locations.id, OTHER_LOCATION));
     }),
   );
 });
@@ -151,6 +165,39 @@ describe("F64 group bulk check-in requires a real gate", () => {
     expect(queue.dlq[0]!.error).toMatch(new RegExp(`gate '${unknownGate}' not found`));
     expect(await groupCheckInRows()).toHaveLength(0);
     expect(await passStatuses()).toEqual(["active", "active"]);
+  });
+
+  it("a gate at another location is refused for the whole group and writes nothing", async () => {
+    const queue = await bulkCheckIn(OTHER_GATE);
+
+    expect(queue.dlq).toHaveLength(1);
+    expect(queue.dlq[0]!.error).toMatch(new RegExp(`gate '${OTHER_GATE}' is at location '${OTHER_LOCATION}'`));
+    const anyRows = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(checkIns).where(
+        and(eq(checkIns.tenantId, TENANT), eq(checkIns.gateId, OTHER_GATE)),
+      )),
+    );
+    expect(anyRows).toHaveLength(0);
+    expect(await groupCheckInRows()).toHaveLength(0);
+    expect(await passStatuses()).toEqual(["active", "active"]);
+  });
+
+  it("an unknown group visit is dead-lettered as non-retryable", async () => {
+    const queue = createQueue() as MemoryQueue;
+    registerGroupVisitConsumers(queue);
+    const retryDelay = vi.spyOn(queue as unknown as { retryDelay: (ms: number) => Promise<void> }, "retryDelay");
+    const missing = randomUUID();
+    await queue.publish(COMMANDS.groupBulkCheckIn, {
+      type: COMMANDS.groupBulkCheckIn, tenantId: TENANT, actorId: ACTOR,
+      correlationId: `corr-f64-${randomUUID()}`, schemaVersion: "1.0",
+      payload: { groupVisitId: missing, tenantId: TENANT, actualHeadcount: 2, gateId: GATE },
+    });
+    await queue.drain();
+
+    expect(queue.dlq).toHaveLength(1);
+    expect(queue.dlq[0]!.error).toMatch(new RegExp(`group visit '${missing}' not found`));
+    // Non-retryable goes straight to the DLQ without any retry backoff.
+    expect(retryDelay).not.toHaveBeenCalled();
   });
 
   it("a valid gate writes one check_ins row per member at that gate", async () => {
