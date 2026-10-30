@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { resolvePoRef, ProcurementUnavailableError } from "../../shared/procurement-client.js";
-import { assertDistinctMakerChecker, DomainError } from "./domain.js";
+import { assertDistinctMakerChecker, assertCanAmend, DomainError } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
   ActivateContractBody, CloseContractBody, TerminateContractBody,
@@ -140,12 +140,25 @@ export async function terminateContract(ctx: RequestContext, id: string, body: T
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * Amend (vary) an active contract. F74: the state is checked HERE, synchronously
+ * (tenant-scoped 404 / 409 INVALID_STATUS), instead of being left to the worker —
+ * a 202 for an amendment that can never apply misleads the caller. The command
+ * carries the version it was validated against so the consumer refuses it if the
+ * contract has changed in between (optimistic concurrency).
+ */
 export async function amendContract(ctx: RequestContext, id: string, body: AmendContractBody): Promise<Accepted> {
-  await loadScoped(ctx, id);
+  const contract = await loadScoped(ctx, id);
+  try {
+    assertCanAmend(contract.status ?? "draft");
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
   await queue.publish(COMMANDS.contractAmend, {
     messageId: randomUUID(), type: COMMANDS.contractAmend,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, expectedVersion: contract.version ?? 1 },
   });
   await inval(ctx, id);
   return { id, status: "accepted", correlationId: ctx.correlationId };

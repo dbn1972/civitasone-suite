@@ -1,17 +1,48 @@
 import { randomUUID } from "node:crypto";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue, type Handler } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition } from "./domain.js";
+import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition, DomainError } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/**
+ * F74: a business-rule rejection (wrong state, illegal transition, SoD, bad
+ * SLA/date input) is permanent — redelivering the command cannot make it valid,
+ * but it CAN make it apply later once the contract has moved on (a refused
+ * pre-activation amendment was applied after activation on live UAT). Every
+ * DomainError raised by a contract handler is therefore rethrown as a
+ * NonRetryableError, which every queue driver routes straight to the DLQ.
+ * Not-found is thrown as NonRetryableError at its call site for the same reason
+ * (the routes verify existence before publishing). Transient errors (DB, network)
+ * are left untouched and still retry.
+ */
+export function rejectBusinessRulesPermanently(queue: Queue): Queue {
+  return new Proxy(queue, {
+    get(target, prop, receiver) {
+      if (prop === "subscribe") {
+        return <T>(topic: string, handler: Handler<T>, options?: Parameters<Queue["subscribe"]>[2]): void =>
+          target.subscribe<T>(topic, async (msg) => {
+            try {
+              await handler(msg);
+            } catch (err) {
+              if (err instanceof DomainError) throw new NonRetryableError(err.message, err);
+              throw err;
+            }
+          }, options);
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 export function registerContractConsumers(rawQueue: Queue): void {
-  const queue = tenantScoped(rawQueue);
+  const queue = rejectBusinessRulesPermanently(tenantScoped(rawQueue));
   // ── create → draft ──────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.contractCreate, async (msg) => {
     const p = msg.payload as {
@@ -55,7 +86,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.id);
-      if (!contract) throw new Error(`contract ${p.id} not found`);
+      if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertDistinctMakerChecker(contract.createdBy, msg.actorId); // defense-in-depth
       assertTransitionAllowed(contract.status ?? "draft", "approved");
       await repo.updateContract(tx, p.id, {
@@ -77,7 +108,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.id);
-      if (!contract) throw new Error(`contract ${p.id} not found`);
+      if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertTransitionAllowed(contract.status ?? "draft", "active");
       await repo.updateContract(tx, p.id, {
         status: "active", updatedBy: msg.actorId, version: (contract.version ?? 1) + 1,
@@ -98,7 +129,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.id);
-      if (!contract) throw new Error(`contract ${p.id} not found`);
+      if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertTransitionAllowed(contract.status ?? "draft", "closed");
       await repo.updateContract(tx, p.id, {
         status: "closed", updatedBy: msg.actorId, version: (contract.version ?? 1) + 1,
@@ -119,7 +150,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.id);
-      if (!contract) throw new Error(`contract ${p.id} not found`);
+      if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertDistinctMakerChecker(contract.createdBy, msg.actorId); // defense-in-depth
       assertTransitionAllowed(contract.status ?? "draft", "terminated");
       await repo.updateContract(tx, p.id, {
@@ -137,12 +168,23 @@ export function registerContractConsumers(rawQueue: Queue): void {
 
   // ── amend: value/expiry variation (only when active) ─────────────────────
   queue.subscribe(COMMANDS.contractAmend, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason: string; valueDelta: number; newExpiry?: string };
+    const p = msg.payload as {
+      id: string; tenantId: string; reason: string; valueDelta: number; newExpiry?: string;
+      /** F74: contract.version the route validated against (absent on pre-F74 messages). */
+      expectedVersion?: number;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.id);
-      if (!contract) throw new Error(`contract ${p.id} not found`);
+      if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertCanAmend(contract.status ?? "draft");
+      // F74: the contract changed after this amendment was accepted -> stale
+      // command; never apply it against a state the requester did not see.
+      if (p.expectedVersion !== undefined && (contract.version ?? 1) !== p.expectedVersion) {
+        throw new NonRetryableError(
+          `STALE_COMMAND: contract ${p.id} amend issued against v${p.expectedVersion}, now v${contract.version ?? 1}`,
+        );
+      }
       const amendmentNo = (await repo.countAmendments(tx, p.id)) + 1;
       await repo.insertAmendment(tx, {
         id: randomUUID(), contractId: p.id, tenantId: p.tenantId,
@@ -189,9 +231,9 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.contractId);
-      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
       const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
-      if (!milestone) throw new Error(`milestone ${p.milestoneId} not found`);
+      if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;
       await repo.updateMilestone(tx, p.milestoneId, p.tenantId, {
         status: "completed",
@@ -222,9 +264,9 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.contractId);
-      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
       const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
-      if (!milestone) throw new Error(`milestone ${p.milestoneId} not found`);
+      if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;
 
       const sla = (contract.slaTerms ?? {}) as Record<string, unknown>;
@@ -270,7 +312,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.contractId);
-      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
       await repo.insertBond(tx, {
         id: p.id, contractId: p.contractId, tenantId: p.tenantId,
         bondType: p.bondType, amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
@@ -295,7 +337,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bond = await repo.findBondByIdTx(tx, p.bondId, p.tenantId);
-      if (!bond || bond.contractId !== p.contractId) throw new Error(`bond ${p.bondId} not found`);
+      if (!bond || bond.contractId !== p.contractId) throw new NonRetryableError(`BOND_NOT_FOUND: ${p.bondId}`);
       assertBondTransition(bond.status ?? "held", p.toStatus);
       await repo.updateBond(tx, p.bondId, p.tenantId, {
         status: p.toStatus,
