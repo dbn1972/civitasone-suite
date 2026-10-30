@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { resolvePoRef, ProcurementUnavailableError } from "../../shared/procurement-client.js";
-import { assertDistinctMakerChecker, assertCanAmend, DomainError } from "./domain.js";
+import { assertDistinctMakerChecker, assertCanAmend, assertTransitionAllowed, DomainError, type ContractStatus } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
   ActivateContractBody, CloseContractBody, TerminateContractBody,
@@ -35,6 +35,21 @@ async function loadScoped(ctx: RequestContext, id: string) {
     throw new HttpError(404, "NOT_FOUND", "contract not found");
   }
   return contract;
+}
+
+/**
+ * B9-contract (F74 pattern for every lifecycle transition): reject an illegal
+ * transition synchronously with 409 INVALID_TRANSITION instead of a 202 the
+ * worker can only dead-letter. The consumer re-checks under a row lock, which is
+ * the authoritative guard against concurrent / duplicate commands.
+ */
+function assertTransition409(contract: { status: string | null }, to: ContractStatus): void {
+  try {
+    assertTransitionAllowed(contract.status ?? "draft", to);
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
 }
 
 export async function createContract(ctx: RequestContext, body: CreateContractBody): Promise<Accepted> {
@@ -89,6 +104,7 @@ export async function approveContract(ctx: RequestContext, id: string, body: App
     if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
     throw err;
   }
+  assertTransition409(contract, "approved");
   await queue.publish(COMMANDS.contractApprove, {
     messageId: randomUUID(), type: COMMANDS.contractApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -100,7 +116,7 @@ export async function approveContract(ctx: RequestContext, id: string, body: App
 
 /** Activate an approved contract (bring it in force). */
 export async function activateContract(ctx: RequestContext, id: string, body: ActivateContractBody): Promise<Accepted> {
-  await loadScoped(ctx, id);
+  assertTransition409(await loadScoped(ctx, id), "active");
   await queue.publish(COMMANDS.contractActivate, {
     messageId: randomUUID(), type: COMMANDS.contractActivate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -112,7 +128,7 @@ export async function activateContract(ctx: RequestContext, id: string, body: Ac
 
 /** Close an active contract normally (obligations discharged). */
 export async function closeContract(ctx: RequestContext, id: string, body: CloseContractBody): Promise<Accepted> {
-  await loadScoped(ctx, id);
+  assertTransition409(await loadScoped(ctx, id), "closed");
   await queue.publish(COMMANDS.contractClose, {
     messageId: randomUUID(), type: COMMANDS.contractClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -131,6 +147,7 @@ export async function terminateContract(ctx: RequestContext, id: string, body: T
     if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
     throw err;
   }
+  assertTransition409(contract, "terminated");
   await queue.publish(COMMANDS.contractTerminate, {
     messageId: randomUUID(), type: COMMANDS.contractTerminate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -172,7 +189,7 @@ export async function amendContract(ctx: RequestContext, id: string, body: Amend
  * the file is under approval.
  */
 export async function submitContractForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
-  await loadScoped(ctx, id);
+  assertTransition409(await loadScoped(ctx, id), "pending_approval");
   await queue.publish(COMMANDS.contractSubmitApproval, {
     messageId: randomUUID(), type: COMMANDS.contractSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

@@ -85,7 +85,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // B9: serialise lifecycle transitions
       if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertDistinctMakerChecker(contract.createdBy, msg.actorId); // defense-in-depth
       assertTransitionAllowed(contract.status ?? "draft", "approved");
@@ -107,7 +107,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // B9: serialise lifecycle transitions
       if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertTransitionAllowed(contract.status ?? "draft", "active");
       await repo.updateContract(tx, p.id, {
@@ -128,7 +128,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // B9: serialise lifecycle transitions
       if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertTransitionAllowed(contract.status ?? "draft", "closed");
       await repo.updateContract(tx, p.id, {
@@ -149,7 +149,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // B9: serialise lifecycle transitions
       if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertDistinctMakerChecker(contract.createdBy, msg.actorId); // defense-in-depth
       assertTransitionAllowed(contract.status ?? "draft", "terminated");
@@ -202,7 +202,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // B9: serialise lifecycle transitions
       if (!contract || contract.tenantId !== p.tenantId) return;
       // Only a draft contract can be submitted to eOffice for award approval.
       assertTransitionAllowed(contract.status ?? "draft", "pending_approval");
@@ -221,7 +221,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.contractId);
       if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
-      const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
+      const milestone = await repo.findMilestoneByIdForUpdateTx(tx, p.milestoneId, p.contractId, p.tenantId); // B9: no double completion
       if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;
       await repo.updateMilestone(tx, p.milestoneId, p.tenantId, {
@@ -254,7 +254,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const contract = await repo.findContractByIdTx(tx, p.contractId);
       if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
-      const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
+      const milestone = await repo.findMilestoneByIdForUpdateTx(tx, p.milestoneId, p.contractId, p.tenantId); // B9: no double completion
       if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;
 
@@ -325,7 +325,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const bond = await repo.findBondByIdTx(tx, p.bondId, p.tenantId);
+      const bond = await repo.findBondByIdForUpdateTx(tx, p.bondId, p.tenantId); // B9: no double transition
       if (!bond || bond.contractId !== p.contractId) throw new NonRetryableError(`BOND_NOT_FOUND: ${p.bondId}`);
       assertBondTransition(bond.status ?? "held", p.toStatus);
       await repo.updateBond(tx, p.bondId, p.tenantId, {
