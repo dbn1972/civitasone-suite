@@ -33,6 +33,12 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   // UAT #31: the web campaign composer calls /api/v1/segments (apps/web lib/notifications/campaigns.ts);
   // notification-service serves it at /v1/segments. Its other un-prefixed v1 modules have no web caller.
   { name: "notification-segments", prefix: "/api/v1/segments", upstream: upstream("notification", 3006), upstreamPath: "/v1/segments" },
+  // UAT F61: template maker-checker lifecycle (modules/approval: /v1/templates/:id/submit|approve|reject|publish,
+  // /v1/templates/commands/:commandId/status) and template locales (modules/i18n: /v1/templates/:templateId/locales)
+  // are served at the un-namespaced /v1/templates; no prefix reached them ("no upstream for path"). Forwarded
+  // verbatim. Exact segment match: /api/v1/contract/templates (contract) and /api/v1/hrms/jd-templates (hrms)
+  // keep their own longer prefixes; the legacy template CRUD stays on /api/notification/templates.
+  { name: "notification-templates", prefix: "/api/v1/templates", upstream: upstream("notification", 3006), upstreamPath: "/v1/templates" },
   { name: "finance",      prefix: "/api/v1/finance",   upstream: upstream("finance", 3007) },
   { name: "procurement",  prefix: "/api/v1/procurement", upstream: upstream("procurement", 3008) },
   { name: "contract",     prefix: "/api/v1/contract",  upstream: upstream("contract", 3009) },

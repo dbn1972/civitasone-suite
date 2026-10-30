@@ -33,6 +33,9 @@ const LOADER_PATHS = [
   { method: "GET", gatewayPath: "/api/v1/asset/assets", expectUpstream: "/v1/assets/assets" },
   { method: "GET", gatewayPath: "/api/notification/templates", expectUpstream: "/notifications/templates" },
   { method: "GET", gatewayPath: "/api/notification/deliveries", expectUpstream: "/notifications/deliveries" },
+  // UAT F61: notification-service template approval lifecycle + locales.
+  { method: "POST", gatewayPath: "/api/v1/templates/t-1/approve", expectUpstream: "/v1/templates/t-1/approve" },
+  { method: "GET", gatewayPath: "/api/v1/templates/t-1/locales", expectUpstream: "/v1/templates/t-1/locales" },
   { method: "GET", gatewayPath: "/api/v1/legal/cases", expectUpstream: "/v1/legal/cases" },
   { method: "GET", gatewayPath: "/api/v1/stock/items", expectUpstream: "/v1/stock/items" },
   { method: "GET", gatewayPath: "/api/v1/billing/plans", expectUpstream: "/v1/billing/plans" },
@@ -116,7 +119,8 @@ describe("gateway contract", () => {
       ["meeting", "meetings"],
       // notification-service: legacy /api/notification + versioned /api/v1/notification
       // + /api/v1/segments (web campaign composer, UAT #31)
-      ["notification", "notification-v1", "notification-segments"],
+      // + /api/v1/templates (template approval lifecycle + locales, UAT F61)
+      ["notification", "notification-v1", "notification-segments", "notification-templates"],
       // location-service: plural resource prefixes share one upstream
       ["locations", "geofences", "jurisdictions", "hierarchy", "pincodes"],
       // tenant-service: plural /tenants + singular /tenant alias, plus its other top-level
