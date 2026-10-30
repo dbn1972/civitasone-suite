@@ -23,6 +23,22 @@ export async function findAssessment(tenantId: string, id: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * UAT B8-F68 (P1 accept-nonexistent): uncached, tenant-scoped existence read used by the
+ * remit / remit-decide commands before publishing (RLS-safe: runs in the tenant context).
+ */
+export async function assessmentExists(tenantId: string, id: string): Promise<boolean> {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select({ id: assessments.id })
+      .from(assessments)
+      .where(and(eq(assessments.tenantId, tenantId), eq(assessments.id, id)))
+      .limit(1);
+  });
+  return rows.length > 0;
+}
+
 export async function listAssessments(tenantId: string, pagination: { limit: number; offset: number }) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:assessments`, async () => {
     return tenantTransaction(db, tenantId, async (tx) => {
