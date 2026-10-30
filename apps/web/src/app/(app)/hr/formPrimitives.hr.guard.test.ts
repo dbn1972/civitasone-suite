@@ -33,6 +33,7 @@ const HR_CONVERTED = [
   "leave/allocate/AllocateLeaveForm.tsx",
   "leave/apply/ApplyLeaveForm.tsx",
   "locations/new/AddLocationForm.tsx",
+  "medical/_components/MedicalInsuranceForm.tsx",
   "medical/new/NewMedicalClaimForm.tsx",
   "office-locations/OfficeLocationForm.tsx",
   "onboarding/_components/AddTaskForm.tsx",

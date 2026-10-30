@@ -4,7 +4,7 @@ import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../.
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
-import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES, MEDICAL_INSURANCE_EDIT_ROLES, MEDICAL_INSURANCE_READ_ROLES, MEDICAL_INSURANCE_REVEAL_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
@@ -15,6 +15,9 @@ import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { getTranslations } from "next-intl/server";
+import { getMedicalInsurance } from "../../medical/_components/insuranceData";
+import { MedicalInsuranceCard } from "../../medical/_components/MedicalInsuranceCard";
+import { MedicalInsuranceForm } from "../../medical/_components/MedicalInsuranceForm";
 
 // GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
 // resolution to GET /v1/hrms/lifecycle/transfers|promotions -- real,
@@ -248,6 +251,14 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles
   // that may read it, so everyone else never meets a 403 card.
   const payGroupResult = roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? await getEmployeePayGroup(params.id) : null;
+
+  // Medical insurance: card number / scheme id arrive masked for every viewer
+  // here; the reveal tier (hr_admin / super_admin) gets the audited reveal, the
+  // HR write tier the edit form; manager / finance_officer read only. Only
+  // fetched for roles the backend admits, so nobody else meets a 403 card.
+  const canEditInsurance = roles.some((r) => MEDICAL_INSURANCE_EDIT_ROLES.includes(r));
+  const canRevealInsurance = roles.some((r) => MEDICAL_INSURANCE_REVEAL_ROLES.includes(r));
+  const insuranceResult = roles.some((r) => MEDICAL_INSURANCE_READ_ROLES.includes(r)) ? await getMedicalInsurance(params.id) : null;
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
@@ -549,6 +560,13 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
       )}
 
       {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
+      {insuranceResult && (
+        <MedicalInsuranceCard result={insuranceResult} canReveal={canRevealInsurance}>
+          {canEditInsurance && insuranceResult.source !== "error" && (
+            <MedicalInsuranceForm employeeId={params.id} initial={insuranceResult.data} />
+          )}
+        </MedicalInsuranceCard>
+      )}
       {canLinkLogin && <EmployeeLoginLinkCard employeeId={params.id} />}
 
       {scannedDocs && <ScannedDocumentsSection result={scannedDocs} backHref="/hr/employees" />}
