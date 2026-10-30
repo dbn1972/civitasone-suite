@@ -168,23 +168,12 @@ export function registerContractConsumers(rawQueue: Queue): void {
 
   // ── amend: value/expiry variation (only when active) ─────────────────────
   queue.subscribe(COMMANDS.contractAmend, async (msg) => {
-    const p = msg.payload as {
-      id: string; tenantId: string; reason: string; valueDelta: number; newExpiry?: string;
-      /** F74: contract.version the route validated against (absent on pre-F74 messages). */
-      expectedVersion?: number;
-    };
+    const p = msg.payload as { id: string; tenantId: string; reason: string; valueDelta: number; newExpiry?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.id);
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.id); // F74: serialise concurrent amends
       if (!contract) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.id}`);
       assertCanAmend(contract.status ?? "draft");
-      // F74: the contract changed after this amendment was accepted -> stale
-      // command; never apply it against a state the requester did not see.
-      if (p.expectedVersion !== undefined && (contract.version ?? 1) !== p.expectedVersion) {
-        throw new NonRetryableError(
-          `STALE_COMMAND: contract ${p.id} amend issued against v${p.expectedVersion}, now v${contract.version ?? 1}`,
-        );
-      }
       const amendmentNo = (await repo.countAmendments(tx, p.id)) + 1;
       await repo.insertAmendment(tx, {
         id: randomUUID(), contractId: p.id, tenantId: p.tenantId,

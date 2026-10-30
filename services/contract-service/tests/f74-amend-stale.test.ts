@@ -12,8 +12,7 @@
  *  2. Consumer: a business-rule rejection is NonRetryable, so a refused amend in
  *     the queue's retry backoff can no longer land after activation.
  *  3. Consumer: every contract lifecycle handler's business-rule / not-found
- *     rejection is NonRetryable; a command issued against an older contract
- *     version is refused (optimistic concurrency).
+ *     rejection is NonRetryable, while a plain (transient) error is still retried.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -28,7 +27,8 @@ import { db } from "../src/shared/db.js";
 import { queue as infraQueue } from "../src/shared/infra.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { contractContracts, contractAmendments } from "../src/modules/contracts/schema.js";
-import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
+import { registerContractConsumers, rejectBusinessRulesPermanently } from "../src/modules/contracts/consumer.js";
+import { DomainError } from "../src/modules/contracts/domain.js";
 import { COMMANDS } from "../src/topics.js";
 
 const MAKER   = "00000000-f74a-4000-8000-0000000000a1";
@@ -125,6 +125,29 @@ describe("F74 route: PATCH /v1/contract/contracts/:id/amend", () => {
     expect(await amendments(id)).toHaveLength(0);
   });
 
+  it("two back-to-back amends on an active contract are both applied (version +2)", async () => {
+    const id = await seed("active");
+    const [a, b] = await Promise.all([
+      app.inject({
+        method: "PATCH", url: `/v1/contract/contracts/${id}/amend`, headers: auth(CHECKER),
+        payload: { reason: "first variation", valueDelta: 10_000 },
+      }),
+      app.inject({
+        method: "PATCH", url: `/v1/contract/contracts/${id}/amend`, headers: auth(CHECKER),
+        payload: { reason: "second variation", valueDelta: 2_500 },
+      }),
+    ]);
+    expect(a.statusCode).toBe(202);
+    expect(b.statusCode).toBe(202);
+    await q.drain();
+
+    const row = await contract(id);
+    expect(row?.valueMinor).toBe(BASE_VALUE + 12_500n);
+    expect(row?.version).toBe(3);
+    const ams = await amendments(id);
+    expect(ams.map((x) => x.amendmentNo).sort()).toEqual([1, 2]);
+  });
+
   it("missing contract -> 404", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/contract/contracts/${randomUUID()}/amend`, headers: auth(MAKER),
@@ -162,7 +185,7 @@ describe("F74 consumer: refused amend is dead-lettered, not redelivered", () => 
     registerContractConsumers(q);
     await q.start();
 
-    // A pre-F74 in-flight command (no expectedVersion, never route-checked).
+    // A command that never went through the route check (e.g. in flight before F74).
     const amend = envelope(COMMANDS.contractAmend, MAKER, { id, tenantId: TENANT, reason: "stale variation", valueDelta: 1 });
     await q.publish(COMMANDS.contractAmend, amend);
     await new Promise((r) => setTimeout(r, 100)); // first attempt has run and been refused
@@ -238,23 +261,59 @@ describe("F74 consumer: business-rule rejections are NonRetryable", () => {
     expect(isNonRetryable(err)).toBe(true);
     expect(String((err as Error).message)).toContain("SOD_VIOLATION");
   });
+});
 
-  it("amend issued against an older contract version is refused and not applied", async () => {
-    const err = await rejection(COMMANDS.contractAmend, CHECKER, {
-      id: active, tenantId: TENANT, reason: "stale variation", valueDelta: 1, expectedVersion: 2,
-    });
-    expect(isNonRetryable(err)).toBe(true);
-    expect(String((err as Error).message)).toContain("STALE_COMMAND");
-    expect((await contract(active))?.valueMinor).toBe(BASE_VALUE);
-    expect(await amendments(active)).toHaveLength(0);
+// ── 4. Transient (non-business) errors are still retried ─────────────────────
+describe("F74 consumer: a plain Error is still retried", () => {
+  it("the wrapper rethrows a plain Error unchanged and retryable", async () => {
+    let captured: Handler | undefined;
+    const capture = { subscribe: (_t: string, h: Handler) => { captured = h; } } as unknown as Queue;
+    const boom = new Error("connection terminated unexpectedly");
+    rejectBusinessRulesPermanently(capture).subscribe("t", async () => { throw boom; });
+    const err = await captured!(envelope("t", CHECKER, {}) as never).catch((e: unknown) => e);
+    expect(err).toBe(boom);
+    expect(isNonRetryable(err)).toBe(false);
   });
 
-  it("amend carrying the current version applies", async () => {
-    const h = handlers.get(COMMANDS.contractAmend)!;
-    await h(envelope(COMMANDS.contractAmend, CHECKER, {
-      id: active, tenantId: TENANT, reason: "current variation", valueDelta: 5, expectedVersion: 3,
-    }) as never);
-    expect((await contract(active))?.valueMinor).toBe(BASE_VALUE + 5n);
-    expect(await amendments(active)).toHaveLength(1);
+  it("MemoryQueue: a transient Error is redelivered until it succeeds; a DomainError is attempted once", async () => {
+    const q = rejectBusinessRulesPermanently(new MemoryQueue({ maxAttempts: 5 })) as unknown as MemoryQueue;
+    let transientAttempts = 0;
+    let ruleAttempts = 0;
+    let applied = false;
+    q.subscribe("f74.transient", async () => {
+      transientAttempts++;
+      if (transientAttempts < 3) throw new Error("simulated DB outage");
+      applied = true;
+    });
+    q.subscribe("f74.rule", async () => {
+      ruleAttempts++;
+      throw new DomainError("INVALID_STATUS", "only active contracts can be amended");
+    });
+    await q.start();
+    await q.publish("f74.transient", envelope("f74.transient", CHECKER, {}));
+    await q.publish("f74.rule", envelope("f74.rule", CHECKER, {}));
+    await q.drain();
+    await q.stop();
+
+    expect(transientAttempts).toBe(3);
+    expect(applied).toBe(true);
+    expect(ruleAttempts).toBe(1);
+    expect(q.dlq.map((d) => d.topic)).toEqual(["f74.rule"]);
+  });
+
+  it("a real contract handler: a non-domain runtime error is not converted to NonRetryable", async () => {
+    let amend: Handler | undefined;
+    const capture = {
+      subscribe: (topic: string, h: Handler) => { if (topic === COMMANDS.contractAmend) amend = h; },
+    } as unknown as Queue;
+    registerContractConsumers(capture);
+    const id = await seed("active");
+    // BigInt(1.5) throws a RangeError inside the handler — not a business rule.
+    const err = await amend!(envelope(COMMANDS.contractAmend, CHECKER, {
+      id, tenantId: TENANT, reason: "fractional delta", valueDelta: 1.5,
+    }) as never).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RangeError);
+    expect(isNonRetryable(err)).toBe(false);
+    expect((await contract(id))?.valueMinor).toBe(BASE_VALUE);
   });
 });

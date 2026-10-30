@@ -143,9 +143,9 @@ export async function terminateContract(ctx: RequestContext, id: string, body: T
 /**
  * Amend (vary) an active contract. F74: the state is checked HERE, synchronously
  * (tenant-scoped 404 / 409 INVALID_STATUS), instead of being left to the worker —
- * a 202 for an amendment that can never apply misleads the caller. The command
- * carries the version it was validated against so the consumer refuses it if the
- * contract has changed in between (optimistic concurrency).
+ * a 202 for an amendment that can never apply misleads the caller. The consumer
+ * re-checks the state and rejects a wrong-state amend as non-retryable, so a
+ * refused amendment can never be applied after a later activation.
  */
 export async function amendContract(ctx: RequestContext, id: string, body: AmendContractBody): Promise<Accepted> {
   const contract = await loadScoped(ctx, id);
@@ -158,7 +158,7 @@ export async function amendContract(ctx: RequestContext, id: string, body: Amend
   await queue.publish(COMMANDS.contractAmend, {
     messageId: randomUUID(), type: COMMANDS.contractAmend,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body, expectedVersion: contract.version ?? 1 },
+    payload: { id, tenantId: ctx.tenantId, ...body },
   });
   await inval(ctx, id);
   return { id, status: "accepted", correlationId: ctx.correlationId };
