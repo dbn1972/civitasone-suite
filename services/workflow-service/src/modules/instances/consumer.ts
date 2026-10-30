@@ -14,6 +14,7 @@ import type { CreateInstancePayload } from "./commands.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 import { resolveAssignee } from "../assignment/resolver.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { WORKFLOW_NOT_CONFIGURED, workflowNotConfiguredMessage } from "../definitions/configured.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -39,6 +40,11 @@ export function registerInstancesConsumers(queue: Queue): void {
       // Fail closed: persist a `rejected` instance, record it, emit a rejection,
       // and create NO actionable approval task. The source module's file simply
       // never gets an approval rather than a one-click rubber-stamp.
+      // F77: the rejection names its cause (WORKFLOW_NOT_CONFIGURED) so a
+      // consumer or operator can tell "this tenant has no such chain" apart
+      // from a human rejection. Callers that can check synchronously do so
+      // first (POST /v1/workflow/instances and procurement's PO create answer
+      // 422 WORKFLOW_NOT_CONFIGURED); this async path stays fail-closed.
       if (p.definitionCode && !def) {
         await repo.insert(tx, {
           id: p.id, tenantId: p.tenantId, name: p.name, status: "rejected",
@@ -51,10 +57,11 @@ export function registerInstancesConsumers(queue: Queue): void {
           tenantId: p.tenantId, instanceId: p.id, taskId: null,
           fromNode: null, toNode: null, action: "rejected", decision: null,
           actorId: msg.actorId,
-          detail: { reason: "unknown_definition", definitionCode: p.definitionCode },
+          detail: { reason: "unknown_definition", code: WORKFLOW_NOT_CONFIGURED, definitionCode: p.definitionCode },
         });
         await emit(tx, msg, EVENTS.instanceRejected, {
-          instanceId: p.id, reason: "unknown_definition",
+          instanceId: p.id, reason: "unknown_definition", code: WORKFLOW_NOT_CONFIGURED,
+          message: workflowNotConfiguredMessage(p.definitionCode),
           definitionCode: p.definitionCode, refType: p.refType, refId: p.refId,
         }, "reject_unknown_definition", p.id);
         return; // no task created → no rubber-stamp path

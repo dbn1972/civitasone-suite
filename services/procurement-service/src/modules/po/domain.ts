@@ -5,6 +5,13 @@ export class DomainError extends Error {
   }
 }
 
+/**
+ * Workflow definition every PO's approval instance is raised against
+ * (po/consumer.ts). Seeded per tenant by workflow-service's provisioning
+ * catalogue (F77); the PO create routes pre-check it exists.
+ */
+export const PO_APPROVAL_DEFINITION_CODE = "procurement_po_approval";
+
 export type PoStatus = "draft" | "pending" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
 
 const VALID_TRANSITIONS: Record<PoStatus, PoStatus[]> = {

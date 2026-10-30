@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError } from "./domain.js";
+import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import { isEmpanelmentLapsed, assertNonEmpanelledOrderBasis, DomainError as VendorDomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
@@ -262,7 +262,7 @@ export function registerPoConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           name: `${PO_WORKFLOW_NAME} — ${poNo}`,
           status: "active",
-          definitionCode: "procurement_po_approval",
+          definitionCode: PO_APPROVAL_DEFINITION_CODE,
           initialTaskName: "Procurement Head Approval",
           version: 1,
           refType: "procurement_po",
