@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
-const feeMinorCoerce = z.union([
+/** A non-negative fee in paise: digit string, or a non-negative integer coerced to one. */
+const feeMinorValue = z.union([
   z.string().regex(/^\d+$/),
   z.number().int().min(0).transform((n: number) => String(n)),
-]).default('0');
+]);
+
+/** Create: a licence issued without a fee starts at 0. */
+const feeMinorCoerce = feeMinorValue.default('0');
 
 const amountMinorCoerce = z.union([
   z.string().regex(/^\d+$/),
@@ -39,7 +43,11 @@ export const createTradeLicenseBody = z.object({
 export const renewTradeLicenseBody = z.object({
   expiryDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   renewalYear: z.number().int().optional(),
-  feeMinor:    feeMinorCoerce,
+  // Owner decision: an omitted feeMinor KEEPS the licence's current fee (the renew consumer
+  // falls back to the stored fee when feeMinor is absent). It used to default to '0' here,
+  // which zeroed the fee on every renewal that did not restate it. An explicit feeMinor still
+  // applies, including an explicit 0 (a fee waiver on renewal, same range create allows).
+  feeMinor:    feeMinorValue.optional(),
   version:     z.number().int().min(1).optional().default(1),
 }).transform((data) => ({
   ...data,
