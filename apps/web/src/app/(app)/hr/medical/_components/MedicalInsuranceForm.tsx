@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Field, Input, Select } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 import { minorToDecimalString, minorToSafeNumber, nonNegativeRupeesToMinorString } from "@/lib/money";
 import {
   INSURANCE_DEPENDANT_RELATIONS, INSURANCE_SCHEME_TYPES, isDependantRelation, isSchemeType,
@@ -53,6 +53,7 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
   );
   const [errors, setErrors] = useState<InsuranceFormErrors>({});
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const isNew = initial === null;
@@ -97,13 +98,15 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
     await send("PUT", body);
   }
 
+  // Removing the record is destructive: confirmed through the design-system
+  // ConfirmDialog (W1 SF-19 -- no native window.confirm).
   async function remove() {
-    if (!window.confirm(t("confirmDelete"))) return;
     setMessage(null);
-    await send("DELETE");
+    const ok = await send("DELETE");
+    if (ok) setConfirmDelete(false);
   }
 
-  async function send(method: "PUT" | "DELETE", body?: unknown) {
+  async function send(method: "PUT" | "DELETE", body?: unknown): Promise<boolean> {
     setBusy(true);
     try {
       const res = await fetch(`/api/proxy/v1/hrms/medical/insurance/${encodeURIComponent(employeeId)}`, {
@@ -117,7 +120,7 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
         setSchemeId("");
         setClearSchemeId(false);
         router.refresh();
-        return;
+        return true;
       }
       const err = (await res.json().catch(() => null)) as { code?: string } | null;
       const code = err?.code;
@@ -125,8 +128,10 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
         kind: "error",
         text: code && (KNOWN_ERRORS as readonly string[]).includes(code) ? t(`errors.api.${code as KnownError}`) : t("errors.api.generic"),
       });
+      return false;
     } catch {
       setMessage({ kind: "error", text: t("errors.api.generic") });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -219,9 +224,21 @@ export function MedicalInsuranceForm({ employeeId, initial }: { employeeId: stri
         <Button variant="primary" type="submit" disabled={busy}>{busy ? t("saving") : t("saveButton")}</Button>
         <Button variant="ghost" disabled={busy} onClick={() => { setOpen(false); setErrors({}); setMessage(null); }}>{t("cancelButton")}</Button>
         {!isNew && (
-          <Button variant="danger" disabled={busy} onClick={() => void remove()}>{t("deleteButton")}</Button>
+          <Button variant="danger" disabled={busy} onClick={() => { setMessage(null); setConfirmDelete(true); }}>{t("deleteButton")}</Button>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title={t("deleteButton")}
+        description={t("confirmDelete")}
+        confirmLabel={t("deleteButton")}
+        cancelLabel={t("cancelButton")}
+        danger
+        busy={busy}
+        errorMessage={confirmDelete && message?.kind === "error" ? message.text : undefined}
+        onConfirm={() => void remove()}
+        onCancel={() => { if (!busy) setConfirmDelete(false); }}
+      />
       {message && (
         <p role={message.kind === "error" ? "alert" : "status"} style={{ margin: 0, fontSize: 13 }}>{message.text}</p>
       )}

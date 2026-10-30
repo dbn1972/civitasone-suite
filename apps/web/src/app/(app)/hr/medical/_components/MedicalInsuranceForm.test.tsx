@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { MedicalInsuranceForm } from "./MedicalInsuranceForm";
@@ -105,16 +105,37 @@ describe("MedicalInsuranceForm (HR)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(m.errors.api.NOT_FOUND);
   });
 
-  it("remove asks for confirmation, then DELETEs", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  it("remove opens the ds ConfirmDialog; nothing is deleted until it is confirmed", async () => {
     renderForm(EXISTING);
     fireEvent.click(screen.getByRole("button", { name: m.deleteButton }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(m.confirmDelete);
     expect(fetchMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: m.deleteButton }));
+    fireEvent.click(within(dialog).getByRole("button", { name: m.deleteButton }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe("DELETE");
+    const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toBe(`/api/proxy/v1/hrms/medical/insurance/${EMP}`);
+    expect(init.method).toBe("DELETE");
     expect(await screen.findByRole("status")).toHaveTextContent(m.deleted);
-    confirm.mockRestore();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it("cancelling the ConfirmDialog closes it and deletes nothing", async () => {
+    renderForm(EXISTING);
+    fireEvent.click(screen.getByRole("button", { name: m.deleteButton }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: m.cancelButton }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a failed delete keeps the dialog open and shows the error in it", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "NOT_FOUND" }), { status: 404 }));
+    renderForm(EXISTING);
+    fireEvent.click(screen.getByRole("button", { name: m.deleteButton }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: m.deleteButton }));
+    await waitFor(() => expect(within(screen.getByRole("alertdialog")).getByText(m.errors.api.NOT_FOUND)).toBeInTheDocument());
   });
 
   it("a brand-new record offers no remove button", () => {
