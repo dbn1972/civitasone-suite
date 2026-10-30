@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { caseIdParam, scrutinyIdParam, defectIdParam, recordScrutinyBody, raiseDefectBody, resolveDefectBody, resolveScrutinyBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { getCaseById } from "../case-registry/repo.js";
 
 const SCRUTINY_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
 const SCRUTINY_READ_ROLES = ["registrar", "court_admin", "super_admin", "court_clerk", "judge"];
@@ -15,6 +16,8 @@ export async function scrutinyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SCRUTINY_WRITE_ROLES);
     const { id } = caseIdParam.parse(req.params);
     const body = recordScrutinyBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getCaseById(ctx.tenantId, id))) throw new HttpError(404, "CASE_NOT_FOUND", "case not found");
     const result = await commands.recordScrutiny(ctx, id, body);
     return reply.code(202).send(result);
   });

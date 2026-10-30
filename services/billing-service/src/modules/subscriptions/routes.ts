@@ -8,6 +8,7 @@ import { createSubBody, idParam, tenantParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as plansQueries from "../plans/queries.js";
+import * as repo from "./repo.js";
 
 const SUBSCRIPTION_READERS = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 const SUMMARY_STATUSES = new Set(["active", "cancelled", "past_due", "suspended", "trial"]);
@@ -24,6 +25,8 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const { id } = idParam.parse(req.params);
+    // UAT W8-D (P1): 404 for a subscription this tenant does not have, before publishing.
+    if (!(await repo.findIdInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "subscription not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.activateSubscription(ctx, id));
   });
 
@@ -31,6 +34,8 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const { id } = idParam.parse(req.params);
+    // UAT W8-D (P1): 404 for a subscription this tenant does not have, before publishing.
+    if (!(await repo.findIdInTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "subscription not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelSubscription(ctx, id));
   });
 

@@ -18,8 +18,11 @@ vi.mock("../src/modules/approval-rules/queries.js", () => ({
   getApprovalRule: vi.fn(async () => null),
 }));
 
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { estabApprovalRule } from "../src/modules/approval-rules/schema.js";
 import {
   parseApproverRoleCatalogue, unknownApproverRoles, assertApproverRolesKnown,
 } from "../src/modules/approval-rules/roleCatalogue.js";
@@ -31,7 +34,8 @@ const ACTOR = "0f1a5e00-5000-4000-8000-0000000007c3";
 
 function authHeader(roles: string[]) {
   const token = signToken({ sub: ACTOR, tid: TENANT, roles, sid: "sess-am03" }, SECRET, 3600);
-  return { authorization: `Bearer ${token}` };
+  // x-tenant-id as the gateway forwards it, so the PATCH existence read runs under this tenant's RLS GUC.
+  return { authorization: `Bearer ${token}`, "x-tenant-id": TENANT };
 }
 
 const rule = (roles: string[]) => ({
@@ -171,7 +175,12 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
   it("PATCH: refuses an edited chain with an unknown role, but a patch with no chain (activate / deactivate) is unaffected", async () => {
     process.env.ESTAB_APPROVER_ROLES = "section_officer";
     const app = await buildApp();
+    // UAT W8-A: PATCH now 404s an unknown rule before publishing, so the chain checks below act on a real rule.
     const id = randomUUID();
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(estabApprovalRule).values({
+      id, tenantId: TENANT, module: "finance", sourceType: "finance_sanction", label: `AM03 seed ${id.slice(0, 8)}`,
+      workflowDefinitionCode: `finance.sanction.${id.slice(0, 8)}`, createdBy: ACTOR, updatedBy: ACTOR,
+    })));
     const bad = await app.inject({
       method: "PATCH", url: `/v1/estab/approval-rules/${id}`, headers: authHeader(["estab_admin"]),
       payload: { steps: [{ role: "ghost_role", label: "Ghost" }] },
@@ -185,6 +194,7 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
       payload: { steps: [{ role: "section_officer", label: "Section Officer" }] },
     });
     await app.close();
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(estabApprovalRule).where(eq(estabApprovalRule.id, id))));
     expect(bad.statusCode).toBe(422);
     expect(bad.json().code).toBe("UNKNOWN_APPROVER_ROLE");
     expect(toggle.statusCode).toBe(202);

@@ -474,9 +474,19 @@ describe("GET /v1/cdp/identity/anonymous-visitors", () => {
     await app.close();
   });
 
-  it("400 — limit is mandatory", async () => {
+  // UAT W8-D (P9b): limit used to be mandatory (bare GET = 400); it now defaults to 50.
+  it("200 — limit defaults to 50 when omitted", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/cdp/identity/anonymous-visitors", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(H.visitorListMock).toHaveBeenLastCalledWith(TENANT, 50, 0, {});
+    expect(r.json().meta.pageSize).toBe(50);
+    await app.close();
+  });
+
+  it("400 — limit above the 200 cap", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/cdp/identity/anonymous-visitors?limit=201", headers: auth() });
     expect(r.statusCode).toBe(400);
     await app.close();
   });

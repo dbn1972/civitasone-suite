@@ -347,15 +347,17 @@ describe("Limitation routes — CRUD", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("PATCH /v1/legal/limitations/:id → 202 update", async () => {
+  // UAT W8-B: RULE_UUID is not a real rule: 404, not 202 (the real-rule 202 is covered by
+  // tests/uat-w8b-regulatory.test.ts).
+  it("PATCH /v1/legal/limitations/:id → 404 for a rule that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/legal/limitations/${RULE_UUID}`,
       headers: authHeader(),
       payload: { periodDays: 120 },
     });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().status).toBe("accepted");
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
   });
 
   it("PATCH /v1/legal/limitations/:id → 400 bad uuid", async () => {

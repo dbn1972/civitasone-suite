@@ -32,7 +32,10 @@ import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db, sqlClient } from "../src/shared/db.js";
+import { tenants } from "../src/modules/tenant/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -204,6 +207,11 @@ describe("COMP-007: tenant-extensions -- tenant_configs round trip (0029_tenant_
 
   it("PATCH /config (tenant_admin) replaces the sections it is given and keeps the rest", async () => {
     const tid = randomUUID();
+    // UAT W8-C: PATCH /config now 404s for a tenant that does not exist, so seed a real one.
+    await runWithTenant(tid, () => db.transaction((tx) => tx.insert(tenants).values({
+      id: tid, tenantId: tid, name: "comp007", domain: `${tid}.example.test`, edition: "govt", status: "active",
+      region: "ap-south-1", residency: "IN", createdBy: tid, updatedBy: tid,
+    })));
     await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/modules`, headers: plat(tid), payload: { modules: { hrms: true } } });
     const patch = await app.inject({
       method: "PATCH",
@@ -215,6 +223,7 @@ describe("COMP-007: tenant-extensions -- tenant_configs round trip (0029_tenant_
 
     const cfg = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/config`, headers: admin(tid) });
     expect(cfg.json()).toMatchObject({ modules: { hrms: true }, featureFlags: { beta: true } });
+    await runWithTenant(tid, () => db.transaction((tx) => tx.delete(tenants).where(eq(tenants.id, tid)))).catch(() => undefined);
   });
 
   it("is tenant-isolated: a tenant_admin cannot read another tenant's config", async () => {

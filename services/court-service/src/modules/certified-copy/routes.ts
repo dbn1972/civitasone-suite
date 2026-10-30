@@ -5,6 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { caseIdParam, copyIdParam, requestCopyBody, transitionCopyBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { getCaseById } from "../case-registry/repo.js";
 import type { CertifiedCopyRow } from "./schema.js";
 
 // Apply/request a copy: registry-side clerks and admins.
@@ -56,6 +57,8 @@ export async function certifiedCopyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, COPY_WRITE_ROLES);
     const { id } = caseIdParam.parse(req.params);
     const body = requestCopyBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getCaseById(ctx.tenantId, id))) throw new HttpError(404, "CASE_NOT_FOUND", "case not found");
     const result = await commands.requestCopy(ctx, id, body);
     return reply.code(202).send(result);
   });

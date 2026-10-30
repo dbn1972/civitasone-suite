@@ -97,7 +97,10 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
  */
 async function assertOpinionCaseAccess(ctx: RequestContext, opinionId: string): Promise<void> {
   const opinion = await queries.getOpinion(opinionId, ctx.tenantId);
-  if (opinion?.caseId) await assertCaseAccess(ctx, opinion.caseId);
+  // UAT W8-B: an unknown (or other-tenant) opinion is 404 here, before anything is published. This
+  // used to pass silently, so PATCH .../issue and .../draft answered 202 for a random id.
+  if (!opinion) throw new HttpError(404, "NOT_FOUND", "opinion not found");
+  if (opinion.caseId) await assertCaseAccess(ctx, opinion.caseId);
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

@@ -72,6 +72,12 @@ export async function validationRuleRoutes(app: FastifyInstance): Promise<void> 
       sortOrder: z.number().int().min(0).max(9999).optional(),
     }).parse(req.body);
     if (body.expression) assertParses(body.expression);
+    // UAT W8-C: tenant-scoped existence read before publishing: an unknown validation rule is a 404, not a 202 for a
+    // command that can never apply. Body validation above still runs first; the consumer stays the race-safe check.
+    const found = await withTenant(ctx.tenantId, (tx) =>
+      tx.select({ id: validationRules.id }).from(validationRules)
+        .where(and(eq(validationRules.id, id), eq(validationRules.tenantId, ctx.tenantId))).limit(1));
+    if (!found[0]) throw new HttpError(404, "NOT_FOUND", "Validation rule not found");
 
     return reply.code(202).send({ data: await updateItem(ctx, id, body) });
   });

@@ -7,6 +7,8 @@ export async function getLimitation(id: string, tenantId: string): Promise<Limit
     cache.makeKey(tenantId, "limitation", id),
     async () => (await repo.findById(id)) ?? null,
   );
+  // UAT W8-B: tenant-scoped like queries.getOpinion — another tenant's rule is "not found".
+  if (rule && rule.tenantId !== tenantId) return null;
   return rule ?? null;
 }
 

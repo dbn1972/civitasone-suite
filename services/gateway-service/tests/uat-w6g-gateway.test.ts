@@ -169,11 +169,12 @@ describe("PUB: exact anonymous verify GETs", () => {
     ["/api/v1/trade/licences/verify", "http://127.0.0.1:3070/v1/trade/licences/verify?code=W6G-1"],
   ];
 
-  it("the allow-list is exactly the three GET verify paths", () => {
+  it("the allow-list is exactly the three GET verify paths plus the W8-B minutes-verify POST", () => {
     expect(PUBLIC_ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       "GET /api/v1/fire/nocs/verify",
       "GET /api/v1/shop/permits/verify",
       "GET /api/v1/trade/licences/verify",
+      "POST /api/v1/meetings/minutes/verify",
     ]);
     expect(isPublicRoute("get", "/api/v1/fire/nocs/verify")).toBe(true);
     expect(isPublicRoute("POST", "/api/v1/fire/nocs/verify")).toBe(false);

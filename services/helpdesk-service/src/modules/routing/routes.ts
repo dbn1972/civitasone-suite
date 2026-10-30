@@ -59,10 +59,15 @@ const evaluateBody = z.object({
   ticketId: z.string().uuid().optional(),
 });
 
+// UAT W8-D: this PATCH is an upsert keyed by an identity user id (the first call creates the
+// agent's capacity row), so there is no local record to 404 on. An empty body (or one with only
+// unknown keys, which zod strips) would still create a default row, so at least one field is required.
 const updateCapacityBody = z.object({
   maxTickets: z.number().int().min(1).max(100).optional(),
   skills: z.array(z.string()).optional(),
   available: z.boolean().optional(),
+}).refine((b) => b.maxTickets !== undefined || b.skills !== undefined || b.available !== undefined, {
+  message: "provide at least one of maxTickets, skills, available",
 });
 
 const enqueueBody = z.object({

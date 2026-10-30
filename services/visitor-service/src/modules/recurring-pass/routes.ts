@@ -9,9 +9,10 @@
  * (effective within 30s at all gate terminals).
  */
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { recurringPassCreateBody, recurringPassSuspendBody, recurringPassRevokeBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
+import { recurringPassExists } from "./repo.js";
 
 const WRITE_ROLES = ["receptionist", "security_admin", "tenant_admin", "super_admin"];
 
@@ -43,6 +44,8 @@ export async function recurringPassRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recurringPassSuspendBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await recurringPassExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "recurring pass not found");
 
     const accepted = await commands.recurringPassSuspend(ctx, {
       passId: id,
@@ -58,6 +61,8 @@ export async function recurringPassRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recurringPassRevokeBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await recurringPassExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "recurring pass not found");
 
     const accepted = await commands.recurringPassRevoke(ctx, {
       passId: id,

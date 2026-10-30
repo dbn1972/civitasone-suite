@@ -14,6 +14,13 @@ export async function findBookingsByRoom(roomId: string, limit = 200): Promise<R
   return db.transaction((tx) => tx.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId)).limit(limit));
 }
 
+/** UAT W8-A: one room booking by id, tenant-scoped (route pre-check before checkin/checkout is published). */
+export async function findRoomBookingById(id: string, tenantId: string): Promise<RoomBookingRow | null> {
+  const rows = await db.transaction((tx) => tx.select().from(estabRoomBookings)
+    .where(and(eq(estabRoomBookings.id, id), eq(estabRoomBookings.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 /**
  * GAP-ESTAB-GUESTHOUSE-NEW-01: list rooms (the booking-form directory) so a
  * clerk picks "Room 101" instead of typing a UUID. Tenant-scoped, inside a

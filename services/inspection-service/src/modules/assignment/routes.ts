@@ -36,7 +36,7 @@ import {
   type TourPlanGeneratePayload,
   type GeoAttendanceMarkPayload,
 } from "./commands.js";
-import { findAssignmentsByTenant, findTourPlan } from "./repo.js";
+import { findAssignmentsByTenant, findTourPlan, findTourPlanById } from "./repo.js";
 
 // ─── RBAC role groups (design § API Routes — Assignment Module) ──────────────
 
@@ -185,6 +185,8 @@ export async function registerAssignmentRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, INSPECTOR_ROLES);
     const { id } = tourPlanIdParam.parse(req.params);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findTourPlanById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "tour plan not found");
     const result = await publishTourPlanSubmit({ tourPlanId: id }, ctx);
     return reply.code(202).send({ data: result });
   });
@@ -194,6 +196,8 @@ export async function registerAssignmentRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, SUPERVISING_ROLES);
     const { id } = tourPlanIdParam.parse(req.params);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findTourPlanById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "tour plan not found");
     const result = await publishTourPlanApprove({ tourPlanId: id }, ctx);
     return reply.code(202).send({ data: result });
   });

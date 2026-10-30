@@ -156,6 +156,9 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
  * the file is under approval.
  */
 export async function submitSanctionForApproval(ctx: RequestContext, id: string, fileNo: string | null = null): Promise<Accepted> {
+  // UAT W8-D (P1): the consumer rejects an unknown / foreign sanction (NonRetryableError);
+  // say so now (404) instead of 202-accepting a submission that can only fail.
+  if (!(await repo.findSanctionByIdAndTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "sanction not found");
   await queue.publish(COMMANDS.sanctionSubmitApproval, {
     messageId: randomUUID(), type: COMMANDS.sanctionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

@@ -190,21 +190,26 @@ describe("PATCH /v1/finance/journals/:id/approve: the checker is told about a cl
     expect(row?.status).toBe("pending_approval");
   });
 
-  it("a draft in an open period is accepted (202); an unknown id falls through to the consumer unchanged (202)", async () => {
+  // UAT W8-D (P1): an unknown id used to fall through to the consumer (202); it is now 404, nothing published.
+  it("a draft in an open period is accepted (202); an unknown id is 404 and nothing is published", async () => {
     const id = await draft(T, { postingDate: "2026-05-20" });
     const ok = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${id}/approve`, headers: checker() });
     expect(ok.statusCode).toBe(202);
+    const publish = vi.spyOn(queue, "publish");
     const unknown = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${randomUUID()}/approve`, headers: checker() });
-    expect(unknown.statusCode).toBe(202);
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json().code).toBe("NOT_FOUND");
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it("a plain finance_officer is still refused (403) and another tenant's draft is not looked at", async () => {
     const id = await draft(T, { postingDate: "2026-03-20" });
     const denied = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${id}/approve`, headers: maker() });
     expect(denied.statusCode).toBe(403);
-    // the checker of ANOTHER tenant cannot see T's draft: RLS hides it, so the route does not 422 on it
+    // the checker of ANOTHER tenant cannot see T's draft: RLS hides it, so the route does not 422 on it;
+    // UAT W8-D (P1): it is not there for that tenant, so 404 (it used to be a 202 the consumer dropped)
     const foreign = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${id}/approve`, headers: checker(OTHER) });
-    expect(foreign.statusCode).toBe(202);
+    expect(foreign.statusCode).toBe(404);
   });
 });
 

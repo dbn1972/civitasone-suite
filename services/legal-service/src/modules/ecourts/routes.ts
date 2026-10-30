@@ -18,7 +18,20 @@ export async function ecourtsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
 
-    const { cnr } = cnrParam.parse(req.params);
+    // UAT W8-B: this module installs no error handler and app.ts registers the shared Zod->400
+    // handler only AFTER the route plugins, so a thrown ZodError (e.g. a 36-char UUID > the 30-char
+    // CNR cap) reached Fastify's default handler as a 500. Validate without throwing instead.
+    const parsed = cnrParam.safeParse(req.params);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: parsed.error.issues[0]?.message ?? "invalid cnr",
+          correlationId: req.id,
+        },
+      });
+    }
+    const { cnr } = parsed.data;
 
     try {
       const result = await lookupCnr(cnr);

@@ -22,13 +22,13 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
   queue.subscribe(TL_CREATE, async (msg) => {
     const p = msg.payload as Record<string, unknown>;
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const createdId = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return undefined;
 
       const licenseNo = (p.licenseNo as string | undefined)
         ?? String(msg.messageId).replace(/-/g, '').slice(0, 12).toUpperCase();
 
-      await tx.insert(tradeLicenses).values({
+      const [created] = await tx.insert(tradeLicenses).values({
         tenantId:       msg.tenantId,
         licenseNo,
         businessName:   p.businessName as string,
@@ -43,7 +43,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         status:         'active',
         createdBy:      msg.actorId,
         updatedBy:      msg.actorId,
-      });
+      }).returning({ id: tradeLicenses.id });
 
       await enqueue(tx, {
         topic:         'revenue.trade_license.created',
@@ -61,9 +61,13 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload:       { service: SERVICE, action: 'create', resourceType: 'trade_license', outcome: 'success' },
       });
+      return created?.id;
     });
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:trade_licenses`);
+    // UAT W8-D review: also drop the new licence's own entry, so a detail read cached
+    // before the create landed cannot keep answering "not found" for the TTL.
+    if (createdId) await cache.invalidate(`${SERVICE}:${msg.tenantId}:trade_license:${createdId}`);
   });
 
   // ── tradeLicenseRenew ───────────────────────────────────────────────────────

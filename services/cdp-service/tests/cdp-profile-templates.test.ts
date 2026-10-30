@@ -565,10 +565,13 @@ describe("GET /v1/cdp/profile-templates", () => {
     await app.close();
   });
 
-  it("400 — limit is mandatory", async () => {
+  // UAT W8-D (P9b): limit used to be mandatory (bare GET = 400); it now defaults to 50.
+  it("200 — limit defaults to 50 when omitted", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/cdp/profile-templates", headers: auth() });
-    expect(r.statusCode).toBe(400);
+    expect(r.statusCode).toBe(200);
+    expect(H.listMock).toHaveBeenLastCalledWith(TENANT, 50, 0, {});
+    expect(r.json().meta.pageSize).toBe(50);
     await app.close();
   });
 

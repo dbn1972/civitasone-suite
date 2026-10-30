@@ -12,8 +12,10 @@ export const storeKeyParams = z.object({
 });
 export type StoreKeyParams = z.infer<typeof storeKeyParams>;
 
+// UAT W8-C: z.unknown() also accepts a MISSING value, and JSON.stringify(undefined) is undefined, so
+// computeValueSize() threw a TypeError (500) on PUT {} . A value is required; JSON null is still allowed.
 export const storeValueBody = z.object({
-  value: z.unknown(),
+  value: z.unknown().refine((v) => v !== undefined, { message: "value is required" }),
 });
 export type StoreValueBody = z.infer<typeof storeValueBody>;
 

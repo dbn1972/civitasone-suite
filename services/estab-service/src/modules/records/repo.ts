@@ -78,6 +78,11 @@ export async function findWeedoutByIdTx(tx: Writer, id: string, tenantId: string
   return rows[0] ?? null;
 }
 
+/** UAT W8-A: one weed-out proposal by id, tenant-scoped (route pre-check before approve/reject). */
+export async function findWeedoutById(id: string, tenantId: string): Promise<WeedoutRow | null> {
+  return db.transaction((tx) => findWeedoutByIdTx(tx, id, tenantId));
+}
+
 export async function updateWeedout(tx: Writer, id: string, patch: Partial<WeedoutInsert>): Promise<void> {
   await tx.update(estabWeedout).set(patch).where(eq(estabWeedout.id, id));
 }

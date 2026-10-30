@@ -63,8 +63,12 @@ describe("entities module", () => {
   it("POST create + PATCH accepted (queue path)", async () => {
     const create = await app.inject({ method: "POST", url: "/v1/metadata/entities", headers: hdr(), body: JSON.stringify({ apiName: `q_${rnd()}`, label: "Q", pluralLabel: "Qs" }) });
     expect(create.statusCode).toBe(202);
-    const patch = await app.inject({ method: "PATCH", url: `/v1/metadata/entities/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ label: "New" }) });
+    // UAT W8-C: PATCH now reads the entity first (tenant-scoped): a real one is 202, an unknown id 404.
+    const entityId = await seedEntity(`qp_${rnd()}`);
+    const patch = await app.inject({ method: "PATCH", url: `/v1/metadata/entities/${entityId}`, headers: hdr(), body: JSON.stringify({ label: "New" }) });
     expect(patch.statusCode).toBe(202);
+    const patchNf = await app.inject({ method: "PATCH", url: `/v1/metadata/entities/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ label: "New" }) });
+    expect(patchNf.statusCode).toBe(404);
   });
 });
 
@@ -107,9 +111,9 @@ describe("fields module — update/delete", () => {
     expect(del.statusCode).toBe(202);
     await drainQueue();
 
-    // Field update/delete are queue-first with no sync existence check.
+    // UAT W8-C: field update reads the field first (tenant-scoped): unknown id -> 404. Delete stays queue-first.
     const patchNf = await app.inject({ method: "PATCH", url: `/v1/metadata/fields/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ label: "x" }) });
-    expect(patchNf.statusCode).toBe(202);
+    expect(patchNf.statusCode).toBe(404);
     const delNf = await app.inject({ method: "DELETE", url: `/v1/metadata/fields/${randomUUID()}`, headers: hdr(false) });
     expect(delNf.statusCode).toBe(202);
   });
@@ -184,9 +188,9 @@ describe("validation-rules module — CRUD", () => {
     expect(del.statusCode).toBe(202);
     await drainQueue();
 
-    // Rule update/delete are queue-first with no sync existence check.
+    // UAT W8-C: rule update reads the rule first (tenant-scoped): unknown id -> 404. Delete stays queue-first.
     const patchNf = await app.inject({ method: "PATCH", url: `/v1/metadata/validation-rules/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ name: "x" }) });
-    expect(patchNf.statusCode).toBe(202);
+    expect(patchNf.statusCode).toBe(404);
     const delNf = await app.inject({ method: "DELETE", url: `/v1/metadata/validation-rules/${randomUUID()}`, headers: hdr(false) });
     expect(delNf.statusCode).toBe(202);
     const postNf = await app.inject({ method: "POST", url: `/v1/metadata/entities/${randomUUID()}/validation-rules`, headers: hdr(), body: JSON.stringify({ name: "x", expression: "a > 0", errorMessage: "e" }) });
