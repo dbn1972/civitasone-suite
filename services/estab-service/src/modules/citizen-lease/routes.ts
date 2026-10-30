@@ -176,6 +176,8 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reviewBody.parse(req.body);
+    // UAT W8-A: tenant-scoped existence read (officer route, so not owner-scoped); unknown request -> 404.
+    if (!(await queries.getRequest(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "request not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.reviewLeaseRequest(ctx, id, body));
   });
 

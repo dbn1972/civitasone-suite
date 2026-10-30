@@ -125,6 +125,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const { reason } = returnDfaBody.parse(req.body);
+    await assertDfaExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.returnDfa(ctx, id, reason));
   });
 

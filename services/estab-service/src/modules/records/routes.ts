@@ -87,6 +87,7 @@ export async function recordsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = destroyWeedoutBody.parse(req.body);
+    await assertWeedoutExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.destroyWeedout(ctx, id, body));
   });
 

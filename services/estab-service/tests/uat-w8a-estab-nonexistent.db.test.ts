@@ -166,6 +166,98 @@ describe("UAT W8-A P1: commands on a non-existent :id answer 404 and publish not
   });
 });
 
+/**
+ * UAT W8-A follow-up: sibling commands with the same accept-nonexistent defect (reproduced on live
+ * UAT as 202 for a random id). Bodies are valid, so the 404 comes from the existence read.
+ */
+const SIBLINGS: Array<["POST" | "PATCH", string, object]> = [
+  ["POST",  "/v1/estab/files/:id/links", { targetFileId: FILE }],
+  ["PATCH", "/v1/estab/files/:id/type", { fileType: "standing_guard" }],
+  ["PATCH", "/v1/estab/files/:id/reopen", { reason: "w8a probe" }],
+  ["POST",  "/v1/estab/files/:id/attach-receipt", { inwardId: randomUUID() }],
+  ["POST",  "/v1/estab/files/:id/attachments", { fileName: "w8a.pdf" }],
+  ["POST",  "/v1/estab/dfa/:id/return", { reason: "w8a probe" }],
+  ["POST",  "/v1/estab/weedout/:id/destroy", { destructionCertRef: "W8A-PROBE" }],
+  ["POST",  "/v1/estab/citizen-lease/requests/:id/review", { decision: "approved" }],
+];
+
+describe("UAT W8-A follow-up: sibling commands on a non-existent :id answer 404 and publish nothing (real DB)", () => {
+  for (const [method, path, body] of SIBLINGS) {
+    it(`${method} ${path}: random id -> 404, nothing published`, async () => {
+      const spy = vi.spyOn(queue, "publish");
+      try {
+        const res = await inject(method, path.replace(":id", randomUUID()), hdr(), body);
+        expect(res.statusCode).toBe(404);
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  }
+
+  it("links: a real file to an unknown target -> 404 TARGET_FILE_NOT_FOUND, nothing published", async () => {
+    const spy = vi.spyOn(queue, "publish");
+    try {
+      const res = await inject("POST", `/v1/estab/files/${FILE}/links`, hdr(), { targetFileId: randomUUID() });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe("TARGET_FILE_NOT_FOUND");
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("attach-receipt: a real file with an unknown DAK entry -> 404 INWARD_NOT_FOUND, nothing published", async () => {
+    const spy = vi.spyOn(queue, "publish");
+    try {
+      const res = await inject("POST", `/v1/estab/files/${FILE}/attach-receipt`, hdr(), { inwardId: randomUUID() });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe("INWARD_NOT_FOUND");
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("another tenant's file / DFA -> 404 on the sibling commands", async () => {
+    const other = hdr(["super_admin"], OTHER_TENANT);
+    expect((await inject("PATCH", `/v1/estab/files/${FILE}/type`, other, { fileType: "standing_guard" })).statusCode).toBe(404);
+    expect((await inject("POST", `/v1/estab/dfa/${DFA}/return`, other, { reason: "w8a probe" })).statusCode).toBe(404);
+  });
+
+  it("real records still get 202 on the sibling commands", async () => {
+    const spy = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
+    try {
+      expect((await inject("PATCH", `/v1/estab/files/${FILE}/type`, hdr(), { fileType: "standing_guard" })).statusCode).toBe(202);
+      expect((await inject("POST", `/v1/estab/files/${FILE}/attachments`, hdr(), { fileName: "w8a.pdf" })).statusCode).toBe(202);
+      expect((await inject("POST", `/v1/estab/dfa/${DFA}/return`, hdr(), { reason: "w8a probe" })).statusCode).toBe(202);
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Not changed by this PR: these already read the record tenant-scoped in the command and 404 before
+  // publishing (live UAT answered 404 for a random id). Pinned so they stay that way.
+  const LIBRARY: Array<[string, object]> = [
+    ["/v1/estab/library/books/:id", { title: "w8a probe" }],
+    ["/v1/estab/library/books/:id/withdraw", { reason: "w8a probe" }],
+    ["/v1/estab/library/issues/:id/return", {}],
+    ["/v1/estab/library/issues/:id/renew", { dueAt: "2027-01-01T00:00:00Z" }],
+  ];
+  for (const [path, body] of LIBRARY) {
+    it(`PATCH ${path}: random id -> 404 (already the case)`, async () => {
+      const spy = vi.spyOn(queue, "publish");
+      try {
+        expect((await inject("PATCH", path.replace(":id", randomUUID()), hdr(), body)).statusCode).toBe(404);
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  }
+});
+
 const GET_BY_ID = [
   "/v1/estab/approval-rules/:id",
   "/v1/estab/dfa/:id",

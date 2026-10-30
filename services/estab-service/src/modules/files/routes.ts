@@ -149,6 +149,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = linkFileBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
+    // UAT W8-A: the file being linked to must exist in this tenant too.
+    if (!(await queries.fileExists(ctx.tenantId, body.targetFileId))) {
+      throw new HttpError(404, "TARGET_FILE_NOT_FOUND", "the file to link does not exist");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.linkFile(ctx, id, body));
   });
 
@@ -157,6 +162,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = setFileTypeBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.setFileType(ctx, id, body));
   });
 
@@ -229,6 +235,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reopenFileBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.reopenFile(ctx, id, body));
   });
 
@@ -238,6 +245,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = attachInwardBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
+    // UAT W8-A: the DAK entry being attached must exist in this tenant.
+    if ((await queries.inwardLinkState(ctx.tenantId, body.inwardId)) === "missing") {
+      throw new HttpError(404, "INWARD_NOT_FOUND", "the DAK entry does not exist");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.attachInward(ctx, body, id));
   });
 
@@ -491,6 +503,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = addAttachmentBody.parse(req.body);
+    await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addAttachment(ctx, id, body));
   });
 
