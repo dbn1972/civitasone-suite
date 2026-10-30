@@ -99,6 +99,10 @@ export const TYPE_COLUMNS: Partial<Record<MasterType, MasterColumn[]>> = {
     { key: "zone", label: "Zone" },
     { key: "srYear", label: "SR Year" },
   ],
+  // UAT F76: work description types have a keyword, not a name/code.
+  "work-description-types": [
+    { key: "keyword", label: "Keyword" },
+  ],
   "assets": [
     { key: "code", label: "Code" },
     { key: "name", label: "Name" },

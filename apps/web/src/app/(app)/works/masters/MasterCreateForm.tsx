@@ -235,11 +235,11 @@ export function MasterCreateForm({
   const formError = useFormError("master data");
 
   const allFields = getFields(masterType);
-  // In edit mode only name/code/active are editable server-side
-  // (patchMasterSchema) — parent links and money fields are immutable to
-  // avoid rewriting history on referenced masters.
+  // In edit mode only name/code/active (and, for work-description-types, the
+  // keyword — UAT F76) are editable server-side — parent links and money
+  // fields are immutable to avoid rewriting history on referenced masters.
   const fields = isEdit
-    ? allFields.filter((f) => ["name", "code", "active"].includes(f.key))
+    ? allFields.filter((f) => ["name", "code", "keyword", "active"].includes(f.key))
     : allFields;
   const typeLabel = humanizeMaster(masterType);
 

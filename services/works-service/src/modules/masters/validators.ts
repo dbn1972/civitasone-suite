@@ -103,6 +103,47 @@ export const createRepairTypeSchema = z.object({
   active: z.boolean().optional(),
 });
 
+/**
+ * UAT F75: works.issue_description_types requires issue_type_id (NOT NULL).
+ * It used to be wired to the generic createMasterSchema, which stripped
+ * issueTypeId, so every create was 202-accepted and then failed the consumer
+ * insert (0 rows on UAT).
+ */
+export const createIssueDescriptionTypeSchema = z.object({
+  name: z.string().min(1).max(256),
+  issueTypeId: z.string().uuid(),
+  active: z.boolean().optional(),
+});
+
+/**
+ * UAT F76: works.work_description_types has NOT NULL work_type_id + keyword
+ * and NO name column. It used to be wired to createMasterSchema ({name}),
+ * which stripped both required fields, so no row could ever be created.
+ */
+export const createWorkDescriptionTypeSchema = z.object({
+  keyword: z.string().min(1).max(256),
+  workTypeId: z.string().uuid(),
+  active: z.boolean().optional(),
+});
+
+/**
+ * UAT F76: PATCH body for work-description-types. The generic
+ * patchMasterSchema edits name/code, neither of which exists on this table,
+ * so such an edit was 202-accepted and silently changed nothing. The editable
+ * field here is the keyword; the parent work type stays immutable (same rule
+ * as patchMasterSchema).
+ */
+export const patchWorkDescriptionTypeSchema = z
+  .object({
+    keyword: z.string().min(1).max(256).optional(),
+    active: z.boolean().optional(),
+    version: z.number().int().min(1),
+  })
+  .refine(
+    (b) => b.keyword !== undefined || b.active !== undefined,
+    { message: "at least one of keyword or active must be provided" },
+  );
+
 /** GAP-WORKS-REPORTS-01: body for the works division master (name/code + optional office type). */
 export const createDivisionSchema = z.object({
   name: z.string().min(1).max(256),

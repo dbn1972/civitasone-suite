@@ -133,7 +133,7 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
   // GAP-WORKS-MASTERS-05: show the entry we just submitted as a pending row until the read model has it.
   if (showPendingRow && pendingRow) {
     const row: DisplayRow = { __id: PENDING_ID, __version: "1" };
-    for (const c of typeCols) row[c.key] = c.key === "name" ? pendingRow.name : c.key === "code" ? pendingRow.code || "—" : "—";
+    for (const c of typeCols) row[c.key] = c.key === "name" || c.key === "keyword" ? pendingRow.name : c.key === "code" ? pendingRow.code || "—" : "—";
     if (parent) row.__parent = "—";
     row.__active = t("pending");
     rows.unshift(row);
