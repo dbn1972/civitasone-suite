@@ -8,6 +8,14 @@ export async function insertAuditPara(tx: Writer, row: AuditParaInsert): Promise
   await tx.insert(financeAuditParas).values(row);
 }
 
+/** Insert unless (tenant_id, para_no) already exists; true when a row was written. */
+export async function insertAuditParaIfAbsent(tx: Writer, row: AuditParaInsert): Promise<boolean> {
+  const rows = await tx.insert(financeAuditParas).values(row)
+    .onConflictDoNothing({ target: [financeAuditParas.tenantId, financeAuditParas.paraNo] })
+    .returning({ id: financeAuditParas.id });
+  return rows.length > 0;
+}
+
 export type ListAuditParasFilters = { status?: string; source?: string; limit: number };
 
 /** Tenant-scoped listing, most recently created first. */
