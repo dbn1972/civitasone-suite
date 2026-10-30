@@ -1,7 +1,7 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { addReferenceBody, removeReferenceBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -10,11 +10,15 @@ import * as repo from "./repo.js";
 const WRITE_ROLES = ["estab_officer", "estab_admin", "super_admin"];
 const READ_ROLES = [...WRITE_ROLES, "audit_officer"];
 
+// UAT W8-A: a malformed id reached the uuid column and 500ed (22P02); it is a 400 now.
+const fileIdParam = z.object({ fileId: z.string().uuid() });
+const noteIdParam = z.object({ noteId: z.string().uuid() });
+
 export async function referencingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/files/:fileId/references", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { fileId } = req.params as { fileId: string };
+    const { fileId } = fileIdParam.parse(req.params);
     const data = await repo.listReferencesByFile(ctx.tenantId, fileId);
     return reply.send({ data });
   });
@@ -22,7 +26,7 @@ export async function referencingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/notings/:noteId/references", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { noteId } = req.params as { noteId: string };
+    const { noteId } = noteIdParam.parse(req.params);
     const data = await repo.listReferencesByNote(ctx.tenantId, noteId);
     return reply.send({ data });
   });

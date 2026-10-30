@@ -1,18 +1,22 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createApprovalRuleBody, updateApprovalRuleBody, listRulesQuery, resolveQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { findRuleById } from "./repo.js";
 import { resolveApproval } from "./resolver.js";
 import { assertApproverRolesKnown, getApproverRoleCatalogue } from "./roleCatalogue.js";
 
 const ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
 const READER_ROLES = [...ADMIN_ROLES, "estab_officer", "audit_officer"];
+
+// UAT W8-A: a malformed :id reached the uuid column and 500ed (22P02); it is a 400 now.
+const idParam = z.object({ id: z.string().uuid() });
 
 export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
   /** List approval rules (admin matrix view), plus the approver-role catalogue for the form. */
@@ -31,7 +35,7 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/approval-rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const rule = await queries.getApprovalRule(ctx.tenantId, id);
     if (!rule) throw new HttpError(404, "NOT_FOUND", "approval rule not found");
     return reply.send({ data: rule });
@@ -64,9 +68,11 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/estab/approval-rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = updateApprovalRuleBody.parse(req.body);
     assertApproverRolesKnown(body.steps);
+    // UAT W8-A: tenant-scoped existence read; an unknown rule answers 404, not 202.
+    if (!(await findRuleById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "approval rule not found");
     const result = await commands.updateApprovalRule(ctx, id, body);
     return sendAccepted(reply, acceptedResponseSchema, result);
   });

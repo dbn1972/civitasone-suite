@@ -23,11 +23,17 @@ const PAYMENT_ROLES = [...ADMIN_ROLES, "finance_officer", "finance_admin"];
 const ownerScope = (ctx: RequestContext): string | undefined =>
   hasAnyRole(ctx, ADMIN_ROLES) ? undefined : ctx.actorId;
 
+// UAT W8-A: every booking command first reads the booking tenant-scoped (and, for a
+// citizen/employee caller, owner-scoped), so an unknown id answers 404 instead of a 202.
 async function assertCanAct(ctx: RequestContext, id: string): Promise<void> {
-  const owner = ownerScope(ctx);
-  if (owner && !(await queries.getBooking(ctx.tenantId, id, owner))) {
+  if (!(await queries.getBooking(ctx.tenantId, id, ownerScope(ctx)))) {
     throw new HttpError(404, "NOT_FOUND", "booking not found");
   }
+}
+
+/** UAT W8-A: officer/finance commands (approve, pay, complete) act on any booking in the tenant; 404 when it does not exist. */
+async function assertBookingExists(ctx: RequestContext, id: string): Promise<void> {
+  if (!(await queries.getBooking(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "booking not found");
 }
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -94,6 +100,8 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateFacilityBody.parse(req.body);
+    // UAT W8-A: tenant-scoped existence read; an unknown facility answers 404, not 202.
+    if (!(await queries.getFacility(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "facility not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateFacility(ctx, id, body));
   });
 
@@ -159,6 +167,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertBookingExists(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBooking(ctx, id));
   });
 
@@ -167,6 +176,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYMENT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = paymentBody.parse(req.body);
+    await assertBookingExists(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordPayment(ctx, id, body));
   });
 
@@ -183,6 +193,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertBookingExists(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeBooking(ctx, id));
   });
 }

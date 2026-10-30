@@ -184,6 +184,8 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = completeBody.parse(req.body);
+    // UAT W8-A: tenant-scoped existence read; an unknown request answers 404, not 202.
+    if (!(await queries.getRequest(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "request not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeLeaseRequest(ctx, id, body));
   });
 }

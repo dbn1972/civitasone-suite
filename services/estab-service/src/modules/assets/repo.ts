@@ -26,6 +26,13 @@ export async function findBookingById(id: string): Promise<VehicleBookingRow | n
   return rows[0] ?? null;
 }
 
+/** UAT W8-A: one booking by id, tenant-scoped (the route pre-check before a return is published). */
+export async function findBookingForTenant(id: string, tenantId: string): Promise<VehicleBookingRow | null> {
+  const rows = await db.transaction((tx) => tx.select().from(estabVehicleBookings)
+    .where(and(eq(estabVehicleBookings.id, id), eq(estabVehicleBookings.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 /**
  * TX-001 — tenant-scoped sibling of findBookingById(). Reads through a
  * caller-supplied transaction handle so an already-open db.transaction()

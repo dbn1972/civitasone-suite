@@ -1,19 +1,32 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createDfaBody, updateDfaBody, returnDfaBody, approveDfaBody, dispatchDfaBody, listDfaQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { findDfaById } from "./repo.js";
 import { findFileById } from "../files/repo.js";
 import { isAccessAllowed } from "../operators/eligibility.js";
 
 const DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_admin"];
 const APPROVER_ROLES = ["estab_admin", "super_admin", "estab_deputy_secretary"];
 const READER_ROLES = [...DRAFTER_ROLES, "audit_officer"];
+
+// UAT W8-A: a malformed :id reached the uuid column and 500ed (22P02); it is a 400 now.
+const idParam = z.object({ id: z.string().uuid() });
+
+/**
+ * UAT W8-A: tenant-scoped existence read (straight from the table, not the read-through
+ * cache) before a DFA command is published, so an unknown DFA answers 404 instead of a
+ * 202 for a command the consumer silently drops.
+ */
+async function assertDfaExists(tenantId: string, id: string): Promise<void> {
+  if (!(await findDfaById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "DFA not found");
+}
 
 /**
  * GAP-ESTAB-DFA-02: segregation of duties enforced at the route, synchronously,
@@ -40,7 +53,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/dfa/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const dfa = await queries.getDfa(ctx.tenantId, id, { withNames: true });
     if (!dfa) throw new HttpError(404, "NOT_FOUND", "DFA not found");
     return reply.send({ data: dfa });
@@ -49,7 +62,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/dfa/:id/versions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const data = await queries.listDfaVersions(ctx.tenantId, id);
     return reply.send({ data });
   });
@@ -81,23 +94,26 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/estab/dfa/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DRAFTER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = updateDfaBody.parse(req.body);
+    await assertDfaExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDfa(ctx, id, body));
   });
 
   app.post("/v1/estab/dfa/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DRAFTER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
+    await assertDfaExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitDfa(ctx, id));
   });
 
   app.post("/v1/estab/dfa/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = approveDfaBody.parse(req.body ?? {});
+    await assertDfaExists(ctx.tenantId, id);
     await assertNotDrafter(ctx, id, "approved");
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id, {
       modality: body.modality, conditions: body.conditions, reason: body.reason,
@@ -107,7 +123,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/dfa/:id/return", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const { reason } = returnDfaBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.returnDfa(ctx, id, reason));
   });
@@ -115,7 +131,8 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/dfa/:id/sign", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
+    await assertDfaExists(ctx.tenantId, id);
     await assertNotDrafter(ctx, id, "signed");
     return sendAccepted(reply, acceptedResponseSchema, await commands.signDfa(ctx, id));
   });
@@ -123,8 +140,9 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/dfa/:id/dispatch", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DRAFTER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = idParam.parse(req.params);
     const body = dispatchDfaBody.parse(req.body ?? {});
+    await assertDfaExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.dispatchDfa(ctx, id, { mode: body.mode, toAddress: body.toAddress }));
   });
 
