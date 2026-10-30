@@ -100,7 +100,8 @@ export interface GroupBulkCheckInInput {
   groupVisitId: string;
   /** Count of members physically present at the gate (confirmed by guard). */
   actualHeadcount: number;
-  gateId?: string | null;
+  /** Required (F64): check_ins.gate_id is a NOT NULL FK to visitor.gates. */
+  gateId: string;
 }
 
 /**
@@ -122,7 +123,7 @@ export async function groupBulkCheckIn(ctx: RequestContext, input: GroupBulkChec
       groupVisitId: input.groupVisitId,
       tenantId: ctx.tenantId,
       actualHeadcount: input.actualHeadcount,
-      gateId: input.gateId ?? null,
+      gateId: input.gateId,
     },
   });
 
