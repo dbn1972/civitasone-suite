@@ -45,3 +45,27 @@ describe("CitizenRequests Page — GAP-CITIZEN-REQUESTS-01 (FAILMASK)", () => {
     expect(screen.getByText("citizenRequests.statOpen")).toBeInTheDocument();
   });
 });
+
+describe("CitizenRequests Page — GAP-CITIZEN-GRIEVANCES-04 (official register, D4c #2)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  it("links into the official grievance register", async () => {
+    mockRequests({ data: [], source: "api" });
+    await renderPage();
+    const link = screen.getByRole("link", { name: "citizenRequests.registerLink" });
+    expect(link).toHaveAttribute("href", "/citizen/grievances");
+  });
+
+  it("counts open/rejected/resolved/total through the shared helper (in_progress is open, closed is resolved)", async () => {
+    const mk = (status: string, i: number) => ({
+      id: `r${i}`, requestNo: `REQ-${i}`, citizenName: "A", serviceType: "grievance", submittedAt: "2026-10-01T00:00:00.000Z", status,
+    });
+    mockRequests({ data: [mk("pending", 1), mk("in_progress", 2), mk("closed", 3), mk("rejected", 4), mk("resolved", 5)], source: "api" });
+    await renderPage();
+    const stat = (label: string) => screen.getByText(label).closest(".stat, [class*=stat]") ?? screen.getByText(label).parentElement!;
+    expect(stat("citizenRequests.statOpen").textContent).toContain("2");
+    expect(stat("citizenRequests.statResolved").textContent).toContain("2");
+    expect(stat("citizenRequests.statRejected").textContent).toContain("1");
+    expect(stat("citizenRequests.statTotal").textContent).toContain("5");
+  });
+});

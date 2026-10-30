@@ -9173,6 +9173,64 @@ paths:
       security:
         - bearerAuth: []
 
+  /v1/loyalty/enrolments/{id}/profile-ref:
+    get:
+      operationId: revealLoyaltyEnrolmentProfileId
+      tags: [Loyalty]
+      summary: Reveal the full member profile id (audited)
+      description: |
+        D4c #14/#15: the only route that returns an enrolment's full CDP profile
+        id. The enrolment is looked up tenant-scoped first (no audit for a
+        missing or foreign id); the reveal is then audited and the audit write
+        is awaited before the id is returned. If the audit trail is unavailable
+        the request fails closed with 503 and the id is not returned.
+        Responses carry `Cache-Control: no-store`.
+        Roles: loyalty_user, loyalty_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/LoyaltyEnrolmentIdPath"
+      responses:
+        "200":
+          description: The full profile id for this enrolment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      profileId:
+                        type: string
+                        format: uuid
+                        description: CDP golden profile id (cross-service reference, no FK)
+        "400":
+          description: Validation error (id is not a uuid)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: Enrolment not found (NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Audit trail unavailable (AUDIT_UNAVAILABLE); the id is not returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
   /v1/loyalty/enrolments/{id}/status:
     patch:
       operationId: updateLoyaltyEnrolmentStatus
@@ -19619,10 +19677,15 @@ components:
         programId:
           type: string
           format: uuid
-        profileId:
+        profileRef:
           type: string
-          format: uuid
-          description: CDP golden profile id (cross-service reference, no FK)
+          maxLength: 8
+          description: |
+            Shortened display reference to the CDP golden profile id (first UUID
+            group). The member profile id is personal data (D4c #14/#15), so list
+            and detail views never carry it in full; use
+            `GET /v1/loyalty/enrolments/{id}/profile-ref` (audited) to reveal it.
+          examples: ["5b1c2d3e"]
         status:
           $ref: "#/components/schemas/LoyaltyEnrolmentStatus"
         tier:

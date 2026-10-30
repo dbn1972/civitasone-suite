@@ -756,7 +756,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-04  ·  MEDIUM  ·  partly  ·  theme IA (was OTHER)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — two overlapping grievance lists; canonical source and merge/redirect path unclear)
+- [x] **Status** Closed by 2e0442d9f (owner decision D4c #2, 2026-10-27)
 - **First-pass claim:** Two parallel lists of the same grievances: /citizen/requests (GET /citizen/requests) and this register (GET /citizen/grievances) count differently and show different numbers (requests/page.tsx:16-19 vs grievances/page.tsx:30-37).
 - **Verified evidence:** /citizen/requests lists GET /api/v1/citizen/requests (loaders.ts:3337) with a Grievance/Service segmented filter (CitizenRequestsClient.tsx:21,37-40) and links to requests/[id] which is the grievance detail; /citizen/grievances lists GET /citizen/grievances. Two lists overlap but counts computed differently (requests page counts by status buckets). Whether both endpoints return the same records is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/page.tsx`, `apps/web/src/app/(app)/citizen/grievances/page.tsx`, `apps/web/src/app/(app)/citizen/page.tsx`

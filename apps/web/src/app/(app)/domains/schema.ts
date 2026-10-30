@@ -42,15 +42,56 @@ function isStateGovHost(host: string): boolean {
 /** Indian phone: optional +91 / 0 prefix, STD-landline (011-24301001) or 10-digit mobile. */
 const PHONE = /^(?:\+91[\s-]?|0)?(?:\d{2,4}[\s-]?\d{6,8}|\d{10})$/;
 
+type CrossCheckInput = { domainName: string; domainType: DomainType };
+
+/** domainType must agree with the host suffix (shared by every registration schema). */
+function crossCheckDomainType(val: CrossCheckInput, ctx: z.RefinementCtx): void {
+  const host = val.domainName;
+  const isNic = host.endsWith(".nic.in");
+  const isGov = host.endsWith(".gov.in");
+
+  if (val.domainType === "nic.in" && !isNic) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "This domain type requires a .nic.in domain." });
+  }
+  if (val.domainType === "gov.in") {
+    if (!isGov) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "This domain type requires a .gov.in domain." });
+    }
+  }
+  if (val.domainType === "state.gov.in" && !(isGov && isStateGovHost(host))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "A State Government domain must be a <state>.gov.in host." });
+  }
+}
+
+const domainNameField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, "Enter a domain name.")
+  .regex(GOV_HOST, "Enter a valid .gov.in or .nic.in domain.");
+
+const domainTypeField = z.enum(DOMAIN_TYPES, { errorMap: () => ({ message: "Choose a domain type." }) });
+
+/**
+ * GAP-DOMAINS-NEW-05 / owner decision D4c #12 (2026-10-27): what the /domains/new form submits.
+ * The existing admin custom-domains API (POST /v1/admin/custom-domains; role-checked, validated,
+ * audited) stores only the domain and its verification method, so that is all this collects;
+ * `domainType` is a client-side cross-check of the host and is NOT sent.
+ */
+export const VERIFICATION_METHODS = ["dns_txt", "dns_cname"] as const;
+export const registerDomainSchema = z
+  .object({
+    domainName: domainNameField,
+    domainType: domainTypeField,
+    verificationMethod: z.enum(VERIFICATION_METHODS).default("dns_txt"),
+  })
+  .superRefine(crossCheckDomainType);
+export type RegisterDomainParsed = z.output<typeof registerDomainSchema>;
+
 export const domainSchema = z
   .object({
-    domainName: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .min(1, "Enter a domain name.")
-      .regex(GOV_HOST, "Enter a valid .gov.in or .nic.in domain."),
-    domainType: z.enum(DOMAIN_TYPES, { errorMap: () => ({ message: "Choose a domain type." }) }),
+    domainName: domainNameField,
+    domainType: domainTypeField,
     organisation: z.string().trim().min(1, "Enter the organisation."),
     department: z.string().trim().optional().default(""),
     state: z.string().trim().optional().default(""),
@@ -63,23 +104,7 @@ export const domainSchema = z
       .refine((v) => v === "" || PHONE.test(v), "Enter a valid Indian phone number, e.g. 011-24301001 or +91 9876543210."),
     notes: z.string().trim().optional().default(""),
   })
-  .superRefine((val, ctx) => {
-    const host = val.domainName;
-    const isNic = host.endsWith(".nic.in");
-    const isGov = host.endsWith(".gov.in");
-
-    if (val.domainType === "nic.in" && !isNic) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "This domain type requires a .nic.in domain." });
-    }
-    if (val.domainType === "gov.in") {
-      if (!isGov) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "This domain type requires a .gov.in domain." });
-      }
-    }
-    if (val.domainType === "state.gov.in" && !(isGov && isStateGovHost(host))) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domainType"], message: "A State Government domain must be a <state>.gov.in host." });
-    }
-  });
+  .superRefine(crossCheckDomainType);
 
 export type DomainInput = z.input<typeof domainSchema>;
 export type DomainParsed = z.output<typeof domainSchema>;

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { publishCommand, type Accepted } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
 
 export type { Accepted };
 
@@ -25,4 +26,17 @@ export async function updateEnrolmentStatus(
   body: { status: string; version: number },
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.updateEnrolmentStatus, id, { id, status: body.status, version: body.version });
+}
+
+/**
+ * D4c #14: record that a full member profile id is about to be shown. Published and awaited BEFORE the
+ * response so a reveal that cannot be audited is refused (503) instead of going unrecorded. The command
+ * carries the enrolment id and the actor's roles, never the profile id.
+ */
+export async function recordProfileReveal(ctx: RequestContext, enrolmentId: string): Promise<void> {
+  try {
+    await publishCommand(ctx, COMMANDS.revealEnrolmentProfile, enrolmentId, { enrolmentId, roles: ctx.roles });
+  } catch {
+    throw new HttpError(503, "AUDIT_UNAVAILABLE", "The full member id cannot be shown while the audit trail is unavailable");
+  }
 }

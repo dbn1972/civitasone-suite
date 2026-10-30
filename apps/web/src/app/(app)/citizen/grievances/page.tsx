@@ -9,6 +9,7 @@ import { getTranslations } from "next-intl/server";
 import { daysUntilIST } from "@/lib/formatters";
 import { maskName } from "../../../_components/ds";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { countByBucket } from "../_data/statusCounts";
 
 // GAP-CITIZEN-GRIEVANCES-05: "today" and days-left must be computed per request
 // in Asia/Kolkata, not at module load in UTC. A module-scope UTC TODAY freezes
@@ -21,8 +22,6 @@ export const dynamic = "force-dynamic";
 // name is never serialised to the client for a non-privileged viewer.
 const GRIEVANCE_PRIVILEGED_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
-const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
-
 export default async function GrievancesPage() {
   const t = await getTranslations("grievances");
   const result = await getGrievances();
@@ -31,13 +30,10 @@ export default async function GrievancesPage() {
   const errored = resource.status === "error";
 
   const total = errored ? null : grievances.length;
-  const pending = errored
-    ? null
-    : grievances.filter(
-        (g) => g.status === "pending" || g.status === "registered" || g.status === "under_review" || g.status === "assigned",
-      ).length;
-  const escalated = errored ? null : grievances.filter((g) => g.status === "escalated").length;
-  const resolved = errored ? null : grievances.filter((g) => CLOSED_STATUSES.has(g.status.toLowerCase())).length;
+  const counts = errored ? null : countByBucket(grievances);
+  const pending = counts && counts.open;
+  const escalated = counts && counts.escalated;
+  const resolved = counts && counts.resolved;
 
   const canSeeNames = hasAnyRole(getSessionRoles(), GRIEVANCE_PRIVILEGED_ROLES);
   const rows: GrievanceRow[] = grievances.map((g: GrievanceSummary) => ({
@@ -56,9 +52,14 @@ export default async function GrievancesPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         actions={
-          <Link href="/citizen/grievances/new" className="btn primary">
-            {t("register")}
-          </Link>
+          <>
+            <Link href="/citizen/requests" className="btn">
+              {t("allRequestsLink")}
+            </Link>
+            <Link href="/citizen/grievances/new" className="btn primary">
+              {t("register")}
+            </Link>
+          </>
         }
       />
       <StatGrid>

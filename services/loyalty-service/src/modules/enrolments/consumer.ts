@@ -56,6 +56,21 @@ export function registerEnrolmentConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "member enrolled");
   });
 
+  // D4c #14: audit-only. One audit event per reveal, same transaction as the inbox mark; the profile id
+  // itself is never written to the audit record.
+  queue.subscribe(COMMANDS.revealEnrolmentProfile, async (msg) => {
+    const p = msg.payload as { enrolmentId: string; roles?: string[] };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await writeAudit(tx, ctxOf(msg), {
+        action: "enrolment.reveal_profile_id",
+        resourceType: "loyalty_enrolment",
+        resourceId: p.enrolmentId,
+        details: { roles: p.roles ?? [] },
+      });
+    });
+  });
+
   queue.subscribe(COMMANDS.updateEnrolmentStatus, async (msg) => {
     const p = msg.payload as { id: string; status: string; version: number };
     let applied = false;

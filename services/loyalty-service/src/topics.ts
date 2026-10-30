@@ -6,6 +6,8 @@ export const COMMANDS = {
   archiveProgram: "loyalty.program.archive",
   enrolMember: "loyalty.member.enrol",
   updateEnrolmentStatus: "loyalty.enrolment.update_status",
+  /** Audit-only command: a loyalty user asked to see a member full profile id (D4c #14). */
+  revealEnrolmentProfile: "loyalty.enrolment.reveal_profile",
   accruePoints: "loyalty.points.accrue",
   redeemPoints: "loyalty.points.redeem",
   voidRedemption: "loyalty.redemption.void",

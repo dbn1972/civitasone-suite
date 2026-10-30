@@ -5,12 +5,19 @@ import { eq, and, sql, desc, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { enrolments, type EnrolmentRow, type EnrolmentInsert } from "./schema.js";
 
+/** Shortened, non-reversible display reference for a profile id (first UUID group). */
+export function shortProfileRef(profileId: string): string {
+  return profileId.slice(0, 8);
+}
+
 export function toView(r: EnrolmentRow) {
   return {
     id: r.id,
     tenantId: r.tenantId,
     programId: r.programId,
-    profileId: r.profileId,
+    // D4c #14/#15: the profile id is personal data. Views carry only a shortened reference;
+    // the full id is available solely through the audited reveal route.
+    profileRef: shortProfileRef(r.profileId),
     status: r.status,
     tier: r.tier,
     pointsBalance: r.pointsBalance.toString(),

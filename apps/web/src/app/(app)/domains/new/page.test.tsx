@@ -37,8 +37,6 @@ function fill(label: RegExp, value: string) {
 
 function fillValidForm() {
   fill(/Domain Name/, "example.gov.in");
-  fill(/Organisation/, "Ministry of X");
-  fill(/Contact Email/, "webmaster@example.gov.in");
 }
 
 describe("NewDomainPage", () => {
@@ -59,7 +57,7 @@ describe("NewDomainPage", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(String(spy.mock.calls[0]![0])).toBe("/api/proxy/v1/domains");
+    expect(String(spy.mock.calls[0]![0])).toBe("/api/proxy/v1/admin/custom-domains");
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/domains"));
     expect(pushMock.mock.calls.every((c) => !/\/domains\/[^/]+$/.test(String(c[0])) || c[0] === "/domains")).toBe(true);
   });
@@ -68,8 +66,6 @@ describe("NewDomainPage", () => {
   it("rejects example.co.in and does not POST", async () => {
     render(<NewDomainPage />);
     fill(/Domain Name/, "example.co.in");
-    fill(/Organisation/, "Ministry of X");
-    fill(/Contact Email/, "webmaster@example.gov.in");
     fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
     expect(await screen.findByText(/valid \.gov\.in or \.nic\.in domain/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
@@ -85,8 +81,6 @@ describe("NewDomainPage", () => {
   it("domainType nic.in with a .gov.in name shows a field error and does not POST", async () => {
     render(<NewDomainPage />);
     fill(/Domain Name/, "example.gov.in");
-    fill(/Organisation/, "Ministry of X");
-    fill(/Contact Email/, "webmaster@example.gov.in");
     fireEvent.change(screen.getByLabelText(/Domain Type/), { target: { value: "nic.in" } });
     fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
     expect(await screen.findByText(/requires a \.nic\.in domain/i)).toBeInTheDocument();
@@ -100,38 +94,11 @@ describe("NewDomainPage", () => {
     expect(values).not.toContain("other");
   });
 
-  // GAP-DOMAINS-NEW-03
-  it("rejects 'a@b' as email with the custom message (noValidate so it is reachable)", async () => {
-    render(<NewDomainPage />);
-    fill(/Domain Name/, "example.gov.in");
-    fill(/Organisation/, "Ministry of X");
-    fill(/Contact Email/, "a@b");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
-    expect(spy).not.toHaveBeenCalled();
-  });
-
+  // GAP-DOMAINS-NEW-03 (email/phone validation now lives in schema.test.ts; the form no longer collects contact data)
   it("the form has noValidate", () => {
     const { container } = render(<NewDomainPage />);
     const form = container.querySelector("form")!;
     expect(form.noValidate).toBe(true);
-  });
-
-  it("rejects a non-numeric phone", async () => {
-    render(<NewDomainPage />);
-    fillValidForm();
-    fill(/Contact Phone/, "abc");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    expect(await screen.findByText(/valid Indian phone number/i)).toBeInTheDocument();
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("accepts a valid STD phone and POSTs", async () => {
-    render(<NewDomainPage />);
-    fillValidForm();
-    fill(/Contact Phone/, "011-24301001");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
   });
 
   // GAP-DOMAINS-NEW-06
@@ -153,12 +120,10 @@ describe("NewDomainPage", () => {
   it("submits a lower-cased domain name even if typed in mixed case", async () => {
     render(<NewDomainPage />);
     fill(/Domain Name/, "Example.GOV.in");
-    fill(/Organisation/, "Ministry of X");
-    fill(/Contact Email/, "webmaster@example.gov.in");
     fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     const body = JSON.parse((spy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.domainName).toBe("example.gov.in");
+    expect(body.domain).toBe("example.gov.in");
   });
 
   // GAP-DOMAINS-NEW-04
@@ -167,10 +132,51 @@ describe("NewDomainPage", () => {
     expect(hex).toEqual([]);
   });
 
-  // GAP-DOMAINS-NEW-05
-  it("shows a DPDP purpose/consent notice for the contact data", () => {
+});
+
+// GAP-DOMAINS-NEW-05 / owner decision D4c #12 (2026-10-27): registration is re-pointed at the
+// existing admin custom-domains API (role-checked, validated, audited), which stores only the
+// domain and its verification method. The form therefore sends exactly that and nothing else.
+describe("NewDomainPage -> admin custom-domains API (D4c #12)", () => {
+  let spy: MockInstance<typeof fetch>;
+  beforeEach(() => {
+    flags.available = true;
+    vi.restoreAllMocks();
+    spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "abc", status: "accepted" }), { status: 202, headers: { "content-type": "application/json" } }),
+    );
+  });
+
+  it("POSTs only { domain, verificationMethod } to /api/proxy/v1/admin/custom-domains", async () => {
     render(<NewDomainPage />);
-    expect(screen.getByText(/collected only to reach the domain owner/i)).toBeInTheDocument();
+    fill(/Domain Name/, "Example.GOV.in");
+    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(String(spy.mock.calls[0]![0])).toBe("/api/proxy/v1/admin/custom-domains");
+    const init = spy.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ domain: "example.gov.in", verificationMethod: "dns_txt" });
+  });
+
+  it("lets the officer choose the CNAME verification method", async () => {
+    render(<NewDomainPage />);
+    fill(/Domain Name/, "example.gov.in");
+    fireEvent.change(screen.getByLabelText(/Verification method/i), { target: { value: "dns_cname" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse((spy.mock.calls[0]![1] as RequestInit).body as string).verificationMethod).toBe("dns_cname");
+  });
+
+  it("does not collect contact details the API has nowhere to store", () => {
+    render(<NewDomainPage />);
+    expect(screen.queryByLabelText(/Contact Email/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Contact Phone/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Organisation/)).not.toBeInTheDocument();
+  });
+
+  it("the shipped availability flag is ON (the backend exists)", async () => {
+    const actual = await vi.importActual<typeof import("./availability")>("./availability");
+    expect(actual.DOMAIN_REGISTRATION_AVAILABLE).toBe(true);
   });
 });
 
