@@ -13,6 +13,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { DomainError, assertMakerCheckerForReportApproval } from "./domain.js";
 
 const INSPECTOR_ROLES = ["inspector", "reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
 const REVIEWER_ROLES  = ["reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
@@ -127,6 +128,13 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     const report = await repo.findReportById(ctx.tenantId, id);
     if (!report) throw new HttpError(404, "NOT_FOUND", "inspection report not found");
     if (report.status !== "submitted") throw new HttpError(409, "CONFLICT", "report is not in submitted status");
+    // Fail fast on self-approval; the consumer re-checks under a row lock (authoritative).
+    try {
+      assertMakerCheckerForReportApproval([report.inspectorId, report.createdBy, report.updatedBy], ctx.actorId);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
+      throw err;
+    }
     const result = await commands.approveReport(ctx, id);
     return reply.code(202).send({ data: result });
   });

@@ -37,6 +37,7 @@ export const observations = reportsSchema.table("observations", {
   severity:    varchar("severity", { length: 16 }).notNull().default("minor"),
   description: text("description").notNull(),
   location:    text("location"),
+  evidenceIds: text("evidence_ids").array(),
   status:      varchar("status", { length: 24 }).notNull().default("open"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
