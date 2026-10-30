@@ -2,7 +2,13 @@ import { z } from "zod";
 import { NAMESPACE_PATTERN, KEY_PATTERN } from "./domain.js";
 
 export const configIdParam = z.object({ id: z.string().uuid() });
-export const namespaceParam = z.object({ namespace: z.string() });
+// UAT W8-B: namespace / key are validated HERE (zod -> 400). They used to be checked only by the
+// domain assertValidNamespace/assertValidKey, which throw a plain Error, so any bad path segment 500d.
+export const namespaceParam = z.object({ namespace: z.string().regex(NAMESPACE_PATTERN, "invalid namespace") });
+export const configEntryQuery = z.object({
+  namespace: z.string().regex(NAMESPACE_PATTERN, "invalid namespace"),
+  key:       z.string().regex(KEY_PATTERN, "invalid key"),
+});
 
 /**
  * Set (create or version-guarded update) a config entry (§47). `value` is

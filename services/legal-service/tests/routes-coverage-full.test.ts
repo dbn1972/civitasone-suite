@@ -534,13 +534,15 @@ describe("Opinions routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("PATCH /v1/legal/opinions/:id/draft → 202", async () => {
+  // UAT W8-B: CASE_UUID is not a real opinion: 404, not 202 (the real-opinion 202 is covered by
+  // tests/uat-w8b-regulatory.test.ts).
+  it("PATCH /v1/legal/opinions/:id/draft → 404 for an opinion that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/legal/opinions/${CASE_UUID}/draft`,
       headers: authHeader(),
       payload: { counselName: "Sr. Adv. Test", opinionText: "In my opinion..." },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("PATCH /v1/legal/opinions/:id/draft → 400 bad body", async () => {
@@ -561,13 +563,14 @@ describe("Opinions routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/legal/opinions/:id/issue → 202", async () => {
+  // UAT W8-B: CASE_UUID is not a real opinion: 404, not 202 (see uat-w8b-regulatory.test.ts).
+  it("PATCH /v1/legal/opinions/:id/issue → 404 for an opinion that does not exist", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/legal/opinions/${CASE_UUID}/issue`,
       headers: authHeader(),
       payload: {},
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("PATCH /v1/legal/opinions/:id/issue → 400 bad uuid", async () => {

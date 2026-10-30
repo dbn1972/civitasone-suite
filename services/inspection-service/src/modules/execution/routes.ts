@@ -105,6 +105,8 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINALIZE_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await findInspectionById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "inspection not found");
     const result = await publishInspectionFinalize(
       { inspectionId: id },
       ctx,

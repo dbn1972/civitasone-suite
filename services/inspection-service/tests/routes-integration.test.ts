@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
+import { findInspectionById } from "../src/modules/execution/repo.js";
 
 const TENANT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 const USER_ID = "11111111-2222-3333-4444-555555555555";
@@ -881,8 +882,15 @@ describe("Execution Routes", () => {
 
   describe("POST /v1/inspection/inspections/:id/finalize", () => {
     it("returns 202 for valid finalize command", async () => {
+      // UAT W8-B: the route now reads the inspection (tenant-scoped) before publishing.
+      vi.mocked(findInspectionById).mockResolvedValueOnce(mockInspection as never);
       const res = await app.inject({ method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/finalize`, headers: AUTH_HEADER });
       expect(res.statusCode).toBe(202);
+    });
+
+    it("returns 404 when the inspection does not exist (UAT W8-B)", async () => {
+      const res = await app.inject({ method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/finalize`, headers: AUTH_HEADER });
+      expect(res.statusCode).toBe(404);
     });
 
     // Regression / hazard documentation: the test above (no content-type

@@ -16,15 +16,18 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, desc, eq, getTableColumns } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { pino } from "pino";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { maskPhone } from "../../shared/pii-crypto.js";
+import { decryptPii, maskPhone, PiiDecryptError } from "../../shared/pii-crypto.js";
+import { UNDECRYPTABLE_PII_PLACEHOLDER } from "../blacklist/repo.js";
 import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
 import { resolvePage, splitPage, type PageOpts, type Paged } from "../../shared/pagination.js";
 import { visitRequests, type VisitRequestRow } from "./schema.js";
 
 const RESOURCE_VISIT_REQUEST = "visit_request";
+const log = pino({ name: "visit-request-repo" });
 
 /** Optional actor context for PII access logging (Requirement 18.6). */
 export interface PiiAccessContext {
@@ -49,7 +52,7 @@ export interface ListVisitRequestsFilter extends PageOpts {
  * ever scoped to the caller's own hosted requests (or an elevated oversight
  * role) and the name is needed to identify the row.
  */
-export type VisitRequestListRow = Omit<VisitRequestRow, "visitorEmail" | "identityDocRef">;
+export type VisitRequestListRow = Omit<VisitRequestRow, "visitorEmail" | "identityDocRef"> & { piiDecryptFailed?: true };
 
 export async function listVisitRequests(tenantId: string, filter: ListVisitRequestsFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<VisitRequestListRow>> {
   const conditions = [eq(visitRequests.tenantId, tenantId)];
@@ -58,8 +61,17 @@ export async function listVisitRequests(tenantId: string, filter: ListVisitReque
   if (filter.hostEmployeeId !== undefined) conditions.push(eq(visitRequests.hostEmployeeId, filter.hostEmployeeId));
   // Select every column EXCEPT visitorEmail / identityDocRef; visitorPhone is
   // selected but masked below, so raw contact PII never crosses the API boundary.
-  const { visitorEmail: _e, identityDocRef: _d, ...listColumns } = getTableColumns(visitRequests);
+  // UAT W8-B: visitorName / visitorPhone are selected as the RAW stored envelope (mapWith(String)
+  // bypasses encryptedText's fromDriver) and decrypted per row below. Decrypting inside the driver
+  // mapping of the whole result meant ONE row the keyring cannot open (legacy key / tampered) threw
+  // PiiDecryptError and 500'd the entire list — same defect and fix as blacklist (UAT FQ9 #29).
+  const { visitorEmail: _e, identityDocRef: _d, ...tableColumns } = getTableColumns(visitRequests);
   void _e; void _d;
+  const listColumns = {
+    ...tableColumns,
+    visitorName: sql<string>`${visitRequests.visitorName}`.mapWith(String),
+    visitorPhone: sql<string>`${visitRequests.visitorPhone}`.mapWith(String),
+  };
   // CLOS3-S6-15: bounded + deterministically ordered (newest first, id tiebreak) so
   // offset paging is stable. Fetch one extra row to learn `hasMore` without a COUNT.
   const { limit, offset } = resolvePage(filter);
@@ -68,7 +80,22 @@ export async function listVisitRequests(tenantId: string, filter: ListVisitReque
       .orderBy(desc(visitRequests.createdAt), desc(visitRequests.id))
       .limit(limit + 1).offset(offset));
   const { rows: rawRows, hasMore } = splitPage(fetched, limit);
-  const rows: VisitRequestListRow[] = rawRows.map((r) => ({ ...r, visitorPhone: maskPhone(r.visitorPhone) ?? "" }));
+  const rows: VisitRequestListRow[] = rawRows.map(({ visitorName: storedName, visitorPhone: storedPhone, ...rest }) => {
+    try {
+      // Both columns are NOT NULL; the guard only keeps a malformed row from becoming a TypeError.
+      const name = typeof storedName === "string" ? decryptPii(storedName) : storedName;
+      const phone = typeof storedPhone === "string" ? decryptPii(storedPhone) : storedPhone;
+      return { ...rest, visitorName: name, visitorPhone: maskPhone(phone) ?? "" };
+    } catch (err) {
+      if (!(err instanceof PiiDecryptError)) throw err;
+      // Logged by id only — never the value. No ciphertext or plaintext is returned in its place.
+      log.error(
+        { tenantId, visitRequestId: rest.id, err: err.message, event: "visit_request_pii_decrypt_failed" },
+        "visit request PII could not be decrypted; returned masked",
+      );
+      return { ...rest, visitorName: UNDECRYPTABLE_PII_PLACEHOLDER, visitorPhone: UNDECRYPTABLE_PII_PLACEHOLDER, piiDecryptFailed: true as const };
+    }
+  });
 
   // Requirement 18.6: log PII access for each row (visitorName is still
   // decrypted + returned, so the access is auditable).

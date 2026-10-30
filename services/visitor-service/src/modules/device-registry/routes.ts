@@ -256,6 +256,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
     const body = updateDeviceBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     // UAT FQ9 #8: an unknown gate is a 422 now rather than a dead-letter later.
     if (body.gateId) await assertGateExists(ctx.tenantId, body.gateId);
 
@@ -276,6 +278,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
 
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     const accepted = await publishDeviceActivate(ctx, { deviceId });
     return reply.code(202).send({ data: accepted });
   });
@@ -288,6 +292,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
 
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     const accepted = await publishDeviceSuspend(ctx, { deviceId });
     return reply.code(202).send({ data: accepted });
   });
@@ -300,6 +306,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
 
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     const accepted = await publishDeviceDeregister(ctx, { deviceId });
     return reply.code(202).send({ data: accepted });
   });
@@ -312,6 +320,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
 
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
     const accepted = await publishDeviceRotateCredential(ctx, { deviceId });
     // UAT FQ9 #31: `data.deviceToken` is the only copy of the new credential. Never cache it.
     return reply.code(202).header("cache-control", "no-store").send({ data: accepted });
@@ -346,6 +356,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
     const body = configPushBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
 
     const accepted = await publishDeviceConfigPush(ctx, {
       deviceId,

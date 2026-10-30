@@ -97,11 +97,18 @@ export const PUBLIC_PREFIXES = [
  * HEAD, ...) and every sibling route keep the bearer requirement and edge JWT verification. On a match
  * the client-supplied identity headers are dropped (jwt-edge.ts and app.ts), so an anonymous caller
  * cannot present a tenant or actor to the upstream.
+ *
+ * UAT W8-B: meeting-service `POST /v1/meetings/minutes/verify` (Req 8.4, public signature verification
+ * of signed minutes from the QR) is likewise `config:{public:true}` upstream: it takes a zod-validated
+ * `{minutesId | hashCurrent}` body and an optional `?tenantId=` uuid, returns only
+ * `{found, integrity, signed}` (never minutes content) and meeting-service registers
+ * @civitasone/rate-limit. Exact POST only; every other method / path variant keeps the bearer check.
  */
 export const PUBLIC_ROUTES: ReadonlyArray<{ method: string; path: string }> = [
   { method: "GET", path: "/api/v1/fire/nocs/verify" },
   { method: "GET", path: "/api/v1/shop/permits/verify" },
   { method: "GET", path: "/api/v1/trade/licences/verify" },
+  { method: "POST", path: "/api/v1/meetings/minutes/verify" },
 ];
 
 /** Exact (method, canonical path) match against PUBLIC_ROUTES — no prefix matching, no wildcards. */

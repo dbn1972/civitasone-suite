@@ -135,7 +135,10 @@ vi.mock("../src/modules/group-visit/commands.js", () => ({
   groupBulkCheckIn: vi.fn(async () => fakeAccepted),
 }));
 
-/* ─── Mock recurring-pass commands ─── */
+/* ─── Mock recurring-pass repo (UAT W8-B existence read) & commands ─── */
+vi.mock("../src/modules/recurring-pass/repo.js", () => ({
+  recurringPassExists: vi.fn(async (_tid: string, id: string) => id === FAKE_ID),
+}));
 vi.mock("../src/modules/recurring-pass/commands.js", () => ({
   recurringPassCreate: vi.fn(async () => fakeAccepted),
   recurringPassSuspend: vi.fn(async () => fakeAccepted),
@@ -785,6 +788,11 @@ describe("Recurring-pass routes — happy paths", () => {
   it("POST /v1/visitor/recurring-passes/:id/revoke → 202", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/visitor/recurring-passes/${FAKE_ID}/revoke`, headers: headers(), payload: { reason: "terminated" } });
     expect(res.statusCode).toBe(202);
+  });
+  // UAT W8-B: an unknown pass is a 404 now, not a 202 for a revoke that can never apply.
+  it("POST /v1/visitor/recurring-passes/:id/revoke unknown → 404", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/recurring-passes/99999999-9999-4000-8000-999999999999/revoke", headers: headers(), payload: { reason: "terminated" } });
+    expect(res.statusCode).toBe(404);
   });
 });
 
