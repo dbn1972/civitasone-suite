@@ -6,6 +6,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
+import { assertDscChainTrustConfigured } from "./modules/order-issuance/dsc-provider.js";
 import { caseRegistryRoutes } from "./modules/case-registry/routes.js";
 import { courtRegistryRoutes } from "./modules/court-registry/routes.js";
 import { caseLifecycleRoutes } from "./modules/case-lifecycle/routes.js";
@@ -50,6 +51,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Fail-fast if COURT_PII_KEY is absent/too short so we never boot fail-open
   // (party personal_email / personal_phone are PII-encrypted at rest).
   assertPiiKeyConfigured();
+  // UAT F65: fail fast in production when no DSC trust store is configured
+  // (court orders would otherwise be issued on self-signed DSCs); WARN once
+  // outside production.
+  assertDscChainTrustConfigured();
 
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
