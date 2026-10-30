@@ -14,6 +14,11 @@ export interface MasterConfig {
   table: MasterTable;
   prefix: string;
   createSchema: ZodTypeAny;
+  /**
+   * PATCH body schema. Defaults to v.patchMasterSchema (name/code/active);
+   * set it for a table whose editable columns differ (UAT F76).
+   */
+  patchSchema?: ZodTypeAny;
   /** Fields carrying money in MINOR units — decoded via parseMinor before insert. */
   moneyFields?: string[];
 }
@@ -38,9 +43,14 @@ export const masters: MasterConfig[] = [
   { table: s.userDepartments, prefix: "user-departments", createSchema: v.createMasterSchema },
   { table: s.contractorClasses, prefix: "contractor-classes", createSchema: v.createMasterSchema },
   { table: s.issueTypes, prefix: "issue-types", createSchema: v.createMasterSchema },
-  { table: s.issueDescriptionTypes, prefix: "issue-description-types", createSchema: v.createMasterSchema },
+  { table: s.issueDescriptionTypes, prefix: "issue-description-types", createSchema: v.createIssueDescriptionTypeSchema },
   { table: s.assets, prefix: "assets", createSchema: v.createAssetSchema, moneyFields: ["cost"] },
-  { table: s.workDescriptionTypes, prefix: "work-description-types", createSchema: v.createMasterSchema },
+  {
+    table: s.workDescriptionTypes,
+    prefix: "work-description-types",
+    createSchema: v.createWorkDescriptionTypeSchema,
+    patchSchema: v.patchWorkDescriptionTypeSchema,
+  },
   { table: s.srItems, prefix: "sr-items", createSchema: v.createSrItemSchema, moneyFields: ["rate"] },
   { table: s.divisions, prefix: "divisions", createSchema: v.createDivisionSchema },
 ];
