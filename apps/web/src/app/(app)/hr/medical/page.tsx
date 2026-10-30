@@ -10,6 +10,10 @@ import { HR_FINANCE_DECIDER_ROLES } from "@/lib/auth/workRoles";
 import { mapEmployeeOptions } from "@/lib/entityAdapters/employee";
 import type { EntityOption } from "@/app/_components/ds";
 import { MedicalClaimsTable, type MedicalClaimRow } from "./MedicalClaimsTable";
+import { getMyProfile } from "@/app/_data/loaders";
+import { getMedicalInsurance } from "./_components/insuranceData";
+import { MedicalInsuranceCard } from "./_components/MedicalInsuranceCard";
+import type { MedicalInsurance } from "./_components/insuranceTypes";
 
 
 type ApiRow = {
@@ -37,6 +41,18 @@ async function getData(): Promise<LoaderResult<ApiRow[]>> {
   });
 }
 
+/**
+ * Self-service: the caller's OWN insurance record, resolved through their
+ * linked employee profile. No linked profile (e.g. a pure admin login) means
+ * no self-service card at all, rather than an error.
+ */
+async function getMyInsurance(): Promise<LoaderResult<MedicalInsurance | null> | null> {
+  const me = await getMyProfile();
+  const id = (me.data as { id?: unknown } | null)?.id;
+  if (me.source === "error" || typeof id !== "string" || id.length === 0) return null;
+  return getMedicalInsurance(id);
+}
+
 export default async function MedicalPage() {
   const t = await getTranslations("medicalClaims");
   const roles = getSessionRoles();
@@ -48,6 +64,7 @@ export default async function MedicalPage() {
   const canApprove = roles.some((r) => HR_FINANCE_DECIDER_ROLES.includes(r));
 
   const { data: apiRows, source } = await getData();
+  const myInsurance = await getMyInsurance();
   const errored = source === "error";
 
   // GAP-HR-MEDICAL-02 (PII/identity): employee_id was already in the API
@@ -122,6 +139,7 @@ export default async function MedicalPage() {
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedLabel")} value={errored ? null : approved} />
         <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
+      {myInsurance && <MedicalInsuranceCard result={myInsurance} title={t("myInsuranceTitle")} />}
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">

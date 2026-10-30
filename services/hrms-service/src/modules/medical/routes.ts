@@ -6,7 +6,10 @@
  *  GET    /v1/hrms/medical/claims            — list my claims
  *  PATCH  /v1/hrms/medical/claims/:id/approve — HR approves/rejects
  *  GET    /v1/hrms/medical/hospitals         — empanelled hospital list
- *  GET    /v1/hrms/medical/insurance         — my insurance details (CGHS/state)
+ *  GET    /v1/hrms/medical/insurance         — insurance details (CGHS/state/mediclaim/ESIC)
+ *  PUT    /v1/hrms/medical/insurance/:employeeId — HR upserts (CQRS 202)
+ *  DELETE /v1/hrms/medical/insurance/:employeeId — HR removes (CQRS 202)
+ *  POST   /v1/hrms/medical/insurance/:employeeId/reveal — HR audited reveal of card number / scheme id
  *  GET    /v1/hrms/medical/history           — medical history timeline
  *
  * Schema: employee_id, claim_type (indoor/outdoor/reimbursement/advance), amount (paise),
@@ -24,9 +27,35 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveOwnEmployeeIdIfBareEmployee } from "../../shared/self-scope.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { pino } from "pino";
+import {
+  buildUpsertPayload, toInsuranceView, tryDecrypt, upsertInsuranceBody, REVEALABLE_INSURANCE_FIELDS, MEDICAL_INSURANCE_REVEAL_OP,
+  type InsuranceDbRow, type RevealableInsuranceField,
+} from "./insurance.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
+
+import * as insuranceCommands from "./insurance-commands.js";
+
+const insuranceLog = pino({ name: "hrms-medical-insurance" });
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
+
+/**
+ * Medical insurance tiers (review of PR #2397), deliberately NARROWER than the
+ * module's HR_ROLES above (which adds finance_officer for claim decisions):
+ *  - INSURANCE_WRITE_ROLES: add / edit / remove the record and see dependant
+ *    names -- the employee-master PII write tier (employee/routes.ts HR_ROLES,
+ *    the roles that edit PAN / bank details).
+ *  - INSURANCE_REVEAL_ROLES: audited reveal of the clear card number / scheme
+ *    id -- exactly the SF-05a PAN / bank-account reveal tier
+ *    (employee/pii-reveal.ts REVEALABLE_EMPLOYEE_FIELDS.pan.roles).
+ * finance_officer keeps read access (SELF_ROLES) but only ever sees masked values.
+ */
+const INSURANCE_WRITE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const INSURANCE_REVEAL_ROLES = ["hr_admin", "super_admin"];
 
 /**
  * IDOR fix (audit: medical claims/insurance/history leaked tenant-wide to a
@@ -146,11 +175,14 @@ async function auditMedicalClaimsListRead(
  */
 async function auditMedicalEmployeeRead(
   ctx: RequestContext, targetEmployeeId: string, view: "insurance" | "history",
+  ownEmployeeId?: string | null,
 ): Promise<void> {
   const privileged = HR_ROLES.some((r) => ctx.roles.includes(r)) || ctx.roles.includes("manager");
   if (!privileged) return;
-  const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  if (own?.id === targetEmployeeId) return;
+  const ownId = ownEmployeeId !== undefined
+    ? ownEmployeeId
+    : (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id ?? null;
+  if (ownId === targetEmployeeId) return;
   await queue.publish(COMMANDS.medicalClaimsListRead, {
     messageId: randomUUID(),
     type: COMMANDS.medicalClaimsListRead,
@@ -512,7 +544,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       "empanelled hospital directory has not been implemented — no backing table exists yet");
   });
 
-  // My insurance details
+  // Insurance details (one employee's current record)
   app.get("/v1/hrms/medical/insurance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, SELF_ROLES);
@@ -523,20 +555,140 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // mandatory here, but a bare "employee" caller's value is still ignored
     // and replaced by their own linked id — an unresolvable link folds into
     // the same 404 a genuinely-missing record gets (never leaks whether the
-    // record exists for someone else).
+    // record exists for someone else). A manager is limited to self + direct
+    // reports (403 otherwise).
     const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
-    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "insurance");
 
-    const [row] = await sqlClient`
-      SELECT employee_id, scheme_type, scheme_id, card_number, validity_from,
-             validity_to, tier, dependants, annual_limit_minor::text
+    // Masking (owner-approved, PR #2397 review):
+    //  - the employee themself sees their own record in full;
+    //  - everyone else -- HR included -- gets card number / scheme id masked to
+    //    the last 4; HR's clear value is the audited reveal below (SF-05a);
+    //  - dependant names / dates of birth: self and INSURANCE_WRITE_ROLES; a
+    //    manager or finance_officer sees relations only.
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const isBareEmployee = !isHr && !ctx.roles.includes("manager");
+    const ownEmployeeId = isBareEmployee
+      ? effectiveEmployeeId // forced onto their own record above
+      : (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id ?? null;
+    const isSelf = ownEmployeeId === effectiveEmployeeId;
+    const dependantsFullAccess = isSelf || INSURANCE_WRITE_ROLES.some((r) => ctx.roles.includes(r));
+
+    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "insurance", ownEmployeeId);
+
+    // RLS-safe: runs inside the tenant GUC transaction (FORCE RLS on the table).
+    const [row] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT employee_id, scheme_type, scheme_id, card_number, validity_from::text AS validity_from,
+             validity_to::text AS validity_to, tier, dependants, annual_limit_minor::text,
+             version, updated_at
       FROM employee.medical_insurance
       WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${effectiveEmployeeId}
-    `;
+    `);
 
     if (!row) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
-    return reply.send({ data: row });
+    const view = toInsuranceView(row as unknown as InsuranceDbRow, { cardInFull: isSelf, dependantsFullAccess }, () => {
+      // No value, no ciphertext — just which record needs attention.
+      insuranceLog.warn({ employeeId: effectiveEmployeeId, code: "PII_DECRYPT_FAILED" }, "medical insurance PII could not be decrypted; returned masked");
+    });
+    return reply.send({ data: view });
+  });
+
+  // HR (INSURANCE_WRITE_ROLES) upserts an employee's insurance record (CQRS: 202, written by
+  // insurance-consumer.ts). The card number / scheme id are encrypted here,
+  // before publishing, so plaintext never leaves this handler.
+  app.put("/v1/hrms/medical/insurance/:employeeId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INSURANCE_WRITE_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+    const body = upsertInsuranceBody.parse(req.body);
+
+    const [target] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT e.id, mi.id AS insurance_id
+      FROM employee.hrms_employees e
+      LEFT JOIN employee.medical_insurance mi
+        ON mi.tenant_id = e.tenant_id AND mi.employee_id = e.id
+      WHERE e.tenant_id = ${ctx.tenantId} AND e.id = ${employeeId}
+    `);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    const existingId = (target.insurance_id as string | null) ?? null;
+    if (!existingId && !body.cardNumber) {
+      throw new HttpError(400, "CARD_NUMBER_REQUIRED", "cardNumber is required when creating an insurance record");
+    }
+
+    const payload = buildUpsertPayload(existingId ?? randomUUID(), ctx.tenantId, employeeId, body);
+    return sendAccepted(reply, acceptedResponseSchema, await insuranceCommands.upsertMedicalInsurance(ctx, payload));
+  });
+
+  // Audited reveal of the clear card number / scheme id (owner decision on
+  // PR #2397). Same contract and guarantees as the employee-master PAN reveal
+  // (employee/pii-reveal.ts, POST /v1/hrms/pii/reveal) so the web MaskedReveal
+  // control drives it with only a path change:
+  //   body { resourceType: "medical_insurance", resourceId: <employeeId>, field, reason }
+  //   -> { data: { resourceType, resourceId, field, value } }
+  //  1. INSURANCE_REVEAL_ROLES only (hr_admin / super_admin -- the PAN / bank
+  //     reveal tier), 403 otherwise; 2. server-side field allow-list (422);
+  //  3. record must exist in the caller's tenant (RLS-scoped read), else 404;
+  //  4. reason >= 10 chars; 5. AUDIT FIRST, fail closed: the audit command is
+  //     published (publishF3Write, own messageId) BEFORE the value is returned;
+  //     the payload carries who / whom / field / reason, never the value.
+  // Rate limit: like the PAN reveal, only the service-wide per-actor limit
+  // (registerRateLimit in app.ts) applies -- the PAN reveal has no tighter one.
+  app.post("/v1/hrms/medical/insurance/:employeeId/reveal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INSURANCE_REVEAL_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+    const body = z.object({
+      resourceType: z.literal("medical_insurance"),
+      resourceId: z.string().uuid(),
+      field: z.string().min(1).max(64),
+      reason: z.string().trim().min(10, "state why you need the clear value (at least 10 characters)").max(2000),
+    }).parse(req.body ?? {});
+    if (body.resourceId !== employeeId) throw new HttpError(400, "RESOURCE_MISMATCH", "resourceId must match the employee in the path");
+    if (!Object.hasOwn(REVEALABLE_INSURANCE_FIELDS, body.field)) {
+      throw new HttpError(422, "FIELD_NOT_REVEALABLE", `field '${body.field}' is not revealable for medical_insurance`);
+    }
+    const field = body.field as RevealableInsuranceField;
+
+    const [row] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT card_number, scheme_id FROM employee.medical_insurance
+      WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${employeeId}
+    `);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+
+    const decrypted = tryDecrypt(row[REVEALABLE_INSURANCE_FIELDS[field]] as string | null);
+    if (!decrypted.ok) {
+      insuranceLog.warn({ employeeId, field, code: "PII_DECRYPT_FAILED" }, "medical insurance reveal: stored value could not be decrypted");
+      throw new HttpError(422, "PII_DECRYPT_FAILED", "the stored value could not be read; ask HR to re-enter it");
+    }
+
+    // Audit first, fail closed: no queued audit command, no reveal.
+    await publishF3Write(ctx, MEDICAL_INSURANCE_REVEAL_OP, randomUUID(), {
+      params: { employeeId }, query: {},
+      body: { action: "medical_insurance_pii_revealed", field, reason: body.reason },
+    });
+
+    void reply.header("cache-control", "no-store");
+    return reply.send({ data: { resourceType: "medical_insurance", resourceId: employeeId, field, value: decrypted.value } });
+  });
+
+  // HR removes an employee's insurance record (CQRS: 202).
+  app.delete("/v1/hrms/medical/insurance/:employeeId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INSURANCE_WRITE_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
+
+    const [target] = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT e.id, mi.id AS insurance_id
+      FROM employee.hrms_employees e
+      LEFT JOIN employee.medical_insurance mi
+        ON mi.tenant_id = e.tenant_id AND mi.employee_id = e.id
+      WHERE e.tenant_id = ${ctx.tenantId} AND e.id = ${employeeId}
+    `);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (!target.insurance_id) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+
+    return sendAccepted(reply, acceptedResponseSchema,
+      await insuranceCommands.deleteMedicalInsurance(ctx, target.insurance_id as string, employeeId));
   });
 
   // Medical history timeline
