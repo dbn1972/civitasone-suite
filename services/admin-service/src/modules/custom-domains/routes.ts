@@ -60,6 +60,12 @@ export async function customDomainRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(domainIdParam, req.params);
+    // UAT W8-C: tenant-scoped existence read before publishing, so an unknown domain is a 404 instead of a
+    // 202 for a command that can never apply. The consumer stays the race-safe check.
+    const existing = await scopedRead((tx) => tx.select({ id: customDomains.id }).from(customDomains)
+      .where(and(eq(customDomains.id, id), eq(customDomains.tenantId, ctx.tenantId)))
+      .then((rows) => rows[0]));
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "domain not found");
     const result = await commands.domainVerify(ctx, id);
     return reply.code(202).send(result);
   });

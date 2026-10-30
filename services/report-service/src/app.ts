@@ -56,11 +56,16 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerOpsRoutes(app, { service: "report-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
+  // UAT W8-C: MUST run BEFORE any app.register(<routes>) below. Fastify encapsulated route contexts copy the
+  // parent error handler when they are created, so a handler set after the routes only covered the root
+  // context, and a ZodError thrown in a route module without its own handler surfaced as a 500 (same root
+  // cause and fix as billing/citizen/finance/revenue in #2375). delegateFrameworkClientErrors: module-local
+  // handlers that map unknown errors to 500 still answer the framework 4xx (malformed/empty JSON) as 4xx.
+  registerSchemaErrorHandler(app, HttpError, { delegateFrameworkClientErrors: true });
   await app.register(jobRoutes);
   await app.register(dashboardRoutes);
   await app.register(scheduledRoutes);
   await app.register(templateRoutes);
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }

@@ -6,6 +6,16 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { deptResponseBody, settleBody, pendingRecoveryBody, closeBody, idParam, listParasQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
+
+/**
+ * UAT W8-C: tenant-scoped existence read (uncached, through db.transaction so the RLS GUC is set) before a
+ * para command is published: an unknown para is a 404, not a 202 for a command that can never apply. The
+ * consumer stays the race-safe check for state.
+ */
+async function assertParaExists(id: string, tenantId: string): Promise<void> {
+  if (!(await repo.findParaById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "para not found");
+}
 
 const AUDIT_ROLES = ["audit_officer", "audit_admin", "super_admin"];
 const DEPT_ROLES  = ["dept_head", "dept_officer", ...AUDIT_ROLES];
@@ -16,6 +26,7 @@ export async function paraRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, AUDIT_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertParaExists(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.issuePara(ctx, id));
   });
 
@@ -32,6 +43,7 @@ export async function paraRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, AUDIT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = settleBody.parse(req.body ?? {});
+    await assertParaExists(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.settlePara(ctx, id, body));
   });
 
@@ -40,6 +52,7 @@ export async function paraRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, AUDIT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = pendingRecoveryBody.parse(req.body ?? {});
+    await assertParaExists(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.pendingRecovery(ctx, id, body));
   });
 
@@ -48,6 +61,7 @@ export async function paraRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, AUDIT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeBody.parse(req.body ?? {});
+    await assertParaExists(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.closePara(ctx, id, body));
   });
 

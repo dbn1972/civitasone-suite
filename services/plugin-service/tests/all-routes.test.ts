@@ -82,6 +82,11 @@ vi.mock("../src/modules/registry/repo.js", () => ({
     if (id === FAKE_ID && tenantId === TENANT) return fakePlugin;
     return null;
   }),
+  // UAT W8-C: POST /:id/enable reads the plugin through the tenant-scoped findByIdScoped().
+  findByIdScoped: vi.fn(async (id: string, tenantId: string) => {
+    if (id === FAKE_ID && tenantId === TENANT) return fakePlugin;
+    return null;
+  }),
   // The real registry/repo.ts::listByTenant returns a bare array (there is no
   // separate queries.js wrapping layer for this module, unlike items/ above) —
   // registry/routes.ts itself wraps it into {data, pagination} before handing

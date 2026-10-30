@@ -29,3 +29,55 @@ describe.each(["contract-service", "project-service", "stock-service", "works-se
     });
   },
 );
+
+/**
+ * UAT W8-C (2026-10-30): same root cause in four platform services. install /modules/resolve, metadata
+ * /config/import, report /dashboards and workflow /nurture-rules answered a ZodError 500. Their call
+ * also passes `{ delegateFrameworkClientErrors: true }` (as billing/citizen/finance/revenue do), so the
+ * match tolerates an options argument.
+ */
+describe.each(["install-service", "metadata-service", "report-service", "workflow-service"])(
+  "%s app.ts registers the schema error handler before any route plugin (UAT W8-C)",
+  (svc) => {
+    const src = readFileSync(join(ROOT, "services", svc, "src/app.ts"), "utf8");
+    const CALL = /registerSchemaErrorHandler\(app, HttpError(?:, \{[^}]*\})?\)/g;
+
+    it("calls registerSchemaErrorHandler exactly once", () => {
+      expect(src.match(CALL)?.length).toBe(1);
+    });
+
+    it("precedes every `app.register(<xRoutes>)`", () => {
+      const handlerAt = src.search(CALL);
+      const firstRouteAt = src.search(/app\.register\(\s*\w*Routes\s*\)/);
+      expect(firstRouteAt).toBeGreaterThan(0);
+      expect(handlerAt).toBeGreaterThan(0);
+      expect(handlerAt).toBeLessThan(firstRouteAt);
+    });
+  },
+);
+
+/**
+ * UAT W8-C (2026-10-30): same root cause in four platform services. install /modules/resolve, metadata
+ * /config/import, report /dashboards and workflow /nurture-rules answered a ZodError 500. Their call
+ * also passes `{ delegateFrameworkClientErrors: true }` (as billing/citizen/finance/revenue do), so the
+ * match tolerates an options argument.
+ */
+describe.each(["install-service", "metadata-service", "report-service", "workflow-service"])(
+  "%s app.ts registers the schema error handler before any route plugin (UAT W8-C)",
+  (svc) => {
+    const src = readFileSync(join(ROOT, "services", svc, "src/app.ts"), "utf8");
+    const CALL = /registerSchemaErrorHandler\(app, HttpError(?:, \{[^}]*\})?\)/g;
+
+    it("calls registerSchemaErrorHandler exactly once", () => {
+      expect(src.match(CALL)?.length).toBe(1);
+    });
+
+    it("precedes every `app.register(<xRoutes>)`", () => {
+      const handlerAt = src.search(CALL);
+      const firstRouteAt = src.search(/app\.register\(\s*\w*Routes\s*\)/);
+      expect(firstRouteAt).toBeGreaterThan(0);
+      expect(handlerAt).toBeGreaterThan(0);
+      expect(handlerAt).toBeLessThan(firstRouteAt);
+    });
+  },
+);

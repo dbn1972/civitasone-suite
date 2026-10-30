@@ -6,11 +6,20 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import * as tasksRepo from "../tasks/repo.js";
 import { computeDueOnCalendar, agingMinutes } from "../../shared/calendar.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * UAT W8-C: tenant-scoped existence read (scopedRead: RLS GUC set) of the task before an SLA pause/resume
+ * command is published: an unknown task is a 404, not a 202 for a command that can never apply.
+ */
+async function assertTaskExists(id: string, tenantId: string): Promise<void> {
+  if (!(await tasksRepo.findById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "task not found");
+}
 
 export async function slaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/calendars", async (req, reply) => {
@@ -50,6 +59,7 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ reason: z.string().max(256).nullable().optional() }).parse(req.body ?? {});
+    await assertTaskExists(id, ctx.tenantId);
     // Synchronous pre-check: repo.pauseTask() is idempotent per task (a
     // partial unique index blocks a second open pause) but that enforcement
     // now runs deep in the async consumer with no channel back to the HTTP
@@ -63,6 +73,7 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/tasks/:id/sla/resume", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await assertTaskExists(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.resumeTaskSla(ctx, id));
   });
   app.get("/v1/workflow/sla/overdue", async (req, reply) => {

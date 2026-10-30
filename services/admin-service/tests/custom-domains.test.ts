@@ -139,13 +139,14 @@ describe("POST /v1/admin/custom-domains", () => {
 // POST /v1/admin/custom-domains/:id/verify — VERIFY
 // ══════════════════════════════════════════════════════════════════════════════
 describe("POST /v1/admin/custom-domains/:id/verify", () => {
-  it("returns 202 for super_admin", async () => {
+  // UAT W8-C: VALID_UUID is not a registered domain, so the verify can never apply: 404, not 202.
+  // The 202 path on a real domain is covered by tests/uat-w8c-accept-nonexistent.test.ts.
+  it("returns 404 for super_admin on a domain that does not exist", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/admin/custom-domains/${VALID_UUID}/verify`,
       headers: authHeader(["super_admin"]),
     });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().status).toBe("accepted");
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 400 with invalid uuid", async () => {

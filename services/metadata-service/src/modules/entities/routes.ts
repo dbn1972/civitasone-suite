@@ -47,6 +47,12 @@ export async function entityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ label: z.string().max(256).optional(), pluralLabel: z.string().max(256).optional(), description: z.string().max(2000).optional(), isActive: z.boolean().optional() }).parse(req.body);
+    // UAT W8-C: tenant-scoped existence read before publishing: an unknown entity definition is a 404, not a 202 for a
+    // command that can never apply. Body validation above still runs first; the consumer stays the race-safe check.
+    const found = await withTenant(ctx.tenantId, (tx) =>
+      tx.select({ id: entityDefinitions.id }).from(entityDefinitions)
+        .where(and(eq(entityDefinitions.id, id), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1));
+    if (!found[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
     await queue.publish("metadata.entity.update", { messageId: randomUUID(), type: "metadata.entity.update", tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, tenantId: ctx.tenantId, ...body } });
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });

@@ -81,7 +81,9 @@ describe("POST /v1/audit/paras/:id/issue", () => {
   });
 
   it("202 for audit_officer — publishes a command, no DB write needed", async () => {
+    // UAT W8-C: the command now reads the para first (an unknown id is a 404), so seed a real one.
     const paraId = randomUUID();
+    await seedPara(paraId, TENANT, { paraNo: `PARA-W8C-${paraId.slice(0, 8)}` });
     const res = await app.inject({
       method: "POST",
       url: `/v1/audit/paras/${paraId}/issue`,
@@ -174,7 +176,9 @@ describe("PATCH /v1/audit/paras/:id/settle", () => {
   });
 
   it("202 for audit_officer with an optional body", async () => {
+    // UAT W8-C: the command now reads the para first (an unknown id is a 404), so seed a real one.
     const paraId = randomUUID();
+    await seedPara(paraId, TENANT, { paraNo: `PARA-W8C-${paraId.slice(0, 8)}` });
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/audit/paras/${paraId}/settle`,
@@ -188,7 +192,9 @@ describe("PATCH /v1/audit/paras/:id/settle", () => {
   });
 
   it("202 for audit_officer with an empty body (body is optional/defaults)", async () => {
+    // UAT W8-C: the command now reads the para first (an unknown id is a 404), so seed a real one.
     const paraId = randomUUID();
+    await seedPara(paraId, TENANT, { paraNo: `PARA-W8C-${paraId.slice(0, 8)}` });
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/audit/paras/${paraId}/settle`,
@@ -217,7 +223,9 @@ describe("PATCH /v1/audit/paras/:id/pending_recovery", () => {
   });
 
   it("202 for audit_officer", async () => {
+    // UAT W8-C: the command now reads the para first (an unknown id is a 404), so seed a real one.
     const paraId = randomUUID();
+    await seedPara(paraId, TENANT, { paraNo: `PARA-W8C-${paraId.slice(0, 8)}` });
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/audit/paras/${paraId}/pending_recovery`,
@@ -247,7 +255,9 @@ describe("PATCH /v1/audit/paras/:id/close", () => {
   });
 
   it("202 for audit_officer", async () => {
+    // UAT W8-C: the command now reads the para first (an unknown id is a 404), so seed a real one.
     const paraId = randomUUID();
+    await seedPara(paraId, TENANT, { paraNo: `PARA-W8C-${paraId.slice(0, 8)}` });
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/audit/paras/${paraId}/close`,

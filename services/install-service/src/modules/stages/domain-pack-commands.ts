@@ -54,9 +54,16 @@ export async function activateDomainPackStage3(
     status: "accepted",
   });
 
+  // UAT W8-C: the two install-side commands are independent of each other, so they are published
+  // CONCURRENTLY. Each SQS publish first discovers the subscriber queues (ListQueues), which took 3-4.5 s
+  // per call on the UAT LocalStack; three strictly sequential publishes pushed this route past the
+  // gateway's 15 s upstream timeout (504) although every command had been sent. The citizen command is
+  // still published only AFTER both have resolved, so the activation record always exists before
+  // citizen-service can report an outcome against it (applyActivationOutcome rejects an unknown record).
+  //
   // Owner decision #28: durable per-tenant activation record (accepted -> completed/failed). Own
   // messageId so the record command is idempotent independently of the stage create / citizen commands.
-  await queue.publish(COMMANDS.recordDomainPackActivation, {
+  const recordPublished = queue.publish(COMMANDS.recordDomainPackActivation, {
     messageId: randomUUID(),
     type: COMMANDS.recordDomainPackActivation,
     tenantId: ctx.tenantId,
@@ -67,7 +74,7 @@ export async function activateDomainPackStage3(
   });
 
   // Track Stage 3 in install stages (CQRS create).
-  await queue.publish(COMMANDS.createStage, {
+  const stagePublished = queue.publish(COMMANDS.createStage, {
     messageId: stageId,
     type: COMMANDS.createStage,
     tenantId: ctx.tenantId,
@@ -76,6 +83,7 @@ export async function activateDomainPackStage3(
     schemaVersion: "1.0",
     payload: stageProjected,
   });
+  await Promise.all([recordPublished, stagePublished]);
 
   // Cross-service: citizen-service packs consumer imports drafts.
   await queue.publish(CITIZEN_PACK_DOMAIN_ACTIVATE, {
