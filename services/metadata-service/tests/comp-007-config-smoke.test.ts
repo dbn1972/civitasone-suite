@@ -29,8 +29,8 @@
  * verifying those consumers actually apply them is those modules' own test
  * scope, not this route's.
  *
- * REAL BUG (found while writing this test, not fixed here -- see PR
- * description): POST /import returns a raw 500 for invalid input instead of a
+ * REAL BUG (FIXED by UAT W8-C: app.ts now calls registerSchemaErrorHandler
+ * BEFORE the route plugins; history kept below): POST /import returns a raw 500 for invalid input instead of a
  * 400. Root-caused by direct instrumentation of the error-handling chain
  * (temporary debug logging in packages/schemas, reverted before this commit --
  * confirmed with `git diff`/`git status` clean): every OTHER route module in
@@ -147,7 +147,7 @@ describe("COMP-007: metadata config -- POST /v1/metadata/config/import", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("KNOWN ISSUE (see file header): a body missing the required 'version' field 500s instead of 400 -- no local error handler catches the ZodError", async () => {
+  it("UAT W8-C: a body missing the required 'version' field is a 400 VALIDATION_FAILED (was a ZodError 500, see file header)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "POST",
@@ -155,10 +155,9 @@ describe("COMP-007: metadata config -- POST /v1/metadata/config/import", () => {
       headers: { authorization: `Bearer ${token(["metadata_admin"], tid)}` },
       payload: { entities: [] },
     });
-    // NOT the desired behavior -- documents the bug. Every other tested route
-    // in this service returns 400 with {code:"VALIDATION_FAILED",...} for the
-    // identical mistake (see e.g. entities' POST /v1/metadata/entities).
-    expect(res.statusCode).toBe(500);
+    // Same envelope every other route in this service returns for the identical mistake.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("an authorized import publishes exactly one command per item across all seven sections", async () => {

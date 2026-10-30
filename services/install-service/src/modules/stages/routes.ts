@@ -60,10 +60,12 @@ export function stageToStep(stage: {
   };
 }
 
+// UAT W8-C: .strict() so a body with unknown fields is a 400 instead of silently starting a real
+// activation with the defaults (the web client sends only domainPackKey and packKeys).
 const activateDomainPackBody = z.object({
   domainPackKey: z.string().min(1).max(64).optional().default("municipal-in-v1"),
   packKeys: z.array(z.string().min(1).max(64)).max(50).optional(),
-});
+}).strict();
 
 const domainPackActivateAcceptedSchema = z.object({
   id: z.string().uuid(),

@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createPlanBody, createPlanItemBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const AUDIT_ROLES = ["audit_officer", "audit_admin", "super_admin"];
 const READER_ROLES = [...AUDIT_ROLES, "finance_admin"];
@@ -31,6 +32,9 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, AUDIT_ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W8-C: tenant-scoped existence read (uncached) before publishing: an unknown plan is a 404, not a
+    // 202 for a command that can never apply. The consumer stays the race-safe check.
+    if (!(await repo.findPlanById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "plan not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.startPlan(ctx, id));
   });
 

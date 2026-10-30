@@ -50,6 +50,9 @@ export async function registryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = idParam.parse(req.params);
+    // UAT W8-C: tenant-scoped existence read before publishing: an unknown plugin is a 404, not a 202 for
+    // a command that can never apply. The consumer stays the race-safe check for the state transition.
+    if (!(await repo.findByIdScoped(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "plugin not found");
     sendAccepted(reply, acceptedResponseSchema, await commands.pluginEnable(ctx, id));
   });
 

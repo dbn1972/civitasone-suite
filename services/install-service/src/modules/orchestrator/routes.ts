@@ -14,11 +14,24 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import { defaultOnboardingSteps, ONBOARDING_WIZARD_NAME } from "./onboarding.js";
 
 const ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
 // install_user is read-only: wizard/step mutations need an install admin role.
 const MUTATE_ROLES = ["install_admin", "super_admin", "tenant_admin"];
+
+/**
+ * UAT W8-C: tenant-scoped existence read before a step command is published. An unknown wizard, or a
+ * stepKey the wizard does not define, is a 404 instead of a 202 for a command that can never apply.
+ * Both reads run in tenantTx (RLS GUC set); the consumer stays the race-safe check for step state.
+ */
+async function assertStepExists(wizardId: string, stepKey: string, tenantId: string): Promise<void> {
+  const wizard = await repo.getWizard(wizardId, tenantId);
+  if (!wizard) throw new HttpError(404, "NOT_FOUND", "wizard not found");
+  const defs = await repo.getStepDefinitions(wizardId, tenantId);
+  if (!defs.some((d) => d.stepKey === stepKey)) throw new HttpError(404, "NOT_FOUND", "step not found in this wizard");
+}
 
 export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/install/wizards", async (req, reply) => {
@@ -67,6 +80,7 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
+    await assertStepExists(wizardId, stepKey, ctx.tenantId);
     sendAccepted(reply, acceptedResponseSchema, await commands.startStep(ctx, wizardId, stepKey));
   });
 
@@ -75,6 +89,7 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
     const body = completeStepBody.parse(req.body ?? {});
+    await assertStepExists(wizardId, stepKey, ctx.tenantId);
     sendAccepted(reply, acceptedResponseSchema, await commands.completeStep(ctx, wizardId, stepKey, body));
   });
 
@@ -83,6 +98,7 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
     const body = skipStepBody.parse(req.body ?? {});
+    await assertStepExists(wizardId, stepKey, ctx.tenantId);
     sendAccepted(reply, acceptedResponseSchema, await commands.skipStep(ctx, wizardId, stepKey, body.reason));
   });
 

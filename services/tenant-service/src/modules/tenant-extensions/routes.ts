@@ -7,6 +7,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, readScoped } from "../../shared/db.js";
 import { tenantQuotas, tenantConfigs } from "../tenant/schema.js";
+import { findByIdTx as findTenantByIdTx } from "../tenant/repo.js";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 
@@ -49,9 +50,15 @@ export async function tenantExtensionRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { tenantId } = safeParse(tenantIdParam, req.params);
+    // UAT W8-C: same cross-tenant rule as the GET above: a tenant admin may only change its OWN tenant's
+    // config; only platform roles may target another tenant.
+    if (ctx.tenantId !== tenantId && !ctx.roles.some((r) => PLAT.includes(r))) throw new HttpError(403, "FORBIDDEN", "cross-tenant");
     const body = safeParse(configBody, req.body);
     await runWithTenant(tenantId, () =>
       db.transaction(async (tx) => {
+        // UAT W8-C: the tenant must exist, read in the same tenant-scoped transaction. Previously an unknown
+        // tenantId got a config row created for it (getOrInitConfig) and a 202.
+        if (!(await findTenantByIdTx(tx, tenantId))) throw new HttpError(404, "NOT_FOUND", "tenant not found");
         const existing = await getOrInitConfig(tx, tenantId);
         await tx.update(tenantConfigs).set({
           billing:  (body as any).billing      ?? existing.billing,

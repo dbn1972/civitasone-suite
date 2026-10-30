@@ -68,7 +68,7 @@ const lifecycleBody = z.object({
 export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   // ── List ────────────────────────────────────────────────────────────────
   app.get("/api/v1/gateway/catalogue", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     // GAP-ADMIN-GATEWAY-ROUTES-01: the catalogue is the platform's internal
     // API surface (paths, upstreams, owners) -- admin-only on read too, not
     // just on write. RLS still scopes rows to the caller's tenant.
@@ -87,7 +87,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Get one + changelog ───────────────────────────────────────────────────
   app.get("/api/v1/gateway/catalogue/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const result = await withTenant(
@@ -105,7 +105,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Register (CQRS) ───────────────────────────────────────────────────────
   app.post("/api/v1/gateway/catalogue", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = registerBody.parse(req.body);
 
@@ -127,7 +127,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Deprecate (convenience wrapper) ───────────────────────────────────────
   app.post("/api/v1/gateway/catalogue/:id/deprecate", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = deprecateBody.parse(req.body ?? {});
@@ -137,7 +137,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Generic lifecycle transition ────────────────────────────────────────────
   app.post("/api/v1/gateway/catalogue/:id/lifecycle", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = lifecycleBody.parse(req.body);
@@ -147,14 +147,14 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Seed from the live route registry ─────────────────────────────────────
   app.post("/api/v1/gateway/catalogue/seed", async (req, reply) => {
-    const ctx = resolveContext(req);
+    const ctx = await resolveContext(req);
     requireRole(ctx, ["super_admin", "platform_admin"]);
     const accepted = await commands.seedCatalogue(ctx);
     return reply.code(202).send({ data: accepted });
   });
 
   async function enqueueLifecycle(
-    ctx: ReturnType<typeof resolveContext>,
+    ctx: Awaited<ReturnType<typeof resolveContext>>,
     id: string,
     action: ApiAction,
     opts: { deprecationDate?: string | undefined; sunsetDate?: string | undefined; note?: string | undefined },
@@ -176,6 +176,14 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     }
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
+    }
+    // UAT W8-C: the gateway JSON parser tags a malformed body as a SyntaxError with statusCode 400, and
+    // Fastify's own client errors (empty JSON body, body too large, unsupported media type) carry a 4xx
+    // statusCode too. They are the caller's mistake: answer that 4xx, never a 500 "internal error".
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      const code = err instanceof SyntaxError ? "MALFORMED_BODY" : "BAD_REQUEST";
+      return reply.code(statusCode).send({ code, message: "invalid request", correlationId: cid });
     }
     req.log.error({ err }, "unhandled");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });

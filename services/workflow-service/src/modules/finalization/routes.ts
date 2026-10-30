@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import * as instancesRepo from "../instances/repo.js";
 import { canReverse, assessImpact, assertEditable, type Dependency } from "./domain.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
@@ -18,6 +19,15 @@ const dependencySchema = z.object({
   blocking: z.boolean().default(false), detail: z.string().max(256).optional(),
 });
 
+/**
+ * UAT W8-C: tenant-scoped existence read (scopedRead: RLS GUC set) of the workflow instance. An unknown
+ * instance is a 404 instead of a 202 finalize that can never apply, or a 200 impact/edit answer about a
+ * record that does not exist.
+ */
+async function assertInstanceExists(id: string, tenantId: string): Promise<void> {
+  if (!(await instancesRepo.findById(id, tenantId))) throw new HttpError(404, "NOT_FOUND", "workflow instance not found");
+}
+
 export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/instances/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
@@ -29,6 +39,7 @@ export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
     // row lets the common "already finalized" request still 409 immediately;
     // a request racing a concurrent finalize is still resolved correctly (as
     // a silent no-op) by the consumer's own existence check.
+    await assertInstanceExists(id, ctx.tenantId);
     const existing = await repo.findByInstance(id, ctx.tenantId);
     if (existing) throw new HttpError(409, "ALREADY_FINALIZED", "instance is already finalized");
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeInstance(ctx, id));
@@ -45,6 +56,7 @@ export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ dependencies: z.array(dependencySchema).default([]) }).parse(req.body ?? {});
+    await assertInstanceExists(id, ctx.tenantId);
     return reply.send({ data: assessImpact(id, body.dependencies as Dependency[]) });
   });
 
@@ -67,6 +79,7 @@ export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/instances/:id/guarded-edit", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await assertInstanceExists(id, ctx.tenantId);
     const row = await repo.findByInstance(id, ctx.tenantId);
     const guard = assertEditable(repo.toState(row));
     if (!guard.allowed) throw new HttpError(409, "INSTANCE_FINALIZED", "finalized record is protected from edits; reverse it first");

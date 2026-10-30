@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { plugins, type PluginRow, type PluginInsert, type PluginView, type PluginState } from "./schema.js";
 
@@ -24,6 +25,20 @@ export async function findById(id: string, tenantId: string): Promise<PluginView
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * UAT W8-C: tenant-scoped existence read for HTTP command routes. Runs in an explicit tenant context
+ * (runWithTenant + db.transaction, so wrapWithTenantGuc sets app.tenant_id): findById() above is a bare
+ * select that FORCE RLS always answers with zero rows (locked by registry-consumer-rls.test.ts), and the
+ * request hook only enters a tenant context from an x-tenant-id header.
+ */
+export async function findByIdScoped(id: string, tenantId: string): Promise<PluginView | null> {
+  const rows = await runWithTenant(tenantId, () =>
+    db.transaction((tx) => tx.select().from(plugins).where(eq(plugins.id, id)).limit(1)));
+  const row = rows[0];
+  if (!row || row.tenantId !== tenantId) return null;
+  return toView(row);
+}
 
 /**
  * TX-003 — tenant-scoped sibling of findById(). registry.plugins is under
