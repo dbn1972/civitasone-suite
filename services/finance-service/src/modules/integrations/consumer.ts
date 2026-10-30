@@ -326,21 +326,31 @@ export function registerIntegrationConsumers(queue: Queue): void {
     });
   });
 
-  /** audit-service → finance: flag recoverable amount in finance audit paras register */
+  /**
+   * audit-service → finance: flag recoverable amount in finance audit paras register.
+   *
+   * The para enters the register as open -- the entry state of the finance respond / escalate / settle
+   * workflow (audit/commands.ts) and the only value the status CHECK (migrations/0036) allows for a new
+   * para; pending_recovery is audit-services vocabulary, not the registers. The recoverable amount is
+   * money_value_minor. para_no carries the full audit-service paraId (an 8-char prefix could collide on
+   * (tenant_id, para_no)) and the insert is a no-op on conflict, so a redelivery of the same para under a
+   * new messageId cannot unique-violate into a retry / DLQ loop.
+   */
   queue.subscribe(CONSUMED_EVENTS.auditParaPendingRecovery, async (msg) => {
     const p = msg.payload as {
-      paraId: string; deptRef: string; amountInvolvedMinor: number;
+      paraId: string; deptRef: string; amountInvolvedMinor: number | string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await auditRepo.insertAuditPara(tx, {
+      const inserted = await auditRepo.insertAuditParaIfAbsent(tx, {
         id: randomUUID(), tenantId: msg.tenantId,
-        paraNo: `AUDIT-${p.paraId.slice(0, 8)}`,
+        paraNo: `AUDIT-${p.paraId}`,
         source: "internal", dept: p.deptRef,
         moneyValueMinor: BigInt(p.amountInvolvedMinor),
-        currency: "INR", status: "pending_recovery",
+        currency: "INR", status: "open",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      if (!inserted) return;
       await audit(tx, msg, "recovery_flag", "finance_audit_para", p.paraId);
     });
   });
