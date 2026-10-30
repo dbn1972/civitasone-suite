@@ -95,6 +95,17 @@ export async function findContractByIdTx(tx: Writer, id: string): Promise<Contra
   return rows[0] ?? null;
 }
 
+/**
+ * F74: read the contract row under SELECT ... FOR UPDATE, so read-modify-write
+ * handlers (amend: value_minor + delta, amendment_no = count + 1) serialise per
+ * contract. Without it two concurrent amends both read the same value and the
+ * second overwrites the first (lost update).
+ */
+export async function findContractByIdForUpdateTx(tx: Writer, id: string): Promise<ContractRow | null> {
+  const rows = await (tx as typeof db).select().from(contractContracts).where(eq(contractContracts.id, id)).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
 export async function insertContract(tx: Writer, row: ContractInsert): Promise<void> {
   await tx.insert(contractContracts).values(row);
 }
