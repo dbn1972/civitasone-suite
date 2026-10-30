@@ -78,6 +78,30 @@ export const STANDARD_DEFINITIONS: SeedDefinition[] = [
       { nodeKey: "po_issue", name: "PO Issuance", roleRef: "procurement_manager" },
     ],
   },
+  // F77: the chains procurement-service actually requests. po/consumer.ts and
+  // indent/consumer.ts raise workflow.instance.create with these exact codes
+  // (refType procurement_po / procurement_indent, both in the tasks consumer's
+  // dispatchDomainApprove map), so a tenant without them had every PO / indent
+  // approval instance rejected as `unknown_definition` (R13) and a PO could
+  // never be approved or dispatched. Previously only the demo tenant had them
+  // (scripts/dev/seed-all.mjs); the node shape matches that seed exactly. One
+  // node each: approving it is terminal and dispatches the domain approval.
+  {
+    code: "procurement_indent_approval",
+    name: "Procurement Indent Approval",
+    cluster: "p2p",
+    nodes: [
+      { nodeKey: "proc_officer", name: "Procurement Officer Approval", roleRef: "procurement_officer" },
+    ],
+  },
+  {
+    code: "procurement_po_approval",
+    name: "Procurement PO Approval",
+    cluster: "p2p",
+    nodes: [
+      { nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" },
+    ],
+  },
   {
     code: "grant_disbursement",
     name: "Grant Disbursement Workflow",

@@ -30,7 +30,7 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { eq, and, inArray } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
@@ -48,8 +48,8 @@ import { isBlacklisted } from "../blacklist/screening-store.js";
 // check-in path (check-in/consumer.ts) enforces. Bring it to parity using
 // the exact same building blocks that path uses.
 import { checkIns } from "../check-in/schema.js";
-import { locations } from "../location/schema.js";
-import { checkIn as domainCheckIn, type CheckInStatus } from "../check-in/domain.js";
+import { locations, gates } from "../location/schema.js";
+import { checkIn as domainCheckIn, isLocationScopeValid, type CheckInStatus } from "../check-in/domain.js";
 import { isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 
@@ -92,6 +92,11 @@ export interface GroupBulkCheckInPayload {
   groupVisitId: string;
   tenantId: string;
   actualHeadcount: number;
+  /**
+   * Required: check_ins.gate_id is a NOT NULL uuid FK to visitor.gates. The
+   * type stays nullable only to describe messages enqueued before the route
+   * started requiring it; the consumer rejects those (see below).
+   */
   gateId: string | null;
 }
 
@@ -253,6 +258,22 @@ export function registerGroupVisitConsumers(q: Queue): void {
   q.subscribe<GroupBulkCheckInPayload>(COMMANDS.groupBulkCheckIn, async (msg) => {
     const p = msg.payload;
 
+    // F64 BUG FIX (silent data loss): gateId used to be optional end to end
+    // and was written as `gateId ?? ""` into check_ins.gate_id (NOT NULL uuid
+    // FK to gates). Postgres rejected "" on every attempt, the whole bulk
+    // check-in rolled back, and the message was retried as if transient
+    // before dead-lettering, while the route had already answered 202.
+    // A missing gate is a permanent rejection: fail fast, loudly, and never
+    // write "" into a uuid column.
+    const gateId = p.gateId;
+    if (!gateId) {
+      log.error(
+        { tenantId: p.tenantId, groupVisitId: p.groupVisitId, messageId: msg.messageId, event: "group_bulk_checkin_missing_gate" },
+        "group bulk check-in rejected: gateId is required",
+      );
+      throw new NonRetryableError(`group bulk check-in for '${p.groupVisitId}' rejected: gateId is required`);
+    }
+
     const committed = await db.transaction(async (tx): Promise<{
       locationId: string;
       capacityThreshold: number | null;
@@ -268,8 +289,26 @@ export function registerGroupVisitConsumers(q: Queue): void {
         .limit(1);
       const group = groupRows[0];
       if (!group) {
-        throw new Error(`group visit '${p.groupVisitId}' not found for tenant '${p.tenantId}'`);
+        // Permanent: retrying cannot make a missing group appear.
+        throw new NonRetryableError(`group visit '${p.groupVisitId}' not found for tenant '${p.tenantId}'`);
       }
+
+      // F64: the gate must exist for this tenant (check_ins.gate_id FK). An
+      // unknown gate is permanent, so dead-letter instead of retrying an FK
+      // violation (same convention as check-in/consumer.ts).
+      const gateRows = await tx
+        .select({ id: gates.id, locationId: gates.locationId })
+        .from(gates)
+        .where(and(eq(gates.id, gateId), eq(gates.tenantId, p.tenantId)))
+        .limit(1);
+      if (!gateRows[0]) {
+        log.error(
+          { tenantId: p.tenantId, groupVisitId: p.groupVisitId, gateId, messageId: msg.messageId, event: "group_bulk_checkin_unknown_gate" },
+          "group bulk check-in rejected: gate not found for tenant",
+        );
+        throw new NonRetryableError(`gate '${gateId}' not found for tenant '${p.tenantId}'`);
+      }
+      const gateLocationId = gateRows[0].locationId;
 
       // Headcount reconciliation (Requirement 9.6, domain logic).
       const reconciliation = confirmBulkCheckIn(group.memberCount, p.actualHeadcount);
@@ -293,6 +332,30 @@ export function registerGroupVisitConsumers(q: Queue): void {
             .where(and(inArray(digitalPasses.id, passIds), eq(digitalPasses.tenantId, p.tenantId)))
         : [];
       const passById = new Map(passRows.map((row) => [row.id, row]));
+
+      // F64 review: gate/location scope (Property 26), the same check the
+      // single check-in path makes (check-in/consumer.ts) before writing.
+      // A gate at another site would otherwise write check_ins and roster
+      // rows for the wrong location. Whole-batch refusal, not per-member
+      // skip: the single path dead-letters the whole command on a scope
+      // violation, and a group's member passes all come from one visit
+      // request at one location, so a mismatch means the guard used the
+      // wrong gate for the group, not that one member is ineligible.
+      // Checked before any write, so nothing is committed.
+      const outOfScope = passRows.filter((row) => !isLocationScopeValid(row.locationId, gateLocationId));
+      if (outOfScope.length > 0) {
+        log.error(
+          {
+            tenantId: p.tenantId, groupVisitId: p.groupVisitId, gateId, gateLocationId,
+            passIds: outOfScope.map((row) => row.id), passLocationIds: [...new Set(outOfScope.map((row) => row.locationId))],
+            messageId: msg.messageId, event: "group_bulk_checkin_gate_location_mismatch",
+          },
+          "group bulk check-in rejected: gate is not at the group's pass location",
+        );
+        throw new NonRetryableError(
+          `gate '${gateId}' is at location '${gateLocationId}', but ${outOfScope.length} member pass(es) of group '${p.groupVisitId}' are scoped to location '${outOfScope[0]!.locationId}'`,
+        );
+      }
 
       const now = new Date();
       const checkedInMembers: Array<{ passId: string; visitorName: string; checkInTime: string }> = [];
@@ -332,7 +395,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
           tenantId: p.tenantId,
           passId: member.passId,
           locationId: pass.locationId,
-          gateId: p.gateId ?? "",
+          gateId,
           direction: "in",
           timestamp: now,
           verificationMethod: "bulk",
@@ -366,7 +429,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
           membersCheckedIn: checkedInMembers.length,
           headcountMatched: reconciliation.matched,
           discrepancyCount: reconciliation.discrepancyCount,
-          gateId: p.gateId,
+          gateId,
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "group_visit", resourceId: msg.messageId, outcome: "success" } });
@@ -403,7 +466,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
           visitorName: m.visitorName,
           hostName: "",
           checkInTime: m.checkInTime,
-          lastKnownGate: p.gateId ?? "",
+          lastKnownGate: gateId,
           contactNumber: "",
           evacuated: false,
         };

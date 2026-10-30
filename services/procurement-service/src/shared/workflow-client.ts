@@ -42,3 +42,33 @@ export async function fetchRefDecisions(
     return { available: false, decisions: [] };
   }
 }
+
+/**
+ * F77: does this tenant have an ACTIVE workflow definition for `code`? Asked
+ * before accepting a command whose consumer will raise an approval instance,
+ * so a tenant without the chain gets a clear 422 WORKFLOW_NOT_CONFIGURED
+ * instead of a 202 whose instance workflow-service then rejects (R13).
+ * `null` means "could not ask" (workflow-service unreachable / non-2xx): the
+ * caller proceeds and the async path stays fail-closed, so an outage of the
+ * pre-check never blocks PO creation on its own.
+ */
+export async function isWorkflowConfigured(tenantId: string, code: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${WORKFLOW_URL}/v1/workflow/internal/definition-configured`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-internal": "1",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
+      body: JSON.stringify({ code }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { configured?: unknown };
+    return typeof body.configured === "boolean" ? body.configured : null;
+  } catch {
+    return null;
+  }
+}

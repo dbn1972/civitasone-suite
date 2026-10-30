@@ -43,6 +43,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = remitBody.parse(req.body);
+    // UAT B8-F68 (P1): the consumer used to insert a pending remission for ANY id (orphan row).
+    if (!(await repo.assessmentExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "assessment not found");
     const result = await commands.remitAssessment(ctx, id, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
@@ -53,6 +55,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = remitDecideBody.parse(req.body);
+    // UAT B8-F68 (P1): an unknown assessment is 404, never decided (covers pre-existing orphan remissions).
+    if (!(await repo.assessmentExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "assessment not found");
     // Synchronous pre-check (409): the consumer fails silently otherwise.
     const pending = await repo.findPendingRemission(ctx.tenantId, id);
     if (!pending) {

@@ -117,13 +117,21 @@ export function mergeOutputsWithNotifications(
   return [...rest, notifications];
 }
 
+/**
+ * UAT F73: notification-service serves template CRUD at /notifications/templates
+ * (modules/templates/routes.ts), reached through the gateway's legacy /api/notification
+ * rewrite, the same path every other notifications page uses. /v1/notification/templates
+ * does not exist upstream, so the builder's list call 404'd and no template was ever saved.
+ */
+const TEMPLATES_PATH = "/api/proxy/notification/templates";
+
 export async function persistNotificationTemplates(
   design: NotificationsDesignState,
   serviceKey: string,
 ): Promise<NotificationsDesignState> {
   // CLOS3-S1-09: an unreadable list is not "no templates"; creating now would duplicate names.
   // Throw (not return the design) so the caller shows "offline" and does not mark it persisted.
-  const listRes = await fetch("/api/proxy/v1/notification/templates", { cache: "no-store" });
+  const listRes = await fetch(TEMPLATES_PATH, { cache: "no-store" });
   if (!listRes.ok) throw new Error(`notification template list unavailable (${listRes.status})`);
   const templates = (await listRes.json()) as ApiTemplate[];
 
@@ -155,20 +163,22 @@ export async function persistNotificationTemplates(
 
       try {
         if (existing) {
-          await parseJson(await fetch(`/api/proxy/v1/notification/templates/${existing.id}`, {
+          // PATCH is versioned: the service supersedes `existing` and the new current version
+          // takes the id in the 202 body, so bind to that, not to the now-superseded id.
+          const updated = (await parseJson(await fetch(`${TEMPLATES_PATH}/${existing.id}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               body,
               subject,
             }),
-          }));
+          }))) as { id?: string };
           nextMatrix[event as NotificationEvent] = {
             ...nextMatrix[event as NotificationEvent],
-            [ch]: { ...cell, templateId: existing.id, templateName: name },
+            [ch]: { ...cell, templateId: updated.id ?? existing.id, templateName: name },
           };
         } else {
-          const created = (await parseJson(await fetch("/api/proxy/v1/notification/templates", {
+          const created = (await parseJson(await fetch(TEMPLATES_PATH, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

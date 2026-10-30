@@ -34,6 +34,10 @@ export type GroupVisitCreateBody = z.infer<typeof groupVisitCreateBody>;
 
 export const groupBulkCheckInBody = z.object({
   actualHeadcount: z.number().int("actualHeadcount must be an integer").min(1, "actualHeadcount must be at least 1").max(200, "actualHeadcount must be at most 200"),
-  gateId: z.string().uuid("invalid gateId").nullable().optional(),
+  // F64: required. check_ins.gate_id is NOT NULL (FK to gates) and a group
+  // visit has no default/"group" gate, so a bulk check-in without one can
+  // never be recorded: reject it here (400) instead of answering 202 and
+  // dead-lettering it in the consumer.
+  gateId: z.string({ required_error: "gateId is required" }).uuid("invalid gateId"),
 });
 export type GroupBulkCheckInBody = z.infer<typeof groupBulkCheckInBody>;

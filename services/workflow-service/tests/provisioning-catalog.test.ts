@@ -69,15 +69,30 @@ describe("standard definition catalog", () => {
     const clusters = seedClustersFromEnv("core"); // standalone: core only
     const seeded = definitionsForClusters(clusters).map((d) => d.code);
     expect(seeded).toEqual(["file_noting"]);
-    for (const unwanted of ["leave_approval", "finance_approval", "procurement_approval", "grant_disbursement"]) {
+    for (const unwanted of [
+      "leave_approval", "finance_approval", "procurement_approval", "grant_disbursement",
+      "procurement_indent_approval", "procurement_po_approval",
+    ]) {
       expect(seeded).not.toContain(unwanted);
     }
   });
 
-  it("the default (all clusters) still seeds all 5 standard definitions", () => {
+  it("the default (all clusters) seeds every standard definition, incl. the procurement PO/indent chains (F77)", () => {
     const seeded = definitionsForClusters(seedClustersFromEnv(undefined)).map((d) => d.code);
-    expect(seeded.sort()).toEqual(
-      ["file_noting", "finance_approval", "grant_disbursement", "leave_approval", "procurement_approval"],
-    );
+    expect(seeded.sort()).toEqual([
+      "file_noting", "finance_approval", "grant_disbursement", "leave_approval", "procurement_approval",
+      "procurement_indent_approval", "procurement_po_approval",
+    ]);
+  });
+
+  // F77: these codes are exactly what procurement-service's po/indent
+  // consumers request; without them every PO approval instance is rejected.
+  it("seeds procurement_po_approval and procurement_indent_approval in the p2p cluster", () => {
+    const po = STANDARD_DEFINITIONS.find((d) => d.code === "procurement_po_approval");
+    const indent = STANDARD_DEFINITIONS.find((d) => d.code === "procurement_indent_approval");
+    expect(po?.cluster).toBe("p2p");
+    expect(po?.nodes).toEqual([{ nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" }]);
+    expect(indent?.cluster).toBe("p2p");
+    expect(indent?.nodes).toEqual([{ nodeKey: "proc_officer", name: "Procurement Officer Approval", roleRef: "procurement_officer" }]);
   });
 });

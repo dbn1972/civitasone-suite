@@ -8,6 +8,7 @@ import { createInstanceBody, instancesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as historyRepo from "../history/repo.js";
+import { isDefinitionConfigured, WORKFLOW_NOT_CONFIGURED, workflowNotConfiguredMessage } from "../definitions/configured.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -25,6 +26,11 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const body = createInstanceBody.parse(req.body);
+    // F77: answer a missing definition here, synchronously and explicitly,
+    // instead of a 202 the consumer then turns into a rejected instance (R13).
+    if (body.definitionCode !== undefined && !(await isDefinitionConfigured(ctx.tenantId, body.definitionCode))) {
+      throw new HttpError(422, WORKFLOW_NOT_CONFIGURED, workflowNotConfiguredMessage(body.definitionCode));
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createInstance(ctx, body));
   });
 

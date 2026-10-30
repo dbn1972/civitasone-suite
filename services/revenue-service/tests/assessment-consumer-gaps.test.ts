@@ -122,6 +122,7 @@ describe("Assessment Consumer — gaps", () => {
   });
 
   it("remit: creates pending remission", async () => {
+    txSelectResults = [[{ id: "as-1" }]]; // the assessment exists (UAT B8-F68 guard)
     await handlers["revenue.assessment.remit"]!(msg({ payload: { assessmentId: "as-1", reason: "Hard", remissionPercent: 25 } }));
     expect(mockInsert).toHaveBeenCalledTimes(1);
     expect(mockEnqueue).toHaveBeenCalledTimes(1);

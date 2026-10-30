@@ -4,7 +4,6 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { assertTransition, assertDifferentApprover } from "./domain.js";
 import { getOrderForPrecheck, getOrderForDscVerify } from "./repo.js";
-import { defaultDscTrustStoreProvider } from "./dsc-provider.js";
 import { verifyOrderDsc } from "./dsc-verify.js";
 import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
@@ -57,7 +56,7 @@ export async function verifyDsc(
   const body = verifyDscBody.parse(input);
   const signable = await getOrderForDscVerify(ctx.tenantId, orderId);
   if (!signable) throw httpError("ORDER_NOT_FOUND", `Order not found: ${orderId}`);
-  return verifyOrderDsc(signable, body.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
+  return verifyOrderDsc(signable, body.dscSignature);
 }
 
 /** Submit a drafted order for approval (draft → pending_approval). */
@@ -121,15 +120,16 @@ export async function approveAndIssue(
   // this order's canonical content: structure, signer-cert validity window, key
   // usage, and the RSA signature. An invalid/expired/tampered signature is
   // rejected here (422 DSC_VERIFICATION_FAILED) and the order stays in
-  // pending_approval — it is never issued. Chain-of-trust is additionally
-  // reported; it is enforced when a trust store is configured. Run only when the
+  // pending_approval — it is never issued. Chain-of-trust is enforced per
+  // resolveDscChainTrustPolicy: always in production (no trust store => every
+  // DSC refused), in dev/test only when a trust store is configured. Run only when the
   // transition would actually fire (skip the already-issued idempotent no-op, so
   // a redelivery of the exact same intent doesn't re-reject on an unrelated
   // signature re-check).
   if (current.status !== "issued") {
     const signable = await getOrderForDscVerify(ctx.tenantId, orderId);
     if (!signable) throw httpError("ORDER_NOT_FOUND", `Order not found: ${orderId}`);
-    const v = verifyOrderDsc(signable, body.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
+    const v = verifyOrderDsc(signable, body.dscSignature);
     if (!v.acceptedForIssue) {
       throw httpError(
         "DSC_VERIFICATION_FAILED",

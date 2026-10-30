@@ -96,13 +96,27 @@ export async function commissionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
+    // F60 maker ≠ checker: the commission's beneficiary (agent_id) must never approve
+    // their own payout. The guard is part of the UPDATE predicate so it cannot race; a
+    // miss is then classified as self-approval (403) or not-found/already-processed (404).
     const result = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.commission_ledger
       SET status = 'approved', approved_by = ${ctx.actorId}
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND status = 'pending'
+        AND agent_id <> ${ctx.actorId}
       RETURNING id
     `))) as unknown as Array<Record<string, unknown>>;
-    if (result.length === 0) throw new HttpError(404, "NOT_FOUND", "commission entry not found or already processed");
+    if (result.length === 0) {
+      const own = (await scopedRead((tx) => tx.execute(sql`
+        SELECT 1 FROM crm.commission_ledger
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND status = 'pending'
+          AND agent_id = ${ctx.actorId}
+      `))) as unknown as Array<Record<string, unknown>>;
+      if (own.length > 0) {
+        throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a commission cannot be approved by its own beneficiary");
+      }
+      throw new HttpError(404, "NOT_FOUND", "commission entry not found or already processed");
+    }
     return reply.send({ data: { id, status: "approved" } });
   });
 

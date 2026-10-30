@@ -165,11 +165,20 @@ describe("simulation/compare — compareVersions", () => {
 
 // ─── Pack #26: Provisioning Catalog ──────────────────────────────────────────
 describe("provisioning/catalog — standard definitions", () => {
-  it("has 5 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(5));
+  // F77 added the two single-approver procurement chains procurement-service
+  // requests (shape identical to the demo-tenant seed): 5 multi-level + 2.
+  const SINGLE_APPROVER = ["procurement_indent_approval", "procurement_po_approval"];
+  it("has 7 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(7));
 
-  it.each(STANDARD_DEFINITIONS.map(d => d.code))("definition '%s' has ≥ 3 nodes", (code) => {
+  it.each(STANDARD_DEFINITIONS.filter(d => !SINGLE_APPROVER.includes(d.code)).map(d => d.code))("definition '%s' has ≥ 3 nodes", (code) => {
     const def = STANDARD_DEFINITIONS.find(d => d.code === code)!;
     expect(def.nodes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(SINGLE_APPROVER)("single-approver definition '%s' has exactly 1 node (terminal → domain dispatch)", (code) => {
+    const def = STANDARD_DEFINITIONS.find(d => d.code === code)!;
+    expect(def.nodes).toHaveLength(1);
+    expect(linearEdges(def)).toEqual([]);
   });
 
   it("linearEdges derives correct edge count (nodes - 1)", () => {

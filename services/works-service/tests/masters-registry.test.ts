@@ -3,6 +3,8 @@
  * a createSchema, and a table mapping used by both routes and consumer.
  */
 import { describe, it, expect } from "vitest";
+import { getTableColumns, getTableName } from "drizzle-orm";
+import type { ZodObject, ZodRawShape } from "zod";
 import { masters, masterTableByPrefix, masterMoneyFieldsByPrefix } from "../src/modules/masters/registry.js";
 
 describe("masters registry", () => {
@@ -46,9 +48,9 @@ describe("masters registry", () => {
       "user-departments": { name: "Dept" },
       "contractor-classes": { name: "Class A" },
       "issue-types": { name: "Issue" },
-      "issue-description-types": { name: "Desc" },
+      "issue-description-types": { name: "Desc", issueTypeId: "00000000-1111-4000-8000-000000000001" },
       assets: { code: "AST", name: "Bridge" },
-      "work-description-types": { name: "Desc Type" },
+      "work-description-types": { keyword: "Desc Type", workTypeId: "00000000-1111-4000-8000-000000000001" },
       "sr-items": {
         zone: "N", srYear: "2026", itemCode: "IT-1", description: "Excavation", unit: "cum", rate: "4500000",
       },
@@ -65,5 +67,25 @@ describe("masters registry", () => {
 
   it("rejects an untrusted master prefix (not in registry)", () => {
     expect(masterTableByPrefix["not-a-real-master"]).toBeUndefined();
+  });
+
+  // UAT F75/F76: issue-description-types and work-description-types were wired
+  // to the generic {name, code, active} schema, which stripped the NOT NULL
+  // parent id (and, for work-description-types, the keyword), so the consumer
+  // insert could never succeed. Guard the whole registry: every NOT NULL column
+  // without a DB default (other than id/tenant_id, which the consumer sets)
+  // must be a REQUIRED key of that master's create schema.
+  it("every create schema requires each NOT NULL, no-default column of its table", () => {
+    const drift: string[] = [];
+    for (const m of masters) {
+      const shape = (m.createSchema as ZodObject<ZodRawShape>).shape;
+      for (const [key, col] of Object.entries(getTableColumns(m.table))) {
+        if (key === "id" || key === "tenantId") continue;
+        if (!col.notNull || col.hasDefault) continue;
+        const field = shape[key];
+        if (!field || field.isOptional()) drift.push(`${m.prefix}: ${getTableName(m.table)}.${col.name}`);
+      }
+    }
+    expect(drift).toEqual([]);
   });
 });

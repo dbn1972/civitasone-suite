@@ -12,8 +12,9 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, DomainError as PoDomainError } from "./domain.js";
+import { assertCanDispatch, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as poRepo from "./repo.js";
+import { isWorkflowConfigured } from "../../shared/workflow-client.js";
 
 // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
 const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
@@ -56,6 +57,22 @@ async function assertVendorEligible(tenantId: string, vendorId: string, basis: {
   }
 }
 
+/**
+ * F77: a PO is only ever approved through its `procurement_po_approval`
+ * workflow task. In a tenant without that definition the consumer's instance
+ * is rejected (R13), so the PO would sit in draft, unapprovable, behind a 202.
+ * Refuse it up front with an explicit 422 instead. Fails open only when
+ * workflow-service cannot be asked (null): the async path stays fail-closed.
+ */
+async function assertPoApprovalWorkflowConfigured(tenantId: string): Promise<void> {
+  if ((await isWorkflowConfigured(tenantId, PO_APPROVAL_DEFINITION_CODE)) === false) {
+    throw new HttpError(
+      422, "WORKFLOW_NOT_CONFIGURED",
+      `workflow definition '${PO_APPROVAL_DEFINITION_CODE}' is not configured for this tenant; a purchase order could never be approved`,
+    );
+  }
+}
+
 export async function poRoutes(app: FastifyInstance): Promise<void> {
   // Alias: /v1/procurement/orders → same handler as /v1/procurement/pos
   app.get("/v1/procurement/orders", async (req, reply) => {
@@ -91,6 +108,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
+    await assertPoApprovalWorkflowConfigured(ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 
@@ -158,6 +176,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
+    await assertPoApprovalWorkflowConfigured(ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 

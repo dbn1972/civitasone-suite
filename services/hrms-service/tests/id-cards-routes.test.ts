@@ -14,6 +14,10 @@
  * (../src/modules/id-cards/consumer.js, registered in worker.ts) subscribes
  * to COMMANDS.idCardIssue/Suspend/Revoke/Reactivate, but nothing published
  * those commands anywhere in the codebase until this pass wired it up here.
+ * F72: those commands (and issue's notification.send) are now enqueued via
+ * the transactional outbox in the same transaction as the card write, not
+ * published directly on the request path -- so these tests assert the
+ * enqueue() call and that the route never touches queue.publish().
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -27,6 +31,12 @@ const CARD_ID = "cccccccc-0001-4000-8000-000000000001";
 const H = vi.hoisted(() => ({
   poolQuery: vi.fn(),
   publish: vi.fn(async () => undefined),
+  enqueue: vi.fn(async () => undefined),
+}));
+
+vi.mock("../src/shared/outbox.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/outbox.js")>()),
+  enqueue: (...a: unknown[]) => H.enqueue(...a),
 }));
 
 vi.mock("../src/shared/db.js", () => {
@@ -115,7 +125,7 @@ describe("POST /v1/hrms/id-cards", () => {
     validUntil: "2027-01-01",
   };
 
-  it("issues a card for hr_admin (201) and publishes idCardIssue for the audit consumer", async () => {
+  it("issues a card for hr_admin (201) and enqueues idCardIssue (outbox) for the audit consumer", async () => {
     // issue now runs its seq lookup, issuer-name lookup and INSERT each
     // inside withTenantGuc/tx.unsafe (the RLS-GUC fix), so each queues in the
     // raw postgres.js `.unsafe()` shape (an array carrying a `.count`) rather
@@ -128,9 +138,10 @@ describe("POST /v1/hrms/id-cards", () => {
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("active");
 
-    expect(H.publish).toHaveBeenCalledOnce(); // no employeeId -> no separate notification.send
-    const [topic, envelope] = H.publish.mock.calls[0];
-    expect(topic).toBe(COMMANDS.idCardIssue);
+    expect(H.publish).not.toHaveBeenCalled(); // F72: never on the request path
+    expect(H.enqueue).toHaveBeenCalledOnce(); // no employeeId -> no separate notification.send
+    const [, envelope] = H.enqueue.mock.calls[0] as unknown as [unknown, { topic: string; payload: unknown }];
+    expect(envelope.topic).toBe(COMMANDS.idCardIssue);
     expect(envelope.payload).toMatchObject({
       holderName: "Test Holder", cardType: "employee", validUntil: "2027-01-01",
     });
@@ -142,6 +153,7 @@ describe("POST /v1/hrms/id-cards", () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards", headers: auth(USER, ["employee"]), payload });
     expect(r.statusCode).toBe(403);
     expect(H.publish).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -219,13 +231,15 @@ describe("POST /v1/hrms/id-cards/verify", () => {
 });
 
 describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
-  it("suspends an active card (200) and publishes idCardSuspend", async () => {
+  it("suspends an active card (200) and enqueues idCardSuspend (outbox)", async () => {
     H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/suspend`, headers: auth(), payload: { reason: "lost" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("suspended");
-    expect(H.publish).toHaveBeenCalledWith(COMMANDS.idCardSuspend, expect.objectContaining({
+    expect(H.publish).not.toHaveBeenCalled(); // F72: never on the request path
+    expect(H.enqueue).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      topic: COMMANDS.idCardSuspend,
       payload: { id: CARD_ID, tenantId: TENANT, reason: "lost" },
     }));
     await app.close();
@@ -237,6 +251,7 @@ describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/suspend`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(404);
     expect(H.publish).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -249,13 +264,15 @@ describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
 });
 
 describe("PATCH /v1/hrms/id-cards/:id/revoke", () => {
-  it("revokes an active/suspended card (200) and publishes idCardRevoke", async () => {
+  it("revokes an active/suspended card (200) and enqueues idCardRevoke (outbox)", async () => {
     H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/revoke`, headers: auth(), payload: { reason: "terminated" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("revoked");
-    expect(H.publish).toHaveBeenCalledWith(COMMANDS.idCardRevoke, expect.objectContaining({
+    expect(H.publish).not.toHaveBeenCalled(); // F72: never on the request path
+    expect(H.enqueue).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      topic: COMMANDS.idCardRevoke,
       payload: { id: CARD_ID, tenantId: TENANT, reason: "terminated" },
     }));
     await app.close();
@@ -267,18 +284,21 @@ describe("PATCH /v1/hrms/id-cards/:id/revoke", () => {
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/revoke`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(404);
     expect(H.publish).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
 describe("PATCH /v1/hrms/id-cards/:id/reactivate", () => {
-  it("reactivates a suspended card (200) and publishes idCardReactivate", async () => {
+  it("reactivates a suspended card (200) and enqueues idCardReactivate (outbox)", async () => {
     H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/reactivate`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("active");
-    expect(H.publish).toHaveBeenCalledWith(COMMANDS.idCardReactivate, expect.objectContaining({
+    expect(H.publish).not.toHaveBeenCalled(); // F72: never on the request path
+    expect(H.enqueue).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      topic: COMMANDS.idCardReactivate,
       payload: { id: CARD_ID, tenantId: TENANT },
     }));
     await app.close();
@@ -290,6 +310,7 @@ describe("PATCH /v1/hrms/id-cards/:id/reactivate", () => {
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/reactivate`, headers: auth() });
     expect(r.statusCode).toBe(404);
     expect(H.publish).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
     await app.close();
   });
 });

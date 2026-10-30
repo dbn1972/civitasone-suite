@@ -21,7 +21,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { receipts, refunds } from "../src/modules/collection/schema.js";
 import { writeOffs } from "../src/modules/arrears/schema.js";
 import { waivers } from "../src/modules/trade-license/schema.js";
-import { dcbEntries, remissions } from "../src/modules/assessment/schema.js";
+import { assessments, dcbEntries, remissions } from "../src/modules/assessment/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerCollectionConsumers } from "../src/modules/collection/consumer.js";
 import { registerArrearsConsumers } from "../src/modules/arrears/consumer.js";
@@ -66,6 +66,7 @@ async function clean() {
     await tx.delete(writeOffs).where(eq(writeOffs.tenantId, TENANT));
     await tx.delete(waivers).where(eq(waivers.tenantId, TENANT));
     await tx.delete(remissions).where(eq(remissions.tenantId, TENANT));
+    await tx.delete(assessments).where(eq(assessments.tenantId, TENANT));
     await tx.delete(dcbEntries).where(eq(dcbEntries.tenantId, TENANT));
   });
 }
@@ -402,6 +403,13 @@ describe("decide routes answer 409 synchronously (real DB)", () => {
     // The assessment module has no local error handler, so the app-level shape applies: { code, message } (not { error: { code } }).
     const ASSESSMENT = "dec10000-0000-4000-8000-0000000a5e55";
     async function seedRemission(status = "pending") {
+      // remit-decide 404s an unknown assessment (UAT B8-F68), so the remission needs a real one
+      await inTenant((tx) =>
+        tx.insert(assessments).values({
+          id: ASSESSMENT, tenantId: TENANT, assesseeId: ASSESSEE, rateHeadId: ASSESSEE, financialYear: "2026-27",
+          baseValue: 1_000_000n, exemptions: [], status: "active", createdBy: MAKER, updatedBy: MAKER,
+        }).onConflictDoNothing(),
+      );
       await inTenant((tx) =>
         tx.insert(remissions).values({
           tenantId: TENANT, assessmentId: ASSESSMENT, reason: "Hardship", remissionPercent: 10, status, makerUserId: MAKER,

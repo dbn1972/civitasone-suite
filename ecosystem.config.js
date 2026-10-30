@@ -408,6 +408,20 @@ const IDENTITY_SCANNER_ENV = {
 };
 
 const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
+// UAT F65: court DSC chain-of-trust config, read by court-service's
+// dsc-provider.ts in BOTH the court API and the court worker (the API and the
+// issue consumer both verify DSCs). Production court refuses to start without
+// COURT_DSC_TRUST_STORE_PEM (concatenated PEM of the trusted CCA/CA roots), so
+// it must be exported in the launching shell from the secret manager.
+// Passed through ONLY when set: an unset var stays UNSET (never ""), so
+// non-production (UAT, NODE_ENV=development) semantics are unchanged. No
+// ecosystem-level throw here — the court service itself fails fast, which
+// keeps a missing court PEM from blocking every other app in this file.
+const COURT_DSC_ENV = Object.fromEntries(
+  ["COURT_DSC_TRUST_STORE_PEM", "COURT_DSC_REQUIRE_CHAIN_TRUST"]
+    .filter((k) => process.env[k] !== undefined)
+    .map((k) => [k, process.env[k]]),
+);
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
 const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
 // procurement-service's app-layer PII crypto (src/shared/pii-crypto.ts) reads
@@ -681,7 +695,7 @@ module.exports = {
     // as soon as the module finished evaluating, and pm2's autorestart looped
     // it forever (restarts climbing, status "waiting restart"). Point pm2 at
     // the same compiled entrypoint the "pnpm worker" script uses.
-    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
+    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, ...COURT_DSC_ENV, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_TENANT_SIGNING_KEY_PEM, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
     worker("works",        "works_svc",        "civitas_works", { PII_ENC_KEY: WORKS_PII_KEY, WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
     worker("revenue",      "revenue_svc",      "civitas_revenue", {}, "dist/worker.js", { graceful: true }), // PERF-003
@@ -754,7 +768,7 @@ module.exports = {
     svc("analytics",    3031, "analytics_svc",    "civitas_analytics", {}, { graceful: true }), // PERF-015
     svc("ml",           3032, "ml_svc",           "civitas_ml", {}, { graceful: true }), // PERF-015
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }, { graceful: true }), // PERF-015
-    svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
+    svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY, ...COURT_DSC_ENV }, { graceful: true }), // REL-012: validated subset
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }, { graceful: true }), // PERF-015
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
