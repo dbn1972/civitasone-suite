@@ -846,11 +846,21 @@ describe("Evidence Routes", () => {
 describe("Execution Routes", () => {
   describe("POST /v1/inspection/inspections/:id/transition", () => {
     it("returns 202 for valid transition command", async () => {
+      // UAT W8-B: the route now reads the inspection (tenant-scoped) before publishing.
+      vi.mocked(findInspectionById).mockResolvedValueOnce(mockInspection as never);
       const res = await app.inject({
         method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/transition`, headers: AUTH_HEADER,
         payload: { targetState: "in_progress" },
       });
       expect(res.statusCode).toBe(202);
+    });
+
+    it("returns 404 when the inspection does not exist (UAT W8-B)", async () => {
+      const res = await app.inject({
+        method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/transition`, headers: AUTH_HEADER,
+        payload: { targetState: "in_progress" },
+      });
+      expect(res.statusCode).toBe(404);
     });
 
     it("returns 400 with missing targetState", async () => {
@@ -872,11 +882,21 @@ describe("Execution Routes", () => {
 
   describe("POST /v1/inspection/inspections/:id/submit-review", () => {
     it("returns 202 for valid submit-review command", async () => {
+      // UAT W8-B: the route now reads the inspection (tenant-scoped) before publishing.
+      vi.mocked(findInspectionById).mockResolvedValueOnce(mockInspection as never);
       const res = await app.inject({
         method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/submit-review`, headers: AUTH_HEADER,
         payload: { reviewerId: USER_ID },
       });
       expect(res.statusCode).toBe(202);
+    });
+
+    it("returns 404 when the inspection does not exist (UAT W8-B)", async () => {
+      const res = await app.inject({
+        method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/submit-review`, headers: AUTH_HEADER,
+        payload: { reviewerId: USER_ID },
+      });
+      expect(res.statusCode).toBe(404);
     });
   });
 

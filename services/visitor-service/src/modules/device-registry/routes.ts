@@ -387,6 +387,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     requireRole(ctx, ADMIN_ROLES);
     const { deviceId } = deviceIdParams.parse(req.params);
     const body = firmwareScheduleBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await getDeviceById(ctx.tenantId, deviceId))) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
 
     const accepted = await publishDeviceFirmwareSchedule(ctx, {
       deviceId,

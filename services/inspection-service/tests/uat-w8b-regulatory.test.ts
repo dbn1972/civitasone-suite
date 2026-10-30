@@ -22,6 +22,7 @@ const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();
 const ACTOR = randomUUID();
+const REVIEWER = randomUUID();
 const ids = { tourPlan: randomUUID(), inspection: randomUUID() };
 
 const bearer = (tenantId = TENANT) => ({
@@ -55,10 +56,13 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-const cases: Array<{ name: string; url: (id: string) => string; realId: () => string }> = [
+const cases: Array<{ name: string; url: (id: string) => string; realId: () => string; payload?: Record<string, unknown> }> = [
   { name: "tour plan submit", url: (id) => `/v1/inspection/tour-plans/${id}/submit`, realId: () => ids.tourPlan },
   { name: "tour plan approve", url: (id) => `/v1/inspection/tour-plans/${id}/approve`, realId: () => ids.tourPlan },
   { name: "inspection finalize", url: (id) => `/v1/inspection/inspections/${id}/finalize`, realId: () => ids.inspection },
+  // W8-B siblings (same pattern, found while fixing the sweep rows).
+  { name: "inspection transition", url: (id) => `/v1/inspection/inspections/${id}/transition`, realId: () => ids.inspection, payload: { targetState: "finalized" } },
+  { name: "inspection submit-review", url: (id) => `/v1/inspection/inspections/${id}/submit-review`, realId: () => ids.inspection, payload: { reviewerId: REVIEWER } },
 ];
 
 describe("UAT W8-B P1: inspection command routes answer 404 for a record that does not exist", () => {
@@ -66,7 +70,7 @@ describe("UAT W8-B P1: inspection command routes answer 404 for a record that do
     it(`${c.name}: random id -> 404 NOT_FOUND, nothing published`, async () => {
       const spy = vi.spyOn(queue, "publish");
       try {
-        const res = await app.inject({ method: "POST", url: c.url(randomUUID()), headers: bearer(), payload: {} });
+        const res = await app.inject({ method: "POST", url: c.url(randomUUID()), headers: bearer(), payload: c.payload ?? {} });
         expect(res.statusCode).toBe(404);
         expect(res.json().code).toBe("NOT_FOUND");
         expect(spy).not.toHaveBeenCalled();
@@ -78,7 +82,7 @@ describe("UAT W8-B P1: inspection command routes answer 404 for a record that do
     it(`${c.name}: another tenant's real id -> 404, nothing published`, async () => {
       const spy = vi.spyOn(queue, "publish");
       try {
-        const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: bearer(OTHER_TENANT), payload: {} });
+        const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: bearer(OTHER_TENANT), payload: c.payload ?? {} });
         expect(res.statusCode).toBe(404);
         expect(spy).not.toHaveBeenCalled();
       } finally {
@@ -89,7 +93,7 @@ describe("UAT W8-B P1: inspection command routes answer 404 for a record that do
     it(`${c.name}: real id -> 202 and the command is published`, async () => {
       const spy = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
       try {
-        const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: bearer(), payload: {} });
+        const res = await app.inject({ method: "POST", url: c.url(c.realId()), headers: bearer(), payload: c.payload ?? {} });
         expect(res.statusCode).toBe(202);
         expect(spy).toHaveBeenCalledTimes(1);
         expect(spy.mock.calls[0]![1]).toMatchObject({ tenantId: TENANT });
@@ -99,7 +103,7 @@ describe("UAT W8-B P1: inspection command routes answer 404 for a record that do
     });
 
     it(`${c.name}: malformed id -> 400`, async () => {
-      const res = await app.inject({ method: "POST", url: c.url("not-a-uuid"), headers: bearer(), payload: {} });
+      const res = await app.inject({ method: "POST", url: c.url("not-a-uuid"), headers: bearer(), payload: c.payload ?? {} });
       expect(res.statusCode).toBe(400);
     });
   }

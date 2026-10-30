@@ -44,6 +44,8 @@ export async function recurringPassRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recurringPassSuspendBody.parse(req.body);
+    // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
+    if (!(await recurringPassExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "recurring pass not found");
 
     const accepted = await commands.recurringPassSuspend(ctx, {
       passId: id,

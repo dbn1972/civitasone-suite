@@ -109,6 +109,9 @@ const cases: Case[] = [
   { name: "device rotate-credential", method: "POST", url: (id) => `/v1/visitor/devices/${id}/rotate-credential`, realId: () => ids.device },
   { name: "device config push", method: "PUT", url: (id) => `/v1/visitor/devices/${id}/config`, realId: () => ids.device, payload: { heartbeatIntervalMs: 30000 } },
   { name: "recurring pass revoke", method: "POST", url: (id) => `/v1/visitor/recurring-passes/${id}/revoke`, realId: () => ids.recurringPass, payload: { reason: "w8b" } },
+  // W8-B siblings (same pattern, found while fixing the sweep rows).
+  { name: "device firmware schedule", method: "POST", url: (id) => `/v1/visitor/devices/${id}/firmware/schedule`, realId: () => ids.device, payload: { firmwareUrl: "https://example.test/fw-w8b.bin", firmwareChecksum: "w8b-sha" } },
+  { name: "recurring pass suspend", method: "POST", url: (id) => `/v1/visitor/recurring-passes/${id}/suspend`, realId: () => ids.recurringPass, payload: { reason: "w8b" } },
 ];
 
 describe("UAT W8-B P1: visitor command routes answer 404 for a record that does not exist", () => {
