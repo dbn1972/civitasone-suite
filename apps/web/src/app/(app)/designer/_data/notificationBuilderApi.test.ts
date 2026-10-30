@@ -113,3 +113,62 @@ describe("notificationBuilderApi — persistNotificationTemplates with an unread
     expect((w[0][1] as RequestInit).method).toBe("POST");
   });
 });
+
+// UAT F73: the builder called /api/proxy/v1/notification/templates, which the gateway maps to
+// /v1/notification/templates. notification-service serves template CRUD only at
+// /notifications/templates (reached via /api/proxy/notification/templates), so the list call
+// 404'd and nothing was saved.
+describe("notificationBuilderApi: persistNotificationTemplates targets the served template path (UAT F73)", () => {
+  const fetchMock = vi.fn();
+  const SERVED = "/api/proxy/notification/templates";
+  const design = {
+    matrix: {
+      submitted: { email: { enabled: true, body: { en: "Hello" }, subject: { en: "Hi" } } },
+      approved: { sms: { enabled: true, body: { en: "Approved" } } },
+    },
+  } as unknown as Parameters<typeof persistNotificationTemplates>[0];
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lists, creates and updates via /api/proxy/notification/templates and binds the current version id", async () => {
+    fetchMock.mockImplementation(async (_i: RequestInfo | URL, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(
+          JSON.stringify([{ id: "tmpl-old", name: "svc:k:approved:sms", channel: "sms", body: "Old", subject: null }]),
+          { status: 200 },
+        );
+      }
+      const id = init.method === "PATCH" ? "tmpl-v2" : "tmpl-new";
+      return new Response(JSON.stringify({ id, status: "accepted", correlationId: "c" }), { status: 202 });
+    });
+
+    const next = await persistNotificationTemplates(design, "k");
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => [String(url), (init as RequestInit | undefined)?.method ?? "GET"]);
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        [SERVED, "GET"],
+        [SERVED, "POST"],
+        [`${SERVED}/tmpl-old`, "PATCH"],
+      ]),
+    );
+    expect(calls).toHaveLength(3);
+    for (const [url] of calls) expect(url).not.toContain("/v1/notification/");
+
+    const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+    expect(JSON.parse(String((post?.[1] as RequestInit).body))).toEqual({
+      channel: "email",
+      name: "svc:k:submitted:email",
+      body: "Hello",
+      subject: "Hi",
+    });
+
+    expect(next.matrix.submitted?.email?.templateId).toBe("tmpl-new");
+    // PATCH supersedes tmpl-old; the binding follows the new current version.
+    expect(next.matrix.approved?.sms?.templateId).toBe("tmpl-v2");
+  });
+});
