@@ -114,7 +114,9 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     // checker now (422) rather than 202-accepting an approval the posting consumer would refuse. Only a draft of THIS
     // tenant that is still awaiting approval is checked here; anything else falls through to the consumer unchanged.
     const draft = await repo.findJournalById(id);
-    if (draft && draft.tenantId === ctx.tenantId && draft.status === "pending_approval") {
+    // UAT W8-D (P1): a journal this tenant does not have can never be approved: 404, not 202.
+    if (!draft || draft.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "journal not found");
+    if (draft.status === "pending_approval") {
       await assertPeriodAcceptsPosting(ctx.tenantId, String(draft.postingDate), draft.type);
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
@@ -133,6 +135,9 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, JOURNAL_APPROVE_ROLES);
     const { id } = reverseParam.parse(req.params);
+    // UAT W8-D (P1): tenant-scoped existence read; the consumer stays the race-safe state check.
+    const journal = await repo.findJournalById(id);
+    if (!journal || journal.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "journal not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.reverseJournal(ctx, id));
   });
 

@@ -129,6 +129,7 @@ vi.mock("../src/modules/subscriptions/repo.js", () => ({
   insertTrial: async () => {},
   updateStatus: async () => {},
   findByIdTx: async () => mockState.queryResult[0] ?? null,
+  findIdInTenant: async () => mockState.queryResult[0] ?? null,
 }));
 
 vi.mock("../src/modules/usage/repo.js", () => ({

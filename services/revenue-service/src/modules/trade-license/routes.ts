@@ -73,6 +73,8 @@ export async function tradeLicenseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = renewTradeLicenseBody.parse(req.body);
+    // UAT W8-D (P1): the consumer silently no-ops an unknown licence; answer 404 now (uncached read).
+    if (!(await repo.tradeLicenseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "trade license not found");
     return reply.code(202).send({ data: await commands.renewTradeLicense(ctx, id, body as unknown as Record<string, unknown>) });
   });
 
@@ -83,6 +85,8 @@ export async function tradeLicenseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = cancelTradeLicenseBody.parse(req.body);
+    // UAT W8-D (P1): the consumer silently no-ops an unknown licence; answer 404 now (uncached read).
+    if (!(await repo.tradeLicenseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "trade license not found");
     return reply.code(202).send({ data: await commands.cancelTradeLicense(ctx, id, body as unknown as Record<string, unknown>) });
   });
 
@@ -93,6 +97,8 @@ export async function tradeLicenseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = recordPaymentBody.parse(req.body);
+    // UAT W8-D (P1): the consumer silently no-ops an unknown licence; answer 404 now (uncached read).
+    if (!(await repo.tradeLicenseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "trade license not found");
     return reply.code(202).send({ data: await commands.recordLicensePayment(ctx, id, body as unknown as Record<string, unknown>) });
   });
 }

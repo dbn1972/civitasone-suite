@@ -21,6 +21,11 @@ export async function findGrievanceByIdTx(tx: Writer, id: string, tenantId: stri
   return rows[0] ?? null;
 }
 
+/** UAT W8-D (P1): tenant-scoped existence read (in the tenant transaction, RLS-safe) for command routes. */
+export async function findGrievanceInTenant(id: string, tenantId: string): Promise<GrievanceRow | null> {
+  return db.transaction((tx) => findGrievanceByIdTx(tx, id, tenantId));
+}
+
 export async function listGrievancesByCitizen(tenantId: string, citizenId: string, limit = 200): Promise<GrievanceRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

@@ -45,8 +45,24 @@ const postIdRoutes = [
   { url: `/v1/finance/deposits/${FAKE}/refund`, payload: { amountMinor: 1000 } },
   { url: `/v1/finance/deposits/${FAKE}/forfeit`, payload: { amountMinor: 1000 } },
   { url: `/v1/finance/deposits/${FAKE}/adjust`, payload: { amountMinor: 1000 } },
+];
+
+// UAT W8-D (P1): commands that read their target first and answer 404 for an unknown id.
+const postIdNotFoundRoutes = [
   { url: `/v1/finance/journals/${FAKE}/reverse`, payload: { reason: "error" } },
 ];
+
+describe("Finance POST /:id commands — 404 NOT_FOUND for an unknown entity", () => {
+  for (const { url, payload } of postIdNotFoundRoutes) {
+    it(`POST ${url} — 404 NOT_FOUND (route exists, record does not)`, async () => {
+      const app = await buildApp();
+      const r = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token()}` }, payload });
+      await app.close();
+      expect(r.statusCode).toBe(404);
+      expect(r.json().code).toBe("NOT_FOUND");
+    });
+  }
+});
 
 describe("Finance POST /:id routes — validation or not-found", () => {
   for (const { url, payload } of postIdRoutes) {
@@ -60,7 +76,7 @@ describe("Finance POST /:id routes — validation or not-found", () => {
 });
 
 describe("Finance POST /:id routes — auth rejection", () => {
-  for (const { url, payload } of postIdRoutes.slice(0, 5)) {
+  for (const { url, payload } of [...postIdRoutes, ...postIdNotFoundRoutes].slice(0, 5)) {
     it(`POST ${url} — 403 for citizen`, async () => {
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${badToken()}` }, payload });

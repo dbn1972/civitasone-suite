@@ -32,9 +32,9 @@ const WRITE_ROLES = ["cdp_admin", "super_admin", "tenant_admin"];
 
 const idParam = z.object({ id: z.string().uuid() });
 
-/** `limit` is mandatory: an unbounded list of tenant configuration is still unbounded. */
+/** `limit` defaults to 50 and is capped at 200, so the list is never unbounded (UAT W8-D P9b). */
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   vertical: z.string().min(1).max(64).optional(),
   profileType: z.string().min(1).max(32).optional(),

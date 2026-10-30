@@ -44,7 +44,12 @@ export const renewTradeLicenseBody = z.object({
 }).transform((data) => ({
   ...data,
   expiryDate: data.expiryDate ?? (data.renewalYear ? `${data.renewalYear}-03-31` : undefined),
-}));
+// UAT W8-D (P2): a renewal must say until when. An empty body (or one with neither expiryDate nor
+// renewalYear) used to be accepted, and the consumer then set the licence's expiry to NULL and its fee to 0.
+})).refine((data) => data.expiryDate !== undefined, {
+  message: "provide expiryDate (YYYY-MM-DD) or renewalYear",
+  path: ["expiryDate"],
+});
 
 export const cancelTradeLicenseBody = z.object({
   reason:  z.string().min(1).max(500),

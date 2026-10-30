@@ -313,6 +313,14 @@ export async function findAdvanceByNo(tenantId: string, advanceNo: string): Prom
   return rows[0] ?? null;
 }
 
+/** UAT W8-D (P1): tenant-scoped existence read (scopedRead, RLS-safe) for the adjust command. */
+export async function findAdvanceInTenant(id: string, tenantId: string): Promise<{ id: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeAdvances.id }).from(financeAdvances)
+    .where(and(eq(financeAdvances.id, id), eq(financeAdvances.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertAdvance(tx: Writer, row: AdvanceInsert): Promise<void> {
   await tx.insert(financeAdvances).values(row);
 }
