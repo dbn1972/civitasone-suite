@@ -140,6 +140,9 @@ export async function tenantExtensionRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { tenantId } = safeParse(tenantIdParam, req.params);
+    // UAT W8-C (review): same cross-tenant rule as GET /config: a tenant admin may only read its OWN
+    // tenant's billing; only platform roles may read another tenant's.
+    if (ctx.tenantId !== tenantId && !ctx.roles.some((r) => PLAT.includes(r))) throw new HttpError(403, "FORBIDDEN", "cross-tenant");
     const cfg = await readScoped(tenantId, (tx) => getOrInitConfig(tx, tenantId));
     return reply.send({ tenantId, billing: cfg.billing });
   });
