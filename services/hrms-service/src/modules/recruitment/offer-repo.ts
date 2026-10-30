@@ -78,3 +78,35 @@ export async function listEvents(tenantId: string, offerId: string): Promise<Off
     .where(and(eq(hrmsOfferEvents.tenantId, tenantId), eq(hrmsOfferEvents.offerId, offerId)))
     .orderBy(hrmsOfferEvents.createdAt));
 }
+
+/**
+ * Has this actor already recorded an "approve" on this offer WITHIN the current
+ * submission cycle? Enforces that each approval stage is cleared by a DISTINCT
+ * person (segregation of duties), mirroring requisition-repo.ts's
+ * actorAlreadyApproved. The cycle starts at the offer's latest "submit" event, so
+ * a return -> correct -> resubmit starts afresh and an earlier approver is not
+ * permanently barred from the corrected run. Tx-scoped so the F3 consumer can
+ * re-check it inside the write transaction (the route's read can be stale).
+ */
+export async function actorApprovedInCurrentCycleTx(
+  tx: Writer, tenantId: string, offerId: string, actorId: string,
+): Promise<boolean> {
+  const latestSubmit = sql`(SELECT MAX(s.created_at) FROM recruitment.hrms_offer_events s
+    WHERE s.tenant_id = ${tenantId} AND s.offer_id = ${offerId} AND s.action = 'submit')`;
+  const rows = await (tx as typeof db).select({ id: hrmsOfferEvents.id }).from(hrmsOfferEvents)
+    .where(and(
+      eq(hrmsOfferEvents.tenantId, tenantId),
+      eq(hrmsOfferEvents.offerId, offerId),
+      eq(hrmsOfferEvents.actorId, actorId),
+      eq(hrmsOfferEvents.action, "approve"),
+      sql`${hrmsOfferEvents.createdAt} >= COALESCE(${latestSubmit}, '-infinity'::timestamptz)`,
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function actorApprovedInCurrentCycle(
+  tenantId: string, offerId: string, actorId: string,
+): Promise<boolean> {
+  return scopedRead((tx) => actorApprovedInCurrentCycleTx(tx, tenantId, offerId, actorId));
+}

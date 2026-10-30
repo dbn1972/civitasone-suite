@@ -145,9 +145,18 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const role = currentStageRole(chain, o.currentStage);
     if (!role) throw new HttpError(409, "NO_STAGE", "no active approval stage");
     requireRole(ctx, [role, "super_admin"]);
+    // Segregation of duties (maker-checker), mirroring requisition approval: the
+    // offer's creator can never approve it, and no single person may clear more
+    // than one stage -- so an N-stage chain needs N distinct, non-creator approvers.
     if (o.createdBy === ctx.actorId) throw new HttpError(409, "SOD_VIOLATION", "the offer creator cannot approve their own offer");
+    if (await repo.actorApprovedInCurrentCycle(ctx.tenantId, offerId, ctx.actorId)) {
+      throw new HttpError(409, "SOD_VIOLATION", "you have already approved an earlier stage of this offer");
+    }
     const final = isFinalStage(chain, o.currentStage);
-    await publishF3Write(ctx, "recruitment_offer_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // expectedStage: the stage this caller was authorised for above. The write is
+    // asynchronous, so the consumer re-checks state + SoD inside its transaction and
+    // refuses the write if the offer moved on in between (stale read / race).
+    await publishF3Write(ctx, "recruitment_offer_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown>, expectedStage: o.currentStage });
     return reply.send(jsonSafe({ id: offerId, status: final ? "approved" : "pending_approval", currentStage: final ? o.currentStage : o.currentStage + 1 })) as any;
   });
 
