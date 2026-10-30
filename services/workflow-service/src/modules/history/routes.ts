@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
+import { isDefinitionConfigured } from "../definitions/configured.js";
 
 const VIEW_ROLES = [
   "workflow_user", "workflow_admin", "super_admin", "tenant_admin",
@@ -38,6 +39,18 @@ export async function historyRoutes(app: FastifyInstance): Promise<void> {
         nodeKey: r.nodeKey, reason: r.reason, at: r.createdAt.toISOString(),
       })),
     });
+  });
+
+  // F77: internal pre-check for a domain service about to raise an approval
+  // instance. Same service-account boundary as ref-decisions above. Lets
+  // procurement answer 422 WORKFLOW_NOT_CONFIGURED on PO create instead of a
+  // 202 whose approval instance is then rejected as unknown_definition.
+  app.post("/v1/workflow/internal/definition-configured", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["service_account"]);
+    if (ctx.actorType !== "service_account") throw new HttpError(403, "FORBIDDEN", "internal service call only");
+    const body = z.object({ code: z.string().min(1).max(64) }).parse(req.body ?? {});
+    return reply.code(200).send({ code: body.code, configured: await isDefinitionConfigured(ctx.tenantId, body.code) });
   });
 
   // GET /v1/workflow/history/audit
