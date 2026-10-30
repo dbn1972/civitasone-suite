@@ -94,7 +94,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** INTERIM — domain-service is absent from the snapshot; layout.tsx has a requireAnyRole gate and DPDP notice is present. NEEDS OWNER DECISION: verify domain-service POST handler enforces role, validates with zod, and emits audit event (server absent, cannot verify).
+- [x] **Status** Closed by 1bb625649 (owner decision D4c #12, 2026-10-27): re-pointed at the existing admin custom-domains API (role-checked, validated, audited); no new service.
 - **W0 note:** partly fixed by #1925 — DPDP purpose notice added and layout.tsx requireAnyRole admin gate; server enforcement/audit unverifiable (no backend)
 - **First-pass claim:** Contact email and phone are personal data (DPDP) collected with no purpose or consent note and no indication of an audit entry for the create; backend absent — undeterminable. No module gate: any authenticated user reaches the form (no layout.tsx).
 - **Service:** `domain-service`  ·  **Endpoint(s):** `['POST /api/v1/domains']`

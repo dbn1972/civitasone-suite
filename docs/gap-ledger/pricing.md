@@ -60,7 +60,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-PRICING-HOME-05  ·  MEDIUM  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [~] **Status** (W2 PQ: INTERIM — NEEDS OWNER DECISION: whether marketing routes follow the app design-system tokens or keep their own light-only Tailwind palette is a product/design call. The explicit color-scheme:light declaration in the marketing layout is already in place. Flagged in PR body under NEEDS OWNER DECISION)
+- [x] **Status** Closed per owner decision D4c #16 (2026-10-27): public pricing page stays light-only (same ruling as the contact page); accepted.
 - **W0 note:** partly fixed by #1925 — marketing layout is now explicitly light-only (color-scheme: light); pricing CTA still uses hard-coded gray-900 Tailwind classes, not a brand colour token.
 - **First-pass claim:** Page is styled with hard-coded Tailwind grays and gray-900 buttons (page.tsx:84-160), not the design-system tokens the app uses, so it has no dark mode and its highlight/CTA colours differ from the product brand.
 - **Verified evidence:** Pricing page uses hard-coded Tailwind classes (bg-white, text-gray-900, bg-gray-900; lines 90-168) rather than design tokens. Marketing site uses Tailwind classes throughout (landing page identical style), so it is a consistent marketing style, not a token bypass unique to pricing; dark mode absence is true (no dark: variants; (marketing)/layout.tsx has none). Theme FABRICATED is wrong.

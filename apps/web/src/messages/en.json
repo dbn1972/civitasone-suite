@@ -1469,7 +1469,8 @@
     "errLoadRequest": "Failed to load request.",
     "errRecordAction": "Could not record the action.",
     "pageTitle": "Citizen Service Requests",
-    "pageSubtitle": "Grievances and service requests register.",
+    "pageSubtitle": "All citizen requests, grievances and service requests together. The official grievance register is a separate view.",
+    "registerLink": "Official grievance register",
     "statOpen": "Open",
     "statRejected": "Rejected",
     "statResolved": "Resolved (MTD)",
@@ -2668,7 +2669,19 @@
     "revealReasonLabel": "Reason (recorded in the audit log)",
     "revealError": "Couldn't reveal the account number. Please try again."
   },
+  "loyaltyMembers": {
+    "reveal": "Reveal",
+    "revealing": "Revealing…",
+    "hide": "Hide",
+    "revealAria": "Reveal full member ID for {ref} (this is recorded in the audit log)",
+    "revealFailed": "The full ID could not be shown. Try again."
+  },
   "domainsNew": {
+    "subtitle": "Add a government domain (.gov.in / .nic.in). You will be given a DNS record to publish so ownership can be verified.",
+    "verificationMethod": "Verification method",
+    "methodTxt": "DNS TXT record",
+    "methodCname": "DNS CNAME record",
+    "afterRegister": "After you register, add the DNS record shown under Tenant admin, Domain, then request verification.",
     "register": "Register Domain",
     "registering": "Registering…",
     "registerUnavailable": "Register Domain (unavailable)",
@@ -4045,7 +4058,8 @@
   },
   "grievances": {
     "title": "Grievances",
-    "subtitle": "CPGRAMS-style grievance register with 30-day lifecycle.",
+    "subtitle": "The official grievance register (CPGRAMS-style, 30-day lifecycle).",
+    "allRequestsLink": "All citizen requests",
     "register": "Register grievance",
     "total": "Total",
     "pending": "Pending",

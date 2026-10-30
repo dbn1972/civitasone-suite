@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, EmptyState, StatusPill } from "../../../_components/ds";
 import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
@@ -12,15 +14,15 @@ import type { LoyaltyMemberRow } from "../_data";
  * "Detail"/sublabel chain where a present status hid it. GAP-LOYALTY-MEMBERS-03:
  * enrolledAt renders through formatIndianDate (IST), not a raw ISO string.
  * GAP-LOYALTY-ACCRUALS-03: points via formatPoints (en-IN grouping).
- * GAP-LOYALTY-MEMBERS-02: the member reference (profileId, an opaque CDP UUID —
- * the enrolment payload carries NO name/phone/email) is shown shortened, never
- * the full id, and the page is role-gated server-side.
+ * GAP-LOYALTY-MEMBERS-02: the member reference (profile id, an opaque CDP UUID —
+ * the enrolment payload carries NO name/phone/email) is personal data (owner
+ * decision D4c #14/#15): shown shortened, never the full id, role-gated
+ * server-side, and revealed in full only through an audited request.
  */
 
 type MemberTableRow = {
   id: string;
   member: string;
-  memberTitle: string;
   tier: string;
   status: string;
   points: string;
@@ -28,11 +30,59 @@ type MemberTableRow = {
   enrolled: string;
 };
 
-/** Shorten an opaque UUID reference for display (full value kept in the title). */
-function shortRef(id: string | null): string {
-  if (!id) return "—";
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return UUID_RE.test(id) ? id.slice(0, 8) : id;
+/**
+ * D4c #14/#15: the member reference is personal data. Rows carry only the shortened reference; the
+ * full profile id is fetched on request from the audited reveal endpoint and held in component state
+ * only (never in the offline cache, the DOM title, or the row data).
+ */
+function ProfileRefCell({ enrolmentId, profileRef }: { enrolmentId: string; profileRef: string }) {
+  const t = useTranslations("loyaltyMembers");
+  const [full, setFull] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function reveal() {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch(`/api/proxy/v1/loyalty/enrolments/${encodeURIComponent(enrolmentId)}/profile-ref`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setFailed(true);
+        return;
+      }
+      const body = (await res.json()) as { data?: { profileId?: unknown } };
+      if (typeof body.data?.profileId === "string") setFull(body.data.profileId);
+      else setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (profileRef === "—") return <span>—</span>;
+  return (
+    <span>
+      <span>{full ?? profileRef}</span>{" "}
+      {full === null ? (
+        <button type="button" className="btn ghost" disabled={busy} onClick={reveal} aria-label={t("revealAria", { ref: profileRef })}>
+          {busy ? t("revealing") : t("reveal")}
+        </button>
+      ) : (
+        <button type="button" className="btn ghost" onClick={() => setFull(null)}>
+          {t("hide")}
+        </button>
+      )}
+      {failed && (
+        <span role="alert" style={{ color: "var(--bad)", fontSize: 12, marginInlineStart: 6 }}>
+          {t("revealFailed")}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function MembersTable({
@@ -46,7 +96,8 @@ export function MembersTable({
   variant?: "members" | "accruals";
 }) {
   const { data, provenance, offline, cachedAt } = useSeededResource<LoyaltyMemberRow[]>(
-    variant === "accruals" ? "loyalty.accruals" : "loyalty.members",
+    // D4c #15: v2 keys orphan any earlier offline-cache entry that still holds a full profile id.
+    variant === "accruals" ? "loyalty.accruals.v2" : "loyalty.members.v2",
     rows,
     source,
     (d) => d.length === 0,
@@ -69,8 +120,7 @@ export function MembersTable({
 
   const tableRows: MemberTableRow[] = data.map((m) => ({
     id: m.id,
-    member: shortRef(m.profileId),
-    memberTitle: m.profileId ?? "",
+    member: m.profileRef ?? "—",
     tier: m.tier,
     status: m.status,
     points: formatPoints(m.pointsBalance),
@@ -89,7 +139,7 @@ export function MembersTable({
       ) : (
         <DataTable<MemberTableRow>
           columns={[
-            { key: "member", label: "Member ref" },
+            { key: "member", label: "Member ref", render: (r) => <ProfileRefCell enrolmentId={r.id} profileRef={r.member} /> },
             { key: "tier", label: "Tier", render: (r) => <StatusPill status={r.tier} variant="info" /> },
             { key: "status", label: "Status", cellType: "status" },
             { key: "points", label: "Points balance", align: "right" },
