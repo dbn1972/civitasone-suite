@@ -1018,6 +1018,26 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the offer and whether this is the FINAL approval stage.
             const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            // UAT F70: the route's checks ran against a read that can be stale by
+            // the time this runs (the same approver's second click, or a third
+            // approve after the chain completed, both passed it). Re-check state
+            // and segregation of duties against the fresh row inside this write
+            // transaction; a refusal is final (a redelivery would fail the same
+            // way), so record it as an audited no-op instead of retrying.
+            const expectedStage = p.expectedStage == null ? o.currentStage : Number(p.expectedStage);
+            const refusal =
+              o.status !== "pending_approval" ? "WRONG_STATE"
+              : o.currentStage !== expectedStage ? "STALE_STAGE"
+              : o.createdBy === msg.actorId ? "SOD_VIOLATION"
+              : (await offerRepo.actorApprovedInCurrentCycleTx(tx, p.tenantId, offerId, msg.actorId)) ? "SOD_VIOLATION"
+              : null;
+            if (refusal) {
+              log.warn({ op, messageId: msg.messageId, offerId, refusal, status: o.status, currentStage: o.currentStage, expectedStage }, "offer approve refused");
+              await emitAudit(tx, auditCtx, "approve", "offer", offerId, {
+                outcome: "failure", reason: refusal, status: o.status, currentStage: o.currentStage, expectedStage,
+              });
+              break;
+            }
             const final = isFinalStage(o.approvalChain as ApprovalStage[], o.currentStage);
             await offerRepo.updateOffer(tx, p.tenantId, offerId,
                     final ? { status: "approved", approvedAt: new Date() } : { currentStage: o.currentStage + 1 }, o.version);
