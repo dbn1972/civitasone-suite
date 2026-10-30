@@ -6,7 +6,6 @@ import { orders } from "../order/schema.js";
 import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
 import { assertTransition, assertDifferentApprover } from "./domain.js";
-import { defaultDscTrustStoreProvider } from "./dsc-provider.js";
 import { verifyOrderDsc } from "./dsc-verify.js";
 
 type SubmitForApprovalPayload = {
@@ -148,7 +147,7 @@ export function registerOrderIssuanceConsumers(
       // (a bad blob never becomes valid on retry) so the order is never issued.
       const signable = await repo.getOrderSignableInTx(tx, p.tenantId, p.orderId);
       if (!signable) throw new NonRetryableError(`ORDER_NOT_FOUND: ${p.orderId}`);
-      const dsc = verifyOrderDsc(signable, p.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
+      const dsc = verifyOrderDsc(signable, p.dscSignature);
       if (!dsc.acceptedForIssue) {
         throw new NonRetryableError(
           `DSC_VERIFICATION_FAILED: order ${p.orderId} signature rejected (${dsc.issues.join(",")})`,

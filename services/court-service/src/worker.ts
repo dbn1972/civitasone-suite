@@ -36,6 +36,7 @@ import { scannerDb } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
+import { assertDscChainTrustConfigured } from "./modules/order-issuance/dsc-provider.js";
 import { COMMANDS, CONSUMED_EVENTS, SERVICE } from "./topics.js";
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
 import { registerCourtRegistryConsumers } from "./modules/court-registry/consumer.js";
@@ -258,6 +259,8 @@ function assertScannerConfigured(): void {
 
 assertScannerConfigured();
 assertPiiKeyConfigured();
+// UAT F65: the issue consumer re-verifies DSCs — same fail-fast as the API.
+assertDscChainTrustConfigured(undefined, log);
   subscribeConsumers();
   await queue.start();
   // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

@@ -12,8 +12,11 @@
  *     usage,
  *   • verify the RSA signature cryptographically over the ORDER's canonical
  *     signed content, and
- *   • (when a trust store is configured) verify the signer chains to a trusted
- *     CCA/CA root — fail-closed when it is not configured.
+ *   • verify the signer chains to a trusted CCA/CA root when a trust store is
+ *     configured. Whether that chain trust is REQUIRED to issue is decided by
+ *     `resolveDscChainTrustPolicy` (dsc-provider.ts): always in production
+ *     (fail closed), only with a configured trust store in development/test
+ *     (fail open with a WARN — UAT F65).
  *
  * The actual CMS crypto lives in `@civitasone/render`'s `verifyDetachedPkcs7`
  * (which owns node-forge and the sibling PDF-signature verifier), so we don't
@@ -23,8 +26,8 @@
  */
 
 import { verifyDetachedPkcs7, type DetachedDscVerifyResult } from "@civitasone/render";
-import type { DscTrustStoreProvider } from "./dsc-provider.js";
-import { defaultDscTrustStoreProvider } from "./dsc-provider.js";
+import type { DscPolicyLogger, DscTrustStoreProvider } from "./dsc-provider.js";
+import { defaultDscTrustStoreProvider, dscPolicyLog, resolveDscChainTrustPolicy } from "./dsc-provider.js";
 
 /** The minimal order shape whose content a DSC must sign. */
 export interface SignableOrder {
@@ -65,25 +68,36 @@ export interface OrderDscVerification extends DetachedDscVerifyResult {
  * parse, the certificate must be currently valid and a signing cert, and the
  * cryptographic signature over the canonical order content must verify.
  *
- * Chain trust policy (fail-closed when configured): `requireChainTrust`
- * defaults to `provider.isConfigured()`. When `COURT_DSC_TRUST_STORE_PEM` is
- * configured, a signer that does not chain to the trust store (e.g. a
- * self-signed DSC) is REJECTED. When no trust store is configured the
- * deployment has opted out of chain checking: the signature and certificate
- * are still verified cryptographically, chain trust is reported as untrusted
- * (`trustStoreConfigured: false`) but is not required. Callers may force it
- * with `requireChainTrust: true`.
+ * Chain trust policy (see `resolveDscChainTrustPolicy`):
+ *   • production (NODE_ENV not an explicit "development"/"test"): chain trust
+ *     is ALWAYS required. With no `COURT_DSC_TRUST_STORE_PEM` every DSC —
+ *     including a self-signed one — is refused (`trust_store_not_configured`).
+ *   • development/test with a trust store: a signer that does not chain to it
+ *     (e.g. a self-signed DSC) is refused.
+ *   • development/test WITHOUT a trust store: chain trust is NOT enforced — the
+ *     signature and certificate are still verified cryptographically, chain
+ *     trust is reported as untrusted (`trustStoreConfigured: false`), and a
+ *     WARN is logged on every such verification.
+ * `requireChainTrust: true` (or `COURT_DSC_REQUIRE_CHAIN_TRUST=true`) forces it
+ * on; neither can switch it off where the policy requires it.
  */
 export function verifyOrderDsc(
   order: SignableOrder,
   dscSignature: string,
-  opts: { provider?: DscTrustStoreProvider; requireChainTrust?: boolean; now?: Date } = {},
+  opts: {
+    provider?: DscTrustStoreProvider;
+    requireChainTrust?: boolean;
+    now?: Date;
+    logger?: DscPolicyLogger;
+  } = {},
 ): OrderDscVerification {
   const provider = opts.provider ?? defaultDscTrustStoreProvider;
   const trustStorePem = provider.getTrustStorePem() ?? undefined;
 
-  const trustStoreConfigured = provider.isConfigured();
-  const requireChainTrust = opts.requireChainTrust ?? trustStoreConfigured;
+  const policy = resolveDscChainTrustPolicy(provider);
+  const trustStoreConfigured = policy.trustStoreConfigured;
+  // A caller may only STRENGTHEN the policy, never weaken it.
+  const requireChainTrust = policy.required || opts.requireChainTrust === true;
 
   const base = verifyDetachedPkcs7({
     signature: dscSignature,
@@ -97,6 +111,20 @@ export function verifyOrderDsc(
     base.signatureChecked &&
     base.signatureValid &&
     (!requireChainTrust || base.chainTrusted);
+
+  if (!requireChainTrust) {
+    (opts.logger ?? dscPolicyLog()).warn(
+      {
+        // No signer CN/serial: the CN is the signing judge's name (PII).
+        orderId: order.id,
+        chainTrusted: base.chainTrusted,
+        trustStoreConfigured,
+        acceptedForIssue,
+      },
+      "DSC chain-of-trust NOT enforced for this verification (COURT_DSC_TRUST_STORE_PEM unset, " +
+        "non-production); an untrusted/self-signed signer is accepted",
+    );
+  }
 
   return { ...base, acceptedForIssue, trustStoreConfigured };
 }

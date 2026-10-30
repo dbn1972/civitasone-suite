@@ -6,6 +6,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
+import { assertDscChainTrustConfigured } from "./modules/order-issuance/dsc-provider.js";
 import { caseRegistryRoutes } from "./modules/case-registry/routes.js";
 import { courtRegistryRoutes } from "./modules/court-registry/routes.js";
 import { caseLifecycleRoutes } from "./modules/case-lifecycle/routes.js";
@@ -57,6 +58,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
+
+  // UAT F65: fail fast in production when no DSC trust store is configured
+  // (court orders would otherwise be issued on self-signed DSCs); WARN once
+  // outside production. Uses the app logger (its config + redaction).
+  assertDscChainTrustConfigured(undefined, app.log);
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
