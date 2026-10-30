@@ -70,7 +70,7 @@ describe("FQ17 keycloak admin calls use KEYCLOAK_ADMIN_URL", () => {
     expect(r).toMatchObject({ ok: true, kcUserId: KCID, tenantVerified: true });
     expect(calls.map((c) => c.url)).toEqual([
       `${ADMIN_URL}/realms/master/protocol/openid-connect/token`,
-      expect.stringMatching(new RegExp(`^${ADMIN_URL.replace(/[.:/]/g, "\\$&")}/admin/realms/civitasone/users\\?username=`)),
+      `${ADMIN_URL}/admin/realms/civitasone/users?username=${encodeURIComponent(`${TENANT}__${EMAIL}`)}&exact=true&briefRepresentation=false`,
     ]);
     expect(calls.some((c) => c.url.startsWith(PUBLIC_URL))).toBe(false);
   });
