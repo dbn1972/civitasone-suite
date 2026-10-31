@@ -20,6 +20,7 @@
     "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
+    "@civitasone/numbering": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",

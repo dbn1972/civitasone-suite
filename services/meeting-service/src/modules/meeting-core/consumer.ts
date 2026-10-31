@@ -23,7 +23,7 @@
  * _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 14.5_
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, inArray, notInArray, count, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, count, sql } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -45,15 +45,15 @@ import {
   assertTransition,
   computeFinancialYear,
   computeNoticeDays,
-  generateMeetingNumber,
   isDirectMeetingOwner,
   isMeetingState,
-  nextMeetingSequence,
   CHAIR_STANDING_ROLES,
   SECRETARIAL_STANDING_ROLES,
   type MeetingState,
 } from "./domain.js";
 import { getPolicyNumber, getPolicyBool, getPolicyString } from "../config-registry/policy.js";
+import type { SqlExecutor } from "@civitasone/numbering";
+import { allocateMeetingNumber } from "../../shared/numbering.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "meeting";
@@ -266,38 +266,18 @@ async function countAgendaItems(tx: DrizzleTx, meetingId: string, tenantId: stri
   return Number(rows[0]?.n ?? 0);
 }
 
-/** Extract the trailing numeric sequence from a meeting number like "FC/2025-26/007" → 7. */
-function parseMeetingSequence(meetingNumber: string | null): number | null {
-  if (!meetingNumber) return null;
-  const tail = meetingNumber.split("/").pop() ?? "";
-  const n = Number.parseInt(tail, 10);
-  return Number.isFinite(n) ? n : null;
-}
-
 /**
- * Assign a sequential meeting number scoped to (committee, financial year) (Req 1.2). Reads the
- * numbers already issued in the same scope, computes the next sequence via the pure
- * `nextMeetingSequence`, and formats it via `generateMeetingNumber`. The DB UNIQUE constraint on
- * (tenant, committee, meeting_number) is the ultimate guard against a concurrent race.
+ * Assign a sequential meeting number (Req 1.2) from the transactional per-(tenant, prefix, FY)
+ * counter in `meeting.number_sequences` (UAT F81, see shared/numbering.ts). Concurrent creates
+ * serialise on the counter row, and committees without a code share the tenant's `MTG` series,
+ * so no two meetings in a tenant get the same number. The partial UNIQUE index on
+ * (tenant_id, meeting_number) from migration 0014 is the backstop.
  */
 async function computeMeetingNumber(
   tx: DrizzleTx,
   args: { tenantId: string; committeeId: string | null; scheduledAt: Date },
 ): Promise<{ meetingNumber: string; financialYear: string }> {
   const financialYear = computeFinancialYear(args.scheduledAt);
-
-  const scopeFilter = args.committeeId
-    ? eq(meetings.committeeId, args.committeeId)
-    : isNull(meetings.committeeId);
-  const rows = await tx
-    .select({ meetingNumber: meetings.meetingNumber })
-    .from(meetings)
-    .where(and(eq(meetings.tenantId, args.tenantId), eq(meetings.financialYear, financialYear), scopeFilter));
-
-  const sequences = rows
-    .map((r) => parseMeetingSequence(r.meetingNumber))
-    .filter((n): n is number => n !== null);
-  const sequence = nextMeetingSequence(sequences);
 
   let committeeCode: string | null = null;
   if (args.committeeId) {
@@ -309,7 +289,12 @@ async function computeMeetingNumber(
     committeeCode = c[0]?.code ?? null;
   }
 
-  return { meetingNumber: generateMeetingNumber({ committeeCode, financialYear, sequence }), financialYear };
+  const meetingNumber = await allocateMeetingNumber(tx as unknown as SqlExecutor, {
+    tenantId: args.tenantId,
+    committeeCode,
+    financialYear,
+  });
+  return { meetingNumber, financialYear };
 }
 
 /** Best-effort read-cache invalidation for a resource (single key + resource list) after commit. */
