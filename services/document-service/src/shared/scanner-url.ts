@@ -10,7 +10,10 @@ export function resolveScannerUrl(env: NodeJS.ProcessEnv): string {
   const scanner = env.DOCUMENT_SCANNER_DATABASE_URL;
   const devOrTest = ["development", "test"].includes(env.NODE_ENV ?? "");
   if (!scanner) {
-    if (devOrTest && env.DATABASE_URL) return env.DATABASE_URL;        // dev / test: the service role is RLS-inert there
+    // dev / test only, so a local stack without the scanner role still resolves a DSN. document_svc is NOBYPASSRLS
+    // (admin-service 0058), so this role would see no bulk_scan rows: worker.ts's assertScannerBypassesRls() then
+    // refuses to start rather than run schedulers that silently find no work.
+    if (devOrTest && env.DATABASE_URL) return env.DATABASE_URL;
     throw new Error("DOCUMENT_SCANNER_DATABASE_URL is required for the bulk-scan scanner pool (must point at the document_scanner role; no fallback to DATABASE_URL outside development/test)");
   }
   if (!devOrTest && scanner === env.DATABASE_URL) {
