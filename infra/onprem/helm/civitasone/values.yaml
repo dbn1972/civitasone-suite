@@ -33,6 +33,7 @@ serviceAccount:
 # Non-secret config shared by every service (rendered into a ConfigMap).
 config:
   NODE_ENV: "production"
+  DEPLOY_ENV: "production"
   BIND_HOST: "0.0.0.0"
   REDIS_URL: "redis://civitasone-redis:6379"
   QUEUE_DRIVER: "sqs"
