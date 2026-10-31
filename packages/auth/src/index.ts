@@ -126,6 +126,30 @@ export function isDevOrTestEnv(): boolean {
   return PROD_FALLBACK_ALLOWED_ENVS.has(process.env.NODE_ENV ?? "");
 }
 
+/**
+ * F2 (UAT bundle 10): explicit production marker. NODE_ENV=development turns on
+ * the dev-only fallbacks above (x-tenant-id header tenant for tokens without a
+ * `tid`, HS256 shared-secret tokens, skipped boot assertions). That is accepted
+ * on UAT, but a production deployment that ends up with NODE_ENV=development
+ * (copied env file, wrong RUNTIME_NODE_ENV) would silently run with them.
+ * Production deployments set DEPLOY_ENV=production; when they do, the dev/test
+ * posture is refused at boot instead of being trusted.
+ */
+const PRODUCTION_DEPLOY_MARKERS = new Set(["production", "prod"]);
+
+export function isProductionDeployMarked(): boolean {
+  return PRODUCTION_DEPLOY_MARKERS.has((process.env.DEPLOY_ENV ?? "").trim().toLowerCase());
+}
+
+/** Throws when NODE_ENV enables the dev/test fallbacks on a deployment marked production. */
+export function assertDevPostureNotInProduction(): void {
+  if (isDevOrTestEnv() && isProductionDeployMarked()) {
+    throw new Error(
+      `NODE_ENV=${process.env.NODE_ENV} enables dev/test auth fallbacks but DEPLOY_ENV marks this a production deployment; refusing to start.`,
+    );
+  }
+}
+
 function resolveAlgorithm(): "RS256" | "HS256" {
   const configured = (process.env.JWT_ALGORITHM ?? "RS256") as "RS256" | "HS256";
   if (isProduction() && configured === "HS256") {

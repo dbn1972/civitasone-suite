@@ -15,7 +15,7 @@
 
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { verifyJwt, verifyToken, toRequestContext, isDevOrTestEnv } from "./index.js";
+import { verifyJwt, verifyToken, toRequestContext, isDevOrTestEnv, assertDevPostureNotInProduction } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthContextError } from "./context.js";
@@ -60,6 +60,8 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 const authPluginImpl: FastifyPluginAsync = async (fastify) => {
+  // F2: every service registers this plugin, so this is the fleet-wide boot guard.
+  assertDevPostureNotInProduction();
   assertInternalServiceSecret();
   fastify.decorateRequest("ctx", null);
 
