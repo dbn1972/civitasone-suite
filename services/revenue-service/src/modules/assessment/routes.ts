@@ -23,6 +23,10 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createAssessmentBody.parse(req.body);
+    // UAT B9-F78b: both references must exist for this tenant, else the worker drops the command.
+    const refs = await repo.assessmentRefsExist(ctx.tenantId, { assesseeId: body.assesseeId, rateHeadId: body.rateHeadId });
+    if (!refs.assessee) throw new HttpError(422, "ASSESSEE_NOT_FOUND", "assesseeId does not exist for this tenant");
+    if (!refs.rateHead) throw new HttpError(422, "RATE_HEAD_NOT_FOUND", "rateHeadId does not exist for this tenant");
     const result = await commands.createAssessment(ctx, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
@@ -33,6 +37,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = reviseAssessmentBody.parse(req.body);
+    // UAT B9-F78a: an unknown assessment is 404, never a 202 the worker retries until the DLQ.
+    if (!(await repo.assessmentExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "assessment not found");
     const result = await commands.reviseAssessment(ctx, id, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });

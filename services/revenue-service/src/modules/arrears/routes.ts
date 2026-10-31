@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { validateWaiver, DomainError } from "./domain.js";
 import { istToday, DEFAULT_NOTICE_PERIOD_DAYS, NOTICE_SETTINGS_ROLES } from "./recovery-notice.js";
 import {
   createInstalmentBody,
@@ -321,6 +322,15 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createWaiverBody.parse(req.body);
+    // UAT B9-waiver: the cap is knowable now, so reject synchronously instead of a 202 the worker drops.
+    const cap = await repo.getWaiverCap(ctx.tenantId, body.demandId, body.waiverType);
+    if (cap === null) throw new HttpError(422, "DEMAND_NOT_FOUND", "demandId does not exist for this tenant");
+    try {
+      validateWaiver(BigInt(body.amountMinor), cap);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+      throw err;
+    }
     return reply.code(202).send({ data: await commands.createWaiver(ctx, body as unknown as Record<string, unknown>) });
   });
 

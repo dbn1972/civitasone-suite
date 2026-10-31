@@ -13,7 +13,23 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { assessments, demands, dcbEntries, remissions } from "./schema.js";
 import { rateSlabs, penaltyRules, rebateRules } from "../rate-engine/schema.js";
 import { compute } from "../rate-engine/domain.js";
-import { assertCanRevise, assertMakerChecker } from "./domain.js";
+import { assertCanRevise, assertMakerChecker, DomainError } from "./domain.js";
+import { assessees } from "../assessee/schema.js";
+import { rateHeads } from "../rate-engine/schema.js";
+
+/**
+ * UAT B9-F78: a business-rule rejection (DomainError) can never succeed on redelivery, so surface it
+ * as NonRetryableError ("CODE: detail", original as cause): the queue logs it at error level,
+ * records a 'rejected' outcome and dead-letters it once instead of retrying until the DLQ.
+ */
+function rejectOnDomainError<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof DomainError) throw new NonRetryableError(`${err.code}: ${err.message}`, err);
+    throw err;
+  }
+}
 import { eq, and } from "drizzle-orm";
 
 export function registerAssessmentConsumers(queue: Queue): void {
@@ -29,6 +45,21 @@ export function registerAssessmentConsumers(queue: Queue): void {
         baseValue: string;
         exemptions?: Array<{ type: string; amount: string }>;
       };
+
+      // UAT B9-F78b: the route 422s first; this guards a direct or raced publish (RLS-scoped tx).
+      // There is no FK, so without it an unknown assessee became an orphan assessment + demand.
+      const [assessee] = await tx
+        .select({ id: assessees.id })
+        .from(assessees)
+        .where(and(eq(assessees.tenantId, msg.tenantId), eq(assessees.id, assesseeId)))
+        .limit(1);
+      if (!assessee) throw new NonRetryableError("ASSESSEE_NOT_FOUND", `assessee ${assesseeId} not found`);
+      const [rateHead] = await tx
+        .select({ id: rateHeads.id })
+        .from(rateHeads)
+        .where(and(eq(rateHeads.tenantId, msg.tenantId), eq(rateHeads.id, rateHeadId)))
+        .limit(1);
+      if (!rateHead) throw new NonRetryableError("RATE_HEAD_NOT_FOUND", `rate head ${rateHeadId} not found`);
 
       // 1. Insert assessment
       const [assessment] = await tx.insert(assessments).values({
@@ -62,7 +93,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
       // 3. Compute demand via rate engine domain
       const today = new Date().toISOString().slice(0, 10);
       const dueDate = today; // default due date = today for new assessments
-      const computeResult = compute(
+      const computeResult = rejectOnDomainError(() => compute(
         slabs as any,
         penalties as any,
         rebates as any,
@@ -73,7 +104,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
           dueDate,
           exemptions: (exemptions ?? []).map((e) => e.type),
         },
-      );
+      ));
 
       // 4. Insert demand with compute snapshot
       const [demand] = await tx.insert(demands).values({
@@ -176,12 +207,13 @@ export function registerAssessmentConsumers(queue: Queue): void {
         .from(assessments)
         .where(and(eq(assessments.tenantId, msg.tenantId), eq(assessments.id, assessmentId)));
 
+      // UAT B9-F78a: was a plain (retryable) Error, so a 202'd revise of an unknown id looped to the DLQ.
       if (!existing) {
-        throw new Error(`Assessment ${assessmentId} not found`);
+        throw new NonRetryableError("NOT_FOUND", `assessment ${assessmentId} not found`);
       }
 
       // Assert can revise (status must be active)
-      assertCanRevise(existing.status);
+      rejectOnDomainError(() => assertCanRevise(existing.status));
 
       // Update assessment with optimistic lock
       const [updated] = await tx
@@ -197,7 +229,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
         .returning();
 
       if (!updated) {
-        throw new Error(`Version conflict on assessment ${assessmentId}`);
+        throw new NonRetryableError("VERSION_CONFLICT", `version conflict on assessment ${assessmentId}`);
       }
 
       // Recompute demand
@@ -217,7 +249,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
         .where(and(eq(rebateRules.tenantId, msg.tenantId), eq(rebateRules.rateHeadId, existing.rateHeadId)));
 
       const today = new Date().toISOString().slice(0, 10);
-      const computeResult = compute(
+      const computeResult = rejectOnDomainError(() => compute(
         slabs as any,
         penalties as any,
         rebates as any,
@@ -228,7 +260,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
           dueDate: today,
           exemptions: (newExemptions ?? (existing.exemptions as any[]) ?? []).map((e: any) => e.type ?? e),
         },
-      );
+      ));
 
       // Update existing demand
       await tx

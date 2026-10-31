@@ -7,6 +7,8 @@ import { tenantTransaction } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { assessments, demands, dcbEntries, remissions } from "./schema.js";
+import { assessees } from "../assessee/schema.js";
+import { rateHeads } from "../rate-engine/schema.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { SERVICE } from "../../topics.js";
 import { computeDcbSummary, dcbBalanceEffect, type DcbEntry } from "./domain.js";
@@ -37,6 +39,31 @@ export async function assessmentExists(tenantId: string, id: string): Promise<bo
       .limit(1);
   });
   return rows.length > 0;
+}
+
+/**
+ * UAT B9-F78b: uncached, tenant-scoped reads of the two references a new assessment points at.
+ * The create route 422s on either missing one instead of publishing a command the worker can only
+ * drop (unknown rate head) or turn into an orphan assessment (unknown assessee: there is no FK).
+ */
+export async function assessmentRefsExist(
+  tenantId: string,
+  refs: { assesseeId: string; rateHeadId: string },
+): Promise<{ assessee: boolean; rateHead: boolean }> {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const a = await t
+      .select({ id: assessees.id })
+      .from(assessees)
+      .where(and(eq(assessees.tenantId, tenantId), eq(assessees.id, refs.assesseeId)))
+      .limit(1);
+    const h = await t
+      .select({ id: rateHeads.id })
+      .from(rateHeads)
+      .where(and(eq(rateHeads.tenantId, tenantId), eq(rateHeads.id, refs.rateHeadId)))
+      .limit(1);
+    return { assessee: a.length > 0, rateHead: h.length > 0 };
+  });
 }
 
 export async function listAssessments(tenantId: string, pagination: { limit: number; offset: number }) {

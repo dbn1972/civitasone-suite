@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -7,7 +7,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
 import { waivers } from "../trade-license/schema.js";
 import { dcbEntries, demands } from "../assessment/schema.js";
-import { getAssesseeOutstanding, getLatestDemandBalance } from "./outstanding.js";
+import { getAssesseeOutstanding, getLatestDemandBalance, loadWaiverCapTx } from "./outstanding.js";
 import { requireLapsedNoticeTx, istToday, loadNoticeDefaultTx, resolveNoticePeriod, NOTICE_SETTINGS_ROLES } from "./recovery-notice.js";
 import { demandNotices, noticeSettings } from "./schema.js";
 import {
@@ -16,7 +16,6 @@ import {
   assertMakerChecker,
   validateRecoveryReferral,
   validateWaiver,
-  waiverCap,
   DomainError,
   type WaiverComponent,
 } from "./domain.js";
@@ -595,34 +594,20 @@ export function registerArrearsConsumers(queue: Queue): void {
       // non-positive amount). Enforce it here, the command authority: load the
       // tenant-scoped demand, cap at the chosen component(s), and reject
       // (fail closed) if the demand is missing or the amount is over the cap.
-      const demandRows = await tx
-        .select({ penaltyMinor: demands.penaltyMinor, interestMinor: demands.interestMinor })
-        .from(demands)
-        .where(and(eq(demands.tenantId, msg.tenantId), eq(demands.id, demandId)))
-        .limit(1);
-      const demand = demandRows[0];
-      if (!demand) {
-        throw new DomainError("DEMAND_NOT_FOUND", `Demand ${demandId} not found for this tenant`);
-      }
       const component: WaiverComponent = waiverType ?? "both";
-      const componentCap = waiverCap(component, BigInt(demand.penaltyMinor), BigInt(demand.interestMinor));
-      // The cap is per DEMAND, not per request: subtract everything already
-      // waived (pending + approved) on this demand, otherwise N requests of up
-      // to the cap each would pass. Earlier waivers carry no component, so they
-      // count against whichever component is requested (conservative).
-      const waivedRows = await tx
-        .select({ total: sql<string>`COALESCE(SUM(CAST(${waivers.amountMinor} AS numeric)), 0)::text` })
-        .from(waivers)
-        .where(
-          and(
-            eq(waivers.tenantId, msg.tenantId),
-            eq(waivers.demandId, demandId),
-            sql`${waivers.status} IN ('pending', 'approved')`,
-          ),
-        );
-      const alreadyWaived = BigInt(String(waivedRows[0]?.total ?? "0").split(".")[0] || "0");
-      const cap = componentCap > alreadyWaived ? componentCap - alreadyWaived : 0n;
-      validateWaiver(BigInt(amountMinor), cap);
+      const cap = await loadWaiverCapTx(tx, msg.tenantId, demandId, component);
+      // UAT B9-waiver: these were DomainErrors (retryable), so an over-cap waiver looped to the DLQ
+      // with no record and no signal to the caller. The route now 422s first; a raced/direct publish
+      // is rejected here once (NonRetryableError: logged at error level + 'rejected' outcome).
+      if (cap === null) {
+        throw new NonRetryableError(`DEMAND_NOT_FOUND: Demand ${demandId} not found for this tenant`);
+      }
+      try {
+        validateWaiver(BigInt(amountMinor), cap);
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`${err.code}: ${err.message}`, err);
+        throw err;
+      }
 
       await tx.insert(waivers).values({
         tenantId:    msg.tenantId,

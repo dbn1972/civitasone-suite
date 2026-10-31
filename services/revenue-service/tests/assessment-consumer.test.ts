@@ -65,6 +65,7 @@ vi.mock("../src/modules/assessment/schema.js", () => ({
 }));
 
 vi.mock("../src/modules/rate-engine/schema.js", () => ({
+  rateHeads: { id: "id", tenantId: "tenantId" },
   rateSlabs: { tenantId: "tenantId", rateHeadId: "rateHeadId" },
   penaltyRules: { tenantId: "tenantId", rateHeadId: "rateHeadId" },
   rebateRules: { tenantId: "tenantId", rateHeadId: "rateHeadId" },
@@ -175,6 +176,10 @@ describe("Assessment Consumer", () => {
         .mockResolvedValueOnce([{ id: "assessment-1" }])
         .mockResolvedValueOnce([{ id: "demand-1" }])
         .mockResolvedValueOnce([{ id: "dcb-1" }]);
+      // UAT B9-F78b: the assessee and rate head reference reads (select..where..limit) find a row.
+      mockSelectWhere
+        .mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([{ id: "assessee-1" }]) })
+        .mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([{ id: "rate-head-1" }]) });
 
       const msg = buildMsg();
       await handlers["revenue.assessment.create"]!(msg);
