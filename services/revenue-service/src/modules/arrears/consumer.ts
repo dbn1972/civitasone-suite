@@ -2,6 +2,7 @@ import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
+import { randomUUID } from "node:crypto";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
@@ -77,7 +78,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "instalment_plan", outcome: "success" },
+        payload: { service: SERVICE, action: "create", resourceType: "instalment_plan", resourceId: planId, outcome: "success", assesseeId },
       });
     });
 
@@ -191,7 +192,7 @@ export function registerArrearsConsumers(queue: Queue): void {
       validateWriteOff(amount, outstanding);
 
       // Insert write-off (status: pending, makerUserId: actorId)
-      await tx.insert(writeOffs).values({
+      const writeOffRows = await tx.insert(writeOffs).values({
         tenantId: msg.tenantId,
         assesseeId,
         demandId: demandId ?? null,
@@ -200,7 +201,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         reason,
         status: "pending",
         makerUserId: msg.actorId,
-      });
+      }).returning({ id: writeOffs.id });
 
       // Audit
       await enqueue(tx, {
@@ -209,7 +210,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "write_off", outcome: "success", demandId: demandId ?? null, financialYear: resolvedFy },
+        payload: { service: SERVICE, action: "create", resourceType: "write_off", resourceId: writeOffRows[0]!.id, outcome: "success", demandId: demandId ?? null, financialYear: resolvedFy, amountMinor: amount.toString() },
       });
     });
   });
@@ -243,7 +244,7 @@ export function registerArrearsConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "already_decided", writeOffId },
+          payload: { service: SERVICE, action: "decide", resourceType: "write_off", resourceId: writeOffId, outcome: "already_decided", writeOffId },
         });
         return;
       }
@@ -275,7 +276,7 @@ export function registerArrearsConsumers(queue: Queue): void {
             tenantId: msg.tenantId,
             actorId: msg.actorId,
             correlationId: msg.correlationId,
-            payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "exceeds_outstanding", writeOffId },
+            payload: { service: SERVICE, action: "decide", resourceType: "write_off", resourceId: writeOffId, outcome: "exceeds_outstanding", writeOffId },
           });
           return;
         }
@@ -299,7 +300,7 @@ export function registerArrearsConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "already_decided", writeOffId },
+          payload: { service: SERVICE, action: "decide", resourceType: "write_off", resourceId: writeOffId, outcome: "already_decided", writeOffId },
         });
         return;
       }
@@ -343,7 +344,10 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: newStatus },
+        payload: {
+          service: SERVICE, action: "decide", resourceType: "write_off", resourceId: writeOffId, outcome: newStatus,
+          demandId: writeOff.demandId ?? null, amountMinor: writeOff.amountMinor.toString(),
+        },
       });
     });
 
@@ -381,14 +385,14 @@ export function registerArrearsConsumers(queue: Queue): void {
 
       // Insert recovery referral — PENDING. legal-service is NOT notified until a
       // DIFFERENT officer approves it (recoveryReferDecide below).
-      await tx.insert(recoveryReferrals).values({
+      const referralRows = await tx.insert(recoveryReferrals).values({
         tenantId: msg.tenantId,
         assesseeId,
         reason,
         status: "pending",
         noticeId: notice.id,
         createdBy: msg.actorId,
-      });
+      }).returning({ id: recoveryReferrals.id });
 
       await enqueue(tx, {
         topic: "audit.event.record",
@@ -397,7 +401,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: {
-          service: SERVICE, action: "create", resourceType: "recovery_referral", outcome: "pending",
+          service: SERVICE, action: "create", resourceType: "recovery_referral", resourceId: referralRows[0]!.id, outcome: "pending",
           assesseeId, noticeNo: notice.noticeNo, outstandingMinor: BigInt(outstanding).toString(),
         },
       });
@@ -521,7 +525,7 @@ export function registerArrearsConsumers(queue: Queue): void {
       const tenantDefault = await loadNoticeDefaultTx(tx, msg.tenantId, { seed: true });
       const periodDays = resolveNoticePeriod(noticePeriodDays, tenantDefault.days);
 
-      await tx.insert(demandNotices).values({
+      const noticeRows = await tx.insert(demandNotices).values({
         tenantId: msg.tenantId,
         assesseeId,
         demandId: demandId ?? null,
@@ -529,7 +533,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         servedOn,
         noticePeriodDays: periodDays,
         servedBy: msg.actorId,
-      });
+      }).returning({ id: demandNotices.id });
 
       await enqueue(tx, {
         topic: "audit.event.record",
@@ -537,7 +541,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "serve", resourceType: "demand_notice", outcome: "success", assesseeId, noticeNo, servedOn, noticePeriodDays: periodDays },
+        payload: { service: SERVICE, action: "serve", resourceType: "demand_notice", resourceId: noticeRows[0]!.id, outcome: "success", assesseeId, noticeNo, servedOn, noticePeriodDays: periodDays },
       });
     });
   });
@@ -571,7 +575,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "configure", resourceType: "notice_settings", outcome: "success", defaultNoticePeriodDays },
+        payload: { service: SERVICE, action: "configure", resourceType: "notice_settings", resourceId: msg.tenantId, outcome: "success", defaultNoticePeriodDays },
       });
     });
   });
@@ -584,6 +588,8 @@ export function registerArrearsConsumers(queue: Queue): void {
       reason: string;
       waiverType?: WaiverComponent;
     };
+    // UAT B10-F86: the audit event names the waiver it created.
+    const waiverId = randomUUID();
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -612,6 +618,7 @@ export function registerArrearsConsumers(queue: Queue): void {
       }
 
       await tx.insert(waivers).values({
+        id:          waiverId,
         tenantId:    msg.tenantId,
         demandId,
         // GAP2-PLATFORM-REVENUE-MONEY-01: waivers.amount_minor is bigint (drizzle
@@ -630,7 +637,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
         payload:       {
-          service: SERVICE, action: "create", resourceType: "waiver", outcome: "success",
+          service: SERVICE, action: "create", resourceType: "waiver", resourceId: waiverId, outcome: "success",
           demandId, amountMinor: String(amountMinor), waiverType: component,
         },
       });
@@ -681,6 +688,7 @@ export function registerArrearsConsumers(queue: Queue): void {
             service: SERVICE,
             action: "decide",
             resourceType: "waiver",
+            resourceId: waiverId,
             outcome: !row ? "not_found" : sameOfficer ? "maker_checker_violation" : "already_decided",
           },
         });
@@ -737,7 +745,10 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId:      msg.tenantId,
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
-        payload:       { service: SERVICE, action: "decide", resourceType: "waiver", outcome: newStatus },
+        payload:       {
+          service: SERVICE, action: "decide", resourceType: "waiver", resourceId: waiverId, outcome: newStatus,
+          demandId: row.demandId, amountMinor: row.amountMinor.toString(),
+        },
       });
     });
 

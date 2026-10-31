@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
-import { startOutboxPurge } from "@civitasone/outbox";
+import { startOutboxPurge, resolveAuditOutboxRetentionDays } from "@civitasone/outbox";
 import { runWithTenant } from "@civitasone/db";
 import { registerAuditConsumers } from "./modules/events/consumer.js";
 import { registerPlanConsumers } from "./modules/plan/consumer.js";
@@ -46,6 +46,9 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   intervalMs: 60 * 60_000,
   batchSize: 1000,
   logger: log,
+  // UAT B10-F83: keep the audit consumer's dedupe (message id) window longer than
+  // the producers' 30-day audit outbox retention, so any replay is deduped by id.
+  processedRetentionDays: resolveAuditOutboxRetentionDays() + 1,
 });
 // P2-4: scheduled ageing sweep (pending -> overdue past dueDate).
 const ageing = startAgeingJob(log);
