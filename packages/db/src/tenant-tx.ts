@@ -132,7 +132,8 @@ export function createTenantTxHook(db: DrizzleDb) {
         {
           event: "tenant_header_mismatch",
           verifiedTenantId: resolved.tenantId,
-          headerTenantId: resolved.ignoredHeaderTenantId,
+          // Raw client input: truncated so a crafted header cannot flood the log line.
+          headerTenantId: resolved.ignoredHeaderTenantId.slice(0, 64),
           path: req.url?.split("?")[0] ?? "",
           method: req.method,
         },

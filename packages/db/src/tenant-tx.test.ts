@@ -82,6 +82,14 @@ describe("createTenantTxHook", () => {
     expect(JSON.stringify(r.executed)).toContain(A);
     expect(JSON.stringify(r.executed)).not.toContain(B);
   });
+  it("truncates the raw header value it logs to 64 characters", async () => {
+    const huge = B + "x".repeat(5000);
+    const r = await runHook(userReq(A, huge));
+    const logged = r.warn.mock.calls[0]![0] as { headerTenantId: string };
+    expect(logged.headerTenantId).toHaveLength(64);
+    expect(huge.startsWith(logged.headerTenantId)).toBe(true);
+    expect(r.alsTenant).toBe(A);
+  });
   it("stores the verified tenant in AsyncLocalStorage (no header)", async () => {
     const r = await runHook(userReq(A));
     expect(r.sent.status).toBeUndefined();

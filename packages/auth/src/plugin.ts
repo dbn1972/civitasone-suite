@@ -15,7 +15,7 @@
 
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { verifyJwt, verifyToken, toRequestContext, isDevOrTestEnv, assertDevPostureNotInProduction } from "./index.js";
+import { verifyJwt, verifyToken, toRequestContext, isDevOrTestEnv, assertDevPostureNotInProduction, isSharedSecretJwtMode } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthContextError } from "./context.js";
@@ -154,10 +154,12 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
     const token = authHeader.slice(7);
     try {
       const payload = await verifyJwt(token);
+      // F2 follow-up: an RS256 (Keycloak-verified) token never takes its tenant from
+      // the header; only the HS256 shared-secret dev/test mode may fall back to it.
       req.ctx = toRequestContext(
         payload,
         correlationId,
-        (req.headers["x-tenant-id"] as string | undefined),
+        isSharedSecretJwtMode() ? (req.headers["x-tenant-id"] as string | undefined) : undefined,
       );
     } catch (err) {
       // In non-production, try HS256 dev token as fallback before rejecting.
