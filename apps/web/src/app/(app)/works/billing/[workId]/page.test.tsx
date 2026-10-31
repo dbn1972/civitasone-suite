@@ -66,3 +66,30 @@ describe("BillingDetailPage (WORKID-05/06)", () => {
     expect(cells.find((t) => t?.startsWith("▶ RA-02"))).toBeTruthy();
   });
 });
+
+// UAT b10 F93: a bill finance refused must not look finished.
+describe("BillingDetailPage - finance hand-off outcome (UAT b10 F93)", () => {
+  it("calls out a bill finance rejected, with the reason, and labels each bill's finance status", async () => {
+    getBillsForWork.mockResolvedValue({
+      source: "api",
+      data: [
+        row({ id: "b1", billNo: "RA-01", rawStatus: "do_finalized", financeStatus: "rejected", financeRejectionCode: "UNKNOWN_VENDOR", financeRejectionReason: "UNKNOWN_VENDOR: not in vendor master" }),
+        row({ id: "b2", billNo: "RA-02", rawStatus: "do_finalized", financeStatus: "sent" }),
+      ],
+    });
+    const ui = await BillingDetailPage({ params: Promise.resolve({ workId: "11111111-1111-1111-1111-111111111111" }) });
+    render(ui);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/Finance did not accept 1 bill/);
+    expect(alert).toHaveTextContent(/RA-01: UNKNOWN_VENDOR: not in vendor master/);
+    expect(screen.getByText("Rejected by finance (UNKNOWN_VENDOR)")).toBeInTheDocument();
+    expect(screen.getByText("Sent to finance")).toBeInTheDocument();
+  });
+
+  it("shows no finance alert when nothing was rejected", async () => {
+    getBillsForWork.mockResolvedValue({ source: "api", data: [row({ id: "b1" })] });
+    const ui = await BillingDetailPage({ params: Promise.resolve({ workId: "11111111-1111-1111-1111-111111111111" }) });
+    render(ui);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});

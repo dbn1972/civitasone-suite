@@ -8,6 +8,8 @@ export const procurementGrns = grnSchema.table("procurement_grns", {
   grnNo:         text("grn_no").notNull(),
   poRef:         text("po_ref").notNull(),
   vendorId:      uuid("vendor_id").notNull(),
+  // UAT b10 F95 (migration 0047): receiving inventory store, sent on procurement.grn.accepted.
+  storeId:       uuid("store_id"),
   receivedDate:  date("received_date").notNull().defaultNow(),
   threeWayMatch: boolean("three_way_match").notNull().default(false),
   status:        varchar("status", { length: 24 }).notNull().default("draft"),

@@ -79,6 +79,10 @@ export async function listBillsForWork(tenantId: string, workId: string) {
         status: bills.status,
         ifmsRef: bills.ifmsRef,
         submittedAt: bills.submittedAt,
+        // UAT b10 F93: finance hand-off outcome (rejected bills show why).
+        financeStatus: bills.financeStatus,
+        financeRejectionCode: bills.financeRejectionCode,
+        financeRejectionReason: bills.financeRejectionReason,
         version: bills.version,
         createdBy: bills.createdBy,
         createdAt: bills.createdAt,
@@ -123,6 +127,10 @@ export async function listBills(tenantId: string, page: number, pageSize: number
         status: bills.status,
         ifmsRef: bills.ifmsRef,
         submittedAt: bills.submittedAt,
+        // UAT b10 F93: finance hand-off outcome (rejected bills show why).
+        financeStatus: bills.financeStatus,
+        financeRejectionCode: bills.financeRejectionCode,
+        financeRejectionReason: bills.financeRejectionReason,
         version: bills.version,
         createdBy: bills.createdBy,
         createdAt: bills.createdAt,

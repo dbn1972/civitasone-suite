@@ -77,20 +77,12 @@ export const transferPayload = z.object({
   lines:       z.array(lineSchema).min(1).max(500),
 }).refine((b) => b.fromStoreId !== b.toStoreId, { message: "stores must differ", path: ["toStoreId"] });
 
-/** GRN payload emitted by procurement-service (consumed, not owned). */
-export const grnAcceptedPayload = z.object({
-  grnId:       z.string(),
-  toStoreId:   z.string().uuid().optional(),
-  storeId:     z.string().uuid().optional(),
-  postingDate: z.string().regex(datePattern).optional(),
-  items: z.array(z.object({
-    itemId:      z.string().uuid(),
-    acceptedQty: z.number().int().positive(),
-    rateMinor:   z.number().int().nonnegative().default(0),
-    currency:    z.string().length(3).default("INR"),
-    itemType:    z.string().optional(),
-  })).default([]),
-});
+/**
+ * GRN payload emitted by procurement-service (consumed, not owned). UAT b10 F95: this used to be a private schema
+ * that disagreed with the producer (rateMinor as a number, itemId as an inventory item id, a store procurement never
+ * sent), so every accepted GRN dead-lettered. The shape is now the shared contract both sides import.
+ */
+export { procurementGrnAccepted as grnAcceptedContract } from "@civitasone/events/contracts";
 
 // ── Path params ───────────────────────────────────────────────────────────
 

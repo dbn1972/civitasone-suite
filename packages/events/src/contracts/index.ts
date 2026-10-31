@@ -81,3 +81,11 @@ export {
   hrmsPostingHoldPlaced,
   hrmsPostingHoldReleased,
 } from "./smarttransfer/index.js";
+
+// ─── AP intake: works/procurement -> finance and procurement -> inventory (UAT b10 F93-F95) ───
+export {
+  financeBillCreate,
+  financeBillRejected,
+  procurementGrnAccepted,
+  apIntakeContracts,
+} from "./ap-intake.js";

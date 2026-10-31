@@ -456,6 +456,7 @@ export function mapProcurementGRNDetail(payload: unknown): GRNDetail | null {
   return {
     ...base,
     vendorId: toText(payload.vendorId) ?? undefined,
+    storeId: toText(payload.storeId) ?? undefined,
     notes: toText(payload.notes) ?? undefined,
     // GAP-PROCUREMENT-GRN-DETAIL-02 — keep threeWayMatch as boolean | undefined.
     // Coercing a "not computed yet" value to `false` made every uninspected GRN

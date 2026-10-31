@@ -84,8 +84,11 @@ afterAll(async () => {
 async function seedAward(): Promise<{ awardId: string; workId: string }> {
   const awardId = randomUUID();
   const workId = randomUUID();
+  // UAT b10 F93: the finance hand-off pays the award contractor, so a DO-finalizable award links one.
+  const contractorId = randomUUID();
   await inTx(async (tx) => {
-    await tx.insert(awards).values({ id: awardId, tenantId: TENANT, workId, contractorName: "Acme", acceptedAmountMinor: 100000000n, createdBy: MAKER });
+    await tx.insert(contractors).values({ id: contractorId, tenantId: TENANT, name: "Acme", createdBy: MAKER, updatedBy: MAKER } as never);
+    await tx.insert(awards).values({ id: awardId, tenantId: TENANT, workId, contractorId, contractorName: "Acme", acceptedAmountMinor: 100000000n, createdBy: MAKER });
   });
   return { awardId, workId };
 }

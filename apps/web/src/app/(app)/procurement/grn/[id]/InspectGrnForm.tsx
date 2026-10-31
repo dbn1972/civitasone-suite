@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { toHumanError } from "@/lib/messages";
 import { ActionButton } from "@/app/_components/ds";
 
@@ -30,11 +31,15 @@ function grnInspectError(): string {
   return `${human.what} ${human.next}`;
 }
 
-async function submitDecision(grnId: string, action: "accept" | "reject", reason?: string): Promise<void> {
+const NO_STORE_MESSAGE = "This GRN accepts stock items but names no receiving store. Choose the store the goods go into, then accept.";
+
+async function submitDecision(grnId: string, action: "accept" | "reject", reason?: string, storeId?: string): Promise<void> {
   const res = await fetch(`/api/proxy/v1/procurement/grns/${grnId}/${action}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(action === "accept" ? { remarks: reason?.trim() || undefined } : { reason: (reason ?? "").trim() }),
+    body: JSON.stringify(action === "accept"
+      ? { remarks: reason?.trim() || undefined, ...(storeId ? { storeId } : {}) }
+      : { reason: (reason ?? "").trim() }),
   });
   if (!res.ok) {
     let human = grnInspectError();
@@ -43,6 +48,8 @@ async function submitDecision(grnId: string, action: "accept" | "reject", reason
       const parsed = JSON.parse(text) as { code?: string };
       if (parsed.code === "SOD_VIOLATION") {
         human = "You created this GRN, so you cannot also inspect it — a different officer must accept or reject it.";
+      } else if (parsed.code === "GRN_NO_RECEIVING_STORE") {
+        human = NO_STORE_MESSAGE;
       }
     } catch { /* keep the catalogued fallback above */ }
     // Thrown so the ConfirmDialog surfaces the message (incl. the SoD copy)
@@ -51,8 +58,14 @@ async function submitDecision(grnId: string, action: "accept" | "reject", reason
   }
 }
 
-export function InspectGrnForm({ grnId, grnNo, isCreator = false }: { grnId: string; grnNo?: string; isCreator?: boolean }) {
+export function InspectGrnForm({ grnId, grnNo, isCreator = false, hasStore = true, stores = [] }: {
+  grnId: string; grnNo?: string; isCreator?: boolean;
+  /** UAT b10 F95: false when the GRN was created without a receiving store; the inspector then picks one. */
+  hasStore?: boolean;
+  stores?: Array<{ id: string; name: string }>;
+}) {
   const router = useRouter();
+  const [storeId, setStoreId] = useState("");
   const label = grnNo ? `GRN ${grnNo}` : "this GRN";
 
   if (isCreator) {
@@ -76,6 +89,15 @@ export function InspectGrnForm({ grnId, grnNo, isCreator = false }: { grnId: str
         Inspect the received items and record a decision. You must be a different officer from
         whoever created this GRN.
       </p>
+      {!hasStore ? (
+        <label className="field" htmlFor="grn-accept-store" style={{ marginBottom: 12, display: "block" }}>
+          <span className="label">Receiving store (needed to accept stock items)</span>
+          <select id="grn-accept-store" value={storeId} onChange={(e) => setStoreId(e.target.value)} style={{ minHeight: 44 }}>
+            <option value="">{stores.length > 0 ? "Select store…" : "No inventory stores available"}</option>
+            {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+      ) : null}
       <div style={{ display: "flex", gap: 8 }}>
         <ActionButton
           label="Accept"
@@ -89,7 +111,7 @@ export function InspectGrnForm({ grnId, grnNo, isCreator = false }: { grnId: str
           confirmLabel="Accept GRN"
           optionalReason
           reasonLabel="Acceptance remarks (optional)"
-          onConfirm={(reason) => submitDecision(grnId, "accept", reason)}
+          onConfirm={(reason) => submitDecision(grnId, "accept", reason, hasStore ? undefined : storeId || undefined)}
           onSuccess={() => router.refresh()}
         />
         <ActionButton

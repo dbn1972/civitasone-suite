@@ -115,7 +115,10 @@ export const EVENTS = {
   contractorUpdated:            "works.contractor.updated",
 } as const;
 
-export const CONSUMED_EVENTS = {} as const;
+export const CONSUMED_EVENTS = {
+  /** UAT b10 F93: finance refused the finance.bill.create a DO-finalized RA bill raised (code + reason). */
+  financeBillRejected: "finance.bill.rejected",
+} as const;
 
 /** Cross-service command consumed by finance-service when a works RA bill is DO-finalized. */
 export const FINANCE_HANDOFF = {

@@ -216,6 +216,27 @@ describe("procurement.grn.accepted → draft vendor bill for 3-way match", () =>
     await q.stop();
   });
 
+  // UAT b10 F94 (T6-06): the bill head is a per-tenant CODE, never the literal head id of one tenant.
+  it("names the AP bill head by code (resolved per tenant by billCreate), never by a literal head id", async () => {
+    const saved = process.env.FINANCE_GRN_BILL_HEAD_CODE;
+    try {
+      for (const [env, expected] of [[undefined, "2202"], ["6001", "6001"]] as const) {
+        enqueueMock.mockClear();
+        if (env === undefined) delete process.env.FINANCE_GRN_BILL_HEAD_CODE; else process.env.FINANCE_GRN_BILL_HEAD_CODE = env;
+        const q = await buildQueue();
+        await q.publish(CONSUMED_EVENTS.grnAccepted, makeMsg(CONSUMED_EVENTS.grnAccepted, GRN_PAYLOAD));
+        await settle();
+        const billCall = enqueueMock.mock.calls.find(([_tx, msg]: [unknown, { topic: string }]) => msg.topic === COMMANDS.billCreate);
+        expect(billCall).toBeDefined();
+        expect(billCall![1].payload.headCode).toBe(expected);
+        expect(billCall![1].payload).not.toHaveProperty("headId");
+        await q.stop();
+      }
+    } finally {
+      if (saved === undefined) delete process.env.FINANCE_GRN_BILL_HEAD_CODE; else process.env.FINANCE_GRN_BILL_HEAD_CODE = saved;
+    }
+  });
+
   // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number procurement sends rides on the bill command.
   it("carries the human PO number (poNo) onto the bill command as poNumber", async () => {
     const q = await buildQueue();
