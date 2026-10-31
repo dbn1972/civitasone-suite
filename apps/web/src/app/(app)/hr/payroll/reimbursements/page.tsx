@@ -6,7 +6,7 @@ import { getMyProfile } from "@/app/_data/loaders";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
 import { formatMoney, formatIndianDate, formatPeriod } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { PAYROLL_HR_READER_ROLES } from "@/lib/auth/workRoles";
+import { PAYROLL_HR_READER_ROLES, PAYROLL_REIMBURSEMENT_DECIDER_ROLES } from "@/lib/auth/workRoles";
 import { reimbursementCategoryKey } from "@/lib/payroll/reimbursementCategories";
 import { CreateReimbursementForm, type ClaimSubject } from "./CreateReimbursementForm";
 import { ReimbursementsTable, type ClaimRow } from "./ReimbursementsTable";
@@ -29,7 +29,8 @@ type Row = {
 /**
  * GAP-PAYROLL-REIMBURSEMENTS-05: mirrors payroll-service world-class-routes.ts.
  * Staff (`ROLES` there: payroll_admin/officer, super_admin, hr_admin) list
- * every claim, file on anyone's behalf and approve/reject. A self-service
+ * every claim and file on anyone's behalf; only the payroll roles
+ * (DECIDER_ROLES there, F103 -- not hr_admin) approve/reject. A self-service
  * employee lists only their OWN claims (the server pins the list to the
  * caller's employee id) and files only for themselves. Anyone else gets a
  * 403 from the API, so they get an explanation instead of a failed fetch.
@@ -54,6 +55,7 @@ export default async function ReimbursementsPage() {
   const roles = getSessionRoles();
   const isStaff = roles.some((r) => PAYROLL_HR_READER_ROLES.includes(r));
   const isSelfService = !isStaff && roles.includes("employee");
+  const canDecide = roles.some((r) => PAYROLL_REIMBURSEMENT_DECIDER_ROLES.includes(r));
 
   const header = (
     <PageHeader
@@ -137,7 +139,7 @@ export default async function ReimbursementsPage() {
             <RefreshErrorState error={toHumanError("load", { area: "reimbursements" })} backHref="/hr/payroll" />
           </div>
         ) : (
-          <ReimbursementsTable rows={rows} canDecide={isStaff} showEmployee={isStaff} />
+          <ReimbursementsTable rows={rows} canDecide={canDecide} showEmployee={isStaff} />
         )}
       </Card>
     </div>

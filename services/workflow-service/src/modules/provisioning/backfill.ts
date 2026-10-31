@@ -13,7 +13,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { definitionsForClusters, seedClustersFromEnv, STANDARD_DEFINITIONS, type SeedDefinition } from "./catalog.js";
-import { planSeedTx, seedDefinitionsTx, type SeedPlan } from "./seed.js";
+import { planSeedTx, planRepairTx, repairBrokenDefinitionsTx, seedDefinitionsTx, type SeedPlan, type RepairPlan, type Repaired } from "./seed.js";
 
 export type BackfillResult = SeedPlan & { seeded: string[] };
 
@@ -53,5 +53,41 @@ export async function backfillStandardDefinitions(
       });
     }
     return { ...plan, seeded: plan.missing };
+  }));
+}
+
+export type RepairResult = RepairPlan & { repaired: Repaired[] };
+
+/**
+ * B10 `--repair-broken`: replace known-broken catalogue chains (see
+ * catalog.ts brokenRoleRefs) that have no in-flight instances. One
+ * audit.event.record per replacement; definitions with in-flight instances
+ * are skipped and reported. Dry run reports the plan and writes nothing.
+ */
+export async function repairBrokenStandardDefinitions(
+  tenantId: string,
+  opts: { actorId: string; dryRun?: boolean; defs: SeedDefinition[] },
+): Promise<RepairResult> {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    if (opts.dryRun) {
+      const plan = await planRepairTx(tx, tenantId, opts.defs);
+      return { ...plan, repaired: [] };
+    }
+    const r = await repairBrokenDefinitionsTx(tx, tenantId, opts.actorId, opts.defs);
+    for (const x of r.repaired) {
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId, actorId: opts.actorId, correlationId: randomUUID(),
+        payload: {
+          service: "workflow", action: "repair_definition", resourceType: "workflow_definition",
+          resourceId: x.newDefinitionId, outcome: "success",
+          metadata: {
+            code: x.code, replacedDefinitionId: x.definitionId, replacedVersion: x.version,
+            newVersion: x.newVersion, brokenRoleRefs: x.brokenRoleRefs,
+          },
+        },
+      });
+    }
+    return r;
   }));
 }

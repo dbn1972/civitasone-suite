@@ -532,6 +532,12 @@ export function canWriteFleet(roles: readonly string[]): boolean {
 export const PAYROLL_STATUTORY_WRITE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
 export const PAYROLL_CONFIG_ADMIN_ROLES: readonly string[] = ["payroll_admin", "super_admin"] as const;
 export const PAYROLL_ARREAR_DECIDER_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
+/**
+ * F103: PATCH /v1/payroll/reimbursements/:id/approve|reject. Mirrors
+ * payroll-service world-class-routes.ts DECIDER_ROLES -- hr_admin is a
+ * reimbursements reader/filer (PAYROLL_HR_READER_ROLES) but not an approver.
+ */
+export const PAYROLL_REIMBURSEMENT_DECIDER_ROLES: readonly string[] = ["payroll_admin", "payroll_officer", "super_admin"] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Works module (approvals / billing / account-compile / hub) role & status

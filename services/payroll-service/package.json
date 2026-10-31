@@ -16,7 +16,8 @@
     "backfill:payroll-register": "tsx src/scripts/backfill-payroll-register.ts",
     "report:hra-floor-impact": "tsx src/scripts/hra-floor-impact.ts",
     "payroll:set-hra-floor": "tsx src/scripts/set-hra-floor.ts",
-    "signing:init-dev-key": "tsx src/scripts/init-dev-signing-key.ts"
+    "signing:init-dev-key": "tsx src/scripts/init-dev-signing-key.ts",
+    "payroll:seed-uat-da-rates": "tsx src/scripts/seed-uat-da-rates.ts"
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",
