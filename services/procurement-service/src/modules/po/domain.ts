@@ -31,6 +31,16 @@ export function assertTransitionAllowed(from: string, to: PoStatus): void {
   }
 }
 
+/**
+ * F102: only a PO still awaiting approval (draft / pending) can be rejected;
+ * an approved PO is cancelled through its own lifecycle, never by a reject.
+ */
+export function assertPoRejectable(status: string): void {
+  if (status !== "draft" && status !== "pending") {
+    throw new DomainError("PO_NOT_AWAITING_APPROVAL", `only a PO awaiting approval can be rejected, got '${status}'`);
+  }
+}
+
 export function assertBudgetSufficient(available: bigint, requested: bigint): void {
   if (requested > available) {
     throw new DomainError("BUDGET_EXCEEDED", `PO value ${requested} paise exceeds sanction available ${available} paise`);

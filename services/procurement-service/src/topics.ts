@@ -13,6 +13,8 @@ export const COMMANDS = {
   rfqAward:        "procurement.rfq.award",
   poCreate:        "procurement.po.create",
   poApprove:       "procurement.po.approve",
+  // F102: reject a PO awaiting approval (workflow inbox reject or PATCH /pos/:id/reject).
+  poReject:        "procurement.po.reject",
   poDispatch:      "procurement.po.dispatch",
   poSubmitApproval: "procurement.po.submit_approval",
   gemOrderCreate:  "procurement.gem_order.create",
