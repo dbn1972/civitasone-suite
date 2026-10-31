@@ -52,7 +52,7 @@ export function registerBbpsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "fetch_bill", resourceType: "bbps_transaction", outcome: "success" },
+        payload: { service: SERVICE, action: "fetch_bill", resourceType: "bbps_transaction", resourceId: `FETCH-${msg.messageId.slice(0, 8)}`, outcome: "success" },
       });
     });
   });
@@ -159,6 +159,7 @@ export function registerBbpsConsumers(queue: Queue): void {
             service: SERVICE,
             action: "pay_bill",
             resourceType: "bbps_transaction",
+            resourceId: bbpsTxnId,
             outcome: "rejected_duplicate",
             reason: "bbpsTxnId already processed for this tenant (replay)",
           },
@@ -224,7 +225,7 @@ export function registerBbpsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", outcome: "success" },
+        payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", resourceId: bbpsTransactionId, outcome: "success", bbpsTxnId, receiptId: receiptId ?? null },
       });
     });
     } catch (err) {
@@ -259,7 +260,7 @@ export function registerBbpsConsumers(queue: Queue): void {
             tenantId: msg.tenantId,
             actorId: msg.actorId,
             correlationId: msg.correlationId,
-            payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", outcome: "failed", reason },
+            payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", resourceId: bbpsTxnId, outcome: "failed", reason },
           });
         });
       } catch {

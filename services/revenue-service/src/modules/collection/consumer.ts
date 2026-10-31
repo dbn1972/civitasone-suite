@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -100,7 +101,7 @@ export function registerCollectionConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "receipt", outcome: "success" },
+        payload: { service: SERVICE, action: "create", resourceType: "receipt", resourceId: receiptId, outcome: "success", demandId },
       });
     });
 
@@ -150,7 +151,9 @@ export function registerCollectionConsumers(queue: Queue): void {
       validateRefund(refundAmount, receipt.amountMinor);
 
       // Insert refund (status: pending, makerUserId: actorId)
+      const refundId = randomUUID();
       await tx.insert(refunds).values({
+        id: refundId,
         tenantId: msg.tenantId,
         receiptId,
         assesseeId: receipt.assesseeId,
@@ -167,7 +170,7 @@ export function registerCollectionConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "refund", outcome: "success" },
+        payload: { service: SERVICE, action: "create", resourceType: "refund", resourceId: refundId, outcome: "success", receiptId, amountMinor: refundAmount.toString() },
       });
     });
   });
@@ -203,7 +206,7 @@ export function registerCollectionConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { service: SERVICE, action: "decide", resourceType: "refund", outcome: "already_decided", refundId },
+          payload: { service: SERVICE, action: "decide", resourceType: "refund", resourceId: refundId, outcome: "already_decided", refundId },
         });
         return;
       }
@@ -226,7 +229,7 @@ export function registerCollectionConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { service: SERVICE, action: "decide", resourceType: "refund", outcome: "already_decided", refundId },
+          payload: { service: SERVICE, action: "decide", resourceType: "refund", resourceId: refundId, outcome: "already_decided", refundId },
         });
         return;
       }
@@ -276,7 +279,10 @@ export function registerCollectionConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "decide", resourceType: "refund", outcome: newStatus },
+        payload: {
+          service: SERVICE, action: "decide", resourceType: "refund", resourceId: refundId, outcome: newStatus,
+          receiptId: refund.receiptId, amountMinor: refund.amountMinor.toString(),
+        },
       });
     });
 
@@ -330,7 +336,7 @@ export function registerCollectionConsumers(queue: Queue): void {
       );
 
       // Insert the adjustment in PENDING status — NO DCB movement yet.
-      await tx.insert(adjustments).values({
+      const adjustmentRows = await tx.insert(adjustments).values({
         tenantId: msg.tenantId,
         assesseeId,
         fromDemandId,
@@ -340,7 +346,7 @@ export function registerCollectionConsumers(queue: Queue): void {
         status: "pending",
         makerUserId: msg.actorId,
         createdBy: msg.actorId,
-      });
+      }).returning({ id: adjustments.id });
 
       // Audit the request (not an application — the balance has not moved).
       await enqueue(tx, {
@@ -350,7 +356,7 @@ export function registerCollectionConsumers(queue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: {
-          service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending",
+          service: SERVICE, action: "create", resourceType: "adjustment", resourceId: adjustmentRows[0]!.id, outcome: "pending",
           fromDemandId, toDemandId, amountMinor: amount.toString(),
         },
       });
