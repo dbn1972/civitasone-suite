@@ -277,6 +277,18 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     // Rule-based scoring — replace with ML model when training data available
+    // F88: "next month" is computed ONCE, in UTC, from day 1 of the month.
+    // The old `d.setMonth(d.getMonth() + 1)` overflowed on the 29th-31st
+    // (Oct 31 -> "Nov 31" -> Dec 1, so it predicted December) and mixed
+    // server-local getMonth() with UTC toISOString(). The DB session and
+    // the leave bucketing (EXTRACT(MONTH FROM from_date::date)) are UTC, so
+    // UTC is used here and the same month number is passed into the SQL,
+    // so the label and the bucketed data can never disagree.
+    const now = new Date();
+    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const nextMonthNum = nextMonth.getUTCMonth() + 1; // 1-12
+    const nextMonthStr = `${nextMonth.getUTCFullYear()}-${String(nextMonthNum).padStart(2, "0")}`;
+
     // Predict next month's leave based on same month in previous years
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       WITH historical AS (
@@ -304,19 +316,15 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
         ROUND(AVG(total_days)::numeric, 1) AS avg_leave_days,
         COUNT(DISTINCT employee_id)::int AS employees_with_history
       FROM historical
-      WHERE leave_month = EXTRACT(MONTH FROM (CURRENT_DATE + INTERVAL '1 month'))
+      WHERE leave_month = ${nextMonthNum}
       GROUP BY leave_month
     `);
-
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    const nextMonthStr = nextMonth.toISOString().slice(0, 7);
 
     return reply.send({
       data: {
         predictedMonth: nextMonthStr,
         prediction: rows[0] ?? {
-          month: nextMonth.getMonth() + 1,
+          month: nextMonthNum,
           avg_leave_applications: 0,
           avg_leave_days: 0,
           employees_with_history: 0,
