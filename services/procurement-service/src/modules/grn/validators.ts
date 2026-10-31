@@ -28,6 +28,9 @@ export const createGrnBody = z.object({
   vendorId:     z.string().uuid(),
   receivedDate: z.string().optional(),
   notes:        z.string().max(500).optional(),
+  // UAT b10 F95: the inventory store the goods are received into. Carried on procurement.grn.accepted so
+  // inventory-service can post the stock receipt (it has no other way to know the store).
+  storeId:      z.string().uuid().optional(),
   items:        z.array(grnItemSchema).min(1),
 });
 export type CreateGrnBody = z.infer<typeof createGrnBody>;

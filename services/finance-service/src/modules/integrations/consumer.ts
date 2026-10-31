@@ -17,6 +17,15 @@ import { sendNachFile } from "./nach-release.js";
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
 
+/**
+ * Expense head CODE for the AP bill drafted from an accepted GRN. Resolved per tenant (finance.bill.create looks it
+ * up in the bill tenant's own chart of accounts). Default 2202 is the head the old literal id pointed at.
+ */
+export function grnBillHeadCode(): string {
+  const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
+  return configured ? configured : "2202";
+}
+
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */
   queue.subscribe(CONSUMED_EVENTS.eftInitiate, async (msg) => {
@@ -198,7 +207,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // R7: keep money as bigint and transport as a string — never downcast paise
     // to a JS number at the queue boundary.
     const grossBig = grnAmountMinor ?? BigInt(p.grossMinor ?? 0);
-    const headId = process.env.FINANCE_DEFAULT_HEAD_ID ?? "dddddddd-0001-0000-0000-000000000001";
+    // UAT b10 F94: the AP bill head is a CODE resolved in THIS tenant's chart by finance.bill.create, never a
+    // literal head id (the old default dddddddd-0001-... belongs to one tenant, so every other tenant got UNKNOWN_HEAD).
+    const headCode = grnBillHeadCode();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Persist the AP three-way-match read-model so a later invoice citing this
@@ -221,7 +232,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           billNo: `BILL/GRN/${p.grnId.slice(0, 8).toUpperCase()}`,
           vendorId: p.vendorId,
-          headId,
+          headCode,
           grossMinor: minorString(grossBig),
           currency: "INR",
           deductions: [],
