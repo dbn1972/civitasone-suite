@@ -106,7 +106,8 @@ describe("call-activity (sub-workflow)", () => {
     // cycle guard: the call is rejected and the parent fails; NO child instance.
     const children = await sqlAsTenant(tenant, sql`SELECT id FROM workflow.instances WHERE parent_instance_id = ${id}`);
     expect((children as unknown as unknown[]).length).toBe(0);
-    expect((await getInstance(tenant, id))?.status).toBe("completed"); // failed/closed
+    // F102: a failed/rejected instance ends `rejected`, not `completed`.
+    expect((await getInstance(tenant, id))?.status).toBe("rejected"); // failed/closed
     expect(await historyActions(tenant, id)).toContain("call_error");
   });
 

@@ -196,7 +196,8 @@ describe("reject / return semantics", () => {
     ]);
     const id = await createInstance(tenant, def.code, randomUUID());
     await complete((await tasksFor(tenant, id))[0]!, randomUUID(), "reject");
-    expect((await getInstance(tenant, id))?.status).toBe("completed");
+    // F102: a rejected instance ends `rejected` (was `completed`).
+    expect((await getInstance(tenant, id))?.status).toBe("rejected");
     expect(await historyActions(tenant, id)).toContain("reject");
   });
 

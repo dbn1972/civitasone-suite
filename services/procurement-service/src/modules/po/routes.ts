@@ -5,14 +5,14 @@ import { posListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createPoBody, gemOrderBody, dispatchBody, idParam } from "./validators.js";
+import { createPoBody, gemOrderBody, dispatchBody, rejectPoBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertCanDispatch, assertPoRejectable, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as poRepo from "./repo.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 
@@ -21,6 +21,7 @@ const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
+const PO_REJECT_ROLES = ["procurement_admin", "super_admin"];
 
 /**
  * Synchronous vendor-eligibility gate for PO creation (422, nothing enqueued)
@@ -105,6 +106,25 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
+  });
+
+  // F102: direct reject of a PO awaiting approval (draft / pending ->
+  // cancelled). Checker action: same admin roles as amendment / plan approve.
+  // The open workflow inbox task is closed by the consumer (close_by_ref).
+  app.patch("/v1/procurement/pos/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PO_REJECT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectPoBody.parse(req.body ?? {});
+    const po = await poRepo.findPoById(id, ctx.tenantId);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    try {
+      assertPoRejectable(po.status ?? "draft");
+    } catch (err) {
+      if (err instanceof PoDomainError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectPo(ctx, id, body));
   });
 
   app.patch("/v1/procurement/pos/:id/dispatch", async (req, reply) => {

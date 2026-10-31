@@ -129,6 +129,9 @@ export const DISPATCH = {
   leaveReject: "hrms.leave.reject",
   payrollRunApprove: "payroll.run.approve",
   indentApprove: "procurement.indent.approve",
+  // F102: inbox reject of an indent / PO.
+  indentReject: "procurement.indent.reject",
+  poReject: "procurement.po.reject",
   poApprove: "procurement.po.approve",
   // B9-wf1: procurement plan / PO amendment maker-checker decisions.
   planApprove: "procurement.plan.approve",

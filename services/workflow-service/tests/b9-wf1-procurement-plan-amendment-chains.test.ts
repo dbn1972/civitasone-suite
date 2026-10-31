@@ -178,35 +178,39 @@ describe("B9-wf1 — completing the task decides the procurement record", () => 
 describe("B9-wf1 — a direct procurement decision closes the open approval (close_by_ref)", () => {
   for (const chain of CHAINS) {
     for (const decision of ["approve", "reject"] as const) {
-      it(`${chain.refType} ${decision}: the pending task and instance are completed; a replay is a no-op`, async () => {
+      // F102: a reject closes the instance as `rejected`, an approve as `completed`.
+      const endStatus = decision === "reject" ? "rejected" : "completed";
+      it(`${chain.refType} ${decision}: the pending task is completed and the instance ends ${endStatus}; a replay is a no-op`, async () => {
         const tenant = newTenant();
         await provision(tenant);
         const refId = randomUUID();
         const id = await raise(tenant, chain, refId);
         const payload = { tenantId: tenant, refType: chain.refType, refId, decision };
         await q.deliver(COMMANDS.closeInstanceByRef, payload, { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
-        expect((await getInstance(tenant, id))?.status).toBe("completed");
+        expect((await getInstance(tenant, id))?.status).toBe(endStatus);
         const ts = await tasksFor(tenant, id);
         expect(ts).toHaveLength(1);
         expect(ts[0]).toMatchObject({ status: "completed", decision });
         // closing must not re-dispatch the domain decision back to procurement
         expect(await outbox(tenant, decision === "approve" ? DISPATCHES[0].approve : DISPATCHES[0].reject)).toEqual([]);
         await q.deliver(COMMANDS.closeInstanceByRef, payload, { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
-        expect((await getInstance(tenant, id))?.status).toBe("completed");
+        expect((await getInstance(tenant, id))?.status).toBe(endStatus);
       });
     }
   }
 
-  it("ignores refTypes whose producer does not send it (a PO approval stays open)", async () => {
+  // F102 extended close_by_ref to procurement_indent / procurement_po, so the
+  // negative case now uses a refType that is still excluded (leave_app).
+  it("ignores refTypes whose producer does not send it (a leave approval stays open)", async () => {
     const tenant = newTenant();
     await provision(tenant);
     const refId = randomUUID();
     const id = randomUUID();
     await q.deliver(COMMANDS.createInstance, {
       id, tenantId: tenant, name: "PO approval", status: "active", version: 1,
-      definitionCode: "procurement_po_approval", initialTaskName: "Approval", refType: "procurement_po", refId,
+      definitionCode: "leave_approval", initialTaskName: "Approval", refType: "leave_app", refId,
     }, { tenantId: tenant, actorId: randomUUID(), messageId: id });
-    await q.deliver(COMMANDS.closeInstanceByRef, { tenantId: tenant, refType: "procurement_po", refId, decision: "approve" },
+    await q.deliver(COMMANDS.closeInstanceByRef, { tenantId: tenant, refType: "leave_app", refId, decision: "approve" },
       { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
     expect((await getInstance(tenant, id))?.status).toBe("active");
     expect((await tasksFor(tenant, id))[0]).toMatchObject({ status: "pending" });

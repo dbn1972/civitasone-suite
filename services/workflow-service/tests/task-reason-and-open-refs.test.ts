@@ -76,7 +76,8 @@ describe("task decision reason (GAP-HR-LEAVE-APPROVALS-03)", () => {
     const dispatched = await outbox(tenant, "hrms.leave.reject");
     expect(dispatched).toHaveLength(1);
     expect(dispatched[0]).toMatchObject({ id: refId, tenantId: tenant, reason: "Insufficient staffing on those dates" });
-    expect((await getInstance(tenant, id))?.status).toBe("completed");
+    // F102: a rejected instance ends `rejected` (was `completed`).
+    expect((await getInstance(tenant, id))?.status).toBe("rejected");
 
     const hist = (await sqlAsTenant(tenant, sql`SELECT detail FROM workflow.transition_history WHERE instance_id = ${id} AND action = 'reject'`)) as unknown as Array<{ detail: unknown }>;
     const detail = typeof hist[0]!.detail === "string" ? JSON.parse(hist[0]!.detail as string) : hist[0]!.detail;

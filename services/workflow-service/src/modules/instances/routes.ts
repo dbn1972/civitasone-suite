@@ -66,7 +66,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = z.object({
-      status: z.enum(["active", "completed", "cancelled", "suspended"]).optional(),
+      status: z.enum(["active", "completed", "cancelled", "suspended", "rejected"]).optional(),
       refType: z.string().max(64).optional(),
       refId: z.string().uuid().optional(),
       definitionCode: z.string().max(64).optional(),

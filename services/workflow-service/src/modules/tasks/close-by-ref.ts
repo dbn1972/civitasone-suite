@@ -28,7 +28,11 @@ import * as historyRepo from "../history/repo.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 
 /** refTypes whose domain service sends close_by_ref (procurement-service). */
-export const CLOSE_BY_REF_TYPES = ["procurement_plan", "procurement_po_amendment"] as const;
+export const CLOSE_BY_REF_TYPES = [
+  "procurement_plan", "procurement_po_amendment",
+  // F102: a direct indent / PO decision closes its inbox task too.
+  "procurement_indent", "procurement_po",
+] as const;
 
 export type CloseByRefPayload = {
   tenantId: string;
@@ -62,7 +66,9 @@ export function registerCloseByRefConsumer(queue: Queue): void {
         for (const t of pending) {
           await repo.markCompleted(tx, t.id, p.tenantId, msg.actorId, p.decision);
         }
-        await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+        // F102: a rejection ends the instance `rejected`, like a task reject.
+        if (p.decision === "reject") await instanceRepo.markStatus(tx, instance.id, "rejected", msg.actorId);
+        else await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
         await historyRepo.record(tx, {
           tenantId: p.tenantId, instanceId: instance.id, taskId: null,
           fromNode: instance.currentNode ?? null, toNode: null,
