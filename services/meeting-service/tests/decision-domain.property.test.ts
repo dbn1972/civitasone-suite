@@ -111,11 +111,11 @@ describe("P25: resolution number uniqueness + sequential per committee + FY", ()
     expect(generateResolutionNumber({ committeeCode: " fc ", financialYear: "2025-26", sequence: 1 })).toBe(
       "FC/RES/2025-26/001",
     );
-    // Missing committee code → RES prefix fallback.
+    // Missing committee code → single RES prefix (UAT F82: was doubled as RES/RES).
     expect(generateResolutionNumber({ committeeCode: null, financialYear: "2025-26", sequence: 12 })).toBe(
-      "RES/RES/2025-26/012",
+      "RES/2025-26/012",
     );
-    expect(generateResolutionNumber({ financialYear: "2025-26", sequence: 3 })).toBe("RES/RES/2025-26/003");
+    expect(generateResolutionNumber({ financialYear: "2025-26", sequence: 3 })).toBe("RES/2025-26/003");
     // Sequence floored to at least 1 and zero-padded to 3 digits; large values keep full width.
     expect(generateResolutionNumber({ committeeCode: "FC", financialYear: "2025-26", sequence: 0 })).toBe(
       "FC/RES/2025-26/001",
