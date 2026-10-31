@@ -22,10 +22,23 @@ export async function findOffer(tenantId: string, id: string): Promise<OfferRow 
   return scopedRead((tx) => findOfferTx(tx, tenantId, id));
 }
 
-/** Tx-scoped variant of findOffer -- see .claude/skills/16-production-readiness-audit.md section 1. */
-export async function findOfferTx(tx: Writer, tenantId: string, id: string): Promise<OfferRow | null> {
-  const rows = await (tx as typeof db).select().from(hrmsOffers)
+/**
+ * Tx-scoped variant of findOffer -- see .claude/skills/16-production-readiness-audit.md section 1.
+ *
+ * `forUpdate` takes a row lock (SELECT ... FOR UPDATE) for the rest of the write
+ * transaction. Every offer state transition in the F3 consumer reads this way and
+ * then checks the expected SOURCE status on the locked row before writing: the
+ * route's own status check ran against a read that can be stale by the time the
+ * queued write runs (a duplicate click, a redelivered or late command), so it
+ * cannot be the only guard. Concurrent writers serialise on the lock, so the
+ * status the guard saw is the status the UPDATE overwrites (UAT B9-hrms1).
+ */
+export async function findOfferTx(
+  tx: Writer, tenantId: string, id: string, opts: { forUpdate?: boolean } = {},
+): Promise<OfferRow | null> {
+  const q = (tx as typeof db).select().from(hrmsOffers)
     .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.id, id))).limit(1);
+  const rows = opts.forUpdate ? await q.for("update") : await q;
   return rows[0] ?? null;
 }
 
