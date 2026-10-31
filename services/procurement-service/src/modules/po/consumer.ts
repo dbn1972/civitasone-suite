@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, assertPoRejectable, DomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import { isEmpanelmentLapsed, assertNonEmpanelledOrderBasis, DomainError as VendorDomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
@@ -13,6 +13,7 @@ import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import * as indentRepo from "../indent/repo.js";
 import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
 import { allocateDocNo } from "../../shared/numbering.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -304,6 +305,43 @@ export function registerPoConsumers(queue: Queue): void {
         payload: { poId: p.id, poNo: po.poNo, vendorId: po.vendorId, totalMinor: String(po.totalMinor) },
       });
       await audit(tx, msg, "approve", "po", p.id);
+      // F102: a direct approve closes the still-open inbox task.
+      await closeWorkflowForRef(tx, msg, "procurement_po", p.id, "approve");
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
+  });
+
+  // F102: reject a PO awaiting approval -> cancelled. Reached from the workflow
+  // inbox reject (payload { id, tenantId, rejectedBy, reason }) and from
+  // PATCH /v1/procurement/pos/:id/reject.
+  queue.subscribe(COMMANDS.poReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
+      if (!po) throw new Error(`po ${p.id} not found`);
+      assertPoRejectable(po.status ?? "draft");
+      assertTransitionAllowed(po.status ?? "draft", "cancelled");
+      // Version-locked: a concurrent / duplicate reject conflicts and rolls back,
+      // so the release below runs at most once per PO.
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "cancelled", updatedBy: msg.actorId });
+      // F102 review: give the PO's reservation back to its indent (reserved at
+      // create by reserveIndentBudget, same transaction, tenant-scoped).
+      const indentId = po.indentRef.replace(/^.*:/, "");
+      const released = REF_UUID_RE.test(indentId) && BigInt(po.totalMinor) > 0n
+        ? await indentRepo.releaseIndentCommittedGuarded(tx, indentId, p.tenantId, BigInt(po.totalMinor))
+        : false;
+      // No new domain event: nothing consumes one yet (event contract); the
+      // audit row and workflow close_by_ref carry the decision.
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "procurement", action: "reject", resourceType: "po", resourceId: p.id, outcome: "success",
+          metadata: { indentRef: po.indentRef, releasedMinor: released ? String(po.totalMinor) : "0" },
+        },
+      });
+      await closeWorkflowForRef(tx, msg, "procurement_po", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });

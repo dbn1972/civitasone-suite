@@ -25,6 +25,7 @@ import { appendCompletedNode } from "../compensation/executor.js";
 import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
 import { registerCloseByRefConsumer } from "./close-by-ref.js";
+import { isStrictSodRefType } from "./sod.js";
 import type { InstanceRow } from "../instances/schema.js";
 
 const log = pino({ name: "workflow-tasks-consumer" });
@@ -117,9 +118,12 @@ export function registerTasksConsumers(queue: Queue): void {
       // and read prior completions FOR UPDATE, two back-to-back completions by
       // the same actor serialize and the second observes the first's completed
       // row. On violation: record an audit row and DO NOT complete/advance.
-      if (!sodOverride && instance) {
+      // F102: a super_admin override never covers the initiator of a
+      // maker-checker approval whose domain refuses self-approval (sod.ts).
+      const strictOverride = sodOverride && instance != null && isStrictSodRefType(instance.refType);
+      if ((!sodOverride || strictOverride) && instance) {
         const selfApproval = instance.createdBy === msg.actorId;
-        const priorByActor = await repo.priorActorTasksTx(tx, p.instanceId, msg.actorId);
+        const priorByActor = strictOverride ? [] : await repo.priorActorTasksTx(tx, p.instanceId, msg.actorId);
         if (selfApproval || priorByActor.length > 0) {
           await historyRepo.record(tx, {
             tenantId: p.tenantId,
@@ -190,6 +194,9 @@ export function registerTasksConsumers(queue: Queue): void {
         const procurementReject: Record<string, { topic: string; idKey: string }> = {
           procurement_plan: { topic: DISPATCH.planReject, idKey: "id" },
           procurement_po_amendment: { topic: DISPATCH.poAmendmentReject, idKey: "amendmentId" },
+          // F102: an inbox reject rejects the indent / cancels the PO.
+          procurement_indent: { topic: DISPATCH.indentReject, idKey: "id" },
+          procurement_po: { topic: DISPATCH.poReject, idKey: "id" },
         };
         const rejectCfg = instance.refType ? procurementReject[instance.refType] : undefined;
         if (rejectCfg && instance.refId) {
@@ -741,7 +748,13 @@ async function completeInstance(
   instance: InstanceRow,
   outcome: "approve" | "reject",
 ): Promise<void> {
-  await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+  // F102: a rejected instance ends `rejected` (allowed since migration 0026),
+  // not `completed`, so reporting never counts a rejection as a completion.
+  if (outcome === "reject") {
+    await instanceRepo.markStatus(tx, instance.id, "rejected", msg.actorId);
+  } else {
+    await instanceRepo.markCompleted(tx, instance.id, msg.actorId);
+  }
 
   if (!instance.parentInstanceId || !instance.parentTaskId) return;
 

@@ -48,6 +48,12 @@ export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-
   "must be a real calendar date",
 );
 
+// F102: direct PO reject (same shape as rejectIndentBody).
+export const rejectPoBody = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type RejectPoBody = z.infer<typeof rejectPoBody>;
+
 export const dispatchBody = z.object({
   notes: z.string().max(500).optional(),
   // GAP-PROCUREMENT-ORDERS-DETAIL-03: optional structured dispatch metadata so

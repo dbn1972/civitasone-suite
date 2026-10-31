@@ -9,6 +9,7 @@ import { assertTransitionAllowed, assertDistinctMakerChecker } from "./domain.js
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { IndentItemInsert } from "./schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -95,6 +96,9 @@ export function registerIndentConsumers(rawQueue: Queue): void {
         payload: { indentId: p.id, tenantId: p.tenantId },
       });
       await audit(tx, msg, "approve", "indent", p.id);
+      // F102: a direct approve closes the still-open inbox task (no-op when
+      // the approve came from that task).
+      await closeWorkflowForRef(tx, msg, "procurement_indent", p.id, "approve");
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "indent", p.id));
   });
@@ -113,6 +117,7 @@ export function registerIndentConsumers(rawQueue: Queue): void {
         payload: { indentId: p.id, tenantId: p.tenantId, reason: p.reason },
       });
       await audit(tx, msg, "reject", "indent", p.id);
+      await closeWorkflowForRef(tx, msg, "procurement_indent", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "indent", p.id));
   });
