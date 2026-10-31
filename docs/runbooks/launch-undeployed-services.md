@@ -39,15 +39,37 @@ unenforced (self-signed DSCs accepted) with a WARN in the court logs.
 
 **document-worker — bulk-scan scanner DSN (UAT F84).** `DOCUMENT_SCANNER_DATABASE_URL`
 is the DSN of the read-only BYPASSRLS `document_scanner` role (document-service
-migration 0007). document-worker uses it for cross-tenant bulk-scan discovery
-(dispatcher, lease sweeper, upload expiry, retention). In production it **refuses to
-start** without it. `ecosystem.config.js` passes it through from the launching shell
-to `document-worker` only, and only when set. `document_svc` is NOBYPASSRLS
-(admin-service 0058), so on UAT/dev an unset DSN makes the worker fall back to
-`DATABASE_URL`, and discovery then finds no work. Set the `document_scanner` password
-from a mode-600 file (never echoed) and export the DSN before
-`pm2 restart document-worker --update-env`, and do this **before** applying
-admin-service 0058.
+migration 0007), through PgBouncer like every other DSN:
+`postgres://document_scanner:<secret>@localhost:6432/civitas_document`. document-worker
+uses it for cross-tenant bulk-scan discovery (dispatcher, lease sweeper, upload
+expiry, retention). `ecosystem.config.js` passes it through from the launching shell
+to `document-worker` only, and only when set. Without it, document-worker refuses to
+start:
+- in production, because `scanner-url.ts` requires the DSN;
+- everywhere, because its scanner pool role must have BYPASSRLS
+  (`assertScannerBypassesRls`). The dev/test fallback to `DATABASE_URL`
+  (`document_svc`, NOBYPASSRLS after admin-service 0058) therefore fails loudly
+  instead of finding no work.
+
+Order:
+1. Set the `document_scanner` password from a mode-600 file (never echoed).
+2. Add the DSN to document-worker **only**, restarting it with its exact current
+   env plus that one key. Check with a key-by-key env diff (hashes, never values)
+   before and after.
+3. Apply admin-service 0058.
+
+Never run a bare `pm2 restart document-worker --update-env`: it merges the whole
+interactive shell environment into the app.
+
+**admin-service 0058 needs a superuser.** `ALTER ROLE … NOBYPASSRLS` requires a
+superuser. On the UAT host `civitas_admin` is one. In environments where it is
+NOSUPERUSER (see `scripts/ci/bootstrap-postgres.sh`), apply the file with the
+cluster superuser:
+`psql "<superuser DSN>/civitas_admin" -v ON_ERROR_STOP=1 -f services/admin-service/migrations/0058_document_svc_nobypassrls.sql`.
+On managed Postgres without a true superuser, use the provider's admin role, if it may
+change BYPASSRLS on `document_svc`. CI's `bootstrap-postgres.sh` routes the file to its
+superuser automatically. 0058 is idempotent and raises if any `*_svc` role keeps
+BYPASSRLS.
 
 ## Why they fail without this procedure
 
