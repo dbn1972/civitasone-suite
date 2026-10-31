@@ -59,7 +59,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         tenantId:      msg.tenantId,
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
-        payload:       { service: SERVICE, action: 'create', resourceType: 'trade_license', outcome: 'success' },
+        payload:       { service: SERVICE, action: 'create', resourceType: 'trade_license', resourceId: created!.id, outcome: 'success', licenseNo },
       });
       return created?.id;
     });
@@ -117,7 +117,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         tenantId:      msg.tenantId,
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
-        payload:       { service: SERVICE, action: 'renew', resourceType: 'trade_license', outcome: 'success' },
+        payload:       { service: SERVICE, action: 'renew', resourceType: 'trade_license', resourceId: tradeLicenseId, outcome: 'success' },
       });
     });
 
@@ -144,7 +144,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         tenantId:      msg.tenantId,
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
-        payload:       { service: SERVICE, action: 'cancel', resourceType: 'trade_license', outcome: 'success' },
+        payload:       { service: SERVICE, action: 'cancel', resourceType: 'trade_license', resourceId: tradeLicenseId, outcome: 'success' },
       });
     });
 
@@ -204,7 +204,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         tenantId:      msg.tenantId,
         actorId:       msg.actorId,
         correlationId: msg.correlationId,
-        payload:       { service: SERVICE, action: 'payment', resourceType: 'trade_license', outcome: 'success' },
+        payload:       { service: SERVICE, action: 'payment', resourceType: 'trade_license', resourceId: tradeLicenseId, outcome: 'success' },
       });
     });
 

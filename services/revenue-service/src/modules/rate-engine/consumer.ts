@@ -23,7 +23,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         unitOfMeasure?: string | null;
       };
 
-      await tx.insert(rateHeads).values({
+      const headRows = await tx.insert(rateHeads).values({
         ...(p.id ? { id: p.id } : {}),
         tenantId: msg.tenantId,
         code: p.code,
@@ -32,7 +32,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         unitOfMeasure: p.unitOfMeasure ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }).returning({ id: rateHeads.id });
 
       await enqueue(tx, {
         topic: EVENTS.rateHeadCreated,
@@ -53,6 +53,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
           service: SERVICE,
           action: "create",
           resourceType: "rate_head",
+          resourceId: headRows[0]!.id,
           outcome: "success",
         },
       });
@@ -104,7 +105,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         },
       );
 
-      await tx.insert(rateSlabs).values({
+      const slabRows = await tx.insert(rateSlabs).values({
         tenantId: msg.tenantId,
         rateHeadId: p.rateHeadId,
         slabType: p.slabType,
@@ -116,7 +117,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         unitOfMeasure: p.unitOfMeasure ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }).returning({ id: rateSlabs.id });
 
       await enqueue(tx, {
         topic: EVENTS.rateSlabCreated,
@@ -137,6 +138,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
           service: SERVICE,
           action: "create",
           resourceType: "rate_slab",
+          resourceId: slabRows[0]!.id,
           outcome: "success",
         },
       });
@@ -246,7 +248,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         roundingMode?: string;
       };
 
-      await tx.insert(penaltyRules).values({
+      const penaltyRows = await tx.insert(penaltyRules).values({
         tenantId: msg.tenantId,
         rateHeadId: p.rateHeadId,
         interestType: p.interestType,
@@ -256,7 +258,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         roundingMode: p.roundingMode ?? "round_half_up",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }).returning({ id: penaltyRules.id });
 
       await enqueue(tx, {
         topic: EVENTS.penaltyRuleCreated,
@@ -277,6 +279,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
           service: SERVICE,
           action: "create",
           resourceType: "penalty_rule",
+          resourceId: penaltyRows[0]!.id,
           outcome: "success",
         },
       });
@@ -297,7 +300,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         validUntilDaysBeforeDue?: number | null;
       };
 
-      await tx.insert(rebateRules).values({
+      const rebateRows = await tx.insert(rebateRules).values({
         tenantId: msg.tenantId,
         rateHeadId: p.rateHeadId,
         rebateType: p.rebateType,
@@ -305,7 +308,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
         validUntilDaysBeforeDue: p.validUntilDaysBeforeDue ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }).returning({ id: rebateRules.id });
 
       await enqueue(tx, {
         topic: EVENTS.rebateRuleCreated,
@@ -326,6 +329,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
           service: SERVICE,
           action: "create",
           resourceType: "rebate_rule",
+          resourceId: rebateRows[0]!.id,
           outcome: "success",
         },
       });

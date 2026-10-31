@@ -18,6 +18,7 @@ function toView(r: AuditEventRow): AuditEventView {
     prevHash: r.prevHash ?? null, eventHash: r.eventHash ?? null,
     correlationId: r.correlationId ?? null,
     occurredAt: r.occurredAt.toISOString(),
+    eventAt: (r.eventAt ?? r.occurredAt).toISOString(),
     // Compute 180-day retention deadline; retain_until DB column added by migration 0004
     retainUntil: (r.retainUntil ?? new Date(r.occurredAt.getTime() + 180 * 86400 * 1000)).toISOString(),
   };
@@ -281,6 +282,7 @@ export async function writeEvent(
       prevHash: latest?.eventHash ?? null,
       eventHash,
       occurredAt,
+      eventAt: occurredAt, // direct API write: the action happens now
       correlationId,
       createdBy: actorId,
       ipAddress: ipAddress ?? null,

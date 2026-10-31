@@ -9,6 +9,7 @@ import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueueAudit } from "../../shared/audit.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { assessments, demands, dcbEntries, remissions } from "./schema.js";
 import { rateSlabs, penaltyRules, rebateRules } from "../rate-engine/schema.js";
@@ -176,6 +177,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
           action: "create",
           resourceType: "assessment",
           resourceId: assessment!.id,
+          demandId: demand!.id,
           outcome: "success",
         },
       });
@@ -337,29 +339,24 @@ export function registerAssessmentConsumers(queue: Queue): void {
       if (!target) throw new NonRetryableError("NOT_FOUND", `assessment ${assessmentId} not found`);
 
       // Insert remission in pending status
-      await tx.insert(remissions).values({
+      const [remission] = await tx.insert(remissions).values({
         tenantId: msg.tenantId,
         assessmentId,
         reason,
         remissionPercent,
         status: "pending",
         makerUserId: msg.actorId,
-      });
+      }).returning({ id: remissions.id });
 
-      // Audit event
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: {
-          service: SERVICE,
-          action: "remit",
-          resourceType: "assessment",
-          resourceId: assessmentId,
-          outcome: "success",
-        },
+      // UAT B10-F86: the remission itself is the audited resource (it was the
+      // assessment, so no audit event ever targeted a remission row).
+      await enqueueAudit(tx, msg, {
+        action: "remit",
+        resourceType: "remission",
+        resourceId: remission!.id,
+        outcome: "pending",
+        assessmentId,
+        remissionPercent,
       });
     });
   });
@@ -418,20 +415,15 @@ export function registerAssessmentConsumers(queue: Queue): void {
         });
       }
 
-      // Audit event
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: {
-          service: SERVICE,
-          action: "remit_decide",
-          resourceType: "assessment",
-          resourceId: assessmentId,
-          outcome: newStatus,
-        },
+      // UAT B10-F86: audit the decided remission (maker and checker are on the row).
+      await enqueueAudit(tx, msg, {
+        action: "remit_decide",
+        resourceType: "remission",
+        resourceId: remission.id,
+        outcome: newStatus,
+        assessmentId,
+        remissionPercent: remission.remissionPercent,
+        makerUserId: remission.makerUserId,
       });
     });
 

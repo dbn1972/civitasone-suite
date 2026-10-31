@@ -16,7 +16,10 @@ export type AuditEventView = {
   prevHash: string | null;
   eventHash: string | null;
   correlationId: string | null;
+  /** Hash-chain (recorded) instant: strictly increasing per tenant; orders the chain. */
   occurredAt: string;
+  /** UAT B10-F83: when the audited action happened (producer commit time); occurredAt for older rows. */
+  eventAt: string;
   /** ISO-8601 string; computed as occurredAt + 180d if DB column not yet present (pre-migration compat) */
   retainUntil: string;
 };
