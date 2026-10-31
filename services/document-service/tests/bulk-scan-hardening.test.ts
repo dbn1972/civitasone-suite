@@ -137,6 +137,12 @@ describe("scanner pool DSN resolution (fail fast, explicit allowlist)", () => {
     for (const NODE_ENV of ["development", "test"]) expect(resolveScannerUrl({ ...DEV, NODE_ENV } as NodeJS.ProcessEnv)).toBe(DEV.DATABASE_URL);
     expect(() => resolveScannerUrl({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).toThrow();
   });
+  it("F84: development / test prefer an explicit scanner DSN over the DATABASE_URL fallback", () => {
+    const scanner = "postgres://document_scanner@h/db";
+    for (const NODE_ENV of ["development", "test"]) {
+      expect(resolveScannerUrl({ ...DEV, DOCUMENT_SCANNER_DATABASE_URL: scanner, NODE_ENV } as NodeJS.ProcessEnv)).toBe(scanner);
+    }
+  });
   it("an explicit scanner DSN is used; outside dev/test it must differ from the service DSN", () => {
     const scanner = "postgres://document_scanner@h/db";
     expect(resolveScannerUrl({ ...DEV, DOCUMENT_SCANNER_DATABASE_URL: scanner, NODE_ENV: "production" } as NodeJS.ProcessEnv)).toBe(scanner);
