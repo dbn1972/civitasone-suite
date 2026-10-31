@@ -13,47 +13,49 @@
 --       id baa2a61c-5794-3424-5339-7ddd1f8380f7, title FQ9-RUNNER-mtg-4e4202,
 --       tenant 11111111-0000-0000-0000-000000000001,
 --       committee_id 58542851-76e8-430a-ad5a-7f437397e9f1 (no such committee).
---   - 39 attendance_records with check_out_at <= check_in_at (check-ins 2026-08-26 to
---     2026-09-12).
+--   - attendance_records with check_out_at <= check_in_at: 43 at 12:31Z and still
+--     growing, ALL on meetings titled 'Attendance-bounds fixture meeting', written by
+--     tests/integration-attendance-bounds.test.ts runs that reached the UAT database.
 --
--- This migration:
+-- This migration (repairs are scoped to exactly those test rows; anything else that
+-- would block a constraint makes it FAIL LOUDLY instead of being changed):
+--   0. Copies every value it is about to change into meeting.f100_repair_backup
+--      (table, row id, column, old value), so nothing is lost.
 --   1. Archives the FQ9-RUNNER test meeting (test_data_archived_at, the flag 0014 adds;
---      added here too IF NOT EXISTS so this file does not depend on 0014's merge order).
---   2. Clears dangling references so the FKs can be validated. Exact predicate: the
---      referenced row does not exist. Only committee_id matches on UAT (the row above);
---      series_id and deferred_to have 0 orphans and are included so the FKs can never
---      be blocked the same way. The columns are nullable and a NULL committee/series/
---      successor is a state the app already handles.
---   3. Sets check_out_at = NULL where check_out_at <= check_in_at (39 rows on UAT). A
---      check-out at or before the check-in is impossible; NULL means "not checked out",
---      which is what the CHECK allows.
---   4. Adds the 17 constraints of 0010 with a REAL existence check: the constraint must
+--      added here too IF NOT EXISTS so this file does not depend on 0014's merge order)
+--      and clears its dangling committee_id. Any OTHER dangling committee_id, series_id or
+--      deferred_to raises.
+--   2. Sets check_out_at = NULL on check_out_at <= check_in_at rows of the
+--      'Attendance-bounds fixture meeting' meetings only. Any OTHER such row raises.
+--   3. Adds the 17 constraints of 0010 with a REAL existence check: the constraint must
 --      exist ON THAT TABLE, with that name and type AND the same definition. A
 --      same-named constraint with a different definition raises (never silently
 --      skipped). Missing ones are added NOT VALID and then VALIDATEd; an existing NOT
 --      VALID one is VALIDATEd.
 --
--- Rows changed on UAT (from SELECTs, 2026-10-31): meetings 1 (archived + committee
--- nulled), attendance_records 39. Fresh / CI databases: 0 rows, all constraints already
--- exist from 0010 and are validated, so this file is a no-op there.
+-- Rows changed on UAT: meetings 1 (archived + committee nulled), attendance_records =
+-- the fixture rows at deploy time (43 at 12:31Z). Fresh / CI databases: 0 rows, all
+-- constraints already exist from 0010 and are validated; only the empty backup table is
+-- created.
 --
--- Idempotent: every UPDATE is predicate-scoped and matches nothing on a re-run; every
--- constraint step is guarded as above.
+-- Idempotent: every UPDATE is predicate-scoped and matches nothing on a re-run, the
+-- backup insert is ON CONFLICT DO NOTHING, every constraint step is guarded as above.
 --
 -- RLS: the per-service runner applies this as the table OWNER (meeting_svc, NOBYPASSRLS)
--- and these tables are FORCE RLS, so UPDATEs without a tenant would see no rows. FORCE is
--- lifted for the repair UPDATEs and restored in the same transaction (house idiom, see
+-- and these tables are FORCE RLS, so statements without a tenant would see no rows. FORCE
+-- is lifted for the repair block and restored in the same transaction (house idiom, see
 -- 0014). Constraint validation is not subject to RLS.
 --
 -- Preview on UAT (SELECT only):
---   SELECT count(*) FROM meeting.meetings m WHERE committee_id IS NOT NULL
---      AND NOT EXISTS (SELECT 1 FROM meeting.committees c WHERE c.id = m.committee_id);
---   SELECT count(*) FROM meeting.attendance_records
---    WHERE check_out_at IS NOT NULL AND check_out_at <= check_in_at;
+--   SELECT a.id, a.check_in_at, a.check_out_at FROM meeting.attendance_records a
+--     JOIN meeting.meetings m ON m.id = a.meeting_id
+--    WHERE a.check_out_at <= a.check_in_at AND m.title = 'Attendance-bounds fixture meeting';
 --
--- Rollback: see 0010's header (DROP CONSTRAINT IF EXISTS ...). The data repairs are not
--- reversed; the original values of the 39 check-outs and the 1 committee id are listed by
--- the preview queries above until this migration runs.
+-- Rollback: see 0010's header (DROP CONSTRAINT IF EXISTS ...). Original values are in
+-- meeting.f100_repair_backup:
+--   UPDATE meeting.attendance_records a SET check_out_at = b.old_value::timestamptz
+--     FROM meeting.f100_repair_backup b
+--    WHERE b.table_name = 'attendance_records' AND b.column_name = 'check_out_at' AND b.row_id = a.id;
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 SET lock_timeout = '5s';
@@ -62,15 +64,38 @@ BEGIN;
 
 ALTER TABLE meeting.meetings ADD COLUMN IF NOT EXISTS test_data_archived_at TIMESTAMPTZ;
 
--- ── 1-3. Repair the blocking rows ────────────────────────────────────────────────
+-- ── 0. Backup of every value this migration changes ──────────────────────────────
+CREATE TABLE IF NOT EXISTS meeting.f100_repair_backup (
+  tenant_id    UUID        NOT NULL,
+  table_name   TEXT        NOT NULL,
+  row_id       UUID        NOT NULL,
+  column_name  TEXT        NOT NULL,
+  old_value    TEXT,
+  backed_up_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, table_name, row_id, column_name)
+);
+ALTER TABLE meeting.f100_repair_backup ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meeting.f100_repair_backup FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS f100_repair_backup_tenant ON meeting.f100_repair_backup;
+CREATE POLICY f100_repair_backup_tenant ON meeting.f100_repair_backup
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'meeting_scanner') THEN
+    GRANT SELECT ON meeting.f100_repair_backup TO meeting_scanner;
+  END IF;
+END $$;
+
+-- ── 1-2. Repair the identified test rows; fail loudly on anything else ───────────
 DO $$
 DECLARE
   t     text;
   n     bigint;
-  -- committees and meeting_series are only READ (orphan checks), but under FORCE RLS the
-  -- owner would see none of their rows and every reference would look dangling.
+  -- committees, meeting_series and the backup are also lifted: the orphan checks READ
+  -- committees/series (under FORCE RLS the owner would see none of their rows and every
+  -- reference would look dangling) and the backup is written cross-tenant.
   tbls  text[] := ARRAY['meeting.meetings', 'meeting.agenda_items', 'meeting.attendance_records',
-                        'meeting.committees', 'meeting.meeting_series'];
+                        'meeting.committees', 'meeting.meeting_series', 'meeting.f100_repair_backup'];
   forced text[] := '{}';
 BEGIN
   FOREACH t IN ARRAY tbls LOOP
@@ -80,48 +105,73 @@ BEGIN
     END IF;
   END LOOP;
 
-  UPDATE meeting.meetings
-     SET test_data_archived_at = now()
-   WHERE id = 'baa2a61c-5794-3424-5339-7ddd1f8380f7'
-     AND title LIKE 'FQ9-RUNNER-%'
-     AND test_data_archived_at IS NULL;
-  GET DIAGNOSTICS n = ROW_COUNT;
-  RAISE NOTICE '0015: archived % FQ9-RUNNER test meeting(s)', n;
+  -- The FQ9-RUNNER test meeting: archive it and clear its dangling committee.
+  INSERT INTO meeting.f100_repair_backup (tenant_id, table_name, row_id, column_name, old_value)
+  SELECT m.tenant_id, 'meetings', m.id, 'committee_id', m.committee_id::text
+    FROM meeting.meetings m
+   WHERE m.id = 'baa2a61c-5794-3424-5339-7ddd1f8380f7' AND m.title LIKE 'FQ9-RUNNER-%'
+     AND m.committee_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM meeting.committees c WHERE c.id = m.committee_id)
+  ON CONFLICT DO NOTHING;
 
   UPDATE meeting.meetings m
-     SET committee_id = NULL, updated_at = now()
-   WHERE m.committee_id IS NOT NULL
+     SET test_data_archived_at = COALESCE(m.test_data_archived_at, now()),
+         committee_id = NULL, updated_at = now()
+   WHERE m.id = 'baa2a61c-5794-3424-5339-7ddd1f8380f7' AND m.title LIKE 'FQ9-RUNNER-%'
+     AND m.committee_id IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM meeting.committees c WHERE c.id = m.committee_id);
   GET DIAGNOSTICS n = ROW_COUNT;
-  RAISE NOTICE '0015: cleared % dangling meetings.committee_id', n;
+  RAISE NOTICE '0015: archived the FQ9-RUNNER test meeting and cleared its dangling committee: % row(s)', n;
 
-  UPDATE meeting.meetings m
-     SET series_id = NULL, updated_at = now()
+  -- Attendance-bounds fixture rows: back up, then clear the impossible check-out.
+  INSERT INTO meeting.f100_repair_backup (tenant_id, table_name, row_id, column_name, old_value)
+  SELECT a.tenant_id, 'attendance_records', a.id, 'check_out_at', a.check_out_at::text
+    FROM meeting.attendance_records a
+    JOIN meeting.meetings m ON m.id = a.meeting_id
+   WHERE a.check_out_at IS NOT NULL AND a.check_out_at <= a.check_in_at
+     AND m.title = 'Attendance-bounds fixture meeting'
+  ON CONFLICT DO NOTHING;
+
+  UPDATE meeting.attendance_records a
+     SET check_out_at = NULL, updated_at = now()
+    FROM meeting.meetings m
+   WHERE m.id = a.meeting_id
+     AND a.check_out_at IS NOT NULL AND a.check_out_at <= a.check_in_at
+     AND m.title = 'Attendance-bounds fixture meeting';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE '0015: cleared % attendance-bounds fixture check-outs at or before check-in', n;
+
+  -- Anything else that would block the constraints is NOT repaired: stop here.
+  SELECT count(*) INTO n FROM meeting.meetings m
+   WHERE m.committee_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM meeting.committees c WHERE c.id = m.committee_id);
+  IF n > 0 THEN
+    RAISE EXCEPTION '0015: % meeting(s) reference a committee that does not exist; not repaired automatically', n;
+  END IF;
+  SELECT count(*) INTO n FROM meeting.meetings m
    WHERE m.series_id IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM meeting.meeting_series s WHERE s.id = m.series_id);
-  GET DIAGNOSTICS n = ROW_COUNT;
-  RAISE NOTICE '0015: cleared % dangling meetings.series_id', n;
-
-  UPDATE meeting.agenda_items a
-     SET deferred_to = NULL, updated_at = now()
+  IF n > 0 THEN
+    RAISE EXCEPTION '0015: % meeting(s) reference a series that does not exist; not repaired automatically', n;
+  END IF;
+  SELECT count(*) INTO n FROM meeting.agenda_items a
    WHERE a.deferred_to IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM meeting.agenda_items s WHERE s.id = a.deferred_to);
-  GET DIAGNOSTICS n = ROW_COUNT;
-  RAISE NOTICE '0015: cleared % dangling agenda_items.deferred_to', n;
-
-  UPDATE meeting.attendance_records
-     SET check_out_at = NULL, updated_at = now()
-   WHERE check_out_at IS NOT NULL
-     AND check_out_at <= check_in_at;
-  GET DIAGNOSTICS n = ROW_COUNT;
-  RAISE NOTICE '0015: cleared % attendance check-outs at or before check-in', n;
+  IF n > 0 THEN
+    RAISE EXCEPTION '0015: % agenda item(s) defer to an item that does not exist; not repaired automatically', n;
+  END IF;
+  SELECT count(*) INTO n FROM meeting.attendance_records
+   WHERE check_out_at IS NOT NULL AND check_out_at <= check_in_at;
+  IF n > 0 THEN
+    RAISE EXCEPTION '0015: % attendance record(s) outside the test fixture have check_out_at <= check_in_at; not repaired automatically', n;
+  END IF;
 
   FOREACH t IN ARRAY forced LOOP
     EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', t);
   END LOOP;
 END $$;
 
--- ── 4. Enforce the 0010 constraints (real existence check) ───────────────────────
+-- ── 3. Enforce the 0010 constraints (real existence check) ───────────────────────
 DO $$
 DECLARE
   c        record;

@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
 
-export const JURISDICTION_LEVELS = ["state", "district", "block", "gp", "ward", "zone"] as const;
+// subdivision and tehsil are revenue-hierarchy levels (hierarchy UNIT_TYPES lists both; the pilot
+// organogram seed writes them). Mirrors jurisdictions_level_check (migrations/0028).
+export const JURISDICTION_LEVELS = ["state", "district", "subdivision", "tehsil", "block", "gp", "ward", "zone"] as const;
 
 export const assignJurisdictionBody = z.object({
   officeId: z.string().uuid("Select a valid office"),

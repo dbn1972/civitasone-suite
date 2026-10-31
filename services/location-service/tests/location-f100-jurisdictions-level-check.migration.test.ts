@@ -1,7 +1,9 @@
 /**
- * UAT F100: jurisdiction.jurisdictions.jurisdictions_level_check exists on live UAT only as NOT VALID (0010_additional_status_type_constraints.sql added it NOT VALID,
- * its VALIDATE failed on 4 bad row(s) and the tolerant deploy runner hid the error).
- * 0028_jurisdictions_level_check_validate.sql repairs exactly those values and validates the constraint.
+ * UAT F100: jurisdiction.jurisdictions.jurisdictions_level_check exists on live UAT only as
+ * NOT VALID (0010_additional_status_type_constraints.sql added it NOT VALID, its VALIDATE
+ * failed on 4 rows and the tolerant deploy runner hid the error). Those rows are real
+ * revenue-hierarchy levels (tehsil, subdivision) written by the pilot organogram seed, so
+ * 0028_jurisdictions_level_check_validate.sql widens the CHECK to allow them and validates it.
  * The scratch test rebuilds that state (FORCE RLS, NOT VALID constraint, bad rows) in a
  * throwaway schema, runs the migration twice as the table owner and rolls back.
  */
@@ -11,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import { sqlClient } from "../src/shared/db.js";
 
 const MIGRATION = new URL("../migrations/0028_jurisdictions_level_check_validate.sql", import.meta.url);
+// 0010's original, narrower definition, as it exists NOT VALID on UAT.
 const CHECK = "CHECK (level IN ('state', 'district', 'block', 'gp', 'ward', 'zone'))";
 const ROLLBACK = new Error("rollback");
 
@@ -53,8 +56,8 @@ async function migrationFor(scratch: string): Promise<string> {
     .replace(/\bjurisdiction\.(jurisdictions)\b/g, `${scratch}.$1`);
 }
 
-describe("0028: repairs the UAT rows and validates jurisdictions_level_check", () => {
-  it("maps tehsil/subdivision to block, validates the constraint, keeps FORCE RLS, re-runs cleanly", async () => {
+describe("0028: widens and validates jurisdictions_level_check", () => {
+  it("widens the CHECK to tehsil/subdivision without changing rows, validates it, keeps FORCE RLS, re-runs cleanly", async () => {
     const scratch = `f100_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const tenant = randomUUID();
     const sqlText = await migrationFor(scratch);
@@ -71,7 +74,10 @@ describe("0028: repairs the UAT rows and validates jurisdictions_level_check", (
 
       await sql`select set_config('app.tenant_id', ${tenant}, true)`;
       const rows = await sql.unsafe<{ v: string }[]>(`SELECT level AS v FROM ${scratch}.jurisdictions ORDER BY level`);
-      expect(rows.map((r) => r.v)).toEqual(["block", "block", "district"]);
+      expect(rows.map((r) => r.v)).toEqual(["district", "subdivision", "tehsil"]);
+      await expect(
+        sql.unsafe(`INSERT INTO ${scratch}.jurisdictions (id, tenant_id, level) VALUES ('${randomUUID()}', '${tenant}', 'country')`),
+      ).rejects.toThrow(/jurisdictions_level_check/);
     });
   });
 
