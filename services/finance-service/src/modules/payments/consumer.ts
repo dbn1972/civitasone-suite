@@ -73,6 +73,14 @@ function assertPeriodOpenForApPosting(periodStatus: string, period: string, acti
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/** bigint -> exact base-10 string, recursively (objects and arrays); every other value is returned as is. */
+function moneyAsWireStrings(v: unknown): unknown {
+  if (typeof v === "bigint") return v.toString();
+  if (Array.isArray(v)) return v.map(moneyAsWireStrings);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, moneyAsWireStrings(x)]));
+  return v;
+}
+
 /** A master-data validation failure is deterministic: re-throw it as a NonRetryableError (same message). */
 function asRefusal(cls: new (...a: never[]) => Error, fn: () => void): void {
   try { fn(); } catch (e) { throw e instanceof cls ? new NonRetryableError(e.message) : e; }
@@ -119,7 +127,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
    * legacy headId).
    */
   async function createBill(msg: CommandEnvelope<unknown>): Promise<void> {
-    const contract = financeBillCreate.validate(msg.payload);
+    // The in-process (MemoryQueue) path hands over the route's bigint paise (payments/commands.ts createBill) without a
+    // JSON round trip. The wire contract is a money STRING (the walker cannot describe bigint), so read a bigint as its
+    // exact base-10 string before validating, as the SQS transport would have.
+    const wire = moneyAsWireStrings(msg.payload);
+    const contract = financeBillCreate.validate(wire);
     if (!contract.ok) {
       const fields = (contract.violation?.issues ?? []).map((i) => i.path).join(", ");
       throw new NonRetryableError(`SCHEMA_VIOLATION: finance.bill.create payload does not match the contract (${fields})`);
@@ -128,7 +140,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
     if (!rawHead.headCode && !rawHead.headId) {
       throw new NonRetryableError("SCHEMA_VIOLATION: finance.bill.create needs headCode (or a legacy headId)");
     }
-    const p = msg.payload as {
+    // Read the normalised payload: a bigint deduction amount would otherwise crash the jsonb write (JSON.stringify).
+    const p = wire as {
       id: string; tenantId: string; billNo: string; vendorId: string; headId?: string; headCode?: string;
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];

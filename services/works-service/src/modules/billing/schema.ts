@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, numeric, timestamp, text } from "drizzle-orm/pg-core";
 
 const works = pgSchema("works");
 
@@ -54,6 +54,11 @@ export const bills = works.table("bills", {
   // draft|so_finalized|sdo_finalized|auditor_finalized|dao_finalized|do_finalized|submitted
   ifmsRef: varchar("ifms_ref", { length: 128 }),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  // UAT b10 F93 (migration 0154): finance hand-off outcome. NULL (not handed off) | sent | rejected.
+  financeStatus: varchar("finance_status", { length: 16 }),
+  financeRejectionCode: varchar("finance_rejection_code", { length: 64 }),
+  financeRejectionReason: text("finance_rejection_reason"),
+  financeRejectedAt: timestamp("finance_rejected_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   createdBy: uuid("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

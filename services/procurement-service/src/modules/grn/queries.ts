@@ -45,6 +45,8 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
     poNo: po?.poNo ?? undefined,
     vendor: vendor?.name ?? row.vendorId.slice(0, 8),
     vendorId: row.vendorId,
+    // UAT b10 F95: the receiving inventory store (null for a GRN created before it was recorded).
+    storeId: row.storeId ?? undefined,
     receivedDate: String(row.receivedDate),
     receivedBy: row.createdBy,
     // GAP-PROCUREMENT-GRN-DETAIL-03 — expose the creator id so the web detail

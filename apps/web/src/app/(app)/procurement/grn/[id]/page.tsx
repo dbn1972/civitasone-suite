@@ -7,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { AmendGrnForm } from "./AmendGrnForm";
 import { InspectGrnForm } from "./InspectGrnForm";
+import { getInventoryStoreOptions } from "../../../inventory/_data";
 import { grnStatusLabel } from "../statusLabels";
 import { parsePoRef } from "../poRef";
 
@@ -213,7 +214,8 @@ export default async function GRNDetailPage(props: { params: Promise<{ id: strin
         // that separation (403 SOD_VIOLATION otherwise), this is just the UI
         // entry point.
         (<Card title="Inspection required" padding>
-          <InspectGrnForm grnId={grn.id} grnNo={grn.grnNo} isCreator={isCreator} />
+          <InspectGrnForm grnId={grn.id} grnNo={grn.grnNo} isCreator={isCreator}
+            hasStore={Boolean(grn.storeId)} stores={grn.storeId ? [] : (await getInventoryStoreOptions()).data} />
         </Card>)
       ) : null}
       {grn.items.length > 0 && canAmendGrn(grn.status) ? (

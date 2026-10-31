@@ -62,3 +62,24 @@ describe("InspectGrnForm (GAP-PROCUREMENT-GRN-DETAIL-01 / 03)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+// UAT b10 F95: a GRN created without a store gets one at accept (the server refuses 422 otherwise).
+describe("InspectGrnForm - receiving store at accept (UAT b10 F95)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("offers a store picker for a GRN with no store and sends storeId on accept", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<InspectGrnForm grnId="g1" grnNo="GRN/2026/0001" hasStore={false} stores={[{ id: "s-1", name: "Central Store" }]} />);
+    fireEvent.change(screen.getByLabelText(/Receiving store/), { target: { value: "s-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    await screen.findByText(/Accept this GRN\?/i);
+    fireEvent.click(screen.getByRole("button", { name: "Accept GRN" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toMatchObject({ storeId: "s-1" });
+  });
+
+  it("shows no store picker when the GRN already names its store", () => {
+    render(<InspectGrnForm grnId="g1" grnNo="GRN/2026/0001" />);
+    expect(screen.queryByLabelText(/Receiving store/)).toBeNull();
+  });
+});

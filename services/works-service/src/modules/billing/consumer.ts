@@ -397,7 +397,7 @@ export function registerBillingConsumers(q: Queue): void {
       }
 
       await tx.update(bills)
-        .set({ status: nextStatus })
+        .set({ status: nextStatus, ...(isTerminalBillStatus(nextStatus) ? { financeStatus: "sent", financeRejectionCode: null, financeRejectionReason: null, financeRejectedAt: null } : {}) })
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)));
 
       await enqueue(tx, {
@@ -466,6 +466,10 @@ export function registerBillingConsumers(q: Queue): void {
       "finance rejected the bill raised for a DO-finalized works bill");
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Visible on the bill itself (bill API + web bill page), not only in the audit trail.
+      await tx.update(bills)
+        .set({ financeStatus: "rejected", financeRejectionCode: p.code.slice(0, 64), financeRejectionReason: p.reason, financeRejectedAt: new Date() })
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, p.worksBillId!)));
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {

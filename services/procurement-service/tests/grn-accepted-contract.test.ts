@@ -24,6 +24,8 @@ import { threeWayMatch } from "../src/modules/three-way-match/schema.js";
 import { registerGrnConsumers } from "../src/modules/grn/consumer.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { signToken } from "@civitasone/auth";
+import { buildApp } from "../src/app.js";
 
 const TENANT    = randomUUID();
 const RECEIVER  = randomUUID();
@@ -70,7 +72,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await wipe(); await sqlClient.end(); });
 
-async function acceptedEventFor(storeId?: string): Promise<Record<string, unknown>> {
+async function acceptedEventFor(storeId?: string, acceptStoreId?: string): Promise<Record<string, unknown>> {
   const q = wire(new MemoryQueue()) as MemoryQueue;
   registerGrnConsumers(q);
   await q.start();
@@ -82,7 +84,7 @@ async function acceptedEventFor(storeId?: string): Promise<Record<string, unknow
   }, RECEIVER));
   await q.drain();
   const corr = `corr-${randomUUID()}`;
-  await q.publish(COMMANDS.grnAccept, msg(COMMANDS.grnAccept, { id: grnId, tenantId: TENANT }, INSPECTOR, corr));
+  await q.publish(COMMANDS.grnAccept, msg(COMMANDS.grnAccept, { id: grnId, tenantId: TENANT, ...(acceptStoreId ? { storeId: acceptStoreId } : {}) }, INSPECTOR, corr));
   await q.drain();
   await q.stop();
   expect(q.dlq.map((d) => d.error)).toEqual([]);
@@ -114,5 +116,51 @@ describe("F95: procurement.grn.accepted matches the shared contract its consumer
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) =>
       tx.select({ storeId: procurementGrns.storeId }).from(procurementGrns).where(eq(procurementGrns.tenantId, TENANT))));
     expect(rows.some((r) => r.storeId === STORE_ID)).toBe(true);
+  });
+});
+
+describe("F95 review: a GRN without a store gets its store at accept, or a synchronous 422", () => {
+  const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+  const inspectorHdr = () => ({
+    authorization: `Bearer ${signToken({ sub: INSPECTOR, tid: TENANT, roles: ["warehouse_officer"], sid: "s-b10" }, SECRET, 3600)}`,
+    "x-tenant-id": TENANT, "content-type": "application/json",
+  });
+
+  async function createOnly(): Promise<string> {
+    const q = wire(new MemoryQueue()) as MemoryQueue;
+    registerGrnConsumers(q);
+    await q.start();
+    const grnId = randomUUID();
+    await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
+      id: grnId, tenantId: TENANT, poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
+      items: [{ poItemRef: PO_ITEM_ID, itemCode: "B10-ITM-1", orderedQty: 10, receivedQty: 1, acceptedQty: 1, unit: "nos" }],
+    }, RECEIVER));
+    await q.drain();
+    await q.stop();
+    return grnId;
+  }
+
+  it("PATCH /accept on a stock GRN with no store and none in the body is refused 422 GRN_NO_RECEIVING_STORE", async () => {
+    const grnId = await createOnly();
+    const app = await buildApp();
+    try {
+      const res = await app.inject({ method: "PATCH", url: `/v1/procurement/grns/${grnId}/accept`, headers: inspectorHdr(), payload: {} });
+      expect(res.statusCode).toBe(422);
+      expect(JSON.stringify(res.json())).toContain("GRN_NO_RECEIVING_STORE");
+      const ok = await app.inject({ method: "PATCH", url: `/v1/procurement/grns/${grnId}/accept`, headers: inspectorHdr(), payload: { storeId: STORE_ID } });
+      expect(ok.statusCode).toBe(202);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("the store named at accept is persisted and carried on procurement.grn.accepted", async () => {
+    const other = randomUUID();
+    const payload = await acceptedEventFor(undefined, other);
+    expect(procurementGrnAccepted.validate(payload)).toEqual({ ok: true });
+    expect(payload.storeId).toBe(other);
+    const rows = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select({ storeId: procurementGrns.storeId }).from(procurementGrns).where(eq(procurementGrns.id, payload.grnId as string))));
+    expect(rows[0]?.storeId).toBe(other);
   });
 });

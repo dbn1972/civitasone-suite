@@ -155,6 +155,21 @@ describe("F94: finance.bill.create resolves the head CODE in the bill tenant's o
   });
 });
 
+describe("finance.bill.create on the in-process (MemoryQueue) path", () => {
+  it("bigint paise from the route (payments/commands.ts createBill) are read as the wire money string, not refused", async () => {
+    const { q } = countingQueue();
+    registerPaymentsConsumers(q);
+    await q.start();
+    const big = billPayload(T2, { grossMinor: 30000n, netMinor: 25000n, deductions: [{ type: "TDS", amountMinor: 5000n }] });
+    await publishBill(q, T2, big.payload, big.billId);
+    await q.stop();
+    expect(q.dlq.map((d) => d.error)).toEqual([]);
+    const row = (await scoped(T2.tenantId, (tx) => tx.select().from(financeBills).where(eq(financeBills.id, big.billId))))[0];
+    expect(row?.grossMinor).toBe(30000n);
+    expect(row?.netMinor).toBe(25000n);
+  });
+});
+
 describe("F93: finance.bill.create needs a finance vendor-master uuid", () => {
   it("the old works payload (vendorId 'works_award:<id>') is a contract violation, refused once with feedback", async () => {
     const { q, deliveries } = countingQueue();
