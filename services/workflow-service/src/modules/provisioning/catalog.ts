@@ -46,14 +46,23 @@ export const STANDARD_DEFINITIONS: SeedDefinition[] = [
       { nodeKey: "ds_approve", name: "Deputy Secretary Approval", roleRef: "estab_deputy_secretary" },
     ],
   },
+  // B10 (leave routing): the chain hrms-service's leave/consumer.ts actually
+  // requests (definitionCode leave_approval, refType leave_app,
+  // initialTaskName "Reporting Officer Approval"). The old three-node shape
+  // (hrms_employee -> hrms_manager -> hrms_hr) used role refs that exist in no
+  // realm, and its START node was the applicant's own "Employee Application",
+  // so no approver could ever hold the first task. One node, same as the demo
+  // tenant (scripts/dev/seed-all.mjs): the reporting manager (`manager` holds
+  // hrms.leave.approve, is a workflow task role, and is the role hrms sends to
+  // the workflow queue). HR (hr_admin / hr_officer) decides on the direct hrms
+  // approve route instead. Approving it is terminal and dispatches
+  // hrms.leave.approve (tasks consumer dispatchDomainApprove).
   {
     code: "leave_approval",
     name: "Leave Approval Workflow",
     cluster: "hr",
     nodes: [
-      { nodeKey: "apply", name: "Employee Application", roleRef: "hrms_employee" },
-      { nodeKey: "manager_approve", name: "Manager Approval", roleRef: "hrms_manager" },
-      { nodeKey: "hr_approve", name: "HR Approval", roleRef: "hrms_hr" },
+      { nodeKey: "manager_approval", name: "Reporting Officer Approval", roleRef: "manager" },
     ],
   },
   {

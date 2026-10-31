@@ -168,9 +168,12 @@ describe("provisioning/catalog — standard definitions", () => {
   // F77 added the two single-approver procurement chains procurement-service
   // requests (shape identical to the demo-tenant seed): 5 multi-level + 2.
   // B9-wf1 added the plan / PO amendment single-approver chains: 5 + 4.
+  // B10: leave_approval is now the one-node Reporting Officer chain hrms
+  // requests (its old start node was the applicant, on non-existent roles).
   const SINGLE_APPROVER = [
     "procurement_indent_approval", "procurement_po_approval",
     "procurement_plan_approval", "procurement_po_amendment_approval",
+    "leave_approval",
   ];
   it("has 9 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(9));
 

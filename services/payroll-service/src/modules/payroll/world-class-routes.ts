@@ -19,6 +19,10 @@ import {
 import { scopeReimbursementEmployee, assertReimbursementDecidable } from "./adjustment-guards.js";
 
 const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
+// F103 (UAT T3 least-privilege): deciding a reimbursement releases money, so
+// it is a payroll-only action. hr_admin keeps read / file-on-behalf (ROLES)
+// but is NOT an approver -- same set as arrears-approval DECIDER_ROLES.
+const DECIDER_ROLES = ["payroll_admin","payroll_officer","super_admin"];
 
 export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<void> {
   // Arrears
@@ -99,7 +103,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   // assertReimbursementDecidable; reason mandatory on reject.
   app.patch("/v1/payroll/reimbursements/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, DECIDER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = reimbursementDecisionBody.optional().parse(req.body);
     await assertReimbursementDecidable(ctx, id);
@@ -108,7 +112,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
 
   app.patch("/v1/payroll/reimbursements/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, DECIDER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = reimbursementRejectBody.parse(req.body);
     await assertReimbursementDecidable(ctx, id);
