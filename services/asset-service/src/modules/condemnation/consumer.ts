@@ -20,6 +20,7 @@ import { assertMakerChecker, assertBidMeetsFloor, assertProceedsWithinBid, asser
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
 import { assetAssets } from "../register/schema.js";
+import { computeDisposalGainLoss } from "../lifecycle/domain.js";
 
 const log = pino({ name: "condemnation-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -220,20 +221,25 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
           },
         });
 
-        // Emit disposal GL journal (for accounting: debit cash, credit asset)
+        // Emit disposal GL journal (for accounting: debit cash, credit asset).
+        // F90 (UAT T6-02): finance's asset_disposal journal is the contract (one shape for every disposal path:
+        // lifecycle, e-Office, workflow). This sent "asset_disposal_auction", a type finance has no branch for, without
+        // gainLoss -- refused as JOURNAL_TOO_FEW_LINES for every tenant, so no auctioned asset ever left the GL.
         const assetRows = await tx.select().from(assetAssets)
           .where(eq(assetAssets.id, auction.assetId)).limit(1);
         const asset = assetRows[0];
         if (asset) {
+          const proceedsMinor = BigInt(p.saleProceedsMinor);
           await enqueue(tx, {
             topic: GL_TOPIC, eventType: GL_TOPIC,
             tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: {
-              type: "asset_disposal_auction",
+              type: "asset_disposal",
               assetId: auction.assetId,
               acquisitionCost: asset.acquisitionCost.toString(),
               accumulatedDep: asset.accumulatedDep.toString(),
-              proceeds: p.saleProceedsMinor,
+              proceeds: proceedsMinor.toString(),
+              gainLoss: computeDisposalGainLoss(proceedsMinor, asset.bookValue).toString(),
               currency: auction.currency,
             },
           });

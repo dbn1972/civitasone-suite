@@ -58,6 +58,70 @@ import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET } from "./system-
 const GAIN_LOSS = process.env.FINANCE_GAIN_LOSS_CODE ?? "4200";
 const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
 
+/** What finance.gl.rejected tells the producer about the journal it refused. */
+type RejectedJournal = {
+  journalId: string | undefined; voucherNo: string | undefined; type: string | undefined;
+  /** The producer's own reference for the record that waits on this journal (e.g. asset-service's dep entry gl_ref). */
+  sourceRef?: string;
+  source?: Record<string, unknown>;
+};
+
+/**
+ * F89 (UAT T6-01): the one place a deterministic posting refusal becomes producer feedback. If `err` is a refusal
+ * (unknown account, closed period, group account, unbalanced, ... -- see refusal.ts) the posting transaction has already
+ * rolled back; tell the producer with finance.gl.rejected (journal id, producer reference, code, reason), raise an
+ * alertable error and dead-letter it as a NonRetryableError -- a retry cannot change the answer. A transient failure
+ * (no refusal code) is rethrown unchanged and keeps its retry behaviour.
+ *
+ * `markInbox`: whether the rejection also marks the message processed. The generic posting path does (unchanged): its
+ * producers re-send with their own repost flow. The asset-lifecycle and payroll-settlement branches do NOT: their journal
+ * id is deterministic from the source (depreciation:<asset>:<period>:<book>, asset_disposal:<asset>,
+ * payroll_settlement:<run>), so re-driving the dead-lettered message once the chart is fixed posts it exactly once.
+ */
+async function rejectRefusal(msg: CommandEnvelope, err: unknown, j: RejectedJournal, markInbox: boolean): Promise<never> {
+  const code = refusalCode(err);
+  if (!code) throw err;
+  const accountCode = err instanceof UnknownAccountCodeError ? err.accountCode : undefined;
+  captureError(err, {
+    service: "finance-service", alert: code === "UNKNOWN_ACCOUNT_CODE" ? "GL_UNKNOWN_ACCOUNT_CODE" : "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost,
+    journalId: j.journalId, voucherNo: j.voucherNo, type: j.type, code, ...(accountCode ? { accountCode } : {}),
+    ...(j.sourceRef ? { sourceRef: j.sourceRef } : {}), tenantId: msg.tenantId,
+  });
+  const reason = err instanceof UnknownAccountCodeError
+    ? `UNKNOWN_ACCOUNT_CODE: account ${err.accountCode} is not in the chart of accounts`
+    : `${code}: ${String((err as Error).message).replace(/^\[?[A-Z_]+\]?[:\s]\s*/, "")}`;
+  await db.transaction(async (tx) => {
+    if (markInbox && !(await markProcessed(tx, msg.messageId))) return;
+    await enqueue(tx, {
+      topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: {
+        journalId: j.journalId, voucherNo: j.voucherNo, type: j.type, code, reason,
+        ...(accountCode ? { accountCode } : {}),
+        ...(j.sourceRef ? { sourceRef: j.sourceRef } : {}),
+        ...(j.source ? { source: j.source } : {}),
+      },
+    });
+  });
+  if (err instanceof NonRetryableError) throw err;
+  throw new NonRetryableError(String((err as Error).message));
+}
+
+/**
+ * The asset_disposal payload (asset-service). F90: an auction disposal used to arrive as `asset_disposal_auction`, a
+ * type with no branch here (it fell through to the generic path and was refused as JOURNAL_TOO_FEW_LINES for every
+ * tenant), and without gainLoss. asset-service now sends the asset_disposal shape; a legacy auction message still queued
+ * is accepted, its gain/loss derived the way every producer computes it: proceeds - book value (cost - accumulated dep).
+ */
+function disposalAmounts(raw: Record<string, unknown>): { acq: bigint; accum: bigint; proceeds: bigint; gainLoss: bigint } {
+  const minor = (v: unknown): bigint => BigInt(typeof v === "number" || typeof v === "bigint" ? v : String(v));
+  const acq = minor(raw.acquisitionCost);
+  const accum = minor(raw.accumulatedDep);
+  const proceeds = raw.proceeds === undefined || raw.proceeds === null ? 0n : minor(raw.proceeds);
+  const gainLoss = raw.gainLoss === undefined || raw.gainLoss === null ? proceeds - (acq - accum) : minor(raw.gainLoss);
+  return { acq, accum, proceeds, gainLoss };
+}
+
 type StandardJournal = {
   id: string; tenantId: string; voucherNo: string; type: string;
   postingDate: string; lines: JournalLine[]; reversesId?: string;
@@ -325,22 +389,35 @@ export function registerGlConsumers(queue: Queue): void {
       const expenseCode = dep.depBook === "statutory" ? DEP_EXPENSE_STAT : DEP_EXPENSE;
       // C1: deterministic journal id keyed off the depreciation source so an
       // outbox redelivery hits the journal PK and no-ops (mirrors the GL spine).
-      const depKey = `depreciation:${dep.assetId}:${dep.period}:${dep.depBook ?? "company"}`;
+      const depBook = dep.depBook ?? "company";
+      const depKey = `depreciation:${dep.assetId}:${dep.period}:${depBook}`;
       const journalId = deterministicId(depKey);
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        await postJournal(tx, msg, {
-          id: journalId,
-          tenantId: msg.tenantId,
-          voucherNo: `DEP/${dep.depBook ?? "company"}/${dep.period}/${String(dep.assetId).slice(0, 8)}`,
-          type: "depreciation",
-          postingDate: `${dep.period}-28`,
-          lines: [
-            { accountCode: expenseCode, debitMinor: amount.toString(), creditMinor: "0" },
-            { accountCode: ACCUM_DEP, debitMinor: "0", creditMinor: amount.toString() },
-          ],
+      const voucherNo = `DEP/${depBook}/${dep.period}/${String(dep.assetId).slice(0, 8)}`;
+      try {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await postJournal(tx, msg, {
+            id: journalId,
+            tenantId: msg.tenantId,
+            voucherNo,
+            type: "depreciation",
+            postingDate: `${dep.period}-28`,
+            lines: [
+              { accountCode: expenseCode, debitMinor: amount.toString(), creditMinor: "0" },
+              { accountCode: ACCUM_DEP, debitMinor: "0", creditMinor: amount.toString() },
+            ],
+          });
         });
-      });
+      } catch (err) {
+        // F89: this branch used to rethrow a refusal with no finance.gl.rejected, while asset-service had already marked
+        // the entry posted and moved the book value -- the depreciation existed in Assets and not in the GL. The
+        // sourceRef is asset-service's own gl_ref for the entry, so it can put the entry back to unposted.
+        await rejectRefusal(msg, err, {
+          journalId, voucherNo, type: "depreciation",
+          sourceRef: `dep:${depBook}:${dep.assetId}:${dep.period}`,
+          source: { kind: "depreciation", assetId: dep.assetId, period: dep.period, depBook, amountMinor: amount.toString() },
+        }, false);
+      }
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
       // BUG FIX (review follow-up): listFinancialStatements caches under a
       // sibling "gl_financial_statements" key (gl/queries.ts) with no
@@ -364,16 +441,10 @@ export function registerGlConsumers(queue: Queue): void {
       return;
     }
 
-    if (raw.type === "asset_disposal") {
-      const d = raw as {
-        assetId: string; acquisitionCost: string; accumulatedDep: string;
-        proceeds: string | number; gainLoss: string; currency?: string;
-      };
+    if (raw.type === "asset_disposal" || raw.type === "asset_disposal_auction") {
+      const d = raw as { assetId: string; currency?: string };
       // M1: carry paise as decimal strings -> BigInt (no Number() on paise).
-      const acq = BigInt(d.acquisitionCost);
-      const accum = BigInt(d.accumulatedDep);
-      const proceeds = BigInt(d.proceeds ?? 0);
-      const gainLoss = BigInt(d.gainLoss);
+      const { acq, accum, proceeds, gainLoss } = disposalAmounts(raw);
       // C1: deterministic journal id keyed off the asset disposal so redelivery
       // hits the journal PK and no-ops (mirrors the GL spine).
       const journalId = deterministicId(`asset_disposal:${d.assetId}`);
@@ -390,17 +461,27 @@ export function registerGlConsumers(queue: Queue): void {
       } else if (gainLoss < 0n) {
         lines.push({ accountCode: GAIN_LOSS, debitMinor: (-gainLoss).toString(), creditMinor: "0" });
       }
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        await postJournal(tx, msg, {
-          id: journalId,
-          tenantId: msg.tenantId,
-          voucherNo: `DISP/${today}/${String(d.assetId).slice(0, 8)}`,
-          type: "asset_disposal",
-          postingDate: today,
-          lines,
+      const voucherNo = `DISP/${today}/${String(d.assetId).slice(0, 8)}`;
+      try {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await postJournal(tx, msg, {
+            id: journalId,
+            tenantId: msg.tenantId,
+            voucherNo,
+            type: "asset_disposal",
+            postingDate: today,
+            lines,
+          });
         });
-      });
+      } catch (err) {
+        // F89: same gap as depreciation -- a refused disposal journal used to dead-letter with no feedback.
+        await rejectRefusal(msg, err, {
+          journalId, voucherNo, type: "asset_disposal",
+          sourceRef: `asset_disposal:${d.assetId}`,
+          source: { kind: "asset_disposal", assetId: d.assetId },
+        }, false);
+      }
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
       // BUG FIX (review follow-up): see the matching comment above
       // (depreciation branch) -- gl_financial_statements needs invalidating
@@ -426,27 +507,7 @@ export function registerGlConsumers(queue: Queue): void {
       // marks the message processed) and raise an alertable error, then dead-letter -- never retry a refusal that a retry
       // cannot change. A record that waits on this journal (asset-service) shows it as not posted and why, instead of
       // staying pending forever. Transient failures (no code) keep their normal retry behaviour.
-      const code = refusalCode(err);
-      if (code) {
-        const accountCode = err instanceof UnknownAccountCodeError ? err.accountCode : undefined;
-        captureError(err, {
-          service: "finance-service", alert: code === "UNKNOWN_ACCOUNT_CODE" ? "GL_UNKNOWN_ACCOUNT_CODE" : "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost,
-          journalId: p.id, voucherNo: p.voucherNo, code, ...(accountCode ? { accountCode } : {}), tenantId: msg.tenantId,
-        });
-        const reason = err instanceof UnknownAccountCodeError
-          ? `UNKNOWN_ACCOUNT_CODE: account ${err.accountCode} is not in the chart of accounts`
-          : `${code}: ${String((err as Error).message).replace(/^\[?[A-Z_]+\]?[:\s]\s*/, "")}`;
-        await db.transaction(async (tx) => {
-          if (!(await markProcessed(tx, msg.messageId))) return;
-          await enqueue(tx, {
-            topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
-            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { journalId: p.id, voucherNo: p.voucherNo, type: p.type, code, reason, ...(accountCode ? { accountCode } : {}) },
-          });
-        });
-        if (!(err instanceof NonRetryableError)) throw new NonRetryableError(String((err as Error).message));
-      }
-      throw err;
+      await rejectRefusal(msg, err, { journalId: p.id, voucherNo: p.voucherNo, type: p.type }, true);
     }
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
     // BUG FIX (review follow-up): see the matching comment above
@@ -668,48 +729,59 @@ export function registerGlConsumers(queue: Queue): void {
         return;
       }
 
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
+      const settlementVoucherNo = `PAYSTL/${p.month}/${p.runId.slice(0, 8).toUpperCase()}`;
+      try {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
 
-        // Validate both head codes exist in COA for this tenant
-        const resolvedLines: JournalLine[] = [];
-        for (const entry of [
-          { headCode: PAYABLE_HEAD, debitMinor: net.toString(), creditMinor: "0" },
-          { headCode: BANK_HEAD, debitMinor: "0", creditMinor: net.toString() },
-        ]) {
-          const head = await budgetRepo.findHeadByCodeTx(
-            tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0],
-            msg.tenantId,
-            entry.headCode,
-          );
-          if (!head) {
-            await enqueue(tx, {
-              topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
-              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-              payload: { runId: p.runId, journalId, reason: `INVALID_HEAD_CODE: head code '${entry.headCode}' not found in Chart of Accounts for tenant ${msg.tenantId}` },
+          // Validate both head codes exist in COA for this tenant
+          const resolvedLines: JournalLine[] = [];
+          for (const entry of [
+            { headCode: PAYABLE_HEAD, debitMinor: net.toString(), creditMinor: "0" },
+            { headCode: BANK_HEAD, debitMinor: "0", creditMinor: net.toString() },
+          ]) {
+            const head = await budgetRepo.findHeadByCodeTx(
+              tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0],
+              msg.tenantId,
+              entry.headCode,
+            );
+            if (!head) {
+              await enqueue(tx, {
+                topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: { runId: p.runId, journalId, reason: `INVALID_HEAD_CODE: head code '${entry.headCode}' not found in Chart of Accounts for tenant ${msg.tenantId}` },
+              });
+              return;  // markProcessed + glRejected atomic
+            }
+            resolvedLines.push({
+              accountCode: head.id,
+              debitMinor: entry.debitMinor,
+              creditMinor: entry.creditMinor,
             });
-            return;  // markProcessed + glRejected atomic
           }
-          resolvedLines.push({
-            accountCode: head.id,
-            debitMinor: entry.debitMinor,
-            creditMinor: entry.creditMinor,
+
+          // Validate the journal is balanced (sum debits === sum credits)
+          assertJournalBalances(resolvedLines);
+
+          // Post journal via the standard postJournal path
+          await postJournal(tx, msg, {
+            id: journalId,
+            tenantId: msg.tenantId,
+            voucherNo: settlementVoucherNo,
+            type: "payroll_settlement",
+            postingDate: today,
+            lines: resolvedLines,
           });
-        }
-
-        // Validate the journal is balanced (sum debits === sum credits)
-        assertJournalBalances(resolvedLines);
-
-        // Post journal via the standard postJournal path
-        await postJournal(tx, msg, {
-          id: journalId,
-          tenantId: msg.tenantId,
-          voucherNo: `PAYSTL/${p.month}/${p.runId.slice(0, 8).toUpperCase()}`,
-          type: "payroll_settlement",
-          postingDate: today,
-          lines: resolvedLines,
         });
-      });
+      } catch (err) {
+        // A refusal from postJournal itself (closed period, group account, ...) used to be retried as a plain Error and
+        // dead-letter with no feedback. Report it like every other GL posting path (the missing-head case above already
+        // answers in-transaction). Deterministic journal id, so a re-drive after the fix posts exactly once.
+        await rejectRefusal(msg, err, {
+          journalId, voucherNo: settlementVoucherNo, type: "payroll_settlement",
+          sourceRef: `payroll_settlement:${p.runId}`, source: { kind: "payroll_settlement", runId: p.runId },
+        }, false);
+      }
 
       await cache.invalidateResource(msg.tenantId, "journals");
   });
