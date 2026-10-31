@@ -15,7 +15,8 @@ export const PO_APPROVAL_DEFINITION_CODE = "procurement_po_approval";
 export type PoStatus = "draft" | "pending" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
 
 const VALID_TRANSITIONS: Record<PoStatus, PoStatus[]> = {
-  draft:       ["pending", "approved"],
+  // F102: a PO awaits its workflow approval in draft; a reject cancels it.
+  draft:       ["pending", "approved", "cancelled"],
   pending:     ["approved", "cancelled"],
   approved:    ["dispatched", "closed", "cancelled"],
   gem_placed:  ["dispatched", "closed"],

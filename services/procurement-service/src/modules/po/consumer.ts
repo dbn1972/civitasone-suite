@@ -321,10 +321,26 @@ export function registerPoConsumers(queue: Queue): void {
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
       assertPoRejectable(po.status ?? "draft");
+      assertTransitionAllowed(po.status ?? "draft", "cancelled");
+      // Version-locked: a concurrent / duplicate reject conflicts and rolls back,
+      // so the release below runs at most once per PO.
       await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "cancelled", updatedBy: msg.actorId });
+      // F102 review: give the PO's reservation back to its indent (reserved at
+      // create by reserveIndentBudget, same transaction, tenant-scoped).
+      const indentId = po.indentRef.replace(/^.*:/, "");
+      const released = REF_UUID_RE.test(indentId) && BigInt(po.totalMinor) > 0n
+        ? await indentRepo.releaseIndentCommittedGuarded(tx, indentId, p.tenantId, BigInt(po.totalMinor))
+        : false;
       // No new domain event: nothing consumes one yet (event contract); the
       // audit row and workflow close_by_ref carry the decision.
-      await audit(tx, msg, "reject", "po", p.id);
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "procurement", action: "reject", resourceType: "po", resourceId: p.id, outcome: "success",
+          metadata: { indentRef: po.indentRef, releasedMinor: released ? String(po.totalMinor) : "0" },
+        },
+      });
       await closeWorkflowForRef(tx, msg, "procurement_po", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));

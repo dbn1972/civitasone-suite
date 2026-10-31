@@ -157,3 +157,56 @@ describe("F102 — PATCH /v1/procurement/pos/:id/reject", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 });
+
+describe("F102 review — a rejected PO releases its indent commitment exactly once", () => {
+  async function seedApprovedIndent(totalMinor: bigint, committedMinor: bigint): Promise<string> {
+    const id = randomUUID();
+    await inTenant((tx) => tx.insert(procurementIndents).values({
+      id, tenantId: TENANT, indentNo: `IND-F102C-${id.slice(-4)}`, department: "Stores", purpose: "F102 commit",
+      status: "approved", totalMinor, committedMinor, createdBy: MAKER, updatedBy: MAKER,
+    }));
+    return id;
+  }
+  async function seedPoAgainst(indentId: string, totalMinor: bigint, status = "draft"): Promise<string> {
+    const id = randomUUID();
+    await inTenant((tx) => tx.insert(procurementPos).values({
+      id, tenantId: TENANT, poNo: `PO-F102C-${id.slice(-4)}`, vendorId: randomUUID(), indentRef: `procurement_indent:${indentId}`,
+      totalMinor, status, createdBy: MAKER, updatedBy: MAKER,
+    }));
+    return id;
+  }
+
+  it("reject -> cancelled gives the PO value back to the indent; a duplicate reject does not release again", async () => {
+    const indentId = await seedApprovedIndent(10_000n, 7_000n);
+    const poId = await seedPoAgainst(indentId, 4_000n);
+    await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "wrong vendor" });
+    expect((await po(poId))?.status).toBe("cancelled");
+    expect((await indent(indentId))?.committedMinor).toBe(3_000n);
+
+    await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "again" }); // new messageId, same PO
+    expect((await indent(indentId))?.committedMinor).toBe(3_000n);
+  });
+
+  it("a refused reject (approved PO) releases nothing", async () => {
+    const indentId = await seedApprovedIndent(10_000n, 4_000n);
+    const poId = await seedPoAgainst(indentId, 4_000n, "approved");
+    await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "late" });
+    expect((await indent(indentId))?.committedMinor).toBe(4_000n);
+  });
+
+  it("the release never drives committed_minor negative", async () => {
+    const indentId = await seedApprovedIndent(10_000n, 1_000n);
+    const poId = await seedPoAgainst(indentId, 4_000n);
+    await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "inconsistent" });
+    expect((await po(poId))?.status).toBe("cancelled");
+    expect((await indent(indentId))?.committedMinor).toBe(1_000n);
+  });
+});
+
+describe("F102 review — PO state machine", () => {
+  it("draft -> cancelled is a declared transition (reject goes through assertTransitionAllowed)", async () => {
+    const { assertTransitionAllowed } = await import("../src/modules/po/domain.js");
+    expect(() => assertTransitionAllowed("draft", "cancelled")).not.toThrow();
+    expect(() => assertTransitionAllowed("cancelled", "draft")).toThrow();
+  });
+});

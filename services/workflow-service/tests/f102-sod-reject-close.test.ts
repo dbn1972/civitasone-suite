@@ -147,30 +147,105 @@ describe("F102 — a direct indent / PO decision closes the inbox task (close_by
 });
 
 describe("F102 — repair CLI re-opens approvals consumed by a maker's super_admin override", () => {
-  it("dry-run lists only the consumed self-approval; a real run re-opens it once; a checker-approved one is untouched", async () => {
+  const AMEND = { code: "procurement_po_amendment_approval", refType: "procurement_po_amendment", reject: "procurement.po_amendment.reject" } as const;
+
+  /** Simulate the pre-F102 outcome: the maker's override consumed the task and completed the instance. */
+  async function consumed(tenant: string, chain: { code: string; refType: string }, refId: string): Promise<string> {
+    const maker = randomUUID();
+    const id = await raise(tenant, chain as (typeof CHAINS)[number], refId, maker);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET status = 'completed', decision = 'approve', completed_by = ${maker}, sod_override = true WHERE instance_id = ${id}`);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.instances SET status = 'completed' WHERE id = ${id}`);
+    return id;
+  }
+
+  it("re-opens only consumed approvals whose domain record still awaits approval; audits each; re-run is a no-op", async () => {
     const { repairSodConsumedApprovals } = await import("../src/scripts/repair-sod-consumed-approvals.js");
     const tenant = newTenant();
     await provision(tenant);
-    const maker = randomUUID();
-    const stuck = await raise(tenant, CHAINS[0], randomUUID(), maker);
-    // Simulate the pre-F102 outcome: the maker's override consumed the task and completed the instance.
-    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET status = 'completed', decision = 'approve', completed_by = ${maker}, sod_override = true WHERE instance_id = ${stuck}`);
-    await sqlAsTenant(tenant, sql`UPDATE workflow.instances SET status = 'completed' WHERE id = ${stuck}`);
+    const indentRef = randomUUID(), poRef = randomUUID(), amendRef = randomUUID();
+    const indentId = await consumed(tenant, CHAINS[0], indentRef);   // indent still pending -> re-open
+    const poId = await consumed(tenant, CHAINS[1], poRef);           // PO approved since -> skip
+    const amendId = await consumed(tenant, AMEND, amendRef);         // amendment still pending -> re-open
     const fine = await raise(tenant, CHAINS[1], randomUUID(), randomUUID());
-    await deliverComplete(tenant, fine, randomUUID(), "approve");
+    await deliverComplete(tenant, fine, randomUUID(), "approve");    // a real checker approval -> never a candidate
+    const domain: Record<string, string> = { [indentRef]: "pending", [poRef]: "approved", [amendRef]: "pending" };
+    const readDomainStatus = async (_t: string, _r: string, refId: string) => domain[refId] ?? null;
 
-    const dry = await repairSodConsumedApprovals(tenant, { actorId: randomUUID(), dryRun: true });
-    expect(dry.candidates.map((c) => c.instanceId)).toEqual([stuck]);
+    const dry = await repairSodConsumedApprovals(tenant, { actorId: randomUUID(), dryRun: true, readDomainStatus });
+    expect(dry.candidates.map((c) => c.instanceId).sort()).toEqual([indentId, poId, amendId].sort());
+    expect(dry.skipped).toEqual([{ instanceId: poId, reason: "already_decided:approved" }]);
     expect(dry.reopened).toEqual([]);
-    expect((await getInstance(tenant, stuck))?.status).toBe("completed");
+    expect((await getInstance(tenant, indentId))?.status).toBe("completed");
 
-    const run = await repairSodConsumedApprovals(tenant, { actorId: randomUUID() });
-    expect(run.reopened).toEqual([stuck]);
-    expect((await getInstance(tenant, stuck))?.status).toBe("active");
-    expect((await tasksFor(tenant, stuck))[0]).toMatchObject({ status: "pending", decision: null, completed_by: null, sod_override: false });
+    const actor = randomUUID();
+    const run = await repairSodConsumedApprovals(tenant, { actorId: actor, readDomainStatus });
+    expect(run.reopened.sort()).toEqual([indentId, amendId].sort());
+    for (const id of [indentId, amendId]) {
+      expect((await getInstance(tenant, id))?.status).toBe("active");
+      expect((await tasksFor(tenant, id))[0]).toMatchObject({ status: "pending", decision: null, completed_by: null, sod_override: false });
+    }
+    expect((await getInstance(tenant, poId))?.status).toBe("completed");
     expect((await getInstance(tenant, fine))?.status).toBe("completed");
+    const audits = (await outbox(tenant, "audit.event.record")).filter((a) => a.action === "sod_repair_reopen");
+    expect(audits.map((a) => a.resourceId).sort()).toEqual([indentId, amendId].sort());
 
-    const again = await repairSodConsumedApprovals(tenant, { actorId: randomUUID() });
-    expect(again.candidates).toEqual([]);
+    const again = await repairSodConsumedApprovals(tenant, { actorId: actor, readDomainStatus });
+    expect(again.reopened).toEqual([]);
+    expect(again.candidates.map((c) => c.instanceId)).toEqual([poId]);
+  });
+
+  it("procurementStatusReader reads the record status from procurement's DB under the tenant GUC", async () => {
+    const { procurementStatusReader } = await import("../src/scripts/repair-sod-consumed-approvals.js");
+    const url = new URL(process.env.DATABASE_URL as string);
+    url.username = "procurement_svc"; url.password = "procurement_dev_pw"; url.pathname = "/civitas_procurement";
+    const tenant = randomUUID();
+    const indentId = randomUUID();
+    const postgres = (await import("postgres")).default;
+    const pg = postgres(url.toString(), { max: 1 });
+    try {
+      await pg.begin(async (tx) => {
+        await tx`SELECT set_config('app.tenant_id', ${tenant}, true)`;
+        await tx`INSERT INTO indent.procurement_indents (id, tenant_id, indent_no, department, purpose, status, created_by, updated_by)
+                 VALUES (${indentId}, ${tenant}, 'IND-F102-R', 'Stores', 'F102', 'pending', ${tenant}, ${tenant})`;
+      });
+      const reader = procurementStatusReader(url.toString());
+      try {
+        expect(await reader.read(tenant, "procurement_indent", indentId)).toBe("pending");
+        expect(await reader.read(randomUUID(), "procurement_indent", indentId)).toBeNull(); // other tenant
+        expect(await reader.read(tenant, "procurement_po", randomUUID())).toBeNull();
+      } finally {
+        await reader.end();
+      }
+    } finally {
+      await pg.begin(async (tx) => {
+        await tx`SELECT set_config('app.tenant_id', ${tenant}, true)`;
+        await tx`DELETE FROM indent.procurement_indents WHERE id = ${indentId}`;
+      });
+      await pg.end();
+    }
+  });
+});
+
+describe("F102 review — `rejected` is a terminal instance status", () => {
+  it("cancel and migrate of a rejected instance are refused (409 INSTANCE_TERMINAL); search accepts status=rejected", async () => {
+    const tenant = newTenant();
+    await provision(tenant);
+    const id = await raise(tenant, CHAINS[0], randomUUID(), randomUUID());
+    await deliverComplete(tenant, id, randomUUID(), "reject", { reason: "no" });
+    expect((await getInstance(tenant, id))?.status).toBe("rejected");
+
+    const tok = signToken({ sub: randomUUID(), tid: tenant, roles: ["workflow_admin"], sid: "s" }, SECRET);
+    const headers = { authorization: `Bearer ${tok}` };
+    const app = await buildApp();
+    const cancel = await app.inject({ method: "POST", url: `/v1/workflow/instances/${id}/cancel`, headers, payload: { reason: "x" } });
+    const migrate = await app.inject({ method: "POST", url: `/v1/workflow/instances/${id}/migrate`, headers, payload: { toVersion: 2 } });
+    const search = await app.inject({ method: "GET", url: "/v1/workflow/instances/search?status=rejected", headers });
+    await app.close();
+    expect(cancel.statusCode).toBe(409);
+    expect(cancel.json().code).toBe("INSTANCE_TERMINAL");
+    expect(migrate.statusCode).toBe(409);
+    expect(migrate.json().code).toBe("INSTANCE_TERMINAL");
+    expect(search.statusCode).toBe(200);
+    expect(JSON.stringify(search.json())).toContain(id);
   });
 });
