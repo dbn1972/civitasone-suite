@@ -5,7 +5,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { emitAudit } from "./audit-emit.js";
@@ -31,7 +31,7 @@ import {
   DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, cloneFields, toVacancyType,
   type ApprovalStage,
 } from "./requisition-domain.js";
-import { DEFAULT_OFFER_CHAIN, computeCompensation } from "./offer-domain.js";
+import { DEFAULT_OFFER_CHAIN, computeCompensation, canRelease, isTerminal, isOfferEditable } from "./offer-domain.js";
 import { normalizeEmail, mobileDedupKey } from "./candidate.js";
 import { autoScreenDecision } from "./screening.js";
 import { assessFee } from "./application-fee.js";
@@ -72,6 +72,28 @@ import * as selectionRepo from "./selection-repo.js";
 import * as skillsRepo from "./skills-repo.js";
 
 const log = pino({ name: "hrms-f3-recruitment" });
+
+/**
+ * UAT B9-hrms1: the legal SOURCE statuses of each offer state transition -- the
+ * same predicates the routes check, re-asserted on the locked row inside the
+ * write transaction (see offerRepo.findOfferTx's forUpdate). A transition whose source
+ * status no longer holds is refused: audited, nothing written, and the message
+ * dead-lettered as a CommandRefusal (NonRetryable -- a redelivery would be
+ * refused identically). Before this, each case re-read the row and updated it
+ * under the version it had just read, so e.g. a stale submit reset an approved
+ * offer to pending_approval.
+ */
+const OFFER_TRANSITION_FROM: Record<string, (status: string) => boolean> = {
+  submit: isOfferEditable,
+  approve: (s) => s === "pending_approval",
+  return: (s) => s === "pending_approval",
+  release: canRelease,
+  accept: (s) => s === "released",
+  decline: (s) => s === "released",
+  withdraw: (s) => !isTerminal(s),
+  expire: (s) => s === "released",
+  revise: (s) => s !== "accepted" && s !== "revised",
+};
 
 /** Deliberate non-shortlist decisions bulk shortlist must not overturn (mirrors screening-routes). */
 const BULK_SHORTLIST_BLOCKED = new Set(["ineligible", "waitlisted", "manual_review"]);
@@ -297,6 +319,30 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
     const offerId = params.offerId as string;
     const reqId = params.reqId as string;
     const auditCtx = { tenantId: String(p.tenantId), actorId: msg.actorId, correlationId: msg.correlationId };
+    /** Set when an offer transition is refused; thrown once the audit row has committed. */
+    const refused: { err: CommandRefusal | null } = { err: null };
+    /**
+     * Record a refused offer transition (B9-hrms1): error log + failure audit in
+     * this transaction, no write; the CommandRefusal is thrown after commit so the
+     * audit row and the processed-marker persist and the message dead-letters.
+     */
+    const refuseOffer = async (
+      tx: unknown, action: string, o: offerRepo.OfferRow, reason: string, extra: Record<string, unknown> = {},
+    ): Promise<void> => {
+      log.error({ op, messageId: msg.messageId, offerId: o.id, action, reason, status: o.status, currentStage: o.currentStage, ...extra },
+        "offer transition refused");
+      await emitAudit(tx, auditCtx, action, "offer", o.id, {
+        outcome: "failure", reason, status: o.status, currentStage: o.currentStage, ...extra,
+      });
+      refused.err = new CommandRefusal(reason, { offerId: o.id, action, status: o.status },
+        `${reason}: offer ${action} refused, offer is '${o.status}'`);
+    };
+    /** True (after recording the refusal) when `o` is not in a legal source status for `action`. */
+    const offerFromRefused = async (tx: unknown, action: string, o: offerRepo.OfferRow): Promise<boolean> => {
+      if (OFFER_TRANSITION_FROM[action]!(o.status)) return false;
+      await refuseOffer(tx, action, o, "WRONG_STATE");
+      return true;
+    };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -942,8 +988,10 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_offer_extra_routes__0": {
             // Restored: the offer and its current joining date (preserved as the
             // ORIGINAL when the first extension is requested).
-            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (offer.status !== "accepted") { await refuseOffer(tx, "joining_extension_request", offer, "NOT_ACCEPTED"); break; }
+            if (offer.joiningExtensionStatus === "requested") { await refuseOffer(tx, "joining_extension_request", offer, "EXTENSION_PENDING"); break; }
             const current = offer.joiningDate;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                   joiningExtensionStatus: "requested",
@@ -957,8 +1005,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_extra_routes__1": {
             // Restored: the offer (the requested date becomes the joining date).
-            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (offer.joiningExtensionStatus !== "requested") { await refuseOffer(tx, "joining_extension_approve", offer, "NO_REQUEST"); break; }
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                   joiningDate: offer.requestedJoiningDate,     // apply the new date
                   joiningExtensionStatus: "approved",
@@ -970,8 +1019,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_extra_routes__2": {
             // Restored: the offer (for the optimistic-version guard).
-            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (offer.joiningExtensionStatus !== "requested") { await refuseOffer(tx, "joining_extension_reject", offer, "NO_REQUEST"); break; }
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                   joiningExtensionStatus: "rejected",
                   joiningExtensionBy: msg.actorId,
@@ -1008,15 +1058,16 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__1": {
             // Restored: the offer (version guard + the application it belongs to).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "submit", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "pending_approval", currentStage: 0 }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "submit", actorId: msg.actorId });
             break;
           }
           case "recruitment_offer_routes__2": {
             // Restored: the offer and whether this is the FINAL approval stage.
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             // UAT F70: the route's checks ran against a read that can be stale by
             // the time this runs (the same approver's second click, or a third
@@ -1026,18 +1077,12 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // way), so record it as an audited no-op instead of retrying.
             const expectedStage = p.expectedStage == null ? o.currentStage : Number(p.expectedStage);
             const refusal =
-              o.status !== "pending_approval" ? "WRONG_STATE"
+              !OFFER_TRANSITION_FROM.approve!(o.status) ? "WRONG_STATE"
               : o.currentStage !== expectedStage ? "STALE_STAGE"
               : o.createdBy === msg.actorId ? "SOD_VIOLATION"
               : (await offerRepo.actorApprovedInCurrentCycleTx(tx, p.tenantId, offerId, msg.actorId)) ? "SOD_VIOLATION"
               : null;
-            if (refusal) {
-              log.warn({ op, messageId: msg.messageId, offerId, refusal, status: o.status, currentStage: o.currentStage, expectedStage }, "offer approve refused");
-              await emitAudit(tx, auditCtx, "approve", "offer", offerId, {
-                outcome: "failure", reason: refusal, status: o.status, currentStage: o.currentStage, expectedStage,
-              });
-              break;
-            }
+            if (refusal) { await refuseOffer(tx, "approve", o, refusal, { expectedStage }); break; }
             const final = isFinalStage(o.approvalChain as ApprovalStage[], o.currentStage);
             await offerRepo.updateOffer(tx, p.tenantId, offerId,
                     final ? { status: "approved", approvedAt: new Date() } : { currentStage: o.currentStage + 1 }, o.version);
@@ -1046,16 +1091,18 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__3": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "return", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "returned", currentStage: -1 }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "return", remarks: body.comments, actorId: msg.actorId });
             break;
           }
           case "recruitment_offer_routes__4": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "release", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "released", releasedAt: new Date(), ...(body.expiresAt ? { expiresAt: body.expiresAt } : {}) }, o.version);
                   // GAP-RECRUITMENT-DETAIL-05: a released offer moves the application to stage "offered" (what the
                   // legacy PATCH did), so the Hire step (stage selected|offered) keeps working on the approval path.
@@ -1069,8 +1116,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // IP / user-agent live on the HTTP request, not the body, so the
             // route now forwards them on the payload as `meta`; fabricating them
             // here would put false evidence on the acceptance record.
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "accept", o)) break;
             const meta = (p.meta ?? {}) as Record<string, unknown>;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                     status: "accepted", acceptedAt: new Date(), acceptedVersion: o.offerVersion, acceptanceMeta: meta as never,
@@ -1080,24 +1128,27 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__6": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "decline", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "declined", declinedAt: new Date(), declineReasonCode: body.reasonCode, declineRemarks: body.remarks ?? null }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "decline", reasonCode: body.reasonCode, remarks: body.remarks ?? null, actorId: msg.actorId });
             break;
           }
           case "recruitment_offer_routes__7": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "withdraw", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "withdrawn", withdrawReason: body.reason }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "withdraw", remarks: body.reason, actorId: msg.actorId });
             break;
           }
           case "recruitment_offer_routes__8": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "expire", o)) break;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "expired" }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "expire", actorId: msg.actorId });
             break;
@@ -1105,8 +1156,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_offer_routes__9": {
             // Restored: the superseded offer, the new version's id and number,
             // and the compensation merged over the previous offer's figures.
-            const prev = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
+            const prev = await offerRepo.findOfferTx(tx, p.tenantId, offerId, { forUpdate: true });
             if (!prev) throw new HttpError(404, "NOT_FOUND", "offer not found");
+            if (await offerFromRefused(tx, "revise", prev)) break;
             const newId = genId;
             const nextVersion = (await offerRepo.maxOfferVersionTx(tx, p.tenantId, prev.applicationId)) + 1;
             const c = computeCompensation({
@@ -1906,7 +1958,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
         }
       });
+      if (refused.err) throw refused.err;
     } catch (err) {
+      if (err === refused.err) throw err; // already logged + audited by refuseOffer
       // GAP-RECRUITMENT-HOME-05: two concurrent PATCHes can both pass the route's duplicate pre-check; the
       // unique index then rejects the loser with SQLSTATE 23505. That outcome is final (a redelivery would fail
       // identically), so record it as a terminal, AUDITED failure instead of rethrowing into endless retries.

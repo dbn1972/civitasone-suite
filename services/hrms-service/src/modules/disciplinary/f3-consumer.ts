@@ -2,35 +2,70 @@ import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsIccComplaints, hrmsIccHearings } from "./schema.js";
 import { hrmsDisciplinaryCases, hrmsSuspensions, type DisciplinaryCaseInsert } from "./schema.js";
+import { canTransition, type CaseAction, type CaseStatus } from "./state-machine.js";
 const log = pino({ name: "hrms-f3-disciplinary" });
 
 const CASE_COLUMNS = getTableColumns(hrmsDisciplinaryCases) as Record<string, { columnType: string }>;
 
 /**
- * Revive a case-transition `patch` that crossed the bus.
- *
- * The route's `transition()` builds `patch` in-process, so `close` / `drop`
- * put a real `Date` in `closedAt`. On the SQS driver the envelope is
- * JSON-serialised, so the consumer receives an ISO string instead, and
- * Drizzle's `PgTimestamp.mapToDriverValue` calls `value.toISOString()` on it.
- * The resulting TypeError retried every close/drop into the DLQ while the
- * route had already answered 200. (MemoryQueue hands the payload over by
- * reference, which is why the in-memory tests never saw it.)
- *
- * Every case transition funnels through `disciplinary_routes__0`, so this is
- * done once here, keyed off the case table's own column types: any Date-mode
- * timestamp column given a string/number becomes a Date. `date` columns are
- * string-mode in Drizzle and pass through untouched. An unparseable value can
- * never succeed on retry, so it is dead-lettered immediately.
+ * UAT B9-hrms2: the case columns each transition may patch -- exactly the keys
+ * the matching route's `transition()` call builds (routes.ts). The consumer used
+ * to spread whatever `patch` the payload carried into the case UPDATE, so a
+ * crafted or buggy payload could rewrite any column (tenant_id, status, ids,
+ * allegation, created_by, ...). Identity, status and audit columns are set by the
+ * consumer itself and are never patchable.
  */
-export function reviveCasePatch(patch: Record<string, unknown>): Partial<DisciplinaryCaseInsert> {
+export const CASE_PATCH_ALLOW_LIST: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
+  issue_charge_memo: new Set(["chargeMemoRef", "chargeMemoDate"]),
+  appoint_inquiry: new Set(["inquiryOfficerName", "inquiryAppointedDate", "inquiryOfficerId"]),
+  record_finding: new Set(["finding", "findingDate", "findingNotes"]),
+  impose_penalty: new Set(["penaltyClass", "penaltyType", "penaltyDate", "penaltyDetail"]),
+  file_appeal: new Set(["appealFiledDate", "appealAuthority"]),
+  decide_appeal: new Set(["appealOutcome", "appealDecidedDate"]),
+  close: new Set(["closedAt"]),
+  drop: new Set(["closedAt"]),
+});
+
+/**
+ * Validate and revive a case-transition `patch` that crossed the bus.
+ *
+ * 1. Allow-list (B9-hrms2): an unknown action, or any key outside that action's
+ *    CASE_PATCH_ALLOW_LIST entry, is refused outright (error log + a
+ *    NonRetryable CommandRefusal; nothing is written). Refusing, rather than
+ *    silently dropping the extra keys, keeps a buggy producer visible.
+ *
+ * 2. Date revival (UAT F71): the route's `transition()` builds `patch`
+ *    in-process, so `close` / `drop` put a real `Date` in `closedAt`. On the SQS
+ *    driver the envelope is JSON-serialised, so the consumer receives an ISO
+ *    string instead, and Drizzle's `PgTimestamp.mapToDriverValue` calls
+ *    `value.toISOString()` on it. The resulting TypeError retried every
+ *    close/drop into the DLQ while the route had already answered 200.
+ *    (MemoryQueue hands the payload over by reference, which is why the
+ *    in-memory tests never saw it.) Keyed off the case table's own column
+ *    types: any Date-mode timestamp column given a string/number becomes a
+ *    Date. `date` columns are string-mode in Drizzle and pass through
+ *    untouched. An unparseable value can never succeed on retry, so it is
+ *    dead-lettered immediately.
+ */
+export function reviveCasePatch(action: string, patch: Record<string, unknown>): Partial<DisciplinaryCaseInsert> {
+  const allowed = Object.prototype.hasOwnProperty.call(CASE_PATCH_ALLOW_LIST, action) ? CASE_PATCH_ALLOW_LIST[action] : undefined;
+  if (!allowed) {
+    log.error({ action }, "disciplinary case transition refused: unknown action");
+    throw new CommandRefusal("UNKNOWN_CASE_ACTION", { action }, `UNKNOWN_CASE_ACTION: '${action}' is not a disciplinary case transition`);
+  }
+  const unknown = Object.keys(patch).filter((k) => !allowed.has(k));
+  if (unknown.length > 0) {
+    log.error({ action, fields: unknown }, "disciplinary case transition refused: patch carries fields outside the allow-list");
+    throw new CommandRefusal("UNPATCHABLE_FIELD", { action, fields: unknown },
+      `UNPATCHABLE_FIELD: '${action}' may not set ${unknown.join(", ")}`);
+  }
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     if (CASE_COLUMNS[key]?.columnType === "PgTimestamp" && value != null && !(value instanceof Date)) {
@@ -222,10 +257,21 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
             const to = String(p.to ?? "");
             const action = String(p.action ?? "");
             const notes = (p.notes ?? null) as string | null;
-            // JSON on the wire: revive timestamp columns (closedAt on close/drop).
-            const patch = reviveCasePatch((p.patch ?? {}) as Record<string, unknown>);
+            // Allow-list the patch for this transition (B9-hrms2), then revive
+            // timestamp columns (closedAt on close/drop; JSON on the wire).
+            const patch = reviveCasePatch(action, (p.patch ?? {}) as Record<string, unknown>);
             const c = await repo.findCaseTx(tx, p.tenantId, caseId);
             if (!c) throw new HttpError(404, "NOT_FOUND", "disciplinary case not found");
+            // B9-hrms2: `to` came from the payload and was computed by the route
+            // against a read that can be stale (duplicate / late delivery).
+            // Re-validate against the row read in this transaction (updateCase's
+            // version guard makes the pair atomic); a mismatch is final.
+            const check = canTransition(c.status as CaseStatus, action as CaseAction, c.proceedingType as "minor" | "major");
+            if (!check.ok || check.to !== to) {
+              log.error({ op, messageId: msg.messageId, caseId, action, status: c.status, to, reason: check.reason }, "disciplinary case transition refused");
+              throw new CommandRefusal("WRONG_STATE", { caseId, action, status: c.status, to },
+                `WRONG_STATE: '${action}' to '${to}' not allowed from '${c.status}'`);
+            }
             await repo.updateCase(tx, c.tenantId, c.id, { ...patch, status: to, updatedBy: actorId }, c.version);
                   await repo.appendEvent(tx, {
                     tenantId: c.tenantId, caseId: c.id, fromStatus: c.status, toStatus: to,
