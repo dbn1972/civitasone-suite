@@ -37,6 +37,18 @@ passes it, and the optional `COURT_DSC_REQUIRE_CHAIN_TRUST=true`, through from t
 launching shell only when set. On UAT/dev, leaving it unset keeps chain trust
 unenforced (self-signed DSCs accepted) with a WARN in the court logs.
 
+**document-worker — bulk-scan scanner DSN (UAT F84).** `DOCUMENT_SCANNER_DATABASE_URL`
+is the DSN of the read-only BYPASSRLS `document_scanner` role (document-service
+migration 0007). document-worker uses it for cross-tenant bulk-scan discovery
+(dispatcher, lease sweeper, upload expiry, retention). In production it **refuses to
+start** without it. `ecosystem.config.js` passes it through from the launching shell
+to `document-worker` only, and only when set. `document_svc` is NOBYPASSRLS
+(admin-service 0058), so on UAT/dev an unset DSN makes the worker fall back to
+`DATABASE_URL`, and discovery then finds no work. Set the `document_scanner` password
+from a mode-600 file (never echoed) and export the DSN before
+`pm2 restart document-worker --update-env`, and do this **before** applying
+admin-service 0058.
+
 ## Why they fail without this procedure
 
 `svc()` injects `NODE_ENV=production` into every app. The ecosystem decides
