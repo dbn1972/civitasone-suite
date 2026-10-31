@@ -31,7 +31,7 @@
  * wrong column, or not excluding ungraded appraisals — would still be
  * caught by the score assertions below, not just a bare status-code check.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withTenantScope } from "@civitasone/db";
@@ -123,9 +123,11 @@ beforeAll(async () => {
     // leave-prediction's real query against leave.hrms_leave_apps
     // (from_date/to_date/days_applied — not start_date/end_date) has real
     // historical rows to average.
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    const mm = String(nextMonth.getMonth() + 1).padStart(2, "0");
+    // F88: same UTC, day-1-anchored arithmetic as the route (the old
+    // setMonth(getMonth() + 1) overflowed on the 31st: Oct 31 -> Dec 1).
+    const now = new Date();
+    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const mm = String(nextMonth.getUTCMonth() + 1).padStart(2, "0");
     for (const y of [2023, 2024, 2025]) {
       await tx.insert(hrmsLeaveApps).values({
         id: randomUUID(), tenantId: TENANT, employeeId: weakEmployeeId,
@@ -242,5 +244,69 @@ describe("GET /v1/hrms/ai/leave-prediction (real DB)", () => {
       headers: auth(["hr_admin"]),
     });
     expect(r.statusCode).toBe(200);
+  });
+});
+
+// F88 regression: pin the clock to month-end days so this never depends on
+// the date CI happens to run. On 2026-10-31 the old route computed
+// setMonth(10) -> "Nov 31" -> Dec 1 and predicted December; on 2026-01-31
+// it went "Feb 31" -> Mar 3 and predicted March. Only Date is faked, so the
+// postgres driver and Fastify timers keep working. A separate tenant keeps
+// the November/February fixtures out of the main suite's averages.
+describe("GET /v1/hrms/ai/leave-prediction month-end overflow (F88)", () => {
+  const MONTH_END_TENANT = randomUUID();
+  const monthEndAuth = (): { authorization: string } => ({
+    authorization: `Bearer ${signToken({ sub: ACTOR, tid: MONTH_END_TENANT, roles: ["super_admin"], sid: "sess-ai-predictions-f88" }, SECRET, 3600)}`,
+  });
+
+  beforeAll(async () => {
+    await withTenantScope(db, MONTH_END_TENANT, async (tx) => {
+      const dept = randomUUID();
+      const desig = randomUUID();
+      const emp = randomUUID();
+      await tx.insert(hrmsDepartments).values({
+        id: dept, tenantId: MONTH_END_TENANT, code: "OPS", name: "Operations", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsDesignations).values({
+        id: desig, tenantId: MONTH_END_TENANT, code: "OFF", name: "Officer", level: 3, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(hrmsEmployees).values({
+        id: emp, tenantId: MONTH_END_TENANT, employeeNo: "OPS-1", fullName: "Month End",
+        departmentId: dept, designationId: desig, dateOfJoining: "2015-01-01",
+        status: "confirmed", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      // November: 2 apps x 5 days; February: 2 apps x 2 days. December and
+      // March (what the overflow predicted) have no rows at all.
+      for (const [mm, toDay, days] of [["11", "14", 5], ["02", "11", 2]] as const) {
+        for (const y of [2024, 2025]) {
+          await tx.insert(hrmsLeaveApps).values({
+            id: randomUUID(), tenantId: MONTH_END_TENANT, employeeId: emp,
+            leaveTypeId: randomUUID(), allocId: randomUUID(),
+            fromDate: `${y}-${mm}-10`, toDate: `${y}-${mm}-${toDay}`, daysApplied: days,
+            status: "approved", createdBy: ACTOR, updatedBy: ACTOR,
+          });
+        }
+      }
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    { now: "2026-10-31T12:00:00Z", predictedMonth: "2026-11", month: 11, days: 10 },
+    { now: "2026-01-31T12:00:00Z", predictedMonth: "2026-02", month: 2, days: 4 },
+  ])("on $now predicts $predictedMonth, not the month after", async ({ now, predictedMonth, month, days }) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/ai/leave-prediction", headers: monthEndAuth() });
+    expect(r.statusCode).toBe(200);
+    const body = r.json().data;
+    expect(body.predictedMonth).toBe(predictedMonth);
+    expect(body.prediction.month).toBe(month);
+    expect(body.prediction.avg_leave_applications).toBeCloseTo(2, 1);
+    expect(body.prediction.avg_leave_days).toBeCloseTo(days, 1);
+    expect(body.confidence).toBe("medium");
   });
 });
