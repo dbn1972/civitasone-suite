@@ -32,6 +32,14 @@ export interface SeedDefinition {
    */
   cluster: "core" | "hr" | "finance" | "p2p" | "delivery";
   nodes: SeedNode[]; // ordered; linear edges are derived (n[i] -> n[i+1])
+  /**
+   * B10 repair: role refs an earlier catalogue shape seeded for this code that
+   * exist in no realm, so a chain using them can never be approved. A tenant
+   * definition with a node on one of these EXACT role refs is "known-broken"
+   * and `backfill --repair-broken` may replace it (see seed.ts). Explicit list,
+   * exact match only -- never a prefix/pattern.
+   */
+  brokenRoleRefs?: readonly string[];
 }
 
 export const STANDARD_DEFINITIONS: SeedDefinition[] = [
@@ -64,6 +72,8 @@ export const STANDARD_DEFINITIONS: SeedDefinition[] = [
     nodes: [
       { nodeKey: "manager_approval", name: "Reporting Officer Approval", roleRef: "manager" },
     ],
+    // The pre-B10 shape (migration 0003 / 0012b and the old catalogue).
+    brokenRoleRefs: ["hrms_employee", "hrms_manager", "hrms_hr"],
   },
   {
     code: "finance_approval",
