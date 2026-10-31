@@ -126,6 +126,9 @@ const PLATFORM_ROUTES = new Set([
   // UAT F61: notification-service template approval / locales tree (registry.ts). Same platform
   // service as "notification" / "notification-v1", so the same never-gated treatment.
   "notification-templates",
+  // UAT B9-gw: notification-service segments (/api/v1/segments, registry.ts; the web campaign
+  // composer). Same platform service as the other notification prefixes, so never gated either.
+  "notification-segments",
   "theme", "tenant", "tenant-singular", "sync", "devices", "queue", "locations",
   // UAT F30: the rest of tenant-service's surface (registry.ts). Same platform service as
   // "tenant" / "tenant-singular" above, so the same never-gated treatment.
