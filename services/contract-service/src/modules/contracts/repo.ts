@@ -100,6 +100,12 @@ export async function findContractByIdTx(tx: Writer, id: string): Promise<Contra
  * handlers (amend: value_minor + delta, amendment_no = count + 1) serialise per
  * contract. Without it two concurrent amends both read the same value and the
  * second overwrites the first (lost update).
+ *
+ * B9-contract: every state-changing contract handler (approve, activate, close,
+ * terminate, submit-approval, eOffice decision) reads through this too. Without
+ * the lock two concurrent transitions both read the old status, both pass
+ * assertTransitionAllowed and both apply (e.g. close + terminate on the same
+ * active contract, or a duplicate approve double-applying).
  */
 export async function findContractByIdForUpdateTx(tx: Writer, id: string): Promise<ContractRow | null> {
   const rows = await (tx as typeof db).select().from(contractContracts).where(eq(contractContracts.id, id)).limit(1).for("update");
@@ -148,6 +154,16 @@ export async function findMilestoneByIdTx(tx: Writer, milestoneId: string, contr
   return rows[0] ?? null;
 }
 
+/** B9-contract: milestone row under FOR UPDATE, so a duplicate complete / mark-late cannot both apply. */
+export async function findMilestoneByIdForUpdateTx(tx: Writer, milestoneId: string, contractId: string, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(contractMilestones).where(and(
+    eq(contractMilestones.id, milestoneId),
+    eq(contractMilestones.contractId, contractId),
+    eq(contractMilestones.tenantId, tenantId),
+  )).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
 export async function updateMilestone(tx: Writer, milestoneId: string, tenantId: string, patch: Record<string, unknown>): Promise<void> {
   await (tx as typeof db).update(contractMilestones)
     .set({ ...patch, updatedAt: new Date() } as any)
@@ -172,6 +188,15 @@ export async function findBondByIdTx(tx: Writer, bondId: string, tenantId: strin
     eq(contractPerformanceBonds.id, bondId),
     eq(contractPerformanceBonds.tenantId, tenantId),
   )).limit(1);
+  return rows[0] ?? null;
+}
+
+/** B9-contract: bond row under FOR UPDATE, so concurrent release / claim / forfeit cannot both apply. */
+export async function findBondByIdForUpdateTx(tx: Writer, bondId: string, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(contractPerformanceBonds).where(and(
+    eq(contractPerformanceBonds.id, bondId),
+    eq(contractPerformanceBonds.tenantId, tenantId),
+  )).limit(1).for("update");
   return rows[0] ?? null;
 }
 

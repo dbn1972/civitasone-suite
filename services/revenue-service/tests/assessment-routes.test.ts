@@ -102,6 +102,8 @@ describe("POST /v1/revenue/assessments", () => {
   };
 
   it("returns 202 with valid body and correct role", async () => {
+    // UAT B9-F78b: both references are read (tenant-scoped) before publishing.
+    vi.spyOn(assessmentRepo, "assessmentRefsExist").mockResolvedValueOnce({ assessee: true, rateHead: true });
     const res = await app.inject({ method: "POST", url: "/v1/revenue/assessments", headers: AUTH, payload: VALID_BODY });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toHaveProperty("messageId");
@@ -137,6 +139,8 @@ describe("PATCH /v1/revenue/assessments/:id/revise", () => {
   const VALID_BODY = { version: 1, reason: "Corrected base value", newBaseValue: "12000000" };
 
   it("returns 202 with valid body", async () => {
+    // UAT B9-F78a: the assessment is read (tenant-scoped) before publishing.
+    vi.spyOn(assessmentRepo, "assessmentExists").mockResolvedValueOnce(true);
     const res = await app.inject({ method: "PATCH", url: `/v1/revenue/assessments/${ASSESSMENT_ID}/revise`, headers: AUTH, payload: VALID_BODY });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toHaveProperty("messageId");

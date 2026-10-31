@@ -15,10 +15,13 @@ export interface MasterConfig {
   prefix: string;
   createSchema: ZodTypeAny;
   /**
-   * PATCH body schema. Defaults to v.patchMasterSchema (name/code/active);
-   * set it for a table whose editable columns differ (UAT F76).
+   * PATCH body schema (strict). REQUIRED per type (UAT F76 / B9-works): a
+   * shared default (name/code/active) used to be applied to tables with no
+   * code (or no name) column, so such an edit was 202-accepted and silently
+   * changed nothing. Every key must be a column of `table`
+   * (tests/masters-registry.test.ts).
    */
-  patchSchema?: ZodTypeAny;
+  patchSchema: ZodTypeAny;
   /** Fields carrying money in MINOR units — decoded via parseMinor before insert. */
   moneyFields?: string[];
 }
@@ -30,29 +33,29 @@ export interface MasterConfig {
  * on one side and forgotten on the other.
  */
 export const masters: MasterConfig[] = [
-  { table: s.authorities, prefix: "authorities", createSchema: v.createAuthoritySchema },
-  { table: s.workTypes, prefix: "work-types", createSchema: v.createWorkTypeSchema },
-  { table: s.workSubTypes, prefix: "work-sub-types", createSchema: v.createWorkSubTypeSchema },
-  { table: s.proposerTypes, prefix: "proposer-types", createSchema: v.createMasterSchema },
-  { table: s.programs, prefix: "programs", createSchema: v.createMasterSchema },
-  { table: s.publicationLevels, prefix: "publication-levels", createSchema: v.createMasterSchema },
-  { table: s.repairTypes, prefix: "repair-types", createSchema: v.createRepairTypeSchema },
-  { table: s.schemes, prefix: "schemes", createSchema: v.createSchemeSchema },
-  { table: s.scopes, prefix: "scopes", createSchema: v.createScopeSchema },
-  { table: s.tenderTypes, prefix: "tender-types", createSchema: v.createTenderTypeSchema },
-  { table: s.userDepartments, prefix: "user-departments", createSchema: v.createMasterSchema },
-  { table: s.contractorClasses, prefix: "contractor-classes", createSchema: v.createMasterSchema },
-  { table: s.issueTypes, prefix: "issue-types", createSchema: v.createMasterSchema },
-  { table: s.issueDescriptionTypes, prefix: "issue-description-types", createSchema: v.createIssueDescriptionTypeSchema },
-  { table: s.assets, prefix: "assets", createSchema: v.createAssetSchema, moneyFields: ["cost"] },
+  { table: s.authorities, prefix: "authorities", createSchema: v.createAuthoritySchema, patchSchema: v.patchMasterSchema },
+  { table: s.workTypes, prefix: "work-types", createSchema: v.createWorkTypeSchema, patchSchema: v.patchMasterSchema },
+  { table: s.workSubTypes, prefix: "work-sub-types", createSchema: v.createWorkSubTypeSchema, patchSchema: v.patchMasterSchema },
+  { table: s.proposerTypes, prefix: "proposer-types", createSchema: v.createMasterSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.programs, prefix: "programs", createSchema: v.createMasterSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.publicationLevels, prefix: "publication-levels", createSchema: v.createMasterSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.repairTypes, prefix: "repair-types", createSchema: v.createRepairTypeSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.schemes, prefix: "schemes", createSchema: v.createSchemeSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.scopes, prefix: "scopes", createSchema: v.createScopeSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.tenderTypes, prefix: "tender-types", createSchema: v.createTenderTypeSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.userDepartments, prefix: "user-departments", createSchema: v.createUserDepartmentSchema, patchSchema: v.patchUserDepartmentSchema },
+  { table: s.contractorClasses, prefix: "contractor-classes", createSchema: v.createContractorClassSchema, patchSchema: v.patchContractorClassSchema },
+  { table: s.issueTypes, prefix: "issue-types", createSchema: v.createMasterSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.issueDescriptionTypes, prefix: "issue-description-types", createSchema: v.createIssueDescriptionTypeSchema, patchSchema: v.patchNameMasterSchema },
+  { table: s.assets, prefix: "assets", createSchema: v.createAssetSchema, patchSchema: v.patchMasterSchema, moneyFields: ["cost"] },
   {
     table: s.workDescriptionTypes,
     prefix: "work-description-types",
     createSchema: v.createWorkDescriptionTypeSchema,
     patchSchema: v.patchWorkDescriptionTypeSchema,
   },
-  { table: s.srItems, prefix: "sr-items", createSchema: v.createSrItemSchema, moneyFields: ["rate"] },
-  { table: s.divisions, prefix: "divisions", createSchema: v.createDivisionSchema },
+  { table: s.srItems, prefix: "sr-items", createSchema: v.createSrItemSchema, patchSchema: v.patchSrItemSchema, moneyFields: ["rate"] },
+  { table: s.divisions, prefix: "divisions", createSchema: v.createDivisionSchema, patchSchema: v.patchMasterSchema },
 ];
 
 export const masterTableByPrefix: Record<string, MasterTable> = Object.fromEntries(

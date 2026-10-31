@@ -9,7 +9,8 @@ import { waivers } from "../trade-license/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { demands } from "../assessment/schema.js";
 import { assessees } from "../assessee/schema.js";
-import { getLatestDemandBalance, getAssesseeOutstanding } from "./outstanding.js";
+import { getLatestDemandBalance, getAssesseeOutstanding, loadWaiverCapTx } from "./outstanding.js";
+import type { WaiverComponent } from "./domain.js";
 import { listNoticesTx, loadNoticeDefaultTx } from "./recovery-notice.js";
 
 export async function listInstalmentPlans(
@@ -289,6 +290,11 @@ export async function precheckDemandNotice(
     const def = await loadNoticeDefaultTx(t, tenantId);
     return { assesseeExists: a.length > 0, noticeExists: dup.length > 0, demandAssesseeId, defaultNoticePeriodDays: def.days };
   });
+}
+
+/** UAT B9-waiver: uncached, tenant-scoped remaining waivable amount (null = demand not found). */
+export async function getWaiverCap(tenantId: string, demandId: string, component: WaiverComponent): Promise<bigint | null> {
+  return tenantTransaction(db, tenantId, (tx) => loadWaiverCapTx(tx, tenantId, demandId, component));
 }
 
 /** Owner decision F1: the tenant default notice period (15 until configured). */

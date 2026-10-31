@@ -2,6 +2,8 @@ export const COMMANDS = {
   createInstance: "workflow.instance.create",
   completeTask: "workflow.task.complete",
   cancelInstance: "workflow.instance.cancel",
+  // B9-wf1: a domain service decided the record directly; close its open approval.
+  closeInstanceByRef: "workflow.instance.close_by_ref",
   suspendInstance: "workflow.instance.suspend",
   resumeInstance: "workflow.instance.resume",
   deliverMessage: "workflow.message.deliver",
@@ -128,6 +130,11 @@ export const DISPATCH = {
   payrollRunApprove: "payroll.run.approve",
   indentApprove: "procurement.indent.approve",
   poApprove: "procurement.po.approve",
+  // B9-wf1: procurement plan / PO amendment maker-checker decisions.
+  planApprove: "procurement.plan.approve",
+  planReject: "procurement.plan.reject",
+  poAmendmentApprove: "procurement.po_amendment.approve",
+  poAmendmentReject: "procurement.po_amendment.reject",
   fileApprove: "estab.file.approve",
   fileReject: "estab.file.reject",
   fileLevelApproved: "estab.file.level_approved",

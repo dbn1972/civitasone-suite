@@ -6,12 +6,13 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { allocateDocNo } from "../../shared/numbering.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 import * as repo from "./repo.js";
 import * as indentRepo from "../indent/repo.js";
 import { procurementIndentItems } from "../indent/schema.js";
 import {
   aggregateDemand, planTotalMinor, assertTransitionAllowed,
-  assertDistinctMakerChecker, assertPlanApprovedForLinkage,
+  assertDistinctMakerChecker, assertPlanApprovedForLinkage, PLAN_APPROVAL_DEFINITION_CODE,
   type DemandInput,
 } from "./domain.js";
 import type { PlanLineInsert } from "./schema.js";
@@ -104,7 +105,7 @@ export function registerPlanningConsumers(queue: Queue): void {
         payload: {
           id: randomUUID(), tenantId: msg.tenantId,
           name: `Annual Procurement Plan Approval — ${plan.planNo}`,
-          status: "active", definitionCode: "procurement_plan_approval",
+          status: "active", definitionCode: PLAN_APPROVAL_DEFINITION_CODE,
           initialTaskName: "Plan Approval", version: 1,
           refType: "procurement_plan", refId: p.id,
         },
@@ -136,6 +137,8 @@ export function registerPlanningConsumers(queue: Queue): void {
         },
       });
       await audit(tx, msg, "approve", "procurement_plan", p.id);
+      // B9-wf1: a direct approve closes the still-open approval task.
+      await closeWorkflowForRef(tx, msg, "procurement_plan", p.id, "approve");
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.id));
   });
@@ -152,6 +155,7 @@ export function registerPlanningConsumers(queue: Queue): void {
         updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
       });
       await audit(tx, msg, "reject", "procurement_plan", p.id);
+      await closeWorkflowForRef(tx, msg, "procurement_plan", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.id));
   });

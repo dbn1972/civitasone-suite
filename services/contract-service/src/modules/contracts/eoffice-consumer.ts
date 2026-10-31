@@ -34,7 +34,8 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contract = await repo.findContractByIdTx(tx, cb.refId);
+      // B9: lock the row so the decision cannot race a concurrent lifecycle command.
+      const contract = await repo.findContractByIdForUpdateTx(tx, cb.refId);
       if (!contract || contract.tenantId !== msg.tenantId) return; // not ours / unknown
       // Only act on a contract still awaiting the eOffice award decision.
       if (contract.status !== "pending_approval" && contract.status !== "draft") return;

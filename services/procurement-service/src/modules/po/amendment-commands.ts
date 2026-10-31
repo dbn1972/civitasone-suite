@@ -5,7 +5,8 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as poRepo from "./repo.js";
 import * as amendRepo from "./amendment-repo.js";
-import { assertPoAmendable, assertDistinctMakerChecker, AmendmentDomainError } from "./amendment-domain.js";
+import { assertPoAmendable, assertDistinctMakerChecker, AmendmentDomainError, PO_AMENDMENT_APPROVAL_DEFINITION_CODE } from "./amendment-domain.js";
+import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 import type {
   RequestAmendmentBody, ApproveAmendmentBody, RejectAmendmentBody,
   AddMilestoneBody, UpdateMilestoneBody, ClosePoBody,
@@ -27,6 +28,9 @@ export async function requestAmendment(ctx: RequestContext, poId: string, body: 
     if (err instanceof AmendmentDomainError) throw new HttpError(409, err.code, err.message);
     throw err;
   }
+  // B9-wf1: the request consumer raises a procurement_po_amendment_approval
+  // instance; without that chain the amendment would never get its approval task.
+  await assertWorkflowConfigured(ctx.tenantId, PO_AMENDMENT_APPROVAL_DEFINITION_CODE, "a PO amendment could never get its approval task");
   const id = randomUUID();
   await queue.publish(COMMANDS.poAmendmentRequest, {
     messageId: id, type: COMMANDS.poAmendmentRequest,

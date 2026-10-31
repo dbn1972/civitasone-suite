@@ -85,7 +85,32 @@ export interface MasterColumn {
   money?: boolean;
 }
 
+// UAT B9-works: these tables have a name but no code column; show what they store.
+const NAME_ONLY: MasterColumn[] = [{ key: "name", label: "Name" }];
+
 export const TYPE_COLUMNS: Partial<Record<MasterType, MasterColumn[]>> = {
+  "proposer-types": NAME_ONLY,
+  "programs": NAME_ONLY,
+  "publication-levels": NAME_ONLY,
+  "repair-types": NAME_ONLY,
+  "issue-types": NAME_ONLY,
+  "issue-description-types": NAME_ONLY,
+  "schemes": [
+    { key: "name", label: "Name" },
+    { key: "sponsor", label: "Sponsor" },
+  ],
+  "tender-types": [
+    { key: "name", label: "Name" },
+    { key: "rateType", label: "Rate Type" },
+  ],
+  "user-departments": [
+    { key: "name", label: "Name" },
+    { key: "demandNumber", label: "Demand Number" },
+  ],
+  "contractor-classes": [
+    { key: "name", label: "Name" },
+    { key: "description", label: "Description" },
+  ],
   // GAP-WORKS-MASTERS-04: scopes carry a mandatory unit; show it (scopes have no code).
   "scopes": [
     { key: "name", label: "Name" },
@@ -111,3 +136,29 @@ export const TYPE_COLUMNS: Partial<Record<MasterType, MasterColumn[]>> = {
     { key: "cost", label: "Cost", money: true },
   ],
 };
+
+/**
+ * UAT F76 / B9-works: the fields each type's PATCH accepts, mirroring the
+ * per-type strict patch schemas in works-service masters/registry.ts. A field
+ * outside this list is rejected (400) by the server, so the edit form must not
+ * offer it. Default: name/code/active (tables with both name and code).
+ */
+const EDITABLE_KEYS: Partial<Record<MasterType, string[]>> = {
+  "proposer-types": ["name", "active"],
+  "programs": ["name", "active"],
+  "publication-levels": ["name", "active"],
+  "repair-types": ["name", "active"],
+  "schemes": ["name", "active"],
+  "scopes": ["name", "active"],
+  "tender-types": ["name", "active"],
+  "issue-types": ["name", "active"],
+  "issue-description-types": ["name", "active"],
+  "user-departments": ["name", "demandNumber", "active"],
+  "contractor-classes": ["name", "description", "active"],
+  "work-description-types": ["keyword", "active"],
+  "sr-items": ["active"],
+};
+
+export function editableKeys(masterType: string): string[] {
+  return EDITABLE_KEYS[masterType as MasterType] ?? ["name", "code", "active"];
+}

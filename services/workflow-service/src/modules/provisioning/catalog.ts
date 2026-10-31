@@ -102,6 +102,29 @@ export const STANDARD_DEFINITIONS: SeedDefinition[] = [
       { nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" },
     ],
   },
+  // B9-wf1: the other two chains procurement-service requests.
+  // planning/consumer.ts (plan submit, refType procurement_plan) and
+  // po/amendment-consumer.ts (amendment request, refType
+  // procurement_po_amendment) raise workflow.instance.create with these exact
+  // codes; no tenant had them, so every instance was rejected (R13). Same
+  // one-node shape and role as procurement_po_approval: procurement-service
+  // only lets procurement_admin approve a plan or an amendment (APPROVE_ROLES).
+  {
+    code: "procurement_plan_approval",
+    name: "Procurement Plan Approval",
+    cluster: "p2p",
+    nodes: [
+      { nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" },
+    ],
+  },
+  {
+    code: "procurement_po_amendment_approval",
+    name: "Procurement PO Amendment Approval",
+    cluster: "p2p",
+    nodes: [
+      { nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" },
+    ],
+  },
   {
     code: "grant_disbursement",
     name: "Grant Disbursement Workflow",

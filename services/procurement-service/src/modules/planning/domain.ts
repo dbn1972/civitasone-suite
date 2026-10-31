@@ -7,6 +7,13 @@ export class DomainError extends Error {
 
 export type PlanStatus = "draft" | "pending" | "approved" | "rejected";
 
+/**
+ * B9-wf1: workflow definition the plan-submit consumer requests for the
+ * maker-checker approval task (consumer.ts). Seeded per tenant by
+ * workflow-service's provisioning catalogue; the submit command pre-checks it.
+ */
+export const PLAN_APPROVAL_DEFINITION_CODE = "procurement_plan_approval";
+
 export const PROCUREMENT_CATEGORIES = ["goods", "services", "works"] as const;
 export const PROCUREMENT_METHODS = [
   "direct_purchase", "gem", "limited_tender", "advertised_tender", "single_tender",

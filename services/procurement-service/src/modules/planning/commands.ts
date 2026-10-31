@@ -4,7 +4,8 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertDistinctMakerChecker, assertTransitionAllowed, DomainError } from "./domain.js";
+import { assertDistinctMakerChecker, assertTransitionAllowed, DomainError, PLAN_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 import type {
   CreatePlanBody, AggregateFromIndentsBody, SubmitPlanBody,
   ApprovePlanBody, RejectPlanBody, LinkTenderBody,
@@ -46,6 +47,9 @@ export async function submitPlan(ctx: RequestContext, id: string, body: SubmitPl
     if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
     throw err;
   }
+  // B9-wf1: the submit consumer raises a procurement_plan_approval instance;
+  // without that chain the plan would sit in 'pending' with no approval task.
+  await assertWorkflowConfigured(ctx.tenantId, PLAN_APPROVAL_DEFINITION_CODE, "a submitted procurement plan could never get its approval task");
   await queue.publish(COMMANDS.planSubmit, {
     messageId: randomUUID(), type: COMMANDS.planSubmit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

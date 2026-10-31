@@ -481,6 +481,37 @@ function topicQueuePrefix(topic: string): string {
 }
 
 /**
+ * F79: freshness window for the per-topic subscriber-queue cache used by
+ * publish(). Discovery is a ListQueues call, and on a loaded broker every SQS
+ * call costs seconds (UAT LocalStack: 3.5-5 s for ANY call, even health). The
+ * old cache expired hard every 15 s, so one publish per topic per process per
+ * 15 s paid that ListQueues inline, and a cold burst paid it once per caller.
+ *
+ * The cache is now stale-while-revalidate: past this window the cached URLs
+ * are still served and ONE background refresh (single-flight per topic) runs.
+ * A newly created subscriber queue is therefore discovered within
+ * TTL + one ListQueues round-trip. Override via SQS_SUBSCRIBER_CACHE_TTL_MS.
+ */
+export const DEFAULT_SQS_SUBSCRIBER_CACHE_TTL_MS = 15_000;
+
+export function resolveSubscriberCacheTtlMs(
+  raw: string | undefined = process.env.SQS_SUBSCRIBER_CACHE_TTL_MS,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_SUBSCRIBER_CACHE_TTL_MS;
+  return Math.floor(parsed);
+}
+
+/** True when an SQS error means the target queue no longer exists. */
+function isNonExistentQueueError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { name?: unknown; Code?: unknown; code?: unknown; __type?: unknown };
+  return [e.name, e.Code, e.code, e.__type].some(
+    (v) => typeof v === "string" && /QueueDoesNotExist|NonExistentQueue/.test(v),
+  );
+}
+
+/**
  * HTTP connection ceiling for the SQS client.
  *
  * This is not a tuning knob — the AWS SDK default of 50 is a hard outage on this
@@ -669,6 +700,9 @@ export class SqsQueue implements Queue {
   private queueUrls = new Map<string, string>();
   private dlqUrls = new Map<string, string>();
   private subUrlCache = new Map<string, { urls: string[]; exp: number }>();
+  /** F79: in-flight discovery per topic (single-flight). */
+  private subUrlRefresh = new Map<string, Promise<string[]>>();
+  private readonly subscriberCacheTtlMs = resolveSubscriberCacheTtlMs();
   private polling = false;
   private pollLoops: Promise<void>[] = [];
   // BOOT-NONBLOCK: the detached warm-up + poll-loop setup launched by
@@ -804,20 +838,58 @@ export class SqsQueue implements Queue {
   }
 
   // QUE-FANOUT: discover every subscriber's per-service queue for the topic and
-  // send each a copy (cached briefly to avoid ListQueues on every publish).
+  // send each a copy (cached to avoid ListQueues on every publish).
+  //
+  // F79: only a COLD topic (never resolved in this process) waits on discovery,
+  // and concurrent cold publishes share one ListQueues. An expired entry is
+  // served as-is while a single background refresh runs (see
+  // DEFAULT_SQS_SUBSCRIBER_CACHE_TTL_MS), so expiry never stalls a request.
   private async resolveSubscriberQueues(topic: string): Promise<string[]> {
-    const now = Date.now();
     const cached = this.subUrlCache.get(topic);
-    if (cached && cached.exp > now) return cached.urls;
-    const res = await this.client.send(new ListQueuesCommand({
-      QueueNamePrefix: topicQueuePrefix(topic), MaxResults: 1000,
-    }));
-    const urls = (res.QueueUrls ?? []).filter((u: string) => {
-      const n = u.split("/").pop() ?? "";
-      return !n.endsWith("-dlq") && !n.endsWith("-dlq.fifo");
-    });
-    this.subUrlCache.set(topic, { urls, exp: now + 15000 });
+    if (!cached) return this.refreshSubscriberQueues(topic);
+    if (cached.exp <= Date.now()) {
+      // A failed refresh keeps serving the last known set; the next publish retries.
+      this.refreshSubscriberQueues(topic).catch((err) => this.logHandlerError(topic, null, 0, err));
+    }
+    return cached.urls;
+  }
+
+  private refreshSubscriberQueues(topic: string): Promise<string[]> {
+    const inflight = this.subUrlRefresh.get(topic);
+    if (inflight) return inflight;
+    const task = (async () => {
+      const urls = await this.listSubscriberQueues(topic);
+      this.subUrlCache.set(topic, { urls, exp: Date.now() + this.subscriberCacheTtlMs });
+      return urls;
+    })().finally(() => this.subUrlRefresh.delete(topic));
+    this.subUrlRefresh.set(topic, task);
+    return task;
+  }
+
+  /** ListQueues by the topic's service-independent prefix, every page, DLQs excluded. */
+  private async listSubscriberQueues(topic: string): Promise<string[]> {
+    const urls: string[] = [];
+    let nextToken: string | undefined;
+    do {
+      const res = await this.client.send(new ListQueuesCommand({
+        QueueNamePrefix: topicQueuePrefix(topic),
+        MaxResults: 1000,
+        ...(nextToken ? { NextToken: nextToken } : {}),
+      }));
+      for (const u of res.QueueUrls ?? []) {
+        const n = u.split("/").pop() ?? "";
+        if (!n.endsWith("-dlq") && !n.endsWith("-dlq.fifo")) urls.push(u);
+      }
+      nextToken = res.NextToken;
+    } while (nextToken);
     return urls;
+  }
+
+  /** F79: drop a deleted subscriber queue and force a refresh on the next publish. */
+  private forgetSubscriberQueue(topic: string, url: string): void {
+    const cached = this.subUrlCache.get(topic);
+    if (!cached) return;
+    this.subUrlCache.set(topic, { urls: cached.urls.filter((u) => u !== url), exp: 0 });
   }
 
   async publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string> {
@@ -868,11 +940,31 @@ export class SqsQueue implements Queue {
         }
       : {};
     // Fan out: one copy to every subscribing service's own queue.
-    await Promise.all(urls.map((QueueUrl) =>
-      this.client.send(new SendMessageCommand({
-        QueueUrl, MessageBody: body, MessageAttributes: attrs, ...fifoFields,
-      })),
-    ));
+    // F79: a cached URL whose queue was deleted since discovery is dropped (that
+    // subscriber no longer exists), not allowed to fail the whole publish. Any
+    // other send error still rejects, as before.
+    await Promise.all(urls.map(async (QueueUrl) => {
+      try {
+        await this.client.send(new SendMessageCommand({
+          QueueUrl, MessageBody: body, MessageAttributes: attrs, ...fifoFields,
+        }));
+      } catch (err) {
+        if (!isNonExistentQueueError(err)) throw err;
+        this.forgetSubscriberQueue(topic, QueueUrl);
+        // eslint-disable-next-line no-console -- structured operational log
+        console.error(
+          JSON.stringify({
+            level: "warn",
+            event: "queue_publish_subscriber_queue_gone",
+            service: this.service,
+            topic,
+            queueUrl: QueueUrl,
+            messageId: msg.messageId,
+            correlationId: msg.correlationId,
+          }),
+        );
+      }
+    }));
     return msg.messageId;
   }
 

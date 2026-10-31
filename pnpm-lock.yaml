@@ -596,8 +596,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       node-forge:
-        specifier: 1.4.0
-        version: 1.4.0
+        specifier: 1.4.1
+        version: 1.4.1
       playwright-core:
         specifier: ^1.40.0
         version: 1.61.0
@@ -1633,8 +1633,8 @@ importers:
         specifier: ^5.4.1
         version: 5.11.1
       node-forge:
-        specifier: 1.4.0
-        version: 1.4.0
+        specifier: 1.4.1
+        version: 1.4.1
       pino:
         specifier: ^8.21.0
         version: 8.21.0
@@ -4062,8 +4062,8 @@ importers:
         specifier: ^5.4.1
         version: 5.11.1
       node-forge:
-        specifier: 1.4.0
-        version: 1.4.0
+        specifier: 1.4.1
+        version: 1.4.1
       openpgp:
         specifier: ^6.3.2
         version: 6.3.2
@@ -11915,8 +11915,8 @@ packages:
       encoding:
         optional: true
 
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+  node-forge@1.4.1:
+    resolution: {integrity: sha512-w5/MfWaeMrpR/5ba6fZyAUTLSuE6aYz7H/3cYrqwZEmf5eQS3IaaLgJt4MBv7HglGFWmV22K8h4U18RJQmw/ow==}
     engines: {node: '>= 6.13.0'}
 
   node-releases@2.0.55:
@@ -21586,7 +21586,7 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
-  node-forge@1.4.0: {}
+  node-forge@1.4.1: {}
 
   node-releases@2.0.55: {}
 

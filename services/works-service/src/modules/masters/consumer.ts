@@ -134,8 +134,8 @@ export function registerMasterConsumers(q: Queue): void {
       const setValues: Record<string, unknown> = { ...patch, version: sql`${(table as { version: unknown }).version} + 1` };
 
       // Column set varies by masterType; patch fields are validated upstream by
-      // the registry's per-type patch schema (patchMasterSchema by default:
-      // name/code/active; work-description-types: keyword/active). Every master table shares id +
+      // the registry's per-type strict patch schema (only columns of this
+      // table; UAT F76 / B9-works). Every master table shares id +
       // tenant_id columns (schema.ts), so this scoping is uniform.
       const cols = table as unknown as { id: Parameters<typeof eq>[0]; tenantId: Parameters<typeof eq>[0] };
       try {

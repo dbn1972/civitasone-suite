@@ -120,6 +120,7 @@ async function run(payload: Record<string, unknown>): Promise<MemoryQueue> {
 const activeDecl = [{ id: DECL, status: "active", version: 1 }];
 const activeSusp = [{ id: SUSP, status: "active", version: 3 }];
 const openCase = { id: CASE, tenantId: TENANT, status: "opened", proceedingType: "major", version: 2 };
+const memoCase = { ...openCase, status: "charge_memo_issued" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -134,7 +135,7 @@ const OPS: Array<{ op: string; extra: Record<string, unknown>; rows?: any[] }> =
   { op: "disciplinary_coi_routes__2", extra: { params: { declId: DECL }, body: {} }, rows: activeDecl },
   { op: "disciplinary_icc_routes__0", extra: { params: {}, body: { complainantId: EMP, summary: "a complaint long enough" } } },
   { op: "disciplinary_icc_routes__1", extra: { params: { id: COMPLAINT }, body: { hearingDate: "2026-02-01" } } },
-  { op: "disciplinary_routes__0", extra: { params: { caseId: CASE }, body: {}, caseId: CASE, actorId: ACTOR, to: "charge_memo_issued", action: "charge_memo", notes: "n", patch: {} } },
+  { op: "disciplinary_routes__0", extra: { params: { caseId: CASE }, body: {}, caseId: CASE, actorId: ACTOR, to: "charge_memo_issued", action: "issue_charge_memo", notes: "n", patch: {} } },
   { op: "disciplinary_routes__1", extra: { params: { id: EMP }, body: { caseNo: "DC-1", allegation: "x" } } },
   { op: "disciplinary_routes__2", extra: { params: { suspId: SUSP }, body: { revokedDate: "2026-03-01" } }, rows: activeSusp },
   { op: "disciplinary_routes__3", extra: { params: { id: EMP }, body: { fromDate: "2026-01-15", paySuspended: true, subsistencePct: 50 } } },
@@ -153,10 +154,14 @@ describe("F3 disciplinary consumer — every op runs (previously: ReferenceError
 
 describe("disciplinary_routes__0 (guarded case transition)", () => {
   it("applies the route-computed transition and appends the audit event with the true previous status", async () => {
+    // A real transition (state-machine.ts): the consumer now re-validates
+    // `action`/`to` against the case's current status and allow-lists the patch
+    // per action (B9-hrms2), so the fixture uses a legal one.
+    R.findCaseTx.mockResolvedValue(memoCase);
     const q = await run({
       op: "disciplinary_routes__0", id: randomUUID(),
       params: { caseId: CASE }, body: {},
-      caseId: CASE, actorId: ACTOR, to: "inquiry_ordered", action: "order_inquiry",
+      caseId: CASE, actorId: ACTOR, to: "inquiry_appointed", action: "appoint_inquiry",
       notes: "inquiry ordered", patch: { inquiryOfficerId: EMP },
     });
     // The case row is re-fetched inside the consumer transaction (it was never
@@ -167,12 +172,12 @@ describe("disciplinary_routes__0 (guarded case transition)", () => {
     const [, tenantArg, idArg, patchArg, versionArg] = R.updateCase.mock.calls[0]!;
     expect(tenantArg).toBe(TENANT);
     expect(idArg).toBe(CASE);
-    expect(patchArg).toMatchObject({ status: "inquiry_ordered", updatedBy: ACTOR, inquiryOfficerId: EMP });
+    expect(patchArg).toMatchObject({ status: "inquiry_appointed", updatedBy: ACTOR, inquiryOfficerId: EMP });
     expect(versionArg).toBe(2);
     expect(R.appendEvent).toHaveBeenCalledOnce();
     expect(R.appendEvent.mock.calls[0]![1]).toMatchObject({
-      tenantId: TENANT, caseId: CASE, fromStatus: "opened", toStatus: "inquiry_ordered",
-      action: "order_inquiry", notes: "inquiry ordered", actorId: ACTOR,
+      tenantId: TENANT, caseId: CASE, fromStatus: "charge_memo_issued", toStatus: "inquiry_appointed",
+      action: "appoint_inquiry", notes: "inquiry ordered", actorId: ACTOR,
     });
     expect(q.dlq).toEqual([]);
     await q.stop();
@@ -296,15 +301,16 @@ describe("disciplinary audit trail events (GAP-HR-AUDIT-LOG-08)", () => {
   });
 
   it("a guarded transition enqueues an audit event with the verb and the true from/to status", async () => {
+    R.findCaseTx.mockResolvedValue(memoCase);
     const q = await run({
       op: "disciplinary_routes__0", id: randomUUID(), params: { caseId: CASE }, body: {},
-      caseId: CASE, actorId: ACTOR, to: "inquiry_ordered", action: "order_inquiry", notes: "private note text", patch: {},
+      caseId: CASE, actorId: ACTOR, to: "inquiry_appointed", action: "appoint_inquiry", notes: "private note text", patch: {},
     });
     const calls = auditCalls();
     expect(calls).toHaveLength(1);
     expect(calls[0]![1].payload).toMatchObject({
-      service: "hrms", action: "order_inquiry", resourceType: "disciplinary_case", resourceId: CASE,
-      outcome: "success", fromStatus: "opened", toStatus: "inquiry_ordered",
+      service: "hrms", action: "appoint_inquiry", resourceType: "disciplinary_case", resourceId: CASE,
+      outcome: "success", fromStatus: "charge_memo_issued", toStatus: "inquiry_appointed",
     });
     // Free-text notes stay on the case's own history, not in the central trail.
     expect(JSON.stringify(calls[0]![1].payload)).not.toContain("private note text");

@@ -24,6 +24,7 @@ import * as decisionRepo from "../decisions/repo.js";
 import { appendCompletedNode } from "../compensation/executor.js";
 import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
+import { registerCloseByRefConsumer } from "./close-by-ref.js";
 import type { InstanceRow } from "../instances/schema.js";
 
 const log = pino({ name: "workflow-tasks-consumer" });
@@ -49,6 +50,7 @@ export function registerTasksConsumers(queue: Queue): void {
   // RLS (#146): run every handler inside the message's tenant context so
   // db.transaction() sets the app.tenant_id GUC (workflow_svc is NOBYPASSRLS).
   queue = tenantScoped(queue);
+  registerCloseByRefConsumer(queue);
   // Gap 3 — wrap with the consumer-side DLQ policy: transient failures retry,
   // a poison message is dead-lettered after WORKFLOW_DLQ_MAX_ATTEMPTS attempts.
   subscribeWithDlq<CompletePayload>(queue, COMMANDS.completeTask, async (msg) => {
@@ -177,6 +179,28 @@ export function registerTasksConsumers(queue: Queue): void {
             correlationId: msg.correlationId,
             payload: {
               id: instance.refId,
+              tenantId: msg.tenantId,
+              rejectedBy: msg.actorId,
+              reason: p.reason ?? "Rejected by approver (no reason recorded)",
+            },
+          });
+        }
+        // B9-wf1: a rejected procurement plan / PO amendment task rejects the
+        // record too (reason required by procurement; same fallback as leave).
+        const procurementReject: Record<string, { topic: string; idKey: string }> = {
+          procurement_plan: { topic: DISPATCH.planReject, idKey: "id" },
+          procurement_po_amendment: { topic: DISPATCH.poAmendmentReject, idKey: "amendmentId" },
+        };
+        const rejectCfg = instance.refType ? procurementReject[instance.refType] : undefined;
+        if (rejectCfg && instance.refId) {
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: rejectCfg.topic,
+            eventType: rejectCfg.topic,
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: {
+              [rejectCfg.idKey]: instance.refId,
               tenantId: msg.tenantId,
               rejectedBy: msg.actorId,
               reason: p.reason ?? "Rejected by approver (no reason recorded)",
@@ -1101,6 +1125,9 @@ async function dispatchDomainApprove(
     payroll_run: { topic: DISPATCH.payrollRunApprove, idKey: "id" },
     procurement_indent: { topic: DISPATCH.indentApprove, idKey: "id" },
     procurement_po: { topic: DISPATCH.poApprove, idKey: "id" },
+    // B9-wf1: procurement resolves the amendment's PO from the amendment id.
+    procurement_plan: { topic: DISPATCH.planApprove, idKey: "id" },
+    procurement_po_amendment: { topic: DISPATCH.poAmendmentApprove, idKey: "amendmentId" },
     estab_file: { topic: DISPATCH.fileApprove, idKey: "fileId" },
     asset_disposal: { topic: DISPATCH.assetDisposeApprove, idKey: "pendingId" },
   };

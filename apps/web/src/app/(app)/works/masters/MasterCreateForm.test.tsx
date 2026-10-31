@@ -186,3 +186,58 @@ describe("MasterCreateForm — GAP-WORKS-MASTERS-04 edit mode", () => {
     expect(body.name).toBe("Roads & Bridges");
   });
 });
+
+describe("MasterCreateForm — UAT B9-works fields match the backend schemas", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("user-departments offers Demand Number (no Code) and POSTs demandNumber", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    render(<MasterCreateForm masterType="user-departments" onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add User Departments" }));
+    expect(screen.queryByLabelText(/^Code/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "PWD North" } });
+    fireEvent.change(screen.getByLabelText(/^Demand Number/i), { target: { value: "H-07" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body).toEqual({ name: "PWD North", demandNumber: "H-07", active: true });
+  });
+
+  it("contractor-classes offers Description (no Code) and POSTs description", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    render(<MasterCreateForm masterType="contractor-classes" onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Contractor Classes" }));
+    expect(screen.queryByLabelText(/^Code/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "Class A" } });
+    fireEvent.change(screen.getByLabelText(/^Description/i), { target: { value: "Above 1.5 crore" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body).toEqual({ name: "Class A", description: "Above 1.5 crore", active: true });
+  });
+
+  it.each(["proposer-types", "programs", "publication-levels", "issue-types"])("%s has no Code field", (masterType) => {
+    render(<MasterCreateForm masterType={masterType} />);
+    fireEvent.click(screen.getByRole("button", { name: /^\+ Add/ }));
+    expect(screen.queryByLabelText(/^Code/i)).toBeNull();
+  });
+
+  it("editing an sr-item PATCHes only active + version (sr_items has no name/code)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    render(
+      <MasterCreateForm
+        masterType="sr-items"
+        editItem={{ id: "sr-1", version: 2, itemCode: "IT-1", description: "Concrete", active: true }}
+      />,
+    );
+    expect(screen.queryByLabelText(/^Description/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body).toEqual({ active: true, version: 2 });
+  });
+});

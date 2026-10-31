@@ -127,11 +127,13 @@ describe("offer routes", () => {
   });
 
   it("releases an approved offer and captures acceptance metadata + version", async () => {
-    H.findOfferMock.mockResolvedValueOnce(offer({ status: "approved" }));
+    // Read twice per action: the route's pre-check, then the consumer's locked
+    // re-read, which now re-asserts the source status (UAT B9-hrms1).
+    H.findOfferMock.mockResolvedValueOnce(offer({ status: "approved" })).mockResolvedValueOnce(offer({ status: "approved" }));
     const app = await buildApp();
     const rel = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/release`, headers: auth(["hr_admin"]), payload: { expiresAt: "2026-12-31" } });
     expect(rel.json().status).toBe("released");
-    H.findOfferMock.mockResolvedValueOnce(offer({ status: "released", offerVersion: 1 }));
+    H.findOfferMock.mockResolvedValueOnce(offer({ status: "released", offerVersion: 1 })).mockResolvedValueOnce(offer({ status: "released", offerVersion: 1 }));
     const acc = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/accept`, headers: auth(["hr_admin"]), payload: { device: "web" } });
     expect(acc.json()).toMatchObject({ status: "accepted", acceptedVersion: 1 });
     const patch = H.updateOfferMock.mock.calls.at(-1)![3];

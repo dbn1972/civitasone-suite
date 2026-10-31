@@ -20,6 +20,12 @@ export default defineConfig({
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
       FINANCE_SERVICE_URL: "http://localhost:3007",
+      // B9-wf2: never reach a real workflow-service from tests. On a shared
+      // dev/UAT host :3029 is the LIVE one, which refuses the test secret (401);
+      // that is now a loud 503, not a silent fail-open. A closed port keeps the
+      // "workflow-service unreachable" fail-open path tests rely on; tests that
+      // need an answer stub fetch.
+      WORKFLOW_SERVICE_URL: "http://127.0.0.1:9",
     },
     coverage: {
       provider: "v8",
