@@ -9,8 +9,10 @@
  *   markProcessed → build balanced journal lines → publish journalPost command → audit.
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
-import { randomUUID } from "node:crypto";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { deterministicId } from "../gl/spine.js";
+import { invoicePaidAmountMinor } from "./payload.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import { pino } from "pino";
@@ -21,7 +23,9 @@ const log = pino({ name: "finance:revenue-billing-consumer" });
 // Default account codes (configurable via env for tenant-specific CoA mapping)
 const REVENUE_CASH = process.env.FINANCE_REVENUE_CASH_CODE ?? "1100";
 const REVENUE_INCOME = process.env.FINANCE_REVENUE_INCOME_CODE ?? "4001";
-const REVENUE_REFUND_EXPENSE = process.env.FINANCE_REVENUE_REFUND_CODE ?? "5200";
+// A refund reverses revenue: it debits a CONTRA-REVENUE head (4090, an income-side account carrying a debit balance),
+// not an expense. It defaulted to 5200, which the fixed-asset register reads as impairment (UAT b10 review of F91).
+const REVENUE_REFUND_EXPENSE = process.env.FINANCE_REVENUE_REFUND_CODE ?? "4090";
 const BILLING_RECEIVABLE = process.env.FINANCE_BILLING_RECEIVABLE_CODE ?? "1300";
 const BILLING_REVENUE = process.env.FINANCE_BILLING_REVENUE_CODE ?? "4010";
 const BILLING_CASH = process.env.FINANCE_BILLING_CASH_CODE ?? "1100";
@@ -40,7 +44,9 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
       receiptDate?: string;
     };
     const amount = BigInt(p.amountMinor);
-    const journalId = randomUUID();
+    // Deterministic journal id keyed off the source document (like the GL spine): a replayed event, even under a new
+    // messageId, hits the journal PK and posts once. randomUUID() made such a replay double-post.
+    const journalId = deterministicId(`revenue_receipt:${p.receiptId}`);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -81,7 +87,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
       processedDate?: string;
     };
     const amount = BigInt(p.amountMinor);
-    const journalId = randomUUID();
+    const journalId = deterministicId(`revenue_refund:${p.refundId}`);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -122,7 +128,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
       issuedDate?: string;
     };
     const amount = BigInt(p.totalMinor);
-    const journalId = randomUUID();
+    const journalId = deterministicId(`billing_invoice_issued:${p.invoiceId}`);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -157,12 +163,17 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.billingInvoicePaid, async (msg: CommandEnvelope) => {
     const p = msg.payload as {
       invoiceId: string;
-      paidMinor: string | number;
+      totalMinor?: string | number;
+      paidMinor?: string | number;
       currency?: string;
       paidDate?: string;
     };
-    const amount = BigInt(p.paidMinor);
-    const journalId = randomUUID();
+    // F92: billing sends totalMinor (the contract); paidMinor is still read for anything queued under the old reading.
+    const amount = invoicePaidAmountMinor(p);
+    if (amount === null) {
+      throw new NonRetryableError(`BILLING_INVOICE_PAID_NO_AMOUNT: billing.invoice.paid for invoice ${String(p.invoiceId)} carries no totalMinor`);
+    }
+    const journalId = deterministicId(`billing_invoice_paid:${p.invoiceId}`);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

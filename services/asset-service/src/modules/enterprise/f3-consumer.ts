@@ -8,6 +8,8 @@ import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
+import * as depRepo from "../depreciation/repo.js";
+import { reverseDepreciationPosting } from "../depreciation/domain.js";
 import { makeBarcode } from "../register/consumer.js";
 import { todayIST } from "../../shared/dates.js";
 import { buildLeaseSchedule, type LeaseFrequency } from "./lease-domain.js";
@@ -681,7 +683,10 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.glRejected, async (msg) => {
-    const p = msg.payload as { journalId?: string; reason?: string; code?: string };
+    const p = msg.payload as {
+      journalId?: string; reason?: string; code?: string; sourceRef?: string;
+      source?: { kind?: string; assetId?: string; period?: string; depBook?: string };
+    };
     if (typeof p.journalId !== "string") return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -692,6 +697,33 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
       const hit = await repo.resolveGlJournal(tx, msg.tenantId, p.journalId as string, "failed", reason);
       if (hit) {
         await auditEvent(tx, msg, "gl_post", REJECTED_RESOURCE[hit.kind], hit.id, { journalId: p.journalId, code: p.code ?? null, failure: reason }, "failure");
+        return;
+      }
+      // F89 (UAT T6-01): a refused DEPRECIATION journal. The run had already claimed the entry (posted_at, gl_ref) and,
+      // for the company book, moved the asset's accumulated depreciation and book value -- so Assets showed depreciation
+      // the GL never got, and a re-run answered 409 ALREADY_POSTED. Put the entry back to unposted and undo the
+      // book-value move, so the next run posts it once the chart is fixed (finance's journal id is deterministic per
+      // asset/period/book, so nothing can post twice).
+      if (p.source?.kind === "depreciation" && typeof p.sourceRef === "string") {
+        const entry = await depRepo.revertEntryPosting(tx, msg.tenantId, p.sourceRef, msg.actorId);
+        if (!entry) return; // not ours, or a replayed rejection
+        if (entry.depBook === "company") {
+          const asset = await registerRepo.findAssetByIdTx(tx, entry.assetId, msg.tenantId);
+          if (asset) {
+            const { bookValueMinor, accumulatedDepMinor } = reverseDepreciationPosting(
+              { acquisitionCostMinor: asset.acquisitionCost, salvageValueMinor: asset.salvageValue, accumulatedDepMinor: asset.accumulatedDep ?? 0n },
+              entry.amountMinor,
+            );
+            await registerRepo.updateAssetBookValue(tx, entry.assetId, msg.tenantId, bookValueMinor, accumulatedDepMinor, msg.actorId);
+          }
+        }
+        await auditEvent(tx, msg, "dep_post", "dep_entry", entry.id, { journalId: p.journalId, glRef: p.sourceRef, code: p.code ?? null, failure: reason }, "failure");
+        return;
+      }
+      // F89: a refused DISPOSAL journal. The disposal itself stands (it was approved); its journal is dead-lettered in
+      // finance and re-drives once the chart is fixed (deterministic id asset_disposal:<asset>). Record why, on the asset.
+      if (p.source?.kind === "asset_disposal" && typeof p.source.assetId === "string") {
+        await auditEvent(tx, msg, "gl_post_disposal", "asset", p.source.assetId, { journalId: p.journalId, code: p.code ?? null, failure: reason }, "failure");
       }
     });
   });

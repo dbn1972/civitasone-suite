@@ -17,6 +17,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { financeMajorHeads } from "../hoa/schema.js";
+import { seedStandardGlHeadsTx } from "../gl/standard-heads.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const TENANT_ONBOARDED = "tenant.tenant.onboarded";
@@ -126,6 +127,11 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
     edition: string;
   }>(TENANT_ONBOARDED, async (msg) => {
     const p = msg.payload;
+    // F89/F91: the tenant's own GL heads that the posting paths resolve by code (depreciation, disposal, billing,
+    // revenue, refund, payroll, AP, TDS, deposits); without them every such journal is refused for this tenant.
+    // Own transaction, idempotent on its own (ON CONFLICT (tenant_id, code) DO NOTHING -- a redelivery, or a head the
+    // tenant already has, is untouched), so it does not depend on the shared major-head seed below succeeding.
+    const glHeadsSeeded = await db.transaction(async (tx) => seedStandardGlHeadsTx(tx, p.tenantId ?? msg.tenantId, msg.actorId));
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent
 
@@ -157,6 +163,7 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
           resourceId:   p.tenantId,
           outcome:      "success",
           headsSeeded:  STANDARD_MAJOR_HEADS.length,
+          glHeadsSeeded,
         },
       });
     });

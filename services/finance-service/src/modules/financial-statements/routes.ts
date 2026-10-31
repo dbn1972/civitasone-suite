@@ -37,7 +37,7 @@ function bi(v: string | number | null | undefined): bigint {
  *   asset/expense  -> debit-normal  (balance = dr - cr)
  *   liability/equity/income -> credit-normal (balance = cr - dr)
  */
-function natureOf(code: string, classification: string | null): "asset" | "liability" | "equity" | "income" | "expense" {
+export function natureOf(code: string, classification: string | null): "asset" | "liability" | "equity" | "income" | "expense" {
   const d = code.charAt(0);
   if (d === "1") return "asset";
   if (d === "4" && (classification === "income" || classification === "revenue")) return "income";
@@ -45,6 +45,9 @@ function natureOf(code: string, classification: string | null): "asset" | "liabi
   if (code === "4200") return "expense"; // gain/loss on disposal
   if (d === "4") return "income";
   if (d === "3" && classification === "equity") return "equity";
+  // A CGA expenditure major head (2xxx/3xxx, e.g. 2202 General Education, the default bill head) explicitly classified
+  // as an expense is an expense, not a liability: the prefix rule alone put bill expenditure on the liability side.
+  if ((d === "2" || d === "3") && (classification === "expense" || classification === "expenditure")) return "expense";
   if (d === "2" || d === "3") return "liability";
   // fall back to the stored classification
   if (classification === "asset") return "asset";

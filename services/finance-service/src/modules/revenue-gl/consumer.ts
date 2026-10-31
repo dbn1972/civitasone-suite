@@ -17,7 +17,9 @@ import type { JournalLine } from "../gl/schema.js";
 import { registerRefundGlConsumer } from "./refund-consumer.js";
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
-const DEFAULT_REVENUE_CODE = process.env.FINANCE_CITIZEN_REVENUE_CODE ?? "4200";
+// Citizen fee income has its own INCOME head (4100). It defaulted to 4200, the gain/loss-on-disposal head, which the
+// chart and the statements treat as an EXPENSE, so fees showed as negative expense (UAT b10 review of F91).
+const DEFAULT_REVENUE_CODE = process.env.FINANCE_CITIZEN_REVENUE_CODE ?? "4100";
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerRevenueGlConsumers(queue: Queue): void {
