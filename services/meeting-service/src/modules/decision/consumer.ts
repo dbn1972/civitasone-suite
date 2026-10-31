@@ -40,7 +40,7 @@
  */
 import { randomUUID, createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, eq, ne, isNull, isNotNull, asc, desc, gte } from "drizzle-orm";
+import { and, eq, ne, isNotNull, asc, desc, gte } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { parseMinor } from "@civitasone/schemas";
@@ -64,11 +64,11 @@ import { isMinutesLocked } from "../minutes/domain.js";
 import { countQuorumEligible, requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
 import { isQuorumMetAtVoteTime, assertVotesWithinPresent } from "../voting/domain.js";
 import { decisions, resolutions } from "./schema.js";
+import type { SqlExecutor } from "@civitasone/numbering";
+import { allocateResolutionNumber } from "../../shared/numbering.js";
 import {
   computeFinancialYear,
   computeVoteResult,
-  generateResolutionNumber,
-  nextResolutionSequence,
   requiredResponseCount,
   routeDecisionEvents,
   assertAcyclicLineage,
@@ -240,20 +240,11 @@ async function loadResolution(tx: DrizzleTx, resolutionId: string, tenantId: str
   return rows[0] ?? null;
 }
 
-/** Extract the trailing numeric sequence from a resolution number like "FC/RES/2025-26/007" → 7. */
-function parseResolutionSequence(resolutionNumber: string | null): number | null {
-  if (!resolutionNumber) return null;
-  const tail = resolutionNumber.split("/").pop() ?? "";
-  const n = Number.parseInt(tail, 10);
-  return Number.isFinite(n) ? n : null;
-}
-
 /**
- * Assign a sequential resolution number scoped to (committee, financial year) (Req 11.4, P25).
- * Reads the numbers already issued in the same scope (resolutions joined to their meetings),
- * computes the next sequence via the pure `nextResolutionSequence`, and formats it via
- * `generateResolutionNumber`. The DB UNIQUE(tenant, meeting, resolution_number) constraint is
- * the final guard against a per-meeting collision; committee-FY uniqueness holds by construction.
+ * Assign a sequential resolution number scoped to (committee code, financial year) (Req 11.4,
+ * P25) from the transactional counter in `meeting.number_sequences` (UAT F82, see
+ * shared/numbering.ts). The partial UNIQUE index on (tenant_id, resolution_number) from
+ * migration 0014 is the backstop.
  */
 async function computeResolutionNumber(
   tx: DrizzleTx,
@@ -269,26 +260,11 @@ async function computeResolutionNumber(
     committeeCode = c[0]?.code ?? null;
   }
 
-  const scopeFilter = args.committeeId
-    ? eq(meetings.committeeId, args.committeeId)
-    : isNull(meetings.committeeId);
-  const rows = await tx
-    .select({ resolutionNumber: resolutions.resolutionNumber })
-    .from(resolutions)
-    .innerJoin(meetings, eq(resolutions.meetingId, meetings.id))
-    .where(
-      and(
-        eq(resolutions.tenantId, args.tenantId),
-        eq(meetings.financialYear, args.financialYear),
-        scopeFilter,
-      ),
-    );
-
-  const sequences = rows
-    .map((r) => parseResolutionSequence(r.resolutionNumber))
-    .filter((n): n is number => n !== null);
-  const sequence = nextResolutionSequence(sequences);
-  return generateResolutionNumber({ committeeCode, financialYear: args.financialYear, sequence });
+  return allocateResolutionNumber(tx as unknown as SqlExecutor, {
+    tenantId: args.tenantId,
+    committeeCode,
+    financialYear: args.financialYear,
+  });
 }
 
 /**

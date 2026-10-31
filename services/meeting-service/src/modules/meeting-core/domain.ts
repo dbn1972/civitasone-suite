@@ -465,7 +465,16 @@ export function generateMeetingNumber(input: {
   financialYear: string;
   sequence: number;
 }): string {
-  const code = (input.committeeCode ?? "").trim().toUpperCase() || "MTG";
+  const code = meetingNumberPrefix(input.committeeCode);
   const seq = String(Math.max(1, Math.trunc(input.sequence))).padStart(3, "0");
   return `${code}/${input.financialYear}/${seq}`;
+}
+
+/**
+ * Series prefix of a meeting number: the normalised committee code, or `MTG` when the committee
+ * has no code. All code-less committees in a tenant share the `MTG` series (UAT F81), and the
+ * counter is keyed by this prefix, so numbers are unique per tenant by construction.
+ */
+export function meetingNumberPrefix(committeeCode?: string | null): string {
+  return (committeeCode ?? "").trim().toUpperCase() || "MTG";
 }

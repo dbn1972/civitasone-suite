@@ -69,8 +69,8 @@ export const decisions = meetingSchema.table("decisions", {
  * recorded vote counts, computed result, and (once passed & signed) a DSC + hash for integrity.
  *
  * Numbering (Req 11.4, P25): `resolutionNumber` is sequential and unique within a committee +
- * financial year (DB `UNIQUE(tenant_id, meeting_id, resolution_number)` guards the write;
- * see domain.ts `generateResolutionNumber` / `nextResolutionSequence`).
+ * financial year. It is allocated from the `meeting.number_sequences` counter (shared/numbering.ts)
+ * and guarded by the partial `UNIQUE(tenant_id, resolution_number)` index from migration 0014.
  *
  * Circulation (Req 12, P18): when `isCirculation` is true the resolution is decided outside a
  * meeting; it is valid only if the response rate meets the configured minimum, otherwise its
@@ -103,6 +103,8 @@ export const resolutions = meetingSchema.table("resolutions", {
   isCirculation:       boolean("is_circulation").notNull().default(false),
   circulationDeadline: timestamp("circulation_deadline", { withTimezone: true }),
   responseRate:        integer("response_rate"),
+  /** Set by migration 0014 on a pre-F82 duplicate-numbered test resolution; such rows are outside the number UNIQUE index. */
+  testDataArchivedAt:  timestamp("test_data_archived_at", { withTimezone: true }),
   createdAt:           timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:           uuid("created_by").notNull(),

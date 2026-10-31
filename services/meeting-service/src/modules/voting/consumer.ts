@@ -29,7 +29,7 @@
  * _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 12.3, 12.6_
  */
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
@@ -40,6 +40,8 @@ import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../s
 import { httpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { votes, recusals } from "./schema.js";
+import type { SqlExecutor } from "@civitasone/numbering";
+import { allocateResolutionNumber } from "../../shared/numbering.js";
 import { resolutions } from "../decision/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -60,8 +62,6 @@ import { getPolicyBool, getPolicyString } from "../config-registry/policy.js";
 import { countQuorumEligible, requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
 import {
   computeCirculationResult,
-  generateResolutionNumber,
-  nextResolutionSequence,
   resolutionFinancialYear,
 } from "../decision/domain.js";
 
@@ -378,10 +378,11 @@ async function computeVoteTimeQuorum(
 }
 
 /**
- * Assign the sequential resolution number scoped to a committee + financial year (Req 11.4, P25).
- * Reads the concluded resolutions already numbered in that scope, derives the next sequence via
- * the decision-domain helper, and formats the canonical number. The DB
- * `UNIQUE(tenant_id, meeting_id, resolution_number)` index is the ultimate guard against races.
+ * Assign the sequential resolution number scoped to a committee + financial year (Req 11.4, P25)
+ * from the same transactional counter the decision module uses (UAT F82, see
+ * shared/numbering.ts), so vote-concluded, recorded and circulation resolutions share one
+ * collision-free series. Migration 0014's partial UNIQUE(tenant_id, resolution_number) index is
+ * the backstop.
  */
 async function assignResolutionNumber(
   tx: DrizzleTx,
@@ -392,7 +393,6 @@ async function assignResolutionNumber(
   const financialYear = resolutionFinancialYear(when);
 
   let committeeCode: string | null = null;
-  let scopeMeetingIds: string[] = [meeting.id];
   if (meeting.committeeId) {
     const committeeRows = await tx
       .select({ code: committees.code })
@@ -400,51 +400,9 @@ async function assignResolutionNumber(
       .where(and(eq(committees.id, meeting.committeeId), eq(committees.tenantId, tenantId)))
       .limit(1);
     committeeCode = committeeRows[0]?.code ?? null;
-
-    const meetingRows = await tx
-      .select({ id: meetings.id })
-      .from(meetings)
-      .where(and(eq(meetings.committeeId, meeting.committeeId), eq(meetings.tenantId, tenantId)));
-    scopeMeetingIds = meetingRows.map((m) => m.id);
   }
 
-  const numbered = await tx
-    .select({
-      resolutionNumber: resolutions.resolutionNumber,
-      effectiveDate: resolutions.effectiveDate,
-      createdAt: resolutions.createdAt,
-    })
-    .from(resolutions)
-    .where(
-      and(
-        eq(resolutions.tenantId, tenantId),
-        inArray(resolutions.meetingId, scopeMeetingIds.length > 0 ? scopeMeetingIds : [meeting.id]),
-        eq(resolutions.isCirculation, false),
-      ),
-    );
-
-  // Only count already-concluded (numbered) resolutions from the same financial year. Rows still
-  // open for voting carry a `PENDING-<id>` placeholder and are skipped by the FY / prefix parse.
-  const existingSequences: number[] = [];
-  for (const row of numbered) {
-    const seq = parseResolutionSequence(row.resolutionNumber);
-    if (seq === null) continue;
-    const rowDate = row.effectiveDate ? new Date(row.effectiveDate) : row.createdAt;
-    if (rowDate && resolutionFinancialYear(rowDate) === financialYear) {
-      existingSequences.push(seq);
-    }
-  }
-
-  const sequence = nextResolutionSequence(existingSequences);
-  return generateResolutionNumber({ committeeCode, financialYear, sequence });
-}
-
-/** Extract the trailing numeric sequence from a canonical resolution number, else null. */
-function parseResolutionSequence(resolutionNumber: string): number | null {
-  const last = resolutionNumber.split("/").pop();
-  if (!last) return null;
-  const n = Number.parseInt(last, 10);
-  return Number.isFinite(n) ? n : null;
+  return allocateResolutionNumber(tx as unknown as SqlExecutor, { tenantId, committeeCode, financialYear });
 }
 
 /** SHA-256 hex of the resolution content — the integrity anchor for DSC/QR verification (P24). */

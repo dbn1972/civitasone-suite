@@ -90,7 +90,7 @@ async function seedMeeting(opts: {
       await sql`
         insert into meeting.resolutions
           (id, tenant_id, meeting_id, resolution_number, text, vote_type, votes_for, votes_against, votes_abstain, majority_rule, result, created_by, updated_by)
-        values (${randomUUID()}, ${TENANT}, ${id}, 'RES/2025-26/1', 'Approve the annual budget', 'show_of_hands', 5, 0, 1, 'simple_majority', 'passed', ${ACTOR}, ${ACTOR})`;
+        values (${randomUUID()}, ${TENANT}, ${id}, ${"RES/2025-26/" + id.slice(0, 8)}, 'Approve the annual budget', 'show_of_hands', 5, 0, 1, 'simple_majority', 'passed', ${ACTOR}, ${ACTOR})`;
       const pid = randomUUID();
       await sql`
         insert into meeting.participants (id, tenant_id, meeting_id, employee_id, role, invitation_status, created_by, updated_by)
@@ -211,7 +211,7 @@ describe("minutes.create (Req 7.1, 7.2)", () => {
     // Rendered content includes the committee, a resolution, and the ordered agenda (seq 1 before 2),
     // while the withdrawn agenda item is excluded.
     expect(row.content).toContain("Committee: Finance Committee");
-    expect(row.content).toContain("RES/2025-26/1");
+    expect(row.content).toContain("RES/2025-26/" + meetingId.slice(0, 8));
     expect(row.content.indexOf("Confirm prior minutes")).toBeLessThan(row.content.indexOf("Budget approval"));
     expect(row.content).not.toContain("Withdrawn item");
 
