@@ -7,7 +7,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
 import { waivers } from "../trade-license/schema.js";
 import { dcbEntries, demands } from "../assessment/schema.js";
-import { getAssesseeOutstanding, getLatestDemandBalance, loadWaiverCapTx } from "./outstanding.js";
+import { getAssesseeOutstanding, getLatestDemandBalance, loadWaiverCapTx, lockDemandWaiversTx } from "./outstanding.js";
 import { requireLapsedNoticeTx, istToday, loadNoticeDefaultTx, resolveNoticePeriod, NOTICE_SETTINGS_ROLES } from "./recovery-notice.js";
 import { demandNotices, noticeSettings } from "./schema.js";
 import {
@@ -595,6 +595,8 @@ export function registerArrearsConsumers(queue: Queue): void {
       // tenant-scoped demand, cap at the chosen component(s), and reject
       // (fail closed) if the demand is missing or the amount is over the cap.
       const component: WaiverComponent = waiverType ?? "both";
+      // Serialise per demand before reading the cap, else concurrent creates all pass (review of #2417).
+      await lockDemandWaiversTx(tx, msg.tenantId, demandId);
       const cap = await loadWaiverCapTx(tx, msg.tenantId, demandId, component);
       // UAT B9-waiver: these were DomainErrors (retryable), so an over-cap waiver looped to the DLQ
       // with no record and no signal to the caller. The route now 422s first; a raced/direct publish

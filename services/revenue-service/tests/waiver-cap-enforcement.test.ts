@@ -54,6 +54,7 @@ const mockSelectLimit = vi.fn().mockResolvedValue([]);
 const mockSelectWhere = vi.fn().mockReturnValue({ limit: mockSelectLimit });
 const mockSelectFrom = vi.fn().mockReturnValue({ where: mockSelectWhere });
 const mockSelect = vi.fn().mockReturnValue({ from: mockSelectFrom });
+const mockExecute = vi.fn().mockResolvedValue([]);
 
 const mockMarkProcessed = vi.fn().mockResolvedValue(true);
 const mockEnqueue = vi.fn().mockResolvedValue(undefined);
@@ -61,7 +62,7 @@ const mockCacheInvalidate = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../src/shared/db.js", () => ({
   db: {
-    transaction: vi.fn(async (fn: any) => fn({ insert: mockInsert, select: mockSelect })),
+    transaction: vi.fn(async (fn: any) => fn({ insert: mockInsert, select: mockSelect, execute: mockExecute })), // execute: per-demand advisory lock (B9-waiver)
   },
 }));
 

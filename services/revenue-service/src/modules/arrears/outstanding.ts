@@ -3,6 +3,22 @@ import { dcbEntries, demands } from "../assessment/schema.js";
 import { waivers } from "../trade-license/schema.js";
 import { waiverCap, type WaiverComponent } from "./domain.js";
 
+/** Advisory-lock key serialising waiver creation per (tenant, demand). */
+export function waiverLockKey(tenantId: string, demandId: string): string {
+  return `waiver:${tenantId}:${demandId}`;
+}
+
+/**
+ * UAT B9-waiver (review): serialise waiver creation on one demand for the rest of this transaction.
+ * The cap is "component minus SUM(pending + approved)", a read-then-insert; under READ COMMITTED
+ * concurrent creates all read the same SUM and all pass. Same advisory-lock pattern as the
+ * write-off approval re-check. Take it BEFORE loadWaiverCapTx.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function lockDemandWaiversTx(tx: any, tenantId: string, demandId: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${waiverLockKey(tenantId, demandId)}, 0))`);
+}
+
 /**
  * GAP-REVENUE-WAIVERS-01 / UAT B9-waiver: the remaining waivable amount (paise) on a demand for the
  * chosen component(s), or null when the demand does not exist for the tenant. The cap is per DEMAND,
