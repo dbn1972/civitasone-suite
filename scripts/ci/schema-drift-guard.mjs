@@ -25,10 +25,29 @@
  * not in the model is reported as INFO, not a failure: that is normal during an
  * additive migration rollout (add column, deploy, then use it).
  *
- * Usage:
- *   node scripts/ci/schema-drift-guard.mjs               # all reachable DBs
- *   node scripts/ci/schema-drift-guard.mjs inspection    # one service
- * Exit: 0 clean or DB unreachable, 1 on any declared-but-missing column.
+ * Usage (DATABASE_URL, or an explicit PGHOST+PGPORT, names the cluster; the
+ * database name in the URL is ignored, each service's civitas_<svc> is used):
+ *   DATABASE_URL=postgres://u:p@127.0.0.1:<disposable>/x node scripts/ci/schema-drift-guard.mjs
+ *   ... node scripts/ci/schema-drift-guard.mjs inspection    # one service
+ * Exit: 0 clean, 1 on any declared-but-missing column, 2 not configured/refused.
+ *
+ * F109 — NO DEFAULT DATABASE. This guard used to default to localhost:5435 as
+ * civitas_admin, which on the shared host is LIVE UAT. It now connects only where
+ * it is told to (DATABASE_URL, else PGHOST+PGPORT, else exit 2) and REFUSES port
+ * 5435 or 6432 (live Postgres / its pgbouncer) unless --live-readonly is passed.
+ *
+ * --live-readonly — post-deploy schema-drift gate (UAT bundle 10, F100). Compares
+ * every service database of a target (live) cluster with a disposable cluster
+ * built by scripts/ci/bootstrap-postgres.sh: columns, constraints and indexes by
+ * NAME and DEFINITION, and RLS/FORCE. The target is only ever read: a READ ONLY
+ * transaction under default_transaction_read_only=on, plus `pg_dump -s` (schema
+ * only) when --dump-dir is given. Exit 1 on class-(a) drift (an object the
+ * migrations create is missing, or differs, on the target). Run it through
+ * scripts/ci/live-schema-drift-gate.sh, which builds the expected cluster:
+ *   node scripts/ci/schema-drift-guard.mjs --live-readonly \
+ *     --expected-url postgres://civitas:pw@127.0.0.1:<disposable>/postgres \
+ *     (--live-container civitasone-postgres [--live-user civitas_admin] | DATABASE_URL=<live>) \
+ *     [--services procurement,asset] [--dump-dir <dir>]
  *
  * A database that cannot be reached is SKIPPED and named in the output — never
  * silently treated as clean.
@@ -36,15 +55,34 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { CATALOG_PSQL, compareCatalogs, resolveConnection } from "./schema-catalog-drift.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const SERVICES_DIR = join(REPO_ROOT, "services");
-const PGHOST = process.env.PGHOST ?? "localhost";
-const PGPORT = process.env.PGPORT ?? "5435";
-const ADMIN_USER = process.env.POSTGRES_ADMIN_USER ?? "civitas_admin";
-const ADMIN_PW = process.env.POSTGRES_ADMIN_PASSWORD ?? "civitas_dev_pw";
+const LIVE_READONLY = process.argv.includes("--live-readonly");
 
-const only = process.argv[2] && process.argv[2].startsWith("--") === false
+/** Value of `--name value` on the command line, or undefined. */
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i > 0 && i + 1 < process.argv.length ? process.argv[i + 1] : undefined;
+}
+
+// F109: connect only where told to; never to the live ports unless --live-readonly.
+// In --live-readonly mode the connection is resolved by that mode (below).
+let PGHOST;
+let PGPORT;
+let ADMIN_USER;
+let ADMIN_PW;
+if (!LIVE_READONLY) {
+  try {
+    ({ host: PGHOST, port: PGPORT, user: ADMIN_USER, password: ADMIN_PW } = resolveConnection(process.env));
+  } catch (e) {
+    console.error(`schema-drift-guard: ${e.message}`);
+    process.exit(2);
+  }
+}
+
+const only = !LIVE_READONLY && process.argv[2] && process.argv[2].startsWith("--") === false
   ? process.argv[2]
   : undefined;
 
@@ -220,6 +258,129 @@ function schemaFilesFor(svc) {
 const DB_NAME_OVERRIDES = { "ai-agent": "civitas_ai_agent" };
 function dbNameFor(svc) {
   return DB_NAME_OVERRIDES[svc] ?? `civitas_${svc}`;
+}
+
+// ── --live-readonly: post-deploy schema-drift gate ───────────────────────────
+if (LIVE_READONLY) {
+  const fail = (msg) => {
+    console.error(`schema-drift-guard --live-readonly: ${msg}`);
+    process.exit(2);
+  };
+  const expectedUrl = argValue("--expected-url");
+  if (!expectedUrl) fail("--expected-url <disposable cluster built by bootstrap-postgres.sh> is required");
+  let expected;
+  try {
+    // The EXPECTED side is never live: a live port there is refused outright.
+    expected = resolveConnection({ DATABASE_URL: expectedUrl });
+  } catch (e) {
+    fail(`--expected-url: ${e.message}`);
+  }
+  const liveContainer = argValue("--live-container");
+  const liveUser = argValue("--live-user") ?? "civitas_admin";
+  let live = null;
+  if (!liveContainer) {
+    try {
+      live = resolveConnection(process.env, { allowLive: true });
+    } catch (e) {
+      fail(`target: ${e.message} (or pass --live-container <name>)`);
+    }
+    if (live.host === expected.host && live.port === expected.port) fail("target and expected are the same cluster");
+  }
+  const dumpDir = argValue("--dump-dir");
+  const wanted = argValue("--services")?.split(",").map((x) => x.trim()).filter(Boolean);
+  const READ_ONLY = "-c default_transaction_read_only=on";
+
+  const runExpected = (db, input) =>
+    execFileSync("psql", ["-h", expected.host, "-p", expected.port, "-U", expected.user, "-d", db, "-X", "-At", "-q", "-f", "-"], {
+      input, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: 120000,
+      env: { ...process.env, PGPASSWORD: expected.password, PGOPTIONS: READ_ONLY },
+    });
+  const runLive = (tool, db, args, input) =>
+    liveContainer
+      ? execFileSync("docker", ["exec", "-i", "-e", `PGOPTIONS=${READ_ONLY}`, liveContainer, tool, "-U", liveUser, "-d", db, ...args], {
+          input, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: 120000,
+        })
+      : execFileSync(tool, ["-h", live.host, "-p", live.port, "-U", live.user, "-d", db, ...args], {
+          input, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: 120000,
+          env: { ...process.env, PGPASSWORD: live.password, PGOPTIONS: READ_ONLY },
+        });
+
+  let expectedDbs;
+  try {
+    expectedDbs = new Set(runExpected("postgres", "SELECT datname FROM pg_database;").split("\n").map((x) => x.trim()));
+  } catch (e) {
+    fail(`expected cluster unreachable: ${String(e.message).split("\n")[0]}`);
+  }
+
+  const svcs = readdirSync(SERVICES_DIR)
+    .filter((d) => d.endsWith("-service") && existsSync(join(SERVICES_DIR, d, "migrations")))
+    .map((d) => d.replace("-service", ""))
+    .filter((s) => (wanted ? wanted.includes(s) : true))
+    .sort();
+  if (wanted) for (const w of wanted) if (!svcs.includes(w)) fail(`unknown service: ${w}`);
+
+  const skippedLive = [];
+  const results = [];
+  for (const svc of svcs) {
+    const db = dbNameFor(svc);
+    if (!expectedDbs.has(db)) {
+      skippedLive.push(`${svc} (${db} not in the expected cluster)`);
+      continue;
+    }
+    const required = requiredExtensionsFor(svc);
+    if (required.length > 0) {
+      const have = new Set(runExpected(db, "SELECT extname FROM pg_extension;").split("\n").map((x) => x.trim()));
+      const absent = required.filter((x) => !have.has(x));
+      if (absent.length > 0) {
+        skippedLive.push(`${svc} (expected cluster lacks extension: ${absent.join(", ")})`);
+        continue;
+      }
+    }
+    const exp = runExpected(db, CATALOG_PSQL);
+    let tgt;
+    try {
+      tgt = runLive("psql", db, ["-X", "-At", "-q", "-f", "-"], CATALOG_PSQL);
+    } catch (e) {
+      results.push({ svc, db, fail: [`target database unreachable: ${String(e.message).split("\n")[0]}`], warn: [], info: [] });
+      continue;
+    }
+    if (dumpDir) {
+      try {
+        writeFileSync(join(dumpDir, `${db}.schema.sql`), runLive("pg_dump", db, ["-s", "--no-owner", "--no-privileges"]));
+      } catch (e) {
+        console.error(`  (pg_dump -s ${db} failed: ${String(e.message).split("\n")[0]})`);
+      }
+    }
+    results.push({ svc, db, ...compareCatalogs(exp, tgt) });
+  }
+
+  console.log("──────────────────────────────────────────────────────────────");
+  console.log("  Live schema-drift gate — target vs migration-built schema (read-only)");
+  console.log("──────────────────────────────────────────────────────────────");
+  let failing = 0;
+  for (const r of results) {
+    const head = `  ${r.svc.padEnd(16)} fail=${r.fail.length} warn=${r.warn.length} info=${r.info.length}`;
+    console.log(head);
+    if (r.fail.length > 0) failing += 1;
+    for (const f of r.fail) console.log(`      FAIL ${f}`);
+    for (const w of r.warn) console.log(`      WARN ${w}`);
+    if (process.argv.includes("--verbose")) for (const i of r.info) console.log(`      info ${i}`);
+  }
+  if (skippedLive.length > 0) {
+    console.log(`  SKIPPED (NOT verified): ${skippedLive.length}`);
+    for (const s of skippedLive) console.log(`      ${s}`);
+  }
+  console.log("──────────────────────────────────────────────────────────────");
+  if (results.length === 0) {
+    console.error("  UNMEASURED — no service database was compared. This is not a pass.");
+    process.exit(2);
+  }
+  if (failing > 0) {
+    console.error(`  DRIFT: ${failing} service database(s) differ from their migrations (class a).`);
+    process.exit(1);
+  }
+  console.log(`  CLEAN — ${results.length} service database(s) match their migrations.`);
+  process.exit(0);
 }
 
 const services = readdirSync(SERVICES_DIR)
