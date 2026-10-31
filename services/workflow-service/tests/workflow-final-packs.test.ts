@@ -167,8 +167,12 @@ describe("simulation/compare — compareVersions", () => {
 describe("provisioning/catalog — standard definitions", () => {
   // F77 added the two single-approver procurement chains procurement-service
   // requests (shape identical to the demo-tenant seed): 5 multi-level + 2.
-  const SINGLE_APPROVER = ["procurement_indent_approval", "procurement_po_approval"];
-  it("has 7 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(7));
+  // B9-wf1 added the plan / PO amendment single-approver chains: 5 + 4.
+  const SINGLE_APPROVER = [
+    "procurement_indent_approval", "procurement_po_approval",
+    "procurement_plan_approval", "procurement_po_amendment_approval",
+  ];
+  it("has 9 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(9));
 
   it.each(STANDARD_DEFINITIONS.filter(d => !SINGLE_APPROVER.includes(d.code)).map(d => d.code))("definition '%s' has ≥ 3 nodes", (code) => {
     const def = STANDARD_DEFINITIONS.find(d => d.code === code)!;

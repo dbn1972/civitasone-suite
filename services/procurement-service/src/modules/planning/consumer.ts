@@ -11,7 +11,7 @@ import * as indentRepo from "../indent/repo.js";
 import { procurementIndentItems } from "../indent/schema.js";
 import {
   aggregateDemand, planTotalMinor, assertTransitionAllowed,
-  assertDistinctMakerChecker, assertPlanApprovedForLinkage,
+  assertDistinctMakerChecker, assertPlanApprovedForLinkage, PLAN_APPROVAL_DEFINITION_CODE,
   type DemandInput,
 } from "./domain.js";
 import type { PlanLineInsert } from "./schema.js";
@@ -104,7 +104,7 @@ export function registerPlanningConsumers(queue: Queue): void {
         payload: {
           id: randomUUID(), tenantId: msg.tenantId,
           name: `Annual Procurement Plan Approval — ${plan.planNo}`,
-          status: "active", definitionCode: "procurement_plan_approval",
+          status: "active", definitionCode: PLAN_APPROVAL_DEFINITION_CODE,
           initialTaskName: "Plan Approval", version: 1,
           refType: "procurement_plan", refId: p.id,
         },

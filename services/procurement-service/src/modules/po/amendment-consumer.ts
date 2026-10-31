@@ -9,6 +9,7 @@ import * as amendRepo from "./amendment-repo.js";
 import {
   assertPoAmendable, assertAmendmentTransition, assertMilestoneTransition,
   assertDistinctMakerChecker, assertClosable, computeChangeOrder, nextSeq,
+  PO_AMENDMENT_APPROVAL_DEFINITION_CODE,
 } from "./amendment-domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -41,7 +42,7 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
         payload: {
           id: randomUUID(), tenantId: msg.tenantId,
           name: `PO Amendment #${amendmentNo} Approval — ${po.poNo}`,
-          status: "active", definitionCode: "procurement_po_amendment_approval",
+          status: "active", definitionCode: PO_AMENDMENT_APPROVAL_DEFINITION_CODE,
           initialTaskName: "Amendment Approval", version: 1,
           refType: "procurement_po_amendment", refId: p.id,
         },

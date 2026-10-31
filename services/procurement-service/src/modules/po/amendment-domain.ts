@@ -80,6 +80,13 @@ export function computeChangeOrder(currentTotalMinor: bigint, deltaMinor: bigint
 }
 
 /** An amendment is only permitted while the PO is in an amendable state. */
+/**
+ * B9-wf1: workflow definition the amendment-request consumer requests for the
+ * maker-checker approval task (amendment-consumer.ts). Seeded per tenant by
+ * workflow-service's provisioning catalogue; the request command pre-checks it.
+ */
+export const PO_AMENDMENT_APPROVAL_DEFINITION_CODE = "procurement_po_amendment_approval";
+
 export function assertPoAmendable(poStatus: string): void {
   const amendable = ["approved", "dispatched", "gem_placed"];
   if (!amendable.includes(poStatus)) {
