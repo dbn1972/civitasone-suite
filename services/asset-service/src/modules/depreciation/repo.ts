@@ -1,7 +1,15 @@
-import { eq, and, isNull, lte, sql, max, SQL } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, lte, sql, max, SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
+import { assetAssets } from "../register/schema.js";
+
+/**
+ * F97 (UAT T6-14): an asset that has left service stops depreciating. Its schedule rows stay (history), but a run must
+ * not post them: the 10-30 run depreciated 4 disposed and 2 condemned assets because nothing here looked at the asset.
+ */
+export const NON_DEPRECIABLE_STATUSES = ["disposed", "condemned", "written_off"] as const;
+const assetStillDepreciable = (): SQL => sql`NOT EXISTS (SELECT 1 FROM ${assetAssets} WHERE ${assetAssets.id} = ${assetDepEntries.assetId} AND ${assetAssets.tenantId} = ${assetDepEntries.tenantId} AND ${assetAssets.status} IN (${sql.join(NON_DEPRECIABLE_STATUSES.map((st) => sql`${st}`), sql`, `)}))`;
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -32,7 +40,7 @@ export async function findEntriesByAsset(assetId: string, tenantId: string, limi
 export async function findDueEntries(tenantId: string, period: string, depBook?: string, limit = 500): Promise<DepEntryRow[]> {
   // P0-3: filter by tenantId. Without it, a depRun for one tenant posts GL for
   // EVERY tenant due in that period.
-  const conditions: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt)];
+  const conditions: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period), isNull(assetDepEntries.postedAt), assetStillDepreciable()];
   if (depBook) conditions.push(eq(assetDepEntries.depBook, depBook));
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
@@ -99,6 +107,20 @@ export async function markEntryPosted(tx: Writer, id: string, tenantId: string, 
   return claimed.length > 0;
 }
 
+/**
+ * F89 (UAT T6-01): finance REFUSED the journal for a claimed entry (finance.gl.rejected carrying the entry's gl_ref).
+ * Put the entry back to unposted so the next run posts it again once the chart is fixed -- the route used to answer
+ * 409 ALREADY_POSTED for a period whose GL never received the journal. Conditional on posted_at IS NOT NULL and the
+ * exact gl_ref, so a replayed rejection is a no-op. Returns the reverted entry (null = not ours / already reverted).
+ */
+export async function revertEntryPosting(tx: Writer, tenantId: string, glRef: string, actorId: string): Promise<DepEntryRow | null> {
+  const rows = await (tx as typeof db).update(assetDepEntries)
+    .set({ postedAt: null, glRef: null, updatedAt: new Date(), updatedBy: actorId })
+    .where(and(eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.glRef, glRef), isNotNull(assetDepEntries.postedAt)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 // P1-1 scheduler support: list (tenantId, period) pairs that still have unposted
 // dep entries up to and including the given period. Drives the worker tick so
 // monthly depreciation posts automatically, per tenant, without a manual call.
@@ -114,6 +136,6 @@ export async function findDueTenantPeriods(uptoPeriod: string): Promise<Array<{ 
   const rows = await scannerDb
     .selectDistinct({ tenantId: assetDepEntries.tenantId, period: assetDepEntries.period })
     .from(assetDepEntries)
-    .where(and(isNull(assetDepEntries.postedAt), lte(assetDepEntries.period, uptoPeriod)));
+    .where(and(isNull(assetDepEntries.postedAt), lte(assetDepEntries.period, uptoPeriod), assetStillDepreciable()));
   return rows.map((r) => ({ tenantId: r.tenantId, period: r.period }));
 }
