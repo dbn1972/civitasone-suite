@@ -122,3 +122,93 @@ describe("B9-wf1 — procurement plan / PO amendment approval chains", () => {
     expect((await getInstance(tenant, id))?.status).toBe("active");
   });
 });
+
+// ---- review follow-up: task decisions dispatch to procurement; direct decisions close the task ----
+
+async function outbox(tenantId: string, topic: string): Promise<Array<Record<string, unknown>>> {
+  const rows = await sqlAsTenant<{ payload: unknown }>(tenantId,
+    sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${tenantId} AND topic = ${topic}`);
+  return rows.map((r) => (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload) as Record<string, unknown>);
+}
+
+async function completeOnly(tenant: string, instanceId: string, decision: "approve" | "reject", reason?: string): Promise<string> {
+  const ts = await tasksFor(tenant, instanceId);
+  const t = ts[0]!;
+  const approver = randomUUID();
+  await q.deliver(COMMANDS.completeTask, {
+    id: t.id, tenantId: tenant, instanceId, name: t.name, status: "pending",
+    roleRef: t.role_ref, nodeKey: t.node_key, refType: t.ref_type, refId: t.ref_id,
+    decision, sodOverride: true, ...(reason ? { reason } : {}),
+  }, { tenantId: tenant, actorId: approver, messageId: randomUUID() });
+  return approver;
+}
+
+const DISPATCHES = [
+  { chain: CHAINS[0], idKey: "id", approve: "procurement.plan.approve", reject: "procurement.plan.reject" },
+  { chain: CHAINS[1], idKey: "amendmentId", approve: "procurement.po_amendment.approve", reject: "procurement.po_amendment.reject" },
+] as const;
+
+describe("B9-wf1 — completing the task decides the procurement record", () => {
+  for (const d of DISPATCHES) {
+    it(`${d.chain.refType}: approving the task dispatches ${d.approve} { ${d.idKey} }`, async () => {
+      const tenant = newTenant();
+      await provision(tenant);
+      const refId = randomUUID();
+      const id = await raise(tenant, d.chain, refId);
+      const approver = await completeOnly(tenant, id, "approve");
+      expect((await getInstance(tenant, id))?.status).toBe("completed");
+      const sent = await outbox(tenant, d.approve);
+      expect(sent).toEqual([{ [d.idKey]: refId, tenantId: tenant, approvedBy: approver }]);
+      expect(await outbox(tenant, d.reject)).toEqual([]);
+    });
+
+    it(`${d.chain.refType}: rejecting the task dispatches ${d.reject} { ${d.idKey}, reason }`, async () => {
+      const tenant = newTenant();
+      await provision(tenant);
+      const refId = randomUUID();
+      const id = await raise(tenant, d.chain, refId);
+      const approver = await completeOnly(tenant, id, "reject", "not justified");
+      const sent = await outbox(tenant, d.reject);
+      expect(sent).toEqual([{ [d.idKey]: refId, tenantId: tenant, rejectedBy: approver, reason: "not justified" }]);
+      expect(await outbox(tenant, d.approve)).toEqual([]);
+    });
+  }
+});
+
+describe("B9-wf1 — a direct procurement decision closes the open approval (close_by_ref)", () => {
+  for (const chain of CHAINS) {
+    for (const decision of ["approve", "reject"] as const) {
+      it(`${chain.refType} ${decision}: the pending task and instance are completed; a replay is a no-op`, async () => {
+        const tenant = newTenant();
+        await provision(tenant);
+        const refId = randomUUID();
+        const id = await raise(tenant, chain, refId);
+        const payload = { tenantId: tenant, refType: chain.refType, refId, decision };
+        await q.deliver(COMMANDS.closeInstanceByRef, payload, { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
+        expect((await getInstance(tenant, id))?.status).toBe("completed");
+        const ts = await tasksFor(tenant, id);
+        expect(ts).toHaveLength(1);
+        expect(ts[0]).toMatchObject({ status: "completed", decision });
+        // closing must not re-dispatch the domain decision back to procurement
+        expect(await outbox(tenant, decision === "approve" ? DISPATCHES[0].approve : DISPATCHES[0].reject)).toEqual([]);
+        await q.deliver(COMMANDS.closeInstanceByRef, payload, { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
+        expect((await getInstance(tenant, id))?.status).toBe("completed");
+      });
+    }
+  }
+
+  it("ignores refTypes whose producer does not send it (a PO approval stays open)", async () => {
+    const tenant = newTenant();
+    await provision(tenant);
+    const refId = randomUUID();
+    const id = randomUUID();
+    await q.deliver(COMMANDS.createInstance, {
+      id, tenantId: tenant, name: "PO approval", status: "active", version: 1,
+      definitionCode: "procurement_po_approval", initialTaskName: "Approval", refType: "procurement_po", refId,
+    }, { tenantId: tenant, actorId: randomUUID(), messageId: id });
+    await q.deliver(COMMANDS.closeInstanceByRef, { tenantId: tenant, refType: "procurement_po", refId, decision: "approve" },
+      { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
+    expect((await getInstance(tenant, id))?.status).toBe("active");
+    expect((await tasksFor(tenant, id))[0]).toMatchObject({ status: "pending" });
+  });
+});

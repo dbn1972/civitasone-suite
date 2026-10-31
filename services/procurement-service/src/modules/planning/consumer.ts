@@ -6,6 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { allocateDocNo } from "../../shared/numbering.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 import * as repo from "./repo.js";
 import * as indentRepo from "../indent/repo.js";
 import { procurementIndentItems } from "../indent/schema.js";
@@ -136,6 +137,8 @@ export function registerPlanningConsumers(queue: Queue): void {
         },
       });
       await audit(tx, msg, "approve", "procurement_plan", p.id);
+      // B9-wf1: a direct approve closes the still-open approval task.
+      await closeWorkflowForRef(tx, msg, "procurement_plan", p.id, "approve");
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.id));
   });
@@ -152,6 +155,7 @@ export function registerPlanningConsumers(queue: Queue): void {
         updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
       });
       await audit(tx, msg, "reject", "procurement_plan", p.id);
+      await closeWorkflowForRef(tx, msg, "procurement_plan", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.id));
   });

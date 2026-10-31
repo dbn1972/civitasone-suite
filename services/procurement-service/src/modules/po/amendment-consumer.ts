@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 import * as poRepo from "./repo.js";
 import * as amendRepo from "./amendment-repo.js";
 import {
@@ -53,18 +54,22 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.poAmendmentApprove, async (msg) => {
-    const p = msg.payload as { poId: string; amendmentId: string; tenantId: string };
+    // B9-wf1: poId is optional - the workflow task dispatch carries only the
+    // amendment id, so the PO is resolved from the (tenant-scoped) amendment row.
+    const p = msg.payload as { poId?: string; amendmentId: string; tenantId: string };
+    let poId = p.poId ?? "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const amendment = await amendRepo.findAmendmentByIdTx(tx, p.amendmentId, p.tenantId);
-      if (!amendment || amendment.poId !== p.poId) throw new Error(`amendment ${p.amendmentId} not found`);
+      if (!amendment || (p.poId !== undefined && amendment.poId !== p.poId)) throw new Error(`amendment ${p.amendmentId} not found`);
+      poId = amendment.poId;
       // Maker-checker defense-in-depth.
       assertDistinctMakerChecker(amendment.requestedBy, msg.actorId);
       assertAmendmentTransition(amendment.status, "approved");
       // Re-read the PO under a FOR UPDATE row lock so concurrent amendment
       // approvals serialise on this row — we never write a request-time snapshot.
-      const po = await poRepo.lockPoByIdTx(tx, p.poId, p.tenantId);
-      if (!po) throw new Error(`PO ${p.poId} not found`);
+      const po = await poRepo.lockPoByIdTx(tx, poId, p.tenantId);
+      if (!po) throw new Error(`PO ${poId} not found`);
       // STALENESS GUARD (SVC-046 lost-update fix): if the PO total moved since
       // this amendment was requested, another amendment was applied in between
       // and this amendment's snapshot (prev/newTotalMinor) is stale. Blindly
@@ -80,6 +85,7 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
           updatedBy: msg.actorId, version: (amendment.version ?? 1) + 1,
         });
         await audit(tx, msg, "reject_stale", "procurement_po_amendment", p.amendmentId);
+        await closeWorkflowForRef(tx, msg, "procurement_po_amendment", p.amendmentId, "reject", "AMENDMENT_STALE_BASE");
         return;
       }
       await amendRepo.updateAmendment(tx, p.amendmentId, {
@@ -90,37 +96,42 @@ export function registerPoAmendmentConsumers(queue: Queue): void {
       // in depth — equals the snapshot on the non-stale path) and write it via
       // the optimistic-locked update keyed on the locked version.
       const newTotalMinor = BigInt(po.totalMinor) + BigInt(amendment.deltaMinor);
-      await poRepo.updatePoVersioned(tx, p.poId, po.version ?? 1, {
+      await poRepo.updatePoVersioned(tx, poId, po.version ?? 1, {
         totalMinor: newTotalMinor, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: EVENTS.poAmended, eventType: EVENTS.poAmended,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          poId: p.poId, tenantId: p.tenantId, amendmentId: p.amendmentId,
+          poId, tenantId: p.tenantId, amendmentId: p.amendmentId,
           amendmentNo: amendment.amendmentNo, amendmentType: amendment.amendmentType,
           deltaMinor: amendment.deltaMinor.toString(), newTotalMinor: newTotalMinor.toString(),
         },
       });
       await audit(tx, msg, "approve", "procurement_po_amendment", p.amendmentId);
+      // B9-wf1: a direct approve closes the still-open approval task.
+      await closeWorkflowForRef(tx, msg, "procurement_po_amendment", p.amendmentId, "approve");
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.poId));
+    if (poId) await cache.invalidate(cache.makeKey(msg.tenantId, "po", poId));
   });
 
   queue.subscribe(COMMANDS.poAmendmentReject, async (msg) => {
-    const p = msg.payload as { poId: string; amendmentId: string; tenantId: string; reason: string };
+    const p = msg.payload as { poId?: string; amendmentId: string; tenantId: string; reason: string };
+    let poId = p.poId ?? "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const amendment = await amendRepo.findAmendmentByIdTx(tx, p.amendmentId, p.tenantId);
-      if (!amendment || amendment.poId !== p.poId) throw new Error(`amendment ${p.amendmentId} not found`);
+      if (!amendment || (p.poId !== undefined && amendment.poId !== p.poId)) throw new Error(`amendment ${p.amendmentId} not found`);
+      poId = amendment.poId;
       assertAmendmentTransition(amendment.status, "rejected");
       await amendRepo.updateAmendment(tx, p.amendmentId, {
         status: "rejected", rejectedReason: p.reason,
         updatedBy: msg.actorId, version: (amendment.version ?? 1) + 1,
       });
       await audit(tx, msg, "reject", "procurement_po_amendment", p.amendmentId);
+      await closeWorkflowForRef(tx, msg, "procurement_po_amendment", p.amendmentId, "reject", p.reason);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.poId));
+    if (poId) await cache.invalidate(cache.makeKey(msg.tenantId, "po", poId));
   });
 
   queue.subscribe(COMMANDS.poMilestoneAdd, async (msg) => {
