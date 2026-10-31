@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { getTableColumns, getTableName } from "drizzle-orm";
-import type { ZodObject, ZodRawShape } from "zod";
+import { ZodEffects, ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 import { masters, masterTableByPrefix, masterMoneyFieldsByPrefix } from "../src/modules/masters/registry.js";
 
 describe("masters registry", () => {
@@ -87,5 +87,50 @@ describe("masters registry", () => {
       }
     }
     expect(drift).toEqual([]);
+  });
+
+  // UAT B9-works: zod strips unknown keys and drizzle ignores keys that are not
+  // columns, so a body field the table cannot store (code on proposer_types,
+  // demandNumber stripped on user_departments, PATCH name on sr_items) was
+  // 202-accepted and silently lost. Every create/PATCH schema must be strict
+  // and every key it accepts must be a real column of that master's table.
+  function objectOf(schema: ZodTypeAny): ZodObject<ZodRawShape> {
+    let s: ZodTypeAny = schema;
+    while (s instanceof ZodEffects) s = s.innerType();
+    expect(s).toBeInstanceOf(ZodObject);
+    return s as ZodObject<ZodRawShape>;
+  }
+
+  it("every create and PATCH schema key is a column of its table (nothing silently dropped)", () => {
+    const drift: string[] = [];
+    for (const m of masters) {
+      const columns = new Set(Object.keys(getTableColumns(m.table)));
+      for (const [kind, schema] of [["create", m.createSchema], ["patch", m.patchSchema]] as const) {
+        expect(schema, `${m.prefix} has no ${kind} schema`).toBeDefined();
+        for (const key of Object.keys(objectOf(schema).shape)) {
+          if (kind === "patch" && key === "version") continue;
+          if (!columns.has(key)) drift.push(`${m.prefix} ${kind}: ${key} is not a column of ${getTableName(m.table)}`);
+        }
+      }
+    }
+    expect(drift).toEqual([]);
+  });
+
+  it("every create and PATCH schema rejects an unknown field (400, not a silent strip)", () => {
+    const lenient: string[] = [];
+    for (const m of masters) {
+      for (const [kind, schema] of [["create", m.createSchema], ["patch", m.patchSchema]] as const) {
+        if (objectOf(schema)._def.unknownKeys !== "strict") lenient.push(`${m.prefix} ${kind}`);
+      }
+    }
+    expect(lenient).toEqual([]);
+  });
+
+  it("the fields the web form sends for user-departments / contractor-classes are accepted", () => {
+    const ud = masters.find((m) => m.prefix === "user-departments")!;
+    const cc = masters.find((m) => m.prefix === "contractor-classes")!;
+    expect(ud.createSchema.parse({ name: "D", demandNumber: "H-1" })).toEqual({ name: "D", demandNumber: "H-1" });
+    expect(cc.createSchema.parse({ name: "A", description: "d" })).toEqual({ name: "A", description: "d" });
+    expect(() => ud.createSchema.parse({ name: "D", code: "X" })).toThrow();
   });
 });

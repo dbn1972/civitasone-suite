@@ -81,8 +81,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       const ctx = resolveContext(req);
       requireRole(ctx, ADMIN_ROLES);
       const { id } = v.idParamSchema.parse(req.params);
-      // UAT F76: per-type PATCH schema where the editable columns differ from name/code/active.
-      const body = (master.patchSchema ?? v.patchMasterSchema).parse(req.body) as { version: number } & Record<string, unknown>;
+      // UAT F76 / B9-works: per-type strict PATCH schema (only that table's editable columns).
+      const body = master.patchSchema.parse(req.body) as { version: number } & Record<string, unknown>;
       const existing = await getMaster(master.table, ctx.tenantId, id);
       if (!existing) throw new HttpError(404, "NOT_FOUND", `${master.prefix} not found`);
       const current = (existing as { version?: number }).version ?? 1;

@@ -8,7 +8,7 @@ import { AcceptedNotice, useToast, Button, EntityPicker, type EntityOption } fro
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
-import { humanizeMaster, PARENT_FIELD } from "./masterTypes";
+import { editableKeys, humanizeMaster, PARENT_FIELD } from "./masterTypes";
 import type { MasterItem, ParentOption } from "./MastersTable";
 
 // ─── Field spec types ─────────────────────────────────────────────────────────
@@ -47,6 +47,12 @@ type FieldSpec = TextField | MoneyField | CheckboxField | SelectField;
 
 // ─── Field map ────────────────────────────────────────────────────────────────
 
+// UAT B9-works: every key here must be a field the works-service create
+// schema for that type accepts (its schemas are strict). proposer-types,
+// programs, publication-levels, issue-types, user-departments and
+// contractor-classes have NO code column, so the form no longer offers one
+// (it used to be 202-accepted and dropped); user-departments now offers its
+// demand number and contractor-classes its description, which were never sent.
 // COMP-004 detector note: static reference -- this defines which form
 // FIELDS (type/key/label/required) each master-data type's create-form
 // renders. It's a frontend form-schema decision, not fabricated records.
@@ -70,17 +76,14 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
   ],
   "proposer-types": [
     { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
     { type: "checkbox", key: "active", label: "Active" },
   ],
   "programs": [
     { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
     { type: "checkbox", key: "active", label: "Active" },
   ],
   "publication-levels": [
     { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
     { type: "checkbox", key: "active", label: "Active" },
   ],
   "repair-types": [
@@ -105,18 +108,17 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
     { type: "checkbox", key: "active",   label: "Active" },
   ],
   "user-departments": [
-    { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
-    { type: "checkbox", key: "active", label: "Active" },
+    { type: "text",     key: "name",         label: "Name", required: true },
+    { type: "text",     key: "demandNumber", label: "Demand Number", placeholder: "e.g. H-1" },
+    { type: "checkbox", key: "active",       label: "Active" },
   ],
   "contractor-classes": [
-    { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
-    { type: "checkbox", key: "active", label: "Active" },
+    { type: "text",     key: "name",        label: "Name", required: true },
+    { type: "text",     key: "description", label: "Description" },
+    { type: "checkbox", key: "active",      label: "Active" },
   ],
   "issue-types": [
     { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
     { type: "checkbox", key: "active", label: "Active" },
   ],
   "issue-description-types": [
@@ -235,12 +237,12 @@ export function MasterCreateForm({
   const formError = useFormError("master data");
 
   const allFields = getFields(masterType);
-  // In edit mode only name/code/active (and, for work-description-types, the
-  // keyword — UAT F76) are editable server-side — parent links and money
-  // fields are immutable to avoid rewriting history on referenced masters.
-  const fields = isEdit
-    ? allFields.filter((f) => ["name", "code", "keyword", "active"].includes(f.key))
-    : allFields;
+  // In edit mode only the fields that type's PATCH schema accepts are shown
+  // (editableKeys, mirroring works-service's per-type patch schemas; UAT F76 /
+  // B9-works) — parent links and money fields are immutable to avoid
+  // rewriting history on referenced masters.
+  const editable = editableKeys(masterType);
+  const fields = isEdit ? allFields.filter((f) => editable.includes(f.key)) : allFields;
   const typeLabel = humanizeMaster(masterType);
 
   const parentOpts: EntityOption[] = parentOptions.map((o) => ({ id: o.id, label: o.label }));
