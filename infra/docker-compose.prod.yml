@@ -24,6 +24,7 @@ x-svc-defaults: &svc-defaults
 
 x-svc-env: &svc-env
   NODE_ENV: production
+  DEPLOY_ENV: production
   BIND_HOST: 0.0.0.0
   REDIS_URL: redis://redis:6379
   QUEUE_DRIVER: sqs
