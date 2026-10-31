@@ -4,7 +4,11 @@ import { hrmsRecruitmentSettings, type RecruitmentSettingsRow } from "./schema.j
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-/** What a tenant gets when nothing has been configured: the safe maker-checker offer flow, no public identity. */
+/**
+ * What a tenant gets when nothing has been configured: the safe maker-checker offer flow, no public identity.
+ * offerWorkflowRequired MUST stay true here (and in the column default): false is what enables the deprecated
+ * legacy PATCH .../offer route (UAT F85, off by default; TODO(F85-go-live): remove the route and this flag).
+ */
 export const DEFAULT_SETTINGS = {
   organisationName: null as string | null,
   departmentName: null as string | null,
