@@ -264,14 +264,19 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     if (repo.NOT_OFFERABLE_STAGES.includes(existingApp.stage) || repo.NOT_OFFERABLE_STATUSES.includes(existingApp.status)) {
       throw new HttpError(409, "INVALID_STATE", `Cannot offer application in stage "${existingApp.stage}" (status "${existingApp.status}")`);
     }
-    // GAP-RECRUITMENT-DETAIL-05: this single-field shortcut releases compensation with NO approval
-    // chain. By default (offerWorkflowRequired, per tenant, default ON) it is refused and offers must
-    // go through POST /applications/:id/offers -> submit -> approve (maker != checker) -> release.
-    // A small-office tenant may switch the policy off in recruitment settings.
+    // DEPRECATED legacy route (GAP-RECRUITMENT-DETAIL-05, UAT F85). Owner decision 2026-10-31: OFF by
+    // default, removed before go-live. TODO(F85-go-live): delete this route, commands.offerApplication,
+    // the COMMANDS.applicationOffer subscriber (consumer.ts) and the offerWorkflowRequired setting.
+    // Offers go through POST /applications/:id/offers -> submit -> approve (maker != checker, one distinct
+    // approver per stage) -> release. The shortcut is refused unless the tenant has explicitly switched
+    // offerWorkflowRequired off (it defaults ON: DEFAULT_SETTINGS, and the column default, for every
+    // tenant with no settings row). Even then it no longer releases anything: the consumer creates the
+    // offer as pending_approval in the same approval chain (see consumer.ts), so no approval is bypassed.
     if ((await settingsRepo.getSettings(ctx.tenantId)).offerWorkflowRequired) {
-      throw new HttpError(409, "OFFER_WORKFLOW_REQUIRED", "offers must go through the approval workflow (create a draft offer, submit it, and have it approved before release)");
+      throw new HttpError(409, "LEGACY_OFFER_DISABLED", "the legacy offer route is disabled: create a draft offer (POST /v1/hrms/applications/:id/offers), submit it, and have it approved before release");
     }
     const body = offerApplicationBody.parse(req.body);
+    reply.header("deprecation", "true");
     return sendAccepted(reply, acceptedResponseSchema, await commands.offerApplication(ctx, id, body));
   });
 

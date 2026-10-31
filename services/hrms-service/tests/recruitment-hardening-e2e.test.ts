@@ -55,6 +55,8 @@ const DESIG = "eeeeeeee-0001-0000-0000-000000000003"; // IAS Officer
 
 const CT = { "content-type": "application/json" };
 const auth = (roles = ["hr_admin"]) => ({ authorization: `Bearer ${signToken({ sub: HR, tid: TENANT, roles, sid: "s" }, SECRET)}` });
+const authAs = (sub: string, roles: string[]) => ({ authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET)}` });
+const OFFER_CHAIN_ROLES = ["hr_admin", "finance_officer", "legal_officer", "competent_authority"];
 const uniq = (label: string) => `${label}-${randomUUID().slice(0, 8)}`;
 
 let app: FastifyInstance;
@@ -128,13 +130,45 @@ async function shortlist(applicationId: string): Promise<void> {
   expect(r.statusCode).toBe(200);
 }
 
-async function offer(applicationId: string): Promise<{ statusCode: number; body: any }> {
+/** The legacy PATCH .../offer alone: since UAT F85 it only submits the offer into the approval chain. */
+async function legacyOffer(applicationId: string): Promise<{ statusCode: number; body: any }> {
   const r = await app.inject({
     method: "PATCH", url: `/v1/hrms/applications/${applicationId}/offer`, headers: { ...auth(), ...CT },
     payload: { ctcMinor: 8_00_000_00 },
   });
   await drain();
   return { statusCode: r.statusCode, body: r.json() };
+}
+
+async function approveAs(offerId: string, actor: string, role: string): Promise<{ statusCode: number; body: any }> {
+  const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${offerId}/approve`, headers: { ...authAs(actor, [role]), ...CT }, payload: {} });
+  await drain();
+  return { statusCode: r.statusCode, body: r.json() };
+}
+
+async function release(offerId: string): Promise<{ statusCode: number; body: any }> {
+  const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${offerId}/release`, headers: { ...auth(), ...CT }, payload: {} });
+  await drain();
+  return { statusCode: r.statusCode, body: r.json() };
+}
+
+async function getOffer(offerId: string) {
+  const [row] = await asTenant((tx) => tx`select status, current_stage, created_by, released_at from recruitment.hrms_offers where id = ${offerId}`);
+  return row as { status: string; current_stage: number; created_by: string; released_at: Date | null } | undefined;
+}
+
+/**
+ * Make an offer the way a tenant with the legacy shortcut enabled must now do it (UAT F85): the PATCH
+ * submits it, then each chain stage is approved by a DIFFERENT non-creator approver, then HR releases it
+ * -- only the release moves the application to "offered", which the hire tests below need.
+ */
+async function offer(applicationId: string): Promise<{ statusCode: number; body: any }> {
+  const res = await legacyOffer(applicationId);
+  if (res.statusCode !== 202) return res;
+  const offerId = res.body.id as string;
+  for (const role of OFFER_CHAIN_ROLES) expect((await approveAs(offerId, randomUUID(), role)).statusCode).toBe(200);
+  expect((await release(offerId)).statusCode).toBe(200);
+  return res;
 }
 
 async function hire(applicationId: string, employeeNo: string): Promise<{ statusCode: number; body: any }> {
@@ -378,7 +412,7 @@ describe("Minor-item hardening — FK existence checks before hire", () => {
 
 
 describe("GAP-RECRUITMENT-DETAIL-05 — the single-step offer shortcut is refused while the approval workflow is required", () => {
-  it("PATCH .../offer is 409 OFFER_WORKFLOW_REQUIRED by default and writes no offer or stage change; switching the policy off restores it", async () => {
+  it("PATCH .../offer is 409 LEGACY_OFFER_DISABLED by default and writes no offer or stage change; switching the policy off restores it", async () => {
     const job = await createJobOpening(2);
     const applied = await applyHrAssisted(job, `${uniq("wf")}@example.com`);
     const applicationId = applied.body.id as string;
@@ -388,7 +422,7 @@ describe("GAP-RECRUITMENT-DETAIL-05 — the single-step offer shortcut is refuse
     try {
       const refused = await offer(applicationId);
       expect(refused.statusCode).toBe(409);
-      expect(refused.body.code).toBe("OFFER_WORKFLOW_REQUIRED");
+      expect(refused.body.code).toBe("LEGACY_OFFER_DISABLED");
       const [stage] = await asTenant((tx) => tx`select stage from recruitment.hrms_applications where id = ${applicationId}`);
       expect(stage?.stage).toBe("shortlisted");
       const offers = await asTenant((tx) => tx`select count(*)::int as n from recruitment.hrms_offers where application_id = ${applicationId}`);
@@ -398,5 +432,47 @@ describe("GAP-RECRUITMENT-DETAIL-05 — the single-step offer shortcut is refuse
     }
     const allowed = await offer(applicationId);
     expect(allowed.statusCode).toBe(202);
+  });
+});
+
+describe("UAT F85 -- the legacy offer route, even when a tenant enables it, cannot bypass the approval chain", () => {
+  it("PATCH .../offer only submits a pending_approval offer; the creator cannot approve, one approver cannot clear two stages, nothing is released or hireable until distinct approvers approve every stage", async () => {
+    const job = await createJobOpening(1);
+    const applied = await applyHrAssisted(job, `${uniq("f85")}@example.com`);
+    const applicationId = applied.body.id as string;
+    await shortlist(applicationId);
+
+    const submitted = await legacyOffer(applicationId);
+    expect(submitted.statusCode).toBe(202);
+    const offerId = submitted.body.id as string;
+    let row = await getOffer(offerId);
+    expect(row).toMatchObject({ status: "pending_approval", current_stage: 0, created_by: HR, released_at: null });
+    // Not sent, and not hireable: the application stays where it was.
+    expect((await getApplication(applicationId))?.stage).toBe("shortlisted");
+    const earlyHire = await hire(applicationId, uniq("EMP"));
+    expect(earlyHire.statusCode).toBe(409);
+    expect(earlyHire.body.code).toBe("INVALID_STATE");
+    expect((await release(offerId)).body.code).toBe("NOT_APPROVED");
+
+    // Maker-checker: the HR user who made the offer cannot approve it.
+    const self = await approveAs(offerId, HR, "hr_admin");
+    expect(self.statusCode).toBe(409);
+    expect(self.body.code).toBe("SOD_VIOLATION");
+
+    // Distinct approvers (F70): whoever cleared stage 0 cannot also clear stage 1.
+    const checker = randomUUID();
+    expect((await approveAs(offerId, checker, "hr_admin")).statusCode).toBe(200);
+    const twice = await approveAs(offerId, checker, "finance_officer");
+    expect(twice.statusCode).toBe(409);
+    expect(twice.body.code).toBe("SOD_VIOLATION");
+    row = await getOffer(offerId);
+    expect(row).toMatchObject({ status: "pending_approval", current_stage: 1 });
+
+    for (const role of OFFER_CHAIN_ROLES.slice(1)) expect((await approveAs(offerId, randomUUID(), role)).statusCode).toBe(200);
+    expect((await getOffer(offerId))?.status).toBe("approved");
+    expect((await getApplication(applicationId))?.stage).toBe("shortlisted");
+    expect((await release(offerId)).statusCode).toBe(200);
+    expect((await getOffer(offerId))?.status).toBe("released");
+    expect((await getApplication(applicationId))?.stage).toBe("offered");
   });
 });
