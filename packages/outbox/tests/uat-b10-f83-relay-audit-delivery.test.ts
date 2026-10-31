@@ -17,9 +17,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@civitasone/observability", () => ({
   incrementOutboxRelayFailure: vi.fn(),
-  captureError: vi.fn(),
+  captureError: vi.fn((_e: unknown, ctx: Record<string, unknown>) => { obs.captured.push(ctx); }),
 }));
-const cap = vi.hoisted(() => ({ marked: [] as string[][] }));
+const cap = vi.hoisted(() => ({ marked: [] as string[][], skipped: [] as string[][] }));
+const obs = vi.hoisted(() => ({ captured: [] as Array<Record<string, unknown>> }));
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
   return {
@@ -29,16 +30,25 @@ vi.mock("drizzle-orm", async (importOriginal) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (actual.inArray as any)(col, vals);
     },
+    notInArray: (col: unknown, vals: string[]) => {
+      cap.skipped.push([...vals]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (actual.notInArray as any)(col, vals);
+    },
   };
 });
 
 // eslint-disable-next-line import/first
-import { relayOnce, purgeOutbox, REQUIRED_DELIVERY_TOPICS, resolveAuditOutboxRetentionDays, type DrizzleTx } from "../src/index.js";
+import {
+  relayOnce, purgeOutbox, REQUIRED_DELIVERY_TOPICS, resolveAuditOutboxRetentionDays, resetRelayBackoff,
+  RELAY_STUCK_ATTEMPTS, RELAY_BACKOFF_MAX_MS, type DrizzleTx,
+} from "../src/index.js";
 
 type Queue = Parameters<typeof relayOnce>[1];
 
-const row = (id: string, topic: string) => ({
+const row = (id: string, topic: string, createdAt?: Date) => ({
   id, topic, eventType: topic, tenantId: "t", actorId: "a", correlationId: "c", payload: {}, schemaVersion: "1.0",
+  ...(createdAt ? { createdAt } : {}),
 });
 
 function makeDb(rows: ReturnType<typeof row>[]): DrizzleTx {
@@ -65,7 +75,7 @@ function busWithNoSubscribers(): { queue: Queue; calls: Array<{ topic: string; o
   return { queue, calls };
 }
 
-beforeEach(() => { cap.marked.length = 0; });
+beforeEach(() => { cap.marked.length = 0; cap.skipped.length = 0; obs.captured.length = 0; resetRelayBackoff(); });
 
 describe("UAT B10-F83 relay: audit events require a subscriber", () => {
   it("leaves an audit row unpublished when no subscriber queue exists (retried next cycle)", async () => {
@@ -108,5 +118,73 @@ describe("UAT B10-F83 purge: audit rows outlive the general retention", () => {
     expect(outboxDelete).toContain("audit.event.record");
     expect(outboxDelete).toContain('["30"]'); // audit cutoff: now() - interval '30 days'
     expect(outboxDelete).toContain(") OR published_at < ");
+  });
+});
+
+describe("UAT B10-F83 relay: no head-of-line blocking behind stuck audit rows", () => {
+  it("a failed row is skipped (backoff) on the next cycles, so newer rows of other topics get relayed", async () => {
+    const { queue } = busWithNoSubscribers();
+    // Cycle 1: the batch window is full of audit rows that cannot be delivered.
+    await relayOnce(makeDb([row("a1", "audit.event.record"), row("a2", "audit.event.record")]), queue, 2, "svc", 5);
+    expect(cap.marked.flat()).toEqual([]);
+    // Cycle 2: the relay query now excludes the backed-off rows…
+    await relayOnce(makeDb([row("e1", "hrms.leave.applied")]), queue, 2, "svc", 5);
+    expect(cap.skipped.at(-1)!.sort()).toEqual(["a1", "a2"]);
+    // …and the other topic's row is published.
+    expect(cap.marked.flat()).toContain("e1");
+  });
+
+  it("keeps retrying with capped exponential backoff and reports a stuck row exactly once", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { queue } = busWithNoSubscribers();
+      const db = makeDb([row("s1", "audit.event.record")]);
+      for (let i = 0; i < RELAY_STUCK_ATTEMPTS + 3; i++) {
+        await relayOnce(db, queue, 10, "svc", 5);
+        vi.setSystemTime(Date.now() + RELAY_BACKOFF_MAX_MS + 1);
+      }
+      const stuck = obs.captured.filter((c) => c.event === "outbox_relay_row_stuck");
+      expect(stuck).toHaveLength(1);
+      expect(stuck[0]).toMatchObject({ outboxId: "s1", topic: "audit.event.record" });
+      expect(cap.marked.flat()).not.toContain("s1"); // never dropped, never marked published
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a row that later succeeds leaves the backoff set", async () => {
+    let fail = true;
+    const queue = { publish: vi.fn(async () => { if (fail) throw new Error("down"); return "x"; }) } as unknown as Queue;
+    await relayOnce(makeDb([row("r1", "audit.event.record")]), queue, 10, "svc", 5);
+    fail = false;
+    resetRelayBackoff(); // (wait elapsed)
+    await relayOnce(makeDb([row("r1", "audit.event.record")]), queue, 10, "svc", 5);
+    expect(cap.marked.flat()).toContain("r1");
+    await relayOnce(makeDb([]), queue, 10, "svc", 5);
+    expect(cap.skipped).toEqual([]);
+  });
+});
+
+describe("UAT B10-F83 relay: audit events carry their commit time", () => {
+  it("sends the outbox created_at as the envelope timestamp for audit topics only", async () => {
+    const created = new Date("2026-10-28T18:30:00.000Z");
+    const inputs: Array<{ topic: string; timestamp?: string }> = [];
+    const queue = { publish: vi.fn(async (topic: string, input: { timestamp?: string }) => { inputs.push({ topic, timestamp: input.timestamp }); return "x"; }) } as unknown as Queue;
+    await relayOnce(makeDb([row("a", "audit.event.record", created), row("b", "crm.lead.created", created)]), queue, 10, "svc", 5);
+    expect(inputs.find((i) => i.topic === "audit.event.record")!.timestamp).toBe(created.toISOString());
+    expect(inputs.find((i) => i.topic === "crm.lead.created")!.timestamp).toBeUndefined();
+  });
+});
+
+describe("UAT B10-F83 purge: the consumer dedupe window can outlive the general one", () => {
+  it("purges _inbox.processed with processedRetentionDays (never shorter than retentionDays)", async () => {
+    const texts: string[] = [];
+    const db = { execute: vi.fn(async (q: unknown) => { texts.push(JSON.stringify(q)); return { count: 0 }; }) } as unknown as DrizzleTx;
+    await purgeOutbox(db, 7, 1000, 31);
+    expect(texts[1]).toContain("_inbox.processed");
+    expect(texts[1]).toContain('["31"]');
+    texts.length = 0;
+    await purgeOutbox(db, 7, 1000, 3);
+    expect(texts[1]).toContain('["7"]');
   });
 });

@@ -19,6 +19,8 @@ export const auditEvents = eventsSchema.table("events", {
   eventHash:     varchar("event_hash", { length: 64 }),
   correlationId: varchar("correlation_id", { length: 64 }),
   occurredAt:    timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  /** UAT B10-F83: when the audited action happened (migration 0036); null on older rows = occurred_at. */
+  eventAt:       timestamp("event_at", { withTimezone: true }),
   version:       integer("version").notNull().default(1),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

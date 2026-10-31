@@ -54,7 +54,7 @@ describe("UAT B10-F83 audit ingest: NonRetryable versus retryable", () => {
   });
 
   it("a transient failure (connection refused, deadlock) stays retryable, so the message is redelivered", async () => {
-    for (const e of [Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:6432"), { code: "ECONNREFUSED" }),
+    for (const e of [Object.assign(new Error("connect ECONNREFUSED db.internal:5432"), { code: "ECONNREFUSED" }),
       Object.assign(new Error("deadlock detected"), { code: "40P01" })]) {
       dbm.transaction.mockRejectedValueOnce(e);
       const err = await capture()["audit.event.record"]!(good()).catch((x: unknown) => x);

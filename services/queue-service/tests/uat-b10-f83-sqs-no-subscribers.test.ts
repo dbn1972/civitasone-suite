@@ -57,6 +57,12 @@ vi.mock("@aws-sdk/client-sqs", async (importOriginal) => {
         case "DeleteMessageCommand":
           state.delivered = true;
           return {};
+        case "SendMessageCommand": {
+          // A send to a queue the broker no longer has fails like real SQS.
+          const qname = String(cmd.input.QueueUrl).split("/").pop()!;
+          if (!state.exists.has(qname)) throw missing();
+          return {};
+        }
         default:
           return {};
       }
@@ -88,15 +94,57 @@ describe("UAT B10-F83 SqsQueue.publish with no subscriber queue", () => {
     expect(sent.filter((c) => c.name === "SendMessageCommand")).toHaveLength(0);
   });
 
-  it("requireSubscribers: re-lists on the next attempt and delivers once the queue exists", async () => {
+  it("requireSubscribers: re-lists (throttled) and delivers once the queue exists", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { SqsQueue } = await import("../src/bus.js");
+      const q = new SqsQueue();
+      await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).rejects.toThrow(/no subscriber queue/);
+      state.listed = ["https://sqs.test/audit-event-record__audit-service"];
+      state.exists.add("audit-event-record__audit-service");
+      vi.setSystemTime(Date.now() + 6_000); // past the 5 s no-subscriber recheck
+      // The first publish after the recheck window starts one background ListQueues…
+      await q.publish("audit.event.record", input(), { requireSubscribers: true }).catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 0));
+      // …and once it lands, delivery succeeds.
+      await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).resolves.toBeTypeOf("string");
+      const sends = sent.filter((c) => c.name === "SendMessageCommand");
+      expect(sends.at(-1)!.input.QueueUrl).toBe("https://sqs.test/audit-event-record__audit-service");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stale cache: a cached URL whose queue no longer exists is NOT a successful publish (requireSubscribers)", async () => {
+    const { SqsQueue, NoSubscribersError } = await import("../src/bus.js");
+    state.listed = ["https://sqs.test/audit-event-record__audit-service"];
+    state.exists.add("audit-event-record__audit-service");
+    const q = new SqsQueue();
+    // Warm the subscriber cache with a live queue.
+    await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).resolves.toBeTypeOf("string");
+    // Broker restart: every queue is gone, but the cache still holds the URL.
+    state.exists.clear();
+    const lists = () => sent.filter((c) => c.name === "ListQueuesCommand").length;
+    const listsBefore = lists();
+    await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).rejects.toBeInstanceOf(NoSubscribersError);
+    // The send was attempted against the cached URL (that is the path that used to "succeed").
+    expect(sent.filter((c) => c.name === "SendMessageCommand")).toHaveLength(2);
+    // Fire-and-forget callers keep resolving (unchanged behaviour), but are logged.
+    await expect(q.publish("audit.event.record", input())).resolves.toBeTypeOf("string");
+    // No ListQueues storm: repeated failing publishes share one in-flight refresh.
+    await Promise.all(Array.from({ length: 20 }, () =>
+      q.publish("audit.event.record", input(), { requireSubscribers: true }).catch(() => undefined)));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(lists() - listsBefore).toBeLessThanOrEqual(2);
+  });
+
+  it("no ListQueues storm while a required topic has no subscriber", async () => {
     const { SqsQueue } = await import("../src/bus.js");
     const q = new SqsQueue();
-    await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).rejects.toThrow(/no subscriber queue/);
-    state.listed = ["https://sqs.test/audit-event-record__audit-service"];
-    await expect(q.publish("audit.event.record", input(), { requireSubscribers: true })).resolves.toBeTypeOf("string");
-    const sends = sent.filter((c) => c.name === "SendMessageCommand");
-    expect(sends).toHaveLength(1);
-    expect(sends[0]!.input.QueueUrl).toBe("https://sqs.test/audit-event-record__audit-service");
+    for (let i = 0; i < 25; i++) {
+      await q.publish("audit.event.record", input(), { requireSubscribers: true }).catch(() => undefined);
+    }
+    expect(sent.filter((c) => c.name === "ListQueuesCommand").length).toBe(1);
   });
 
   it("without the option keeps the existing fire-and-forget behaviour (resolves, logs)", async () => {

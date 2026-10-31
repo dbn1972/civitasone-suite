@@ -42,6 +42,19 @@ export function assertIngestable(msg: {
   }
 }
 
+/**
+ * UAT B10-F83 (review): the event time is the envelope timestamp, which the
+ * outbox relay sets to the producer's commit instant for audit topics. Never
+ * later than the chain instant (clock skew), and the chain instant when the
+ * timestamp is missing or unparseable.
+ */
+export function resolveEventAt(timestamp: unknown, occurredAt: Date): Date {
+  if (typeof timestamp !== "string") return occurredAt;
+  const t = new Date(timestamp);
+  if (Number.isNaN(t.getTime())) return occurredAt;
+  return t.getTime() > occurredAt.getTime() ? occurredAt : t;
+}
+
 /** Postgres data-exception (22xxx) and integrity (23xxx) errors cannot succeed on redelivery. */
 function isPermanentDbError(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code;
@@ -57,6 +70,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
     correlationId: string;
     payload: Record<string, unknown>;
     type: string;
+    timestamp?: string;
   }): Promise<void> => {
     assertIngestable(msg);
     try {
@@ -76,6 +90,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
     correlationId: string;
     payload: Record<string, unknown>;
     type: string;
+    timestamp?: string;
   }): Promise<void> => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -88,6 +103,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
       // V4-G-05: this exact instant is hashed AND persisted as occurred_at.
       const occurredAt = nextOccurredAt(latest?.occurredAt);
       const now = occurredAt.toISOString();
+      const eventAt = resolveEventAt(msg.timestamp, occurredAt);
       // CERT-In §4: capture actor IP, user agent, and field-level old/new values when provided.
       // retainUntil and CERT-In columns are added by migration 0004_cert_in_audit_fields.sql.
       const retainUntil = new Date(Date.now() + 180 * 86400 * 1000);
@@ -96,6 +112,8 @@ export function registerAuditConsumers(rawQueue: Queue): void {
       // Store CERT-In metadata in the payload for queryability.
       const enrichedPayload = {
         ...msg.payload,
+        // Bound into the chain hash, so the event time is tamper-evident too.
+        _eventAt: eventAt.toISOString(),
         _certIn: {
           ipAddress: (msg.payload.ipAddress as string) ?? null,
           userAgent: (msg.payload.userAgent as string) ?? null,
@@ -117,6 +135,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
         prevHash: latest?.eventHash ?? null,
         eventHash,
         occurredAt,
+        eventAt,
         correlationId: msg.correlationId,
         createdBy: msg.actorId,
         ipAddress: (msg.payload.ipAddress as string) ?? null,

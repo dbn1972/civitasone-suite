@@ -1,6 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { eq, and, isNull, gt } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -30,8 +30,11 @@ export function registerBbpsConsumers(queue: Queue): void {
       const billDate = new Date().toISOString().slice(0, 10);
       const _response = buildFetchBillResponse(dcb, billDate);
 
-      // Insert bbps_transaction with status: pending
+      // Insert bbps_transaction with status: pending. UAT B10-F86: the row id is
+      // chosen here so the audit event can name the real resource.
+      const fetchTxnId = randomUUID();
       await tx.insert(bbpsTransactions).values({
+        id: fetchTxnId,
         tenantId: msg.tenantId,
         bbpsTxnId: `FETCH-${msg.messageId.slice(0, 8)}`,
         assesseeId: dcb.assesseeId,
@@ -52,7 +55,7 @@ export function registerBbpsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "fetch_bill", resourceType: "bbps_transaction", resourceId: `FETCH-${msg.messageId.slice(0, 8)}`, outcome: "success" },
+        payload: { service: SERVICE, action: "fetch_bill", resourceType: "bbps_transaction", resourceId: fetchTxnId, outcome: "success", bbpsTxnId: `FETCH-${msg.messageId.slice(0, 8)}` },
       });
     });
   });

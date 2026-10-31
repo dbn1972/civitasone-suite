@@ -113,6 +113,9 @@ export class NoSubscribersError extends Error {
   }
 }
 
+/** UAT B10-F83: how soon a required-delivery publish with no subscriber re-lists the topic. */
+const NO_SUBSCRIBER_RECHECK_MS = 5_000;
+
 /** UAT B10-F83: the broker says the queue is gone (deleted, or lost by a broker restart). */
 export function isQueueMissingError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -954,9 +957,8 @@ export class SqsQueue implements Queue {
       );
       // UAT B10-F83: a caller that needs delivery (the outbox relay for audit
       // topics) must not get a success back for a message that reached nobody.
-      // Drop the cached (empty) list so the retry looks again.
       if (options?.requireSubscribers) {
-        this.subUrlCache.delete(topic);
+        this.recheckSubscribersSoon(topic);
         throw new NoSubscribersError(topic);
       }
     }
@@ -981,11 +983,16 @@ export class SqsQueue implements Queue {
     // F79: a cached URL whose queue was deleted since discovery is dropped (that
     // subscriber no longer exists), not allowed to fail the whole publish. Any
     // other send error still rejects, as before.
+    // UAT B10-F83 (review): count the copies actually enqueued. After a broker
+    // restart every cached URL can be gone; F79 then drops each one and the
+    // fan-out below completes having delivered nothing.
+    let delivered = 0;
     await Promise.all(urls.map(async (QueueUrl) => {
       try {
         await this.client.send(new SendMessageCommand({
           QueueUrl, MessageBody: body, MessageAttributes: attrs, ...fifoFields,
         }));
+        delivered += 1;
       } catch (err) {
         if (!isNonExistentQueueError(err)) throw err;
         this.forgetSubscriberQueue(topic, QueueUrl);
@@ -1003,7 +1010,29 @@ export class SqsQueue implements Queue {
         );
       }
     }));
+    if (urls.length > 0 && delivered === 0) {
+      incrementPublishNoSubscribers(topic);
+      // eslint-disable-next-line no-console -- structured operational error log
+      console.error(JSON.stringify({
+        level: "error", event: "queue_publish_no_subscribers", reason: "all_subscriber_queues_gone",
+        service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId,
+      }));
+      if (options?.requireSubscribers) throw new NoSubscribersError(topic);
+    }
     return msg.messageId;
+  }
+
+  /**
+   * UAT B10-F83 (review): after a required-delivery publish found no subscriber,
+   * look again soon, but through the single-flight refresh and at most once per
+   * NO_SUBSCRIBER_RECHECK_MS per topic, so a stuck backlog does not turn every
+   * relay cycle into a ListQueues storm (the cache is never dropped wholesale).
+   */
+  private recheckSubscribersSoon(topic: string): void {
+    const cached = this.subUrlCache.get(topic);
+    if (!cached) return; // cold topic: the next publish resolves it anyway
+    const soon = Date.now() + NO_SUBSCRIBER_RECHECK_MS;
+    if (cached.exp > soon) this.subUrlCache.set(topic, { urls: cached.urls, exp: soon });
   }
 
   subscribe<T>(topic: string, handler: Handler<T>, options?: SubscribeOptions): void {

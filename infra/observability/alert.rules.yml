@@ -146,6 +146,28 @@ groups:
           summary: "Transactional outbox relay failing on {{ $labels.service }}"
           description: "{{ $labels.service }} outbox relay has failed {{ $value | humanize }} time(s) in 5m — events may be delayed."
 
+      # UAT B10-F83: a publish that reached zero subscriber queues. For audit
+      # topics the outbox relay now keeps the row and retries, so this means the
+      # audit trail is backing up (audit consumer queue missing); page at once.
+      - alert: AuditPublishNoSubscribers
+        expr: increase(publish_no_subscribers_total{topic=~"audit\\.event\\.(record|ingest)"}[5m]) > 0
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Audit events have no subscriber queue ({{ $labels.topic }})"
+          description: "{{ $value | humanize }} audit publish(es) in 5m found no audit-service queue. Rows stay in the producer outboxes and are retried; check audit-worker and the broker."
+
+      - alert: PublishNoSubscribers
+        expr: increase(publish_no_subscribers_total{topic!~"audit\\.event\\..*"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Messages published to {{ $labels.topic }} reached no subscriber"
+          description: "{{ $value | humanize }} publish(es) in 15m to {{ $labels.topic }} found zero subscriber queues: those messages were delivered to nobody."
+
       # PERF-004: a DLQ arrival was previously silent — 0 counter, 0 alert. Any
       # increase pages the owning team; a poison message being permanently
       # dropped is never "wait and see", unlike DlqDepthHigh above which needs
