@@ -20,7 +20,7 @@ import { db } from "../../shared/db.js";
 import { toDomainError } from "../../shared/errors.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import {
-  DomainError, OBSERVABLE_STATUSES, assertMakerCheckerForReportApproval, assertValidReportTransition,
+  DomainError, OBSERVABLE_STATUSES, assertMakerCheckerForReportApproval, assertValidReportTransition, reportMakers,
 } from "./domain.js";
 import { inspectionReports, observations } from "./schema.js";
 
@@ -121,7 +121,7 @@ export function registerReportsConsumers(queue: Queue): void {
       const now = new Date();
       await tx.update(inspectionReports)
         .set({
-          status: "submitted", submittedAt: now, updatedAt: now, updatedBy: msg.actorId,
+          status: "submitted", submittedAt: now, submittedBy: msg.actorId, updatedAt: now, updatedBy: msg.actorId,
           version: sql`${inspectionReports.version} + 1`,
         })
         .where(and(eq(inspectionReports.tenantId, msg.tenantId), eq(inspectionReports.id, p.id)));
@@ -131,7 +131,7 @@ export function registerReportsConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           action: "inspection_report.submitted", resourceType: "inspection_report", resourceId: p.id,
-          details: { from: report.status, to: "submitted" },
+          details: { from: report.status, to: "submitted", submittedBy: msg.actorId },
         },
       });
     });
@@ -146,8 +146,7 @@ export function registerReportsConsumers(queue: Queue): void {
       if (report.status === "approved") return; // redelivery under a fresh messageId
       try {
         assertValidReportTransition(report.status, "approved");
-        // While submitted, updatedBy is the submitter (only submit writes it after create).
-        assertMakerCheckerForReportApproval([report.inspectorId, report.createdBy, report.updatedBy], msg.actorId);
+        assertMakerCheckerForReportApproval(reportMakers(report), msg.actorId);
       } catch (err) { toDomainError(err, DomainError); }
 
       const now = new Date();
@@ -163,7 +162,7 @@ export function registerReportsConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           action: "inspection_report.approved", resourceType: "inspection_report", resourceId: p.id,
-          details: { from: report.status, to: "approved", submittedBy: report.updatedBy },
+          details: { from: report.status, to: "approved", submittedBy: report.submittedBy ?? report.updatedBy },
         },
       });
     });

@@ -25,6 +25,16 @@ const TRANSITIONS: Record<ReportStatus, readonly ReportStatus[]> = {
   rejected: [],
 };
 
+/**
+ * The makers an approver must differ from: inspector, author and submitter. `submitted_by` (0034) is
+ * authoritative; rows submitted before it fall back to `updated_by`, which only submit writes after create.
+ */
+export function reportMakers(report: {
+  inspectorId: string; createdBy: string; updatedBy: string; submittedBy: string | null;
+}): string[] {
+  return [report.inspectorId, report.createdBy, report.submittedBy ?? report.updatedBy];
+}
+
 /** Statuses a report may still receive observations in. */
 export const OBSERVABLE_STATUSES: readonly string[] = ["draft", "submitted"];
 
@@ -47,7 +57,7 @@ export function assertMakerCheckerForReportApproval(
   makers: ReadonlyArray<string | null | undefined>,
   approverId: string,
 ): void {
-  if (makers.some((m) => m === approverId)) {
+  if (makers.some((m) => m != null && m === approverId)) {
     throw new DomainError(
       "MAKER_CHECKER_VIOLATION",
       "Inspection report cannot be approved by its inspector, author or submitter (maker-checker enforcement)",

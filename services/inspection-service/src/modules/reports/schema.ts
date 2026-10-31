@@ -20,6 +20,7 @@ export const inspectionReports = reportsSchema.table("inspection_reports", {
   recommendations: text("recommendations"),
   overallGrade:    varchar("overall_grade", { length: 8 }),
   submittedAt:     timestamp("submitted_at", { withTimezone: true }),
+  submittedBy:     uuid("submitted_by"), // 0034; NULL on rows submitted before it
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   approvedBy:      uuid("approved_by"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
