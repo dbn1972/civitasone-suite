@@ -14,7 +14,7 @@ import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } 
 import * as tenderRepo from "../tender/repo.js";
 import { assertCanDispatch, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as poRepo from "./repo.js";
-import { isWorkflowConfigured } from "../../shared/workflow-client.js";
+import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 
 // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
 const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
@@ -65,12 +65,7 @@ async function assertVendorEligible(tenantId: string, vendorId: string, basis: {
  * workflow-service cannot be asked (null): the async path stays fail-closed.
  */
 async function assertPoApprovalWorkflowConfigured(tenantId: string): Promise<void> {
-  if ((await isWorkflowConfigured(tenantId, PO_APPROVAL_DEFINITION_CODE)) === false) {
-    throw new HttpError(
-      422, "WORKFLOW_NOT_CONFIGURED",
-      `workflow definition '${PO_APPROVAL_DEFINITION_CODE}' is not configured for this tenant; a purchase order could never be approved`,
-    );
-  }
+  await assertWorkflowConfigured(tenantId, PO_APPROVAL_DEFINITION_CODE, "a purchase order could never be approved");
 }
 
 export async function poRoutes(app: FastifyInstance): Promise<void> {

@@ -27,6 +27,9 @@ const REF_PERMISSION: Record<string, string> = {
   payroll_run: "payroll.run.approve",
   procurement_indent: "procurement.indent.approve",
   procurement_po: "procurement.po.approve",
+  // B9-wf1: granted to procurement_admin (scripts/seed-rbac-policy-store.ts), matching procurement APPROVE_ROLES.
+  procurement_plan: "procurement.plan.approve",
+  procurement_po_amendment: "procurement.po_amendment.approve",
 };
 
 async function requireTaskPermission(ctx: RequestContext, refType: string | null | undefined): Promise<void> {

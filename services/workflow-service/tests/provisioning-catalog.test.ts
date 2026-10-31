@@ -81,7 +81,8 @@ describe("standard definition catalog", () => {
     const seeded = definitionsForClusters(seedClustersFromEnv(undefined)).map((d) => d.code);
     expect(seeded.sort()).toEqual([
       "file_noting", "finance_approval", "grant_disbursement", "leave_approval", "procurement_approval",
-      "procurement_indent_approval", "procurement_po_approval",
+      "procurement_indent_approval", "procurement_plan_approval", "procurement_po_amendment_approval",
+      "procurement_po_approval",
     ]);
   });
 

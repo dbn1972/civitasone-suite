@@ -181,7 +181,10 @@ describe("F77 — backfill for existing tenants", () => {
   it("dry-run reports the missing procurement chains and writes nothing", async () => {
     const tenant = await legacyTenant();
     const r = await backfillStandardDefinitions(tenant, { actorId: randomUUID(), dryRun: true, defs: selectDefinitions() });
-    expect(r.missing.sort()).toEqual(["procurement_indent_approval", "procurement_po_approval"]);
+    // B9-wf1 added the plan / amendment chains to the same catalogue.
+    expect(r.missing.sort()).toEqual([
+      "procurement_indent_approval", "procurement_plan_approval", "procurement_po_amendment_approval", "procurement_po_approval",
+    ]);
     expect(r.seeded).toEqual([]);
     expect(await codesFor(tenant)).not.toContain("procurement_po_approval");
   });

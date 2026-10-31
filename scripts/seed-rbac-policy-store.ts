@@ -71,6 +71,11 @@ const GRANTS: Record<string, Array<{ resource: string; action: string }>> = {
   procurement_admin:   [
     { resource: "procurement.indent", action: "approve" },
     { resource: "procurement.po", action: "approve" },
+    // B9-wf1: workflow task completion for plan / PO amendment approvals
+    // (workflow-service tasks/routes.ts REF_PERMISSION); same APPROVE_ROLES
+    // convention as planning/routes.ts and amendment-routes.ts.
+    { resource: "procurement.plan", action: "approve" },
+    { resource: "procurement.po_amendment", action: "approve" },
   ],
 };
 
