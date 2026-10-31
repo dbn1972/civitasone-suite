@@ -23,7 +23,7 @@ import { registerTenantOnboardConsumers } from "../src/modules/tenant-onboard/co
 import { registerRevenueBillingConsumers } from "../src/modules/revenue-billing/consumer.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { deterministicId } from "../src/modules/gl/spine.js";
-import { standardGlHeads } from "../src/modules/gl/standard-heads.js";
+import { standardGlHeads, BILL_HEAD_HOA } from "../src/modules/gl/standard-heads.js";
 import { backfillStandardGlHeads } from "../scripts/backfill-standard-gl-heads.js";
 
 const ACTOR = "00000000-aaaa-4000-8000-0000000b1089";
@@ -107,6 +107,40 @@ describe("backfill-standard-gl-heads", () => {
     const again = await backfillStandardGlHeads(pg, { dryRun: false, tenants: [tenant] });
     expect(again[0]!.missing).toEqual([]);
     expect(again[0]!.inserted).toEqual([]);
+  });
+
+  it("seeds 2050 as a control account and the bill head 2202 with its HoA", async () => {
+    const tenant = randomUUID();
+    await backfillStandardGlHeads(pg, { dryRun: false, tenants: [tenant] });
+    const heads = await headsOf(tenant);
+    expect(heads.find((h) => h.code === "2050")).toMatchObject({ isControl: true });
+    expect(heads.find((h) => h.code === "2202")).toMatchObject({ hoaCode: BILL_HEAD_HOA, classification: "expense" });
+    expect(heads.find((h) => h.code === "4100")).toMatchObject({ classification: "income" });
+  });
+
+  it("--fill-missing-hoa sets the standard HoA only on an existing standard head that has none", async () => {
+    const tenant = randomUUID();
+    // like UAT tenant B: an existing 2202 with no HoA, so every bill against it fails the HoA check
+    await scoped(tenant, (tx) => tx.insert(financeHeads).values({
+      tenantId: tenant, code: "2202", name: "General Education", level: 0, classification: "revenue", createdBy: ACTOR, updatedBy: ACTOR,
+    }));
+    const other = randomUUID();
+    await scoped(other, (tx) => tx.insert(financeHeads).values({
+      tenantId: other, code: "2202", name: "Own HoA", level: 0, classification: "expense", hoaCode: "220202101010101000", createdBy: ACTOR, updatedBy: ACTOR,
+    }));
+
+    // without the flag nothing about an existing head changes
+    await backfillStandardGlHeads(pg, { dryRun: false, tenants: [tenant] });
+    expect((await headsOf(tenant)).find((h) => h.code === "2202")?.hoaCode).toBeNull();
+
+    const dry = await backfillStandardGlHeads(pg, { dryRun: true, tenants: [tenant, other], fillMissingHoa: true });
+    expect(dry.map((p) => p.hoaFill)).toEqual([["2202"], []]);
+    expect((await headsOf(tenant)).find((h) => h.code === "2202")?.hoaCode).toBeNull();
+
+    const run = await backfillStandardGlHeads(pg, { dryRun: false, tenants: [tenant, other], fillMissingHoa: true });
+    expect(run.map((p) => p.hoaFill)).toEqual([["2202"], []]);
+    expect((await headsOf(tenant)).find((h) => h.code === "2202")).toMatchObject({ hoaCode: BILL_HEAD_HOA, name: "General Education", classification: "revenue" });
+    expect((await headsOf(other)).find((h) => h.code === "2202")?.hoaCode).toBe("220202101010101000");
   });
 
   it("refuses a malformed tenant id", async () => {

@@ -234,8 +234,14 @@ describe("F89: depreciation branch reports a refusal (UAT T6-01)", () => {
       journalId: detId(`depreciation:${ASSET}:2026-09:company`), type: "depreciation", code: "UNKNOWN_ACCOUNT_CODE", accountCode: "1250",
       sourceRef: `dep:company:${ASSET}:2026-09`, source: { kind: "depreciation", assetId: ASSET, period: "2026-09", depBook: "company" },
     });
-    // markProcessed ran only inside the rolled-back posting transaction: a re-drive after the chart is fixed posts it
-    expect(markProcessedMock).toHaveBeenCalledTimes(1);
+    // the rejection marks the inbox too (once in the rolled-back posting tx, once with the rejection), so a duplicate
+    // delivery of the same message cannot emit a second rejection
+    expect(markProcessedMock).toHaveBeenCalledTimes(2);
+    markProcessedMock.mockResolvedValue(false); // the duplicate: already processed
+    enqueueMock.mockClear();
+    await q.publish(COMMANDS.journalPost, { ...makeMsg({ type: "depreciation", assetId: ASSET, period: "2026-09", depAmountMinor: "8333", depBook: "company" }) })
+      .catch(() => undefined);
+    expect(rejectedPayloads()).toHaveLength(0);
   });
 
   it("a transient failure in the depreciation branch is not reported and keeps its retry behaviour", async () => {

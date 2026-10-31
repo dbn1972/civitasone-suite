@@ -23,7 +23,9 @@ const log = pino({ name: "finance:revenue-billing-consumer" });
 // Default account codes (configurable via env for tenant-specific CoA mapping)
 const REVENUE_CASH = process.env.FINANCE_REVENUE_CASH_CODE ?? "1100";
 const REVENUE_INCOME = process.env.FINANCE_REVENUE_INCOME_CODE ?? "4001";
-const REVENUE_REFUND_EXPENSE = process.env.FINANCE_REVENUE_REFUND_CODE ?? "5200";
+// A refund reverses revenue: it debits a CONTRA-REVENUE head (4090, an income-side account carrying a debit balance),
+// not an expense. It defaulted to 5200, which the fixed-asset register reads as impairment (UAT b10 review of F91).
+const REVENUE_REFUND_EXPENSE = process.env.FINANCE_REVENUE_REFUND_CODE ?? "4090";
 const BILLING_RECEIVABLE = process.env.FINANCE_BILLING_RECEIVABLE_CODE ?? "1300";
 const BILLING_REVENUE = process.env.FINANCE_BILLING_REVENUE_CODE ?? "4010";
 const BILLING_CASH = process.env.FINANCE_BILLING_CASH_CODE ?? "1100";

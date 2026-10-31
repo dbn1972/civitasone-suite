@@ -67,7 +67,9 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const q = z.object({ side: z.enum(["ap", "ar"]).default("ap") }).parse(req.query);
 
-    const apControl = process.env.FINANCE_AP_CONTROL_CODE ?? "2100";
+    // Same default as every AP posting path (payments/consumer.ts, payment-reversal.ts, treasury): 2050. This read 2100,
+    // a head no posting path uses and none is seeded, so the AP reconciliation compared against an empty account.
+    const apControl = process.env.FINANCE_AP_CONTROL_CODE ?? "2050";
     const arControl = process.env.FINANCE_AR_CONTROL_CODE ?? "1300";
     const controlCode = q.side === "ap" ? apControl : arControl;
 

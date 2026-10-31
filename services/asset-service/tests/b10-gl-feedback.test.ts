@@ -150,14 +150,15 @@ describe("F97: the depreciation run skips assets that left service", () => {
 });
 
 describe("F90: an auction disposal is sent in finance's asset_disposal shape", () => {
-  it("sends type asset_disposal with gainLoss = proceeds - book value", async () => {
+  it("sends type asset_disposal with gainLoss = proceeds - (cost - accumulated dep), so the journal balances under a salvage clamp", async () => {
     const asset = randomUUID();
     const survey = randomUUID();
     const rec = randomUUID();
     await asTenant(async (tx) => {
       await tx.insert(assetAssets).values({
         id: asset, tenantId: TENANT, name: "B10 truck", code: `B10-${asset.slice(0, 8)}`, categoryId, status: "condemned",
-        acquisitionCost: 900_000n, bookValue: 100_000n, accumulatedDep: 800_000n, acquisitionDate: "2012-01-01",
+        // salvage clamp: cost - accumulated = 50,000 but the headline bookValue is held at salvage (100,000)
+        acquisitionCost: 900_000n, salvageValue: 100_000n, bookValue: 100_000n, accumulatedDep: 850_000n, acquisitionDate: "2012-01-01",
         createdBy: MAKER, updatedBy: MAKER,
       });
       await tx.insert(condemnationSurveys).values({
@@ -176,8 +177,11 @@ describe("F90: an auction disposal is sent in finance's asset_disposal shape", (
     const gl = await outboxFor("finance.gl.post", asset);
     expect(gl).toHaveLength(1);
     expect(gl[0]!.payload).toMatchObject({
-      type: "asset_disposal", assetId: asset, acquisitionCost: "900000", accumulatedDep: "800000",
-      proceeds: "350000", gainLoss: "250000", currency: "INR",
+      type: "asset_disposal", assetId: asset, acquisitionCost: "900000", accumulatedDep: "850000",
+      proceeds: "350000", gainLoss: "300000", currency: "INR",
     });
+    // finance's journal: Dr accum 850000 + Dr cash 350000 = Cr cost 900000 + Cr gain 300000
+    const p = gl[0]!.payload as Record<string, string>;
+    expect(BigInt(p.accumulatedDep!) + BigInt(p.proceeds!)).toBe(BigInt(p.acquisitionCost!) + BigInt(p.gainLoss!));
   });
 });

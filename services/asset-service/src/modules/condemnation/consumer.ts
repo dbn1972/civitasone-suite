@@ -239,7 +239,10 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
               acquisitionCost: asset.acquisitionCost.toString(),
               accumulatedDep: asset.accumulatedDep.toString(),
               proceeds: proceedsMinor.toString(),
-              gainLoss: computeDisposalGainLoss(proceedsMinor, asset.bookValue).toString(),
+              // proceeds - (cost - accumulated depreciation), NOT the clamped headline bookValue: finance's journal is
+              // Dr accum + Dr cash = Cr cost +/- gain, so only this figure always balances (a salvage clamp made
+              // bookValue != cost - accum and the journal was refused as unbalanced).
+              gainLoss: computeDisposalGainLoss(proceedsMinor, asset.acquisitionCost - asset.accumulatedDep).toString(),
               currency: auction.currency,
             },
           });

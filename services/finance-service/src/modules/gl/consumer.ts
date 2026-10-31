@@ -73,10 +73,11 @@ type RejectedJournal = {
  * alertable error and dead-letter it as a NonRetryableError -- a retry cannot change the answer. A transient failure
  * (no refusal code) is rethrown unchanged and keeps its retry behaviour.
  *
- * `markInbox`: whether the rejection also marks the message processed. The generic posting path does (unchanged): its
- * producers re-send with their own repost flow. The asset-lifecycle and payroll-settlement branches do NOT: their journal
- * id is deterministic from the source (depreciation:<asset>:<period>:<book>, asset_disposal:<asset>,
- * payroll_settlement:<run>), so re-driving the dead-lettered message once the chart is fixed posts it exactly once.
+ * `markInbox`: whether the rejection also marks the message processed, so a duplicate delivery cannot emit a second
+ * rejection. The generic path and depreciation do: their producers re-send (asset-service's repost flow; depreciation
+ * reverts the entry on gl.rejected and the next run re-sends it). Disposal and payroll settlement do NOT: no producer
+ * re-sends them, the dead-lettered message itself is the recovery path, and their journal id is deterministic
+ * (asset_disposal:<asset>, payroll_settlement:<run>), so re-driving it once the chart is fixed posts exactly once.
  */
 async function rejectRefusal(msg: CommandEnvelope, err: unknown, j: RejectedJournal, markInbox: boolean): Promise<never> {
   const code = refusalCode(err);
@@ -416,7 +417,7 @@ export function registerGlConsumers(queue: Queue): void {
           journalId, voucherNo, type: "depreciation",
           sourceRef: `dep:${depBook}:${dep.assetId}:${dep.period}`,
           source: { kind: "depreciation", assetId: dep.assetId, period: dep.period, depBook, amountMinor: amount.toString() },
-        }, false);
+        }, true); // marks the inbox: a duplicate delivery must not emit a second rejection; asset-service re-sends on re-run
       }
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
       // BUG FIX (review follow-up): listFinancialStatements caches under a
