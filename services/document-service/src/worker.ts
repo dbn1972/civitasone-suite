@@ -16,6 +16,7 @@ import { setPorts } from "./modules/bulk-scan/ports.js";
 import { createFilingAdapter } from "./modules/files/filing-adapter.js";
 import { startBulkScanScheduler, scannerDiscovery } from "./modules/bulk-scan/dispatcher.js";
 import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
+import { assertScannerBypassesRls } from "./shared/scanner-guard.js";
 import { disposeOcrAdapter } from "./modules/bulk-scan/ocr-adapter.js";
 
 const log = pino({ name: "document-worker" });
@@ -38,6 +39,11 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
+
+// UAT F84: the scanner pool must be a BYPASSRLS role (document_scanner). A NOBYPASSRLS role (e.g. the dev/test
+// DATABASE_URL fallback = document_svc) would make every discovery below silently find no work, so refuse to start.
+const scannerRole = await assertScannerBypassesRls(scannerSqlClient);
+log.info({ scannerRole }, "bulk-scan scanner pool role can bypass RLS");
 
 // Bulk-scan dispatcher + lease sweeper (fair, bounded-concurrency scheduling; discovery via the read-only scanner role).
 const bulkScan = startBulkScanScheduler({ discovery: scannerDiscovery(scannerDb) });

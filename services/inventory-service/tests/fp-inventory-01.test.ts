@@ -365,6 +365,16 @@ describe("names from identity-service (GOODS-RETURNS-DETAIL-05 / CYCLE-COUNTS-DE
   });
 });
 
+function grnPayload(grnId: string, line: { itemCode: string; itemName: string; acceptedQty: number; rateMinor: string }) {
+  const poLine = randomUUID();
+  const amount = String(BigInt(line.rateMinor) * BigInt(line.acceptedQty));
+  return {
+    grnId, poRef: `procurement_po:${randomUUID()}`, vendorId: VENDOR, storeId: STORE1,
+    grossMinor: amount, poAmountMinor: amount, grnAmountMinor: amount,
+    items: [{ ...line, currency: "INR", itemType: "consumable", poItemId: poLine, itemId: poLine }],
+  };
+}
+
 describe("GAP-INVENTORY-RECEIPTS-03 / CYCLE-COUNTS-DETAIL-05: GRN references and movement detail", () => {
   it("a receipt posted from an accepted GRN carries GRN no / PO / supplier on its ledger rows and movement detail", async () => {
     const grnId = randomUUID();
@@ -381,7 +391,9 @@ describe("GAP-INVENTORY-RECEIPTS-03 / CYCLE-COUNTS-DETAIL-05: GRN references and
     await queue.publish(CONSUMED.grnAccepted, {
       messageId: randomUUID(), type: CONSUMED.grnAccepted, tenantId: T1, actorId: MAKER,
       correlationId: "corr-fp-grn", schemaVersion: "1.0",
-      payload: { grnId, toStoreId: STORE1, postingDate: "2026-02-01", items: [{ itemId: ITEM1, acceptedQty: 5, rateMinor: 1200, currency: "INR" }] },
+      // The real procurement.grn.accepted shape (UAT b10 F95): store on the event, item by itemCode (= SKU),
+      // money as a string, and the PO line id (not an inventory item id) as poItemId/itemId.
+      payload: grnPayload(grnId, { itemCode: "FP-1", itemName: "FP Gel Pen", acceptedQty: 5, rateMinor: "1200" }),
     });
     await drain();
 
@@ -409,7 +421,7 @@ describe("GAP-INVENTORY-RECEIPTS-03 / CYCLE-COUNTS-DETAIL-05: GRN references and
     await queue.publish(CONSUMED.grnAccepted, {
       messageId: randomUUID(), type: CONSUMED.grnAccepted, tenantId: T1, actorId: MAKER,
       correlationId: "corr-fp-grn2", schemaVersion: "1.0",
-      payload: { grnId, toStoreId: STORE1, postingDate: "2026-02-02", items: [{ itemId: ITEM2, acceptedQty: 3, rateMinor: 500, currency: "INR" }] },
+      payload: grnPayload(grnId, { itemCode: "FP-2", itemName: "FP Ball Pen", acceptedQty: 3, rateMinor: "500" }),
     });
     await drain();
     const ledger = await app.inject({ method: "GET", url: "/v1/inventory/ledger?movementType=receipt", headers: mgr(T1, MAKER) });

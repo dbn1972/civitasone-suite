@@ -11,6 +11,13 @@ import { sumMinor } from "@/lib/money";
 import { BillingActions } from "./BillingActions";
 import { BillDeductions } from "./BillDeductions";
 
+/** UAT b10 F93: finance hand-off outcome shown per bill. */
+function financeLabel(b: BillRow): string {
+  if (b.financeStatus === "rejected") return `Rejected by finance (${b.financeRejectionCode ?? "refused"})`;
+  if (b.financeStatus === "sent") return "Sent to finance";
+  return "—";
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function BillingDetailPage(
@@ -61,6 +68,7 @@ export default async function BillingDetailPage(
     grossAmountMinor: string;
     netPayableMinor: string;
     status: string;
+    finance: string;
   };
 
   // GAP-WORKS-BILLING-02: the register links here with ?bill=<id>; call that bill out and list it first.
@@ -75,7 +83,10 @@ export default async function BillingDetailPage(
     grossAmountMinor: b.gross,
     netPayableMinor: b.netPayable,
     status: billStatusLabel(b.rawStatus),
+    finance: financeLabel(b),
   }));
+  // UAT b10 F93: a DO-finalized bill finance refused is called out with the reason, not left looking finished.
+  const financeRejected = bills.filter((b) => b.financeStatus === "rejected");
 
   const newMbHref = `/works/billing/new-mb?workId=${params.workId}`;
 
@@ -124,6 +135,19 @@ export default async function BillingDetailPage(
         </div>
       ) : null}
 
+      {financeRejected.length > 0 ? (
+        <div role="alert" style={{ background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          <strong>Finance did not accept {financeRejected.length === 1 ? "1 bill" : `${financeRejected.length} bills`}.</strong>
+          <ul style={{ margin: "6px 0 0", paddingInlineStart: 18 }}>
+            {financeRejected.map((b) => (
+              <li key={b.id}>
+                {b.billNo || "—"}: {b.financeRejectionReason || b.financeRejectionCode || "rejected by finance"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <StatGrid>
         <StatCard
           icon="💰"
@@ -169,6 +193,7 @@ export default async function BillingDetailPage(
               align: "right",
             },
             { key: "status", label: "Status", cellType: "status" },
+            { key: "finance", label: "Finance" },
           ]}
           rows={tableRows}
           emptyIcon="💰"

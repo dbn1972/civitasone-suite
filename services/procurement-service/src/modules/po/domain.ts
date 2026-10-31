@@ -15,7 +15,8 @@ export const PO_APPROVAL_DEFINITION_CODE = "procurement_po_approval";
 export type PoStatus = "draft" | "pending" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
 
 const VALID_TRANSITIONS: Record<PoStatus, PoStatus[]> = {
-  draft:       ["pending", "approved"],
+  // F102: a PO awaits its workflow approval in draft; a reject cancels it.
+  draft:       ["pending", "approved", "cancelled"],
   pending:     ["approved", "cancelled"],
   approved:    ["dispatched", "closed", "cancelled"],
   gem_placed:  ["dispatched", "closed"],
@@ -28,6 +29,16 @@ export function assertTransitionAllowed(from: string, to: PoStatus): void {
   const allowed = VALID_TRANSITIONS[from as PoStatus] ?? [];
   if (!allowed.includes(to)) {
     throw new DomainError("INVALID_TRANSITION", `PO cannot transition from '${from}' to '${to}'`);
+  }
+}
+
+/**
+ * F102: only a PO still awaiting approval (draft / pending) can be rejected;
+ * an approved PO is cancelled through its own lifecycle, never by a reject.
+ */
+export function assertPoRejectable(status: string): void {
+  if (status !== "draft" && status !== "pending") {
+    throw new DomainError("PO_NOT_AWAITING_APPROVAL", `only a PO awaiting approval can be rejected, got '${status}'`);
   }
 }
 

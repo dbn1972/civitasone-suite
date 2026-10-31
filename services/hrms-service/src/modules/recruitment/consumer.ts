@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as editionPolicyRepo from "./edition-policy-repo.js";
 import * as offerRepo from "./offer-repo.js";
+import { DEFAULT_OFFER_CHAIN } from "./offer-domain.js";
 import * as templateRepo from "./jd-template-repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
@@ -156,61 +157,36 @@ export function registerRecruitmentConsumers(queue: Queue): void {
     }
   });
 
+  // DEPRECATED (UAT F85): the legacy single-field offer shortcut. TODO(F85-go-live): remove this
+  // subscriber together with PATCH /v1/hrms/applications/:id/offer (routes.ts) before go-live.
   queue.subscribe(COMMANDS.applicationOffer, async (msg) => {
     const p = msg.payload as { offerId: string; applicationId: string; tenantId: string; ctcMinor: number; currency: string; joiningDate?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Bug 1 hardening: atomically claim the application for the offer step
-      // (replaces the old blind updateApplication call, which had no stage/
-      // status precondition at all -- it would happily move a withdrawn,
-      // rejected, or already-hired application to "offered"). Only succeeds
-      // when the application is genuinely offer-eligible right now; see
-      // repo.claimApplicationForOffer for the exact guard and why routes.ts's
-      // synchronous pre-check alone isn't sufficient.
-      const claimed = await repo.claimApplicationForOffer(tx, p.applicationId, p.tenantId);
-      if (!claimed) {
+      // Bug 1 hardening: re-check, inside this write transaction, that the
+      // application is still offer-eligible (routes.ts's synchronous check can
+      // be stale by the time this runs -- a withdraw or a hire in between).
+      const application = await repo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
+      if (!application || repo.NOT_OFFERABLE_STAGES.includes(application.stage) || repo.NOT_OFFERABLE_STATUSES.includes(application.status)) {
         log.warn({ applicationId: p.applicationId, tenantId: p.tenantId }, "offer rejected: application is not in an offerable state");
         return;
       }
 
-      // MEDIUM finding: this legacy shortcut and the compliance approval-
-      // chain flow (offer-routes.ts's POST /applications/:id/offers, via
-      // f3-consumer.ts's "recruitment_offer_routes__0" case) both write
-      // hrms_offers, but used to populate it very differently:
-      //   - offerNo/offerVersion were left unset here (NULL / schema
-      //     default 1), while the compliance path always generates/computes
-      //     them -- meaning a legacy offer had no offer number and a second
-      //     legacy offer for the same application (after a revise/reoffer)
-      //     would silently collide on version numbering.
-      //   - basicMinor/joiningBonusMinor/relocationMinor/variablePayMinor/
-      //     grossCtcMinor were never set here at all, staying at their
-      //     schema default of 0 -- even though ctcMinor (legacy-only) held
-      //     the real figure. Anything reading the compensation breakdown
-      //     (grossCtcMinor in particular, which is what jsonSafe(...) sends
-      //     back to the compliance routes' own responses) saw zero for a
-      //     legacy-flow offer.
-      //   - status was hardcoded to "sent", a value offer-domain.ts's
-      //     vocabulary (draft/pending_approval/approved/returned/released/
-      //     accepted/declined/withdrawn/expired/revised) does not define.
-      //     canRelease/isTerminal/isOfferEditable all return false for it,
-      //     and POST .../accept, .../decline and .../expire all require
-      //     status === "released" exactly -- so a legacy offer could never
-      //     legitimately be accepted, declined or expired through those
-      //     routes; it was stuck in an undefined state. The legacy path
-      //     genuinely has no approval chain (that's the point of it being a
-      //     shortcut), so the honest equivalent state is the one the
-      //     compliance chain reaches right after its own /release step --
-      //     "released", with releasedAt genuinely set to now. approvedAt is
-      //     deliberately left null: no approval actually ran here, and this
-      //     fix does not fabricate one.
-      //   - The legacy body only ever carries a single lump-sum ctcMinor
-      //     (offerApplicationBody has no basic/bonus/relocation/variable
-      //     breakdown to derive one from) -- attributed here in full to
-      //     basicMinor so grossCtcMinor is accurate instead of silently 0,
-      //     matching the compliance path's own ctcMinor<->grossCtcMinor
-      //     sync invariant (see f3-consumer.ts's "keep legacy ctc_minor in
-      //     sync" comment) in the other direction.
+      // UAT F85 (separation of duties): this shortcut used to insert the offer
+      // straight as "released" and claim the application to stage "offered",
+      // so one HR user could send an offer (and then hire) with no approval at
+      // all. Even where a tenant still has the shortcut enabled, it now only
+      // ENTERS the normal approval workflow: the offer is created already
+      // submitted (pending_approval, stage 0 of the default HR -> Finance ->
+      // Legal -> Competent Authority chain) by the caller. From here it is
+      // exactly an offer made via POST /applications/:id/offers + /submit:
+      // POST /offers/:id/approve enforces maker != checker and one distinct
+      // approver per stage (F70), only a fully-approved offer can be
+      // released, and only the release moves the application to "offered"
+      // (f3-consumer.ts's recruitment_offer_routes__4), which Hire requires.
+      // The single lump-sum ctcMinor is attributed to basicMinor so
+      // grossCtcMinor is accurate (see f3-consumer.ts's ctc_minor sync note).
       const nextOfferVersion = (await offerRepo.maxOfferVersionTx(tx, p.tenantId, p.applicationId)) + 1;
       await offerRepo.insertOffer(tx, {
         id: p.offerId, tenantId: p.tenantId, applicationId: p.applicationId,
@@ -218,8 +194,12 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         basicMinor: BigInt(p.ctcMinor), joiningBonusMinor: 0n, relocationMinor: 0n, variablePayMinor: 0n,
         grossCtcMinor: BigInt(p.ctcMinor), ctcMinor: BigInt(p.ctcMinor), currency: p.currency as "INR",
         joiningDate: p.joiningDate ?? null,
-        status: "released", releasedAt: new Date(),
+        approvalChain: DEFAULT_OFFER_CHAIN as never, currentStage: 0, status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await offerRepo.insertEvent(tx, {
+        tenantId: p.tenantId, offerId: p.offerId, applicationId: p.applicationId,
+        action: "submit", remarks: "legacy PATCH .../offer (deprecated): submitted for approval", actorId: msg.actorId,
       });
       await audit(tx, msg, "offer", "application", p.applicationId);
     });

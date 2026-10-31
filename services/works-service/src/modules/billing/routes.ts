@@ -8,7 +8,7 @@ import {
   isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, canRecordMeasurement,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
-  finalizeStepRoles, isSelfFinalization, DEDUCTION_HEADS, computeDeductionLines,
+  finalizeStepRoles, isSelfFinalization, DEDUCTION_HEADS, computeDeductionLines, isTerminalBillStatus,
 } from "./domain.js";
 import {
   getMb, getMbByNumber, getBill, listBillsForWork, listBills, countBills, listMeasurementsByMb, listMeasurementsByBoqItem,
@@ -308,6 +308,15 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, finalizeStepRoles(body.nextStatus));
     if (isSelfFinalization(ctx.actorId, { createdBy: bill.createdBy })) {
       throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of a bill cannot finalize it (maker-checker rule)");
+    }
+    // UAT b10 F93: the DO step hands the bill to finance, which pays the award's contractor. Refuse it here (422)
+    // when the award has no contractor, instead of a 202 the consumer then rolls back (it re-checks, NonRetryable).
+    if (isTerminalBillStatus(body.nextStatus)) {
+      const award = await getAwardById(ctx.tenantId, bill.awardId);
+      if (!award?.contractorId) {
+        throw new HttpError(422, "AWARD_NO_CONTRACTOR",
+          "The bill's award has no contractor, so finance has no payee. Link a contractor to the award before the DO finalizes the bill.");
+      }
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeBillCommand(ctx, body.id, body.nextStatus));

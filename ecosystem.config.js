@@ -422,6 +422,19 @@ const COURT_DSC_ENV = Object.fromEntries(
     .filter((k) => process.env[k] !== undefined)
     .map((k) => [k, process.env[k]]),
 );
+// UAT F84: document-worker's cross-tenant bulk-scan discovery (dispatcher, lease
+// sweeper, upload expiry, retention) reads through the dedicated BYPASSRLS
+// document_scanner role (document-service 0007, shared/scanner-db.ts). document_svc
+// is NOBYPASSRLS (admin-service 0058), so a fallback to DATABASE_URL sees zero
+// bulk_scan rows. Production document-worker refuses to start without this DSN
+// (scanner-url.ts). Passed through ONLY when set, like COURT_DSC_ENV: an unset var
+// stays UNSET (never ""), and no ecosystem-level throw, so a missing document DSN
+// never blocks the other apps. Only the worker opens the scanner pool.
+const DOCUMENT_SCANNER_ENV = Object.fromEntries(
+  ["DOCUMENT_SCANNER_DATABASE_URL"]
+    .filter((k) => process.env[k] !== undefined)
+    .map((k) => [k, process.env[k]]),
+);
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
 const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
 // procurement-service's app-layer PII crypto (src/shared/pii-crypto.ts) reads
@@ -678,7 +691,7 @@ module.exports = {
     worker("catalogue",    "catalogue_svc",    "civitas_catalogue"),
     worker("journey",      "journey_svc",      "civitas_journey", { JOURNEY_SCANNER_DATABASE_URL: scannerDbUrl("journey_scanner", "civitas_journey", "JOURNEY_SCANNER_DATABASE_URL") }),
     worker("loyalty",      "loyalty_svc",      "civitas_loyalty"),
-    worker("document",     "document_svc",     "civitas_document"),
+    worker("document",     "document_svc",     "civitas_document", { ...DOCUMENT_SCANNER_ENV }),
     worker("recommendation", "recommendation_svc", "civitas_recommendation"),
     worker("cdp",          "cdp_svc",         "civitas_cdp"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),

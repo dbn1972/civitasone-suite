@@ -1293,6 +1293,8 @@ export type GRNSummary = {
 
 export type GRNDetail = GRNSummary & {
   vendorId?: string;
+  /** UAT b10 F95: receiving inventory store (absent for a GRN created before it was recorded). */
+  storeId?: string;
   notes?: string;
   // GAP-PROCUREMENT-GRN-DETAIL-02: `undefined` means the three-way match has
   // not been computed yet (GRN still awaiting inspection). It must stay

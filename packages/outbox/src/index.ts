@@ -16,7 +16,7 @@
  */
 import { pgSchema, uuid, varchar, jsonb, timestamp, text } from "drizzle-orm/pg-core";
 import type { PgDatabase } from "drizzle-orm/pg-core";
-import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, inArray, notInArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
@@ -316,6 +316,67 @@ export function resolveRelayConcurrency(
  * ordering. FIFO topics still dedup via the bus default
  * MessageDeduplicationId = messageId = row.id.
  */
+/**
+ * UAT B10-F83: topics whose loss is a compliance defect (the audit trail).
+ * The relay publishes them with `requireSubscribers`, and the purge keeps
+ * their published rows for AUDIT_OUTBOX_RETENTION_DAYS (default 30) so events
+ * the broker accepted but later lost can still be replayed from the outbox.
+ */
+export const REQUIRED_DELIVERY_TOPICS: ReadonlySet<string> = new Set(["audit.event.record", "audit.event.ingest"]);
+
+export function resolveAuditOutboxRetentionDays(raw: string | undefined = process.env.AUDIT_OUTBOX_RETENTION_DAYS): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : 30;
+}
+
+/**
+ * UAT B10-F83 (review): per-row relay backoff, so rows that keep failing (an
+ * audit backlog while the audit queue is missing) are skipped until their next
+ * attempt instead of filling every `ORDER BY created_at LIMIT batch` window
+ * and starving every other topic of the service. In-process state: a restart
+ * simply retries everything once. Rows are never dropped; after
+ * RELAY_STUCK_ATTEMPTS failures a row is reported once (error log +
+ * captureError `outbox_relay_row_stuck`) and keeps retrying at the cap.
+ */
+export const RELAY_BACKOFF_BASE_MS = 5_000;
+export const RELAY_BACKOFF_MAX_MS = 5 * 60_000;
+export const RELAY_STUCK_ATTEMPTS = 10;
+const RELAY_BACKOFF_MAX_ROWS = 10_000;
+type RelayBackoff = { attempts: number; nextAt: number; reported: boolean };
+const relayBackoff = new Map<string, RelayBackoff>();
+
+/** Test hook: forget all per-row backoff state. */
+export function resetRelayBackoff(): void {
+  relayBackoff.clear();
+}
+
+/** Ids currently waiting out a backoff (pruning the ones whose wait is over). */
+function backedOffIds(now: number): string[] {
+  const ids: string[] = [];
+  for (const [id, b] of relayBackoff) if (b.nextAt > now) ids.push(id);
+  return ids;
+}
+
+function recordRelayFailure(row: { id: string; topic: string; correlationId: string }, service: string, now: number): void {
+  const prev = relayBackoff.get(row.id);
+  const attempts = (prev?.attempts ?? 0) + 1;
+  const delay = Math.min(RELAY_BACKOFF_MAX_MS, RELAY_BACKOFF_BASE_MS * 2 ** (attempts - 1));
+  let reported = prev?.reported ?? false;
+  if (attempts >= RELAY_STUCK_ATTEMPTS && !reported) {
+    reported = true;
+    captureError(new Error(`outbox row ${row.id} (${row.topic}) still unpublished after ${attempts} attempts`), {
+      service, topic: row.topic, correlationId: row.correlationId, event: "outbox_relay_row_stuck", outboxId: row.id,
+    });
+    // eslint-disable-next-line no-console -- structured operational error log
+    console.error(JSON.stringify({ level: "error", event: "outbox_relay_row_stuck", service, topic: row.topic, outboxId: row.id, attempts }));
+  }
+  if (!prev && relayBackoff.size >= RELAY_BACKOFF_MAX_ROWS) {
+    const oldest = relayBackoff.keys().next().value;
+    if (oldest !== undefined) relayBackoff.delete(oldest);
+  }
+  relayBackoff.set(row.id, { attempts, nextAt: now + delay, reported });
+}
+
 export async function relayOnce(
   db: DrizzleTx,
   queue: Queue,
@@ -323,10 +384,13 @@ export async function relayOnce(
   service = process.env.SERVICE_NAME ?? "service",
   concurrency = resolveRelayConcurrency(),
 ): Promise<number> {
+  const skip = backedOffIds(Date.now());
   const rows = await db
     .select()
     .from(outboxMessages)
-    .where(isNull(outboxMessages.publishedAt))
+    .where(skip.length > 0
+      ? and(isNull(outboxMessages.publishedAt), notInArray(outboxMessages.id, skip))
+      : isNull(outboxMessages.publishedAt))
     .orderBy(asc(outboxMessages.createdAt))
     .limit(batch);
   if (rows.length === 0) return 0;
@@ -354,7 +418,7 @@ export async function relayOnce(
             const { [OUTBOX_CAUSATION_KEY]: _stripped, ...rest } = rawPayload;
             deliverPayload = rest;
           }
-          await queue.publish(row.topic, {
+          const input = {
             // SEC C1: forward the stable outbox row id as the messageId so a relay
             // re-publish (after a crash between publish and mark-published) reuses
             // the same id and the consumer dedupes it via markProcessed, instead of
@@ -374,19 +438,37 @@ export async function relayOnce(
             // every row enqueued without one.
             ...(causationId !== undefined ? { causationId } : {}),
             schemaVersion: row.schemaVersion, payload: deliverPayload,
-          });
+            // UAT B10-F83 (review): for audit topics the envelope timestamp is the
+            // instant the event was committed (outbox created_at), not the relay
+            // time, so a delayed or replayed delivery keeps its true event time.
+            ...(REQUIRED_DELIVERY_TOPICS.has(row.topic) && row.createdAt
+              ? { timestamp: new Date(row.createdAt).toISOString() }
+              : {}),
+          };
+          // UAT B10-F83: an audit event must reach the audit store. Ask the bus
+          // to fail (row stays unpublished, retried next cycle) when no
+          // subscriber queue exists, instead of "succeeding" into the void.
+          if (REQUIRED_DELIVERY_TOPICS.has(row.topic)) {
+            await queue.publish(row.topic, input, { requireSubscribers: true });
+          } else {
+            await queue.publish(row.topic, input);
+          }
           return row.id;
         } catch (err) {
           // OPS-1: a relay publish failure is observable and isolated - one row's
           // failure never aborts the batch or blocks its peers.
           incrementOutboxRelayFailure(service);
           captureError(err, { service, topic: row.topic, correlationId: row.correlationId, event: "outbox_relay_failed", outboxId: row.id });
+          recordRelayFailure(row, service, Date.now());
           throw err;
         }
       }),
     );
     for (const r of results) {
-      if (r.status === "fulfilled") succeededIds.push(r.value);
+      if (r.status === "fulfilled") {
+        succeededIds.push(r.value);
+        relayBackoff.delete(r.value);
+      }
     }
   }
 
@@ -474,8 +556,22 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
  * Processes deletions in batches of `batchSize` (default 1000).
  * Returns the total number of deleted rows. Safe to call from any service worker.
  */
-export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 1000): Promise<number> {
+export async function purgeOutbox(
+  db: DrizzleTx,
+  retentionDays = 7,
+  batchSize = 1000,
+  processedRetentionDays = retentionDays,
+): Promise<number> {
   const cutoff = sql`now() - interval '${sql.raw(String(retentionDays))} days'`;
+  // UAT B10-F83 (review): the consumer dedupe window (_inbox.processed) can be
+  // kept longer than the general window, e.g. by audit-service so a replay of
+  // a 30-day-old audit row is still deduped by its message id.
+  const processedDays = Math.max(retentionDays, Math.floor(processedRetentionDays));
+  const processedCutoff = sql`now() - interval '${sql.raw(String(processedDays))} days'`;
+  // UAT B10-F83: audit rows are kept longer (never shorter than the general window).
+  const auditDays = Math.max(retentionDays, resolveAuditOutboxRetentionDays());
+  const auditCutoff = sql`now() - interval '${sql.raw(String(auditDays))} days'`;
+  const auditTopics = sql.join([...REQUIRED_DELIVERY_TOPICS].map((t) => sql`${t}`), sql`, `);
 
   // Delete published outbox messages older than retention in batches
   let totalDeleted = 0;
@@ -486,6 +582,7 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
       WHERE id IN (
         SELECT id FROM _outbox.messages
         WHERE published_at IS NOT NULL AND published_at < ${cutoff}
+          AND (topic NOT IN (${auditTopics}) OR published_at < ${auditCutoff})
         LIMIT ${sql.raw(String(batchSize))}
       )
     `);
@@ -500,7 +597,7 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
       DELETE FROM _inbox.processed
       WHERE message_id IN (
         SELECT message_id FROM _inbox.processed
-        WHERE processed_at < ${cutoff}
+        WHERE processed_at < ${processedCutoff}
         LIMIT ${sql.raw(String(batchSize))}
       )
     `);
@@ -537,6 +634,8 @@ export interface OutboxPurgeOptions {
   retentionDays?: number;
   /** Batch size for DELETE operations (default: 1000). */
   batchSize?: number;
+  /** UAT B10-F83: retention for _inbox.processed (default: retentionDays; never shorter). */
+  processedRetentionDays?: number;
   /** Pino-compatible logger for WARN logging (optional). */
   logger?: { warn: (obj: Record<string, unknown>, msg: string) => void };
 }
@@ -548,12 +647,12 @@ export interface OutboxPurgeOptions {
  * Returns the interval handle for cleanup on shutdown.
  */
 export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): NodeJS.Timeout {
-  const { intervalMs = 3_600_000, retentionDays = 7, batchSize = 1000, logger } = opts;
+  const { intervalMs = 3_600_000, retentionDays = 7, batchSize = 1000, logger, processedRetentionDays = retentionDays } = opts;
 
   const timer = setInterval(() => {
     void (async () => {
       try {
-        const deleted = await purgeOutbox(db, retentionDays, batchSize);
+        const deleted = await purgeOutbox(db, retentionDays, batchSize, processedRetentionDays);
         if (deleted === 0 && logger) {
           // Check if outbox has >10K entries — indicates stuck/stale situation
           const countResult = await db.execute(

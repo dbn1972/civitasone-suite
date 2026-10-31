@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -35,8 +36,10 @@ export function registerAssesseeConsumers(queue: Queue): void {
         builtUpArea?: bigint | null;
       };
 
+      const assesseeId = randomUUID();
       try {
         await tx.insert(assessees).values({
+          id: assesseeId,
           tenantId: msg.tenantId,
           assesseeType: p.assesseeType,
           identifierNo: p.identifierNo,
@@ -76,6 +79,7 @@ export function registerAssesseeConsumers(queue: Queue): void {
           service: SERVICE,
           action: "assessee.created",
           resourceType: "assessee",
+          resourceId: assesseeId,
           outcome: "success",
         },
       });

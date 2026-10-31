@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as poRepo from "../po/repo.js";
-import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError } from "./domain.js";
+import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError, needsReceivingStore } from "./domain.js";
 import type { CreateGrnBody, AmendGrnBody, AcceptGrnBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -95,11 +95,23 @@ async function guardInspectable(ctx: RequestContext, id: string): Promise<void> 
  */
 export async function acceptGrn(ctx: RequestContext, id: string, body: AcceptGrnBody): Promise<Accepted> {
   await guardInspectable(ctx, id);
+  // UAT b10 F95: refuse synchronously (422) an accept that inventory could never post as a stock receipt, instead of
+  // a 202 that later dead-letters on GRN_NO_RECEIVING_STORE. The store comes from the GRN or from this accept call.
+  const grn = await repo.findGrnById(id);
+  if (grn && !grn.storeId && !body.storeId) {
+    const items = await repo.findGrnItemsByGrnId(id);
+    const poItems = await poRepo.findPoItemsByPoId(grn.poRef.replace(/^procurement_po:/, ""), ctx.tenantId);
+    const typeByRef = new Map(poItems.map((pi) => [pi.id, pi.itemType]));
+    if (needsReceivingStore(items.map((i) => ({ itemCode: i.itemCode, acceptedQty: i.acceptedQty, poItemType: typeByRef.get(i.poItemRef) })))) {
+      throw new HttpError(422, "GRN_NO_RECEIVING_STORE",
+        "This GRN accepts stock items but names no receiving store. Choose the inventory store the goods go into.");
+    }
+  }
   const msgId = randomUUID();
   await queue.publish(COMMANDS.grnAccept, {
     messageId: msgId, type: COMMANDS.grnAccept,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, remarks: body.remarks },
+    payload: { id, tenantId: ctx.tenantId, remarks: body.remarks, ...(body.storeId ? { storeId: body.storeId } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "grn", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

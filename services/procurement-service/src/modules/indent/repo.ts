@@ -171,6 +171,31 @@ export async function addIndentCommittedGuarded(
   return (rows as unknown as unknown[]).length > 0;
 }
 
+/**
+ * F102 review: release a cancelled PO's reservation from its indent - the
+ * inverse of addIndentCommittedGuarded, same atomic guarded-UPDATE shape and
+ * explicit tenant predicate. Never drives committed_minor negative; returns
+ * false when nothing was released (unknown indent, other tenant, or less
+ * committed than the release). The caller makes it once-only: it runs in the
+ * same transaction as the version-locked PO -> cancelled transition.
+ */
+export async function releaseIndentCommittedGuarded(
+  tx: Exec,
+  id: string,
+  tenantId: string,
+  deltaMinor: bigint,
+): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE indent.procurement_indents
+       SET committed_minor = committed_minor - ${deltaMinor}, updated_at = now()
+     WHERE id = ${id}::uuid
+       AND tenant_id = ${tenantId}::uuid
+       AND committed_minor >= ${deltaMinor}
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
+}
+
 export async function findTenderRequiredIndents(tenantId: string, limit = 50): Promise<IndentRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

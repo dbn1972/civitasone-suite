@@ -116,18 +116,27 @@ export function nextResolutionSequence(existingSequences: readonly number[]): nu
 /**
  * Format a sequential resolution number scoped to a committee + financial year (Req 11.4), e.g.
  * `{ committeeCode: "FC", financialYear: "2025-26", sequence: 7 }` → `"FC/RES/2025-26/007"`.
- * Falls back to the `"RES"` prefix when no committee code is available. The `RES` segment
- * distinguishes resolution numbers from meeting numbers that share the committee/FY scope.
+ * Without a committee code the number is `"RES/<FY>/<seq>"` (UAT F82: it used to double the
+ * prefix as `RES/RES/...`). The `RES` segment distinguishes resolution numbers from meeting
+ * numbers that share the committee/FY scope.
  */
 export function generateResolutionNumber(input: {
   committeeCode?: string | null;
   financialYear: string;
   sequence: number;
 }): string {
-  const code = (input.committeeCode ?? "").trim().toUpperCase() || "RES";
   const seq = String(Math.max(1, Math.trunc(input.sequence))).padStart(3, "0");
-  return `${code}/RES/${input.financialYear}/${seq}`;
+  return `${resolutionNumberPrefix(input.committeeCode)}/${input.financialYear}/${seq}`;
 }
+
+/** Series prefix of a resolution number: `<CODE>/RES`, or `RES` for a committee with no code. */
+export function resolutionNumberPrefix(committeeCode?: string | null): string {
+  const code = (committeeCode ?? "").trim().toUpperCase();
+  return code ? `${code}/RES` : "RES";
+}
+
+/** Prefix that pre-F82 code issued for code-less resolutions; the counter continues after it. */
+export const LEGACY_CODELESS_RESOLUTION_PREFIX = "RES/RES";
 
 // ─── Vote tally + majority rule computation (Req 11.3 · P16) ───────────────────
 

@@ -104,3 +104,19 @@ export function applyDepreciationPosting(
   if (bookValueMinor < asset.salvageValueMinor) bookValueMinor = asset.salvageValueMinor;
   return { bookValueMinor, accumulatedDepMinor };
 }
+
+/**
+ * F89 (UAT T6-01): undo applyDepreciationPosting() for an entry finance REFUSED to journal. accumulatedDep is the exact
+ * running sum of posted entries, so taking the entry back out restores it exactly; bookValue is re-derived from it the
+ * same way (cost - accumulated, never below salvage), so the two figures stay mutually consistent.
+ */
+export function reverseDepreciationPosting(
+  asset: AssetHeadlineFigures,
+  entryAmountMinor: bigint,
+): BookValuePosting {
+  let accumulatedDepMinor = asset.accumulatedDepMinor - entryAmountMinor;
+  if (accumulatedDepMinor < 0n) accumulatedDepMinor = 0n;
+  let bookValueMinor = asset.acquisitionCostMinor - accumulatedDepMinor;
+  if (bookValueMinor < asset.salvageValueMinor) bookValueMinor = asset.salvageValueMinor;
+  return { bookValueMinor, accumulatedDepMinor };
+}

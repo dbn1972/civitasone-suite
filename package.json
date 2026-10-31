@@ -18,7 +18,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
-    "test:contract": "vitest run tests/contract/gateway.contract.test.ts tests/contract/cross-service-events.contract.test.ts",
+    "test:contract": "vitest run tests/contract/gateway.contract.test.ts tests/contract/cross-service-events.contract.test.ts tests/contract/billing-invoice-paid.contract.test.ts",
     "test:contract:events": "vitest run tests/contract/cross-service-events.contract.test.ts",
     "test:contract:strict": "CONTRACT_STRICT=1 vitest run tests/contract/cross-service-events.contract.test.ts",
     "test:e2e:personas": "playwright test --config tests/e2e-personas/playwright.config.ts",

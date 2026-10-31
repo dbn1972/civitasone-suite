@@ -177,7 +177,7 @@ describe("offer approval workflow (DETAIL-05)", () => {
 
     const legacy = await app.inject({ method: "PATCH", url: `/v1/hrms/applications/${appId}/offer`, headers: { ...as(U.admin, ["hr_admin"]), ...CT }, payload: { ctcMinor: 5_000_000 } });
     expect(legacy.statusCode).toBe(409);
-    expect(legacy.json().code).toBe("OFFER_WORKFLOW_REQUIRED");
+    expect(legacy.json().code).toBe("LEGACY_OFFER_DISABLED");
 
     const created = await app.inject({ method: "POST", url: `/v1/hrms/applications/${appId}/offers`, headers: { ...as(U.admin, ["hr_admin"]), ...CT },
       payload: { basicMinor: 5_610_000, payLevel: 10, payCell: 3, grade: "Gr-B" } });

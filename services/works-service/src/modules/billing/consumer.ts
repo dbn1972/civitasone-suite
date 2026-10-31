@@ -1,9 +1,11 @@
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { pino } from "pino";
+import { financeBillCreate, financeBillRejected } from "@civitasone/events/contracts";
 import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
+import { COMMANDS, EVENTS, FINANCE_HANDOFF, CONSUMED_EVENTS } from "../../topics.js";
 import { measurementBooks, measurements, bills, billItems, billRecoveries, deductionRates, accountCompilations } from "./schema.js";
 import { loadDeductionRateRows } from "./repo.js";
 import { workProposals } from "../proposal/schema.js";
@@ -20,6 +22,17 @@ import { awards } from "../tender/schema.js";
 import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
+const log = pino({ name: "works-billing-consumer" });
+
+/**
+ * UAT b10 F94: the finance expense head for a works RA bill, as a CODE that finance resolves in the bill tenant's own
+ * chart of accounts (never a literal head id, which exists for one tenant only). Default 2202 is the head the old
+ * literal id pointed at.
+ */
+export function worksBillHeadCode(): string {
+  const configured = process.env.WORKS_FINANCE_BILL_HEAD_CODE?.trim();
+  return configured ? configured : "2202";
+}
 
 export function registerBillingConsumers(q: Queue): void {
   q.subscribe(COMMANDS.mbIssue, async (msg) => {
@@ -384,7 +397,7 @@ export function registerBillingConsumers(q: Queue): void {
       }
 
       await tx.update(bills)
-        .set({ status: nextStatus })
+        .set({ status: nextStatus, ...(isTerminalBillStatus(nextStatus) ? { financeStatus: "sent", financeRejectionCode: null, financeRejectionReason: null, financeRejectedAt: null } : {}) })
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)));
 
       await enqueue(tx, {
@@ -403,10 +416,15 @@ export function registerBillingConsumers(q: Queue): void {
           .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, bill.awardId)))
           .limit(1);
         const award = awardRows[0];
+        // UAT b10 F93: the payee is the award's contractor (a uuid), never the namespaced "works_award:<id>" string
+        // that finance's vendor-uuid contract rejected, so no works bill ever reached finance. An award with no
+        // contractor link cannot be paid: refuse the DO-finalization loudly instead of raising a bill finance must drop.
+        if (!award?.contractorId) {
+          log.error({ tenantId: msg.tenantId, billId: bill.id, awardId: bill.awardId, code: "AWARD_NO_CONTRACTOR" },
+            "works bill DO-finalization refused: the award has no contractor, so finance has no payee");
+          throw new NonRetryableError(`AWARD_NO_CONTRACTOR: award ${bill.awardId} has no contractor; link one before the DO finalizes the bill`);
+        }
         const financeBillId = randomUUID();
-        const headId = process.env.WORKS_FINANCE_DEFAULT_HEAD_ID
-          ?? process.env.FINANCE_DEFAULT_HEAD_ID
-          ?? "dddddddd-0001-0000-0000-000000000001";
 
         await enqueue(tx, {
           topic: FINANCE_HANDOFF.billCreate,
@@ -414,12 +432,13 @@ export function registerBillingConsumers(q: Queue): void {
           tenantId: msg.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: {
+          // Built through the shared contract (@civitasone/events/contracts) that finance validates against.
+          payload: financeBillCreate.build({
             id: financeBillId,
             tenantId: msg.tenantId,
             billNo: bill.billNumber,
-            vendorId: `works_award:${bill.awardId}`,
-            headId,
+            vendorId: award.contractorId,
+            headCode: worksBillHeadCode(),
             grossMinor: bill.grossAmountMinor.toString(),
             netMinor: bill.netPayableMinor.toString(),
             currency: "INR",
@@ -427,14 +446,39 @@ export function registerBillingConsumers(q: Queue): void {
             poRef: `works_award:${bill.awardId}`,
             grnRef: `works_bill:${bill.id}`,
             billDate: new Date().toISOString().slice(0, 10),
-            contractorName: award?.contractorName ?? null,
+            contractorName: award.contractorName ?? null,
             workId: bill.workId,
             worksBillId: bill.id,
-          },
+          }),
         });
       }
     });
   }, { visibilityTimeout: 300 });
+
+  // UAT b10 F93: finance refused the bill this service raised. Record it on the works bill's audit trail and raise an
+  // error log, so a DO-finalized bill that never became a finance bill is visible instead of silently missing.
+  q.subscribe(CONSUMED_EVENTS.financeBillRejected, async (msg) => {
+    const checked = financeBillRejected.validate(msg.payload);
+    if (!checked.ok) throw new NonRetryableError("SCHEMA_VIOLATION: finance.bill.rejected payload does not match the contract");
+    const p = financeBillRejected.payload(msg);
+    if (!p.worksBillId) return; // a bill some other producer raised (e.g. a GRN bill), not ours
+    log.error({ tenantId: msg.tenantId, worksBillId: p.worksBillId, financeBillId: p.billId, code: p.code },
+      "finance rejected the bill raised for a DO-finalized works bill");
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Visible on the bill itself (bill API + web bill page), not only in the audit trail.
+      await tx.update(bills)
+        .set({ financeStatus: "rejected", financeRejectionCode: p.code.slice(0, 64), financeRejectionReason: p.reason, financeRejectedAt: new Date() })
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, p.worksBillId!)));
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "works-service", action: "finance_handoff_rejected", resourceType: "bill", resourceId: p.worksBillId,
+          outcome: "failure", reason: p.code, metadata: { financeBillId: p.billId, code: p.code },
+        },
+      });
+    });
+  });
 
   // ORPHAN FIX: record a measurement line against an MB. Enforces
   // FR-BIL-011 — billed quantity may not exceed the approved BoQ quantity.

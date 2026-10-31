@@ -89,7 +89,41 @@ export function isNonRetryable(err: unknown): boolean {
 export type PublishOptions = {
   messageGroupId?: string;
   messageDeduplicationId?: string;
+  /**
+   * UAT B10-F83: fail with a retryable NoSubscribersError instead of resolving
+   * when the topic has no subscriber queue (the message would reach nobody).
+   * The outbox relay sets it for audit topics, so the row stays unpublished and
+   * is sent again once the consumer's queue exists, instead of being marked
+   * published and lost.
+   */
+  requireSubscribers?: boolean;
 };
+
+/**
+ * UAT B10-F83: thrown by publish() with `requireSubscribers` when no subscriber
+ * queue exists for the topic. Deliberately retryable (not NonRetryableError):
+ * the consumer queue is normally only missing for a while (consumer not yet
+ * started, or the broker lost its queues), so the caller should try again.
+ */
+export class NoSubscribersError extends Error {
+  readonly code = "NO_SUBSCRIBERS" as const;
+  constructor(public readonly topic: string) {
+    super(`no subscriber queue for topic ${topic}; message not delivered`);
+    this.name = "NoSubscribersError";
+  }
+}
+
+/** UAT B10-F83: how soon a required-delivery publish with no subscriber re-lists the topic. */
+const NO_SUBSCRIBER_RECHECK_MS = 5_000;
+
+/** UAT B10-F83: the broker says the queue is gone (deleted, or lost by a broker restart). */
+export function isQueueMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { name?: unknown; Code?: unknown; code?: unknown; message?: unknown };
+  const tags = [e.name, e.Code, e.code].filter((v): v is string => typeof v === "string");
+  if (tags.some((t) => t === "QueueDoesNotExist" || t === "AWS.SimpleQueueService.NonExistentQueue")) return true;
+  return typeof e.message === "string" && /queue does not exist|NonExistentQueue/i.test(e.message);
+}
 
 /**
  * Terminal result of one command delivery, passed to SubscribeOptions.onOutcome.
@@ -921,6 +955,12 @@ export class SqsQueue implements Queue {
           traceparent: msg.traceparent,
         }),
       );
+      // UAT B10-F83: a caller that needs delivery (the outbox relay for audit
+      // topics) must not get a success back for a message that reached nobody.
+      if (options?.requireSubscribers) {
+        this.recheckSubscribersSoon(topic);
+        throw new NoSubscribersError(topic);
+      }
     }
     const body = JSON.stringify(msg);
     const attrs = {
@@ -943,11 +983,16 @@ export class SqsQueue implements Queue {
     // F79: a cached URL whose queue was deleted since discovery is dropped (that
     // subscriber no longer exists), not allowed to fail the whole publish. Any
     // other send error still rejects, as before.
+    // UAT B10-F83 (review): count the copies actually enqueued. After a broker
+    // restart every cached URL can be gone; F79 then drops each one and the
+    // fan-out below completes having delivered nothing.
+    let delivered = 0;
     await Promise.all(urls.map(async (QueueUrl) => {
       try {
         await this.client.send(new SendMessageCommand({
           QueueUrl, MessageBody: body, MessageAttributes: attrs, ...fifoFields,
         }));
+        delivered += 1;
       } catch (err) {
         if (!isNonExistentQueueError(err)) throw err;
         this.forgetSubscriberQueue(topic, QueueUrl);
@@ -965,7 +1010,29 @@ export class SqsQueue implements Queue {
         );
       }
     }));
+    if (urls.length > 0 && delivered === 0) {
+      incrementPublishNoSubscribers(topic);
+      // eslint-disable-next-line no-console -- structured operational error log
+      console.error(JSON.stringify({
+        level: "error", event: "queue_publish_no_subscribers", reason: "all_subscriber_queues_gone",
+        service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId,
+      }));
+      if (options?.requireSubscribers) throw new NoSubscribersError(topic);
+    }
     return msg.messageId;
+  }
+
+  /**
+   * UAT B10-F83 (review): after a required-delivery publish found no subscriber,
+   * look again soon, but through the single-flight refresh and at most once per
+   * NO_SUBSCRIBER_RECHECK_MS per topic, so a stuck backlog does not turn every
+   * relay cycle into a ListQueues storm (the cache is never dropped wholesale).
+   */
+  private recheckSubscribersSoon(topic: string): void {
+    const cached = this.subUrlCache.get(topic);
+    if (!cached) return; // cold topic: the next publish resolves it anyway
+    const soon = Date.now() + NO_SUBSCRIBER_RECHECK_MS;
+    if (cached.exp > soon) this.subUrlCache.set(topic, { urls: cached.urls, exp: soon });
   }
 
   subscribe<T>(topic: string, handler: Handler<T>, options?: SubscribeOptions): void {
@@ -1205,6 +1272,23 @@ export class SqsQueue implements Queue {
         if (this.polling) {
           incrementConsumerError(this.service, topic);
           this.logHandlerError(topic, null, 0, err);
+          // UAT B10-F83: the queue was deleted under us (e.g. a broker restart
+          // that lost its queues). The cached URL will never work again, and
+          // while the queue is missing every publisher finds no subscriber, so
+          // the messages reach nobody. Re-create the queue (and its DLQ and
+          // redrive policy) now instead of polling a dead URL until a restart.
+          if (isQueueMissingError(err)) {
+            this.queueUrls.delete(topic);
+            this.dlqUrls.delete(topic);
+            try {
+              url = await this.getOrCreateQueue(topic);
+              // eslint-disable-next-line no-console -- structured operational log
+              console.error(JSON.stringify({ level: "warn", event: "queue_recreated_after_missing", service: this.service, topic }));
+              continue;
+            } catch (recreateErr) {
+              this.logHandlerError(topic, null, 0, recreateErr);
+            }
+          }
           await new Promise((r) => setTimeout(r, 2000));
         }
       }

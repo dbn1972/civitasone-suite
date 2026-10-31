@@ -14,7 +14,7 @@ export const WORKFLOW_CLOSE_BY_REF = "workflow.instance.close_by_ref";
 export async function closeWorkflowForRef(
   tx: Parameters<typeof enqueue>[0],
   msg: { tenantId: string; actorId: string; correlationId: string },
-  refType: "procurement_plan" | "procurement_po_amendment",
+  refType: "procurement_plan" | "procurement_po_amendment" | "procurement_indent" | "procurement_po",
   refId: string,
   decision: "approve" | "reject",
   reason?: string | null,

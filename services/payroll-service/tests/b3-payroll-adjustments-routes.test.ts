@@ -61,6 +61,7 @@ const CLAIM_SUBMITTED = randomUUID();
 const CLAIM_APPROVED = randomUUID();
 const CLAIM_OWN = randomUUID();
 const CLAIM_REJECT = randomUUID();
+const CLAIM_F103 = randomUUID();
 
 function auth(sub: string, roles: string[]) {
   return { authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "b3-adj" }, SECRET)}` };
@@ -99,6 +100,7 @@ beforeAll(async () => {
       const claims: Array<[string, string, string]> = [
         [CLAIM_SUBMITTED, CLAIMANT_EMP_ID, "submitted"],
         [CLAIM_REJECT, CLAIMANT_EMP_ID, "submitted"],
+        [CLAIM_F103, CLAIMANT_EMP_ID, "submitted"],
         [CLAIM_APPROVED, CLAIMANT_EMP_ID, "approved"],
         [CLAIM_OWN, EMP_OWN_ID, "submitted"],
       ];
@@ -301,6 +303,20 @@ describe("GAP-PAYROLL-REIMBURSEMENTS-02: approve / reject", () => {
   it("404 for an unknown claim, 409 for one that is not submitted", async () => {
     expect((await approve(randomUUID(), payroll())).statusCode).toBe(404);
     expect((await approve(CLAIM_APPROVED, payroll())).statusCode).toBe(409);
+  });
+
+  // F103: hr_admin passed the approve/reject guard (UAT T3). Deciding a
+  // reimbursement is payroll-only; hr_admin must be refused at the role gate.
+  it("F103: 403 for hr_admin on approve and reject (not an approver role)", async () => {
+    const hr = auth(randomUUID(), ["hr_admin"]);
+    expect((await approve(CLAIM_F103, hr)).statusCode).toBe(403);
+    expect((await reject(CLAIM_F103, hr, { reason: "Bill does not match the claimed amount" })).statusCode).toBe(403);
+    const hrWithEmployee = auth(randomUUID(), ["hr_admin", "employee"]);
+    expect((await approve(CLAIM_F103, hrWithEmployee)).statusCode).toBe(403);
+  });
+
+  it("F103: an independent payroll_officer can still approve", async () => {
+    expect((await approve(CLAIM_F103, auth(randomUUID(), ["payroll_officer"]))).statusCode).toBe(202);
   });
 
   it("202 for an independent approver", async () => {

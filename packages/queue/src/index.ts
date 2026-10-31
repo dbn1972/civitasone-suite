@@ -11,6 +11,8 @@ export {
   wrapQueueAsClient,
   NonRetryableError,
   isNonRetryable,
+  NoSubscribersError,
+  isQueueMissingError,
 } from "@civitasone/queue-service";
 
 export type {

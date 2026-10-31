@@ -38,7 +38,8 @@ async function publishLifecycle(
 ): Promise<Accepted> {
   const instance = await repo.findById(instanceId, ctx.tenantId);
   if (!instance) throw new HttpError(404, "NOT_FOUND", "instance not found");
-  if (instance.status === "completed" || instance.status === "cancelled") {
+  // F102: `rejected` is terminal too.
+  if (instance.status === "completed" || instance.status === "cancelled" || instance.status === "rejected") {
     throw new HttpError(409, "INSTANCE_TERMINAL", `instance is ${instance.status}; no further transitions allowed`);
   }
   if (!allowedFrom.includes(instance.status)) {
@@ -145,7 +146,8 @@ export async function migrateInstanceVersion(
     if (!instance || instance.tenantId !== ctx.tenantId) {
       throw new HttpError(404, "NOT_FOUND", "instance not found");
     }
-    if (instance.status === "completed" || instance.status === "cancelled") {
+    // F102: `rejected` is terminal too.
+  if (instance.status === "completed" || instance.status === "cancelled" || instance.status === "rejected") {
       throw new HttpError(409, "INSTANCE_TERMINAL", `instance is ${instance.status}; cannot migrate`);
     }
     if (!instance.definitionId) {

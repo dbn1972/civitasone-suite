@@ -159,3 +159,18 @@ export function assertDistinctReceiverInspector(receivedBy: string, inspectorId:
     throw new DomainError("SOD_VIOLATION", "receiver and inspector must be different actors (self-inspection rejected)");
   }
 }
+
+/** Item type of a GRN line: the PO line's own type, else inferred from the item-code prefix. */
+export function inferItemType(itemCode: string, poItemType?: string | null): string {
+  if (poItemType) return poItemType;
+  if (/^(FA|AST|FIX)/i.test(itemCode)) return "fixed_asset";
+  return "consumable";
+}
+
+/**
+ * UAT b10 F95: an accepted GRN with any accepted stock (non fixed-asset) line must name the inventory store the goods
+ * go into, or inventory cannot post the stock receipt. Fixed assets are registered by asset-service instead.
+ */
+export function needsReceivingStore(lines: Array<{ itemCode: string; acceptedQty: number; poItemType?: string | null | undefined }>): boolean {
+  return lines.some((l) => l.acceptedQty > 0 && inferItemType(l.itemCode, l.poItemType) !== "fixed_asset");
+}

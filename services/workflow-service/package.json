@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "coverage": "vitest run --coverage",
-    "backfill:workflow-definitions": "tsx src/scripts/backfill-standard-definitions.ts"
+    "backfill:workflow-definitions": "tsx src/scripts/backfill-standard-definitions.ts",
+    "repair:sod-consumed-approvals": "tsx src/scripts/repair-sod-consumed-approvals.ts"
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",

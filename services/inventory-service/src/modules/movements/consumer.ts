@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
+import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
@@ -22,7 +23,7 @@ import { COMMANDS, EVENTS, CONSUMED, INTEGRATION, RESOURCE } from "../../topics.
 import * as repo from "./repo.js";
 import type { Tx } from "./repo.js";
 import {
-  receiptPayload, issuePayload, transferPayload, adjustmentPayload, grnAcceptedPayload,
+  receiptPayload, issuePayload, transferPayload, adjustmentPayload, grnAcceptedContract,
 } from "./validators.js";
 import {
   weightedAvgRate, assertSufficientStock, valuationMinor, isLowStock, suggestedReorderQty,
@@ -33,6 +34,17 @@ import { DomainError } from "../../shared/domain.js";
 import { fetchGrnReference } from "../srn/grn-client.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
+const log = pino({ name: "inventory-movements-consumer" });
+
+/**
+ * UAT b10 F95: a GRN that cannot become a stock receipt is a deterministic refusal. Log it (alertable) and
+ * dead-letter at once, never retry it five times, and never return silently (a missing store used to be a silent
+ * no-op ack).
+ */
+function refuseGrn(msg: CommandEnvelope, grnId: unknown, code: string, detail: string): never {
+  log.error({ tenantId: msg.tenantId, grnId, code, topic: CONSUMED.grnAccepted }, `GRN stock receipt refused: ${detail}`);
+  throw new NonRetryableError(`${code}: ${detail}`);
+}
 
 export function registerMovementConsumers(queue: Queue): void {
   // ── Receipt (GRN-in) ─────────────────────────────────────────────────────
@@ -154,11 +166,21 @@ export function registerMovementConsumers(queue: Queue): void {
 
   // ── procurement GRN accepted → auto receipt for consumable items ──────────
   queue.subscribe(CONSUMED.grnAccepted, async (msg) => {
-    const p = grnAcceptedPayload.parse(msg.payload);
-    const storeId = p.toStoreId ?? p.storeId;
-    const stockItems = p.items.filter((i) => i.itemType !== "fixed_asset");
-    if (!storeId || stockItems.length === 0) return;
-    const postingDate = p.postingDate ?? new Date().toISOString().slice(0, 10);
+    const checked = grnAcceptedContract.validate(msg.payload);
+    if (!checked.ok) {
+      const fields = (checked.violation?.issues ?? []).map((i) => i.path).join(", ");
+      refuseGrn(msg, (msg.payload as { grnId?: unknown } | null)?.grnId, "GRN_CONTRACT_VIOLATION",
+        `procurement.grn.accepted payload does not match the contract (${fields})`);
+    }
+    const p = grnAcceptedContract.payload(msg);
+    // Fixed assets are registered by asset-service; a zero-accepted line moves no stock.
+    const grnLines = p.items.filter((i) => i.itemType !== "fixed_asset" && i.acceptedQty > 0);
+    if (grnLines.length === 0) return;
+    if (!p.storeId) {
+      refuseGrn(msg, p.grnId, "GRN_NO_RECEIVING_STORE", "the accepted GRN names no receiving store (storeId), so no stock receipt can be posted");
+    }
+    const storeId: string = p.storeId;
+    const postingDate = new Date().toISOString().slice(0, 10);
     const movementId = randomUUID();
     // Best-effort: copy the GRN number / PO / supplier so the receipts register can show them.
     // Outside the transaction (no network call while holding row locks); null on any failure.
@@ -169,6 +191,24 @@ export function registerMovementConsumers(queue: Queue): void {
       // composite key is folded into a deterministic uuid (the raw "<id>:grn:<id>" string made every
       // GRN-accepted receipt fail with "invalid input syntax for type uuid" and dead-letter).
       if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:grn:${p.grnId}`)))) return;
+      // A refusal below throws, so this transaction (and the markProcessed above) rolls back: a re-driven copy of
+      // the message is processed again once the store or item master is fixed.
+      if (!(await repo.activeStoreExistsTx(tx, msg.tenantId, storeId))) {
+        refuseGrn(msg, p.grnId, "UNKNOWN_STORE", `store ${storeId} is not an active store of this tenant`);
+      }
+      const codes = [...new Set(grnLines.map((i) => i.itemCode))];
+      const matches = await repo.activeItemsBySkuTx(tx, msg.tenantId, codes);
+      const bySku = new Map<string, string[]>();
+      for (const m of matches) bySku.set(m.sku, [...(bySku.get(m.sku) ?? []), m.id]);
+      const unknown = codes.filter((c) => (bySku.get(c)?.length ?? 0) === 0);
+      if (unknown.length > 0) {
+        refuseGrn(msg, p.grnId, "UNKNOWN_ITEM_CODE", `no active inventory item has SKU ${unknown.join(", ")}`);
+      }
+      const ambiguous = codes.filter((c) => (bySku.get(c)?.length ?? 0) > 1);
+      if (ambiguous.length > 0) {
+        refuseGrn(msg, p.grnId, "AMBIGUOUS_ITEM_CODE", `more than one active inventory item has SKU ${ambiguous.join(", ")}`);
+      }
+      const stockItems = grnLines.map((i) => ({ ...i, itemId: bySku.get(i.itemCode)![0]! }));
       await insertHeader(tx, msg, movementId, "receipt", {
         postingDate, toStoreId: storeId, refDoc: "GRN", refNo: p.grnId,
         grnNo: ref?.grnNo, poRef: ref?.poRef, supplierId: ref?.supplierId,
@@ -338,7 +378,7 @@ async function insertHeader(tx: Tx, msg: CommandEnvelope, id: string, movementTy
 
 async function insertLines(
   tx: Tx, msg: CommandEnvelope, movementId: string,
-  lines: Array<{ itemId: string; qty: number; rateMinor: number; currency: string }>,
+  lines: Array<{ itemId: string; qty: number; rateMinor: number | string | bigint; currency: string }>,
 ): Promise<void> {
   await repo.insertMovementLines(tx, lines.map((l) => ({
     id: randomUUID(), tenantId: msg.tenantId, movementId, itemId: l.itemId,

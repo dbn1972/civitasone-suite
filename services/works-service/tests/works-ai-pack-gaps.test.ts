@@ -6,7 +6,9 @@ import type { FastifyInstance } from "fastify";
 import {
   TENANT_A, ACTOR_A, AWARD_ID, WORK_ID, BILL_ID, MB_ID, bearerToken, jwtPayload, queueMessage,
 } from "./fixtures/works-fixtures.js";
-import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../src/topics.js";
+import { COMMANDS, EVENTS, FINANCE_HANDOFF, CONSUMED_EVENTS } from "../src/topics.js";
+import { NonRetryableError } from "@civitasone/queue";
+import { financeBillCreate } from "@civitasone/events/contracts";
 import { boqItems } from "../src/modules/boq/schema.js";
 import { bills, measurementBooks, measurements } from "../src/modules/billing/schema.js";
 import { awards } from "../src/modules/tender/schema.js";
@@ -24,6 +26,8 @@ import {
   canViewBidDetails,
   redactQuotation,
 } from "../src/modules/tender/domain.js";
+
+const CONTRACTOR_ID = "00000000-3333-4000-8000-000000000001";
 
 // ── Shared consumer mocks ───────────────────────────────────────────────────
 const mockInserted: unknown[] = [];
@@ -118,6 +122,7 @@ describe("Gap 1 — Finance hand-off on bill DO-finalization", () => {
     }]);
     mockSelectMap.set(awards, [{
       id: AWARD_ID,
+      contractorId: CONTRACTOR_ID,
       contractorName: "ACME Works Ltd",
       acceptedAmountMinor: 1000000n,
     }]);
@@ -135,6 +140,56 @@ describe("Gap 1 — Finance hand-off on bill DO-finalization", () => {
     expect(financeEvt!.payload?.poRef).toBe(`works_award:${AWARD_ID}`);
     expect(financeEvt!.payload?.grossMinor).toBe("500000");
     expect(financeEvt!.payload?.netMinor).toBe("450000");
+  });
+
+  // UAT b10 F93/F94 (T6-05/T6-06): the hand-off must satisfy the finance contract, or no works bill reaches finance.
+  it("the hand-off satisfies the shared finance.bill.create contract: contractor uuid as vendor, head by code", async () => {
+    mockSelectMap.set(bills, [{
+      id: BILL_ID, billNumber: "BILL/2026/002", awardId: AWARD_ID, workId: WORK_ID,
+      grossAmountMinor: 30000n, netPayableMinor: 30000n, status: "dao_finalized",
+    }]);
+    mockSelectMap.set(awards, [{ id: AWARD_ID, contractorId: CONTRACTOR_ID, contractorName: "ACME Works Ltd", acceptedAmountMinor: 1000000n }]);
+    const h = await billingHandlers();
+    await h[COMMANDS.billFinalize]({ ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-contract"), payload: { id: BILL_ID, nextStatus: "do_finalized" } });
+
+    const payload = mockEnqueued.find((e) => e.topic === FINANCE_HANDOFF.billCreate)!.payload!;
+    expect(financeBillCreate.validate(payload)).toEqual({ ok: true });
+    expect(payload.vendorId).toBe(CONTRACTOR_ID);
+    expect(payload.headCode).toBe("2202");
+    expect(payload).not.toHaveProperty("headId");
+    expect(payload.worksBillId).toBe(BILL_ID);
+  });
+
+  it("refuses the DO-finalization (NonRetryable, no hand-off) when the award has no contractor to pay", async () => {
+    mockSelectMap.set(bills, [{
+      id: BILL_ID, billNumber: "BILL/2026/003", awardId: AWARD_ID, workId: WORK_ID,
+      grossAmountMinor: 1n, netPayableMinor: 1n, status: "dao_finalized",
+    }]);
+    mockSelectMap.set(awards, [{ id: AWARD_ID, contractorId: null, contractorName: "Legacy", acceptedAmountMinor: 10n }]);
+    const h = await billingHandlers();
+    const run = h[COMMANDS.billFinalize]({ ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-nocon"), payload: { id: BILL_ID, nextStatus: "do_finalized" } });
+    await expect(run).rejects.toBeInstanceOf(NonRetryableError);
+    await expect(run).rejects.toThrow(/AWARD_NO_CONTRACTOR/);
+    expect(mockEnqueued.some((e) => e.topic === FINANCE_HANDOFF.billCreate)).toBe(false);
+  });
+
+  it("records a finance.bill.rejected for one of its bills on the works bill audit trail", async () => {
+    const h = await billingHandlers();
+    await h[CONSUMED_EVENTS.financeBillRejected]({
+      ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-rej"),
+      payload: { billId: "00000000-9999-4000-8000-000000000001", code: "UNKNOWN_VENDOR", reason: "UNKNOWN_VENDOR: x", worksBillId: BILL_ID },
+    });
+    const audit = mockEnqueued.find((e) => e.topic === "audit.event.record");
+    expect(audit?.payload).toMatchObject({ action: "finance_handoff_rejected", resourceType: "bill", resourceId: BILL_ID, outcome: "failure", reason: "UNKNOWN_VENDOR" });
+  });
+
+  it("ignores a finance.bill.rejected for a bill another producer raised", async () => {
+    const h = await billingHandlers();
+    await h[CONSUMED_EVENTS.financeBillRejected]({
+      ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-rej-grn"),
+      payload: { billId: "00000000-9999-4000-8000-000000000002", code: "UNKNOWN_HEAD_CODE", reason: "r", grnRef: "procurement_grn:x" },
+    });
+    expect(mockEnqueued).toHaveLength(0);
   });
 
   it("does not emit finance.bill.create for intermediate finalization steps", async () => {

@@ -70,6 +70,15 @@ describe("ReimbursementsPage", () => {
     expect(screen.getAllByRole("button", { name: /^Reject claim/ })).toHaveLength(1);
   });
 
+  it("F103: hr_admin sees the staff list but is not offered Approve/Reject", async () => {
+    sessionRoles = ["hr_admin"];
+    withData({ data: CLAIMS, source: "api" });
+    await renderPage();
+    expect(screen.getByRole("cell", { name: "LTA" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Approve claim/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reject claim/ })).not.toBeInTheDocument();
+  });
+
   it("GAP-PAYROLL-REIMBURSEMENTS-01/05: an employee files only for themselves and has no decision buttons", async () => {
     sessionRoles = ["employee"];
     profileMock.mockResolvedValue({ data: { id: ME, name: "Self User", employeeNo: "EMP-9", department: "", status: "active", designation: "" }, source: "api" });

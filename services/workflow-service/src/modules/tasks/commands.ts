@@ -12,6 +12,7 @@ import * as delegationRepo from "../delegations/repo.js";
 import * as historyRepo from "../history/repo.js";
 import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
+import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
 
 /** YYYY-MM-DD in IST (Asia/Kolkata), used to bound active-delegation validity. */
@@ -130,6 +131,13 @@ export async function completeTask(
   } else {
     // record whether the super_admin is actually overriding a SoD conflict
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
+    // F102: no break-glass for the initiator of a maker-checker approval whose
+    // domain refuses self-approval anyway - consuming the task here would leave
+    // the record pending with no open task.
+    if (instance && isStrictSodRefType(instance.refType ?? existing.refType)
+        && (instance.createdBy === ctx.actorId || delegatorIds.has(instance.createdBy))) {
+      throw new HttpError(403, "SOD_SELF_APPROVAL", "the initiator of a maker-checker approval may not complete it, even as super_admin");
+    }
     const priorByActor = await scopedRead((tx) => tx.select().from(tasks)
       .where(and(
         eq(tasks.instanceId, existing.instanceId),

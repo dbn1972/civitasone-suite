@@ -11,7 +11,7 @@ const {
   insertJobOpeningMock, insertApplicationMock, updateApplicationMock,
   insertOfferMock, findApplicationByIdMock, insertEmployeeMock,
   claimApplicationForHireMock, claimApplicationForOfferMock, claimVacancyMock,
-  departmentExistsTxMock, designationExistsTxMock, maxOfferVersionTxMock,
+  departmentExistsTxMock, designationExistsTxMock, maxOfferVersionTxMock, insertOfferEventMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -54,6 +54,7 @@ const {
     // directly (matching the compliance chain's own module) instead of
     // repo.ts's byte-identical duplicate -- see consumer.ts's doc comment.
     maxOfferVersionTxMock: vi.fn(async () => 0),
+    insertOfferEventMock: vi.fn(async () => undefined),
   };
 });
 
@@ -69,6 +70,9 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
 vi.mock("../src/modules/recruitment/repo.js", () => ({
+  // The real offer-eligibility vocabulary (repo.ts), used by the legacy offer handler's in-tx re-check.
+  NOT_OFFERABLE_STAGES: ["offered", "hired"],
+  NOT_OFFERABLE_STATUSES: ["withdrawn", "rejected", "joined"],
   insertJobOpening: (...a: any[]) => insertJobOpeningMock(...a),
   insertApplication: (...a: any[]) => insertApplicationMock(...a),
   updateApplication: (...a: any[]) => updateApplicationMock(...a),
@@ -100,6 +104,7 @@ vi.mock("../src/modules/employee/repo.js", () => ({
 vi.mock("../src/modules/recruitment/offer-repo.js", () => ({
   insertOffer: (...a: any[]) => insertOfferMock(...a),
   maxOfferVersionTx: (...a: any[]) => maxOfferVersionTxMock(...a),
+  insertEvent: (...a: any[]) => insertOfferEventMock(...a),
 }));
 
 import { registerRecruitmentConsumers } from "../src/modules/recruitment/consumer.js";
@@ -170,41 +175,36 @@ describe("applicationCreate command", () => {
   });
 });
 
-describe("applicationOffer command", () => {
-  it("claims the application for offer (atomic guard) and inserts the offer", async () => {
+describe("applicationOffer command (legacy shortcut, deprecated -- UAT F85)", () => {
+  it("enters the approval workflow: pending_approval in the default chain, nothing released, application NOT moved to offered", async () => {
+    findApplicationByIdMock.mockResolvedValue({ id: "a", stage: "shortlisted", status: "active" });
     const q = await buildQueue();
     const appId = randomUUID();
+    const offerId = randomUUID();
     await q.publish(COMMANDS.applicationOffer, makeMsg(COMMANDS.applicationOffer, {
-      offerId: randomUUID(), applicationId: appId, tenantId: TENANT,
+      offerId, applicationId: appId, tenantId: TENANT,
       ctcMinor: 6000000, currency: "INR",
     }));
     await settle();
-    // Bug 1 fix: the offer handler now claims the application atomically
-    // (claimApplicationForOffer, a guarded UPDATE ... WHERE stage/status is
-    // offer-eligible) instead of the old blind updateApplication -- see
-    // recruitment/repo.ts.
-    expect(claimApplicationForOfferMock).toHaveBeenCalledOnce();
-    expect(claimApplicationForOfferMock).toHaveBeenCalledWith(mockTx, appId, TENANT);
+    // F85: only an approved, released offer may move the application to
+    // "offered" (which is what Hire requires) -- the release step does that,
+    // never this shortcut.
+    expect(claimApplicationForOfferMock).not.toHaveBeenCalled();
     expect(updateApplicationMock).not.toHaveBeenCalled();
 
     expect(insertOfferMock).toHaveBeenCalledOnce();
     const offer = insertOfferMock.mock.calls[0]![1] as Record<string, unknown>;
-    // MEDIUM finding: "sent" was never a value offer-domain.ts's vocabulary
-    // (draft/pending_approval/approved/returned/released/accepted/declined/
-    // withdrawn/expired/revised) defines -- canRelease/isTerminal/
-    // isOfferEditable all returned false for it, and POST .../accept,
-    // .../decline and .../expire all require status === "released" exactly,
-    // so a legacy-flow offer could never legitimately be actioned through
-    // those routes. The legacy shortcut has no approval chain, so the
-    // honest equivalent is the state the compliance chain reaches right
-    // after its own /release step -- with releasedAt genuinely set, and
-    // approvedAt correctly left null since no approval actually ran.
-    expect(offer.status).toBe("released");
-    expect(offer.releasedAt).toBeInstanceOf(Date);
+    expect(offer.status).toBe("pending_approval");
+    expect(offer.currentStage).toBe(0);
+    expect(offer.approvalChain).toEqual([
+      { stage: "HR", role: "hr_admin" }, { stage: "Finance", role: "finance_officer" },
+      { stage: "Legal", role: "legal_officer" }, { stage: "Competent Authority", role: "competent_authority" },
+    ]);
+    expect(offer.createdBy).toBe(ACTOR);
+    expect(offer.releasedAt ?? null).toBeNull();
     expect(offer.approvedAt ?? null).toBeNull();
     // Same columns the compliance flow (f3-consumer.ts's
-    // "recruitment_offer_routes__0") populates, instead of silently staying
-    // at their schema defaults (0 / null) for a legacy-flow offer.
+    // "recruitment_offer_routes__0") populates.
     expect(offer.offerNo).toMatch(/^OFR-/);
     expect(offer.offerVersion).toBe(1);
     expect(offer.basicMinor).toBe(6000000n);
@@ -212,24 +212,32 @@ describe("applicationOffer command", () => {
     expect(offer.joiningBonusMinor).toBe(0n);
     expect(offer.relocationMinor).toBe(0n);
     expect(offer.variablePayMinor).toBe(0n);
+    // The lifecycle trail records the submit, like POST /offers/:id/submit.
+    expect(insertOfferEventMock).toHaveBeenCalledWith(mockTx, expect.objectContaining({ offerId, applicationId: appId, action: "submit", actorId: ACTOR }));
     await q.stop();
   });
 
   // Bug 1 regression: an application that's withdrawn/rejected/already
-  // offered/hired must never get a new offer inserted. This is what a real
-  // guarded UPDATE ... WHERE stage NOT IN (...) AND status NOT IN (...)
-  // returns 0 rows for -- claimApplicationForOfferMock simulates that.
-  it("does not insert an offer when the application is not offer-eligible (withdrawn/rejected/already offered/hired)", async () => {
-    claimApplicationForOfferMock.mockResolvedValue(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.applicationOffer, makeMsg(COMMANDS.applicationOffer, {
-      offerId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
-      ctcMinor: 6000000, currency: "INR",
-    }));
-    await settle();
-    expect(insertOfferMock).not.toHaveBeenCalled();
-    await q.stop();
-  });
+  // offered/hired must never get a new offer inserted (re-checked inside the
+  // write transaction, since the route's check can be stale).
+  for (const app of [
+    { stage: "shortlisted", status: "withdrawn" }, { stage: "shortlisted", status: "rejected" },
+    { stage: "offered", status: "active" }, { stage: "hired", status: "joined" }, null,
+  ]) {
+    it(`does not insert an offer when the application is not offer-eligible (${app ? `${app.stage}/${app.status}` : "missing"})`, async () => {
+      findApplicationByIdMock.mockResolvedValue(app);
+      const q = await buildQueue();
+      await q.publish(COMMANDS.applicationOffer, makeMsg(COMMANDS.applicationOffer, {
+        offerId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
+        ctcMinor: 6000000, currency: "INR",
+      }));
+      await settle();
+      expect(findApplicationByIdMock).toHaveBeenCalledOnce();
+      expect(insertOfferMock).not.toHaveBeenCalled();
+      expect(insertOfferEventMock).not.toHaveBeenCalled();
+      await q.stop();
+    });
+  }
 });
 
 describe("applicationHire command", () => {
