@@ -10,7 +10,14 @@ import { Button } from "@/app/_components/ds";
 import { RemoteSearchSelect, type RemoteOption } from "../../_components/RemoteSearchSelect";
 
 type POOption = { id: string; poNo: string; vendor?: string; vendorId?: string };
-type POItem = { ref: string; itemCode: string; quantity: number; unit: string };
+type POItem = { ref: string; itemCode: string; quantity: number; unit: string; itemType?: string };
+export type StoreOption = { id: string; name: string };
+
+/** Same rule as procurement's needsReceivingStore: accepted stock (non fixed-asset) goods need a store. */
+function lineIsStock(l: { itemCode: string; itemType?: string }): boolean {
+  if (l.itemType) return l.itemType !== "fixed_asset";
+  return !/^(FA|AST|FIX)/i.test(l.itemCode);
+}
 
 type GRNLine = {
   poItemRef: string;
@@ -19,6 +26,7 @@ type GRNLine = {
   receivedQty: number;
   acceptedQty: number;
   unit: string;
+  itemType?: string;
 };
 
 type LoadState = "loading" | "ready" | "error";
@@ -44,7 +52,7 @@ function emptyLine(): GRNLine {
 //        the server rejects a vendor/PO mismatch (commands.ts VENDOR_PO_MISMATCH).
 //  - 05: load failures surface an inline alert with Retry instead of a stuck
 //        "Loading…" placeholder.
-export function CreateGRNForm() {
+export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
   const router = useRouter();
   const t = useTranslations("procurement.poPicker");
   const [vendorId, setVendorId] = useState("");
@@ -55,6 +63,8 @@ export function CreateGRNForm() {
   const [poRef, setPoRef] = useState("");
   const [poItems, setPoItems] = useState<POItem[]>([]);
   const [receivedDate, setReceivedDate] = useState(todayIST());
+  // UAT b10 F95: the inventory store the goods are received into (inventory posts the stock receipt there).
+  const [storeId, setStoreId] = useState("");
   const [lines, setLines] = useState<GRNLine[]>([emptyLine()]);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -124,6 +134,7 @@ export function CreateGRNForm() {
           itemCode: String(i.itemCode ?? ""),
           quantity: typeof i.quantity === "number" ? i.quantity : 0,
           unit: typeof i.unit === "string" && i.unit ? i.unit : "nos",
+          ...(typeof i.itemType === "string" && i.itemType ? { itemType: i.itemType } : {}),
         }))
         .filter((i) => i.itemCode);
       setPoItems(items);
@@ -131,7 +142,7 @@ export function CreateGRNForm() {
       // GAP-PROCUREMENT-GRN-NEW-02 — one row per PO item, ordered prefilled but
       // received/accepted left blank (0) so the clerk must enter them.
       if (items.length > 0) {
-        setLines(items.map((it) => ({ poItemRef: it.ref, itemCode: it.itemCode, orderedQty: it.quantity, receivedQty: 0, acceptedQty: 0, unit: it.unit })));
+        setLines(items.map((it) => ({ poItemRef: it.ref, itemCode: it.itemCode, orderedQty: it.quantity, receivedQty: 0, acceptedQty: 0, unit: it.unit, ...(it.itemType ? { itemType: it.itemType } : {}) })));
         setLineRowIds(items.map(() => nextLineRowId.current++));
       } else {
         setLines([emptyLine()]);
@@ -156,7 +167,7 @@ export function CreateGRNForm() {
   }
   function pickItem(idx: number, ref: string) {
     const it = poItems.find((p) => p.ref === ref);
-    updateLine(idx, it ? { poItemRef: it.ref, itemCode: it.itemCode, orderedQty: it.quantity, unit: it.unit } : { poItemRef: ref });
+    updateLine(idx, it ? { poItemRef: it.ref, itemCode: it.itemCode, orderedQty: it.quantity, unit: it.unit, ...(it.itemType ? { itemType: it.itemType } : {}) } : { poItemRef: ref });
   }
 
   // GAP-PROCUREMENT-GRN-NEW-03 — explicit quantity validation (shared shape with
@@ -190,6 +201,12 @@ export function CreateGRNForm() {
       setMessage("Enter the received quantity for at least one item before recording the GRN.");
       return;
     }
+    // UAT b10 F95: stock goods must name the store they are received into, or the accepted GRN can never post.
+    if (!storeId && valid.some((l) => l.acceptedQty > 0 && lineIsStock(l))) {
+      setStatus("error");
+      setMessage("Choose the receiving store for the stock items on this GRN.");
+      return;
+    }
     const errs = validateLines(valid);
     if (Object.keys(errs).length > 0) {
       setRowErrors(errs);
@@ -204,6 +221,7 @@ export function CreateGRNForm() {
       poRef: poRef.trim(),
       vendorId,
       receivedDate,
+      ...(storeId ? { storeId } : {}),
       items: valid.map((l) => ({
         poItemRef: l.poItemRef.trim(),
         itemCode: l.itemCode.trim(),
@@ -268,6 +286,13 @@ export function CreateGRNForm() {
           {/* GAP-PROCUREMENT-GRN-NEW-04 — read-only, derived from the PO. */}
           <span>{vendorName || (vendorId ? t("vendorFromPo") : t("vendorPending"))}</span>
         </div>
+        <label className="field" htmlFor="grn-store" style={{ background: "var(--panel)", padding: "13px 16px" }}>
+          <span className="label">Receiving store</span>
+          <select id="grn-store" value={storeId} onChange={(e) => setStoreId(e.target.value)} style={{ minHeight: 44 }}>
+            <option value="">{stores.length > 0 ? "Select store…" : "No inventory stores available"}</option>
+            {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
         <label className="field" htmlFor="grn-received-date" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">Received date</span>
           <input id="grn-received-date" type="date" max={todayIST()} value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} style={{ minHeight: 44 }} />

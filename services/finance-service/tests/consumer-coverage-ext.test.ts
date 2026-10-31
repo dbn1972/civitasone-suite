@@ -229,7 +229,9 @@ vi.mock("../src/modules/payments/repo.js", () => ({
 }));
 
 // ─── @civitasone/schemas mocks ───────────────────────────────────────────────
-vi.mock("@civitasone/schemas/money", () => ({
+vi.mock("@civitasone/schemas/money", async (importOriginal) => ({
+  // The real zod money codecs are kept: the shared event contracts (@civitasone/events/contracts) build on them.
+  ...(await importOriginal<Record<string, unknown>>()),
   minorString: (v: any) => String(v),
 }));
 

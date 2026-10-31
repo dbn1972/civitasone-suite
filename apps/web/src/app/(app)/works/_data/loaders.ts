@@ -76,6 +76,11 @@ export interface BillRow extends Record<string, unknown> {
   rawStatus: BillStatus | string;
   /** Maker (bill creator) id - the maker cannot finalize their own bill. */
   createdBy: string | null;
+  /** UAT b10 F93: finance hand-off outcome: null (not handed off) | "sent" | "rejected". */
+  financeStatus: string | null;
+  /** Why finance refused the bill (code + reason), when financeStatus is "rejected". */
+  financeRejectionCode: string | null;
+  financeRejectionReason: string | null;
 }
 
 function mapBillRow(r: Row): BillRow {
@@ -94,6 +99,9 @@ function mapBillRow(r: Row): BillRow {
     status: billBucket(status),
     rawStatus: status,
     createdBy: strOrNull(r.createdBy),
+    financeStatus: strOrNull(r.financeStatus),
+    financeRejectionCode: strOrNull(r.financeRejectionCode),
+    financeRejectionReason: strOrNull(r.financeRejectionReason),
   };
 }
 

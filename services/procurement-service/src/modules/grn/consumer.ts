@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { procurementGrnAccepted } from "@civitasone/events/contracts";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -10,6 +11,7 @@ import {
   computeThreeWayMatch, assertQtyValid, assertGrnAmendable,
   assertPoItemsResolved, assertGrnLinesResolved, assertDistinctReceiverInspector,
   assertGrnInspectable, assertWithinOpenQty,
+  inferItemType,
 } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
@@ -18,17 +20,12 @@ import { findPoItemsByPoId, findPoByIdTx, findPoItemsByPoIdTx } from "../po/repo
 
 const AUDIT_TOPIC = "audit.event.record";
 
-function inferItemType(itemCode: string, poItemType?: string | null): string {
-  if (poItemType) return poItemType;
-  if (/^(FA|AST|FIX)/i.test(itemCode)) return "fixed_asset";
-  return "consumable";
-}
 
 export function registerGrnConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.grnCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; grnNo: string; poRef: string; vendorId: string;
-      receivedDate?: string; notes?: string;
+      receivedDate?: string; notes?: string; storeId?: string;
       items: Array<{ poItemRef: string; itemCode: string; orderedQty: number; receivedQty: number; acceptedQty: number; unit: string }>;
     };
 
@@ -76,6 +73,7 @@ export function registerGrnConsumers(queue: Queue): void {
       await repo.insertGrn(tx, {
         id: p.id, tenantId: p.tenantId, grnNo, poRef: p.poRef,
         vendorId: p.vendorId,
+        storeId: p.storeId ?? null,
         receivedDate: p.receivedDate ?? new Date().toISOString().slice(0, 10),
         threeWayMatch: false, status: "under_inspection",
         notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -105,8 +103,8 @@ export function registerGrnConsumers(queue: Queue): void {
   // is genuinely a second, independently-authenticated actor from whoever
   // ran the earlier CREATE call.
   queue.subscribe(COMMANDS.grnAccept, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; remarks?: string };
-    await inspectGrn(msg, p.id, p.tenantId, "pass", p.remarks ?? null);
+    const p = msg.payload as { id: string; tenantId: string; remarks?: string; storeId?: string };
+    await inspectGrn(msg, p.id, p.tenantId, "pass", p.remarks ?? null, p.storeId);
   });
 
   // DOM-002 — wires the previously-unwired COMMANDS.grnReject the same way:
@@ -193,6 +191,8 @@ async function inspectGrn(
   tenantId: string,
   result: "pass" | "fail",
   remarks: string | null,
+  // UAT b10 F95: the receiving store the inspector named at accept, for a GRN created without one.
+  acceptStoreId?: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
@@ -213,9 +213,11 @@ async function inspectGrn(
     }));
     const threeWayMatch = computeThreeWayMatch(guardItems, result);
 
+    const storeId = grn.storeId ?? acceptStoreId ?? null;
     await repo.updateGrn(tx, grnId, {
       status: threeWayMatch ? "accepted" : "rejected",
       threeWayMatch,
+      ...(storeId && !grn.storeId ? { storeId } : {}),
       updatedBy: msg.actorId,
     });
     await repo.insertInspection(tx, {
@@ -285,14 +287,18 @@ async function inspectGrn(
           rateMinor: poItem ? minorString(poItem.unitPriceMinor) : "0",
           currency: poItem?.currency ?? "INR",
           itemType,
-          itemId: poItem?.id,
+          // UAT b10 F95: the PO line id, named as such. `itemId` is the same value, kept for legacy readers; it is
+          // NOT an inventory item id (inventory resolves its item by itemCode).
+          ...(poItem ? { poItemId: poItem.id, itemId: poItem.id } : {}),
         };
       });
       await enqueue(tx, {
         topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
+        // Built through the shared contract (@civitasone/events/contracts) every consumer validates against.
+        payload: procurementGrnAccepted.build({
           grnId, poRef: grn.poRef, vendorId: grn.vendorId, grossMinor: grossMinorStr,
+          ...(storeId ? { storeId } : {}),
           // Human PO number (e.g. "PO-2026-014") so finance can show it beside the opaque poRef on the bill it drafts
           // (GAP-FINANCE-EXPENDITURE-BILLS-06). Absent when the PO row cannot be read; never a fabricated value.
           ...(po?.poNo ? { poNo: po.poNo } : {}),
@@ -300,7 +306,7 @@ async function inspectGrn(
           poAmountMinor: poAmountMinor.toString(),
           grnAmountMinor: grnAmountMinor.toString(),
           items: enrichedItems,
-        },
+        }),
       });
     } else {
       await enqueue(tx, {

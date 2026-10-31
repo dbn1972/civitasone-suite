@@ -1,5 +1,7 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { z } from "zod";
+import { captureError } from "@civitasone/observability";
+import { financeBillCreate } from "@civitasone/events/contracts";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
@@ -12,7 +14,8 @@ import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, ass
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
-import { assertValidDdoCode } from "../../shared/pfms.js";
+import { assertValidDdoCode, PfmsValidationError } from "../../shared/pfms.js";
+import { HoaError } from "../../shared/hoa.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists, vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
@@ -70,6 +73,22 @@ function assertPeriodOpenForApPosting(periodStatus: string, period: string, acti
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/** bigint -> exact base-10 string, recursively (objects and arrays); every other value is returned as is. */
+function moneyAsWireStrings(v: unknown): unknown {
+  if (typeof v === "bigint") return v.toString();
+  if (Array.isArray(v)) return v.map(moneyAsWireStrings);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, moneyAsWireStrings(x)]));
+  return v;
+}
+
+/** A master-data validation failure is deterministic: re-throw it as a NonRetryableError (same message). */
+function asRefusal(cls: new (...a: never[]) => Error, fn: () => void): void {
+  try { fn(); } catch (e) { throw e instanceof cls ? new NonRetryableError(e.message) : e; }
+}
+async function asRefusalAsync(cls: new (...a: never[]) => Error, fn: () => Promise<void>): Promise<void> {
+  try { await fn(); } catch (e) { throw e instanceof cls ? new NonRetryableError(e.message) : e; }
+}
+
 /**
  * Resolve the 3-way-match tolerance from env.
  *
@@ -93,20 +112,37 @@ export function registerPaymentsConsumers(queue: Queue): void {
   const sub = <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>): void =>
     queue.subscribe<T>(topic, async (msg) => { await runWithTenant(msg.tenantId, () => handler(msg)); });
   sub(COMMANDS.billCreate, async (msg) => {
-    {
-      const schema = z.object({
-        id: z.string().uuid(),
-        tenantId: z.string().uuid(),
-        headId: z.string().uuid(),
-        vendorId: z.string().uuid(),
-        grossMinor: z.union([z.string(), z.number(), z.bigint()]),
-        netMinor: z.union([z.string(), z.number(), z.bigint()]),
-      });
-      const _v = schema.safeParse(msg.payload);
-      if (!_v.success) throw new NonRetryableError(`[finance/payments] billCreate SCHEMA_VIOLATION: ${_v.error.message}`);
+    try {
+      await createBill(msg);
+    } catch (err) {
+      await reportBillRefusal(msg, err);
+      throw err;
     }
-    const p = msg.payload as {
-      id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
+  });
+
+  /**
+   * finance.bill.create. The payload must match the shared contract
+   * (@civitasone/events/contracts financeBillCreate): a uuid vendorId from the
+   * finance vendor master and the bill head as a per-tenant headCode (or a
+   * legacy headId).
+   */
+  async function createBill(msg: CommandEnvelope<unknown>): Promise<void> {
+    // The in-process (MemoryQueue) path hands over the route's bigint paise (payments/commands.ts createBill) without a
+    // JSON round trip. The wire contract is a money STRING (the walker cannot describe bigint), so read a bigint as its
+    // exact base-10 string before validating, as the SQS transport would have.
+    const wire = moneyAsWireStrings(msg.payload);
+    const contract = financeBillCreate.validate(wire);
+    if (!contract.ok) {
+      const fields = (contract.violation?.issues ?? []).map((i) => i.path).join(", ");
+      throw new NonRetryableError(`SCHEMA_VIOLATION: finance.bill.create payload does not match the contract (${fields})`);
+    }
+    const rawHead = msg.payload as { headId?: unknown; headCode?: unknown };
+    if (!rawHead.headCode && !rawHead.headId) {
+      throw new NonRetryableError("SCHEMA_VIOLATION: finance.bill.create needs headCode (or a legacy headId)");
+    }
+    // Read the normalised payload: a bigint deduction amount would otherwise crash the jsonb write (JSON.stringify).
+    const p = wire as {
+      id: string; tenantId: string; billNo: string; vendorId: string; headId?: string; headCode?: string;
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
       netMinor: number; poRef?: string; poNumber?: string; grnRef?: string; billDate?: string;
@@ -122,7 +158,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const tenantCfg = await pfmsRepo.getTenantConfig(msg.tenantId);
       resolvedDdoCode = process.env.FINANCE_DEFAULT_DDO_CODE ?? tenantCfg?.defaultDdo ?? "DDO000001";
     }
-    assertValidDdoCode(resolvedDdoCode);
+    asRefusal(PfmsValidationError, () => assertValidDdoCode(resolvedDdoCode));
     const hasMismatch = !p.poRef || !p.grnRef;
     // C3: derive the period from the bill's OWN posting/value date, not wall-clock.
     // The bill carries an optional billDate (YYYY-MM-DD); when absent we fall back
@@ -134,21 +170,28 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const netMinor = BigInt(p.netMinor);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const head = await budgetRepo.findHeadByIdTx(tx, p.headId);
+      // UAT b10 F94: producers name the head by CODE, resolved in the bill tenant's own chart. A literal head id from
+      // one tenant (the old FINANCE_DEFAULT_HEAD_ID) never resolves for another tenant.
+      const head = p.headCode
+        ? await budgetRepo.findHeadByCodeTx(tx, p.tenantId, p.headCode)
+        : await budgetRepo.findHeadByIdTx(tx, p.headId as string);
       const reader = tx as unknown as Parameters<typeof ddoExists>[2];
       // M3: a referenced head that does not resolve for this tenant is a hard error,
-      // not a silently-skipped control. (headId is always referenced on a bill.)
+      // not a silently-skipped control. (A head is always referenced on a bill.)
       if (!head || head.tenantId !== p.tenantId) {
-        throw new Error(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
+        throw p.headCode
+          ? new NonRetryableError(`UNKNOWN_HEAD_CODE: head code ${p.headCode} is not in the chart of accounts for tenant`)
+          : new NonRetryableError(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
       }
+      const headId = head.id;
       // HoA: well-formed 18-digit segmentation + major head exists in master
-      await assertValidHoAWithMaster(head.hoaCode, reader);
+      await asRefusalAsync(HoaError, () => assertValidHoAWithMaster(head.hoaCode, reader));
       // DDO/PAO must exist in the per-tenant master (when provided)
       if (!(await ddoExists(p.tenantId, resolvedDdoCode.toUpperCase(), reader))) {
-        throw new Error(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
+        throw new NonRetryableError(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
       }
       if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
-        throw new Error(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
+        throw new NonRetryableError(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
       }
       // BUG FIX: vendorId previously only got a UUID-format check (Zod) —
       // never an existence/tenant lookup — so a bill citing a vendor that
@@ -156,7 +199,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // accepted, approved and paid with no error at any point. Same
       // existence + tenant-match pattern as head/DDO/PAO/sanction above.
       if (!(await vendorExists(p.tenantId, p.vendorId, reader))) {
-        throw new Error(`UNKNOWN_VENDOR: ${p.vendorId} not found in vendor master for tenant`);
+        throw new NonRetryableError(`UNKNOWN_VENDOR: ${p.vendorId} not found in vendor master for tenant`);
       }
       // M3: if a sanction is REFERENCED, it must resolve for this tenant. A bill
       // citing a bogus/other-tenant sanctionRef must NOT bypass the balance check.
@@ -164,12 +207,12 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (p.sanctionRef) {
         sanction = await budgetRepo.findSanctionByIdTx(tx, p.sanctionRef);
         if (!sanction || sanction.tenantId !== p.tenantId) {
-          throw new Error(`UNKNOWN_SANCTION: ${p.sanctionRef} not found for tenant`);
+          throw new NonRetryableError(`UNKNOWN_SANCTION: ${p.sanctionRef} not found for tenant`);
         }
         // R11: a bill may only draw on an APPROVED sanction. A pending/draft
         // sanction (maker-checker not yet completed) cannot fund expenditure.
         if (sanction.status !== "approved") {
-          throw new Error(`SANCTION_NOT_APPROVED: ${p.sanctionRef} is '${sanction.status}', must be approved before billing`);
+          throw new NonRetryableError(`SANCTION_NOT_APPROVED: ${p.sanctionRef} is '${sanction.status}', must be approved before billing`);
         }
       }
       // Period close: block bill creation into a hard- or soft-closed period
@@ -178,7 +221,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       assertPeriodOpenForApPosting(await getPeriodStatusTx(tx, p.tenantId, billPeriod), billPeriod, "post bill");
       // Budget appropriation control: locate the head allocation for the bill's FY.
       const billFy = fyFromDate(billDate);
-      const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, p.headId, billFy);
+      const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, headId, billFy);
       // P1-1: gapless, strictly-sequential bill number from the shared atomic
       // allocator (per tenant+FY+series). The caller-supplied billNo is ignored
       // as the authoritative number; a rolled-back create does not consume one.
@@ -199,7 +242,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
-        headId: p.headId, ddoCode: resolvedDdoCode.toUpperCase(),
+        headId, ddoCode: resolvedDdoCode.toUpperCase(),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
@@ -216,11 +259,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // WHERE serialises them; the loser gets rowcount=0 and is rejected.
       if (!alloc) {
         throw new NonRetryableError(
-          `NO_ALLOCATION_FOUND: no budget allocation for head ${p.headId} in FY ${billFy} — create an allocation before committing expenditure`
+          `NO_ALLOCATION_FOUND: no budget allocation for head ${p.headCode ?? headId} in FY ${billFy} — create an allocation before committing expenditure`
         );
       }
       const ok = await allocRepo.addCommittedGuarded(tx, alloc.id, netMinor);
-      if (!ok) throw new NonRetryableError(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available allocation for head ${p.headId}`);
+      if (!ok) throw new NonRetryableError(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available allocation for head ${p.headCode ?? headId}`);
       // C2: increment sanction utilised via guarded SQL expression (no read-then-set,
       // no lost update). Loser of a concurrent race gets rowcount=0 → rejected.
       if (sanction) {
@@ -239,7 +282,45 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await audit(tx, msg, "create", "bill", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
-  });
+  }
+
+  /**
+   * UAT b10 F93/F94: a refused bill used to vanish into the DLQ (a plain Error was retried five times; nothing told
+   * the producer). Now a deterministic refusal (any NonRetryableError) raises an alertable error log and emits
+   * finance.bill.rejected with a stable code, so the producer can show "not accepted by finance, and why".
+   * The rejection is written in its OWN transaction and does NOT mark the message processed, so re-driving the
+   * DLQ copy after the master data is fixed still creates the bill (the bill id and messageId are fixed in the
+   * message, so a re-drive cannot create a second bill).
+   */
+  async function reportBillRefusal(msg: CommandEnvelope<unknown>, err: unknown): Promise<void> {
+    if (!(err instanceof NonRetryableError)) return; // transient: keep normal retry
+    const message = String(err.message);
+    const code = /^\[?(?:finance\/payments\]\s*billCreate\s*)?([A-Z][A-Z_]+)\]?[:\s]/.exec(message)?.[1] ?? "BILL_REFUSED";
+    const p = (msg.payload ?? {}) as { id?: unknown; poRef?: unknown; grnRef?: unknown; worksBillId?: unknown };
+    const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
+    const billId = str(p.id) ?? msg.messageId;
+    captureError(err, {
+      service: "finance-service", alert: "FINANCE_BILL_REJECTED", topic: COMMANDS.billCreate,
+      billId, code, tenantId: msg.tenantId,
+    });
+    try {
+      await db.transaction(async (tx) => {
+        await enqueue(tx, {
+          topic: EVENTS.billRejected, eventType: EVENTS.billRejected,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            billId, code, reason: message,
+            ...(str(p.poRef) ? { poRef: str(p.poRef) } : {}),
+            ...(str(p.grnRef) ? { grnRef: str(p.grnRef) } : {}),
+            ...(str(p.worksBillId) ? { worksBillId: str(p.worksBillId) } : {}),
+          },
+        });
+      });
+    } catch (feedbackErr) {
+      // The refusal itself is already logged above and the message still dead-letters; never mask it.
+      captureError(feedbackErr, { service: "finance-service", alert: "FINANCE_BILL_REJECTED_FEEDBACK_FAILED", billId, tenantId: msg.tenantId });
+    }
+  }
 
   sub(COMMANDS.billApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; notes?: string; expectedStage?: string };

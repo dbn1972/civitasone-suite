@@ -183,3 +183,44 @@ describe("CreateGRNForm - GRN-NEW-02/03/04/05", () => {
     expect(await screen.findByText("No purchase orders found.")).toBeInTheDocument();
   });
 });
+
+// UAT b10 F95: inventory posts the stock receipt into the GRN's store, so the form must send one.
+describe("CreateGRNForm - receiving store (UAT b10 F95)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+  const STORES = [{ id: "66666666-6666-4666-8666-666666666666", name: "Central Store" }];
+
+  async function fillAccepted() {
+    await pickPo(/PO\/2026\/0001/);
+    await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Received qty row 1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Accepted qty row 1"), { target: { value: "2" } });
+  }
+
+  it("blocks submit of accepted stock items until a receiving store is chosen", async () => {
+    const urls: string[] = [];
+    mockRoutes(urls);
+    render(<CreateGRNForm stores={STORES} />);
+    await fillAccepted();
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/receiving store/i));
+    expect(urls.some((u) => u.endsWith("/procurement/grns"))).toBe(false);
+  });
+
+  it("sends the chosen storeId with the GRN", async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") calls.push({ url, body: String(init.body) });
+      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
+      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+      if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm stores={STORES} />);
+    await fillAccepted();
+    fireEvent.change(screen.getByLabelText("Receiving store"), { target: { value: STORES[0]!.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(JSON.parse(calls[0]!.body!)).toMatchObject({ storeId: STORES[0]!.id });
+  });
+});

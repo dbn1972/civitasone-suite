@@ -124,6 +124,8 @@ export const EVENTS = {
   sanctionApproved: "finance.sanction.approved",
   billPassed:       "finance.bill.passed",
   billMismatch:     "finance.bill.mismatch",
+  /** UAT b10 F93/F94: finance refused a finance.bill.create (code + reason), so the producer is told. */
+  billRejected:     "finance.bill.rejected",
   paymentMade:      "finance.payment.made",
   glPosted:         "finance.gl.posted",
   glRejected:       "finance.gl.rejected",

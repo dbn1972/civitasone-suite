@@ -11,6 +11,7 @@ import {
   type StockBalanceRow, type LedgerRow, type MovementRow,
 } from "./schema.js";
 import { items } from "../items/schema.js";
+import { stores } from "../stores/schema.js";
 import { costLayers, type CostLayerInsert } from "../costing/schema.js";
 import type { CostLayer, ConsumedLayer } from "../costing/fifo-engine.js";
 
@@ -105,6 +106,28 @@ export async function listBalances(
     .leftJoin(items, and(eq(stockBalances.itemId, items.id), eq(stockBalances.tenantId, items.tenantId)))
     .where(and(...conds))
     .limit(opts.limit).offset(opts.offset));
+}
+
+// ── GRN receipt resolution (UAT b10 F95) ──────────────────────────────────
+
+/** Is this an active store of this tenant? Read inside the write tx. */
+export async function activeStoreExistsTx(tx: Tx, tenantId: string, storeId: string): Promise<boolean> {
+  const rows = await tx.select({ id: stores.id }).from(stores)
+    .where(and(eq(stores.tenantId, tenantId), eq(stores.id, storeId), eq(stores.isActive, true)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * The tenant's active items whose SKU is one of `skus` (procurement's itemCode is the shared business key; the PO
+ * line id procurement also sends is not an inventory item id). Returns every match so a caller can reject an
+ * ambiguous SKU instead of picking one.
+ */
+export async function activeItemsBySkuTx(tx: Tx, tenantId: string, skus: string[]): Promise<Array<{ id: string; sku: string }>> {
+  if (skus.length === 0) return [];
+  const rows = await tx.select({ id: items.id, sku: items.sku }).from(items)
+    .where(and(eq(items.tenantId, tenantId), inArray(items.sku, skus), eq(items.isActive, true)));
+  return rows.filter((r): r is { id: string; sku: string } => typeof r.sku === "string");
 }
 
 // ── Item valuation (WAVG / FIFO / STANDARD) ─────────────────────────────────
