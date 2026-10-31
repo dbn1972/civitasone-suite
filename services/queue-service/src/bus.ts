@@ -89,7 +89,38 @@ export function isNonRetryable(err: unknown): boolean {
 export type PublishOptions = {
   messageGroupId?: string;
   messageDeduplicationId?: string;
+  /**
+   * UAT B10-F83: fail with a retryable NoSubscribersError instead of resolving
+   * when the topic has no subscriber queue (the message would reach nobody).
+   * The outbox relay sets it for audit topics, so the row stays unpublished and
+   * is sent again once the consumer's queue exists, instead of being marked
+   * published and lost.
+   */
+  requireSubscribers?: boolean;
 };
+
+/**
+ * UAT B10-F83: thrown by publish() with `requireSubscribers` when no subscriber
+ * queue exists for the topic. Deliberately retryable (not NonRetryableError):
+ * the consumer queue is normally only missing for a while (consumer not yet
+ * started, or the broker lost its queues), so the caller should try again.
+ */
+export class NoSubscribersError extends Error {
+  readonly code = "NO_SUBSCRIBERS" as const;
+  constructor(public readonly topic: string) {
+    super(`no subscriber queue for topic ${topic}; message not delivered`);
+    this.name = "NoSubscribersError";
+  }
+}
+
+/** UAT B10-F83: the broker says the queue is gone (deleted, or lost by a broker restart). */
+export function isQueueMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { name?: unknown; Code?: unknown; code?: unknown; message?: unknown };
+  const tags = [e.name, e.Code, e.code].filter((v): v is string => typeof v === "string");
+  if (tags.some((t) => t === "QueueDoesNotExist" || t === "AWS.SimpleQueueService.NonExistentQueue")) return true;
+  return typeof e.message === "string" && /queue does not exist|NonExistentQueue/i.test(e.message);
+}
 
 /**
  * Terminal result of one command delivery, passed to SubscribeOptions.onOutcome.
@@ -921,6 +952,13 @@ export class SqsQueue implements Queue {
           traceparent: msg.traceparent,
         }),
       );
+      // UAT B10-F83: a caller that needs delivery (the outbox relay for audit
+      // topics) must not get a success back for a message that reached nobody.
+      // Drop the cached (empty) list so the retry looks again.
+      if (options?.requireSubscribers) {
+        this.subUrlCache.delete(topic);
+        throw new NoSubscribersError(topic);
+      }
     }
     const body = JSON.stringify(msg);
     const attrs = {
@@ -1205,6 +1243,23 @@ export class SqsQueue implements Queue {
         if (this.polling) {
           incrementConsumerError(this.service, topic);
           this.logHandlerError(topic, null, 0, err);
+          // UAT B10-F83: the queue was deleted under us (e.g. a broker restart
+          // that lost its queues). The cached URL will never work again, and
+          // while the queue is missing every publisher finds no subscriber, so
+          // the messages reach nobody. Re-create the queue (and its DLQ and
+          // redrive policy) now instead of polling a dead URL until a restart.
+          if (isQueueMissingError(err)) {
+            this.queueUrls.delete(topic);
+            this.dlqUrls.delete(topic);
+            try {
+              url = await this.getOrCreateQueue(topic);
+              // eslint-disable-next-line no-console -- structured operational log
+              console.error(JSON.stringify({ level: "warn", event: "queue_recreated_after_missing", service: this.service, topic }));
+              continue;
+            } catch (recreateErr) {
+              this.logHandlerError(topic, null, 0, recreateErr);
+            }
+          }
           await new Promise((r) => setTimeout(r, 2000));
         }
       }

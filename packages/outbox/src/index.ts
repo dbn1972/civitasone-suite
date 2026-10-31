@@ -316,6 +316,19 @@ export function resolveRelayConcurrency(
  * ordering. FIFO topics still dedup via the bus default
  * MessageDeduplicationId = messageId = row.id.
  */
+/**
+ * UAT B10-F83: topics whose loss is a compliance defect (the audit trail).
+ * The relay publishes them with `requireSubscribers`, and the purge keeps
+ * their published rows for AUDIT_OUTBOX_RETENTION_DAYS (default 30) so events
+ * the broker accepted but later lost can still be replayed from the outbox.
+ */
+export const REQUIRED_DELIVERY_TOPICS: ReadonlySet<string> = new Set(["audit.event.record", "audit.event.ingest"]);
+
+export function resolveAuditOutboxRetentionDays(raw: string | undefined = process.env.AUDIT_OUTBOX_RETENTION_DAYS): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : 30;
+}
+
 export async function relayOnce(
   db: DrizzleTx,
   queue: Queue,
@@ -354,7 +367,7 @@ export async function relayOnce(
             const { [OUTBOX_CAUSATION_KEY]: _stripped, ...rest } = rawPayload;
             deliverPayload = rest;
           }
-          await queue.publish(row.topic, {
+          const input = {
             // SEC C1: forward the stable outbox row id as the messageId so a relay
             // re-publish (after a crash between publish and mark-published) reuses
             // the same id and the consumer dedupes it via markProcessed, instead of
@@ -374,7 +387,15 @@ export async function relayOnce(
             // every row enqueued without one.
             ...(causationId !== undefined ? { causationId } : {}),
             schemaVersion: row.schemaVersion, payload: deliverPayload,
-          });
+          };
+          // UAT B10-F83: an audit event must reach the audit store. Ask the bus
+          // to fail (row stays unpublished, retried next cycle) when no
+          // subscriber queue exists, instead of "succeeding" into the void.
+          if (REQUIRED_DELIVERY_TOPICS.has(row.topic)) {
+            await queue.publish(row.topic, input, { requireSubscribers: true });
+          } else {
+            await queue.publish(row.topic, input);
+          }
           return row.id;
         } catch (err) {
           // OPS-1: a relay publish failure is observable and isolated - one row's
@@ -476,6 +497,10 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
  */
 export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 1000): Promise<number> {
   const cutoff = sql`now() - interval '${sql.raw(String(retentionDays))} days'`;
+  // UAT B10-F83: audit rows are kept longer (never shorter than the general window).
+  const auditDays = Math.max(retentionDays, resolveAuditOutboxRetentionDays());
+  const auditCutoff = sql`now() - interval '${sql.raw(String(auditDays))} days'`;
+  const auditTopics = sql.join([...REQUIRED_DELIVERY_TOPICS].map((t) => sql`${t}`), sql`, `);
 
   // Delete published outbox messages older than retention in batches
   let totalDeleted = 0;
@@ -486,6 +511,7 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
       WHERE id IN (
         SELECT id FROM _outbox.messages
         WHERE published_at IS NOT NULL AND published_at < ${cutoff}
+          AND (topic NOT IN (${auditTopics}) OR published_at < ${auditCutoff})
         LIMIT ${sql.raw(String(batchSize))}
       )
     `);

@@ -19,6 +19,8 @@ export {
   isNonRetryable,
   isFifoTopic,
   SqsQueue,
+  NoSubscribersError,
+  isQueueMissingError,
 } from "./bus.js";
 
 export { RabbitMqQueue } from "./adapters/rabbitmq.js";
