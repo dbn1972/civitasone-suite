@@ -240,11 +240,11 @@ describe("PATCH /v1/hrms/applications/:id/offer (legacy shortcut)", () => {
   const body = { ctcMinor: 5_610_050, currency: "INR" };
   beforeEach(() => { H.findApplicationById.mockResolvedValue({ id: APP_ID, stage: "shortlisted", status: "active" }); });
 
-  it("is refused with OFFER_WORKFLOW_REQUIRED by default (no approval chain would run)", async () => {
+  it("is refused with LEGACY_OFFER_DISABLED by default (UAT F85: off unless the tenant explicitly enables it)", async () => {
     const app = await appWith(recruitmentRoutes);
     const res = await app.inject({ method: "PATCH", url: `/v1/hrms/applications/${APP_ID}/offer`, payload: body });
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("OFFER_WORKFLOW_REQUIRED");
+    expect(res.json().code).toBe("LEGACY_OFFER_DISABLED");
     expect(H.offerApplication).not.toHaveBeenCalled();
     await app.close();
   });
@@ -254,6 +254,7 @@ describe("PATCH /v1/hrms/applications/:id/offer (legacy shortcut)", () => {
     const app = await appWith(recruitmentRoutes);
     const res = await app.inject({ method: "PATCH", url: `/v1/hrms/applications/${APP_ID}/offer`, payload: body });
     expect(res.statusCode).toBe(202);
+    expect(res.headers["deprecation"]).toBe("true");
     expect(H.offerApplication).toHaveBeenCalledTimes(1);
     await app.close();
   });

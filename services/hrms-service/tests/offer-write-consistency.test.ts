@@ -16,6 +16,8 @@ const H = vi.hoisted(() => ({
   insertOfferMock: vi.fn(),
   maxVersionMock: vi.fn(async () => 0),
   claimForOfferMock: vi.fn(async () => true),
+  findAppTxMock: vi.fn(async () => ({ id: "app", stage: "shortlisted", status: "active" })),
+  insertEventMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/shared/db.js", async (io) => {
@@ -33,11 +35,13 @@ vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertOffer: (...a: unknown[]) => H.insertOfferMock(...a),
   maxOfferVersionTx: (...a: unknown[]) => H.maxVersionMock(...a),
+  insertEvent: (...a: unknown[]) => H.insertEventMock(...a),
 }));
 
 vi.mock("../src/modules/recruitment/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   claimApplicationForOffer: (...a: unknown[]) => H.claimForOfferMock(...a),
+  findApplicationByIdTx: (...a: unknown[]) => H.findAppTxMock(...a),
 }));
 
 import { queue } from "../src/shared/infra.js";
@@ -117,24 +121,21 @@ describe("legacy vs compliance offer write consistency", () => {
     expect(legacyRow.grossCtcMinor).toBe(complianceRow.grossCtcMinor);
     expect(legacyRow.grossCtcMinor).toBe(6_000_000n);
 
-    // Same status SEMANTICS, not force-equal values: the compliance chain's
-    // whole point is its approval gate, so it legitimately starts at
-    // "draft" pending submit -> approve x N -> release, while the legacy
-    // shortcut has no approval chain and goes straight to the equivalent
-    // "ready for the candidate" state the compliance chain reaches right
-    // after ITS OWN /release step. What must be true of both is that
-    // neither is the old undefined "sent" value offer-domain.ts's
-    // canRelease/isTerminal/isOfferEditable never recognised (which made a
-    // legacy offer un-actionable via accept/decline/expire, since all three
-    // require status === "released" exactly).
-    expect(legacyRow.status).toBe("released");
-    expect(legacyRow.releasedAt).toBeInstanceOf(Date);
+    // UAT F85: both paths go through the SAME approval chain. The compliance
+    // path starts at "draft" (pending its own /submit); the deprecated legacy
+    // shortcut lands already submitted -- "pending_approval" at stage 0 of the
+    // same default chain -- and is never released without approval.
+    expect(legacyRow.status).toBe("pending_approval");
+    expect(legacyRow.currentStage).toBe(0);
+    expect(legacyRow.approvalChain).toEqual(complianceRow.approvalChain);
+    expect(legacyRow.releasedAt ?? null).toBeNull();
     expect(complianceRow.status).toBe("draft");
     expect(OFFER_STATUS_VOCABULARY).toContain(legacyRow.status);
     expect(OFFER_STATUS_VOCABULARY).toContain(complianceRow.status);
 
-    // Honest, not fabricated: the legacy path never ran an approval chain,
-    // so it must not claim one did.
+    // Honest, not fabricated: no approval has run yet on either path.
     expect(legacyRow.approvedAt ?? null).toBeNull();
+    // ...and the legacy shortcut no longer moves the application to "offered".
+    expect(H.claimForOfferMock).not.toHaveBeenCalled();
   });
 });

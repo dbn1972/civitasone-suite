@@ -11298,7 +11298,7 @@
     "setEmblem": "Emblem image URL (https)",
     "setOffers": "Offers",
     "setOfferWorkflow": "Offers must go through the approval workflow (recommended)",
-    "setOfferWorkflowHelp": "On: an offer is drafted, submitted and approved by every approver in the chain (never by its creator) before release. Off: HR may send a single-step offer that skips approval; intended only for small offices.",
+    "setOfferWorkflowHelp": "On: an offer is drafted, submitted and approved by every approver in the chain (never by its creator) before release. Off: the deprecated single-step offer shortcut is allowed, but its offers still go through the same approval chain before release; it will be removed before go-live.",
     "setPrivacy": "Applicant data",
     "setPurposeNote": "Purpose and retention note (shown on the talent pool)",
     "setPurposeNoteHelp": "Describe why past applicants' details are held and for how long. Leave blank to use the default wording; have it checked against your records-retention policy.",

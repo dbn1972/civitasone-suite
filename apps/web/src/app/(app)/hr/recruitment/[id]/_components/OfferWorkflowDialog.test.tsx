@@ -41,6 +41,16 @@ beforeEach(() => resetSessionIdentityCache());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("OfferWorkflowDialog", () => {
+  it("UAT F85: making an offer creates a draft in the approval workflow, never the legacy PATCH .../offer route", async () => {
+    const calls = stub({ offers: [], post: () => new Response(JSON.stringify({ id: "o-9", status: "draft" }), { status: 201 }) });
+    renderDialog();
+    fireEvent.change(await screen.findByLabelText(/basic pay/i), { target: { value: "56100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create draft offer" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toMatchObject({ url: "/api/proxy/v1/hrms/applications/app-1/offers", method: "POST", body: { basicMinor: 5610000 } });
+    expect(calls.some((c) => c.method === "PATCH" || /\/applications\/[^/]+\/offer$/.test(c.url))).toBe(false);
+  });
+
   it("a draft offer made by the signed-in HR user can be submitted for approval", async () => {
     const calls = stub({ offers: [offer()] });
     renderDialog();
