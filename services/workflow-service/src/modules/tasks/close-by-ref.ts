@@ -7,11 +7,14 @@
  * approvals inbox for good. procurement-service now sends
  * `workflow.instance.close_by_ref` from its approve / reject consumers; this
  * consumer completes every still-open instance bound to that record, and its
- * pending tasks, with the domain's decision.
+ * pending tasks, with the domain's decision. F125: hrms-service does the same
+ * for a leave application decided directly (PATCH /leave-applications/:id/
+ * approve|reject) or cancelled while still pending.
  *
  * Idempotent and loop-free: when the decision itself came from the workflow
- * task, the instance is already completed by the time procurement answers, so
- * nothing is open and this is a no-op. Scoped to the refTypes whose producer
+ * task, the instance is already completed by the time the domain answers, so
+ * nothing is open and this is a no-op. It never dispatches a decision back to
+ * the domain (only history + audit). Scoped to the refTypes whose producer
  * sends it, so a stray message cannot close any other module's approvals.
  */
 import type { Queue } from "@civitasone/queue";
@@ -27,11 +30,13 @@ import * as instanceRepo from "../instances/repo.js";
 import * as historyRepo from "../history/repo.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 
-/** refTypes whose domain service sends close_by_ref (procurement-service). */
+/** refTypes whose domain service sends close_by_ref (procurement-service, hrms-service). */
 export const CLOSE_BY_REF_TYPES = [
   "procurement_plan", "procurement_po_amendment",
   // F102: a direct indent / PO decision closes its inbox task too.
   "procurement_indent", "procurement_po",
+  // F125: hrms-service leave/consumer.ts (direct approve / reject, pending cancel).
+  "leave_app",
 ] as const;
 
 export type CloseByRefPayload = {
