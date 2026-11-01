@@ -4,6 +4,7 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 import { and, eq } from "drizzle-orm";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
@@ -365,6 +366,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           }),
         });
         await audit(tx, msg, "approve", "leave_app", p.id);
+        // F125: a direct approve closes the open leave_approval inbox task.
+        await closeWorkflowForRef(tx, msg, "leave_app", p.id, "approve");
       });
     } catch (err: unknown) {
       if (err instanceof Error && err.message === "LEAVE_ALREADY_PROCESSED") {
@@ -411,6 +414,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         }),
       });
       await audit(tx, msg, "reject", "leave_app", p.id);
+      // F125: a direct reject closes the open leave_approval inbox task.
+      await closeWorkflowForRef(tx, msg, "leave_app", p.id, "reject", p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
@@ -458,6 +463,12 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           // commit instead of relying on an out-of-transaction JS read.
           await repo.creditLeaveBalance(tx, alloc.id, exactAppliedDays(application));
         }
+      }
+      // F125: a still-pending application cancelled before anyone decided it
+      // must not leave its approval task in the inbox. An approved one's
+      // instance is already completed; a draft never started one.
+      if (application.status === "pending") {
+        await closeWorkflowForRef(tx, msg, "leave_app", p.id, "reject", p.reason ? `cancelled: ${p.reason}` : "leave application cancelled");
       }
       await enqueue(tx, {
         topic: "audit.event.record", eventType: "audit.event.record",

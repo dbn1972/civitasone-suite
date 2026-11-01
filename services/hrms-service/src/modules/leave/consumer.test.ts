@@ -893,3 +893,115 @@ describe("leave_request_detail cache invalidation", () => {
     await q.stop();
   });
 });
+
+// ---------------------------------------------------------------------------
+// F125 (UAT T4): a direct manager / HR decision used to leave the leave_app's
+// leave_approval instance active with a pending "Reporting Officer Approval"
+// task in the approvals inbox. The decision now enqueues
+// workflow.instance.close_by_ref in its own transaction; no-op paths do not.
+// ---------------------------------------------------------------------------
+describe("F125 — a direct leave decision closes its workflow approval (close_by_ref)", () => {
+  const CLOSE = "workflow.instance.close_by_ref";
+  const APP = {
+    id: "app-f125", tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID, allocId: ALLOC_ID,
+    fromDate: "2025-08-01", toDate: "2025-08-02", daysApplied: 2, reason: null, approvedBy: null,
+    status: "pending", createdAt: new Date(), updatedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+  };
+  const closes = () => enqueuedMessages.filter((m) => m.topic === CLOSE).map((m) => m.payload);
+  const cancelReads = (row: Record<string, unknown>) => mockTx.select.mockReturnValueOnce({
+    from: () => ({ where: () => ({ limit: async () => [row] }) }),
+  });
+
+  it("approve enqueues close_by_ref { leave_app, id, approve }", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveApprove, makeMsg(COMMANDS.leaveApprove, { id: APP.id, tenantId: TENANT, approvedBy: ACTOR }));
+    await settle();
+    expect(closes()).toEqual([{ tenantId: TENANT, refType: "leave_app", refId: APP.id, decision: "approve" }]);
+    await q.stop();
+  });
+
+  it("reject enqueues close_by_ref { leave_app, id, reject, reason }", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: APP.id, tenantId: TENANT, rejectedBy: ACTOR, reason: "project deadline" }));
+    await settle();
+    expect(closes()).toEqual([{ tenantId: TENANT, refType: "leave_app", refId: APP.id, decision: "reject", reason: "project deadline" }]);
+    await q.stop();
+  });
+
+  it("a concurrent duplicate approve (LEAVE_ALREADY_PROCESSED) closes nothing", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    approveLeaveAppMock.mockResolvedValueOnce(0);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveApprove, makeMsg(COMMANDS.leaveApprove, { id: APP.id, tenantId: TENANT, approvedBy: ACTOR }));
+    await settle();
+    // the mocked enqueue records even inside a tx that later rolls back, so
+    // this proves the close is never even attempted on the losing worker
+    expect(closes()).toEqual([]);
+    await q.stop();
+  });
+
+  it("an approve refused by the status guard (already approved) closes nothing", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP, status: "approved" });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveApprove, makeMsg(COMMANDS.leaveApprove, { id: APP.id, tenantId: TENANT, approvedBy: ACTOR }));
+    await settle();
+    expect(closes()).toEqual([]);
+    await q.stop();
+  });
+
+  it.each(["rejected", "approved", "cancelled"])("a reject for a leave already '%s' (no-op) closes nothing", async (status) => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP, status });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: APP.id, tenantId: TENANT, rejectedBy: ACTOR, reason: "late" }));
+    await settle();
+    expect(closes()).toEqual([]);
+    await q.stop();
+  });
+
+  it("a replayed reject (same messageId) closes once", async () => {
+    const seen = new Set<string>();
+    vi.mocked(markProcessed).mockImplementation(async (_tx: unknown, id: string) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    const msg = makeMsg(COMMANDS.leaveReject, { id: APP.id, tenantId: TENANT, rejectedBy: ACTOR, reason: "once" });
+    await q.publish(COMMANDS.leaveReject, msg);
+    await q.publish(COMMANDS.leaveReject, msg);
+    await settle();
+    expect(closes()).toHaveLength(1);
+    vi.mocked(markProcessed).mockImplementation(async () => true);
+    await q.stop();
+  });
+
+  it("cancelling a still-pending leave closes its approval as reject with the cancel reason", async () => {
+    cancelReads({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveCancel, makeMsg(COMMANDS.leaveCancel, { id: APP.id, tenantId: TENANT, reason: "plans changed" }));
+    await settle();
+    expect(closes()).toEqual([{ tenantId: TENANT, refType: "leave_app", refId: APP.id, decision: "reject", reason: "cancelled: plans changed" }]);
+    await q.stop();
+  });
+
+  it("a body-less cancel of a pending leave still closes, with a default reason", async () => {
+    cancelReads({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveCancel, makeMsg(COMMANDS.leaveCancel, { id: APP.id, tenantId: TENANT }));
+    await settle();
+    expect(closes()).toEqual([{ tenantId: TENANT, refType: "leave_app", refId: APP.id, decision: "reject", reason: "leave application cancelled" }]);
+    await q.stop();
+  });
+
+  it.each(["approved", "draft", "cancelled"])("cancelling a '%s' leave sends no close_by_ref", async (status) => {
+    cancelReads({ ...APP, status, daysApplied: 0 });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveCancel, makeMsg(COMMANDS.leaveCancel, { id: APP.id, tenantId: TENANT, reason: "x" }));
+    await settle();
+    expect(closes()).toEqual([]);
+    await q.stop();
+  });
+});
