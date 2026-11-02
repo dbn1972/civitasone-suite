@@ -47,13 +47,10 @@
  * collectAdHocEarnings's 3 reads, computeAndInsertSlip's ~3 writes, the loan
  * -repayment read+2 writes, and the arrears double-pay-guard update).
  *
- * NOT exercised end-to-end here: a "disbursed" loan with a positive applied
- * EMI. Doing so hits a real, pre-existing, unrelated bug -- loansRepo
- * .insertRepayment writes status: "paid", but payroll_loan_repayments
- * _status_check (migration 0027) only allows pending/deducted/waived/
- * overdue, so the INSERT throws and rolls back the whole run. Flagged as a
- * separate follow-up (not this PR's concern); loansRepo.findLoansByEmployeesTx
- * itself is proven correct and O(1) directly in Section A above.
+ * Every employee also carries a "disbursed" loan with a positive EMI, so the
+ * loan pre-fetch -> EMI deduction -> repayment ledger chain runs end to end
+ * (recorded as status "deducted" -- F126; see also
+ * tests/f126-loan-emi-repayment-real-db.test.ts for the split/closure detail).
  */
 import { describe, it, expect, vi, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -351,15 +348,15 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
           VALUES (${tenant}::uuid, ${e.id}::uuid, '2026-08-01'::date, 2500000, 3500000, 4000000, 5000000)
         `);
         await tx.insert(payrollLopLedger).values({ tenantId: tenant, employeeId: e.id, month: RUN_MONTH, lopDays: 2, source: "attendance_sync" });
-        // NOTE: deliberately not exercising a "disbursed" loan with a positive
-        // EMI through this end-to-end path -- doing so hits a real,
-        // pre-existing, unrelated bug (loansRepo.insertRepayment writes
-        // status: "paid", but payroll_loan_repayments_status_check only
-        // allows pending/deducted/waived/overdue per migration 0027, so the
-        // INSERT throws and rolls back the WHOLE run's transaction). Flagged
-        // separately; not this PR's concern. The batched loan-fetch itself
-        // (loansRepo.findLoansByEmployeesTx) is proven correct and O(1)
-        // directly in Section A above, independent of that write-path bug.
+        // A disbursed 0%-interest loan with a positive EMI, so the loan
+        // repayment chain (batched fetch -> LOAN_EMI -> 'deducted' repayment
+        // row -> outstanding update) runs for every employee (F126).
+        await tx.insert(payrollLoans).values({
+          tenantId: tenant, loanNo: `LN-${e.employeeNo}-${tenant.slice(0, 8)}`, employeeId: e.id,
+          principalMinor: 1000000n, outstandingMinor: 1000000n, emiMinor: 100000n, tenureMonths: 10,
+          interestRatePct: "0", disbursedAt: new Date("2026-08-01T00:00:00Z"), status: "disbursed",
+          createdBy: ACTOR, updatedBy: ACTOR,
+        });
         await tx.execute(sql`
           INSERT INTO payroll.payroll_tax_declarations (tenant_id, employee_id, fy, regime, section_80c, section_80d, other_deductions, created_by)
           VALUES (${tenant}::uuid, ${e.id}::uuid, '2026-27', 'old', 100000, 50000, 0, ${ACTOR}::uuid)
@@ -467,9 +464,21 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
       const arrearComp = components.find((c) => c.code === "ARREAR");
       expect(arrearComp?.amountMinor, `ARREAR component for ${emp.employeeNo}`).toBe(Number(arrearRows[0]?.difference_minor));
 
-      // Iter2/P3 (loan pre-fetch/repayment chain) is deliberately not
-      // exercised through this end-to-end path -- see the seeding note
-      // above. It is proven correct and O(1) directly in Section A.
+      // Iter2/P3 + F126: the batched loan pre-fetch fed the EMI deduction,
+      // and the withheld EMI was recorded as a 'deducted' repayment that
+      // reduced the outstanding.
+      expect(components.find((c) => c.code === "LOAN_EMI")?.amountMinor, `LOAN_EMI for ${emp.employeeNo}`).toBe(100000);
+      const repayRows = await runWithTenant(tenantLarge, () => db.transaction((tx) => tx.execute(sql`
+        SELECT r.status, r.run_id, r.principal_minor, r.interest_minor, l.outstanding_minor
+        FROM loans.payroll_loan_repayments r JOIN loans.payroll_loans l ON l.id = r.loan_id
+        WHERE l.tenant_id = ${tenantLarge}::uuid AND l.employee_id = ${emp.id}::uuid
+      `))) as unknown as Array<{ status: string; run_id: string; principal_minor: string; interest_minor: string; outstanding_minor: string }>;
+      expect(repayRows, `loan repayment for ${emp.employeeNo}`).toHaveLength(1);
+      expect(repayRows[0]?.status).toBe("deducted");
+      expect(repayRows[0]?.run_id).toBe(runIdLarge);
+      expect(BigInt(repayRows[0]!.principal_minor)).toBe(100000n);
+      expect(BigInt(repayRows[0]!.interest_minor)).toBe(0n);
+      expect(BigInt(repayRows[0]!.outstanding_minor)).toBe(900000n);
     }
   }, { timeout: 60_000 });
 });

@@ -2040,7 +2040,9 @@ async function processPayrollRun(
         await loansRepo.insertRepayment(tx, {
           id: randomUUID(), tenantId: p.tenantId, loanId: plan.loanId, runId: p.id,
           installmentNo, principalMinor: principalPaid, interestMinor: interestPaid, totalMinor: take,
-          currency: "INR", status: "paid", paidAt: new Date(),
+          // F126: "deducted" (withheld from this run's salary) -- the CHECK
+          // constraint (migration 0027) has no "paid"; writing it failed the run.
+          currency: "INR", status: "deducted", paidAt: new Date(),
           createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await loansRepo.updateLoan(tx, plan.loanId, {
