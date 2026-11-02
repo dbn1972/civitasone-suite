@@ -199,18 +199,19 @@ describe("B9-wf1 — a direct procurement decision closes the open approval (clo
     }
   }
 
-  // F102 extended close_by_ref to procurement_indent / procurement_po, so the
-  // negative case now uses a refType that is still excluded (leave_app).
-  it("ignores refTypes whose producer does not send it (a leave approval stays open)", async () => {
+  // F102 extended close_by_ref to procurement_indent / procurement_po and F125
+  // to leave_app, so the negative case now uses a refType that is still
+  // excluded (estab_file: estab-service does not send close_by_ref).
+  it("ignores refTypes whose producer does not send it (an e-file approval stays open)", async () => {
     const tenant = newTenant();
     await provision(tenant);
     const refId = randomUUID();
     const id = randomUUID();
     await q.deliver(COMMANDS.createInstance, {
-      id, tenantId: tenant, name: "PO approval", status: "active", version: 1,
-      definitionCode: "leave_approval", initialTaskName: "Approval", refType: "leave_app", refId,
+      id, tenantId: tenant, name: "File noting", status: "active", version: 1,
+      definitionCode: "file_noting", initialTaskName: "Approval", refType: "estab_file", refId,
     }, { tenantId: tenant, actorId: randomUUID(), messageId: id });
-    await q.deliver(COMMANDS.closeInstanceByRef, { tenantId: tenant, refType: "leave_app", refId, decision: "approve" },
+    await q.deliver(COMMANDS.closeInstanceByRef, { tenantId: tenant, refType: "estab_file", refId, decision: "approve" },
       { tenantId: tenant, actorId: randomUUID(), messageId: randomUUID() });
     expect((await getInstance(tenant, id))?.status).toBe("active");
     expect((await tasksFor(tenant, id))[0]).toMatchObject({ status: "pending" });
