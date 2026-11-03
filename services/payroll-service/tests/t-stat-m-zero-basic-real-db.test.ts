@@ -85,7 +85,9 @@ describe("T-STAT M-ZERO: a run with Rs 0-basic slips cannot be approved silently
   it("an exclusion for a different employee does not unlock it", async () => {
     const runId = await seedRun("2026-05");
     const err = await runWithTenant(tenantId, () => approveRun(ctx(), runId, undefined, [{ employeeId: paidEmp, reason: "not the zero-basic one" }])).catch((e: unknown) => e);
-    expect((err as HttpError).code).toBe("ZERO_BASIC_SLIPS");
+    // Review SF5: naming a slip that is not a Rs 0-basic slip of the run is itself rejected.
+    expect((err as HttpError).status).toBe(422);
+    expect((err as HttpError).code).toBe("INVALID_ZERO_BASIC_EXCLUSION");
   });
 
   it("approves once every Rs 0-basic employee is explicitly excluded with a reason; the exclusion is audited", async () => {

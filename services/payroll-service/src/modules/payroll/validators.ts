@@ -69,12 +69,31 @@ export type RunActionBody = z.infer<typeof runActionBody>;
  * excludes named Rs 0-basic slips (HRMS basic missing) from the approval
  * guard, each with a reason that is recorded on the approval audit event.
  */
-export const approveRunBody = runActionBody.extend({
-  zeroBasicExclusions: z.array(z.object({
-    employeeId: z.string().uuid(),
-    reason: z.string().trim().min(10).max(500),
-  })).max(5000).optional(),
+const employeeReason = z.object({
+  employeeId: z.string().uuid(),
+  reason: z.string().trim().min(10).max(500),
 });
+export const approveRunBody = runActionBody.extend({
+  zeroBasicExclusions: z.array(employeeReason).max(5000).optional(),
+  /** Review SF4: acknowledgement of each employee whose arrears exceed the review threshold. */
+  arrearsAcknowledgements: z.array(employeeReason).max(5000).optional(),
+});
+
+/** Review SF4 / SF5: GET /v1/payroll/runs/:id/approval-review (money as paise digit strings). */
+export const runApprovalReviewResponse = z.object({
+  runId: z.string().uuid(),
+  zeroBasic: z.array(z.object({ employeeId: z.string(), employeeNo: z.string() })),
+  arrears: z.object({
+    totalMinor: z.string().regex(/^\d+$/),
+    thresholdBps: z.number().int().nonnegative(),
+    employees: z.array(z.object({
+      employeeId: z.string(), employeeNo: z.string(),
+      arrearsMinor: z.string().regex(/^\d+$/), regularGrossMinor: z.string().regex(/^-?\d+$/),
+      requiresReview: z.boolean(),
+    })),
+  }),
+});
+export type RunApprovalReview = z.infer<typeof runApprovalReviewResponse>;
 export type ApproveRunBody = z.infer<typeof approveRunBody>;
 
 // Multi-DDO admin

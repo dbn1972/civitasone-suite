@@ -55,8 +55,9 @@ export interface FyTaxConfig {
    * before cess may not exceed (total income - rebateIncomeCap). The proviso
    * applies to the new regime u/s 115BAC(1A) (Finance Act 2023, extended to
    * the Rs 12 lakh limit by the Finance Act 2025) and never to the old
-   * regime. Optional: omitted == the statutory default for the regime (new:
-   * on, old: off). The relief threshold is always the rebateIncomeCap of the
+   * regime. Optional: omitted == the statutory default (new regime from FY
+   * 2023-24, when the proviso was introduced: on; old regime and earlier
+   * new-regime years: off). The relief threshold is always the rebateIncomeCap of the
    * same FY row, so a re-configured FY moves it together with the rebate limit.
    */
   rebateMarginalRelief?: boolean;
@@ -191,10 +192,10 @@ function slabTax(taxableIncomeMinor: bigint, slabs: TaxSlab[]): { taxMinor: bigi
  * crossover (about Rs 12,70,588 on the FY 2025-26 / 2026-27 slabs) the slab
  * tax is already below the excess and no rebate applies.
  */
-function rebate87A(taxableIncomeMinor: bigint, baseTaxMinor: bigint, cfg: FyTaxConfig, regime: Regime): bigint {
+function rebate87A(taxableIncomeMinor: bigint, baseTaxMinor: bigint, cfg: FyTaxConfig, regime: Regime, startYear: number): bigint {
   const capMinor = BigInt(cfg.rebateIncomeCap) * 100n;
   if (taxableIncomeMinor <= capMinor) return minBig(baseTaxMinor, BigInt(cfg.rebateMax) * 100n);
-  const marginalRelief = cfg.rebateMarginalRelief ?? regime === "new";
+  const marginalRelief = cfg.rebateMarginalRelief ?? (regime === "new" && startYear >= 2023);
   if (!marginalRelief || capMinor <= 0n) return 0n;
   const excessMinor = taxableIncomeMinor - capMinor;
   return baseTaxMinor > excessMinor ? baseTaxMinor - excessMinor : 0n;
@@ -216,7 +217,7 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
 
   const { taxMinor: rawSlabMinor, breakdown } = slabTax(taxableIncomeMinor, slabs);
   const baseTaxMinor = roundRupeeMinor(rawSlabMinor);
-  const rebateMinor = rebate87A(taxableIncomeMinor, baseTaxMinor, cfg, regime);
+  const rebateMinor = rebate87A(taxableIncomeMinor, baseTaxMinor, cfg, regime, startYear);
   const afterRebateMinor = maxBig(0n, baseTaxMinor - rebateMinor);
   let surchargeMinor = roundRupeeMinor(divRoundBig(afterRebateMinor * surchargeRateBps(taxableIncomeMinor, cfg.surchargeBands), 10000n));
 

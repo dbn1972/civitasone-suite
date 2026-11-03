@@ -27,7 +27,8 @@
  *    month LOP deducted (F02);
  *  - SNAP-03 arrear rows: old/new amounts are now the pay drawn / due for the
  *    month ("due minus drawn", F03; the June / July drawn slips are seeded
- *    above); the differences are unchanged;
+ *    above), tagged source revision_dmd (migration 0160); the differences
+ *    are unchanged;
  *  - the run, slip and register totals that follow from those.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";

@@ -5595,7 +5595,27 @@
     "statAwaitingDisbursement": "वितरण की प्रतीक्षा में",
     "statFailed": "विफल",
     "statEmployeesPaidPeriod": "भुगतान किए गए कर्मचारी, नियमित रन ({period})",
-    "statTotalGrossPeriod": "कुल सकल वेतन, सभी भुगतान किए गए रन ({period})"
+    "statTotalGrossPeriod": "कुल सकल वेतन, सभी भुगतान किए गए रन ({period})",
+    "runApproval": {
+      "summaryTitle": "इस रन में बकाया (एरियर)",
+      "summaryTotal": "{count, plural, one {# कर्मचारी को} other {# कर्मचारियों को}} कुल {amount} का बकाया दिया जा रहा है।",
+      "summaryNeedReview": "{count, plural, one {# मामले} other {# मामलों}} को अनुमोदन से पहले पुष्टि चाहिए (बकाया समीक्षा सीमा से अधिक)।",
+      "zeroBasicSummary": "{count, plural, one {# पर्ची में} other {# पर्चियों में}} मूल वेतन नहीं है (HRMS में मूल वेतन नहीं); अनुमोदन से पहले इन्हें ठीक करें या बाहर करें।",
+      "colEmployee": "कर्मचारी",
+      "colArrears": "बकाया",
+      "colRegularGross": "नियमित मासिक सकल",
+      "colReview": "समीक्षा",
+      "needsReview": "पुष्टि आवश्यक",
+      "withinThreshold": "सीमा के भीतर",
+      "reviewNeededIntro": "इस रन को अनुमोदित करने से पहले समीक्षा आवश्यक है।",
+      "zeroBasicHeading": "बिना मूल वेतन वाली पर्चियाँ",
+      "zeroBasicExclude": "{employee} को इस रन से बाहर करें (भुगतान नहीं होगा)",
+      "arrearsHeading": "समीक्षा सीमा से अधिक बकाया",
+      "arrearsAcknowledge": "मैंने {employee} के {amount} के बकाया की जाँच कर ली है",
+      "reviewNoteLabel": "समीक्षा टिप्पणी (हर बहिष्करण और पुष्टि के साथ दर्ज)",
+      "reviewIncomplete": "बिना मूल वेतन वाली हर पर्ची को बाहर करें, सूचीबद्ध हर बकाया की पुष्टि करें, और कम से कम 10 अक्षरों की समीक्षा टिप्पणी लिखें।",
+      "reviewLoadFailed": "समीक्षा के मद लोड नहीं हो सके। यह संवाद बंद करके फिर से प्रयास करें।"
+    }
   },
   "payrollLoans": {
     "loadingAriaLabel": "लोड हो रहा है…",

@@ -1,4 +1,4 @@
-import { eq, ne, and, sql, inArray, count, desc } from "drizzle-orm";
+import { eq, and, sql, inArray, notInArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
 import { inForceRows } from "./pt-versions-repo.js";
@@ -210,7 +210,8 @@ export async function listSlipsByRunTx(tx: Writer, runId: string, tenantId: stri
 export async function markSlipsPaidForRun(tx: Writer, runId: string, actorId: string): Promise<void> {
   await tx.update(payrollSlips)
     .set({ status: "paid", updatedAt: new Date(), updatedBy: actorId })
-    .where(and(eq(payrollSlips.runId, runId), ne(payrollSlips.status, "exception")));
+    // T-STAT review SF5: an "excluded" (Rs 0-basic, excluded on approval) slip is never paid either.
+    .where(and(eq(payrollSlips.runId, runId), notInArray(payrollSlips.status, ["exception", "excluded"])));
 }
 
 // ── world-class-routes repo functions ─────────────────────────────────────────

@@ -17,7 +17,7 @@ import * as lopRepo from "../integration/lop-repo.js";
 import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, unrecordedFyMonths, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
@@ -292,13 +292,16 @@ export async function resolveTdsYtdMinorsTx(tx: typeof db, tenantId: string, emp
  * An employee with nothing paid is absent from the Map: callers default to
  * { grossMinor: 0n, months: 0 } (a mid-year joiner).
  */
-export async function resolveFyPaidToDateTx(tx: typeof db, tenantId: string, employeeIds: string[], fyStart: number, beforeMonth: string): Promise<Map<string, { grossMinor: bigint; months: number }>> {
-  const result = new Map<string, { grossMinor: bigint; months: number }>();
+export async function resolveFyPaidToDateTx(tx: typeof db, tenantId: string, employeeIds: string[], fyStart: number, beforeMonth: string): Promise<Map<string, { grossMinor: bigint; months: number; recordedMonths: string[] }>> {
+  const result = new Map<string, { grossMinor: bigint; months: number; recordedMonths: string[] }>();
   if (employeeIds.length === 0) return result;
   const rows = (await tx.execute(sql`
     SELECT s.employee_id,
            (COALESCE(SUM(s.gross_minor), 0) - COALESCE(SUM(l.lop), 0))::bigint::text AS paid,
-           COUNT(DISTINCT r.month)::int AS months
+           -- review nit: a month counts as recorded only with a regular (or
+           -- pensioner) slip; a supplementary-only month still has its
+           -- regular pay estimated (its amount is in paid above).
+           COALESCE(array_agg(DISTINCT r.month::text) FILTER (WHERE r.run_type IN ('regular', 'pensioner')), ARRAY[]::text[]) AS recorded
     FROM payroll.payroll_slips s
     JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
     LEFT JOIN LATERAL (
@@ -310,9 +313,55 @@ export async function resolveFyPaidToDateTx(tx: typeof db, tenantId: string, emp
       AND r.month >= ${`${fyStart}-04`} AND r.month < ${beforeMonth}
       AND r.status IN ('approved', 'disbursed')
     GROUP BY s.employee_id
-  `)) as unknown as Array<{ employee_id: string; paid: string | number; months: number }>;
-  for (const r of rows) result.set(r.employee_id, { grossMinor: BigInt(r.paid), months: Number(r.months) });
+  `)) as unknown as Array<{ employee_id: string; paid: string | number; recorded: string[] }>;
+  for (const r of rows) {
+    const recordedMonths = [...(r.recorded ?? [])].sort();
+    result.set(r.employee_id, { grossMinor: BigInt(r.paid), months: recordedMonths.length, recordedMonths });
+  }
   return result;
+}
+
+/**
+ * T-STAT review SF1: loss-of-pay days recorded in the local LOP ledger
+ * (leave / attendance syncs) for the FY months before `beforeMonth`, per
+ * employee and month -- used to keep in-service months that have no slip in
+ * this system from being estimated at full pay. One batched, tenant-scoped
+ * read (FORCE RLS). Months absent == no ledger entry (estimated at full pay;
+ * EOL that HRMS never synced to the ledger cannot be seen here).
+ */
+export async function resolveUnrecordedLopDaysTx(tx: typeof db, tenantId: string, employeeIds: string[], fyStart: number, beforeMonth: string): Promise<Map<string, Map<string, number>>> {
+  const result = new Map<string, Map<string, number>>();
+  if (employeeIds.length === 0) return result;
+  const rows = (await tx.execute(sql`
+    SELECT employee_id::text AS employee_id, month::text AS month,
+           COALESCE(SUM(COALESCE(lop_days_exact, lop_days::numeric)), 0)::float8 AS days
+    FROM payroll.payroll_lop_ledger
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${idArray(employeeIds)})
+      AND month >= ${`${fyStart}-04`} AND month < ${beforeMonth}
+    GROUP BY employee_id, month
+    ORDER BY employee_id, month
+  `)) as unknown as Array<{ employee_id: string; month: string; days: number }>;
+  for (const r of rows) {
+    if (!(Number(r.days) > 0)) continue;
+    const m = result.get(r.employee_id) ?? new Map<string, number>();
+    m.set(r.month, Number(r.days));
+    result.set(r.employee_id, m);
+  }
+  return result;
+}
+
+/**
+ * T-STAT review SF4: arrears above this share (bps) of an employee regular
+ * monthly gross need an explicit acknowledgement on approval
+ * (payroll_settings.arrears_review_threshold_bps, migration 0160; default one
+ * month). Reads through the caller tx / scopedRead (FORCE RLS).
+ */
+export async function resolveArrearsReviewThresholdBps(tx: typeof db, tenantId: string): Promise<number> {
+  const rows = (await tx.execute(sql`
+    SELECT arrears_review_threshold_bps FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1
+  `)) as unknown as Array<{ arrears_review_threshold_bps: number | string | null }>;
+  const v = rows[0]?.arrears_review_threshold_bps;
+  return v != null ? Number(v) : DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS;
 }
 
 /**
@@ -406,12 +455,34 @@ export interface RetroArrearsOutcome {
   skippedPeriods: string[];
 }
 
-/** Per-run context shared by every employee of a run (the DA table is per tenant). */
+/** Source tag of the "due minus drawn" settlement rows (migration 0160). Legacy rows keep "revision". */
+export const ARREARS_DMD_SOURCE = "revision_dmd";
+const REVISION_SOURCES = new Set(["revision", ARREARS_DMD_SOURCE]);
+
+type RetroSlip = { period: string; components: Array<{ code: string; type: string; amountMinor: number | string }> | null; pay_profile: string | null; suspended: boolean; created_us: string };
+type RetroPrior = { from_period: string; to_period: string; component_code: string; source: string; difference_minor: string | number; pension_base_minor: string | number | null; old_amount_minor: string | number; new_amount_minor: string | number };
+type RetroRevision = { new_basic_minor: string | number; eff_month: string };
+type RetroDaRow = { effective_from: string; rate_bps: number | string; created_us: string };
+
+/**
+ * T-STAT review SF3: every input the arrears step needs, read ONCE for all
+ * employees of a run (4 set-based, tenant-scoped reads on FORCE RLS tables)
+ * instead of per employee. generateRetroArrears then only writes.
+ */
+export interface RetroArrearsPrefetch {
+  runMonth: string;
+  revisions: Map<string, RetroRevision[]>;
+  daRows: RetroDaRow[];
+  /** First month of a DA rate that took effect in the 12 months before the run month, or null. */
+  daChangeFrom: string | null;
+  slips: Map<string, RetroSlip[]>;
+  prior: Map<string, RetroPrior[]>;
+}
+
+/** Per-run context for generateRetroArrears. */
 export interface RetroArrearsRunContext {
-  /** DA rate per period, memoised across the run. */
-  daRateCache?: Map<string, bigint>;
-  /** First month (YYYY-MM) of a DA rate that took effect in the 12 months before the run month, or null; undefined == look it up. */
-  daChangeFrom?: string | null;
+  /** The run prefetch (prefetchRetroArrearsTx); omitted == read for this employee alone. */
+  prefetch?: RetroArrearsPrefetch;
 }
 
 /** Slip pay lines that make up the monthly "pay" an arrear settles. */
@@ -426,57 +497,95 @@ export function addMonthsToPeriod(period: string, n: number): string {
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
 }
 
-/**
- * First month of a DA rate (dearness_allowance_rates) that took effect in the
- * 12 months before `runMonth` -- the start of the window a retro DA revision
- * can reach. One read per run (the table is per tenant).
- */
-export async function resolveDaChangeFrom(tx: typeof db, tenantId: string, runMonth: string): Promise<string | null> {
-  const rows = (await tx.execute(sql`
-    SELECT min(to_char(effective_from, 'YYYY-MM')) AS first
-    FROM payroll.dearness_allowance_rates
-    WHERE tenant_id = ${tenantId}::uuid
-      AND to_char(effective_from, 'YYYY-MM') >= ${addMonthsToPeriod(runMonth, -12)}
-      AND to_char(effective_from, 'YYYY-MM') < ${runMonth}
-  `)) as unknown as Array<{ first: string | null }>;
-  return rows[0]?.first ?? null;
+const pushTo = <T,>(m: Map<string, T[]>, k: string, v: T) => { const xs = m.get(k); if (xs) xs.push(v); else m.set(k, [v]); };
+const idArray = (ids: string[]) => sql`ARRAY[${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)}]`;
+
+export async function prefetchRetroArrearsTx(tx: typeof db, tenantId: string, employeeIds: string[], runMonth: string): Promise<RetroArrearsPrefetch> {
+  const pre: RetroArrearsPrefetch = { runMonth, revisions: new Map(), daRows: [], daChangeFrom: null, slips: new Map(), prior: new Map() };
+  if (employeeIds.length === 0) return pre;
+  const revs = (await tx.execute(sql`
+    SELECT employee_id::text AS employee_id, new_basic_minor, to_char(effective_date, 'YYYY-MM') AS eff_month
+    FROM payroll.payroll_salary_revisions
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${idArray(employeeIds)})
+      AND status = 'approved' AND to_char(effective_date, 'YYYY-MM') < ${runMonth}
+    ORDER BY employee_id, effective_date ASC, created_at ASC
+  `)) as unknown as Array<RetroRevision & { employee_id: string }>;
+  for (const r of revs) pushTo(pre.revisions, r.employee_id, r);
+  pre.daRows = (await tx.execute(sql`
+    SELECT effective_from::text AS effective_from, rate_bps, (extract(epoch FROM created_at) * 1000000)::bigint::text AS created_us
+    FROM payroll.dearness_allowance_rates WHERE tenant_id = ${tenantId}::uuid ORDER BY effective_from ASC
+  `)) as unknown as RetroDaRow[];
+  const lookback = addMonthsToPeriod(runMonth, -12);
+  pre.daChangeFrom = pre.daRows.map((d) => d.effective_from.slice(0, 7)).find((m) => m >= lookback && m < runMonth) ?? null;
+  const starts = [...[...pre.revisions.values()].map((rs) => rs[0]!.eff_month), ...(pre.daChangeFrom ? [pre.daChangeFrom] : [])].sort();
+  const windowStart = starts[0];
+  if (!windowStart || windowStart >= runMonth) return pre;
+  const slips = (await tx.execute(sql`
+    SELECT s.employee_id::text AS employee_id, r.month::text AS period, s.components, s.pay_profile,
+           (extract(epoch FROM s.created_at) * 1000000)::bigint::text AS created_us,
+           EXISTS (SELECT 1 FROM payroll.payroll_run_suspensions x
+                   WHERE x.tenant_id = s.tenant_id AND x.run_id = s.run_id AND x.employee_id = s.employee_id) AS suspended
+    FROM payroll.payroll_slips s
+    JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
+    WHERE s.tenant_id = ${tenantId}::uuid AND s.employee_id = ANY(${idArray(employeeIds)})
+      AND r.run_type = 'regular' AND r.status IN ('approved', 'disbursed')
+      AND r.month >= ${windowStart} AND r.month < ${runMonth}
+  `)) as unknown as Array<RetroSlip & { employee_id: string }>;
+  for (const sl of slips) pushTo(pre.slips, sl.employee_id, sl);
+  const prior = (await tx.execute(sql`
+    SELECT employee_id::text AS employee_id, from_period, to_period, component_code, source, difference_minor, pension_base_minor,
+           old_amount_minor, new_amount_minor
+    FROM payroll.payroll_arrears
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${idArray(employeeIds)})
+      AND status <> 'rejected' AND from_period < ${runMonth} AND to_period >= ${windowStart}
+  `)) as unknown as Array<RetroPrior & { employee_id: string }>;
+  for (const a of prior) pushTo(pre.prior, a.employee_id, a);
+  return pre;
+}
+
+/** Share of a month the drawn slip actually paid: (Basic + DA + allowance - LOP) / (Basic + DA + allowance), as num/den. */
+function payableShare(lopBase: bigint, lop: bigint): { num: bigint; den: bigint } {
+  if (lopBase <= 0n) return lop > 0n ? { num: 0n, den: 1n } : { num: 1n, den: 1n };
+  const paid = lopBase - lop;
+  return { num: paid > 0n ? paid : 0n, den: lopBase };
 }
 
 /**
  * Retro arrears, T-STAT F03 -- "due minus drawn" (ERP-head decision under the
- * owner delegated authority, FIX-QUEUE 2026-11-03). For every month from the
- * first back-dated salary revision (or the first DA rate that took effect in
- * the last 12 months, whichever is earlier) up to the month before the run:
+ * owner delegated authority, FIX-QUEUE 2026-11-03), with the review B1 fix:
  *
- *   due   = the pay due for that month NOW: Basic of the LATEST approved
- *           revision in force for the month (or the Basic actually drawn
- *           when no revision applies) + DA at the rate now recorded for the
- *           month + HRA (slab tier from that DA rate, floor in force then)
+ *   arrear(month) = (due for the full month - drawn earning lines)
+ *                   x payable share of the month - arrears already raised
+ *
+ *   due   = Basic of the LATEST approved revision in force for the month (or
+ *           the Basic drawn when none applies) + DA at the rate now recorded
+ *           for the month + HRA (tier from that rate, floor in force then)
  *           + the Option A deputation allowance;
- *   drawn = the BASIC / DA / HRA / DEP_ALLOW lines of the regular slips of
- *           APPROVED or DISBURSED runs for the month, plus every arrear
- *           already raised for it (revision rows, and single-month manual
- *           BASIC / DA / HRA / ARREAR rows), paid or not;
- *   arrear = due - drawn.
+ *   drawn = BASIC / DA / HRA / DEP_ALLOW lines of the regular slips of
+ *           APPROVED or DISBURSED runs for the month;
+ *   payable share = 1 - LOP / (Basic + DA + DEP_ALLOW) of those slips -- the
+ *           run recovers unpaid days (EOL, LOP, days before joining or after
+ *           leaving) as that LOP deduction, so a full EOL month owes nothing
+ *           and a month joined on the 20th owes 12/31 of the difference.
  *
- * So a month already drawn at the revised rate produces nothing (the
- * UATG1-34285 December / January double payment cannot recur), a superseding
- * revision prices the month at the latest rate, and a second DA revision pays
- * only the increment. A month with NO drawn slip is never presumed drawn at
- * the old rate (that presumption is what paid December twice): it is left to
- * its own regular run and reported. A negative difference is recovered only
- * when it is a genuine back-dated pay decrease against the slip itself (H1:
- * ARREAR_RECOVERY, floor-protected); an overdrawn month caused by arrears
- * already paid is reported, not reversed.
+ * Months considered: from the first back-dated revision, and from the first
+ * DA rate that took effect in the last 12 months. A month is re-priced only
+ * when something is being settled for it: a salary revision applies to it,
+ * the DA rate in force for it was recorded AFTER its slip was computed (a
+ * retrospective DA order), or arrears were already raised for it (so an
+ * overpayment is seen). A month already priced with the rate in force is
+ * never re-priced (no blanket 12-month window).
  *
- * Each row records settled_in_period = runMonth and the Basic + DA part
- * (pension_base_minor) the NPS 10% / 14% fall on (M-NPS). Idempotent: a
- * re-processed run sees its own rows as drawn and adds nothing, and the
- * unique partial index ux_payroll_arrears_revision_settled (0160) is the
- * belt-and-suspenders guard. Historical slips and arrears are never changed.
+ * A month with NO drawn slip is never presumed drawn at the old rate (that
+ * presumption paid UATG1-34285 December twice): it is left to its own
+ * regular run and reported. A negative difference is recovered only when it
+ * is a genuine back-dated pay decrease against the slip itself (H1); a month
+ * overdrawn by arrears already paid is reported, not reversed.
  *
- * DA for each month is that month OWN rate (historical-DA fix, HIGH,
- * payroll-calc audit), memoised in the run context.
+ * Rows: source revision_dmd, settled_in_period = runMonth, pension_base_minor
+ * = the Basic + DA part (M-NPS), deduped on ux_payroll_arrears_dmd_settled.
+ * Idempotent: a re-processed run sees its own rows as drawn. Historical slips
+ * and arrears are never changed. With the run prefetch this issues no reads.
  */
 export async function generateRetroArrears(
   tx: typeof db,
@@ -501,100 +610,82 @@ export async function generateRetroArrears(
   runContext: RetroArrearsRunContext = {},
 ): Promise<RetroArrearsOutcome> {
   const outcome: RetroArrearsOutcome = { notDrawnPeriods: [], overdrawn: [], skippedPeriods: [] };
+  const pre = runContext.prefetch ?? await prefetchRetroArrearsTx(tx, tenantId, [employeeId], runMonth);
   const hraFloorForPeriod = profileOpts?.hraFloorForPeriod;
   const depForPeriod = profileOpts?.deputationAllowanceForPeriod;
-  const revs = (await tx.execute(sql`
-    SELECT new_basic_minor, to_char(effective_date, 'YYYY-MM') AS eff_month
-    FROM payroll.payroll_salary_revisions
-    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
-      AND status = 'approved'
-      AND to_char(effective_date, 'YYYY-MM') < ${runMonth}
-    ORDER BY effective_date ASC, created_at ASC
-  `)) as unknown as Array<{ new_basic_minor: string | number; eff_month: string }>;
-  // A DA revision only moves the pay due when the central DA rate is used.
-  const daChangeFrom = profileOpts?.daRateBpsOverride != null
-    ? null
-    : runContext.daChangeFrom !== undefined ? runContext.daChangeFrom : await resolveDaChangeFrom(tx, tenantId, runMonth);
+  const override = profileOpts?.daRateBpsOverride;
+  const revs = pre.revisions.get(employeeId) ?? [];
+  // A DA order only moves the pay due when the central DA rate is used.
+  const daChangeFrom = override != null ? null : pre.daChangeFrom;
   const starts = [revs[0]?.eff_month, daChangeFrom ?? undefined].filter((x): x is string => !!x).sort();
   const windowStart = starts[0];
   if (!windowStart || windowStart >= runMonth) return outcome;
 
-  const daRateCache = runContext.daRateCache ?? new Map<string, bigint>();
-  const daRateForPeriod = async (period: string): Promise<bigint> => {
-    if (profileOpts?.daRateBpsOverride != null) return profileOpts.daRateBpsOverride;
-    let rate = daRateCache.get(period);
-    if (rate === undefined) {
-      rate = await resolveDaRateBps(tx, tenantId, period);
-      daRateCache.set(period, rate);
-    }
-    return rate;
+  const daRowFor = (period: string): RetroDaRow | undefined => {
+    let row: RetroDaRow | undefined;
+    for (const d of pre.daRows) if (d.effective_from <= `${period}-01`) row = d;
+    return row;
   };
-
-  // Pay actually drawn: regular slips of approved / disbursed runs in the window.
-  const slips = (await tx.execute(sql`
-    SELECT r.month::text AS period, s.components, s.pay_profile,
-           EXISTS (SELECT 1 FROM payroll.payroll_run_suspensions x
-                   WHERE x.tenant_id = s.tenant_id AND x.run_id = s.run_id AND x.employee_id = s.employee_id) AS suspended
-    FROM payroll.payroll_slips s
-    JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
-    WHERE s.tenant_id = ${tenantId}::uuid AND s.employee_id = ${employeeId}::uuid
-      AND r.run_type = 'regular' AND r.status IN ('approved', 'disbursed')
-      AND r.month >= ${windowStart} AND r.month < ${runMonth}
-  `)) as unknown as Array<{ period: string; components: Array<{ code: string; type: string; amountMinor: number | string }> | null; pay_profile: string | null; suspended: boolean }>;
-  const slipsByPeriod = new Map<string, typeof slips>();
-  for (const sl of slips) slipsByPeriod.set(sl.period, [...(slipsByPeriod.get(sl.period) ?? []), sl]);
-
-  // Arrears already raised for months in the window (paid or not, any run).
-  const prior = (await tx.execute(sql`
-    SELECT from_period, to_period, component_code, source, difference_minor, pension_base_minor,
-           old_amount_minor, new_amount_minor
-    FROM payroll.payroll_arrears
-    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
-      AND status <> 'rejected'
-      AND from_period < ${runMonth} AND to_period >= ${windowStart}
-  `)) as unknown as Array<{ from_period: string; to_period: string; component_code: string; source: string; difference_minor: string | number; pension_base_minor: string | number | null; old_amount_minor: string | number; new_amount_minor: string | number }>;
+  const daRateFor = async (period: string): Promise<bigint> => {
+    if (override != null) return override;
+    const row = daRowFor(period);
+    return row ? BigInt(row.rate_bps) : resolveDaRateBps(tx, tenantId, period); // no row: the same DA_RATE_NOT_CONFIGURED failure
+  };
+  const slipsOf = pre.slips.get(employeeId) ?? [];
+  const prior = pre.prior.get(employeeId) ?? [];
 
   for (let period = windowStart; period < runMonth; period = addMonthsToPeriod(period, 1)) {
-    const drawnSlips = slipsByPeriod.get(period) ?? [];
-    let rev: (typeof revs)[number] | undefined;
+    const drawnSlips = slipsOf.filter((sl) => sl.period === period);
+    let rev: RetroRevision | undefined;
     for (const r of revs) if (r.eff_month <= period) rev = r; // latest in force (ordered ASC)
     if (drawnSlips.length === 0) {
       // Nothing drawn: nothing to arrear. Reported only when a salary revision covers the month.
       if (rev) outcome.notDrawnPeriods.push(period);
       continue;
     }
-    const manualSpan = prior.some((a) => a.source !== "revision" && a.from_period !== a.to_period
+    const priorRows = prior.filter((a) => a.from_period === period && a.to_period === period);
+    const daRow = override != null ? undefined : daRowFor(period);
+    const slipComputedUs = drawnSlips.reduce((mx, sl) => (BigInt(sl.created_us) > mx ? BigInt(sl.created_us) : mx), 0n);
+    const retroDa = daRow != null && BigInt(daRow.created_us) > slipComputedUs;
+    // Only months where something is being settled are re-priced.
+    if (!rev && !retroDa && priorRows.length === 0) continue;
+    const manualSpan = prior.some((a) => !REVISION_SOURCES.has(a.source) && a.from_period !== a.to_period
       && a.from_period <= period && a.to_period >= period && (ARREAR_PAY_CODES.has(a.component_code) || a.component_code === "ARREAR"));
     if (manualSpan || drawnSlips.some((sl) => sl.suspended || (sl.pay_profile != null && !SCALE_PAY_PROFILES.has(sl.pay_profile)))) {
       outcome.skippedPeriods.push(period);
       continue;
     }
 
-    let drawnBasic = 0n, drawnDa = 0n, drawnPay = 0n;
+    let drawnBasic = 0n, drawnDa = 0n, drawnDep = 0n, drawnPay = 0n, lop = 0n;
     for (const sl of drawnSlips) {
       for (const c of sl.components ?? []) {
-        if (c.type !== "earning") continue;
         const amt = BigInt(c.amountMinor);
+        if (c.type === "deduction") { if (c.code === "LOP") lop += amt; continue; }
+        if (c.type !== "earning") continue;
         if (c.code === "BASIC") drawnBasic += amt;
         if (c.code === "DA") drawnDa += amt;
+        if (c.code === "DEP_ALLOW") drawnDep += amt;
         if (ARREAR_PAY_CODES.has(c.code) && (c.code !== "DEP_ALLOW" || depForPeriod)) drawnPay += amt;
       }
     }
 
     const dueBasic = rev ? BigInt(rev.new_basic_minor) : drawnBasic;
-    const rate = await daRateForPeriod(period);
+    const rate = await daRateFor(period);
     const dueDa = roundRupee((dueBasic * rate) / 10000n);
     const dueHra = govtHraMinor(dueBasic, cityClass, rate, hraFloorForPeriod ? hraFloorForPeriod(period) : 0n);
     const dueDep = depForPeriod ? depForPeriod(period, dueBasic) : 0n;
     const due = dueBasic + dueDa + dueHra + dueDep;
 
+    // B1: only the payable share of the month is owed (LOP / EOL / joining / leaving days).
+    const share = payableShare(drawnBasic + drawnDa + drawnDep, lop);
+    const scale = (x: bigint): bigint => roundRupee((x * share.num) / share.den);
+
     // Arrears already raised for this month count as drawn.
     let priorNet = 0n, priorPension = 0n;
-    for (const a of prior) {
-      if (a.from_period !== period || a.to_period !== period) continue;
+    for (const a of priorRows) {
       const sign = a.component_code === "ARREAR_RECOVERY" ? -1n : 1n;
       const diff = BigInt(a.difference_minor);
-      if (a.source === "revision") {
+      if (REVISION_SOURCES.has(a.source)) {
         priorNet += sign * diff;
         if (a.pension_base_minor != null) priorPension += sign * BigInt(a.pension_base_minor);
         else {
@@ -608,8 +699,8 @@ export async function generateRetroArrears(
       }
     }
 
-    const diff = due - drawnPay - priorNet;
-    const pensionDiff = dueBasic + dueDa - drawnBasic - drawnDa - priorPension;
+    const diff = scale(due - drawnPay) - priorNet;
+    const pensionDiff = scale(dueBasic + dueDa - drawnBasic - drawnDa) - priorPension;
     if (diff === 0n) continue;
     if (diff < 0n) {
       // H1: only a genuine back-dated pay decrease against the slip itself is recovered.
@@ -634,8 +725,8 @@ export async function generateRetroArrears(
         (${tenantId}::uuid, ${employeeId}::uuid, ${componentCode}, ${period}, ${period},
          ${(drawnPay + priorNet).toString()}::bigint, ${due.toString()}::bigint, ${storedDiff.toString()}::bigint,
          ${storedPension.toString()}::bigint, ${runMonth},
-         ${reason}, 'approved', 'revision', ${actorId}::uuid)
-      ON CONFLICT (tenant_id, employee_id, component_code, from_period, settled_in_period) WHERE source = 'revision'
+         ${reason}, 'approved', ${ARREARS_DMD_SOURCE}, ${actorId}::uuid)
+      ON CONFLICT (tenant_id, employee_id, component_code, from_period, settled_in_period) WHERE source = 'revision_dmd'
       DO NOTHING
     `);
   }
@@ -659,6 +750,8 @@ export async function collectAdHocEarnings(
   arrearIds: string[]; bonusIds: string[]; reimbIds: string[];
   /** T-STAT M-NPS: the Basic + DA part of the collected arrears (recoveries negative), for the NPS base. */
   arrearPensionBaseMinor: bigint;
+  /** Legacy revision arrears whose month has no DA rate configured: their DA part is NOT in the NPS base (reported on the run). */
+  pensionBaseDaMissingPeriods: string[];
 }> {
   const components: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }> = [];
   // C1: lock the candidate rows FOR UPDATE so a concurrent (regular vs
@@ -687,14 +780,17 @@ export async function collectAdHocEarnings(
   //    Basic + DA part is the basic delta plus DA on it at that month rate;
   //  - a manual BASIC or DA arrear is wholly Basic + DA; HRA / other heads are not.
   let arrearPensionBaseMinor = 0n;
+  const pensionBaseDaMissingPeriods: string[] = [];
   for (const a of arrears) {
     const amt = BigInt(a.difference_minor);
     const sign = a.component_code === "ARREAR_RECOVERY" ? -1n : 1n;
     if (a.pension_base_minor != null) {
       arrearPensionBaseMinor += sign * BigInt(a.pension_base_minor);
-    } else if (a.source === "revision") {
+    } else if (REVISION_SOURCES.has(a.source)) {
       const basicDelta = BigInt(a.new_amount_minor) - BigInt(a.old_amount_minor);
-      const rate = await resolveDaRateBps(tx, tenantId, a.from_period).catch(() => 0n);
+      // Review SF3: no silent 0n -- a month with no DA rate is reported on the run.
+      let rate = 0n;
+      try { rate = await resolveDaRateBps(tx, tenantId, a.from_period); } catch { pensionBaseDaMissingPeriods.push(a.from_period); }
       arrearPensionBaseMinor += basicDelta + roundRupee((basicDelta * rate) / 10000n);
     } else if (a.component_code === "BASIC" || a.component_code === "DA") {
       arrearPensionBaseMinor += amt;
@@ -735,6 +831,7 @@ export async function collectAdHocEarnings(
     bonusIds: bonus.map((b) => b.id),
     reimbIds: reimb.map((r) => r.id),
     arrearPensionBaseMinor,
+    pensionBaseDaMissingPeriods,
   };
 }
 
@@ -912,7 +1009,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   }, { visibilityTimeout: 300 });
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[] };
+    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[] };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);
@@ -932,11 +1029,32 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // enough concurrent runApprove calls are in-flight (pool.max) — see
       // .claude/skills/16-production-readiness-audit.md section 1.
       const slips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
-      // T-STAT M-ZERO: re-assert, under the run lock, the guard approveRun applies synchronously.
-      const zeroBasic = unexcludedZeroBasicSlips(zeroBasicSlipsOf(slips), p.zeroBasicExclusions ?? []);
+      // T-STAT M-ZERO / review SF4-5: re-assert, under the run lock, the guards approveRun applies synchronously.
+      const zeroSlips = zeroBasicSlipsOf(slips);
+      const exclusions = p.zeroBasicExclusions ?? [];
+      const invalid = invalidZeroBasicExclusions(zeroSlips, exclusions);
+      if (invalid.length > 0) throw new NonRetryableError(`${INVALID_ZERO_BASIC_EXCLUSION}: ${invalid.map((e) => e.employeeId).join(", ")}`);
+      const zeroBasic = unexcludedZeroBasicSlips(zeroSlips, exclusions);
       if (zeroBasic.length > 0) throw new NonRetryableError(`${ZERO_BASIC_SLIPS}: ${zeroBasicSlipsMessage(zeroBasic)}`);
-      const totalGross = slips.reduce((s, sl) => s + sl.grossMinor, 0n);
-      const totalNet = slips.reduce((s, sl) => s + sl.netPayMinor, 0n);
+      const unacked = slipsCarryArrears(slips)
+        ? unacknowledgedArrears(arrearsReviewOf(slips, await resolveArrearsReviewThresholdBps(tx as unknown as typeof db, p.tenantId)), p.arrearsAcknowledgements ?? [])
+        : [];
+      if (unacked.length > 0) throw new NonRetryableError(`${ARREARS_REVIEW_REQUIRED}: ${arrearsReviewMessage(unacked)}`);
+      // Review SF5: an excluded Rs 0-basic slip leaves the run -- status
+      // "excluded" (not in any bank file: PAYABLE_SLIP_STATUSES is an
+      // allow-list; never marked paid), one audit event per slip.
+      const excludedIds = new Set(exclusions.map((e) => e.employeeId));
+      const excludedSlips = zeroSlips.filter((z) => excludedIds.has(z.employeeId));
+      for (const sl of excludedSlips) {
+        await tx.execute(sql`UPDATE payroll.payroll_slips SET status = ${"excluded"}, updated_by = ${p.approvedBy}::uuid, updated_at = now()
+          WHERE id = ${sl.id}::uuid AND tenant_id = ${p.tenantId}::uuid`);
+        const ex = exclusions.find((e) => e.employeeId === sl.employeeId)!;
+        await audit(tx, msg, "exclude", "payroll_slip", sl.id, { runId: p.id, employeeId: sl.employeeId, employeeNo: sl.employeeNo, reason: ex.reason });
+      }
+      const excludedSlipIds = new Set(excludedSlips.map((sl) => sl.id));
+      const paySlips = slips.filter((sl) => !excludedSlipIds.has(sl.id));
+      const totalGross = paySlips.reduce((s, sl) => s + sl.grossMinor, 0n);
+      const totalNet = paySlips.reduce((s, sl) => s + sl.netPayMinor, 0n);
       const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRunTx(tx, p.id, p.tenantId);
       await repo.updateRun(tx, p.id, {
         status: "approved",
@@ -977,6 +1095,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const approveDetails = {
         ...(p.reason ? { reason: p.reason } : {}),
         ...(p.zeroBasicExclusions && p.zeroBasicExclusions.length > 0 ? { zeroBasicExclusions: p.zeroBasicExclusions } : {}),
+        ...(p.arrearsAcknowledgements && p.arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements: p.arrearsAcknowledgements } : {}),
       };
       await audit(tx, msg, "approve", "payroll_run", p.id, Object.keys(approveDetails).length > 0 ? approveDetails : undefined);
     });
@@ -1009,7 +1128,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // section 1.
       const slips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
       const slipNet = slips
-        .filter((s) => s.status !== "exception")
+        .filter((s) => s.status !== "exception" && s.status !== "excluded")
         .reduce((acc, s) => acc + s.netPayMinor, 0n);
       if (slipNet !== run.totalNetMinor) {
         throw new DomainError("DISBURSE_RECONCILIATION_FAILED", `run net ${run.totalNetMinor} != slip sum ${slipNet}`);
@@ -1955,13 +2074,14 @@ async function processPayrollRun(
     const tdsYtdByEmployee = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
     // T-STAT F02: salary actually paid earlier in the FY (s.192 annual estimate).
     const fyPaidByEmployee = await resolveFyPaidToDateTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
-    // T-STAT F03: retro-arrears context shared by every employee of the run.
-    const retroContext: RetroArrearsRunContext = {
-      daRateCache: new Map<string, bigint>(),
-      daChangeFrom: (p.runType ?? "regular") === "regular"
-        ? await resolveDaChangeFrom(tx as unknown as typeof db, p.tenantId, p.month)
-        : null,
-    };
+    // Review SF1: LOP recorded for months with no slip (kept out of the estimate).
+    const unrecordedLopByEmployee = await resolveUnrecordedLopDaysTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
+    const unrecordedEstimated: Array<{ employee: string; months: string[] }> = [];
+    const npsBaseDaMissing: Array<{ employee: string; periods: string[] }> = [];
+    // T-STAT F03 / review SF3: every arrears input read once for the whole run.
+    const retroContext: RetroArrearsRunContext = (p.runType ?? "regular") === "regular"
+      ? { prefetch: await prefetchRetroArrearsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, p.month) }
+      : {};
     const retroNotDrawn: Array<{ employee: string; periods: string[] }> = [];
     const retroOverdrawn: Array<{ employee: string; period: string; amountMinor: string }> = [];
     const retroSkipped: Array<{ employee: string; periods: string[] }> = [];
@@ -2170,6 +2290,7 @@ async function processPayrollRun(
       // EARNING components. Source rows are marked consumed after the slip is
       // persisted so they pay exactly once.
       const earned = await collectAdHocEarnings(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
+      if (earned.pensionBaseDaMissingPeriods.length > 0) npsBaseDaMissing.push({ employee: emp.employeeNo ?? emp.id, periods: earned.pensionBaseDaMissingPeriods });
       for (const c of earned.components) adHoc.push(c);
 
       // PERF-021 (Site A): fyStart/fyStr/monthIdxInFy now hoisted above the
@@ -2228,8 +2349,22 @@ async function processPayrollRun(
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
         fyPaidToDate: (() => {
-          const paid = fyPaidByEmployee.get(emp.id) ?? { grossMinor: 0n, months: 0 };
-          return { ...paid, unrecordedMonths: unrecordedFyMonths(fyStart, p.month, emp.dateOfJoining, paid.months) };
+          const paid = fyPaidByEmployee.get(emp.id) ?? { grossMinor: 0n, months: 0, recordedMonths: [] };
+          // F02 + review SF1: in-service months with no regular slip are estimated
+          // at the regular pay, net of LOP recorded for them; a declared
+          // previous-employer salary replaces the estimate (computeSlip).
+          const unrecorded = unrecordedFyMonthList(fyStart, p.month, emp.dateOfJoining, paid.recordedMonths);
+          const ledger = unrecordedLopByEmployee.get(emp.id);
+          let unrecordedLopMinor = 0n;
+          for (const m of unrecorded) {
+            const days = ledger?.get(m) ?? 0;
+            if (days > 0) {
+              const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
+              unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor, Math.min(days, dim), BigInt(dim));
+            }
+          }
+          if (unrecorded.length > 0 && !((decl?.prevEmployerSalaryMinor ?? 0n) > 0n)) unrecordedEstimated.push({ employee: emp.employeeNo ?? emp.id, months: unrecorded });
+          return { grossMinor: paid.grossMinor, months: paid.months, unrecordedMonths: unrecorded.length, unrecordedLopMinor };
         })(),
         arrearPensionBaseMinor: earned.arrearPensionBaseMinor,
         protectedNetFloorMinor,
@@ -2370,6 +2505,38 @@ async function processPayrollRun(
         employees: zeroBasicEmployees.slice(0, 200),
       });
     }
+    // Review SF4: the arrears this run pays, per employee, before approval.
+    const arrearsReview = slipsCarryArrears(allSlips)
+      ? arrearsReviewOf(allSlips, await resolveArrearsReviewThresholdBps(tx as unknown as typeof db, p.tenantId))
+      : { totalArrearsMinor: 0n, employees: [] };
+    if (arrearsReview.employees.length > 0) {
+      const needReview = arrearsReview.employees.filter((e) => e.requiresReview);
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "ARREARS_RAISED",
+        message: `${arrearsReview.employees.length} employee(s) are paid arrears totalling Rs ${(arrearsReview.totalArrearsMinor / 100n).toString()} in this run; ${needReview.length} above the review threshold need an acknowledgement to approve`,
+        count: arrearsReview.employees.length,
+        totalMinor: arrearsReview.totalArrearsMinor.toString(),
+        requiresReviewCount: needReview.length,
+        employees: arrearsReview.employees.slice(0, 200).map((e) => ({ employee: e.employeeNo, arrearsMinor: e.arrearsMinor.toString(), requiresReview: e.requiresReview })),
+      });
+    }
+    // Review SF1: months estimated at the regular pay because no slip exists here.
+    if (unrecordedEstimated.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "UNRECORDED_FY_MONTHS_ESTIMATED",
+        message: `${unrecordedEstimated.length} employee(s) have earlier FY months in service with no slip in this system; TDS estimates them at the current regular pay (net of LOP in the ledger). Declare previous-employer / previous-office salary for transfer-ins`,
+        count: unrecordedEstimated.length,
+        employees: unrecordedEstimated.slice(0, 50),
+      });
+    }
+    if (npsBaseDaMissing.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "ARREAR_NPS_BASE_DA_MISSING",
+        message: `${npsBaseDaMissing.length} employee(s) are paid legacy arrears for months with no DA rate configured; the DA part of those arrears is not in the NPS base`,
+        count: npsBaseDaMissing.length,
+        employees: npsBaseDaMissing.slice(0, 50),
+      });
+    }
     // T-STAT F03: arrears the run did NOT raise, for payroll to review.
     if (retroOverdrawn.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
@@ -2425,6 +2592,8 @@ type PensionerRow = {
   id: string; ppo_no: string; full_name: string; date_of_birth: string;
   basic_pension_minor: string | number; commuted_pension_minor: string | number;
   commutation_date: string | null; medical_allowance_minor: string | number; tax_regime: string;
+  /** Migration 0160: when pension began (s.192 estimate starts there); null == the whole FY. */
+  pension_commencement_date: string | null;
 };
 
 /**
@@ -2453,7 +2622,7 @@ export async function resolvePensioners(tx: typeof db, tenantId: string, ddoCode
   const rows = (await tx.execute(sql`
     SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
            basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
-           medical_allowance_minor, tax_regime
+           medical_allowance_minor, tax_regime, pension_commencement_date::text AS pension_commencement_date
     FROM payroll.payroll_pensioners
     WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
       AND (${ddoCode}::varchar IS NULL OR ddo_code = ${ddoCode})
@@ -2510,6 +2679,8 @@ async function processPensionRun(
     // PERF-021 batched-pre-fetch pattern processPayrollRun already uses.
     const pensionerIds = pensioners.filter((pen) => !alreadyComputed.has(pen.id)).map((pen) => pen.id);
     const tdsYtdByPensioner = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, pensionerIds, fyStart, p.month);
+    // T-STAT review SF2: pension actually paid this FY (pensioner runs), for the s.192 estimate.
+    const fyPaidByPensioner = await resolveFyPaidToDateTx(tx as unknown as typeof db, p.tenantId, pensionerIds, fyStart, p.month);
 
     for (const pen of pensioners) {
       if (alreadyComputed.has(pen.id)) continue;
@@ -2527,7 +2698,18 @@ async function processPensionRun(
         dateOfBirth: pen.date_of_birth,
         month: p.month,
       });
-      const annualGross = preview.grossMinor * 12n;
+      // T-STAT review SF2 (s.192, as for salary): pension actually paid this FY +
+      // the current pension for in-pension months with no slip here (from the
+      // later of April and pension_commencement_date; none recorded == the
+      // whole FY, the previous x12) + the months remaining incl. this one.
+      // A pensioner who retired mid-year is no longer projected over 12 months.
+      const paid = fyPaidByPensioner.get(pen.id) ?? { grossMinor: 0n, months: 0, recordedMonths: [] };
+      const annualGross = pensionAnnualGrossEstimateMinor({
+        currentGrossMinor: preview.grossMinor,
+        fyPaid: paid,
+        unrecordedMonths: unrecordedFyMonthList(fyStart, p.month, pen.pension_commencement_date, paid.recordedMonths).length,
+        monthsRemaining,
+      });
       // DOM-008: was a third independently hardcoded std-deduction literal;
       // now sourced from the same payroll.tax_slab_config as the salary path
       // (domain.ts computeSlip) and fnf/domain.ts.

@@ -5596,7 +5596,27 @@
     "statAwaitingDisbursement": "Awaiting Disbursement",
     "statFailed": "Failed",
     "statEmployeesPaidPeriod": "Employees Paid, regular runs ({period})",
-    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})"
+    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})",
+    "runApproval": {
+      "summaryTitle": "Arrears in this run",
+      "summaryTotal": "{count, plural, one {# employee is} other {# employees are}} paid arrears totalling {amount}.",
+      "summaryNeedReview": "{count, plural, one {# needs} other {# need}} an acknowledgement before approval (arrears above the review threshold).",
+      "zeroBasicSummary": "{count, plural, one {# slip has} other {# slips have}} no basic pay (HRMS basic missing) and must be fixed or excluded before approval.",
+      "colEmployee": "Employee",
+      "colArrears": "Arrears",
+      "colRegularGross": "Regular monthly gross",
+      "colReview": "Review",
+      "needsReview": "Needs acknowledgement",
+      "withinThreshold": "Within threshold",
+      "reviewNeededIntro": "This run needs a review before it can be approved.",
+      "zeroBasicHeading": "Slips with no basic pay",
+      "zeroBasicExclude": "Exclude {employee} from this run (not paid)",
+      "arrearsHeading": "Arrears above the review threshold",
+      "arrearsAcknowledge": "I have checked the arrears of {amount} for {employee}",
+      "reviewNoteLabel": "Review note (recorded with each exclusion and acknowledgement)",
+      "reviewIncomplete": "Exclude every slip with no basic pay, acknowledge every arrears line listed, and enter a review note of at least 10 characters.",
+      "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again."
+    }
   },
   "payrollRunsTable": {
     "colPeriod": "Period",

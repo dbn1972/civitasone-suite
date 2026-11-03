@@ -90,8 +90,12 @@ export interface SlipInput {
    *   fyPaidToDate + regular x unrecordedMonths + this month (less LOP)
    *   + regular salary x (monthsRemaining - 1) + this month one-offs once.
    * Omitted (a preview with no run context): regular salary x 12 + one-offs once.
+   * `unrecordedLopMinor`: loss of pay recorded (LOP ledger) for those
+   * unrecorded months, deducted from their estimate. When previous-employer
+   * salary is declared (a transfer-in: LPC / Form 12B) the declared figure
+   * REPLACES the unrecorded-month estimate (review SF1), so it is skipped.
    */
-  fyPaidToDate?: { grossMinor: bigint; months: number; unrecordedMonths?: number };
+  fyPaidToDate?: { grossMinor: bigint; months: number; unrecordedMonths?: number; unrecordedLopMinor?: bigint };
   /**
    * T-STAT M-NPS (F04): the Basic + DA part of the arrears paid on this slip
    * (a recovery counts negative). Added to the NPS base only: NPS employee 10%
@@ -526,9 +530,11 @@ export function computeSlip(input: SlipInput): SlipResult {
   // one-offs are still counted once.
   const projected = fyPaidToDate != null && monthsRemaining != null;
   const remaining = BigInt(monthsRemaining != null && monthsRemaining > 1 ? monthsRemaining : 1);
-  const unrecorded = projected ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
+  const declaredPrevSalary = (declaration.prevEmployerSalaryMinor ?? 0n) > 0n;
+  const unrecorded = projected && !declaredPrevSalary ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
+  const unrecordedLop = unrecorded > 0n ? (fyPaidToDate?.unrecordedLopMinor ?? 0n) : 0n;
   const annualGross = projected
-    ? fyPaidToDate.grossMinor + regularGrossMinor * unrecorded
+    ? fyPaidToDate.grossMinor + regularGrossMinor * unrecorded - unrecordedLop
       + (regularGrossMinor - lopMinor) + regularGrossMinor * (remaining - 1n) + oneOffEarningsMinor
     : regularGrossMinor * 12n + oneOffEarningsMinor;
   const fyMonths = projected ? BigInt(fyPaidToDate.months) + unrecorded + remaining : 12n;
@@ -651,6 +657,104 @@ export function unrecordedFyMonths(fyStartYear: number, runMonth: string, dateOf
   const fromIdx = Math.max(fyStartIdx, dojIdx);
   const inService = Math.max(0, idx(runMonth) - fromIdx);
   return Math.max(0, inService - recordedMonths);
+}
+
+/**
+ * T-STAT F02 / review SF1: the in-service FY months before `runMonth` (from the
+ * later of April and the joining / commencement month) that have no recorded
+ * regular slip, as YYYY-MM. Pure.
+ */
+export function unrecordedFyMonthList(fyStartYear: number, runMonth: string, startDate: string | null | undefined, recordedMonths: readonly string[]): string[] {
+  const idx = (period: string) => { const [y, m] = period.split("-").map(Number) as [number, number]; return y * 12 + (m - 1); };
+  const fyStartIdx = fyStartYear * 12 + 3;
+  const startIdx = startDate && /^\d{4}-\d{2}/.test(startDate) ? idx(startDate.slice(0, 7)) : fyStartIdx;
+  const recorded = new Set(recordedMonths);
+  const out: string[] = [];
+  for (let i = Math.max(fyStartIdx, startIdx); i < idx(runMonth); i++) {
+    const period = `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
+    if (!recorded.has(period)) out.push(period);
+  }
+  return out;
+}
+
+/**
+ * T-STAT review SF2: the s.192 annual estimate of a pensioner gross -- pension
+ * actually paid this FY + the current month pension for the unrecorded
+ * in-pension months and for the months remaining (incl. this one). Pure.
+ */
+export function pensionAnnualGrossEstimateMinor(p: { currentGrossMinor: bigint; fyPaid: { grossMinor: bigint; months: number }; unrecordedMonths: number; monthsRemaining: number }): bigint {
+  const remaining = BigInt(Math.max(1, p.monthsRemaining));
+  return p.fyPaid.grossMinor + p.currentGrossMinor * (BigInt(Math.max(0, p.unrecordedMonths)) + remaining);
+}
+
+/** Earning codes paid once (not regular monthly pay). */
+const ONE_OFF_EARNING_CODES = new Set(["ARREAR", "BONUS", "REIMB"]);
+
+export interface ArrearsReviewEmployee {
+  employeeId: string; employeeNo: string; arrearsMinor: bigint; regularGrossMinor: bigint; requiresReview: boolean;
+}
+
+/**
+ * T-STAT review SF4: the arrears paid on a run, per employee, and which need an
+ * explicit acknowledgement on approval: arrears above `thresholdBps` of the
+ * regular monthly gross (gross less one-off earnings; 10000 = one month). Pure.
+ */
+export function arrearsReviewOf(
+  slips: Array<{ employeeId: string; employeeNo: string; grossMinor: bigint; components?: Array<{ code: string; type: string; amountMinor: number | string | bigint }> | null }>,
+  thresholdBps: number,
+): { totalArrearsMinor: bigint; employees: ArrearsReviewEmployee[] } {
+  const employees: ArrearsReviewEmployee[] = [];
+  let total = 0n;
+  for (const sl of slips) {
+    let arrears = 0n, oneOff = 0n;
+    for (const c of sl.components ?? []) {
+      if (c.type !== "earning") continue;
+      const amt = BigInt(c.amountMinor);
+      if (c.code === "ARREAR") arrears += amt;
+      if (ONE_OFF_EARNING_CODES.has(c.code)) oneOff += amt;
+    }
+    if (arrears <= 0n) continue;
+    const regular = sl.grossMinor - oneOff;
+    total += arrears;
+    employees.push({
+      employeeId: sl.employeeId, employeeNo: sl.employeeNo, arrearsMinor: arrears, regularGrossMinor: regular,
+      requiresReview: arrears * 10000n > (regular > 0n ? regular : 0n) * BigInt(thresholdBps),
+    });
+  }
+  employees.sort((a, b) => a.employeeNo.localeCompare(b.employeeNo));
+  return { totalArrearsMinor: total, employees };
+}
+
+/** True when any slip carries an ARREAR earning (the review threshold only needs reading then). Pure. */
+export function slipsCarryArrears(slips: Array<{ components?: Array<{ code: string; type: string }> | null }>): boolean {
+  return slips.some((sl) => (sl.components ?? []).some((c) => c.type === "earning" && c.code === "ARREAR"));
+}
+
+export const ARREARS_REVIEW_REQUIRED = "ARREARS_REVIEW_REQUIRED";
+export const INVALID_ZERO_BASIC_EXCLUSION = "INVALID_ZERO_BASIC_EXCLUSION";
+/** Default arrears review threshold: arrears above one month of regular gross. */
+export const DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS = 10000;
+
+/** An explicit, reasoned acknowledgement of one employee arrears on approval. */
+export interface ArrearsAcknowledgement { employeeId: string; reason: string }
+
+/** Arrears that need review and are not acknowledged (with a non-blank reason). Pure. */
+export function unacknowledgedArrears(review: { employees: ArrearsReviewEmployee[] }, acks: ArrearsAcknowledgement[] = []): ArrearsReviewEmployee[] {
+  const acked = new Set(acks.filter((a) => a.reason.trim().length > 0).map((a) => a.employeeId));
+  return review.employees.filter((e) => e.requiresReview && !acked.has(e.employeeId));
+}
+
+export function arrearsReviewMessage(employees: ArrearsReviewEmployee[]): string {
+  const sample = employees.slice(0, 20).map((e) => `${e.employeeNo} (Rs ${(e.arrearsMinor / 100n).toString()})`).join(", ");
+  const more = employees.length > 20 ? ", ..." : "";
+  return `${employees.length} employee(s) have arrears above the review threshold: ${sample}${more}. `
+    + "Check them and approve with arrearsAcknowledgements [{ employeeId, reason }] for each of them";
+}
+
+/** Exclusions that do not name a Rs 0-basic slip of the run. Pure. */
+export function invalidZeroBasicExclusions(zeroBasic: Array<{ employeeId: string }>, exclusions: ZeroBasicExclusion[] = []): ZeroBasicExclusion[] {
+  const zero = new Set(zeroBasic.map((z) => z.employeeId));
+  return exclusions.filter((e) => !zero.has(e.employeeId));
 }
 
 /** T-STAT M-ZERO: an explicit, reasoned exclusion of one Rs 0-basic slip from the approval guard. */

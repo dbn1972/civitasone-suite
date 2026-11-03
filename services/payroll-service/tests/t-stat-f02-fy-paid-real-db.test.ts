@@ -51,7 +51,7 @@ describe("T-STAT F02: salary actually paid earlier in the FY", () => {
     await slip(other, a, "2026-04", 12345, "disbursed"); // another tenant: invisible
 
     const m = await inTenant(tenant, (tx) => resolveFyPaidToDateTx(tx, tenant, [a, b], 2026, "2026-07"));
-    expect(m.get(a)).toEqual({ grossMinor: R(50000 + 50000 - 2000 + 7000), months: 2 });
+    expect(m.get(a)).toEqual({ grossMinor: R(50000 + 50000 - 2000 + 7000), months: 2, recordedMonths: ["2026-04", "2026-05"] });
     expect(m.get(b)).toBeUndefined();
   });
 });

@@ -225,7 +225,9 @@ describe("retro arrears honour the HRA floor", () => {
     const run = await settle(runId);
     expect(run.status).not.toBe("failed");
     const warn = await q(sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record' AND payload->>'resourceId' = ${runId} AND payload->>'action' = 'warning'`);
-    expect(warn.map((w) => (w.payload as { code: string }).code)).toEqual(["HRA_FLOOR_NOT_CONFIGURED"]);
+    // T-STAT review SF1: the run also notes (exact set, no other warning) that PP-G
+    // (in service all year, no earlier slip here) had Apr-Nov estimated for TDS.
+    expect(warn.map((w) => (w.payload as { code: string }).code).sort()).toEqual(["HRA_FLOOR_NOT_CONFIGURED", "UNRECORDED_FY_MONTHS_ESTIMATED"]);
     const mixedWarn = await q(sql`SELECT 1 FROM _outbox.messages WHERE topic = 'audit.event.record' AND payload->>'action' = 'warning' AND payload->>'code' = 'HRA_FLOOR_NOT_CONFIGURED' AND payload->>'resourceId' IN (SELECT id::text FROM payroll.payroll_runs WHERE run_no = 'PP-MIXED' AND tenant_id = ${TENANT}::uuid)`);
     expect(mixedWarn).toHaveLength(0);
   });
