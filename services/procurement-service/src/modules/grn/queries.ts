@@ -135,7 +135,11 @@ export async function listGrns(tenantId: string, limit: number, offset: number, 
   });
 }
 
-function mapGrnStatus(status: string): "draft" | "under_inspection" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {
+export function mapGrnStatus(status: string): "draft" | "under_inspection" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {
+  // UAT Phase 2 C5: `partial` is the stored (migration 0015 CHECK) name of a
+  // decided, partly-rejected three-way-match outcome (see grn/domain.ts
+  // canAmendGrn). It is terminal, so it must never read as `draft`.
+  if (status === "partial") return "partially_rejected";
   const valid = ["draft", "under_inspection", "received", "quality_check", "accepted", "partially_rejected", "rejected"] as const;
   return (valid as readonly string[]).includes(status) ? status as typeof valid[number] : "draft";
 }
@@ -146,7 +150,8 @@ export type GrnSummaryCounts = { total: number; accepted: number; awaitingInspec
  * GAP-PROCUREMENT-GRN-02: true status-count summary over every GRN matching the
  * filter, so the register's stat cards and pager stay correct when the store
  * holds more GRNs than one list page. awaitingInspection / rejected group the
- * same states the web labels use (draft..quality_check; rejected + partial).
+ * same states the web labels use (draft..quality_check; rejected + partially
+ * rejected, which is stored as `partial`).
  */
 export async function grnSummary(tenantId: string, filter: repo.GrnListFilter = {}): Promise<GrnSummaryCounts> {
   const rows = await repo.countGrnsByStatus(tenantId, filter);
@@ -155,6 +160,6 @@ export async function grnSummary(tenantId: string, filter: repo.GrnListFilter = 
     total: rows.reduce((a, r) => a + r.n, 0),
     accepted: n("accepted"),
     awaitingInspection: n(...repo.GRN_AWAITING_STATUSES),
-    rejected: n("rejected", "partially_rejected"),
+    rejected: n(...repo.GRN_REJECTED_STATUSES),
   };
 }

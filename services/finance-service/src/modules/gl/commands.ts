@@ -8,6 +8,17 @@ import type { PostJournalBody } from "./validators.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 /**
+ * UAT P2 (J6, D10): the voucher-level narration is stored on every line that has no narration of its own. A journal
+ * keeps its lines as jsonb (there is no journal-level narration column), and the ledger page, its search and the
+ * approval screen all read `lines[].narration`, so this keeps what the maker typed without a schema change.
+ */
+export function withVoucherNarration(body: Pick<PostJournalBody, "lines" | "narration">): PostJournalBody["lines"] {
+  const narration = body.narration;
+  if (!narration) return body.lines;
+  return body.lines.map((l) => (l.narration ? l : { ...l, narration }));
+}
+
+/**
  * DOM-024 R11 — maker-checker gate for MANUAL journal entries. This no
  * longer posts: it records the request as `pending_approval` (created_by =
  * this maker) via finance.gl.create — see gl/consumer.ts. A distinct
@@ -26,7 +37,7 @@ export async function createJournal(ctx: RequestContext, body: PostJournalBody):
   await queue.publish(COMMANDS.journalCreate, {
     messageId: id, type: COMMANDS.journalCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, lines: withVoucherNarration(body) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -49,6 +60,20 @@ export async function approveJournal(ctx: RequestContext, id: string): Promise<A
     messageId, type: COMMANDS.journalApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * UAT P2 (J6) — a checker rejects a pending manual journal (final). Deterministic messageId per (tenant, journal) so
+ * a double-click dedupes; the consumer enforces approver != maker and the pending-only guard.
+ */
+export async function rejectJournal(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  const messageId = idempotentId({ idempotencyKey: `journal-reject:${id}`, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.journalReject, {
+    messageId, type: COMMANDS.journalReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -19,6 +19,12 @@
  *       6000-7999  loans and advances       -> expense,   budgetable
  *       8000-8999  public account           -> liability, not budgetable
  *  3. Any other code (non-numeric, 9xxx, ...) is budgetable (expense).
+ *
+ * UAT P2 (A5): a head classified 'capital' whose code is 1xxx is the GL
+ * fixed-asset block of this chart (1200 Fixed Assets (Gross), 1250
+ * Accumulated Depreciation, finance-service gl/standard-heads.ts), not an
+ * LMMHA receipt head: it is an asset (not budgetable), not income. The chart
+ * of accounts showed both as Income.
  */
 export type HeadNature = "asset" | "liability" | "equity" | "income" | "expense";
 
@@ -32,6 +38,7 @@ export function classifyBudgetHead(head: { classification?: string | null; code?
   const m = /^(\d{4})(?!\d)/.exec((head.code ?? "").trim());
   if (m) {
     const major = Number(m[1]);
+    if (c === "capital" && major >= 1000 && major < 2000) return { type: "asset", budgetable: false };
     if (major < 2000) return { type: "income", budgetable: false };
     if (major < 8000) return { type: "expense", budgetable: true };
     if (major < 9000) return { type: "liability", budgetable: false };

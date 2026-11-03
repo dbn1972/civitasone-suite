@@ -136,8 +136,10 @@ describe("PayStructuresPage", () => {
     },
   );
 
-  it.each([["hr_admin"], ["finance_officer"]])(
-    "lets a %s session view structures (backend READER_ROLES) but hides the create-structure form (backend PAYROLL_ROLES is narrower)",
+  // UAT Phase 2 follow-up (security): pay structures are payroll + HR only; finance_officer
+  // is refused below (payroll-service PAY_DATA_ROLES).
+  it.each([["hr_admin"]])(
+    "lets a %s session view structures (backend PAY_DATA_ROLES) but hides the create-structure form (backend PAYROLL_ROLES is narrower)",
     async (role) => {
       getSessionRolesMock.mockReturnValue([role]);
       fetchJsonMock
@@ -155,6 +157,14 @@ describe("PayStructuresPage", () => {
       expect(screen.queryByText("Create Pay Structure")).not.toBeInTheDocument();
     },
   );
+
+  it("refuses a finance_officer session (pay structures are payroll + HR only)", async () => {
+    getSessionRolesMock.mockReturnValue(["finance_officer"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    const ui = await PayStructuresPage();
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+  });
 
   // GAP-PAYROLL-STRUCTURES-05: a components-endpoint outage used to blank
   // the stat tile to "—" with no other signal; the grid itself still

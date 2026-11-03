@@ -11,6 +11,7 @@
  */
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -20,7 +21,7 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as repo from "./repo.js";
 import { istYear, OPEN_STATUSES } from "./domain.js";
 
-const log = pino({ name: "hrms-grievance" });
+const log = pino({ name: "hrms-grievance", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

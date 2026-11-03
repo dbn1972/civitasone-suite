@@ -1110,6 +1110,10 @@ export async function getCurrentTenantOrgType(): Promise<LoaderResult<{ tenantId
     {
       revalidateSeconds: 30,
       telemetryKey: "tenant.org_type",
+      // UAT-P2-D1: tenant-service 404 NOT_FOUND = the office has no tenant
+      // record yet. Render the selector read-only (tenantId null) instead of
+      // a "couldn't load" error.
+      notFoundAsEmpty: true,
       mapResponse: (p) => {
         const view = (p && typeof p === "object" && "data" in p ? (p as { data?: unknown }).data : p) as
           | { tenantId?: unknown; id?: unknown; settings?: unknown }
@@ -5962,6 +5966,10 @@ export async function getTenantConfig(): Promise<LoaderResult<AdminTenantConfig 
   return fetchJson<unknown, AdminTenantConfig | null>("/api/v1/admin/tenant-config", null, {
     revalidateSeconds: 60,
     telemetryKey: "admin.tenant-config",
+    // UAT-P2-D1: admin-service answers 404 NOT_FOUND when no admin_tenants row
+    // exists for the caller's office -- that is "no configuration on record"
+    // (the page's EmptyState), not a load failure.
+    notFoundAsEmpty: true,
     mapResponse: (payload) => {
       const data = isRecord(payload) && isRecord((payload as Record<string, unknown>).data)
         ? ((payload as Record<string, unknown>).data as Record<string, unknown>)
@@ -8307,7 +8315,7 @@ export async function getAdminSettings(): Promise<LoaderResult<AdminSettings | n
 
 // ── GAP-ADMIN-INVOICES-06: invoice detail (GET /v1/billing/invoices/:id) ────
 export type AdminInvoiceItem = { id: string; description: string; kind: string; quantity: string; amountMinor: string };
-export type AdminInvoiceApproval = { id: string; action: string; status: string; amountMinor: string; decidedAt: string | null; reason: string | null };
+export type AdminInvoiceApproval = { id: string; action: string; status: string; amountMinor: string; decidedAt: string | null; reason: string | null; requestedBy?: string };
 export type AdminInvoiceDetail = {
   id: string;
   periodMonth: string;
@@ -8352,6 +8360,8 @@ export function mapInvoiceDetail(p: unknown): AdminInvoiceDetail | null {
     approvals: (Array.isArray(p.approvals) ? p.approvals : []).filter(isRecord).map((a) => ({
       id: String(a.id ?? ""), action: String(a.action ?? ""), status: String(a.status ?? ""),
       amountMinor: minorText(a.amountMinor), decidedAt: toText(a.decidedAt), reason: toText(a.reason),
+      // UAT P2 (J8): who asked, so the issue panel does not offer Approve on the viewer's own request.
+      ...(toText(a.requestedBy) ? { requestedBy: toText(a.requestedBy)! } : {}),
     })),
   };
 }

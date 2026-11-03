@@ -1,12 +1,13 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 import * as repo from "./repo.js";
-const log = pino({ name: "workflow-workbaskets-consumer" });
+const log = pino({ name: "workflow-workbaskets-consumer", serializers: SAFE_LOG_SERIALIZERS });
 export function registerWorkbasketConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.upsertWorkbasket, async (msg) => {
     const p = msg.payload as any;

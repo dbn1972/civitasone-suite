@@ -3,10 +3,11 @@
  * Fire-and-forget: never throws, never delays a response.
  */
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "./safe-error-log.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { sqlClient } from "./db.js";
 
-const log = pino({ name: "hrms.audit" });
+const log = pino({ name: "hrms.audit", serializers: SAFE_LOG_SERIALIZERS });
 
 interface AuditEntry {
   tenantId: string;

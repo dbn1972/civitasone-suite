@@ -12,6 +12,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { dirForLocale } from "../i18n/config";
+import { ThemeInit } from "./_components/ThemeInit";
 import "@civitasone/ui-kit/tokens.css";
 import "./globals.css";
 import "./civitas-ds.css";
@@ -28,9 +29,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const t = await getTranslations("common");
 
   return (
-    <html lang={locale} dir={dirForLocale(locale)}>
+    // suppressHydrationWarning: ThemeInit may add class="dark" to <html> on the client.
+    <html lang={locale} dir={dirForLocale(locale)} suppressHydrationWarning>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          {/* UAT-P2-D3 (A11Y-08): apply the saved theme on every page load. */}
+          <ThemeInit />
           {/* Skip-to-content link: first focusable element on the page (WCAG 2.4.1).
               Targets the <main id="main"> rendered by AppShell. */}
           <a href="#main" className="skip-link">

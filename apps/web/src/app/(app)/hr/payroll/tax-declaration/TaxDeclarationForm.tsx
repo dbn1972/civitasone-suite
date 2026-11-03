@@ -8,6 +8,7 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { AMOUNT_FIELD_MAP, parseTaxDeclarationResponse, type AmountField } from "@/lib/payroll/taxDeclaration";
 import { Button, ConfirmDialog, StatusPill, Field, Input } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 
 /**
  * Parse a clerk-entered rupees string into a non-negative paise integer.
@@ -81,6 +82,14 @@ export function TaxDeclarationForm() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  // UAT L1 (/hr/payroll/tax-declaration failed to load): payroll-service answers
+  // the self-service GET with 400 "employeeId is required" for payroll/HR staff
+  // (they file ON BEHALF of an employee) and 403 "no employee record is linked"
+  // for a user with no employee record. Both were shown as a failed load with a
+  // scary overwrite warning. Now: staff pick the employee they are filing for;
+  // a user with no record is told so and the form stays read-only.
+  const [mode, setMode] = useState<"self" | "staff" | "noRecord" | "notPermitted">("self");
+  const [onBehalfOf, setOnBehalfOf] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const formError = useFormError("tax declaration");
@@ -101,7 +110,7 @@ export function TaxDeclarationForm() {
   // is read-only for a verified/approved declaration or a closed window.
   const locked = hasExisting && !loadFailed && existingStatus !== null && LOCKED_STATUSES.includes(existingStatus);
   const windowClosed = windowInfo !== null && !windowInfo.open;
-  const readOnly = locked || windowClosed;
+  const readOnly = locked || windowClosed || mode === "noRecord" || mode === "notPermitted" || (mode === "staff" && !onBehalfOf);
 
   const regimeNewId = useId();
   const regimeOldId = useId();
@@ -120,7 +129,19 @@ export function TaxDeclarationForm() {
     async (signal?: AbortSignal) => {
       setLoadFailed(false);
       try {
-        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}`, { signal });
+        const who = onBehalfOf ? `&employeeId=${encodeURIComponent(onBehalfOf)}` : "";
+        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}${who}`, { signal });
+        if (!onBehalfOf && res.status === 400) {
+          setMode("staff");
+          return;
+        }
+        if (!onBehalfOf && res.status === 403) {
+          // UAT #2445 review item 7: only payroll-service's NO_EMPLOYEE_RECORD means "no
+          // record"; any other 403 is a permission refusal and is shown as one.
+          const code = await res.clone().json().then((j: { code?: unknown }) => j?.code, () => null);
+          setMode(code === "NO_EMPLOYEE_RECORD" ? "noRecord" : "notPermitted");
+          return;
+        }
         if (res.ok) {
           // GAP-PAYROLL-TAX-DECLARATION-03: the body is unwrapped (root or { data })
           // and validated. Anything that is not a declaration (or "none") is a FAILED
@@ -162,7 +183,7 @@ export function TaxDeclarationForm() {
         setLoading(false);
       }
     },
-    [fy],
+    [fy, onBehalfOf],
   );
 
   // Fetch existing declaration on load
@@ -242,6 +263,7 @@ export function TaxDeclarationForm() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(onBehalfOf ? { employeeId: onBehalfOf } : {}),
           fy,
           regime,
           // Amount names come from the one FIELD_MAP (all paise); the three optional
@@ -366,6 +388,41 @@ export function TaxDeclarationForm() {
 
   return (
     <>
+    {mode === "notPermitted" && (
+      <div role="status" className="card" style={{ marginBottom: 16 }}>
+        <div className="pad" style={{ fontSize: 13, lineHeight: 1.5 }}>{t("notPermitted")}</div>
+      </div>
+    )}
+    {mode === "noRecord" && (
+      <div role="status" className="card" style={{ marginBottom: 16 }}>
+        <div className="pad" style={{ fontSize: 13, lineHeight: 1.5 }}>{t("noEmployeeRecord")}</div>
+      </div>
+    )}
+    {mode === "staff" && (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="pad" style={{ display: "grid", gap: 8 }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>{t("staffFilingNote")}</p>
+          <Field id="tax-decl-employee" label={t("staffEmployeeLabel")} required>
+            <EmployeePicker
+              id="tax-decl-employee"
+              directory="payroll"
+              value={onBehalfOf}
+              clearable
+              onChange={(id) => {
+                // Never carry one employee's figures over to another's declaration.
+                for (const clear of [setSection80c, setSection80d, setOtherDeductions, setRentPaid, setPrevEmployerSalary, setOtherSourcesIncome, setPerquisites, setLandlordName, setLandlordPan]) clear("");
+                setRegime("new");
+                setLandlordPanMasked(null);
+                setOnBehalfOf(id);
+                setHasExisting(false);
+                setExistingStatus(null);
+                setMessage(null);
+              }}
+            />
+          </Field>
+        </div>
+      </div>
+    )}
     {loadFailed && (
       <div role="alert" style={{ background: "var(--badbg)", border: "1px solid var(--bad)",
         borderRadius: 6, padding: "10px 14px", marginBottom: 16,

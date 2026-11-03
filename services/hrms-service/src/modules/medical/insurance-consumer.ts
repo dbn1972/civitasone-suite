@@ -13,6 +13,7 @@
 import type { Queue } from "@civitasone/queue";
 import { and, eq, sql } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -22,7 +23,7 @@ import { medicalInsurance } from "./schema.js";
 import { MEDICAL_INSURANCE_REVEAL_OP, type InsuranceUpsertPayload } from "./insurance.js";
 import { emitAudit } from "../recruitment/audit-emit.js";
 
-const log = pino({ name: "hrms-medical-insurance-consumer" });
+const log = pino({ name: "hrms-medical-insurance-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerMedicalInsuranceConsumers(rawQueue: Queue): void {

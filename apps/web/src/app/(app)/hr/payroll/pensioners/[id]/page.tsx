@@ -4,7 +4,8 @@ import { PageHeader, Card, StatusPill, LoadErrorState } from "../../../../../_co
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_PAY_DATA_ROLES } from "@/lib/auth/payrollRunRoles";
 import { RevealValue } from "./RevealValue";
 import { PensionerStatusActions } from "./PensionerStatusActions";
 
@@ -34,8 +35,8 @@ export default async function PensionerDetailPage(props: { params: Promise<{ id:
   const params = await props.params;
   const t = await getTranslations("pensionerDetail");
   const roles = getSessionRoles();
-  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
-    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll/pensioners" backLabel={t("backLabel")} />;
+  if (!roles.some((r) => PAYROLL_PAY_DATA_ROLES.includes(r))) {
+    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_PAY_DATA_ROLES} backHref="/hr/payroll/pensioners" backLabel={t("backLabel")} />;
   }
   const canManage = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 

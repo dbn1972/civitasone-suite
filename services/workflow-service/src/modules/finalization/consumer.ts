@@ -1,6 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { and, eq } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -10,7 +11,7 @@ import { instances } from "../instances/schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-const log = pino({ name: "workflow-finalization-consumer" });
+const log = pino({ name: "workflow-finalization-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerFinalizationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.finalizeInstance, async (msg) => {

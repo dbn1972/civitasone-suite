@@ -572,6 +572,37 @@ export function humanizeStatus(status: string): string {
  *   formatEnumLabel("GOOD")          -> "Good"
  *   formatEnumLabel(null)            -> "—"
  */
+/**
+ * UAT-P2-D4 (UX GLB-08 / GLB-10): the shared display formatter for a plain
+ * string cell that has no explicit cellType/render. Raw ISO dates
+ * ("2026-11-03", "2026-11-03T04:15:00.000Z") are shown in the Indian
+ * convention ("03 Nov 2026", "03 Nov 2026, 09:45 am") and raw lower-case
+ * enum codes in a lifecycle column (status, state, stage, step, ...) go
+ * through humanizeStatus ("proc_head" -> "Proc Head", "approved" ->
+ * "Approved"). Anything else -- references, names, amounts, mixed case --
+ * is returned unchanged.
+ */
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+// Deliberately narrow (lifecycle columns only): type / category / role columns often
+// show a code as an audit fact, and module screens own their own labels for those.
+const ENUM_COLUMN = /(status|state|stage|step|phase|outcome|decision)$/i;
+const ENUM_CODE = /^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/;
+
+export function formatDisplayText(value: string, columnKey?: string): string {
+  const v = value.trim();
+  if (ISO_DATE_ONLY.test(v)) {
+    const out = formatIndianDate(v);
+    return out === "—" ? value : out;
+  }
+  if (ISO_DATE_TIME.test(v)) {
+    const out = formatIndianDateTime(v);
+    return out === "—" ? value : out;
+  }
+  if (columnKey && ENUM_COLUMN.test(columnKey) && ENUM_CODE.test(v)) return humanizeStatus(v);
+  return value;
+}
+
 export function formatEnumLabel(value: string | null | undefined): string {
   if (value === null || value === undefined) return "—";
   const words = value.trim().toLowerCase().split(/[\s_]+/).filter(Boolean);

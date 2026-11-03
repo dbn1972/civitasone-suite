@@ -15,7 +15,7 @@ export type JournalLine = {
   accountCode: string;
   debitMinor:  MinorAmount;
   creditMinor: MinorAmount;
-  narration?:  string;
+  narration?:  string | undefined;
 };
 
 export const financeJournals = glSchema.table("finance_journals", {
@@ -38,6 +38,9 @@ export const financeJournals = glSchema.table("finance_journals", {
   // journals (they never set budgetOverride).
   budgetOverride: boolean("budget_override").notNull().default(false),
   overrideReason: text("override_reason"),
+  // UAT P2 (J6, migration 0157): why a checker rejected a pending manual journal. Status 'rejected' is final;
+  // the row is read-only afterwards (gl.block_journal_mutation).
+  rejectionReason: text("rejection_reason"),
   // ERP org structure references (0028)
   legalEntityId:  uuid("legal_entity_id"),
   costCenterId:   uuid("cost_center_id"),

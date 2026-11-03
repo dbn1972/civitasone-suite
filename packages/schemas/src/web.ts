@@ -1449,6 +1449,9 @@ export const TenderSummarySchema = z.object({
     "awarded", "cancelled",
   ]),
   bidsReceived: z.number().default(0),
+  // UAT Phase 2 C4: the real number of bid rows (bidsReceived is a stale counter).
+  // Optional so an older procurement-service still parses.
+  bidCount: z.number().int().nonnegative().optional(),
 });
 export const TenderSummaryListSchema = z.array(TenderSummarySchema);
 

@@ -11,7 +11,8 @@ import { PayrollRunsTable } from "./PayrollRunsTable";
 import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_RUN_READER_ROLES } from "@/lib/auth/payrollRunRoles";
 
 export default async function PayrollPage() {
   const t = await getTranslations("payroll");
@@ -23,12 +24,13 @@ export default async function PayrollPage() {
   // hr/layout.tsx role, including employee/manager, used to reach this far
   // and land on a generic RefreshErrorState from the failed fetch. Gate up
   // front so the real reason shows instead.
-  const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  // UAT Phase 2 C8: run screens admit payroll staff + hr_admin only (payroll-service RUN_READER_ROLES).
+  const canView = roles.some((r) => PAYROLL_RUN_READER_ROLES.includes(r));
   if (!canView) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
+        <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_RUN_READER_ROLES} />
       </div>
     );
   }

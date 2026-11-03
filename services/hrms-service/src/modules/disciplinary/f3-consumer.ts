@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
@@ -10,7 +11,7 @@ import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsIccComplaints, hrmsIccHearings } from "./schema.js";
 import { hrmsDisciplinaryCases, hrmsSuspensions, type DisciplinaryCaseInsert } from "./schema.js";
 import { canTransition, type CaseAction, type CaseStatus } from "./state-machine.js";
-const log = pino({ name: "hrms-f3-disciplinary" });
+const log = pino({ name: "hrms-f3-disciplinary", serializers: SAFE_LOG_SERIALIZERS });
 
 const CASE_COLUMNS = getTableColumns(hrmsDisciplinaryCases) as Record<string, { columnType: string }>;
 

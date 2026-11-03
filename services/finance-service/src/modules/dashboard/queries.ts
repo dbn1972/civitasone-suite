@@ -1,7 +1,8 @@
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { financeSanctions, financeBudgets } from "../budget/schema.js";
+import { headNatureOf } from "../../shared/head-nature.js";
+import { financeSanctions, financeBudgets, financeHeads } from "../budget/schema.js";
 import { financePayments } from "../payments/schema.js";
 import { financeLedger } from "../gl/schema.js";
 
@@ -53,8 +54,25 @@ export function fyDateBounds(fy: string): { start: string; end: string } | null 
 }
 
 /**
+ * UAT P2 (A4, recon D02): every stored sanction status that is still awaiting a decision. sanctionCreate and
+ * submit-approval store 'pending_approval' (and a saved draft is 'draft'); counting only 'pending' made the card read
+ * 0 while two sanctions waited. Same buckets as the sanctions register (budget/domain.ts SANCTION_STATUS_TO_WEB).
+ */
+export const PENDING_SANCTION_STATUSES = ["draft", "pending", "pending_approval"] as const;
+
+/**
+ * UAT P2 (A4, recon D01): the heads whose postings are expenditure. The dashboard summed debits on EVERY head
+ * (cash, bank, asset and payable legs included), which overstated expenditure several times over. Pure, so the rule
+ * is unit-testable; the nature rule is the one the financial statements use (shared/head-nature.ts).
+ */
+export function expenseHeadIds(heads: ReadonlyArray<{ id: string; code: string; classification: string | null }>): string[] {
+  return heads.filter((h) => headNatureOf(h.code, h.classification) === "expense").map((h) => h.id);
+}
+
+/**
  * `fy` (optional): scope expenditure to ledger postings dated inside that FY
  * and budget estimates to that FY. Omitted -> legacy all-time totals.
+ * Expenditure = net debits (debit - credit, so a reversal cancels its original) on expense heads only.
  */
 export async function getDashboard(tenantId: string, fy?: string) {
   const bounds = fy ? fyDateBounds(fy) : null;
@@ -63,18 +81,26 @@ export async function getDashboard(tenantId: string, fy?: string) {
     cache.makeKey(tenantId, "dashboard", `summary:${fy ?? "all"}`),
     async () => {
       return scopedRead(async (tx) => {
+        const heads = await tx.select({ id: financeHeads.id, code: financeHeads.code, classification: financeHeads.classification })
+          .from(financeHeads)
+          .where(eq(financeHeads.tenantId, tenantId));
+        const expenseIds = expenseHeadIds(heads);
+        const ledgerScope = bounds
+          ? and(eq(financeLedger.tenantId, tenantId), gte(financeLedger.postingDate, bounds.start), lte(financeLedger.postingDate, bounds.end))
+          : eq(financeLedger.tenantId, tenantId);
         const [[pendingRow], [payRow], [expRow], [budgetRow]] = await Promise.all([
           tx.select({ count: sql<number>`count(*)::int` })
             .from(financeSanctions)
-            .where(and(eq(financeSanctions.tenantId, tenantId), eq(financeSanctions.status, "pending"))),
+            .where(and(eq(financeSanctions.tenantId, tenantId), inArray(financeSanctions.status, [...PENDING_SANCTION_STATUSES]))),
           tx.select({ count: sql<number>`count(*)::int` })
             .from(financePayments)
-            .where(eq(financePayments.tenantId, tenantId)),
-          tx.select({ total: sql<number>`coalesce(sum(${financeLedger.debitMinor}), 0)::bigint` })
-            .from(financeLedger)
-            .where(bounds
-              ? and(eq(financeLedger.tenantId, tenantId), gte(financeLedger.postingDate, bounds.start), lte(financeLedger.postingDate, bounds.end))
-              : eq(financeLedger.tenantId, tenantId)),
+            // UAT P2: "this month" = since the 1st of the current calendar month in India (it counted every payment).
+            .where(and(eq(financePayments.tenantId, tenantId), sql`${financePayments.createdAt} >= (date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`)),
+          expenseIds.length === 0
+            ? Promise.resolve([{ total: 0 }])
+            : tx.select({ total: sql<number>`coalesce(sum(${financeLedger.debitMinor} - ${financeLedger.creditMinor}), 0)::bigint` })
+              .from(financeLedger)
+              .where(and(ledgerScope, inArray(financeLedger.headId, expenseIds))),
           tx.select({ totalBE: sql<number>`coalesce(sum(be_minor), 0)::bigint` })
             .from(financeBudgets)
             .where(fy

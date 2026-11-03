@@ -131,7 +131,10 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
       const items: POItem[] = raw
         .filter((i): i is Record<string, unknown> => !!i && typeof i === "object")
         .map((i) => ({
-          ref: String(i.poItemRef ?? i.id ?? `procurement_po_item:${po.id}:${String(i.itemCode ?? "")}`),
+          // F131: the procurement worker resolves a GRN line by the PO item's own
+          // id (PO detail lineItems[].id). The composite is only a last resort for
+          // an older procurement-service that does not return the id yet.
+          ref: String(i.id ?? i.poItemRef ?? `procurement_po_item:${po.id}:${String(i.itemCode ?? "")}`),
           itemCode: String(i.itemCode ?? ""),
           quantity: typeof i.quantity === "number" ? i.quantity : 0,
           unit: typeof i.unit === "string" && i.unit ? i.unit : "nos",

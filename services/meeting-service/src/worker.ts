@@ -26,6 +26,7 @@
  * Mirrors the sibling worker layout (finance-service / visitor-service).
  */
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import type { CommandEnvelope, Handler } from "@civitasone/queue";
 import { isNonRetryable } from "@civitasone/queue";
 import { captureError, incrementDlqMessage } from "@civitasone/observability";
@@ -59,7 +60,7 @@ import { startActionItemEscalationScheduler } from "./workers/action-item-escala
 import { startStatutoryFrequencyScheduler } from "./workers/statutory-frequency-check.js";
 import { startTenureExpiryScheduler } from "./workers/tenure-expiry.js";
 
-const log = pino({ name: "meeting-worker" });
+const log = pino({ name: "meeting-worker", serializers: SAFE_LOG_SERIALIZERS });
 
 // (1) Fail-fast on missing/short MEETING_PII_KEY — never start fail-open.
 assertPiiKeyConfigured();

@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import { outstandingMinor, invoiceNumber } from "./domain.js";
+import { invoiceOutstandingMinor, invoiceNumber } from "./domain.js";
 import type { BillingInvoiceRow } from "./schema.js";
 
 export async function listInvoices(tenantId: string, opts?: { status?: string }) {
@@ -37,7 +37,7 @@ function summarize(r: BillingInvoiceRow) {
     status: r.status,
     totalMinor: r.totalMinor.toString(),
     paidMinor: r.paidMinor.toString(),
-    outstandingMinor: outstandingMinor(r.totalMinor, r.paidMinor).toString(),
+    outstandingMinor: invoiceOutstandingMinor(r.status, r.totalMinor, r.paidMinor).toString(),
     currency: r.currency,
     issuedAt: r.issuedAt,
     paidAt: r.paidAt,

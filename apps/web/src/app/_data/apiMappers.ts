@@ -409,6 +409,8 @@ const GRN_STATUSES = new Set(["draft", "under_inspection", "received", "quality_
 
 function normalizeGrnStatus(raw: string | null): GRNSummary["status"] {
   const key = (raw ?? "draft").toLowerCase();
+  // UAT Phase 2 C5: `partial` is the stored name of a decided, partly-rejected GRN — never a draft.
+  if (key === "partial") return "partially_rejected";
   return GRN_STATUSES.has(key) ? key as GRNSummary["status"] : "draft";
 }
 

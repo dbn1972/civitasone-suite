@@ -33,6 +33,7 @@
  */
 import { createHash } from "node:crypto";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
@@ -53,7 +54,7 @@ const CACHE_RESOURCE_VERSIONS = "document_versions";
 const AGENDA_BOOK_MIME = "application/pdf";
 
 /** Module logger (Pino) — same convention as the maintenance workers (workers/*.ts). */
-const log = pino({ name: "meeting-document-consumer" });
+const log = pino({ name: "meeting-document-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 // ─── Command payload contracts (mirror topics.ts JSDoc) ────────────────────────
 

@@ -118,7 +118,8 @@ test.describe('Payroll Runs', () => {
         route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND', message: 'run not found' }) }),
       );
       await page.goto('/hr/payroll/nonexistent');
-      await expect(page.getByText(/not found|removed|access/i)).toBeVisible();
+      // Scoped to <main>: the shell's GIGW footer links ("Accessibility statement") also match /access/i.
+      await expect(page.getByRole('main').getByText(/not found|removed|access/i)).toBeVisible();
     });
   });
 

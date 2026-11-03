@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -9,7 +10,7 @@ import { cache } from "../../shared/infra.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-const log = pino({ name: "hrms.integration.consumer" });
+const log = pino({ name: "hrms.integration.consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Seed default leave types when a tenant is provisioned. */
 export function registerIntegrationConsumers(queue: Queue): void {

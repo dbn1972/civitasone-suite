@@ -78,12 +78,13 @@ export function mapRows(payload: unknown): ModuleRowSummary[] {
   return mapped;
 }
 
-function moduleLoader(path: string, key: string) {
+function moduleLoader(path: string, key: string, opts: { notFoundAsEmpty?: boolean } = {}) {
   return (): Promise<LoaderResult<ModuleRowSummary[]>> =>
     fetchJson<unknown, ModuleRowSummary[]>(path, [] as ModuleRowSummary[], {
       revalidateSeconds: 30,
       telemetryKey: key,
       mapResponse: mapRows,
+      ...(opts.notFoundAsEmpty ? { notFoundAsEmpty: true } : {}),
     });
 }
 
@@ -108,7 +109,9 @@ export function getLatestThemeRevisionVersion(): Promise<LoaderResult<number>> {
 }
 
 export const getThemeTemplates = moduleLoader("/api/v1/themes/templates", "themes.templates");
-export const getThemeBranding = moduleLoader("/api/v1/themes/branding", "themes.branding");
+// UAT-P2-D1: theme-service answers 404 NOT_FOUND "branding not configured"
+// until the office saves its first branding -> empty list, not a load error.
+export const getThemeBranding = moduleLoader("/api/v1/themes/branding", "themes.branding", { notFoundAsEmpty: true });
 export const getThemeBrand = moduleLoader("/api/v1/themes/brand", "themes.brand");
 
 /* ── GAP-THEMES-BRAND-01: brand preview + activation ──────────────────────

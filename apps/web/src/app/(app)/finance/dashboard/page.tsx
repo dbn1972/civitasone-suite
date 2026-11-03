@@ -79,11 +79,11 @@ export default async function FinanceDashboardPage(props: { searchParams?: Promi
       {/* GAP-FINANCE-DASHBOARD-03: the utilisation percentage is shown once (first
           card); the old "Approved" caption and the repeated percentage on the
           expenditure card were not measures, so they are gone. */}
-      {/* UAT Phase 1B (recon D01): finance-service's dashboard `totalExpenditure` is the sum of
-          ALL ledger debits in the FY (every head, incl. asset/cash/bank legs), not expenditure on
-          expense heads, and budgetUtilisationPct is derived from it. Until finance-service returns
-          an expense-head figure, the cards are labelled for what they actually are (see the
-          financeDashboard.* messages) rather than as expenditure / utilisation. */}
+      {/* UAT Phase 2 (recon D01): finance-service's dashboard `totalExpenditure` is now the net
+          debits on EXPENSE heads in the FY (it used to be every head's debits, cash/bank/asset legs
+          included), and budgetUtilisationPct is derived from it. The cards keep their ledger-debit
+          wording (financeDashboard.* messages) apart from the expenditure card, which now says
+          expense heads. */}
       <StatGrid>
         <StatCard
           icon="💰"

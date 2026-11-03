@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSSEConnection } from "./useSSEConnection";
 import { SSEConnectionStatus } from "./SSEConnectionStatus";
+import { Bell } from "lucide-react";
 import { Button } from "./ds";
+import { useMenuKeyboard } from "./ds/useMenuKeyboard";
 
 /**
  * Where a notification's "Review" action should navigate. A truthful
@@ -101,6 +103,11 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
   const [localUnreadCount, setLocalUnreadCount] = useState<number>(unreadCount ?? 0);
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  // UAT-P2-D3 (A11Y-09): Escape closes and returns focus, arrows move, focus moves in on open.
+  useMenuKeyboard(open, closeMenu, triggerRef, menuRef);
 
   // SSE connection with exponential backoff reconnection
   const sseEnabled = !propNotifications;
@@ -257,6 +264,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         <SSEConnectionStatus connectionState={sseConnectionState} showDelay={7000} />
       )}
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         type="button"
         className="iconbtn"
@@ -266,7 +274,8 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         aria-haspopup="true"
         style={{ position: "relative" }}
       >
-        🔔
+        {/* UAT-P2-D3 (A11Y-11): SVG icon, not the 🔔 emoji (blank box without an emoji font). */}
+        <Bell aria-hidden="true" size={18} />
         {count > 0 && (
           <span
             aria-hidden="true"
@@ -295,6 +304,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Notifications"
           style={{

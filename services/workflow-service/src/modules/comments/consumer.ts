@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -7,7 +8,7 @@ import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-const log = pino({ name: "workflow-comments-consumer" });
+const log = pino({ name: "workflow-comments-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerCommentsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.addComment, async (msg) => {

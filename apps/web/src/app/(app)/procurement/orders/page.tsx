@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { getProcurementPOs } from "../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
@@ -16,6 +17,8 @@ export default async function OrdersPage(
   const rawStatus = searchParams?.status;
   const initialStatus = parsePoStatusParam(Array.isArray(rawStatus) ? rawStatus[0] : rawStatus);
   const { data: orders, source } = await getProcurementPOs({ limit: 500 });
+  const tk = await getTranslations("procurement.ordersKpi");
+  const labels = { completedValue: tk("completedValue"), completedValueHint: tk("completedValueHint"), activeFilter: tk("activeFilter") };
 
   // GAP-PROCUREMENT-ORDERS-03: creating a PO is a controlled maker action; the
   // service 403s a read-only role (audit_officer/finance_officer) on POST /pos.
@@ -35,7 +38,7 @@ export default async function OrdersPage(
           the same seeded resource the table renders, so on a fetch error they
           read "—" (not a fabricated 0 / ₹0.00) and can never contradict the
           rows shown. */}
-      <OrdersTable orders={orders} source={source} {...(initialStatus ? { initialStatus } : {})} />
+      <OrdersTable orders={orders} source={source} labels={labels} {...(initialStatus ? { initialStatus } : {})} />
     </>
   );
 }

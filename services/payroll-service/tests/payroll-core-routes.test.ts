@@ -73,11 +73,12 @@ describe("GET /v1/payroll/runs (core)", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("200 — returns list for finance_officer (reader role)", async () => {
+  // UAT Phase 2 C8 (security, roles-11021730 R1): finance_officer is not a payroll-run reader.
+  it("403 — finance_officer cannot list payroll runs", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/payroll/runs", headers: auth(["finance_officer"]) });
     await app.close();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
   });
 
   it("401 — no token", async () => {

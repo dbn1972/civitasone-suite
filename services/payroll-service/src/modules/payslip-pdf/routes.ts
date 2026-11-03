@@ -12,7 +12,11 @@ import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, Hr
 import { maskLast4, maskPan } from "../../shared/pii-mask.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 
-const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+// UAT Phase 2 follow-up (security): a payslip PDF is per-employee pay data --
+// payroll + HR staff see any slip; everyone else (an employee, including a
+// finance officer who is also an employee) only their own. finance_officer is
+// no longer a staff reader here (finance works from aggregate run totals).
+const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "employee"];
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 const pathParamSchema = z.object({

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -10,7 +11,7 @@ import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAtt
 import * as repo from "./repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
-const log = pino({ name: "hrms-f3-attendance" });
+const log = pino({ name: "hrms-f3-attendance", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * F3 leftover fix (batch 2, resweep). routes.ts published five writes

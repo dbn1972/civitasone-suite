@@ -32,9 +32,12 @@ describe("salary-slip pages' SALARY_ADMIN_ROLES stay identical across all 3 file
     expect(c).toEqual(a);
   });
 
-  it("includes finance_officer (matches the backend's payroll-service READER_ROLES and the sibling PENSIONER_VIEW_ROLES)", () => {
+  // UAT Phase 2 follow-up (security): payroll-service now admits payroll + HR
+  // only to per-employee slips (PAY_DATA_ROLES); finance works from aggregate
+  // run totals. These gates must not admit finance_officer any more.
+  it("excludes finance_officer (matches payroll-service PAY_DATA_ROLES)", () => {
     for (const roles of [listRoles, detailRoles, slipsDetailRoles]) {
-      expect(roles).toContain("finance_officer");
+      expect(roles).not.toContain("finance_officer");
     }
   });
 });

@@ -29,7 +29,8 @@ describe("GET /v1/workflow/instances/:id/history", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/instances/${UNKNOWN_ID}/history`,
-      headers: { authorization: `Bearer ${makeToken(["workflow_user"])}` },
+      // UAT #2445 review item 4: history is for participants and admins; a non-participant gets 404 (instance-access-2445.test.ts).
+      headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(200);

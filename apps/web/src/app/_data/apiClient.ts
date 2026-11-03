@@ -58,6 +58,25 @@ export interface FetchJsonOptions<TApi, TOutput> {
    * known-slow report endpoints.
    */
   timeoutMs?: number;
+  /**
+   * UAT-P2-D1: the service answered 404 with its own typed `NOT_FOUND` error
+   * for a "the caller's own record" endpoint (e.g. GET /v1/tenants/current,
+   * GET /v1/themes/branding) -- that means "nothing is on record yet", not an
+   * outage. When set, such a 404 resolves as `{ data: empty, source: "api",
+   * status: 404 }` so the screen renders its empty state instead of
+   * "We couldn't load ...". A gateway "no upstream for path" 404 and a bare
+   * Fastify route-not-found 404 (no typed code) still surface as errors, so a
+   * real wiring gap is never hidden. Opt-in; every existing loader is unchanged.
+   */
+  notFoundAsEmpty?: boolean;
+}
+
+/** The gateway's own 404 for an unrouted path (services/gateway-service/src/app.ts). */
+const GATEWAY_NO_UPSTREAM_MESSAGE = "no upstream for path";
+
+/** True for a service-level "no record" 404 (typed NOT_FOUND), false for a routing/wiring 404. */
+export function isRecordNotFound(status: number, code: string | undefined, message: string | undefined): boolean {
+  return status === 404 && code === "NOT_FOUND" && message !== GATEWAY_NO_UPSTREAM_MESSAGE;
 }
 
 /** Without a bound, a hung gateway pins the SSR render, a socket and a request slot per page view. */
@@ -189,8 +208,11 @@ export async function fetchJson<TApi, TOutput>(
     });
 
     if (!response.ok) {
-      emitError(options.telemetryKey, "http_error", path, response.status);
       const { code, message } = await readErrorBody(response);
+      if (options.notFoundAsEmpty && isRecordNotFound(response.status, code, message)) {
+        return { data: empty, source: "api", status: 404, errorCode: code, errorMessage: message };
+      }
+      emitError(options.telemetryKey, "http_error", path, response.status);
       return { data: empty, source: "error", status: response.status, errorCode: code, errorMessage: message };
     }
 

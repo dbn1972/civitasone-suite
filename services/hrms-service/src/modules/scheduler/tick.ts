@@ -55,6 +55,7 @@
  */
 import { sql } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { recordScheduledJobRun } from "@civitasone/observability";
 import { runWithTenant } from "@civitasone/db";
 import type { Db, ScopedTx } from "../../shared/db.js";
@@ -152,7 +153,7 @@ export const SCHEDULER_JOB_NAME = "hr_due_lists";
 // signal every other scheduled job in the fleet now has, and reuse
 // SCHEDULER_JOB_NAME so the log lines, the Prometheus series, and the
 // job_name column in scheduler.hrms_scheduler_runs all correlate.
-const log = pino({ name: SCHEDULER_JOB_NAME });
+const log = pino({ name: SCHEDULER_JOB_NAME, serializers: SAFE_LOG_SERIALIZERS });
 
 export async function runSchedulerOnce(db: Db, opts: TickOptions = {}): Promise<TickResult> {
   const start = performance.now();

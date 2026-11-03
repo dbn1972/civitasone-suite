@@ -1,12 +1,13 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { computeContractTax, type ContractorKind } from "./domain.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-contractor-bill" });
+const log = pino({ name: "hrms-f3-contractor-bill", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Section 194C thresholds. Mirror routes.ts. */
 const TDS_194C_SINGLE_MINOR = 3_000_000n;   // ₹30,000

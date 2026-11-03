@@ -19,7 +19,10 @@ export default defineConfig({
             })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
-      FINANCE_SERVICE_URL: "http://localhost:3007",
+      // UAT Phase 2 follow-up: PO create now asks finance for the sanction balance
+      // synchronously. On a shared dev/UAT host :3007 is the LIVE finance-service;
+      // a closed port keeps tests off it (tests that need an answer stub fetch).
+      FINANCE_SERVICE_URL: "http://127.0.0.1:9",
       // B9-wf2: never reach a real workflow-service from tests. On a shared
       // dev/UAT host :3029 is the LIVE one, which refuses the test secret (401);
       // that is now a loud 503, not a silent fail-open. A closed port keeps the

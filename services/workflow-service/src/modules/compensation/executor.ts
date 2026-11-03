@@ -11,6 +11,7 @@
  */
 
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -20,7 +21,7 @@ import * as defRepo from "../definitions/repo.js";
 import * as instanceRepo from "../instances/repo.js";
 import * as historyRepo from "../history/repo.js";
 
-const log = pino({ name: "workflow-compensation" });
+const log = pino({ name: "workflow-compensation", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT_TOPIC = "audit.event.record";
 export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000a1";
 

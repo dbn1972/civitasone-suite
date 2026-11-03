@@ -1,4 +1,5 @@
 import "./shared/bigint-json.js";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import { createTenantTxHook, tenantStorage } from "@civitasone/db";
@@ -40,7 +41,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
     trustProxy: INTERNAL_PROXY_TRUST,
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // No PII from database errors in request logs (@civitasone/observability safeErr).
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: SAFE_LOG_SERIALIZERS },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });

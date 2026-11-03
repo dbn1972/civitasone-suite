@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -6,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
-const log = pino({ name: "service-book-consumer" });
+const log = pino({ name: "service-book-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerServiceBookConsumers(queue: Queue): void {

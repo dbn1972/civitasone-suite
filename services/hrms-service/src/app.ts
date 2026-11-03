@@ -123,12 +123,14 @@ import { apprenticeStipendRoutes } from "./modules/apprentice-stipend/routes.js"
 import { registerRateLimit } from "@civitasone/rate-limit";
 import { INTERNAL_PROXY_TRUST } from "./modules/recruitment/careers-resume.js";
 import { loadModuleProfile, type NonCoreModule } from "./shared/module-profile.js";
+import { SAFE_LOG_SERIALIZERS } from "./shared/safe-error-log.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // No PII from database errors in request logs (shared/safe-error-log.ts).
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: SAFE_LOG_SERIALIZERS },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
     // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
     // external caller cannot forge it. Deliberately not `true`.

@@ -135,6 +135,9 @@ describe("POST routes — accepted (202)", () => {
       method: "POST", url: "/v1/procurement/pos", headers: auth,
       payload: {
         poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001", gemOrderRef: "GEM/TEST/BASIS",
+        // UAT Phase 2 C2: a ₹10,000 PO is only valid with a budget sanction (#14);
+        // without one the route now answers 422 SANCTION_REF_REQUIRED.
+        sanctionRef: `finance_sanction:${FAKE_UUID}`,
         items: [{ itemCode: "IT001", description: "Monitor", quantity: 5, unitPriceMinor: 200000 }],
       },
     });

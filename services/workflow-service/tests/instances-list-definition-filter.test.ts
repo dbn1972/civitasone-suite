@@ -68,7 +68,8 @@ describe("GET /v1/workflow/instances?definitionId= — GAP2-WORKFLOW-DEFINITIONS
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/instances?definitionId=${defA}`,
-      headers: { authorization: `Bearer ${makeToken(tenantId)}` },
+      // UAT #2445: the instance list is for participants; the caller is the instances' requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 
@@ -90,7 +91,8 @@ describe("GET /v1/workflow/instances?definitionId= — GAP2-WORKFLOW-DEFINITIONS
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/instances`,
-      headers: { authorization: `Bearer ${makeToken(tenantId)}` },
+      // UAT #2445: the instance list is for participants; the caller is the instances' requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 

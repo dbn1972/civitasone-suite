@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { type Queue } from "@civitasone/queue";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,7 +10,7 @@ import { detectMilestones, daysUntilExpiry } from "./domain.js";
 import { getContractConfig, getSentMilestones, getPendingRenewalForContract } from "./repo.js";
 import { eq, and, inArray, lte } from "drizzle-orm";
 
-const log = pino({ name: "contract-expiry-consumer" });
+const log = pino({ name: "contract-expiry-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const NOTIFICATION_SEND = "notification.send";
 const DEFAULT_MILESTONES = [90, 60, 30, 15, 7];
 

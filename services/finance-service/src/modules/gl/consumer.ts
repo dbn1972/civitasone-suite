@@ -695,6 +695,46 @@ export function registerGlConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "journals");
   });
 
+  // UAT P2 (J6) — a checker REJECTS a pending manual journal (owner decision: final). Nothing posts: no ledger line,
+  // no voucher number, no budget or period effect. The approver must differ from the maker (same R11 rule as
+  // approval). The status flip is ONE guarded UPDATE (status = 'pending_approval'), so a concurrent approval and
+  // rejection cannot both win; the gl.block_journal_mutation trigger (migration 0157) keeps the rejected row
+  // read-only afterwards.
+  queue.subscribe(COMMANDS.journalReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const existing = await repo.findJournalByIdTx(tx, p.id);
+      if (!existing || existing.tenantId !== p.tenantId) {
+        throw new NonRetryableError(`[finance/gl] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
+      }
+      if (existing.status === "rejected") return; // idempotent redelivery
+      if (existing.status !== "pending_approval") {
+        throw new NonRetryableError(`[finance/gl] INVALID_JOURNAL_STATE: id=${p.id} status=${existing.status} (only a pending journal can be rejected)`);
+      }
+      try {
+        assertDistinctMakerChecker(existing.createdBy, msg.actorId);
+      } catch (err) {
+        throw new NonRetryableError(`[finance/gl] ${(err as Error).message}`);
+      }
+      const reason = String(p.reason ?? "").trim();
+      if (reason.length < 10) throw new NonRetryableError(`[finance/gl] REJECTION_REASON_REQUIRED: id=${p.id}`);
+      const changed = await repo.markPendingJournalRejected(tx, p.id, { reason, updatedBy: msg.actorId });
+      if (!changed) {
+        throw new NonRetryableError(`[finance/gl] INVALID_JOURNAL_STATE: id=${p.id} was no longer pending when the rejection ran`);
+      }
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "finance", action: "reject_journal", resourceType: "journal", resourceId: p.id, outcome: "success",
+          makerId: existing.createdBy, reason,
+        },
+      });
+    });
+    await cache.invalidateResource(msg.tenantId, "journals");
+  });
+
   /**
    * BL-03: payroll.run.disbursed → salary SETTLEMENT journal.
    * The accrual (Dr salary expense / Cr net payable / Cr statutory) posts on

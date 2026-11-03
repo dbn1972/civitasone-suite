@@ -29,7 +29,8 @@ export const formControlStyle: React.CSSProperties = {
   boxSizing: "border-box",
   padding: "10px 12px",
   fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
+  // UAT-P2-D3 (A11Y-03, WCAG 1.4.11): field boundary token (>= 3:1), not the divider --line (1.18:1).
+  border: "1px solid var(--control-border, #7a8599)",
   borderRadius: 10,
   background: "var(--panel, #fff)",
   color: "var(--ink, #0f172a)",

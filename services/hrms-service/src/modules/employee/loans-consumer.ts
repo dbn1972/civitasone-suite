@@ -1,12 +1,13 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 
-const log = pino({ name: "hrms-loans-consumer" });
+const log = pino({ name: "hrms-loans-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 const employeeSchema = pgSchema("employee");
 const hrmsLoans = employeeSchema.table("hrms_loans", {

@@ -8,6 +8,8 @@ import { isMaskedValue } from "../../shared/pii-mask.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { isUniqueViolation } from "../../shared/safe-error-log.js";
 import { hrmsEmployees } from "./schema.js";
 import { idempotentId } from "@civitasone/auth";
 
@@ -30,53 +32,76 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
     }
   }
 
-  const [row] = await scopedRead((tx) =>
-    tx.insert(hrmsEmployees).values({
-      tenantId:       ctx.tenantId,
-      employeeNo:     body.employeeNo,
-      fullName:       body.fullName,
-      departmentId:   body.departmentId,
-      designationId:  body.designationId,
-      dateOfJoining:  body.dateOfJoining,
-      dateOfBirth:    body.dateOfBirth ?? null,
-      gender:         body.gender ?? null,
-      mobile:         body.mobile ?? null,
-      email:          body.email ?? null,
-      photoKey,
-      employeeType:   body.employeeType ?? "permanent",
-      basicMinor:     BigInt(body.basicMinor ?? 0),
-      currency:       body.currency ?? "INR",
-      payStructureId: body.payStructureId ?? null,
-      legalEntityId:  body.legalEntityId ?? null,
-      costCenterId:   body.costCenterId ?? null,
-      locationId:     body.locationId ?? null,
-      workStateCode:  body.workStateCode ?? null,
-      // Previously validated by createEmployeeBody + present as real columns on
-      // hrmsEmployees, but never mapped into this insert -- silently discarded on
-      // every create (HR-A deep-verify finding). See employee/schema.ts for columns.
-      pan:            body.pan ?? null,
-      aadhaarRef:     body.aadhaarRef ?? null,
-      bankAccountNo:  body.bankAccountNo ?? null,
-      bankIfsc:       body.bankIfsc ?? null,
-      esicIpNumber:   body.esicIpNumber ?? null,
-      uanNumber:      body.uanNumber ?? null,
-      pran:           body.pran ?? null,
-      gstin:          body.gstin ?? null,
-      sacCode:        body.sacCode ?? null,
-      agencyRef:      body.agencyRef ?? null,
-      napsId:         body.napsId ?? null,
-      managerId:      body.managerId ?? null,
-      station:        body.station ?? null,
-      category:       body.category ?? null,
-      disability:     body.disability ?? false,
-      serviceGrade:   body.serviceGrade ?? null,
-      maritalStatus:  body.maritalStatus ?? null,
-      bloodGroup:     body.bloodGroup ?? null,
-      shift:          body.shift ?? null,
-      createdBy:      ctx.actorId,
-      updatedBy:      ctx.actorId,
-    }).returning({ id: hrmsEmployees.id })
-  );
+  // UAT F127: this single-row create writes here (not via employee/consumer.ts,
+  // which only the bulk import reaches), so it never emitted the employee-create
+  // audit event. The audit row now goes into the outbox in the SAME transaction
+  // as the insert, exactly like the consumer path (action "create", ids only).
+  let row: { id: string } | undefined;
+  try {
+    [row] = await scopedRead(async (tx) => {
+      const inserted = await tx.insert(hrmsEmployees).values({
+        tenantId:       ctx.tenantId,
+        employeeNo:     body.employeeNo,
+        fullName:       body.fullName,
+        departmentId:   body.departmentId,
+        designationId:  body.designationId,
+        dateOfJoining:  body.dateOfJoining,
+        dateOfBirth:    body.dateOfBirth ?? null,
+        gender:         body.gender ?? null,
+        mobile:         body.mobile ?? null,
+        email:          body.email ?? null,
+        photoKey,
+        employeeType:   body.employeeType ?? "permanent",
+        basicMinor:     BigInt(body.basicMinor ?? 0),
+        currency:       body.currency ?? "INR",
+        payStructureId: body.payStructureId ?? null,
+        legalEntityId:  body.legalEntityId ?? null,
+        costCenterId:   body.costCenterId ?? null,
+        locationId:     body.locationId ?? null,
+        workStateCode:  body.workStateCode ?? null,
+        // Previously validated by createEmployeeBody + present as real columns on
+        // hrmsEmployees, but never mapped into this insert -- silently discarded on
+        // every create (HR-A deep-verify finding). See employee/schema.ts for columns.
+        pan:            body.pan ?? null,
+        aadhaarRef:     body.aadhaarRef ?? null,
+        bankAccountNo:  body.bankAccountNo ?? null,
+        bankIfsc:       body.bankIfsc ?? null,
+        esicIpNumber:   body.esicIpNumber ?? null,
+        uanNumber:      body.uanNumber ?? null,
+        pran:           body.pran ?? null,
+        gstin:          body.gstin ?? null,
+        sacCode:        body.sacCode ?? null,
+        agencyRef:      body.agencyRef ?? null,
+        napsId:         body.napsId ?? null,
+        managerId:      body.managerId ?? null,
+        station:        body.station ?? null,
+        category:       body.category ?? null,
+        disability:     body.disability ?? false,
+        serviceGrade:   body.serviceGrade ?? null,
+        maritalStatus:  body.maritalStatus ?? null,
+        bloodGroup:     body.bloodGroup ?? null,
+        shift:          body.shift ?? null,
+        createdBy:      ctx.actorId,
+        updatedBy:      ctx.actorId,
+      }).returning({ id: hrmsEmployees.id });
+      const newId = inserted[0]?.id;
+      if (newId) {
+        await enqueue(tx, {
+          topic: "audit.event.record", eventType: "audit.event.record",
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+          payload: { service: "hrms", action: "create", resourceType: "employee", resourceId: newId, outcome: "success" },
+        });
+      }
+      return inserted;
+    });
+  } catch (err) {
+    // A second employee with the same number used to surface as a 500 whose log
+    // carried the whole insert (name, sealed PAN ...). Answer 409 instead.
+    if (isUniqueViolation(err, "hrms_employees_tenant_id_employee_no_key")) {
+      throw new HttpError(409, "EMPLOYEE_NO_EXISTS", "an employee with this employee number already exists");
+    }
+    throw err;
+  }
   const id = row!.id;
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

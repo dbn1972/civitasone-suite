@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 
 export function MobileNavToggle() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -16,6 +18,23 @@ export function MobileNavToggle() {
     close();
   }, [pathname, close]);
 
+  // UAT-P2-D3 (A11Y-05): while the off-canvas drawer is open, focus moves into
+  // it and Escape closes it and returns focus to this button. (When closed the
+  // drawer is visibility:hidden at <=768px, so its links leave the Tab order.)
+  useEffect(() => {
+    if (!open) return;
+    const first = document.querySelector<HTMLElement>("#app-sidebar a[href], #app-sidebar button");
+    first?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      close();
+      buttonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, close]);
+
   function toggle() {
     const next = !open;
     setOpen(next);
@@ -25,6 +44,7 @@ export function MobileNavToggle() {
   return (
     <>
       <button
+        ref={buttonRef}
         className="mob-menu-btn"
         aria-label={open ? "Close navigation menu" : "Open navigation menu"}
         aria-expanded={open}
@@ -32,7 +52,7 @@ export function MobileNavToggle() {
         onClick={toggle}
         type="button"
       >
-        {open ? "✕" : "☰"}
+        {open ? <X aria-hidden="true" size={18} /> : <Menu aria-hidden="true" size={18} />}
       </button>
       {open && (
         <div

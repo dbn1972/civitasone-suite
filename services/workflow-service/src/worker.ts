@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -30,7 +31,7 @@ import { registerCaseLinksConsumers } from "./modules/case-links/consumer.js";
 import { registerChecklistConsumers } from "./modules/checklists/consumer.js";
 import { registerCommentsConsumers } from "./modules/comments/consumer.js";
 
-const log = pino({ name: "workflow-worker" });
+const log = pino({ name: "workflow-worker", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * RLS (#146): workflow_svc is NOBYPASSRLS, so every consumer write must run

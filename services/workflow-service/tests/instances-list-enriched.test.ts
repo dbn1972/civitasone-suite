@@ -80,7 +80,8 @@ describe("GET /v1/workflow/instances (enriched list) — GAP-WORKFLOW-LIST-03", 
     const res = await app.inject({
       method: "GET",
       url: "/v1/workflow/instances",
-      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"])}` },
+      // UAT #2445: the instance list is for participants; the caller is the instances' requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 
@@ -107,7 +108,8 @@ describe("GET /v1/workflow/instances (enriched list) — GAP-WORKFLOW-LIST-03", 
     const res = await app.inject({
       method: "GET",
       url: "/v1/workflow/instances",
-      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"])}` },
+      // UAT #2445: the instance list is for participants; the caller is the instances' requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 
@@ -134,7 +136,8 @@ describe("GET /v1/workflow/tasks — createdAt + dueAt (GAP-WORKFLOW-MY-TASKS-05
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/tasks?instanceId=${instanceId}`,
-      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"])}` },
+      // UAT #2445 review item 4: instance data is for its participants; the caller is the instance requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 

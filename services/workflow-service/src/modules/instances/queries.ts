@@ -5,14 +5,17 @@ import { INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as defRepo from "../definitions/repo.js";
 
-export async function listInstances(tenantId: string, limit: number, offset: number, definitionId?: string) {
+export async function listInstances(tenantId: string, limit: number, offset: number, definitionId?: string, viewer?: repo.InstanceViewer) {
   // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — definitionId is part of the cache key
   // so a filtered list is never served from (or written to) the unfiltered slot.
-  const key = `list:${limit}:${offset}${definitionId ? `:def:${definitionId}` : ""}`;
+  // UAT #2445 instance-list follow-up: a non-admin page is participant-scoped, so the
+  // viewer (roles + actor) keys the cache; admins share the unscoped slot.
+  const scope = viewer && !repo.isInstanceAdmin(viewer) ? `:v:${[...new Set(viewer.roles)].sort().join("+")}@${viewer.actorId ?? "-"}` : "";
+  const key = `list:${limit}:${offset}${definitionId ? `:def:${definitionId}` : ""}${scope}`;
   return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, key, async () => {
     // GAP-WORKFLOW-LIST-03 — enriched rows (subject/definition/current step/
     // dates) so the list surface can show what each instance is about.
-    const rows = await repo.listByTenantEnriched(tenantId, limit, offset, definitionId);
+    const rows = await repo.listByTenantEnriched(tenantId, limit, offset, definitionId, viewer);
     return {
       data: rows,
       pagination: {
@@ -78,7 +81,7 @@ export interface SearchFilters {
   offset: number;
 }
 
-export async function searchInstances(tenantId: string, filters: SearchFilters) {
+export async function searchInstances(tenantId: string, filters: SearchFilters, viewer?: { roles: readonly string[]; actorId?: string }) {
   let query = sql`
     SELECT i.id, i.name, i.status, i.ref_type, i.ref_id, i.current_node,
            i.definition_id, i.created_at, i.updated_at,
@@ -98,6 +101,10 @@ export async function searchInstances(tenantId: string, filters: SearchFilters) 
     const namePattern = `%${filters.q}%`;
     query = sql`${query} AND i.name ILIKE ${namePattern}`;
   }
+
+  // UAT #2445 review item 4: a non-admin only finds instances they participate in
+  // (requester, or holder/assignee/completer of one of its tasks), as canViewInstance.
+  query = sql`${query}${repo.participantFilterSql(viewer)}`;
 
   if (filters.assignee) {
     query = sql`${query} AND EXISTS (

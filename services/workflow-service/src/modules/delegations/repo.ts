@@ -1,4 +1,4 @@
-import { and, eq, or, sql, desc } from "drizzle-orm";
+import { and, eq, or, sql, desc, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { fetchUserRoleKeys } from "../../shared/identity-client.js";
 import { todayIST } from "../../shared/dates.js";
@@ -103,6 +103,25 @@ export async function revoke(id: string, tenantId: string, outer?: Tx): Promise<
  * (YYYY-MM-DD). An active delegation lets the delegate act on behalf of the
  * delegator's role. Date bounds are inclusive; a null to_date is open-ended.
  */
+/**
+ * UAT #2445 delta review item 3: which of `ids` are still active on `onDate`
+ * (not revoked, within [from_date, to_date]), read inside the caller's transaction.
+ */
+export async function stillActiveIdsTx(
+  tx: Pick<typeof db, "select">, tenantId: string, ids: readonly string[], onDate: string,
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await tx.select({ id: delegations.id }).from(delegations)
+    .where(and(
+      eq(delegations.tenantId, tenantId),
+      inArray(delegations.id, [...ids]),
+      eq(delegations.isActive, true),
+      sql`${delegations.fromDate} <= ${onDate}`,
+      sql`(${delegations.toDate} IS NULL OR ${delegations.toDate} >= ${onDate})`,
+    ));
+  return rows.map((r) => r.id);
+}
+
 export async function activeForDelegate(
   tenantId: string,
   delegateId: string,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -30,7 +31,6 @@ class FinanceUnavailableError extends Error {
 }
 
 // PO value above this (Rs 1,000 in paise) must carry a sanctionRef (#14).
-const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
 
 async function checkSanctionAvailable(sanctionRef: string, required: bigint, tenantId: string): Promise<void> {
   const sanctionId = sanctionRef.replace(/^.*:/, "");

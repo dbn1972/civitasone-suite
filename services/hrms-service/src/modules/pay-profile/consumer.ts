@@ -9,6 +9,7 @@
  */
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -23,7 +24,7 @@ import { loadTypeCategoryResolver } from "../employee/engagement-policy.js";
 import { planApproval, requiredPayOption, deputationTermsError, isPayProfile, applyMoneyTerms } from "./domain.js";
 import type { PayProfileRequestPayload } from "./commands.js";
 
-const log = pino({ name: "hrms-pay-profile" });
+const log = pino({ name: "hrms-pay-profile", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

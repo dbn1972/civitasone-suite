@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
@@ -52,7 +53,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     trustProxy: "loopback,linklocal,uniquelocal",
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // No PII from database errors in request logs (@civitasone/observability safeErr).
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: SAFE_LOG_SERIALIZERS },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 

@@ -6,6 +6,7 @@ import { SyncProvider } from "@/lib/sync/SyncProvider";
 import { getEnabledModules } from "@/lib/moduleVisibility";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { AppShell, ToastProvider } from "../_components/ds";
+import { humanizeStatus } from "@/lib/formatters";
 import { SessionTimeoutWarning } from "../_components/session/SessionTimeoutWarning";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -45,9 +46,11 @@ function decodeJwtRole(token: string): string | undefined {
     const roles = [
       ...(claims.resource_access?.civitasone?.roles ?? []),
       ...(claims.realm_access?.roles ?? []),
-    ].filter(r => !r.startsWith("offline_access") && !r.startsWith("uma_"));
-    const key = roles[0];
-    return key ? (ROLE_LABELS[key] ?? key) : undefined;
+    ].filter(r => !r.startsWith("offline_access") && !r.startsWith("uma_") && !r.startsWith("default-roles-"));
+    // UAT-P2-D3 (A11Y-20 / UX NAV-04): the sidebar footer showed the raw Keycloak
+    // composite "default-roles-civitasone". Prefer a known role, then a humanized code.
+    const key = roles.find((r) => ROLE_LABELS[r]) ?? roles[0];
+    return key ? (ROLE_LABELS[key] ?? humanizeStatus(key)) : undefined;
   } catch {
     return undefined;
   }

@@ -127,9 +127,11 @@ const CASES: Case[] = [
     req: (e) => ({ method: "GET", url: `/v1/payroll/tax/optimization?employeeId=${empId(e)}` }), actedOn: field("employeeId") },
   { name: "GET /tax/regime-comparison", financeIsStaff: true,
     req: (e) => ({ method: "GET", url: `/v1/payroll/tax/regime-comparison?employeeId=${empId(e)}` }), actedOn: field("employeeId") },
-  { name: "GET /slips/:id/pdf", financeIsStaff: true,
+  // UAT Phase 2 follow-up (security): payslips are payroll/HR staff only; finance is self-scoped.
+  { name: "GET /slips/:id/pdf", financeIsStaff: false,
     req: (e) => ({ method: "GET", url: `/v1/payroll/slips/${slipId(e)}/pdf` }) },
-  { name: "GET /slips/:id/download", financeIsStaff: true,
+  // UAT Phase 2 follow-up (security): payslips are payroll/HR staff only; finance is self-scoped.
+  { name: "GET /slips/:id/download", financeIsStaff: false,
     req: (e) => ({ method: "GET", url: `/v1/payroll/slips/${slipId(e)}/download` }) },
   { name: "GET /statutory/form12ba", financeIsStaff: true,
     req: (e) => ({ method: "GET", url: `/v1/payroll/statutory/form12ba?employeeId=${empId(e)}&fy=${FY}` }) },

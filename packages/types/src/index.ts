@@ -1374,6 +1374,8 @@ export type TenderSummary = {
   // TenderSummarySchema in packages/schemas/src/web.ts.
   status: "draft" | "published" | "evaluation" | "technical_evaluation" | "financial_evaluation" | "awarded" | "cancelled";
   bidsReceived: number;
+  /** UAT Phase 2 C4: real number of bid rows (bidsReceived is a stale counter). Absent from older servers. */
+  bidCount?: number;
 };
 
 export type TenderDetail = TenderSummary & {

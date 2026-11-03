@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { sql } from "drizzle-orm";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -7,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as employeeRepo from "../employee/repo.js";
 
-const log = pino({ name: "hrms.social.consumer" });
+const log = pino({ name: "hrms.social.consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerSocialConsumers(queue: Queue): void {

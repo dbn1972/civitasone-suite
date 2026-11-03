@@ -55,6 +55,10 @@ export function grnStatusLabel(status: string | null | undefined): string {
  * PO statuses that represent a real financial commitment to a vendor. Used to
  * compute "Committed value" (GAP-PROCUREMENT-ORDERS-02): draft and cancelled
  * POs must NOT inflate committed spend.
+ *
+ * UAT Phase 2: "committed" means OPEN obligations. A `closed` PO is fulfilled
+ * — its value has moved to actual / expended — so it is NOT committed; it is
+ * shown on its own "Completed (closed) value" tile (CLOSED_PO_STATUSES).
  */
 export const COMMITTED_PO_STATUSES = new Set<string>([
   "approved",
@@ -63,6 +67,18 @@ export const COMMITTED_PO_STATUSES = new Set<string>([
   "fully_received",
   "gem_placed",
 ]);
+
+/** UAT Phase 2: fulfilled-and-closed POs, valued separately from committed spend. */
+export const CLOSED_PO_STATUSES = new Set<string>(["closed"]);
+
+/**
+ * UAT Phase 2: open POs working toward delivery — the "In fulfilment" tile and
+ * the dashboard "Active POs" counter (procurement-service dashboard/queries.ts
+ * ACTIVE_PO_STATUSES). The dashboard drills into the order list with
+ * `?status=active`, which filters to exactly this set.
+ */
+export const ACTIVE_PO_STATUSES = ["approved", "partial_grn", "dispatched", "gem_placed"] as const;
+export const ACTIVE_PO_FILTER = "active";
 
 /** True when a PO's delivery is overdue: past the delivery date and not terminal. */
 export function isDeliveryOverdue(

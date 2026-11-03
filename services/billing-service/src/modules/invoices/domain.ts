@@ -68,6 +68,16 @@ export function outstandingMinor(totalMinor: bigint, paidMinor: bigint): bigint 
 }
 
 /**
+ * UAT P2 (A8, recon D21): what is still owed on a bill, by its status. A cancelled bill is owed nothing; it showed
+ * its unpaid total (Rs 500 outstanding on a cancelled invoice). Every other status keeps total - paid (clamped),
+ * the figure outstandingByTenant (repo.ts) already excludes cancelled bills from.
+ */
+export function invoiceOutstandingMinor(status: string, totalMinor: bigint, paidMinor: bigint): bigint {
+  if (status === "cancelled") return 0n;
+  return outstandingMinor(totalMinor, paidMinor);
+}
+
+/**
  * Status after a payment of `amount` lands on a bill currently at `paid` of
  * `total`. Returns the new paid amount and resulting status. Caller has already
  * guarded against over-payment.

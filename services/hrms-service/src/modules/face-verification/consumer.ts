@@ -1,10 +1,11 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 
-const log = pino({ name: "hrms.face-verification.consumer" });
+const log = pino({ name: "hrms.face-verification.consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerFaceVerificationConsumers(queue: Queue): void {

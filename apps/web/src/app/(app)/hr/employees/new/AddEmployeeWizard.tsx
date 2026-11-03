@@ -258,6 +258,14 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
       });
 
       if (!res.ok) {
+        // A duplicate Employee ID is refused with 409 EMPLOYEE_NO_EXISTS; say so plainly.
+        if (res.status === 409) {
+          const code = await res.clone().json().then((j: { code?: unknown }) => j?.code, () => null);
+          if (code === "EMPLOYEE_NO_EXISTS") {
+            setGlobalError(t("employeeNoExists", { employeeNo: data.employeeNo }));
+            return;
+          }
+        }
         const resolved = await formError.fromResponse(res, "save");
         setGlobalError(resolved.message);
         return;

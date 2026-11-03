@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-gpf" });
+const log = pino({ name: "hrms-f3-gpf", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * F3 leftover write consumer for GPF (General Provident Fund).

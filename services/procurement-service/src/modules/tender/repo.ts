@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
@@ -50,6 +50,24 @@ export async function listTendersByTenant(tenantId: string, limit: number, offse
     .where(eq(procurementTenders.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
+}
+
+/**
+ * UAT Phase 2 C4: the real number of bids per tender, for the register. One
+ * grouped COUNT over the bids table (no N+1), tenant-scoped. Counts every bid
+ * row, exactly as the tender detail page does (bids.length). Tenders with no
+ * bids are absent from the map (the caller reads them as 0).
+ */
+export async function countBidsByTenderIds(tenantId: string, tenderIds: readonly string[]): Promise<Map<string, number>> {
+  const byTender = new Map<string, number>();
+  if (tenderIds.length === 0) return byTender;
+  const rows = await db.transaction((tx) => tx
+    .select({ tenderId: procurementTenderBids.tenderId, count: sql<number>`count(*)::int` })
+    .from(procurementTenderBids)
+    .where(and(eq(procurementTenderBids.tenantId, tenantId), inArray(procurementTenderBids.tenderId, [...tenderIds])))
+    .groupBy(procurementTenderBids.tenderId));
+  for (const r of rows) byTender.set(r.tenderId, r.count);
+  return byTender;
 }
 
 export async function findBidsByTender(tenderId: string): Promise<TenderBidRow[]> {

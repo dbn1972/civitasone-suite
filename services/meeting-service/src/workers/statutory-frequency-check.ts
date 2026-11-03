@@ -37,6 +37,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino, type Logger } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -331,7 +332,7 @@ export async function runStatutoryFrequencyCheck(
 ): Promise<StatutoryFrequencyCheckResult> {
   const now = deps.now ?? new Date();
   const todayIso = now.toISOString().slice(0, 10);
-  const log = deps.logger ?? pino({ name: "meeting-statutory-frequency-check" });
+  const log = deps.logger ?? pino({ name: "meeting-statutory-frequency-check", serializers: SAFE_LOG_SERIALIZERS });
   const loadCandidates = deps.loadCandidates ?? defaultLoadCandidates;
   const loadSecretaryRecipients = deps.loadSecretaryRecipients ?? defaultLoadSecretaryRecipients;
   const emit = deps.emit ?? defaultEmit;
@@ -481,7 +482,7 @@ export function startStatutoryFrequencyScheduler(
   intervalMs: number = DEFAULT_INTERVAL_MS,
   deps: StatutoryFrequencyCheckDeps = {},
 ): NodeJS.Timeout {
-  const log = deps.logger ?? pino({ name: "meeting-statutory-frequency-check" });
+  const log = deps.logger ?? pino({ name: "meeting-statutory-frequency-check", serializers: SAFE_LOG_SERIALIZERS });
   const tick = (): void => {
     void runStatutoryFrequencyCheck(deps).catch((err) => {
       log.error(

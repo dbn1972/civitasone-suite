@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { vendorListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
@@ -14,6 +14,13 @@ import type { RequestContext } from "@civitasone/types";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer"];
+
+/** UAT Phase 2 C7: ?ids=<uuid>,<uuid>… (at most 100) for the internal vendor-name lookup. */
+const vendorNamesQuery = z.object({
+  ids: z.string().min(1).max(4000)
+    .transform((s) => [...new Set(s.split(",").map((x) => x.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().uuid()).min(1).max(100)),
+});
 
 /** Roles authorized to view decrypted PII fields on vendor records. */
 export const PII_AUTHORIZED_ROLES = [
@@ -125,6 +132,15 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = blacklistBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.blacklistVendor(ctx, id, body));
+  });
+
+  // UAT Phase 2 C7: internal (x-internal service account only) id -> name lookup
+  // so finance-service can name the payee on bills raised from a procurement GRN.
+  app.get("/v1/procurement/internal/vendor-names", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["service_account"]);
+    const { ids } = vendorNamesQuery.parse(req.query);
+    return reply.send({ data: await queries.vendorNamesByIds(ctx.tenantId, ids) });
   });
 
   app.get("/v1/procurement/vendors/:id", async (req, reply) => {

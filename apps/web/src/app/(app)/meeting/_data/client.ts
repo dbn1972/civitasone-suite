@@ -159,14 +159,58 @@ export async function listCommittees(): Promise<CommitteeSummary[]> {
 // ─── Meeting lifecycle ───────────────────────────────────────────────────────
 
 /** Drive a state-machine transition (e.g. { toState: "in_progress" }). */
+/**
+ * UAT J14 / D9: meeting-service's transitionMeetingSchema is `{ version, to,
+ * reason? }` (optimistic lock + target state). The console used to send
+ * `{ toState }`, which the route rejects with 400, so no lifecycle button ever
+ * worked. A refusal the service explains (wrong state, quorum not met, missing
+ * scheduling prerequisites) is thrown as a MeetingTransitionError carrying its
+ * code so the console can say why in the user's language.
+ */
+export class MeetingTransitionError extends UserFacingError {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "MeetingTransitionError";
+  }
+}
+
+const EXPLAINED_TRANSITION_CODES = new Set([
+  "MEETING_INVALID_TRANSITION",
+  "MEETING_QUORUM_NOT_MET",
+  "MEETING_SHORT_NOTICE",
+  "VERSION_CONFLICT",
+  "FORBIDDEN",
+]);
+
 export async function transitionMeeting(
   meetingId: string,
   toState: string,
+  version: number,
   reason?: string,
 ): Promise<void> {
-  await send("POST", `v1/meeting/${meetingId}/transition`, {
-    body: { toState, ...(reason ? { reason } : {}) },
+  const res = await browserFetch(`v1/meeting/${meetingId}/transition`, {
+    method: "POST",
+    body: JSON.stringify({ version, to: toState, ...(reason ? { reason } : {}) }),
   });
+  if (res.ok) return;
+  let code = "";
+  try {
+    const j = (await res.json()) as { code?: unknown };
+    code = typeof j.code === "string" ? j.code : "";
+  } catch { /* no JSON body */ }
+  if (EXPLAINED_TRANSITION_CODES.has(code)) throw new MeetingTransitionError(code, readError("save"));
+  throw new UserFacingError(readError("save"));
+}
+
+/** UAT J14: add an agenda item (meeting-service agendaItemSubmitSchema: title + outcomeType). */
+export const AGENDA_OUTCOME_TYPES = ["decision", "discussion", "information", "ratification"] as const;
+export type AgendaOutcomeType = (typeof AGENDA_OUTCOME_TYPES)[number];
+
+export async function addAgendaItem(
+  meetingId: string,
+  input: { title: string; outcomeType: AgendaOutcomeType },
+): Promise<void> {
+  await send("POST", `v1/meeting/${meetingId}/agenda`, { body: input });
 }
 
 // ─── Attendance ──────────────────────────────────────────────────────────────

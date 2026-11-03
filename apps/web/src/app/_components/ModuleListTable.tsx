@@ -9,7 +9,7 @@ import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate, formatIndianDateTime, formatShortId } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime, formatShortId, formatDisplayText } from "@/lib/formatters";
 
 // GAP-INSTALL-STEPS-03: the bare <table className="tbl"> had no search, sort,
 // pagination or mobile card transform, and status was plain text. The shared
@@ -68,7 +68,8 @@ const MODULE_COLUMNS: ModuleCol[] = [
     label: "Meta",
     // GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x: a date-typed meta is formatted
     // with formatIndianDate so a raw ISO timestamp never reaches the screen.
-    render: (row) => (row.meta ? (row.metaKind === "datetime" ? formatIndianDateTime(row.meta) : row.metaKind === "date" ? formatIndianDate(row.meta) : row.meta) : "—"),
+    // UAT-P2-D4: an untyped meta that is a raw ISO date still gets the Indian date format.
+    render: (row) => (row.meta ? (row.metaKind === "datetime" ? formatIndianDateTime(row.meta) : row.metaKind === "date" ? formatIndianDate(row.meta) : formatDisplayText(row.meta)) : "—"),
   },
 ];
 

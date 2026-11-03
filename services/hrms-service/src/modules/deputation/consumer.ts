@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,7 +10,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import { payTermsColumns, mergedTermsError, moneyChanges, patchDiff, type PayTermsPatch } from "./pay-terms.js";
 import { liveProfileReferencesDeputationTx } from "../pay-profile/repo.js";
 
-const log = pino({ name: "deputation-consumer" });
+const log = pino({ name: "deputation-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerDeputationConsumers(queue: Queue): void {

@@ -8,7 +8,7 @@ import { findControlAccountRefs } from "../budget/repo.js";
 import { getPeriodStatusDb } from "../period-close/repo.js";
 import { assertNoControlAccounts, DomainError } from "./domain.js";
 import { periodPostingRefusal, voucherNeedsAllocation } from "./posting-rules.js";
-import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery } from "./validators.js";
+import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery, rejectJournalBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -116,10 +116,38 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     const draft = await repo.findJournalById(id);
     // UAT W8-D (P1): a journal this tenant does not have can never be approved: 404, not 202.
     if (!draft || draft.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "journal not found");
+    // UAT P2 (J6): a rejected journal is final; approving it can never succeed, so say so now (not a 202 + DLQ).
+    if (draft.status === "rejected") {
+      throw new HttpError(409, "JOURNAL_REJECTED", "this journal was rejected and cannot be approved; raise a new voucher");
+    }
+    // F107: the maker approving their own draft is refused now (403), not 202-accepted and dead-lettered later in the
+    // queue. The consumer keeps its own check (assertDistinctMakerChecker) for anything that reaches it another way.
+    if (draft.status === "pending_approval" && draft.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER_VIOLATION", "you drafted this journal; a different officer must approve or reject it");
+    }
     if (draft.status === "pending_approval") {
       await assertPeriodAcceptsPosting(ctx.tenantId, String(draft.postingDate), draft.type);
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
+  });
+
+  // UAT P2 (J6) — a checker rejects a pending manual journal. Final (owner decision): nothing posts, the journal is
+  // kept read-only as 'rejected' with the reason, and the maker raises a fresh voucher. Same role tier as approval;
+  // the maker cannot reject their own draft (refused here, and again in the consumer transaction).
+  app.patch("/v1/finance/journals/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, JOURNAL_APPROVE_ROLES);
+    const { id } = reverseParam.parse(req.params);
+    const body = rejectJournalBody.parse(req.body);
+    const draft = await repo.findJournalById(id);
+    if (!draft || draft.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "journal not found");
+    if (draft.status !== "pending_approval") {
+      throw new HttpError(409, "JOURNAL_NOT_PENDING", `only a journal waiting for approval can be rejected (this one is ${draft.status})`);
+    }
+    if (draft.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER_VIOLATION", "you drafted this journal; a different officer must approve or reject it");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectJournal(ctx, id, body.reason));
   });
 
   // POLICY DECISION (flagged for explicit review, not assumed obviously
@@ -154,6 +182,25 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit, q.offset));
+  });
+
+  // UAT P2 (J6, D4): the checker's queue -- manual journals awaiting approval, with their lines and narration.
+  // Readable by every finance reader; only JOURNAL_APPROVE_ROLES can act on them (PATCH .../:id/approve).
+  app.get("/v1/finance/journals/pending", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listPendingJournals(ctx.tenantId, ctx.actorId, q.limit, q.offset);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
+  // UAT P2 (J6): rejected manual journals, read-only, for the audit trail and so the maker sees why.
+  app.get("/v1/finance/journals/rejected", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listRejectedJournals(ctx.tenantId, ctx.actorId, q.limit, q.offset);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
   });
 
   // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: bounded, filtered ledger LINES with whole-set totals.

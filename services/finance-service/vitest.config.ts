@@ -42,6 +42,10 @@ export default defineConfig({
             })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // UAT Phase 2 C7: bill reads resolve procurement vendor names over HTTP. On a
+      // shared dev/UAT host :3008 is the LIVE procurement-service; a closed port keeps
+      // tests on the fail-open path (tests that need an answer stub fetch).
+      PROCUREMENT_SERVICE_URL: "http://127.0.0.1:9",
     },
     coverage: {
       provider: "v8",

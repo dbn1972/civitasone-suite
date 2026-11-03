@@ -1,8 +1,9 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import * as dlq from "./repo.js";
 
-const log = pino({ name: "workflow-dlq" });
+const log = pino({ name: "workflow-dlq", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * Gap 3 — consumer-side DLQ wrapper. Wraps a handler so that:

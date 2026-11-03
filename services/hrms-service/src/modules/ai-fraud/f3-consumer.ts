@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsFraudAlerts, hrmsRecommendations } from "./schema.js";
 import type { FraudAlert, Recommendation } from "./detection-engine.js";
-const log = pino({ name: "hrms-f3-ai-fraud" });
+const log = pino({ name: "hrms-f3-ai-fraud", serializers: SAFE_LOG_SERIALIZERS });
 export function registerF3_ai_fraud_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;

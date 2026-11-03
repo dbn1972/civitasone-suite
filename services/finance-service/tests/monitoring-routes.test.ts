@@ -30,9 +30,12 @@ import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeLedger } from "../src/modules/gl/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT_A = "aaaaaaaa-1111-4000-8000-0000000fa039";
+// UAT P2 (A7): Expended is now read from the ledger, which is append-only, so tenant A is fresh per run (the
+// expenditure below is booked as ledger lines and would otherwise accumulate across runs on a persistent DB).
+const TENANT_A = randomUUID();
 const TENANT_B = "aaaaaaaa-1111-4000-8000-0000000fb039";
 const ACTOR = "00000000-aaaa-4000-8000-00000000a039";
 const FY = "2025-26";
@@ -49,9 +52,10 @@ const reader = (t = TENANT_A) => ({ authorization: `Bearer ${token(t, ["finance_
 // finance_heads has UNIQUE(tenant_id, code), so a fresh random id paired with
 // a fixed code would silently no-op against a prior run's row on that same
 // code, leaving the new id unlinked to any real row and 23503-ing downstream.
-const HEAD_OVERSPEND = "aaaaaaaa-2222-4000-8000-0000000fa039";
-const HEAD_UNDER = "aaaaaaaa-2222-4000-8000-0000000fb039";
-const HEAD_OK = "aaaaaaaa-2222-4000-8000-0000000fc039";
+// Fresh per run together with TENANT_A (a fixed id would collide with a prior run's row under another tenant).
+const HEAD_OVERSPEND = randomUUID();
+const HEAD_UNDER = randomUUID();
+const HEAD_OK = randomUUID();
 
 async function seed() {
   for (const t of [TENANT_A, TENANT_B]) {
@@ -77,10 +81,13 @@ async function seed() {
   // makes committed+actual > allocated unpersistable, so that bucket is exercised
   // only at the pure-domain unit-test level, not via a DB fixture.
   await scoped(TENANT_A, (tx) => tx.insert(financeBudgetAllocation).values([
-    mk(OVERSPEND, HEAD_OVERSPEND, 1000n, 0n, 600n),  // projected_overspend at half-year
-    mk(UNDER, HEAD_UNDER, 1000n, 0n, 100n),          // under_utilised
-    mk(OK, HEAD_OK, 1000n, 0n, 450n),                // on_track
+    mk(OVERSPEND, HEAD_OVERSPEND, 1000n, 0n, 0n),  // projected_overspend at half-year
+    mk(UNDER, HEAD_UNDER, 1000n, 0n, 0n),          // under_utilised
+    mk(OK, HEAD_OK, 1000n, 0n, 0n),                // on_track
   ]));
+  // UAT P2 (A7): the expenditure is what the books hold -- ledger debits to each head inside FY 2025-26.
+  const booked = (headId: string, dr: bigint) => ({ tenantId: TENANT_A, headId, debitMinor: dr, voucherNo: "MON-1", postingDate: "2025-07-01", createdBy: ACTOR, updatedBy: ACTOR });
+  await scoped(TENANT_A, (tx) => tx.insert(financeLedger).values([booked(HEAD_OVERSPEND, 600n), booked(HEAD_UNDER, 100n), booked(HEAD_OK, 450n)]));
 }
 
 beforeAll(seed);

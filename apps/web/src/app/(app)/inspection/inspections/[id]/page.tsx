@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Card, PageHeader, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
@@ -29,6 +30,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       </div>
     );
   }
+  const tr = await getTranslations("inspectionReports");
   const when = (insp.scheduledDate ?? insp.createdAt) as string | null | undefined;
   const inspectors = Array.isArray(insp.assignedInspectors) ? (insp.assignedInspectors as unknown[]).map(String) : [];
   return (
@@ -54,6 +56,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
           <dt>Inspector(s)</dt>
           <dd>{inspectors.length > 0 ? inspectors.join(", ") : "—"}</dd>
         </dl>
+        {/* UAT Phase 2 C3 (J13): raise / find this inspection's reports. */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          <Link href={`/inspection/reports/new?inspectionId=${encodeURIComponent(String(insp.id))}`} className="btn primary">{tr("createFromInspection")}</Link>
+          <Link href={`/inspection/reports?inspectionId=${encodeURIComponent(String(insp.id))}`} className="btn ghost">{tr("viewReports")}</Link>
+        </div>
       </Card>
     </div>
   );

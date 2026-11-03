@@ -1,4 +1,4 @@
-import { eq, desc, and, or, isNull, isNotNull, lte, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, lte, inArray, sql, exists } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 import { instances } from "../instances/schema.js";
@@ -66,10 +66,85 @@ function refTypePredicate(refTypes?: readonly string[]) {
   return refTypes && refTypes.length > 0 ? inArray(tasks.refType, [...refTypes]) : undefined;
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number, refTypes?: readonly string[]): Promise<TaskView[]> {
+/**
+ * UAT R2 / F108 (security): who may SEE a task in a task list. A task with no
+ * roleRef used to be "open to all", so every inbox in the tenant listed it: an
+ * HR officer saw finance-chain tasks ("Finance Officer Approval") next to their
+ * leave approvals, and the non-pending listing returned every task in the
+ * tenant to any role-holder. Visibility is now:
+ *   - super_admin: every task (break-glass, unchanged);
+ *   - workflow_admin: tasks for roles it holds plus unrestricted (no roleRef)
+ *     tasks, which it triages/assigns; on the non-pending listing every task;
+ *   - everyone else: tasks targeted at a role they hold, plus an unrestricted
+ *     task only once it is assigned to them.
+ * Narrowing only; completion rules (commands.ts) are unchanged.
+ */
+export const TASK_ADMIN_ROLES: readonly string[] = ["super_admin", "workflow_admin"];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function taskVisibilityPredicate(
+  roles: readonly string[],
+  actorId: string | undefined,
+  scope: "inbox" | "all",
+) {
+  if (roles.includes("super_admin")) return undefined;
+  if (roles.includes("workflow_admin")) {
+    if (scope === "all") return undefined;
+    return or(isNull(tasks.roleRef), inArray(tasks.roleRef, [...roles]));
+  }
+  // assignee_id is a uuid column: a non-uuid actor id (service/test tokens) can hold no assignment.
+  const unrestrictedMine = actorId && UUID_RE.test(actorId)
+    ? and(isNull(tasks.roleRef), eq(tasks.assigneeId, actorId))
+    : undefined;
+  if (roles.length === 0) return unrestrictedMine ?? sql`false`;
+  return unrestrictedMine ? or(inArray(tasks.roleRef, [...roles]), unrestrictedMine) : inArray(tasks.roleRef, [...roles]);
+}
+
+/**
+ * UAT #2445 review items 2 and 4: may this caller read an instance's tasks, detail,
+ * history or timeline? super_admin / workflow_admin always; otherwise only a
+ * participant: the instance's requester (created_by), or anyone holding the role of,
+ * assigned to, or having completed one of its tasks. One indexed EXISTS read.
+ * Instance-level on purpose: a participant sees the whole chain of their own
+ * instance (the estab approvals panel reads every task of the instance to say where
+ * a noting was forwarded, GAP-ESTAB-APPROVALS-05); a non-participant sees nothing.
+ */
+export async function canViewInstance(
+  tenantId: string, instanceId: string, roles: readonly string[], actorId: string | undefined,
+): Promise<boolean> {
+  if (roles.some((r) => TASK_ADMIN_ROLES.includes(r))) return true;
+  const actor = actorId && UUID_RE.test(actorId) ? actorId : null;
+  const rows = await scopedRead((tx) => {
+    const taskParts = [
+      ...(roles.length ? [inArray(tasks.roleRef, [...roles])] : []),
+      ...(actor ? [eq(tasks.assigneeId, actor), eq(tasks.completedBy, actor)] : []),
+    ];
+    const participates = taskParts.length
+      ? exists(tx.select({ one: sql`1` }).from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instances.id), or(...taskParts))))
+      : sql`false`;
+    return tx.select({ id: instances.id }).from(instances)
+      .where(and(eq(instances.tenantId, tenantId), eq(instances.id, instanceId), or(...(actor ? [eq(instances.createdBy, actor)] : []), participates)))
+      .limit(1);
+  });
+  return rows.length > 0;
+}
+
+/** UAT #2445 review item 5: the task row, locked for the rest of the transaction. */
+export async function lockTaskTx(tx: Writer, id: string, tenantId: string): Promise<TaskRow | null> {
+  const rows = await (tx as typeof db).select().from(tasks)
+    .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId))).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
+export async function listByTenant(
+  tenantId: string, limit: number, offset: number, refTypes?: readonly string[],
+  viewer?: { roles: readonly string[]; actorId?: string },
+): Promise<TaskView[]> {
   const refPredicate = refTypePredicate(refTypes);
+  const visible = viewer ? taskVisibilityPredicate(viewer.roles, viewer.actorId, "all") : undefined;
   const rows = await scopedRead((tx) => tx.select().from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : [])))
+    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : []), ...(visible ? [visible] : [])))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
     .offset(offset));
@@ -82,10 +157,14 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
  * instead of only the length of the first page. Tenant-scoped via scopedRead
  * (RLS), mirrors listByTenant's WHERE.
  */
-export async function countByTenant(tenantId: string, refTypes?: readonly string[]): Promise<number> {
+export async function countByTenant(
+  tenantId: string, refTypes?: readonly string[],
+  viewer?: { roles: readonly string[]; actorId?: string },
+): Promise<number> {
   const refPredicate = refTypePredicate(refTypes);
+  const visible = viewer ? taskVisibilityPredicate(viewer.roles, viewer.actorId, "all") : undefined;
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : []))));
+    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : []), ...(visible ? [visible] : []))));
   return rows[0]?.n ?? 0;
 }
 
@@ -161,17 +240,13 @@ export async function listPendingForRoles(
   limit: number,
   offset: number,
   refTypes?: readonly string[],
+  actorId?: string,
 ): Promise<TaskView[]> {
   const refPredicate = refTypePredicate(refTypes);
   // L1 — filter by role in SQL (not in app code after a limit*3 fetch, which
-  // silently dropped matching tasks beyond the window). A task with no roleRef
-  // is unrestricted; super_admin sees every pending task.
-  const isSuperAdmin = roles.includes("super_admin");
-  const rolePredicate = isSuperAdmin
-    ? undefined
-    : roles.length > 0
-      ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
-      : isNull(tasks.roleRef);
+  // silently dropped matching tasks beyond the window). UAT R2 / F108: see
+  // taskVisibilityPredicate (an unrestricted task is no longer in every inbox).
+  const rolePredicate = taskVisibilityPredicate(roles, actorId, "inbox");
 
   const rows = await scopedRead((tx) => tx.select().from(tasks)
     .where(and(
@@ -194,14 +269,9 @@ export async function listPendingForRoles(
  * unified approvals page's Pending stat reflects every item an approver has,
  * not just the first page. Tenant-scoped via scopedRead (RLS).
  */
-export async function countPendingForRoles(tenantId: string, roles: string[], refTypes?: readonly string[]): Promise<number> {
+export async function countPendingForRoles(tenantId: string, roles: string[], refTypes?: readonly string[], actorId?: string): Promise<number> {
   const refPredicate = refTypePredicate(refTypes);
-  const isSuperAdmin = roles.includes("super_admin");
-  const rolePredicate = isSuperAdmin
-    ? undefined
-    : roles.length > 0
-      ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
-      : isNull(tasks.roleRef);
+  const rolePredicate = taskVisibilityPredicate(roles, actorId, "inbox");
 
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
     .where(and(

@@ -90,6 +90,14 @@ describe("CorrectionsPage", () => {
     expect(screen.queryByText("Record Salary Correction")).not.toBeInTheDocument();
   });
 
+  // UAT Phase 2 security review #2446 (1): corrections are per-employee pay data.
+  it("a finance_officer gets Access restricted and no fetch", async () => {
+    sessionRoles = ["finance_officer"];
+    await renderPage();
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
   it("GAP-PAYROLL-CORRECTIONS-05: a read-only payroll reader sees history but no form", async () => {
     sessionRoles = ["hr_admin"];
     withDirectory({ data: [ROW], source: "api" });

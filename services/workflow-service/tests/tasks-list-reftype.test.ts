@@ -37,12 +37,14 @@ async function seedInstance(tenant: string): Promise<string> {
   return id;
 }
 
+// UAT R2 / F108: a task with no roleRef is no longer listed to every role-holder
+// (tasks/repo.ts taskVisibilityPredicate), so inbox fixtures target the caller's role.
 /** `ageMinutes` makes ordering deterministic: the larger it is, the OLDER (later in the updated_at DESC list) the task. */
 async function seedTask(tenant: string, instanceId: string, refType: string | null, ageMinutes: number): Promise<void> {
   const actor = randomUUID();
   await sqlAsTenant(tenant, sql`
     INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, ref_type, ref_id, is_call, created_by, updated_by, updated_at)
-    VALUES (${randomUUID()}, ${tenant}, ${instanceId}, 'Approve something', 'pending', NULL, ${refType}, ${refType ? randomUUID() : null}, false, ${actor}, ${actor}, now() - make_interval(mins => ${ageMinutes}))
+    VALUES (${randomUUID()}, ${tenant}, ${instanceId}, 'Approve something', 'pending', 'manager', ${refType}, ${refType ? randomUUID() : null}, false, ${actor}, ${actor}, now() - make_interval(mins => ${ageMinutes}))
   `);
 }
 

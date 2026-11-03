@@ -52,7 +52,8 @@ beforeAll(async () => {
     }
   }));
   // 12 accepted + 5 draft + 2 under_inspection + 2 rejected + 1 partial = 22 for the tenant.
-  // (`partial` renders as draft in list rows, so it counts as awaiting.)
+  // (UAT Phase 2 C5: `partial` is the stored partly-rejected outcome, so it
+  // counts with the rejected GRNs, not as awaiting inspection.)
   for (let i = 0; i < 12; i++) await seedGrn(TENANT, VENDOR_A, `GRN-AC-${String(i).padStart(3, "0")}`, "accepted");
   for (let i = 0; i < 5; i++) await seedGrn(TENANT, VENDOR_A, `GRN-DR-${i}`, "draft");
   for (let i = 0; i < 2; i++) await seedGrn(TENANT, VENDOR_A, `GRN-UI-${i}`, "under_inspection");
@@ -68,7 +69,7 @@ describe("GAP-PROCUREMENT-GRN-02 server-side summary and search", () => {
   it("summary counts every GRN of the tenant, not one page", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/procurement/grns/summary", headers: hdr(READER) });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ total: 22, accepted: 12, awaitingInspection: 8, rejected: 2 });
+    expect(res.json().data).toEqual({ total: 22, accepted: 12, awaitingInspection: 7, rejected: 3 });
   });
 
   it("the list is paged server-side and a page is smaller than the summary total", async () => {
@@ -85,7 +86,12 @@ describe("GAP-PROCUREMENT-GRN-02 server-side summary and search", () => {
     const byVendor = await app.inject({ method: "GET", url: "/v1/procurement/grns?limit=5&q=zenith", headers: hdr(READER) });
     expect(byVendor.json().map((g: { grnNo: string }) => g.grnNo)).toEqual(["GRN-ZZ-LAST"]);
     const summary = await app.inject({ method: "GET", url: "/v1/procurement/grns/summary?q=zenith", headers: hdr(READER) });
-    expect(summary.json().data).toEqual({ total: 1, accepted: 0, awaitingInspection: 1, rejected: 0 });
+    expect(summary.json().data).toEqual({ total: 1, accepted: 0, awaitingInspection: 0, rejected: 1 });
+  });
+
+  it("UAT Phase 2 C5: a stored `partial` GRN is listed as partially_rejected, never as draft", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/procurement/grns?limit=5&q=GRN-ZZ-LAST", headers: hdr(READER) });
+    expect(res.json().map((g: { status: string }) => g.status)).toEqual(["partially_rejected"]);
   });
 
   it("a typed % matches literally, not as a wildcard", async () => {

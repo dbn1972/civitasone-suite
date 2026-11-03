@@ -9,6 +9,7 @@ import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkComplete
 import { paginatedSchema } from "@civitasone/schemas/common";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const tasksListSchema = paginatedSchema(taskViewSchema);
 
@@ -51,11 +52,15 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       // first page client-side. Narrowing only: it can never widen the role scope.
       refType: z.union([z.string().min(1).max(64), z.array(z.string().min(1).max(64)).max(20)]).optional(),
     }).parse(req.query);
-    const listOpts: { status?: string; roles?: string[]; instanceId?: string; refTypes?: string[] } = {};
+    const listOpts: { status?: string; roles?: string[]; actorId?: string; instanceId?: string; refTypes?: string[] } = { actorId: ctx.actorId };
     if (q.status !== undefined) listOpts.status = q.status;
     if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
     if (q.refType !== undefined) listOpts.refTypes = Array.isArray(q.refType) ? q.refType : [q.refType];
     if (ctx.roles.length) listOpts.roles = ctx.roles;
+    // UAT #2445 review item 2: an instance's task list only for its participants.
+    if (q.instanceId !== undefined && !(await repo.canViewInstance(ctx.tenantId, q.instanceId, ctx.roles, ctx.actorId))) {
+      throw new HttpError(404, "NOT_FOUND", "instance not found");
+    }
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });
 

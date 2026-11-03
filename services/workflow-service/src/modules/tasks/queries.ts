@@ -10,7 +10,7 @@ export async function listTasks(
   tenantId: string,
   limit: number,
   offset: number,
-  opts?: { status?: string; roles?: string[]; instanceId?: string; refType?: string; refTypes?: string[] },
+  opts?: { status?: string; roles?: string[]; actorId?: string; instanceId?: string; refType?: string; refTypes?: string[] },
 ) {
   // GAP-PROCUREMENT-APPROVALS-01: normalised (deduped, sorted) refType set; it
   // narrows the SQL filter AND is part of the cache key, so a filtered list can
@@ -25,11 +25,14 @@ export async function listTasks(
     // GAP-HR-LEAVE-APPROVALS-02 / GAP-PROCUREMENT-APPROVALS-01 — the refType set narrows every branch in SQL
     // (and its total below), so a module inbox is never crowded out of the
     // first page by other modules' tasks.
+    // UAT R2 / F108: a caller-scoped listing (roles supplied, as the route
+    // always does) only returns tasks the caller may see, pending or not.
+    const viewer = opts?.roles?.length ? { roles: opts.roles, ...(opts.actorId ? { actorId: opts.actorId } : {}) } : undefined;
     const rows = opts?.instanceId
       ? await repo.listByInstance(tenantId, opts.instanceId, limit, offset, refTypes)
       : opts?.status === "pending" && opts.roles?.length
-        ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset, refTypes)
-        : await repo.listByTenant(tenantId, limit, offset, refTypes);
+        ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset, refTypes, opts.actorId)
+        : await repo.listByTenant(tenantId, limit, offset, refTypes, viewer);
     // GAP-APPROVALS-HOME-01 — the exact total of the WHOLE (unpaged) matching
     // set, computed with the same filter the page just used, so the unified
     // approvals inbox can show a real Pending count / "N of M" instead of only
@@ -38,8 +41,8 @@ export async function listTasks(
     const total = opts?.instanceId
       ? await repo.countByInstance(tenantId, opts.instanceId, refTypes)
       : opts?.status === "pending" && opts.roles?.length
-        ? await repo.countPendingForRoles(tenantId, opts.roles, refTypes)
-        : await repo.countByTenant(tenantId, refTypes);
+        ? await repo.countPendingForRoles(tenantId, opts.roles, refTypes, opts.actorId)
+        : await repo.countByTenant(tenantId, refTypes, viewer);
     const subjects = await repo.instanceSummaries(tenantId, rows.map((r) => r.instanceId));
     const enriched = rows.map((r) => {
       const s = subjects.get(r.instanceId);
@@ -60,8 +63,10 @@ export async function listTasks(
   // on the caller's role set, so the role set is part of its cache key: without
   // it one role's cached page was served to a caller holding different roles
   // (showing tasks they may not act on, or hiding ones they can).
-  const roleScoped = !opts?.instanceId && opts?.status === "pending" && (opts.roles?.length ?? 0) > 0;
-  const roleKey = roleScoped ? [...new Set(opts?.roles ?? [])].sort().join("+") : "-";
+  // UAT R2 / F108: every caller-scoped listing (not just the pending inbox) and
+  // the actor (an unrestricted task is visible to its assignee) key the cache.
+  const roleScoped = !opts?.instanceId && (opts?.roles?.length ?? 0) > 0;
+  const roleKey = roleScoped ? `${[...new Set(opts?.roles ?? [])].sort().join("+")}@${opts?.actorId ?? "-"}` : "-";
   const key = `list:${opts?.status ?? "all"}:${opts?.instanceId ?? "-"}:${refTypes.join("+") || "-"}:${roleKey}:${limit}:${offset}`;
   return cache.listOrLoad(tenantId, TASK_RESOURCE, key, loader);
 }

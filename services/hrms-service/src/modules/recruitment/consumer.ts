@@ -1,6 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -14,7 +15,7 @@ import * as templateRepo from "./jd-template-repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT = "audit.event.record";
-const log = pino({ name: "recruitment-consumer" });
+const log = pino({ name: "recruitment-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerRecruitmentConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.jobCreate, async (msg) => {

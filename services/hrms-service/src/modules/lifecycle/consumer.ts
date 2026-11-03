@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -10,7 +11,7 @@ import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 
-const log = pino({ name: "lifecycle-consumer" });
+const log = pino({ name: "lifecycle-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 /** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
