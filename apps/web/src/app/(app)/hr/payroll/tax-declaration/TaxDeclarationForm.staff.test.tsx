@@ -64,10 +64,23 @@ describe("TaxDeclarationForm — staff filing and users with no employee record 
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       const u = String(url);
       if (u.includes("/limits") || u.includes("/window")) return Promise.resolve(new Response("", { status: 500 }));
-      return Promise.resolve(json({ code: "FORBIDDEN", message: "no employee record is linked to this user" }, 403));
+      return Promise.resolve(json({ code: "NO_EMPLOYEE_RECORD", message: "no employee record is linked to this user" }, 403));
     }));
     renderForm();
     expect(await screen.findByText(/not linked to an employee record/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit declaration/i })).toBeDisabled();
+  });
+
+  it("UAT #2445 review item 7: any other 403 is shown as not permitted, never as a missing employee record", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes("/limits") || u.includes("/window")) return Promise.resolve(new Response("", { status: 500 }));
+      return Promise.resolve(json({ code: "FORBIDDEN", message: "forbidden" }, 403));
+    }));
+    renderForm();
+    expect(await screen.findByText(/not permitted to view or file tax declarations/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not linked to an employee record/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /submit declaration/i })).toBeDisabled();
   });

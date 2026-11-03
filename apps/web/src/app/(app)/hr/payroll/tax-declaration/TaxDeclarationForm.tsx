@@ -88,7 +88,7 @@ export function TaxDeclarationForm() {
   // for a user with no employee record. Both were shown as a failed load with a
   // scary overwrite warning. Now: staff pick the employee they are filing for;
   // a user with no record is told so and the form stays read-only.
-  const [mode, setMode] = useState<"self" | "staff" | "noRecord">("self");
+  const [mode, setMode] = useState<"self" | "staff" | "noRecord" | "notPermitted">("self");
   const [onBehalfOf, setOnBehalfOf] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
@@ -110,7 +110,7 @@ export function TaxDeclarationForm() {
   // is read-only for a verified/approved declaration or a closed window.
   const locked = hasExisting && !loadFailed && existingStatus !== null && LOCKED_STATUSES.includes(existingStatus);
   const windowClosed = windowInfo !== null && !windowInfo.open;
-  const readOnly = locked || windowClosed || mode === "noRecord" || (mode === "staff" && !onBehalfOf);
+  const readOnly = locked || windowClosed || mode === "noRecord" || mode === "notPermitted" || (mode === "staff" && !onBehalfOf);
 
   const regimeNewId = useId();
   const regimeOldId = useId();
@@ -136,7 +136,10 @@ export function TaxDeclarationForm() {
           return;
         }
         if (!onBehalfOf && res.status === 403) {
-          setMode("noRecord");
+          // UAT #2445 review item 7: only payroll-service's NO_EMPLOYEE_RECORD means "no
+          // record"; any other 403 is a permission refusal and is shown as one.
+          const code = await res.clone().json().then((j: { code?: unknown }) => j?.code, () => null);
+          setMode(code === "NO_EMPLOYEE_RECORD" ? "noRecord" : "notPermitted");
           return;
         }
         if (res.ok) {
@@ -385,6 +388,11 @@ export function TaxDeclarationForm() {
 
   return (
     <>
+    {mode === "notPermitted" && (
+      <div role="status" className="card" style={{ marginBottom: 16 }}>
+        <div className="pad" style={{ fontSize: 13, lineHeight: 1.5 }}>{t("notPermitted")}</div>
+      </div>
+    )}
     {mode === "noRecord" && (
       <div role="status" className="card" style={{ marginBottom: 16 }}>
         <div className="pad" style={{ fontSize: 13, lineHeight: 1.5 }}>{t("noEmployeeRecord")}</div>

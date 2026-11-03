@@ -7913,6 +7913,7 @@
     "introCutoff": "After {date}, only accepted documents count towards your tax deduction (TDS)."
   },
   "taxDeclarationForm": {
+    "notPermitted": "You are not permitted to view or file tax declarations from this account. Contact payroll if you need access.",
     "noEmployeeRecord": "Your sign-in is not linked to an employee record, so there is no declaration of your own to file here. Ask HR to link your employee record.",
     "staffFilingNote": "You are filing on behalf of an employee. Choose the employee whose declaration you want to view or file.",
     "staffEmployeeLabel": "Employee",
