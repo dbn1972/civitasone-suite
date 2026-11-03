@@ -60,7 +60,12 @@ function formatPaiseForInput(paise: unknown): string {
   return (n / 100).toFixed(2);
 }
 
-export function TaxDeclarationForm() {
+/**
+ * `staff` (UAT b15 item 3): the session holds a payroll/HR staff role (lib/payroll/taxDeclarationRoles.ts). Staff
+ * file on behalf of an employee, so the form opens in that mode and loads only once an employee is chosen, rather
+ * than learning it from the 400 the self-service GET returns to staff. Without the prop the old detection stays.
+ */
+export function TaxDeclarationForm({ staff = false }: { staff?: boolean } = {}) {
   const t = useTranslations("taxDeclarationForm");
   const fy = currentFinancialYear();
 
@@ -88,7 +93,7 @@ export function TaxDeclarationForm() {
   // for a user with no employee record. Both were shown as a failed load with a
   // scary overwrite warning. Now: staff pick the employee they are filing for;
   // a user with no record is told so and the form stays read-only.
-  const [mode, setMode] = useState<"self" | "staff" | "noRecord" | "notPermitted">("self");
+  const [mode, setMode] = useState<"self" | "staff" | "noRecord" | "notPermitted">(staff ? "staff" : "self");
   const [onBehalfOf, setOnBehalfOf] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
@@ -128,6 +133,11 @@ export function TaxDeclarationForm() {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setLoadFailed(false);
+      if (staff && !onBehalfOf) {
+        // Nothing to load until the staff member picks the employee (no self-service probe).
+        setLoading(false);
+        return;
+      }
       try {
         const who = onBehalfOf ? `&employeeId=${encodeURIComponent(onBehalfOf)}` : "";
         const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}${who}`, { signal });
@@ -183,7 +193,7 @@ export function TaxDeclarationForm() {
         setLoading(false);
       }
     },
-    [fy, onBehalfOf],
+    [fy, onBehalfOf, staff],
   );
 
   // Fetch existing declaration on load

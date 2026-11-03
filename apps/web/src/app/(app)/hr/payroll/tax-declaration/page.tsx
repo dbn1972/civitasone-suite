@@ -4,6 +4,7 @@ import { PageHeader } from "../../../../_components/ds";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { hasAnyRole, TAX_PROOF_VIEWER_ROLES } from "@/lib/payroll/taxProofs";
+import { isTaxDeclarationStaff, isSelfServiceEmployee } from "@/lib/payroll/taxDeclarationRoles";
 import { TaxDeclarationForm } from "./TaxDeclarationForm";
 import { TaxProofsPanel } from "./TaxProofsPanel";
 
@@ -16,7 +17,12 @@ export async function generateMetadata() {
 export default async function TaxDeclarationPage() {
   const t = await getTranslations("taxDeclaration");
   const tp = await getTranslations("taxProofs");
-  const canVerify = hasAnyRole(getSessionRoles(), TAX_PROOF_VIEWER_ROLES);
+  const roles = getSessionRoles();
+  const canVerify = hasAnyRole(roles, TAX_PROOF_VIEWER_ROLES);
+  // UAT b15 item 3: the roles decide the mode up front (staff file on behalf; only the employee role has own proofs),
+  // instead of the loaders reading it from a 400 / 403 on every load.
+  const staff = isTaxDeclarationStaff(roles);
+  const selfService = isSelfServiceEmployee(roles);
   return (
     <div className="page-main wrap">
       <PageHeader
@@ -31,8 +37,8 @@ export default async function TaxDeclarationPage() {
           </>
         }
       />
-      <TaxDeclarationForm />
-      <TaxProofsPanel fy={currentFinancialYear()} />
+      <TaxDeclarationForm staff={staff} />
+      <TaxProofsPanel fy={currentFinancialYear()} selfService={selfService && !staff} />
     </div>
   );
 }
