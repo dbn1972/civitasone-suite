@@ -57,8 +57,13 @@ export function WhatsNewBanner() {
         // blocking result. A flat color makes the ratio decidable — both
         // original gradient stops were near-white, so this keeps the same
         // look.
-        background: "#eff6ff",
-        borderBottom: "1px solid #e0e7ff",
+        // UAT post-b14 dark-theme contrast: these were literals (#eff6ff /
+        // #e0e7ff / #2563eb / #6b7280), so in dark mode the inherited light
+        // --ink text sat on a light-blue band (1.11:1). Info tokens follow
+        // the theme: --ink on --infobg is 17.0:1 light / 12.09:1 dark.
+        background: "var(--infobg)",
+        borderBottom: "1px solid var(--infobd)",
+        color: "var(--ink)",
         fontSize: 14,
       }}
     >
@@ -67,7 +72,7 @@ export function WhatsNewBanner() {
         <strong>New:</strong> {title}{" "}
         <Link
           href="/help/changelog"
-          style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 500 }}
+          style={{ color: "var(--info)", textDecoration: "underline", fontWeight: 500 }}
         >
           See what&apos;s new →
         </Link>
@@ -80,7 +85,7 @@ export function WhatsNewBanner() {
           background: "none",
           cursor: "pointer",
           lineHeight: 1,
-          color: "#6b7280",
+          color: "var(--ink2)",
           padding: 4,
           display: "inline-flex",
         }}

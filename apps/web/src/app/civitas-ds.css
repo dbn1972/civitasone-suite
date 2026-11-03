@@ -26,6 +26,16 @@
      3.44:1 on --bg. --on-primary is the text colour on a --primary fill
      (referenced by tenant-admin/plans but never defined -> ink on blue, 1.92:1). */
   --control-border:#7a8599; --on-primary:#ffffff;
+  /* UAT post-b14 dark-theme contrast: text on a --bad fill, the --bad hover
+     fill and the --primary-soft hover tint were literals (#fff, #912018,
+     #c7ddfa) that stayed light-theme values in dark mode. */
+  --on-bad:#ffffff; --bad-d:#912018; --primary-soft-hover:#c7ddfa;
+  /* A-N1 (UAT post-b14, WCAG 1.4.3): footer tokens shared by the app shell
+     footer (.app-foot) and the public site footer (.site-foot). The site
+     footer copyright used text-gray-400 (#9ca3af on #f9fafb = 2.42:1).
+     ink 7.36:1, link 8.80:1, hover 17.0:1, focus ring 5.97:1 on --footer-bg. */
+  --footer-bg:#f9fafb; --footer-ink:#475467; --footer-heading:#101828;
+  --footer-link:#00439c; --footer-link-hover:#101828; --footer-line:#eaecf0; --footer-focus:#4f46e5;
   --good:#067647; --goodbg:#ecfdf3; --goodbd:#abefc6;
   /* UAT-P2-D3 (A11Y-07): #b54708 dropped to 4.42:1 on the 14% warn tint used by
      inline warn chips (/admin/org); #9c3f0a is 5.4:1 there, 6.43:1 on --warnbg. */
@@ -86,9 +96,9 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
 /* buttons */
 /* UX-008 tranche 2 review follow-up: base .btn had no justify-content, defaulting to flex-start. Invisible for the fleet-wide auto-width case, but for the handful of buttons stretched wider than their content (e.g. a width:100% modal-close button, a minWidth reset-zoom button) the raw <button> elements this tranche converted used to center via the native UA button default -- the new flex layout left-aligned instead. Centering here restores that for every width-constrained .btn; content-sized buttons (the fleet-wide majority) are unaffected since there is no extra space to redistribute. One known exception: menu-item-style .btn rows that set width:100% + textAlign (which flex ignores) to fake left alignment -- see grants/applications/FilterButton.tsx -- now render centered too; flagged separately, not fixed here. */
 .btn{border:0;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:.12s}
-.btn.primary{background:var(--primary);color:#fff;box-shadow:0 8px 16px -8px var(--primary)}
+.btn.primary{background:var(--primary);color:var(--on-primary);box-shadow:0 8px 16px -8px var(--primary)}
 .btn.primary:hover{background:var(--primary-d)}
-.btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
 .btn.ghost:hover{background:var(--line2)}
 /* UX-008 tranche 2: .btn.secondary had no rule at all (found in tranche 1,
    left open) -- reuses the existing --primary-soft/--primary-d pair already
@@ -96,7 +106,7 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
    clickable row, focus ring), so a secondary button reads as a lower-emphasis
    but still-branded filled action, distinct from ghost's outlined look. */
 .btn.secondary{background:var(--primary-soft);color:var(--primary-d)}
-.btn.secondary:hover{background:#c7ddfa}
+.btn.secondary:hover{background:var(--primary-soft-hover)}
 .btn.sm{padding:7px 12px;font-size:12.5px}
 /* GAP-RECRUITMENT-TALENT-POOL-07: 44px touch target without per-call inline styles */
 .btn.btn-tall{min-height:44px;box-sizing:border-box}
@@ -380,6 +390,12 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   --line:#2d3748; --line2:#1e2a3a;
   /* UAT-P2-D3 (A11Y-03/08): field boundary 3.62:1 on --panel; dark text on the light-blue primary fill (7.7:1). */
   --control-border:#6b7a90; --on-primary:#0f1419;
+  /* dark: dark text on the light --bad fill (6.69:1) and its hover (9.75:1);
+     the secondary-button hover tint keeps --primary-d at 6.38:1. */
+  --on-bad:#0f1419; --bad-d:#fca5a5; --primary-soft-hover:#1e3a5f;
+  /* A-N1 dark footer: ink 9.67:1, link 10.27:1, hover 15.23:1, focus 6.21:1 on #0f1419. */
+  --footer-bg:#0f1419; --footer-ink:#b4bcc8; --footer-heading:#e7e9ed;
+  --footer-link:#93c5fd; --footer-link-hover:#e7e9ed; --footer-line:#2d3748; --footer-focus:#818cf8;
   --good:#34d399; --goodbg:#064e3b; --goodbd:#065f46;
   --warn:#fbbf24; --warnbg:#451a03; --warnbd:#78350f;
   --bad:#f87171; --badbg:#450a0a; --badbd:#7f1d1d;
@@ -448,8 +464,10 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    and the shell footer (.app-foot) reserves a gutter under the content, so it
    never covers the focused control or the last table rows / form actions. */
 html{scroll-padding-bottom:96px}
-/* UAT-P2-D3 (A11Y-08): native selects follow the dark palette. */
-.dark select{color-scheme:dark}
+/* UAT-P2-D3 (A11Y-08): native selects follow the dark palette.
+   UAT post-b14: color-scheme alone left Chrome painting the closed select on
+   its own grey (#6b6b6b, 4.38:1 with --ink); give it the token surface. */
+.dark select{color-scheme:dark;background-color:var(--panel);color:var(--ink)}
 /* UAT-P2-D4 (FIN-01): .fields is the read-only 2-column label/value grid. On
    the journal voucher entry form it squeezed the whole form into half the card
    and pushed line items past the right edge at 1366px. Scoped to that form
@@ -460,10 +478,23 @@ form.fields.jv-form>*{min-width:0}
 /* UAT-P2-D3 (A11Y-17): breadcrumb links get a usable target height. */
 .tb .crumb a{display:inline-block;padding-block:4px}
 /* UAT-P2-D3 (A11Y-20, GIGW): shell footer (contentinfo) + visible language toggle. */
-.app-foot{border-top:1px solid var(--line);padding:14px 24px 96px;font-size:12.5px;color:var(--ink2)}
+.app-foot{border-top:1px solid var(--footer-line);padding:14px 24px 96px;font-size:12.5px;background:var(--footer-bg);color:var(--footer-ink)}
 .app-foot-owner{margin:0 0 6px}
 .app-foot-links{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;margin:0;padding:0}
-.app-foot-links a{color:var(--primary);display:inline-block;padding-block:4px;text-decoration:underline}
+.app-foot-links a{color:var(--footer-link);display:inline-block;padding-block:4px;text-decoration:underline}
+.app-foot-links a:hover{color:var(--footer-link-hover)}
+/* A-N1: public (marketing) site footer, same footer tokens. */
+.site-foot{background:var(--footer-bg);color:var(--footer-ink);border-top:1px solid var(--footer-line)}
+.site-foot-heading{color:var(--footer-heading)}
+.site-foot-rule{border-top:1px solid var(--footer-line)}
+.site-foot a{color:var(--footer-link)}
+.site-foot a:hover{color:var(--footer-link-hover);text-decoration:underline}
+.site-foot a:focus-visible,
+.app-foot-links a:focus-visible{outline:2px solid var(--footer-focus);outline-offset:2px;border-radius:2px}
+/* The marketing surface is light-only by design (data-color-scheme="light",
+   see (marketing)/layout.tsx): keep its footer on the light footer tokens
+   even when the app theme on <html> is dark. */
+[data-color-scheme="light"]{--footer-bg:#f9fafb; --footer-ink:#475467; --footer-heading:#101828; --footer-link:#00439c; --footer-link-hover:#101828; --footer-line:#eaecf0; --footer-focus:#4f46e5}
 .tb-lang{min-height:36px;padding:6px 10px;font-size:13px}
 @media(max-width:768px){.app-foot{padding:14px 16px 96px}}
 
@@ -512,7 +543,7 @@ form.fields.jv-form>*{min-width:0}
   font-size:13.5px;color:var(--ink);background:#fff;font-family:inherit}
 .cd-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}
-.btn.danger{background:var(--bad);color:#fff;box-shadow:0 8px 16px -8px var(--bad)}
+.btn.danger{background:var(--bad);color:var(--on-bad);box-shadow:0 8px 16px -8px var(--bad)}
 
 /* ============================================================
    MODAL — generic dialog shell (role=dialog / alertdialog).
@@ -528,7 +559,7 @@ form.fields.jv-form>*{min-width:0}
 .modal-panel--sm{max-width:360px}
 .modal-panel--lg{max-width:640px}
 .modal-title{font-size:17px;font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
-.btn.danger:hover{background:#912018}
+.btn.danger:hover{background:var(--bad-d)}
 
 
 /* == Sprint 6: Mobile responsive breakpoints for key HRMS pages == */
