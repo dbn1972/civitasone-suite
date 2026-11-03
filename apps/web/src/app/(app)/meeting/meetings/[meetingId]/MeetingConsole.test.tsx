@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import en from "@/messages/en.json";
+
+// UAT J14: the lifecycle labels now come from the meetingLifecycle messages.
+const render = (ui: React.ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={en}>{ui}</NextIntlClientProvider>);
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -15,8 +21,14 @@ const attendanceCheckInMock = vi.fn();
 const attendanceCheckOutMock = vi.fn();
 const initiateVoteMock = vi.fn();
 
+const addAgendaItemMock = vi.fn();
 vi.mock("../../_data/client", () => ({
   transitionMeeting: (...args: unknown[]) => transitionMeetingMock(...args),
+  addAgendaItem: (...args: unknown[]) => addAgendaItemMock(...args),
+  AGENDA_OUTCOME_TYPES: ["decision", "discussion", "information", "ratification"],
+  MeetingTransitionError: class MeetingTransitionError extends Error {
+    constructor(public readonly code: string, message: string) { super(message); }
+  },
   castVote: (...args: unknown[]) => castVoteMock(...args),
   concludeVote: (...args: unknown[]) => concludeVoteMock(...args),
   fetchActiveVotes: (...args: unknown[]) => fetchActiveVotesMock(...args),
@@ -117,16 +129,20 @@ describe("MeetingConsole — danger transition confirmation (fix 2)", () => {
     render(<MeetingConsole {...baseProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Adjourn meeting" }));
     const dialog = screen.getByRole("alertdialog");
+    // UAT J14: meeting-service refuses an adjournment without a recorded reason.
+    expect(within(dialog).getByRole("button", { name: "Adjourn meeting" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Power failure" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Adjourn meeting" }));
-    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "adjourned"));
+    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "adjourned", 1, "Power failure"));
   });
 
   it("a non-danger transition still fires immediately without a dialog", async () => {
     transitionMeetingMock.mockResolvedValue(undefined);
-    render(<MeetingConsole {...baseProps()} meeting={meeting({ status: "scheduled" })} />);
+    // UAT J14: Start is offered from agenda_locked (the service has no scheduled -> in_progress edge).
+    render(<MeetingConsole {...baseProps()} meeting={meeting({ status: "agenda_locked" })} />);
     fireEvent.click(screen.getByRole("button", { name: "Start meeting" }));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "in_progress"));
+    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "in_progress", 1));
   });
 });
 
@@ -331,3 +347,40 @@ describe("MeetingConsole — in-page anchor nav (GAP-MEETING-MEETINGS-MEETINGID-
   });
 });
 
+
+describe("MeetingConsole — lifecycle from draft (UAT J14 / D9)", () => {
+  beforeEach(() => { transitionMeetingMock.mockReset().mockResolvedValue(undefined); addAgendaItemMock.mockReset().mockResolvedValue(undefined); });
+  const future = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  const agendaItem = { id: "a1", meetingId: "m1", title: "Budget", status: "proposed", sequence: 1 } as never;
+
+  it("a draft meeting offers Schedule (it used to offer nothing) and sends the version-locked body", async () => {
+    render(<MeetingConsole {...baseProps()} agenda={[agendaItem]}
+      meeting={meeting({ status: "draft", chairpersonId: "c1", scheduledAt: future, version: 3 })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "scheduled", 3));
+  });
+
+  it("Schedule is disabled with the reasons when the service prerequisites are missing", () => {
+    render(<MeetingConsole {...baseProps()} agenda={[]} meeting={meeting({ status: "draft", chairpersonId: null, scheduledAt: future })} />);
+    expect(screen.getByRole("button", { name: "Schedule meeting" })).toBeDisabled();
+    expect(screen.getByText(/add at least one agenda item/i)).toBeInTheDocument();
+    expect(screen.getByText(/assign a chairperson/i)).toBeInTheDocument();
+  });
+
+  it("a draft meeting can take an agenda item on screen", async () => {
+    render(<MeetingConsole {...baseProps()} agenda={[]} meeting={meeting({ status: "draft" })} />);
+    fireEvent.change(screen.getByLabelText(/new agenda item/i), { target: { value: "Approve Q3 budget" } });
+    fireEvent.change(screen.getByLabelText(/outcome/i), { target: { value: "decision" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add agenda item" }));
+    await waitFor(() => expect(addAgendaItemMock).toHaveBeenCalledWith("m1", { title: "Approve Q3 budget", outcomeType: "decision" }));
+  });
+
+  it("scheduled offers Lock agenda, not Start meeting; consecutive transitions carry the bumped version", async () => {
+    render(<MeetingConsole {...baseProps()} meeting={meeting({ status: "scheduled", version: 4 })} />);
+    expect(screen.queryByRole("button", { name: "Start meeting" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Lock agenda" }));
+    await waitFor(() => expect(transitionMeetingMock).toHaveBeenCalledWith("m1", "agenda_locked", 4));
+    fireEvent.click(await screen.findByRole("button", { name: "Start meeting" }));
+    await waitFor(() => expect(transitionMeetingMock).toHaveBeenLastCalledWith("m1", "in_progress", 5));
+  });
+});

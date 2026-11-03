@@ -54,7 +54,8 @@ import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES } from "./domain.js";
+import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, allowedTargets, canTransition, isMeetingState } from "./domain.js";
+import { httpError } from "../../shared/context.js";
 import {
   createMeetingSchema,
   updateMeetingSchema,
@@ -317,6 +318,15 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
     await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const body = transitionMeetingSchema.parse(req.body);
+    // UAT J14 / D9: refuse an edge the state machine does not have HERE (422 with
+    // the allowed targets), instead of answering 202 for a command the consumer
+    // can only dead-letter. Data guards (agenda, quorum, notice) stay in the
+    // consumer, which re-checks everything.
+    if (isMeetingState(meeting.status) && !canTransition(meeting.status, body.to)) {
+      throw httpError("MEETING_INVALID_TRANSITION", `cannot transition meeting from "${meeting.status}" to "${body.to}" (allowed: ${allowedTargets(meeting.status).join(", ")})`, {
+        from: meeting.status, to: body.to, allowed: allowedTargets(meeting.status),
+      });
+    }
     const accepted = await commands.publishMeetingTransition(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });
