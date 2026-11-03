@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { eq, and } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollTdsChallan, payrollTds, payrollTdsNonSalary } from "../statutory/schema.js";
+import { notExcludedSlip } from "../statutory/repo.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -59,7 +60,7 @@ async function tdsDeductedMinor(tenantId: string, period: string): Promise<bigin
     .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
   const valid = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
   const rows = await scopedRead((tx) => tx.select().from(payrollTds)
-    .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.period, period))));
+    .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.period, period), notExcludedSlip(payrollTds.slipId))));
   let sum = 0n;
   for (const t of rows) {
     if (valid.size > 0 && !valid.has(t.runId)) continue;

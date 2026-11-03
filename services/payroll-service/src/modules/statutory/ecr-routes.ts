@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
+import { notExcludedSlip } from "./repo.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { queue } from "../../shared/infra.js";
@@ -36,7 +37,7 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
 
     // Fetch PF records for the given period
     const pfRecords = await scopedRead((tx) => tx.select().from(payrollPf)
-      .where(and(eq(payrollPf.tenantId, ctx.tenantId), eq(payrollPf.period, month))));
+      .where(and(eq(payrollPf.tenantId, ctx.tenantId), eq(payrollPf.period, month), notExcludedSlip(payrollPf.slipId))));
 
     if (pfRecords.length === 0) {
       throw new HttpError(404, "NOT_FOUND", `No PF records found for period ${month}`);

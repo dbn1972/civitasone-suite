@@ -341,6 +341,14 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
         id: approvedRunId, tenantId: tenant, runNo: `PRIOR-${tenant.slice(0, 8)}`, month: "2026-06",
         structureId: randomUUID(), status: "approved", createdBy: ACTOR, updatedBy: ACTOR,
       });
+      // T-STAT F03: arrears are "due minus drawn" -- August (the revised month)
+      // must have been drawn, at the OLD basic 25,000 (DA 50%, HRA X 30%), for
+      // the run to owe an arrear for it.
+      const augustRunId = randomUUID();
+      await tx.insert(payrollRuns).values({
+        id: augustRunId, tenantId: tenant, runNo: `AUG-${tenant.slice(0, 8)}`, month: "2026-08",
+        structureId: randomUUID(), status: "disbursed", createdBy: ACTOR, updatedBy: ACTOR,
+      });
       for (const e of employees) {
         await tx.execute(sql`
           INSERT INTO payroll.payroll_salary_revisions
@@ -366,6 +374,16 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
           id: priorSlipId, tenantId: tenant, runId: approvedRunId, employeeId: e.id, employeeNo: e.employeeNo,
           basicMinor: 3000000n, grossMinor: 5000000n, totalDeductionsMinor: 500000n, netPayMinor: 4500000n,
           currency: "INR", components: [], createdBy: ACTOR, updatedBy: ACTOR,
+        });
+        await tx.insert(payrollSlips).values({
+          id: randomUUID(), tenantId: tenant, runId: augustRunId, employeeId: e.id, employeeNo: e.employeeNo,
+          basicMinor: 2500000n, grossMinor: 4500000n, totalDeductionsMinor: 0n, netPayMinor: 4500000n, currency: "INR",
+          components: [
+            { code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: 2500000 },
+            { code: "DA", name: "Dearness Allowance", type: "earning", amountMinor: 1250000 },
+            { code: "HRA", name: "House Rent Allowance", type: "earning", amountMinor: 750000 },
+          ],
+          createdBy: ACTOR, updatedBy: ACTOR,
         });
         await tx.insert(payrollTds).values({
           id: randomUUID(), tenantId: tenant, slipId: priorSlipId, employeeId: e.id, runId: approvedRunId,

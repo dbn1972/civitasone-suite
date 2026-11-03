@@ -3,6 +3,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
+import { notExcludedSlip } from "../statutory/repo.js";
 import { taxDeclarations } from "./schema.js";
 import { computeTax, roundRupeeMinor, roundTenRupeesMinor } from "./engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
@@ -195,7 +196,8 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
   );
   const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
     .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId))));
-  const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId));
+  // Delta review D-B1: an excluded slip was never paid -- not Form 16 salary.
+  const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId) && s.status !== "excluded");
   const grossMinor = roundRupeeMinor(fySlips.reduce((a, s) => a + BigInt(s.grossMinor), 0n));
   const grossSalary = toSafeInt(grossMinor / 100n);
 
@@ -211,7 +213,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
   let totalTdsMinor = 0n;
   for (const month of months) {
     const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
-      .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.employeeId, employeeId), eq(payrollTds.period, month))));
+      .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.employeeId, employeeId), eq(payrollTds.period, month), notExcludedSlip(payrollTds.slipId))));
     for (const t of tdsRows) {
       // M3: exclude TDS rows whose source run is not approved/disbursed.
       if (!finalisedRunIds.has(t.runId)) continue;

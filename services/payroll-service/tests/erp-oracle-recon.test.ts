@@ -42,7 +42,9 @@ function taxNew2025(taxableRupees: number): number {
     rem -= inSlab;
   }
   slab = Math.round(slab);
-  const rebate = t <= 1200000 ? Math.min(slab, 60000) : 0;
+  // s.87A: rebate up to 60,000 at <= 12L; above 12L the proviso (marginal
+  // relief, Finance Act 2025) caps the tax before cess at (income - 12L).
+  const rebate = t <= 1200000 ? Math.min(slab, 60000) : Math.max(0, slab - (t - 1200000));
   const afterRebate = Math.max(0, slab - rebate);
   // surcharge bands new: >50L 10%, >1cr 15%, >2cr 25%
   let scRate = 0;
@@ -171,7 +173,8 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
     const promo = 500_000n;
     const gross = basic + da + hra + promo;
     const { pfEmployee, eps } = pfBlock(basic + da);
-    const annualTaxable = gross * 12n - 7_500_000n;
+    // s.192 estimate: regular salary x 12, the one-off promotion arrear ONCE (T-STAT F02).
+    const annualTaxable = (gross - promo) * 12n + promo - 7_500_000n;
     const tds = annualTaxNewPaise(annualTaxable) / 100n / 12n * 100n;
     const ded = pfEmployee + tds;
     checkSlip("C5 promo", {
@@ -186,7 +189,8 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
     const arrear = 2_000_000n;
     const gross = basic + da + hra + arrear;
     const { pfEmployee, eps } = pfBlock(basic + da);
-    const annualTaxable = gross * 12n - 7_500_000n;
+    // s.192 estimate: regular salary x 12, the arrear ONCE (T-STAT F02).
+    const annualTaxable = (gross - arrear) * 12n + arrear - 7_500_000n;
     const tds = annualTaxNewPaise(annualTaxable) / 100n / 12n * 100n;
     const ded = pfEmployee + tds;
     checkSlip("C6 arrear", {
