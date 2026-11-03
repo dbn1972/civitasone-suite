@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { eq, sql } from "drizzle-orm";
@@ -105,13 +105,14 @@ describe("duplicate Employee ID (UAT follow-up)", () => {
 
   it("the Fastify request logger and every hrms module pino logger use the safe serializer", () => {
     const sers = (app.log as unknown as Record<symbol, Record<string, unknown>>)[pino.symbols.serializersSym];
-    expect(sers?.err).toBe(safeErr);
+    expect(sers?.err).toBe(SAFE_LOG_SERIALIZERS.err);
     const offenders: string[] = [];
     const walk = (d: string) => {
-      for (const f of readdirSync(d)) {
-        const p = join(d, f);
-        if (statSync(p).isDirectory()) { if (f !== "__tests__") walk(p); continue; }
-        if (!p.endsWith(".ts") || p.endsWith(".test.ts")) continue;
+      // Dirent types come from the same readdir call (no stat-then-read race, CodeQL js/file-system-race).
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, e.name);
+        if (e.isDirectory()) { if (e.name !== "__tests__") walk(p); continue; }
+        if (!e.isFile() || !p.endsWith(".ts") || p.endsWith(".test.ts")) continue;
         const src = readFileSync(p, "utf8");
         for (const m of src.matchAll(/pino\(\{[^)]*\}\)/g)) if (!m[0].includes("SAFE_LOG_SERIALIZERS")) offenders.push(p);
       }
