@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccount, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries, mapStockItemSummaries, mapStockLedgerEntries } from "./apiMappers";
+import { getArrayPayload, mapProcurementPODetail, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccount, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries, mapStockItemSummaries, mapStockLedgerEntries } from "./apiMappers";
 
 // GAP-CRM-ACCOUNTS-DETAIL-01: the by-id endpoint's `{ data: <account> }` body.
 describe("mapCrmAccount", () => {
@@ -823,5 +823,25 @@ describe("mapEstabFileSummaries — status and IST days (GAP-ESTAB-DASHBOARD-01)
     expect(row?.dueDate).toBe("2026-11-02");
     expect(row?.createdDate).toBe("2026-10-01");
     expect(mapEstabFileSummaries([{ ...base }])?.[0]?.dueDate).toBeUndefined();
+  });
+});
+
+describe("PO status vocabulary (UAT-P1A-02)", () => {
+  it("keeps a closed PO closed in the list (it used to read as Draft)", () => {
+    const result = mapProcurementPOListItems({
+      data: [
+        { id: "1", poNo: "PO/2026/0001", status: "closed" },
+        { id: "2", poNo: "PO/2026/0002", status: "rejected" },
+        { id: "3", poNo: "PO/2026/0003", status: "gem_placed" },
+      ],
+    });
+    expect(result!.map((r) => r.status)).toEqual(["closed", "cancelled", "gem_placed"]);
+  });
+});
+
+describe("PO detail status (UAT-P1A-02)", () => {
+  it("keeps a closed PO closed on the detail page", () => {
+    const po = mapProcurementPODetail({ id: "po-1", poNo: "PO/2026/0001", vendor: "V", status: "closed", lineItems: [] });
+    expect(po?.status).toBe("closed");
   });
 });

@@ -8,12 +8,15 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { headLabel, type HeadLookup } from "../../_components/headLookup";
 
 const STATEMENT_TYPES = ["R&P", "I&E", "Balance Sheet"] as const;
 type StatementType = (typeof STATEMENT_TYPES)[number];
 
 const TYPE_LABEL: Record<StatementType, string> = {
-  "R&P": "Receipts & Payments Account",
+  // UAT Phase 1B (recon D11): the feed is a per-head trial balance with no cash/bank marking,
+  // so this view is every head's debits and credits, not a Receipts & Payments account.
+  "R&P": "All heads — debits and credits",
   "I&E": "Income & Expenditure Account",
   "Balance Sheet": "Balance Sheet",
 };
@@ -27,6 +30,8 @@ const TYPE_FILTER: Record<StatementType, ((s: FinancialStatementSummary) => bool
 interface StatementsTableProps {
   statements: FinancialStatementSummary[];
   source?: "api" | "error";
+  /** Chart-of-accounts lookup (id and code -> code/name) so the Head column never shows a UUID. */
+  heads?: HeadLookup;
 }
 
 /** "—" for anything that is not a clean paise string (never a fabricated 0). */
@@ -35,11 +40,24 @@ function cellMoney(v: unknown): string {
   return p === null ? "—" : formatMoney(p);
 }
 
+/**
+ * UAT Phase 1B (recon D11): closingBalance is credits - debits for EVERY head, so a
+ * debit-balance head (cash, bank, an expense) came out negative. Show the balance as an
+ * amount with its side -- "Dr" (debit balance) / "Cr" (credit balance) -- which is correct
+ * for every account class without guessing which side is "normal".
+ */
+function drCr(v: unknown): string {
+  const p = parseMinorExact(v);
+  if (p === null) return "—";
+  if (p === 0n) return formatMoney(0n);
+  return p > 0n ? `${formatMoney(p)} Cr` : `${formatMoney(-p)} Dr`;
+}
+
 const MONEY_FIELDS = ["openingBalance", "receipts", "payments", "closingBalance"] as const;
 
 type StatRow = FinancialStatementSummary & Record<string, unknown>;
 
-export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
+export function StatementsTable({ statements, source = "api", heads = {} }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
     // ".v2": the cached shape changed from rupee numbers to paise strings
@@ -52,7 +70,11 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
   );
 
   const filterFn = TYPE_FILTER[activeType];
-  const filtered = (filterFn ? rows.filter(filterFn) : rows) as StatRow[];
+  const filtered = (filterFn ? rows.filter(filterFn) : rows).map((r) => ({
+    ...r,
+    // UAT Phase 1B (recon D11): `head` is the head's UUID on the live feed; show code · name.
+    headName: headLabel(heads, r.head),
+  })) as StatRow[];
 
   // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-02: totals are derived per
   // statement (never summed across account classes).
@@ -140,7 +162,7 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
         <>
           <DataTable<StatRow>
             columns={[
-              { key: "head", label: "Head" },
+              { key: "headName", label: "Head" },
               { key: "type", label: "Type", render: (st) => <span style={{ textTransform: "capitalize" }}>{st.type as string}</span> },
               {
                 key: "openingBalance",
@@ -152,33 +174,37 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
                   </span>
                 ),
               },
-              {
-                key: "receipts",
-                label: "Receipts",
-                align: "right",
-                render: (st) => (
-                  <span aria-label={`Receipts ${cellMoney(st.receipts)}`}>
-                    {cellMoney(st.receipts)}
-                  </span>
-                ),
-              },
+              // UAT Phase 1B (recon D11): the feed's `receipts` are a head's total CREDITS and its
+              // `payments` its total DEBITS (gl/queries.ts listFinancialStatements). For a cash or bank
+              // head that is the reverse of receipts/payments (a cash outflow is a credit), so they are
+              // labelled for what they are.
               {
                 key: "payments",
-                label: "Payments",
+                label: "Debits",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Payments ${cellMoney(st.payments)}`}>
+                  <span aria-label={`Debits ${cellMoney(st.payments)}`}>
                     {cellMoney(st.payments)}
                   </span>
                 ),
               },
               {
-                key: "closingBalance",
-                label: "Closing",
+                key: "receipts",
+                label: "Credits",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Closing ${cellMoney(st.closingBalance)}`}>
-                    {cellMoney(st.closingBalance)}
+                  <span aria-label={`Credits ${cellMoney(st.receipts)}`}>
+                    {cellMoney(st.receipts)}
+                  </span>
+                ),
+              },
+              {
+                key: "closingBalance",
+                label: "Closing balance",
+                align: "right",
+                render: (st) => (
+                  <span aria-label={`Closing ${drCr(st.closingBalance)}`}>
+                    {drCr(st.closingBalance)}
                   </span>
                 ),
               },
@@ -188,8 +214,9 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
           />
           {activeType === "R&P" ? (
             <p style={{ fontSize: 13, color: "var(--ink2)", margin: "8px 0 0" }}>
-              Grand totals are not shown: the statements feed does not mark which heads are cash or bank, and a
-              total across all account classes has no accounting meaning.
+              The statements feed does not mark which heads are cash or bank, so a Receipts &amp; Payments account
+              cannot be drawn from it; grand totals are not shown because a total across all account classes has no
+              accounting meaning.
             </p>
           ) : null}
         </>

@@ -12,6 +12,17 @@ const A = (id: string, type: string, status = "active") => ({
 });
 
 describe("computeAssetStats", () => {
+  // UAT Phase 1B (recon D17): disposed / written-off assets are off the books.
+  it("excludes disposed and written-off assets from Net Book Value (condemned stay on the books)", () => {
+    const rows = [
+      { status: "active", purchaseCost: 100000, currentValue: 80000 },
+      { status: "disposed", purchaseCost: 50000, currentValue: 39333 },
+      { status: "written_off", purchaseCost: 10000, currentValue: 1000 },
+      { status: "condemned", purchaseCost: 20000, currentValue: 5000 },
+    ];
+    expect(computeAssetStats(rows).netBlock).toBe(85000);
+  });
+
   it("summarises count, active share and blocks in paise", () => {
     expect(computeAssetStats([A("1", "it"), A("2", "it", "maintenance")])).toEqual({ count: 2, activePct: 50, grossBlock: 200000, netBlock: 160000 });
     expect(computeAssetStats([])).toEqual({ count: 0, activePct: 0, grossBlock: 0, netBlock: 0 });

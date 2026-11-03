@@ -9,7 +9,8 @@ import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/st
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
-import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
+import { ExceptionPanel } from "./ExceptionPanel";
+import { deriveExceptions } from "./deriveExceptions";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
 import { getSessionRoles, getSessionUserId, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";

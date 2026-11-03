@@ -117,6 +117,42 @@ async function readErrorBody(response: Response): Promise<{ code?: string; messa
 }
 
 /**
+ * UAT-P1A-01: the payload inside a `{ data, meta }` / `{ data, pagination }` /
+ * `{ items, total, ... }` list envelope (or a `{ data: {...} }` record
+ * envelope), or `undefined` when `raw` is not such an envelope. Services
+ * wrap their responses inconsistently, and many loader schemas describe only
+ * the bare array/record; validating the envelope against those schemas failed
+ * every time, so the screen showed "We couldn't load ..." over a 200 with data.
+ */
+export function envelopePayload(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const env = raw as { data?: unknown; items?: unknown };
+  if (Array.isArray(env.data)) return env.data;
+  if (typeof env.data === "object" && env.data !== null) return env.data;
+  if (Array.isArray(env.items)) return env.items;
+  return undefined;
+}
+
+/**
+ * Validate the body as-is first: schemas that model the envelope (and bare
+ * array/record responses) are unaffected. Only when that fails is the
+ * envelope's payload validated against the same schema, so a schema for the
+ * bare array/record accepts the enveloped response too. Field-level
+ * mismatches still fail -- the payload is held to the same schema.
+ */
+export function parseWithEnvelope<TApi>(
+  schema: ZodType<TApi, ZodTypeDef, unknown>,
+  raw: unknown,
+): { success: true; data: TApi } | { success: false } {
+  const direct = schema.safeParse(raw);
+  if (direct.success) return { success: true, data: direct.data };
+  const inner = envelopePayload(raw);
+  if (inner === undefined) return { success: false };
+  const unwrapped = schema.safeParse(inner);
+  return unwrapped.success ? { success: true, data: unwrapped.data } : { success: false };
+}
+
+/**
  * API-only loader — no mock fallback. On failure returns empty data + source:"error".
  */
 export async function fetchJson<TApi, TOutput>(
@@ -160,7 +196,7 @@ export async function fetchJson<TApi, TOutput>(
 
     const raw = await response.json();
     if (options.responseSchema) {
-      const parsed = options.responseSchema.safeParse(raw);
+      const parsed = parseWithEnvelope(options.responseSchema, raw);
       if (!parsed.success) {
         emitError(options.telemetryKey, "invalid_payload", path, response.status);
         return { data: empty, source: "error", status: response.status };
@@ -173,8 +209,13 @@ export async function fetchJson<TApi, TOutput>(
       return { data: mapped, source: "api" };
     }
 
-    const payload = raw as TApi;
-    const mapped = options.mapResponse(payload);
+    // UAT-P1A-01: a mapper written for the bare record/array gets the
+    // envelope's payload when it rejects the envelope itself.
+    let mapped = options.mapResponse(raw as TApi);
+    if (mapped === null) {
+      const inner = envelopePayload(raw);
+      if (inner !== undefined) mapped = options.mapResponse(inner as TApi);
+    }
     if (mapped === null) {
       emitError(options.telemetryKey, "invalid_payload", path, response.status);
       return { data: empty, source: "error", status: response.status };

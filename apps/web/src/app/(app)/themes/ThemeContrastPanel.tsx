@@ -28,14 +28,19 @@ function toHex6(value: string): string | null {
   return null;
 }
 
+/** Lower-cased token key; "" for a malformed row (never throws on a missing key). */
+function keyOf(t: ThemeTokenSummary): string {
+  return typeof t?.key === "string" ? t.key.toLowerCase() : "";
+}
+
 function findToken(tokens: ThemeTokenSummary[], candidates: string[]): ThemeTokenSummary | undefined {
   for (const cand of candidates) {
-    const hit = tokens.find((t) => t.key.toLowerCase() === cand);
+    const hit = tokens.find((t) => keyOf(t) === cand);
     if (hit && isCssColour(String(hit.value ?? ""))) return hit;
   }
   // fall back to a key that *contains* the candidate word
   for (const cand of candidates) {
-    const hit = tokens.find((t) => t.key.toLowerCase().includes(cand) && isCssColour(String(t.value ?? "")));
+    const hit = tokens.find((t) => keyOf(t).includes(cand) && isCssColour(String(t.value ?? "")));
     if (hit) return hit;
   }
   return undefined;

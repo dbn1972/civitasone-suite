@@ -102,7 +102,7 @@ export default async function ChequeDetailPage(props: { params: Promise<{ id: st
             <RevealableValue
               maskedText={maskedAccountLabel(cheque.accountNoLast4)}
               revealPath={`v1/finance/instruments/${cheque.id}/reveal-account`}
-              pick={(json) => (json as { accountNo?: string })?.accountNo}
+              pickPath={["accountNo"]}
               canReveal={!!cheque.bankAccountId && canWrite(roles, BANK_ACCOUNT_REVEAL_ROLES)}
               label="account number"
               fallback="—"

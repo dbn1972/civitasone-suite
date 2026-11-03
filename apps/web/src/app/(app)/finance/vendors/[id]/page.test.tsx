@@ -26,6 +26,16 @@ vi.mock("../VendorBankChange", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+// UAT Phase 1B: record RevealableValue's props so a test can assert they are all serialisable
+// (a function prop from this Server Component crashed the real render).
+const revealProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock("@/app/_components/ds/RevealableValue", async (orig) => {
+  const actual = await orig<typeof import("@/app/_components/ds/RevealableValue")>();
+  return {
+    ...actual,
+    RevealableValue: (p: Record<string, unknown>) => { revealProps.push(p); return actual.RevealableValue(p as never); },
+  };
+});
 
 import VendorDetailPage from "./page";
 
@@ -151,5 +161,17 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
     session.roles = ["finance_officer"];
     render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(4);
+  });
+
+  it("passes RevealableValue only serialisable props (pickPath, never a pick function)", async () => {
+    revealProps.length = 0;
+    session.roles = ["finance_officer"];
+    getFinanceVendorById.mockResolvedValue({ data: { ...base, panMasked: "XXXXX1234X", bills: [] }, source: "api" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(revealProps.length).toBeGreaterThan(0);
+    for (const p of revealProps) {
+      expect(Object.entries(p).filter(([, v]) => typeof v === "function").map(([k]) => k)).toEqual([]);
+      expect(Array.isArray(p.pickPath)).toBe(true);
+    }
   });
 });

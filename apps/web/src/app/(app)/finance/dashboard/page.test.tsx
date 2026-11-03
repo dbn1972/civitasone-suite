@@ -22,8 +22,11 @@ const MOCK_DASHBOARD = {
   totalExpenditure: 12_500_000,
 };
 
-function mockFinanceLoader(result: { data: unknown; source: "api" | "error" }) {
+const MOCK_SANCTIONS_SUMMARY = { total: 10, active: 9, pending: 7, approved: 2, approvedMinor: "100" };
+
+function mockFinanceLoader(result: { data: unknown; source: "api" | "error" }, summary: { data: unknown; source: "api" | "error" } = { data: MOCK_SANCTIONS_SUMMARY, source: "api" }) {
   fetchJsonMock.mockImplementation((path: unknown) => {
+    if (typeof path === "string" && path.includes("/finance/sanctions/summary")) return Promise.resolve(summary);
     if (typeof path === "string" && path.includes("/finance/dashboard")) return Promise.resolve(result);
     return Promise.resolve({ data: null, source: "api" });
   });
@@ -138,4 +141,19 @@ describe("FinanceDashboardPage", () => {
     render(await FinanceDashboardPage({}));
     expect(screen.queryByText("exportMis")).not.toBeInTheDocument();
   });
+
+  // UAT Phase 1B (recon D02): the dashboard's pendingSanctions counted only status 'pending' (0),
+  // while sanctions wait as 'pending_approval'; the card now uses the sanctions summary.
+  it("Pending card shows the sanctions summary's pending count, not the dashboard's status='pending' count", async () => {
+    mockFinanceLoader({ data: { ...MOCK_DASHBOARD, pendingSanctions: 0 }, source: "api" }, { data: { ...MOCK_SANCTIONS_SUMMARY, pending: 2 }, source: "api" });
+    render(await FinanceDashboardPage({}));
+    expect(screen.getByText("pendingApprovals").closest(".stat")).toHaveTextContent("2");
+  });
+
+  it("Pending card shows — (not a fabricated 0) when the sanctions summary fails", async () => {
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" }, { data: null, source: "error" });
+    render(await FinanceDashboardPage({}));
+    expect(screen.getByText("pendingApprovals").closest(".stat")).toHaveTextContent("—");
+  });
 });
+

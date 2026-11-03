@@ -14,7 +14,7 @@ async function connectSrc(env: Record<string, string>): Promise<string> {
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
   vi.resetModules();
   const { middleware } = await import("./middleware");
-  const csp = middleware(new NextRequest(new URL("https://demo.test/auth/login"))).headers.get("Content-Security-Policy") ?? "";
+  const csp = (await middleware(new NextRequest(new URL("https://demo.test/auth/login")))).headers.get("Content-Security-Policy") ?? "";
   return csp.split("; ").find((d) => d.startsWith("connect-src")) ?? "";
 }
 

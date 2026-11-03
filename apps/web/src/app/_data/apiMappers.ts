@@ -149,8 +149,12 @@ export function mapProcurementPOListItems(payload: unknown): PurchaseOrderListIt
               : raw === "fully_received" ? "fully_received"
                 : raw === "cancelled" ? "cancelled"
                   : raw === "gem_placed" ? "gem_placed"
-                    : raw === "review" ? "draft"
-                      : "draft";
+                    // UAT-P1A-02: a closed PO is closed, not a draft; a rejected
+                    // one reads as cancelled, matching normalizePoStatus.
+                    : raw === "closed" ? "closed"
+                      : raw === "rejected" ? "cancelled"
+                        : raw === "review" ? "draft"
+                          : "draft";
     if (!id || !poNo) continue;
     mapped.push({
       id,
@@ -357,6 +361,8 @@ function normalizePoStatus(raw: string | null): PODetail["status"] {
   if (key === "partial_grn" || key === "partial") return "partial_grn";
   if (key === "fully_received" || key === "received") return "fully_received";
   if (key === "cancelled" || key === "rejected") return "cancelled";
+  // UAT-P1A-02: the detail page has a "Closed" state; don't collapse it to Draft.
+  if (key === "closed") return "closed";
   return "draft";
 }
 

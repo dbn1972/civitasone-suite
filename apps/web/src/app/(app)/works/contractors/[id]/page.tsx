@@ -329,7 +329,7 @@ export default async function ContractorDetailPage(
                 <RevealableValue
                   maskedText={maskPan(contractor.pan)}
                   revealPath={`v1/works/contractors/${params.id}/reveal-pan`}
-                  pick={(json) => (json as { data?: { value?: string | null } })?.data?.value}
+                  pickPath={["data", "value"]}
                   canReveal={canRevealPii}
                   label="PAN"
                   fallback="—"

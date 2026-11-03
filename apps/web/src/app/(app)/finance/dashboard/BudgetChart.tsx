@@ -24,6 +24,12 @@ function paiseToRupeesForChart(minor: bigint): number {
   return Number(minor) / 100;
 }
 
+/**
+ * UAT Phase 1B review: `expenditure` / `utilisationPct` are finance-service's dashboard figures, which
+ * today are the sum of ALL ledger debits in the FY (every head, not just expense heads) and that sum
+ * over the budget estimate. The chart is labelled for what it draws -- "Ledger debits" -- until
+ * finance-service reports expense-head expenditure (same as the relabelled dashboard cards).
+ */
 export function BudgetChart({ utilisationPct, expenditure, sanctionedMinor, categoryBreakdown }: BudgetChartProps) {
   const t = useTranslations("financeDashboard");
   const split = computeBudgetSplit({ utilisationPct, expenditure, sanctionedMinor });
@@ -41,7 +47,7 @@ export function BudgetChart({ utilisationPct, expenditure, sanctionedMinor, cate
       <EmptyState
         icon="📉"
         title="No budget estimate"
-        message={`Budget utilisation can't be shown until a budget estimate is on record for this financial year.${split.expenditureMinor > 0n ? ` Expenditure recorded so far: ${formatMoney(split.expenditureMinor)}.` : ""}`}
+        message={`Ledger debits can't be compared with a budget until a budget estimate is on record for this financial year.${split.expenditureMinor > 0n ? ` Ledger debits recorded so far: ${formatMoney(split.expenditureMinor)}.` : ""}`}
       />
     );
   } else if (split.kind === "overspent") {
@@ -51,20 +57,20 @@ export function BudgetChart({ utilisationPct, expenditure, sanctionedMinor, cate
     ];
     banner = (
       <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn)" }}>
-        <span aria-hidden="true">⚠ </span>Over budget estimate by {formatMoney(split.overspentMinor)}
+        <span aria-hidden="true">⚠ </span>Ledger debits exceed the budget estimate by {formatMoney(split.overspentMinor)}
       </p>
     );
   } else if (split.kind === "over-budget") {
     // Older API: no exact estimate, so no amount (D1).
-    donut = [{ label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-warn)" }];
+    donut = [{ label: `Ledger debits (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-warn)" }];
     banner = (
       <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn)" }}>
-        <span aria-hidden="true">⚠ </span>Over budget
+        <span aria-hidden="true">⚠ </span>Ledger debits exceed the budget estimate
       </p>
     );
   } else {
     donut = [
-      { label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-1)" },
+      { label: `Ledger debits (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-1)" },
       {
         label: `Remaining (${split.remainingMinor === null ? "—" : formatMoney(split.remainingMinor)})`,
         value: split.remainingMinor === null ? 0 : paiseToRupeesForChart(split.remainingMinor),
@@ -78,7 +84,7 @@ export function BudgetChart({ utilisationPct, expenditure, sanctionedMinor, cate
       <div style={{ flex: "1 1 200px" }}>
         {banner && (split.kind === "overspent" || split.kind === "over-budget") ? banner : null}
         {split.kind === "no-budget" ? banner : (
-          <Chart type="donut" data={donut} title="Budget Utilisation" height={160} valueFormatter={formatRupees} />
+          <Chart type="donut" data={donut} title={t("budgetChart")} height={160} valueFormatter={formatRupees} />
         )}
       </div>
       <div style={{ flex: "2 1 300px" }}>

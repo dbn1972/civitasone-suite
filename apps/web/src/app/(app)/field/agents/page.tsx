@@ -22,8 +22,13 @@ export default async function Page() {
   // GAP-FIELD-AGENTS-01: one row per agent (distinct assignee) with a task
   // count, from field-service's dedicated /agents endpoint — not one row per
   // task from the tasks endpoint.
-  const rows = data.map((a) => ({ ...a, count: a.taskCount }));
-  type AgentDisplay = FieldAgentRow & { count: number };
+  // `id` (the agent id) gives DataTable its default stable row key. This used to
+  // pass `rowKey={(r) => r.agentId}`, but a Server Component cannot hand a
+  // function prop to the client DataTable: React threw "Functions cannot be
+  // passed directly to Client Components" and /field/agents crashed on every
+  // load (UAT L1, Phase 1B).
+  const rows = data.map((a) => ({ ...a, id: a.agentId, count: a.taskCount }));
+  type AgentDisplay = FieldAgentRow & { id: string; count: number };
 
   return (
     <>
@@ -35,7 +40,6 @@ export default async function Page() {
             { key: "count", label: "Assigned tasks", align: "right" },
           ]}
           rows={rows}
-          rowKey={(r) => r.agentId}
           sortable
           filterable
           filterPlaceholder="Filter agents…"

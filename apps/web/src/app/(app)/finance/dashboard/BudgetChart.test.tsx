@@ -51,7 +51,7 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
     // The pre-#15 raw digits and the pre-#5 paise value must not appear.
     expect(screen.queryByText("5000")).not.toBeInTheDocument();
     expect(screen.queryByText("500000")).not.toBeInTheDocument();
-    expect(screen.getByText(/^Utilized \(₹5,000\.00\)$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Ledger debits \(₹5,000\.00\)$/)).toBeInTheDocument();
     expect(screen.getByText(/^Remaining \(₹5,000\.00\)$/)).toBeInTheDocument();
   });
 
@@ -63,14 +63,14 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
 
   it("pct=120 renders 'Overspent by' and no 'Remaining ₹0.00' legend", () => {
     render(<BudgetChart utilisationPct={120} expenditure={120000} sanctionedMinor="100000" />);
-    expect(screen.getByText(/Over budget estimate by ₹200\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Ledger debits exceed the budget estimate by ₹200\.00/)).toBeInTheDocument();
     expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
   });
 
   it("pct=null renders the no-budget message, not a ₹0.00 Remaining slice", () => {
     expect(() => render(<BudgetChart utilisationPct={null} expenditure={500000} />)).not.toThrow();
     expect(screen.getByText("No budget estimate")).toBeInTheDocument();
-    expect(screen.getByText(/Expenditure recorded so far: ₹5,000\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Ledger debits recorded so far: ₹5,000\.00/)).toBeInTheDocument();
     expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
   });
 
@@ -112,13 +112,13 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
 describe("BudgetChart old-API fallback (D1)", () => {
   it("101% without sanctionedMinor says 'Over budget' with no rupee overspend figure", () => {
     render(<BudgetChart utilisationPct={101} expenditure={10100} />);
-    expect(screen.getByText(/Over budget$/)).toBeInTheDocument();
-    expect(screen.queryByText(/Over budget estimate by/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Ledger debits exceed the budget estimate$/)).toBeInTheDocument();
+    expect(screen.queryByText(/Ledger debits exceed the budget estimate by/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
   });
   it("100.4% without sanctionedMinor is over budget, not 'within, remaining 0'", () => {
     render(<BudgetChart utilisationPct={100.4} expenditure={10040} />);
-    expect(screen.getByText(/Over budget$/)).toBeInTheDocument();
+    expect(screen.getByText(/Ledger debits exceed the budget estimate$/)).toBeInTheDocument();
   });
   it("50% without sanctionedMinor shows Remaining as a dash, not an invented amount", () => {
     render(<BudgetChart utilisationPct={50} expenditure={10000} />);
@@ -175,5 +175,15 @@ describe("BudgetChart category breakdown (supplied by the service)", () => {
     const li = screen.getByText(/^Mega:/);
     expect(li.textContent!.replace(/\D/g, "")).toBe("9007199254740993");
     expect(screen.getByText("Small: ₹1.00")).toBeInTheDocument();
+  });
+});
+
+// UAT Phase 1B review: the chart draws finance-service's all-heads ledger-debit figure, so it is
+// labelled as such (consistent with the relabelled dashboard cards), never "Budget Utilisation".
+describe("BudgetChart labelling", () => {
+  it("titles the donut 'Ledger debits vs budget estimate' and never says Utilized / Budget Utilisation", () => {
+    const { container } = render(<BudgetChart utilisationPct={50} expenditure={500000} sanctionedMinor="1000000" />);
+    expect(container.textContent).toContain("Ledger debits vs budget estimate");
+    expect(container.textContent).not.toMatch(/Budget Utilisation|Utilized/);
   });
 });

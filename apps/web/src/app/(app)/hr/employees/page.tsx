@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, Alert } from "../../../_components/ds";
 import { getEmployees, getHRDashboard } from "../../../_data/loaders";
+import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -57,6 +58,13 @@ function empPageHref(type: string, p: number, q: string, status = ""): string {
   return "/hr/employees" + (qs.length ? "?" + qs.join("&") : "");
 }
 
+/** The directory list's `pagination.total` (every status), or null when the API did not report one. */
+function rosterTotalOf(payload: unknown): number | null {
+  const pagination = (payload as { pagination?: { total?: unknown } } | null)?.pagination;
+  const t = pagination?.total;
+  return typeof t === "number" && Number.isInteger(t) && t >= 0 ? t : null;
+}
+
 export default async function EmployeeDirectoryPage(props: { searchParams?: Promise<Record<string, string>> }) {
   const searchParams = await props.searchParams;
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
@@ -67,9 +75,19 @@ export default async function EmployeeDirectoryPage(props: { searchParams?: Prom
   const q = (searchParams?.q ?? "").trim();
   const rawStatus = searchParams?.status ?? "";
   const statusFilter = (STATUS_FILTERS as readonly string[]).includes(rawStatus) ? rawStatus : "";
-  const [{ data: rawEmployees, source }, { data: hrDashboard, source: dashboardSource }] = await Promise.all([
+  const [{ data: rawEmployees, source }, { data: hrDashboard, source: dashboardSource }, { data: rosterTotal }] = await Promise.all([
     getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter, q || undefined, statusFilter || undefined),
     getHRDashboard(),
+    // UAT Phase 1B (recon D19): the HR dashboard's `headcount` counts only
+    // non-separated staff, so Total excluded separated/retired employees and
+    // "Others" (which by its own legend includes them) was always 0. The
+    // unfiltered directory's own pagination total counts every employee record
+    // in the viewer's scope, whatever the status; use it for Total.
+    fetchJson<unknown, number | null>("/api/v1/hrms/employees?limit=1", null, {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.employees.total",
+      mapResponse: rosterTotalOf,
+    }),
   ]);
   const t = await getTranslations("employees");
   const employees = rawEmployees as EmpRow[];
@@ -99,7 +117,9 @@ export default async function EmployeeDirectoryPage(props: { searchParams?: Prom
   // A search (`q`) legitimately narrows `employees` to far fewer rows than
   // the tenant total on purpose -- must not be mistaken for "genuinely
   // empty roster" the way an un-searched empty page 0 is.
-  const total = page === 0 && !q && !(source === "error") && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
+  const total = page === 0 && !q && !(source === "error") && employees.length === 0
+    ? 0
+    : (rosterTotal ?? (hrDashboard.headcount || employees.length));
   // GAP-HR-EMPLOYEES-01: all four cards are tenant-wide aggregates from the
   // HR dashboard (headcount / serving / onLeave) and so identical on every
   // ?page=, ?type=, ?status= and ?q= view -- Active used to count only the

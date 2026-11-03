@@ -23,6 +23,7 @@ import type { GLEntrySummary } from "@civitasone/types";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import type { GlLinesPagination, GlLinesTotals } from "@/lib/finance/workflowTypes";
 import { GL_PAGE_SIZE, GL_TABS, glQuery, glRange, type GlTab, type GlView } from "./glPage";
+import { resolveHead, type HeadLookup } from "../../_components/headLookup";
 
 type GLRow = GLEntrySummary & Record<string, unknown>;
 
@@ -34,9 +35,26 @@ export interface GLTableProps {
   /** Totals over the whole fiscal-year ledger; omitted/null = unknown (shown as a dash when a filter is active). */
   ledgerTotals?: GlLinesTotals | null;
   view: GlView;
+  /** Chart-of-accounts lookup (id and code -> code/name); see accountColumns(). */
+  heads?: HeadLookup;
 }
 
-export function GLTable({ entries, pagination, totals, ledgerTotals, view }: GLTableProps) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * UAT Phase 1B (recon D13): journal lines carry either the head code or, for some postings, the
+ * head UUID, and finance-service sends `accountName` = that same code. Resolve both against the
+ * chart of accounts: Account shows the head code, Account Name its real name. An unresolvable
+ * UUID is never shown raw, and a name that merely repeats the code is not a name.
+ */
+function accountColumns(heads: HeadLookup, accountCode: string, accountName: string | null | undefined): { accountCode: string; accountName: string } {
+  const ref = resolveHead(heads, accountCode);
+  if (ref) return { accountCode: ref.code, accountName: ref.name };
+  const name = accountName && accountName !== accountCode ? accountName : "—";
+  return { accountCode: UUID_RE.test(accountCode) ? "Unknown head" : accountCode, accountName: name };
+}
+
+export function GLTable({ entries, pagination, totals, ledgerTotals, view, heads = {} }: GLTableProps) {
   const t = useTranslations("financeGeneralLedger");
   const router = useRouter();
   const [query, setQuery] = useState(view.q);
@@ -135,7 +153,7 @@ export function GLTable({ entries, pagination, totals, ledgerTotals, view }: GLT
                   render: (e) => <PrintDocumentLink href={`/api/proxy/v1/finance/journals/${journalIdOf(e.id as string)}/pdf`} label="Voucher" />,
                 },
               ]}
-              rows={entries as GLRow[]}
+              rows={entries.map((e) => ({ ...e, ...accountColumns(heads, e.accountCode, e.accountName) })) as GLRow[]}
               pageSize={GL_PAGE_SIZE}
               sortable
             />

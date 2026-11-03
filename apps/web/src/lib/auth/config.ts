@@ -9,7 +9,12 @@ export function getOidcConfig(): OidcConfig {
     clientId: process.env.KEYCLOAK_CLIENT_ID ?? process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "civitasone-web",
     redirectUri: process.env.KEYCLOAK_REDIRECT_URI
       ?? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/auth/callback`,
-    scopes: ["openid", "profile", "email", "offline_access"],
+    // A11Y-01: NO offline_access. An offline token (typ "Offline", no exp,
+    // refresh_expires_in 0) is not bound to the SSO session: it ignores the
+    // realm's idle/max lifetimes and survives sign-out, so silently refreshing
+    // with one would make a web session unbounded. A normal refresh token
+    // carries the SSO session's own end (exp), which the expiry warning uses.
+    scopes: ["openid", "profile", "email"],
   };
 }
 

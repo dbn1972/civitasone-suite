@@ -24,8 +24,18 @@ export interface RevealableValueProps {
   revealPath: string;
   /** JSON body for the reveal call (the reason is added). */
   revealBody?: Record<string, unknown>;
-  /** Picks the clear string out of the endpoint's JSON response. */
-  pick: (json: unknown) => string | null | undefined;
+  /**
+   * Picks the clear string out of the endpoint's JSON response. Client callers only: a function
+   * cannot cross the Server -> Client boundary, so a Server Component passing `pick` crashes the
+   * whole page render ("Functions cannot be passed directly to Client Components"). Server
+   * Components pass `pickPath` instead.
+   */
+  pick?: (json: unknown) => string | null | undefined;
+  /**
+   * Serialisable alternative to `pick`: the property path of the clear string in the response,
+   * e.g. `["values", "pan"]` for `{ values: { pan } }`. Used when `pick` is absent.
+   */
+  pickPath?: readonly string[];
   canReveal: boolean;
   /** What is being revealed, for the accessible name and the dialog ("PAN", "account number"). */
   label: string;
@@ -48,11 +58,21 @@ export interface RevealableValueProps {
   context?: string;
 }
 
+/** The string at `path` inside `json`, or undefined (never throws on a missing/odd shape). */
+export function pickByPath(json: unknown, path: readonly string[]): string | undefined {
+  let cur: unknown = json;
+  for (const seg of path) {
+    if (!cur || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return typeof cur === "string" ? cur : undefined;
+}
+
 const MIN_REASON = 5;
 const MAX_REASON = 300;
 
 export function RevealableValue({
-  maskedText, revealPath, revealBody, pick, canReveal, label, fallback = "—", autoHideMs = 30_000, className,
+  maskedText, revealPath, revealBody, pick, pickPath, canReveal, label, fallback = "—", autoHideMs = 30_000, className,
   minReasonLength = MIN_REASON, maxReasonLength = MAX_REASON, context,
 }: RevealableValueProps) {
   const t = useTranslations("revealableValue");
@@ -80,7 +100,8 @@ export function RevealableValue({
         setError(await workflowErrorMessage(res, te, "load", label));
         return;
       }
-      const value = pick(await res.json());
+      const json: unknown = await res.json();
+      const value = pick ? pick(json) : pickByPath(json, pickPath ?? []);
       if (!value) { setError(t("unavailable")); return; }
       setClear(value);
       setOpen(false);
