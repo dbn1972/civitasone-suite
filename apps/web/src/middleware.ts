@@ -4,7 +4,7 @@ import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 import { tileImgSource } from "@/lib/mapTiles";
 import { clearedSessionCookieSpecs, isSilentRefreshToken, sessionCookieSpecs } from "@/lib/auth/sessionCookies";
-import { refreshTokensOnce } from "@/lib/auth/tokenRefresh";
+import { forgetRefreshToken, refreshTokensOnce } from "@/lib/auth/tokenRefresh";
 
 // SEC-029: /api/metrics is public HERE (no session cookie) because a
 // Prometheus scrape carries no browser session to check -- access is instead
@@ -51,6 +51,10 @@ const REFRESH_SKEW_SEC = 60;
 // given refresh token goes through the one single-flight cache in
 // lib/auth/tokenRefresh.ts -- Keycloak revokes the session on refresh-token reuse.
 const REFRESH_PATH = "/api/auth/refresh";
+// Sign-out routes. The refresh cache lives in THIS module instance (the
+// middleware runtime), not in the route handlers' module graph, so it is
+// cleared here, before the handler runs, for every sign-out request.
+const SIGN_OUT_PATHS = new Set(["/logout", "/api/auth/logout"]);
 
 function isTokenExpiringSoon(token: string): boolean {
   try {
@@ -176,6 +180,7 @@ export function middleware(req: NextRequest): NextResponse | Promise<NextRespons
   }
 
   if (pathname === REFRESH_PATH && req.method === "POST") return refreshSession(req, true);
+  if (SIGN_OUT_PATHS.has(pathname)) return forgetThenContinue(req);
 
   if (isPublicPath(pathname)) return buildNextResponse(req);
 
@@ -188,6 +193,13 @@ export function middleware(req: NextRequest): NextResponse | Promise<NextRespons
   if (isSilentRefreshToken(req.cookies.get(COOKIE.REFRESH)?.value)) return refreshSession(req, false);
 
   if (!token || isTokenExpired(token)) return loginRedirect(req);
+  return buildNextResponse(req);
+}
+
+// A rotated (pre-rotation) refresh token must not be redeemable from the
+// grace cache after sign-out.
+async function forgetThenContinue(req: NextRequest): Promise<NextResponse> {
+  await forgetRefreshToken(req.cookies.get(COOKIE.REFRESH)?.value);
   return buildNextResponse(req);
 }
 
@@ -243,6 +255,13 @@ async function refreshSession(req: NextRequest, forced: boolean): Promise<NextRe
   // Keycloak unreachable: never sign the user out for a transient fault.
   if (forced) return NextResponse.json({ code: "REFRESH_UNAVAILABLE" }, { status: 503 });
   if (tokenStillValid) return buildNextResponse(req);
+  // Expired and cannot be renewed right now: an API call gets the same JSON
+  // 401 as a rejected token (never the login page's HTML). The cookies are
+  // deliberately KEPT -- the refresh token is still valid, so the next request
+  // after the outage renews the session instead of forcing a new sign-in.
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
+  }
   return loginRedirect(req);
 }
 

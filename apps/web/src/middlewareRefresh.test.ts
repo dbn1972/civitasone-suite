@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { refreshAccessToken } from "@civitasone/client-core";
 import { middleware } from "./middleware";
@@ -124,6 +124,90 @@ describe("middleware silent refresh (A11Y-01)", () => {
     expect(refreshAccessToken).not.toHaveBeenCalled();
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/auth/login");
+  });
+
+  it("answers an API call with JSON 401 SESSION_EXPIRED (not a login redirect) when the token has expired and Keycloak is unreachable, keeping the cookies", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(new TypeError("fetch failed"));
+    const res = await middleware(req("/api/proxy/finance/vouchers", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: liveRt() }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+    expect(await res.json()).toMatchObject({ code: "SESSION_EXPIRED" });
+    // the refresh token is still good: nothing is cleared, so the session resumes after the outage
+    expect(setCookie(res, COOKIE.REFRESH)).toBeUndefined();
+    expect(setCookie(res, COOKIE.ACCESS)).toBeUndefined();
+  });
+
+  it("still sends a page request to login when the token has expired and Keycloak is unreachable", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(new TypeError("fetch failed"));
+    const res = await middleware(req("/dashboard", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: liveRt() }));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+
+  it("does not hit Keycloak on every request during an outage (short negative cache)", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(new TypeError("fetch failed"));
+    const cookies = { [COOKIE.ACCESS]: expiringAt(), [COOKIE.REFRESH]: liveRt() };
+    await middleware(req("/dashboard", cookies));
+    await middleware(req("/api/proxy/hr/employees", cookies));
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["/logout", "/api/auth/logout"])("clears the refresh cache on sign-out (%s) so a rotated token can't be replayed from it", async (path) => {
+    const tokens = newTokens();
+    vi.mocked(refreshAccessToken).mockResolvedValue(tokens);
+    const oldRt = liveRt();
+    await middleware(req("/dashboard", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: oldRt }));
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    // Without sign-out the old token would be served from the grace cache...
+    const signOut = await middleware(req(path, { [COOKIE.ACCESS]: tokens.access_token, [COOKIE.REFRESH]: tokens.refresh_token }, path === "/logout" ? "GET" : "POST"));
+    expect(signOut.status).toBe(200);
+    // ...after it, replaying the rotated token goes to Keycloak (which rejects it).
+    vi.mocked(refreshAccessToken).mockRejectedValue(new Error("TOKEN_REFRESH_FAILED: 400"));
+    const replay = await middleware(req("/dashboard", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: oldRt }));
+    expect(refreshAccessToken).toHaveBeenCalledTimes(2);
+    expect(new URL(replay.headers.get("location")!).searchParams.get("error")).toBe("session_expired");
+  });
+
+  describe("Set-Cookie flags", () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    function assertFlags(cookie: string | undefined, maxAge: number, secure: boolean) {
+      expect(cookie).toBeDefined();
+      expect(cookie).toMatch(/;\s*HttpOnly/i);
+      expect(cookie).toMatch(/;\s*SameSite=Strict/i);
+      expect(cookie).toMatch(/;\s*Path=\/(;|$)/);
+      expect(cookie).toMatch(new RegExp(`;\\s*Max-Age=${maxAge}(;|$)`));
+      if (secure) expect(cookie).toMatch(/;\s*Secure/i);
+      else expect(cookie).not.toMatch(/;\s*Secure/i);
+    }
+
+    it("refresh success (production): both cookies HttpOnly, SameSite=Strict, Secure, Path=/, Max-Age from Keycloak", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      const tokens = { ...newTokens(), expires_in: 900, refresh_expires_in: 1700 };
+      vi.mocked(refreshAccessToken).mockResolvedValue(tokens);
+      const res = await middleware(req("/dashboard", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: liveRt() }));
+      assertFlags(setCookie(res, COOKIE.ACCESS), 900, true);
+      assertFlags(setCookie(res, COOKIE.REFRESH), 1700, true);
+    });
+
+    it("cleared cookies (production): same flags with Max-Age=0", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.mocked(refreshAccessToken).mockRejectedValue(new Error("TOKEN_REFRESH_FAILED: 400"));
+      for (const path of ["/dashboard", "/api/proxy/x"]) {
+        __resetRefreshFlightsForTests();
+        const res = await middleware(req(path, { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: liveRt() }));
+        assertFlags(setCookie(res, COOKIE.ACCESS), 0, true);
+        assertFlags(setCookie(res, COOKIE.REFRESH), 0, true);
+      }
+    });
+
+    it("omits Secure outside production (plain-http local dev)", async () => {
+      vi.stubEnv("NODE_ENV", "test");
+      vi.mocked(refreshAccessToken).mockResolvedValue(newTokens());
+      const res = await middleware(req("/dashboard", { [COOKIE.ACCESS]: expiredAt(), [COOKIE.REFRESH]: liveRt() }));
+      assertFlags(setCookie(res, COOKIE.ACCESS), 1800, false);
+      assertFlags(setCookie(res, COOKIE.REFRESH), 1800, false);
+    });
   });
 
   describe("POST /api/auth/refresh (Stay signed in)", () => {

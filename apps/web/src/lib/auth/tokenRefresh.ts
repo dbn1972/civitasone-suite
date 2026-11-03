@@ -27,13 +27,36 @@ export type RefreshOutcome =
   /** invalid: Keycloak rejected the token (expired, revoked, replayed) -> sign out. unavailable: transient, retry later. */
   | { ok: false; reason: "invalid" | "unavailable" };
 
-/** How long a settled outcome is reused for requests still carrying the old refresh token. */
-export const REFRESH_GRACE_MS = 60_000;
+/**
+ * How long a SUCCESSFUL outcome is reused for requests still carrying the old
+ * (now rotated) refresh token.
+ *
+ * Trade-off: the window must cover requests that were already in flight with
+ * the old cookie when it rotated (parallel API calls from one page, a second
+ * tab whose next request leaves before the new Set-Cookie lands) -- without it
+ * they would redeem the rotated token and Keycloak would revoke the whole
+ * session. But for as long as an entry lives, anyone presenting that rotated
+ * token gets the CURRENT tokens back from this cache without Keycloak seeing a
+ * replay. 15 s covers the in-flight race (browsers apply Set-Cookie
+ * immediately; the API proxy's own upstream timeout is the only longer path,
+ * and it already holds its token) while keeping the replay window short.
+ * Entries are also dropped on sign-out (forgetRefreshToken).
+ */
+export const REFRESH_GRACE_MS = 15_000;
+/**
+ * Negative cache for "Keycloak unavailable": during an outage every request
+ * near expiry would otherwise wait the full 10 s token-endpoint timeout. A
+ * rejected (invalid) token keeps the grace TTL -- it will not become valid.
+ */
+export const UNAVAILABLE_TTL_MS = 5_000;
 const MAX_ENTRIES = 5_000;
 
 interface Flight {
   promise: Promise<RefreshOutcome>;
   settledAt: number | null;
+  outcome: RefreshOutcome | null;
+  /** Set by forgetRefreshToken() while the flight was still running: drop it on settle. */
+  forgotten: boolean;
 }
 
 const flights = new Map<string, Flight>();
@@ -43,9 +66,13 @@ async function flightKey(refreshToken: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function ttlOf(flight: Flight): number {
+  return flight.outcome && !flight.outcome.ok && flight.outcome.reason === "unavailable" ? UNAVAILABLE_TTL_MS : REFRESH_GRACE_MS;
+}
+
 function prune(now: number): void {
   for (const [key, flight] of flights) {
-    if (flight.settledAt !== null && now - flight.settledAt > REFRESH_GRACE_MS) flights.delete(key);
+    if (flight.settledAt !== null && now - flight.settledAt > ttlOf(flight)) flights.delete(key);
   }
   // Hard cap (oldest first -- Map iterates in insertion order) so the cache can never grow without bound.
   for (const key of flights.keys()) {
@@ -78,15 +105,38 @@ export async function refreshTokensOnce(refreshToken: string, now: () => number 
   const existing = flights.get(key);
   if (existing) return existing.promise;
 
-  const flight: Flight = { promise: Promise.resolve({ ok: false, reason: "unavailable" }), settledAt: null };
+  const flight: Flight = { promise: Promise.resolve({ ok: false, reason: "unavailable" }), settledAt: null, outcome: null, forgotten: false };
   flight.promise = redeem(refreshToken).then((outcome) => {
     flight.settledAt = now();
-    // A transient failure must not be cached: the next request should retry.
-    if (!outcome.ok && outcome.reason === "unavailable") flights.delete(key);
+    flight.outcome = outcome;
+    if (flight.forgotten && flights.get(key) === flight) flights.delete(key);
     return outcome;
   });
   flights.set(key, flight);
   return flight.promise;
+}
+
+/**
+ * Sign-out: drop every cache entry that could hand out this session's tokens
+ * -- the entry keyed by the current refresh token and any entry for an older
+ * (pre-rotation) token whose cached outcome is this token -- so a rotated
+ * token cannot be replayed from the cache after sign-out. A flight still
+ * running for it is dropped as soon as it settles.
+ */
+export async function forgetRefreshToken(refreshToken: string | undefined): Promise<void> {
+  if (!refreshToken) return;
+  const key = await flightKey(refreshToken);
+  for (const [k, flight] of flights) {
+    const issued = flight.outcome?.ok ? flight.outcome.tokens.refresh_token : undefined;
+    if (k !== key && issued !== refreshToken) continue;
+    if (flight.settledAt === null) flight.forgotten = true;
+    else flights.delete(k);
+  }
+}
+
+/** Test seam only. */
+export function __refreshFlightCountForTests(): number {
+  return flights.size;
 }
 
 /**
