@@ -33,6 +33,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino, type Logger } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { and, eq, isNotNull, lte } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../shared/db.js";
@@ -324,7 +325,7 @@ async function defaultNotifyExpiring(row: MembershipRow, correlationId: string):
  */
 export async function runTenureExpiryWorker(deps: TenureExpiryDeps = {}): Promise<TenureExpiryResult> {
   const now = deps.now ?? new Date();
-  const log = deps.logger ?? pino({ name: "meeting-tenure-expiry-worker" });
+  const log = deps.logger ?? pino({ name: "meeting-tenure-expiry-worker", serializers: SAFE_LOG_SERIALIZERS });
   const scan = deps.scan ?? defaultScan;
   const expireMembership = deps.expireMembership ?? defaultExpireMembership;
   const notifyExpiring = deps.notifyExpiring ?? defaultNotifyExpiring;
@@ -420,7 +421,7 @@ export function startTenureExpiryScheduler(
   intervalMs: number = DEFAULT_INTERVAL_MS,
   deps: TenureExpiryDeps = {},
 ): NodeJS.Timeout {
-  const log = deps.logger ?? pino({ name: "meeting-tenure-expiry-worker" });
+  const log = deps.logger ?? pino({ name: "meeting-tenure-expiry-worker", serializers: SAFE_LOG_SERIALIZERS });
   const tick = (): void => {
     void runTenureExpiryWorker(deps).catch((err) => {
       log.error({ err: err instanceof Error ? err.stack : String(err) }, "tenure-expiry: scheduler cycle failed");

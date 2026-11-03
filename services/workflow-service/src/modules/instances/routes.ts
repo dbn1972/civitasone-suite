@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { createInstanceBody, instancesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
+import * as taskRepo from "../tasks/repo.js";
 import * as queries from "./queries.js";
 import * as historyRepo from "../history/repo.js";
 import { isDefinitionConfigured, WORKFLOW_NOT_CONFIGURED, workflowNotConfiguredMessage } from "../definitions/configured.js";
@@ -56,6 +57,8 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // UAT #2445 review item 4: participants (and admins) only; same 404 as a missing id.
+    if (!(await taskRepo.canViewInstance(ctx.tenantId, id, ctx.roles, ctx.actorId))) throw new HttpError(404, "NOT_FOUND", "instance not found");
     const detail = await queries.getInstanceDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "instance not found");
     return reply.send({ data: detail });
@@ -79,7 +82,8 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    const results = await queries.searchInstances(ctx.tenantId, q);
+    // UAT #2445 review item 4: only instances the caller participates in (admins: all).
+    const results = await queries.searchInstances(ctx.tenantId, q, { roles: ctx.roles, actorId: ctx.actorId });
     return reply.send(results);
   });
 
@@ -87,6 +91,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    if (!(await taskRepo.canViewInstance(ctx.tenantId, id, ctx.roles, ctx.actorId))) throw new HttpError(404, "NOT_FOUND", "instance not found");
     const rows = await historyRepo.listForInstance(id, ctx.tenantId);
     return reply.send({ data: rows });
   });

@@ -230,7 +230,8 @@ export async function completeTask(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { ...existing, decision, sodOverride, ...(reason ? { reason } : {}) },
+    // UAT #2445 review item 5: what the consumer re-checks under the row lock.
+    payload: { ...existing, decision, sodOverride, ...(reason ? { reason } : {}), authz: { roles: ctx.roles, assigneeAtCheck: existing.assigneeId ?? null } },
   });
 
   return { id: taskId, status: "accepted", correlationId: ctx.correlationId };

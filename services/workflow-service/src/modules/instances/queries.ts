@@ -78,7 +78,7 @@ export interface SearchFilters {
   offset: number;
 }
 
-export async function searchInstances(tenantId: string, filters: SearchFilters) {
+export async function searchInstances(tenantId: string, filters: SearchFilters, viewer?: { roles: readonly string[]; actorId?: string }) {
   let query = sql`
     SELECT i.id, i.name, i.status, i.ref_type, i.ref_id, i.current_node,
            i.definition_id, i.created_at, i.updated_at,
@@ -97,6 +97,21 @@ export async function searchInstances(tenantId: string, filters: SearchFilters) 
   if (filters.q) {
     const namePattern = `%${filters.q}%`;
     query = sql`${query} AND i.name ILIKE ${namePattern}`;
+  }
+
+  // UAT #2445 review item 4: a non-admin only finds instances they participate in
+  // (requester, or holder/assignee/completer of one of its tasks), as canViewInstance.
+  if (viewer && !viewer.roles.some((r) => r === "super_admin" || r === "workflow_admin")) {
+    const actor = viewer.actorId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(viewer.actorId) ? viewer.actorId : null;
+    const roleList = viewer.roles.length ? sql.join(viewer.roles.map((r) => sql`${r}`), sql`, `) : sql`NULL`;
+    query = sql`${query} AND (
+      ${actor === null ? sql`false` : sql`i.created_by = ${actor}::uuid`}
+      OR EXISTS (
+        SELECT 1 FROM workflow.tasks t
+        WHERE t.instance_id = i.id AND t.tenant_id = i.tenant_id
+          AND (t.role_ref IN (${roleList})${actor === null ? sql`` : sql` OR t.assignee_id = ${actor}::uuid OR t.completed_by = ${actor}::uuid`})
+      )
+    )`;
   }
 
   if (filters.assignee) {

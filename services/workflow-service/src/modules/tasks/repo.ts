@@ -1,4 +1,4 @@
-import { eq, desc, and, or, isNull, isNotNull, lte, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, lte, inArray, sql, exists } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 import { instances } from "../instances/schema.js";
@@ -99,6 +99,42 @@ export function taskVisibilityPredicate(
     : undefined;
   if (roles.length === 0) return unrestrictedMine ?? sql`false`;
   return unrestrictedMine ? or(inArray(tasks.roleRef, [...roles]), unrestrictedMine) : inArray(tasks.roleRef, [...roles]);
+}
+
+/**
+ * UAT #2445 review items 2 and 4: may this caller read an instance's tasks, detail,
+ * history or timeline? super_admin / workflow_admin always; otherwise only a
+ * participant: the instance's requester (created_by), or anyone holding the role of,
+ * assigned to, or having completed one of its tasks. One indexed EXISTS read.
+ * Instance-level on purpose: a participant sees the whole chain of their own
+ * instance (the estab approvals panel reads every task of the instance to say where
+ * a noting was forwarded, GAP-ESTAB-APPROVALS-05); a non-participant sees nothing.
+ */
+export async function canViewInstance(
+  tenantId: string, instanceId: string, roles: readonly string[], actorId: string | undefined,
+): Promise<boolean> {
+  if (roles.some((r) => TASK_ADMIN_ROLES.includes(r))) return true;
+  const actor = actorId && UUID_RE.test(actorId) ? actorId : null;
+  const rows = await scopedRead((tx) => {
+    const taskParts = [
+      ...(roles.length ? [inArray(tasks.roleRef, [...roles])] : []),
+      ...(actor ? [eq(tasks.assigneeId, actor), eq(tasks.completedBy, actor)] : []),
+    ];
+    const participates = taskParts.length
+      ? exists(tx.select({ one: sql`1` }).from(tasks).where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instances.id), or(...taskParts))))
+      : sql`false`;
+    return tx.select({ id: instances.id }).from(instances)
+      .where(and(eq(instances.tenantId, tenantId), eq(instances.id, instanceId), or(...(actor ? [eq(instances.createdBy, actor)] : []), participates)))
+      .limit(1);
+  });
+  return rows.length > 0;
+}
+
+/** UAT #2445 review item 5: the task row, locked for the rest of the transaction. */
+export async function lockTaskTx(tx: Writer, id: string, tenantId: string): Promise<TaskRow | null> {
+  const rows = await (tx as typeof db).select().from(tasks)
+    .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId))).limit(1).for("update");
+  return rows[0] ?? null;
 }
 
 export async function listByTenant(

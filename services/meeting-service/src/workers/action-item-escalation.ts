@@ -50,6 +50,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino, type Logger } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { and, inArray, isNotNull, lt, notInArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -338,7 +339,7 @@ export async function runActionItemEscalation(
   deps: ActionItemEscalationDeps = {},
 ): Promise<ActionItemEscalationResult> {
   const now = deps.now ?? new Date();
-  const log = deps.logger ?? pino({ name: "meeting-action-item-escalation" });
+  const log = deps.logger ?? pino({ name: "meeting-action-item-escalation", serializers: SAFE_LOG_SERIALIZERS });
   const loadCandidates = deps.loadCandidates ?? defaultLoadCandidates;
   const emit = deps.emit ?? defaultEmit;
   const loadOverrides = deps.loadOverrides ?? defaultLoadOverrides;
@@ -526,7 +527,7 @@ export function startActionItemEscalationScheduler(
   intervalMs: number = DEFAULT_INTERVAL_MS,
   deps: ActionItemEscalationDeps = {},
 ): NodeJS.Timeout {
-  const log = deps.logger ?? pino({ name: "meeting-action-item-escalation" });
+  const log = deps.logger ?? pino({ name: "meeting-action-item-escalation", serializers: SAFE_LOG_SERIALIZERS });
   const tick = (): void => {
     void runActionItemEscalation(deps).catch((err) => {
       log.error(

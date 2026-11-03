@@ -37,7 +37,7 @@ export async function workbasketsRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
     const wb = await repo.findByCode(ctx.tenantId, code);
     if (!wb) throw new HttpError(404, "NOT_FOUND", "workbasket not found");
-    const data = await repo.resolveTasks(ctx.tenantId, wb.filter as WorkbasketFilter, wb.sortOrder, q.limit);
+    const data = await repo.resolveTasks(ctx.tenantId, wb.filter as WorkbasketFilter, wb.sortOrder, q.limit, { roles: ctx.roles, actorId: ctx.actorId });
     return reply.send({ data, meta: { total: data.length, workbasket: code } });
   });
   app.setErrorHandler((err, req, reply) => {

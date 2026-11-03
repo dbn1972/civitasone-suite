@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { and, eq, lte, gt, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -13,7 +14,7 @@ import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 import { resolveEscalationRecipient } from "../sla/lane-compile.js";
 
-const log = pino({ name: "workflow-sla-sweeper" });
+const log = pino({ name: "workflow-sla-sweeper", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT_TOPIC = "audit.event.record";
 const ESCALATION_TOPIC = "workflow.task.escalated";
 
@@ -180,7 +181,7 @@ export function startSlaSweeper(intervalMs = 30_000): NodeJS.Timeout {
 // reminder notification, WITHOUT touching escalation_count. reminder_count
 // tracks how many thresholds have already fired so a threshold never re-sends.
 // ---------------------------------------------------------------------------
-const reminderLog = pino({ name: "workflow-reminder-sweeper" });
+const reminderLog = pino({ name: "workflow-reminder-sweeper", serializers: SAFE_LOG_SERIALIZERS });
 const REMINDER_TOPIC = "workflow.task.reminder";
 
 /** Parse REMINDER_THRESHOLDS (CSV of fractions, e.g. "0.5,0.8"). */
@@ -297,7 +298,7 @@ export function startReminderSweeper(intervalMs = 30_000): NodeJS.Timeout {
 // P1-2 — Timer / wait nodes (deemed approval).
 // ---------------------------------------------------------------------------
 
-const timerLog = pino({ name: "workflow-timer-sweeper" });
+const timerLog = pino({ name: "workflow-timer-sweeper", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * Find pending timer tasks whose fire_at has passed and auto-advance each by

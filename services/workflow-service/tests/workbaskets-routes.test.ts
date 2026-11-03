@@ -30,8 +30,10 @@ async function seedTask(status: string, instanceId: string): Promise<void> {
   const id = randomUUID(); const actor = randomUUID();
   await sqlAsTenant(TENANT, sql`INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
     VALUES (${instanceId}, ${TENANT}, 'inst', 'active', ${actor}, ${actor}) ON CONFLICT DO NOTHING`);
-  await sqlAsTenant(TENANT, sql`INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, created_by, updated_by)
-    VALUES (${id}, ${TENANT}, ${instanceId}, 'task', ${status}, ${actor}, ${actor})`);
+  // UAT #2445 review item 3: a basket resolves over the caller's task pool (tasks for a role
+  // they hold, or assigned to them), so the fixtures target the caller's case_manager role.
+  await sqlAsTenant(TENANT, sql`INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, created_by, updated_by)
+    VALUES (${id}, ${TENANT}, ${instanceId}, 'task', ${status}, 'case_manager', ${actor}, ${actor})`);
 }
 
 afterEach(async () => {

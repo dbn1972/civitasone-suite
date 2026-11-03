@@ -3,6 +3,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { gather } from "./repo.js";
+import { canViewInstance } from "../tasks/repo.js";
 import { mergeTimeline } from "./domain.js";
 
 const USER = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin", "case_manager"];
@@ -16,6 +17,10 @@ export async function timelineRoutes(app: FastifyInstance): Promise<void> {
       entityId: z.string().uuid(),
       limit: z.coerce.number().int().min(1).max(500).default(100),
     }).parse(req.query);
+    // UAT #2445 review item 4: an instance's timeline only for its participants.
+    if (q.entityType === "instance" && !(await canViewInstance(ctx.tenantId, q.entityId, ctx.roles, ctx.actorId))) {
+      throw new HttpError(404, "NOT_FOUND", "instance not found");
+    }
     const entries = await gather(ctx.tenantId, q.entityType, q.entityId, q.limit);
     const merged = mergeTimeline(entries).slice(0, q.limit);
     return reply.send({ data: merged, meta: { total: merged.length, entityType: q.entityType, entityId: q.entityId } });

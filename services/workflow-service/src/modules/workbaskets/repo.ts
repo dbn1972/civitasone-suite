@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, asc, desc, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, asc, desc, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 
 export type Writer = Pick<typeof db, "select" | "insert" | "update">;
@@ -39,8 +39,23 @@ export async function upsertTx(tx: Writer, input: UpsertInput): Promise<Workbask
 }
 
 /** CAP-035 — run a workbasket's filter against the task pool (tenant-scoped). */
-export async function resolveTasks(tenantId: string, filter: WorkbasketFilter, sortOrder: string, limit: number): Promise<TaskRow[]> {
+export async function resolveTasks(
+  tenantId: string, filter: WorkbasketFilter, sortOrder: string, limit: number,
+  viewer?: { roles: readonly string[]; actorId?: string },
+): Promise<TaskRow[]> {
   const conds: SQL[] = [eq(tasks.tenantId, tenantId)];
+  // UAT #2445 review item 3: a workbasket is a saved filter, not a membership (there
+  // is no member table); anyone with a workflow user role may run it. So it runs over
+  // the caller's own task pool: tasks for a role they hold, or assigned to them.
+  // super_admin / workflow_admin see the whole tenant pool.
+  if (viewer && !viewer.roles.some((r) => r === "super_admin" || r === "workflow_admin")) {
+    const actor = viewer.actorId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(viewer.actorId) ? viewer.actorId : null;
+    const parts = [
+      ...(viewer.roles.length ? [inArray(tasks.roleRef, [...viewer.roles])] : []),
+      ...(actor ? [eq(tasks.assigneeId, actor)] : []),
+    ];
+    conds.push(parts.length ? or(...parts)! : sql`false`);
+  }
   if (filter.status && filter.status.length > 0) conds.push(inArray(tasks.status, filter.status));
   if (filter.unassigned) conds.push(isNull(tasks.assigneeId));
   else if (filter.assigneeId) conds.push(eq(tasks.assigneeId, filter.assigneeId));

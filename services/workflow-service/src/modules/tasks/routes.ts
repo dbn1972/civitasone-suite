@@ -9,6 +9,7 @@ import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkComplete
 import { paginatedSchema } from "@civitasone/schemas/common";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const tasksListSchema = paginatedSchema(taskViewSchema);
 
@@ -56,6 +57,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
     if (q.refType !== undefined) listOpts.refTypes = Array.isArray(q.refType) ? q.refType : [q.refType];
     if (ctx.roles.length) listOpts.roles = ctx.roles;
+    // UAT #2445 review item 2: an instance's task list only for its participants.
+    if (q.instanceId !== undefined && !(await repo.canViewInstance(ctx.tenantId, q.instanceId, ctx.roles, ctx.actorId))) {
+      throw new HttpError(404, "NOT_FOUND", "instance not found");
+    }
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });
 

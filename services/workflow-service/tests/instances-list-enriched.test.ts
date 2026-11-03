@@ -134,7 +134,8 @@ describe("GET /v1/workflow/tasks — createdAt + dueAt (GAP-WORKFLOW-MY-TASKS-05
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/tasks?instanceId=${instanceId}`,
-      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"])}` },
+      // UAT #2445 review item 4: instance data is for its participants; the caller is the instance requester.
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"], actorId)}` },
     });
     await app.close();
 

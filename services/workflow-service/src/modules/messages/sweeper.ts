@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -9,7 +10,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
 
-const log = pino({ name: "workflow-message-sweeper" });
+const log = pino({ name: "workflow-message-sweeper", serializers: SAFE_LOG_SERIALIZERS });
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000a1";
 const AUDIT_TOPIC = "audit.event.record";
 
