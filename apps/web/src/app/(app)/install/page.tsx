@@ -8,6 +8,7 @@ import { getSessionRoles, hasAnyRole, INSTALL_OPERATE_ROLES } from "@/lib/auth/r
 import { InstallStepActions } from "./InstallStepActions";
 import { DomainPackActivatePanel } from "./DomainPackActivatePanel";
 import { isDomainPackStageStep } from "./domainPackCatalog";
+import { stepNotice, NOTHING_IMPORTED_COPY } from "./stepNotice";
 
 const STATUS_ICON: Record<string, string> = {
   pending: "○",
@@ -148,11 +149,25 @@ export default async function Page() {
                           Completed: {formatIndianDate(step.completedAt)}
                         </p>
                       ) : null}
-                      {step.errorMessage ? (
-                        <p className="mt-1 text-xs text-red-600" role="alert">
-                          Error: {step.errorMessage}
-                        </p>
-                      ) : null}
+                      {(() => {
+                        // UAT b15 item 4: an activation that imported nothing is an empty result, not an error.
+                        const notice = stepNotice(step.errorMessage);
+                        if (!notice) return null;
+                        if (notice.kind === "nothingImported") {
+                          return (
+                            <div role="status" aria-label={NOTHING_IMPORTED_COPY.title} className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                              <p className="font-medium text-slate-900">{NOTHING_IMPORTED_COPY.title}</p>
+                              <p className="mt-1">{NOTHING_IMPORTED_COPY.message}</p>
+                              <Link href={NOTHING_IMPORTED_COPY.href} className="mt-1 inline-block">{NOTHING_IMPORTED_COPY.linkLabel} →</Link>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p className="mt-1 text-xs text-red-600" role="alert">
+                            Error: {notice.text}
+                          </p>
+                        );
+                      })()}
                       {step.status !== "completed" && canOperate ? (
                         <InstallStepActions
                           id={step.id}
