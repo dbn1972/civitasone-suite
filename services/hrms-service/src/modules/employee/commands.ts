@@ -8,6 +8,7 @@ import { isMaskedValue } from "../../shared/pii-mask.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { hrmsEmployees } from "./schema.js";
 import { idempotentId } from "@civitasone/auth";
 
@@ -30,8 +31,12 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
     }
   }
 
-  const [row] = await scopedRead((tx) =>
-    tx.insert(hrmsEmployees).values({
+  // UAT F127: this single-row create writes here (not via employee/consumer.ts,
+  // which only the bulk import reaches), so it never emitted the employee-create
+  // audit event. The audit row now goes into the outbox in the SAME transaction
+  // as the insert, exactly like the consumer path (action "create", ids only).
+  const [row] = await scopedRead(async (tx) => {
+    const inserted = await tx.insert(hrmsEmployees).values({
       tenantId:       ctx.tenantId,
       employeeNo:     body.employeeNo,
       fullName:       body.fullName,
@@ -75,8 +80,17 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
       shift:          body.shift ?? null,
       createdBy:      ctx.actorId,
       updatedBy:      ctx.actorId,
-    }).returning({ id: hrmsEmployees.id })
-  );
+    }).returning({ id: hrmsEmployees.id });
+    const newId = inserted[0]?.id;
+    if (newId) {
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+        payload: { service: "hrms", action: "create", resourceType: "employee", resourceId: newId, outcome: "success" },
+      });
+    }
+    return inserted;
+  });
   const id = row!.id;
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

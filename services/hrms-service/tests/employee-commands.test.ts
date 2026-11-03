@@ -5,11 +5,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 
-const { publishMock, putMock, invalidateMock, insertValuesMock } = vi.hoisted(() => ({
+const { publishMock, putMock, invalidateMock, insertValuesMock, enqueueMock } = vi.hoisted(() => ({
   publishMock: vi.fn(async () => randomUUID()),
   putMock: vi.fn(async () => undefined),
   invalidateMock: vi.fn(async () => undefined),
   insertValuesMock: vi.fn(),
+  enqueueMock: vi.fn(async () => undefined),
+}));
+
+// UAT F127: createEmployee now writes the employee-create audit event to the
+// outbox in the insert's transaction; capture it separately from the row insert.
+vi.mock("../src/shared/outbox.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  enqueue: (...a: any[]) => enqueueMock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
@@ -53,6 +61,24 @@ function ctx(): RequestContext {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe("createEmployee", () => {
+  it("UAT F127: emits one employee-create audit event (ids only) inside the insert transaction", async () => {
+    const r = await createEmployee(ctx(), {
+      employeeNo: "EMP-F127", fullName: "Audit Person", departmentId: randomUUID(),
+      designationId: randomUUID(), dateOfJoining: "2026-01-01",
+      employeeType: "permanent" as any, basicMinor: 5000000n, currency: "INR", pan: "ABCDE1234F",
+    } as any);
+    expect(enqueueMock).toHaveBeenCalledOnce();
+    const [tx, event] = enqueueMock.mock.calls[0] as unknown as [{ insert: unknown }, Record<string, any>];
+    // same transaction object the employee row was inserted through
+    expect(typeof tx.insert).toBe("function");
+    expect(event).toMatchObject({
+      topic: "audit.event.record", eventType: "audit.event.record",
+      tenantId: TENANT, actorId: ACTOR,
+      payload: { service: "hrms", action: "create", resourceType: "employee", resourceId: r.id, outcome: "success" },
+    });
+    expect(JSON.stringify(event.payload)).not.toContain("Audit Person");
+  });
+
   it("inserts a row and returns accepted", async () => {
     const r = await createEmployee(ctx(), {
       employeeNo: "EMP001", fullName: "Test", departmentId: randomUUID(),
