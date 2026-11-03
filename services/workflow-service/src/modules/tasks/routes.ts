@@ -51,7 +51,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       // first page client-side. Narrowing only: it can never widen the role scope.
       refType: z.union([z.string().min(1).max(64), z.array(z.string().min(1).max(64)).max(20)]).optional(),
     }).parse(req.query);
-    const listOpts: { status?: string; roles?: string[]; instanceId?: string; refTypes?: string[] } = {};
+    const listOpts: { status?: string; roles?: string[]; actorId?: string; instanceId?: string; refTypes?: string[] } = { actorId: ctx.actorId };
     if (q.status !== undefined) listOpts.status = q.status;
     if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
     if (q.refType !== undefined) listOpts.refTypes = Array.isArray(q.refType) ? q.refType : [q.refType];

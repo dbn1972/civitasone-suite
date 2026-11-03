@@ -241,10 +241,12 @@ describe("GET /v1/workflow/tasks?instanceId=", () => {
     await seedTask(tenantId, instanceA, actorId, { name: "Unfiltered Task" });
 
     const app = await buildApp();
+    // UAT R2 / F108: the whole-tenant listing is the workflow admin view; a plain
+    // role-holder only sees tasks for roles it holds (tasks-list-visibility-r2.test.ts).
     const res = await app.inject({
       method: "GET",
       url: "/v1/workflow/tasks",
-      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_user"])}` },
+      headers: { authorization: `Bearer ${makeToken(tenantId, ["workflow_admin"])}` },
     });
     await app.close();
 
