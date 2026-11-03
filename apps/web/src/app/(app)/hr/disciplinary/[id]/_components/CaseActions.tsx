@@ -139,6 +139,7 @@ export function CaseActions({
         if (code === "NOT_CASE_OWNER") setError(t("errNotOwner"));
         else if (code === "WRONG_STATE") setError(t("errWrongState"));
         else if (code === "PENALTY_MISMATCH") setError(t("errPenaltyMismatch"));
+        else if (code === "PENALTY_BEFORE_CHARGE_MEMO") setError(t("errPenaltyBeforeMemo"));
         else setError(await errorMessageFromResponse(res));
         return;
       }

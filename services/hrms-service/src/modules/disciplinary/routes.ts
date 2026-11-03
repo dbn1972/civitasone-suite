@@ -129,6 +129,20 @@ async function auditCaseViewed(ctx: RequestContext, caseId: string): Promise<voi
   });
 }
 
+/**
+ * UAT J11 / D12: a penalty (imposed, or proposed for eOffice approval) cannot be
+ * dated before the charge memo it follows -- the screen accepted 01-01-2026
+ * against a charge memo of 03-11-2026. Both are ISO YYYY-MM-DD, so a string
+ * compare is a date compare. Synchronous, before the 200/202.
+ */
+function assertPenaltyNotBeforeChargeMemo(c: DisciplinaryCaseRow, penaltyDate: string): void {
+  const memo = c.chargeMemoDate ? String(c.chargeMemoDate).slice(0, 10) : null;
+  if (memo && penaltyDate < memo) {
+    throw new HttpError(400, "PENALTY_BEFORE_CHARGE_MEMO",
+      `penalty date ${penaltyDate} is before the charge memo date ${memo}`);
+  }
+}
+
 export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
   async function mustCase(tenantId: string, caseId: string): Promise<DisciplinaryCaseRow> {
     const c = await repo.findCase(tenantId, caseId);
@@ -268,6 +282,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     if (c.proceedingType === "minor" && pclass === "major") {
       throw new HttpError(409, "PENALTY_MISMATCH", "a major penalty cannot be imposed in a minor proceeding");
     }
+    assertPenaltyNotBeforeChargeMemo(c, body.penaltyDate);
     const to = await transition(c, "impose_penalty", ctx.actorId, {
       penaltyClass: pclass, penaltyType: body.penaltyType, penaltyDate: body.penaltyDate,
       ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),
@@ -301,6 +316,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     if (c.proceedingType === "minor" && pclass === "major") {
       throw new HttpError(409, "PENALTY_MISMATCH", "a major penalty cannot be imposed in a minor proceeding");
     }
+    assertPenaltyNotBeforeChargeMemo(c, body.penaltyDate);
     // Validate the case is in a state from which a penalty may be proposed.
     const check = canTransition(
       c.status as CaseStatus, "submit_for_approval", c.proceedingType as "minor" | "major");
