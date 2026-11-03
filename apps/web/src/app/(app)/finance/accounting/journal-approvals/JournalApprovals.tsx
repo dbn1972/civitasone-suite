@@ -17,56 +17,12 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { headLabel, type HeadLookup } from "../../_components/headLookup";
 
-export type PendingJournalLine = { accountCode: string; debitMinor: string; creditMinor: string; narration: string | null };
-export type PendingJournal = {
-  id: string;
-  voucherNo: string | null;
-  type: string;
-  postingDate: string;
-  narration: string | null;
-  totalMinor: string;
-  lines: PendingJournalLine[];
-  createdAt: string;
-  isOwn: boolean;
-  /** Rejected journals only: why and when. */
-  rejectionReason?: string | null;
-  decidedAt?: string | null;
-};
+// The payload types and mapper live in a plain module (journalsPayload.ts): the Server Component page calls the
+// mapper, and a function exported from this "use client" module is only a client reference on the server.
+export { mapPendingJournals, type PendingJournal, type PendingJournalLine } from "./journalsPayload";
+import type { PendingJournal, PendingJournalLine } from "./journalsPayload";
 
-const DIGITS = /^\d{1,38}$/;
 const REJECT_MIN = 10;
-const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
-
-/** GET /v1/finance/journals/pending (or /rejected) -> rows the screen can trust; null when the payload is not that shape. */
-export function mapPendingJournals(payload: unknown): PendingJournal[] | null {
-  const rows = Array.isArray(payload) ? payload : (payload as { data?: unknown } | null)?.data;
-  if (!Array.isArray(rows)) return null;
-  const out: PendingJournal[] = [];
-  for (const r of rows as Array<Record<string, unknown>>) {
-    const id = str(r?.id);
-    const total = str(r?.totalMinor);
-    if (!id || !total || !DIGITS.test(total) || !Array.isArray(r.lines)) continue;
-    out.push({
-      id,
-      voucherNo: str(r.voucherNo),
-      type: str(r.type) ?? "journal",
-      postingDate: str(r.postingDate) ?? "",
-      narration: str(r.narration),
-      totalMinor: total,
-      lines: (r.lines as Array<Record<string, unknown>>).map((l) => ({
-        accountCode: str(l?.accountCode) ?? "",
-        debitMinor: str(l?.debitMinor) ?? "0",
-        creditMinor: str(l?.creditMinor) ?? "0",
-        narration: str(l?.narration),
-      })),
-      createdAt: str(r.createdAt) ?? "",
-      isOwn: r.isOwn === true,
-      rejectionReason: str(r.rejectionReason),
-      decidedAt: str(r.decidedAt),
-    });
-  }
-  return out;
-}
 
 type LineRow = PendingJournalLine & { _key: string; _account: string } & Record<string, unknown>;
 type Action = { journal: PendingJournal; kind: "approve" | "reject" };

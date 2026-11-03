@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Card, EmptyState } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 import { HELP_MODULES, getHelpModule, defineTerm } from "@/lib/helpContent";
+import { getHelpFallback } from "@/lib/helpFallback";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
@@ -12,7 +14,11 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ module: string }> }) {
   const params = await props.params;
   const mod = getHelpModule(params.module);
-  return { title: mod ? `Help — ${mod.title}` : "Help" };
+  if (mod) return { title: `Help — ${mod.title}` };
+  const fallback = getHelpFallback(params.module);
+  if (!fallback) return { title: "Help" };
+  const t = await getTranslations("helpFallback");
+  return { title: `Help — ${t(`topics.${fallback.slug}.name`)}` };
 }
 
 /**
@@ -33,7 +39,12 @@ export async function generateMetadata(props: { params: Promise<{ module: string
 export default async function HelpModulePage(props: { params: Promise<{ module: string }> }) {
   const params = await props.params;
   const mod = getHelpModule(params.module);
-  if (!mod) notFound();
+  if (!mod) {
+    // UAT b15 item 5: a module the app links to that has no full guide yet gets a short overview, not not-found.
+    const fallback = getHelpFallback(params.module);
+    if (!fallback) notFound();
+    return helpFallbackOverview(fallback.slug, fallback.href);
+  }
 
   const enabled = await getEnabledModules();
   const roles = getSessionRoles();
@@ -126,6 +137,29 @@ export default async function HelpModulePage(props: { params: Promise<{ module: 
 
       <p style={{ marginTop: 18, color: "var(--mut)", fontSize: 13 }}>
         Need a different topic? Go back to the <Link href="/help">Help Centre</Link>.
+      </p>
+    </section>
+  );
+}
+
+/** UAT b15 item 5: what the module is for, a link to it, and the way back to the Help Centre (helpFallback messages). */
+async function helpFallbackOverview(slug: string, href: string) {
+  const t = await getTranslations("helpFallback");
+  const name = t(`topics.${slug}.name`);
+  return (
+    <section className="page-main wrap" aria-labelledby="page-heading">
+      <p style={{ margin: "0 0 6px", fontSize: 13 }}>
+        <Link href="/help">← {t("backToHelp")}</Link>
+      </p>
+      <PageHeader title={name} subtitle={t(`topics.${slug}.summary`)} />
+      <Card padding>
+        <p style={{ margin: "0 0 12px", lineHeight: 1.5 }}>{t("intro")}</p>
+        <Link href={href} className="btn primary">
+          {t("openModule", { name })}
+        </Link>
+      </Card>
+      <p style={{ marginTop: 18, color: "var(--mut)", fontSize: 13 }}>
+        <Link href="/help">{t("moreTopics")}</Link>
       </p>
     </section>
   );

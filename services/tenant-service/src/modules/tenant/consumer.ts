@@ -13,6 +13,7 @@ import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertTransition, type TenantView } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { tenantCreatedEventPayload } from "./events.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -35,7 +36,8 @@ export function registerTenantConsumers(rawQueue: Queue): void {
         isolationTier, policyVersion, policyReason, settings: p.settings ?? {},
         createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
-      await emit(tx, msg, EVENTS.tenantCreated, { tenantId: p.id, plan: p.edition }, "create", p.id);
+      // F133: the full v1.1 payload (directory fields) -- admin-service registers the tenant from it.
+      await emit(tx, msg, EVENTS.tenantCreated, tenantCreatedEventPayload({ ...p, status: "draft" }), "create", p.id);
 
       // Audit the onboarding-time Tenant_Placement_Policy tier assignment,
       // including the fallback reason when applicable (Req 2.5, 2.6, 15.3).

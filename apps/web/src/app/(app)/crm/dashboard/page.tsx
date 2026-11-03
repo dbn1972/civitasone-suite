@@ -34,7 +34,7 @@ export default async function Page() {
         subtitle={tl("subtitle")}
         back="/crm"
         backLabel="CRM Hub"
-        help="crm/overview"
+        help="crm"
         actions={
           <>
             <a className="btn ghost" href="/crm/contacts/new">+ New Contact</a>

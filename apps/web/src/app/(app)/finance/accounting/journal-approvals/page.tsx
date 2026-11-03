@@ -5,7 +5,9 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWrite, JOURNAL_APPROVE_ROLES } from "@/lib/finance/writeRoles";
 import { buildHeadLookup } from "../../_components/headLookup";
-import { JournalApprovals, mapPendingJournals, type PendingJournal } from "./JournalApprovals";
+import { JournalApprovals } from "./JournalApprovals";
+// Plain module: a mapper imported from the "use client" component would be a client reference here (UAT b15 item 6).
+import { mapPendingJournals, type PendingJournal } from "./journalsPayload";
 
 /** UAT P2 (J6, D4): manual journal vouchers waiting for a checker. */
 export default async function JournalApprovalsPage() {
