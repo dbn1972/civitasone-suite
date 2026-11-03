@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
+import { endKeycloakSession, forgetRefreshToken } from "@/lib/auth/tokenRefresh";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 
@@ -13,7 +14,16 @@ function clearAuthCookies(jar: Awaited<ReturnType<typeof cookies>>) {
 }
 
 export async function POST() {
-  clearAuthCookies(await cookies());
+  const jar = await cookies();
+  // A11Y-01: the session-expiry warning signs an idle user out through here;
+  // end the Keycloak session too (best-effort) so "Sign in" cannot silently
+  // resume it via SSO on a shared/unattended machine.
+  const rt = jar.get(COOKIE.REFRESH)?.value;
+  // Drop any cached refresh outcome for this session (the middleware does the
+  // same for its own module instance before this handler runs).
+  await forgetRefreshToken(rt);
+  await endKeycloakSession(rt);
+  clearAuthCookies(jar);
   return NextResponse.json({ ok: true });
 }
 

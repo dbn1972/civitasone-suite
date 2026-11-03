@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 import { tileImgSource } from "@/lib/mapTiles";
+import { clearedSessionCookieSpecs, isSilentRefreshToken, sessionCookieSpecs } from "@/lib/auth/sessionCookies";
+import { forgetRefreshToken, refreshTokensOnce } from "@/lib/auth/tokenRefresh";
 
 // SEC-029: /api/metrics is public HERE (no session cookie) because a
 // Prometheus scrape carries no browser session to check -- access is instead
@@ -36,6 +38,28 @@ function isTokenExpired(token: string): boolean {
       Buffer.from(token.split('.')[1]!, 'base64url').toString(),
     );
     return typeof payload.exp === 'number' && payload.exp < Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+}
+
+// A11Y-01 (WCAG 2.2.1): refresh a little BEFORE the access token expires so a
+// request never reaches the gateway with a token that dies in flight.
+const REFRESH_SKEW_SEC = 60;
+// POST here forces a refresh (the session-expiry warning's "Stay signed in" and
+// the active-user timer). Handled by this middleware so that EVERY refresh of a
+// given refresh token goes through the one single-flight cache in
+// lib/auth/tokenRefresh.ts -- Keycloak revokes the session on refresh-token reuse.
+const REFRESH_PATH = "/api/auth/refresh";
+// Sign-out routes. The refresh cache lives in THIS module instance (the
+// middleware runtime), not in the route handlers' module graph, so it is
+// cleared here, before the handler runs, for every sign-out request.
+const SIGN_OUT_PATHS = new Set(["/logout", "/api/auth/logout"]);
+
+function isTokenExpiringSoon(token: string): boolean {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString());
+    return typeof payload.exp === 'number' && payload.exp - REFRESH_SKEW_SEC <= Math.floor(Date.now() / 1000);
   } catch {
     return false;
   }
@@ -148,22 +172,97 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
-export function middleware(req: NextRequest) {
+export function middleware(req: NextRequest): NextResponse | Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/auth/dev") && !isDevLoginEnabled()) {
     return NextResponse.redirect(new URL("/auth/login", req.url));
   }
 
+  if (pathname === REFRESH_PATH && req.method === "POST") return refreshSession(req, true);
+  if (SIGN_OUT_PATHS.has(pathname)) return forgetThenContinue(req);
+
   if (isPublicPath(pathname)) return buildNextResponse(req);
 
   const token = req.cookies.get(COOKIE.ACCESS)?.value;
-  if (!token || isTokenExpired(token)) {
-    const login = new URL(defaultLoginPath(), req.url);
-    login.searchParams.set("next", pathname);
-    return NextResponse.redirect(login);
-  }
+  if (token && !isTokenExpiringSoon(token)) return buildNextResponse(req);
+
+  // A11Y-01: expired / about to expire (or the access cookie already aged out)
+  // but the SSO session is still alive -> renew silently instead of dumping the
+  // user (and their unsaved form) on the login page.
+  if (isSilentRefreshToken(req.cookies.get(COOKIE.REFRESH)?.value)) return refreshSession(req, false);
+
+  if (!token || isTokenExpired(token)) return loginRedirect(req);
   return buildNextResponse(req);
+}
+
+// A rotated (pre-rotation) refresh token must not be redeemable from the
+// grace cache after sign-out.
+async function forgetThenContinue(req: NextRequest): Promise<NextResponse> {
+  await forgetRefreshToken(req.cookies.get(COOKIE.REFRESH)?.value);
+  return buildNextResponse(req);
+}
+
+function loginRedirect(req: NextRequest): NextResponse {
+  const login = new URL(defaultLoginPath(), req.url);
+  login.searchParams.set("next", req.nextUrl.pathname);
+  return NextResponse.redirect(login);
+}
+
+// Keycloak rejected the refresh token (expired, revoked, or replayed): end the
+// app session cleanly. Pages go to login with the "session expired" message and
+// a return URL; API calls get a JSON 401 (a redirect would hand fetch() the
+// login page's HTML).
+function sessionExpiredResponse(req: NextRequest): NextResponse {
+  const { pathname, search } = req.nextUrl;
+  let res: NextResponse;
+  if (pathname.startsWith("/api/")) {
+    res = NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
+  } else {
+    const login = new URL(defaultLoginPath(), req.url);
+    login.searchParams.set("error", "session_expired");
+    login.searchParams.set("next", `${pathname}${search}`);
+    res = NextResponse.redirect(login);
+  }
+  for (const c of clearedSessionCookieSpecs()) res.cookies.set(c.name, c.value, c.options);
+  return res;
+}
+
+async function refreshSession(req: NextRequest, forced: boolean): Promise<NextResponse> {
+  const token = req.cookies.get(COOKIE.ACCESS)?.value;
+  const tokenStillValid = !!token && !isTokenExpired(token);
+  const rt = req.cookies.get(COOKIE.REFRESH)?.value;
+
+  if (!isSilentRefreshToken(rt)) {
+    // Only reachable for the forced endpoint (the implicit path checks first).
+    return tokenStillValid
+      ? NextResponse.json({ code: "NOT_REFRESHABLE" }, { status: 409 })
+      : NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401 });
+  }
+
+  const outcome = await refreshTokensOnce(rt);
+  if (outcome.ok) {
+    const specs = sessionCookieSpecs(outcome.tokens);
+    // Hand the NEW tokens to this same request's downstream handler (layout,
+    // API proxy), then persist them in the browser.
+    for (const c of specs) req.cookies.set(c.name, c.value);
+    const res = buildNextResponse(req);
+    for (const c of specs) res.cookies.set(c.name, c.value, c.options);
+    return res;
+  }
+  if (outcome.reason === "invalid") return sessionExpiredResponse(req);
+
+  // Keycloak unreachable: never sign the user out for a transient fault.
+  if (forced) return NextResponse.json({ code: "REFRESH_UNAVAILABLE" }, { status: 503 });
+  if (tokenStillValid) return buildNextResponse(req);
+  // Expired and cannot be renewed right now: an API call gets the same JSON
+  // 401 as a rejected token (never the login page's HTML). The cookies are
+  // deliberately KEPT -- the refresh token is still valid, so the next request
+  // after the outage renews the session instead of forcing a new sign-in.
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
+  }
+  return loginRedirect(req);
 }
 
 export const config = {

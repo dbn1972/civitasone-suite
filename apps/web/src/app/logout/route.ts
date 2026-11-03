@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE, getOidcConfig } from "@/lib/auth/config";
+import { endKeycloakSession, forgetRefreshToken } from "@/lib/auth/tokenRefresh";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 
@@ -15,6 +16,12 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-
 // post_logout_redirect_uri pointing back at our own public login page.
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
+  // A11Y-01: back-channel end of the Keycloak session first (best-effort), so
+  // the RP-initiated redirect below finds no live session and returns straight
+  // to the login page instead of showing Keycloak's logout confirmation.
+  const rt = cookieStore.get(COOKIE.REFRESH)?.value;
+  await forgetRefreshToken(rt);
+  await endKeycloakSession(rt);
   cookieStore.delete(COOKIE.ACCESS);
   cookieStore.delete(COOKIE.REFRESH);
   cookieStore.delete(COOKIE.DEVICE_TRUST);

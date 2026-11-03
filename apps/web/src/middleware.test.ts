@@ -13,20 +13,20 @@ function anonReq(path: string): NextRequest {
 }
 
 describe("middleware public sandbox access", () => {
-  it("lets an anonymous GET /sandbox through without redirect", () => {
-    const res = middleware(anonReq("/sandbox"));
+  it("lets an anonymous GET /sandbox through without redirect", async () => {
+    const res = (await middleware(anonReq("/sandbox")));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("lets anonymous GET /api/sandbox/enter through without redirect", () => {
-    const res = middleware(anonReq("/api/sandbox/enter?role=citizen"));
+  it("lets anonymous GET /api/sandbox/enter through without redirect", async () => {
+    const res = (await middleware(anonReq("/api/sandbox/enter?role=citizen")));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("still redirects an anonymous visitor on a protected route", () => {
-    const res = middleware(anonReq("/dashboard"));
+  it("still redirects an anonymous visitor on a protected route", async () => {
+    const res = (await middleware(anonReq("/dashboard")));
     expect(res.status).toBe(307);
     const loc = res.headers.get("location");
     expect(loc).toContain("/auth/login");
@@ -37,14 +37,14 @@ describe("middleware public sandbox access", () => {
 // W0 defect 3: /contact, /api/contact and /.well-known/* must be reachable
 // anonymously (the matcher covers them, and no proxy in infra/ exempts them).
 describe("middleware public contact + well-known access", () => {
-  it.each(["/contact", "/api/contact", "/.well-known/security.txt"])("lets an anonymous request to %s through", (path) => {
-    const res = middleware(anonReq(path));
+  it.each(["/contact", "/api/contact", "/.well-known/security.txt"])("lets an anonymous request to %s through", async (path) => {
+    const res = (await middleware(anonReq(path)));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("still redirects an anonymous visitor on a private path", () => {
-    const res = middleware(anonReq("/finance/vouchers"));
+  it("still redirects an anonymous visitor on a private path", async () => {
+    const res = (await middleware(anonReq("/finance/vouchers")));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/auth/login");
   });
@@ -72,26 +72,26 @@ function marketingRoutes(): string[] {
 describe("middleware public marketing site", () => {
   const routes = marketingRoutes();
 
-  it("found the marketing routes (guards the walker itself)", () => {
+  it("found the marketing routes (guards the walker itself)", async () => {
     expect(routes).toEqual(expect.arrayContaining(["/", "/pricing", "/docs", "/docs/api", "/docs/sample-slug", "/contact", "/sandbox"]));
   });
 
-  it.each(routes)("lets an anonymous visitor reach %s without a redirect", (path) => {
-    const res = middleware(anonReq(path));
+  it.each(routes)("lets an anonymous visitor reach %s without a redirect", async (path) => {
+    const res = (await middleware(anonReq(path)));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("still redirects private paths, including ones that only share a prefix with a public path", () => {
+  it("still redirects private paths, including ones that only share a prefix with a public path", async () => {
     for (const path of ["/finance/vouchers", "/dashboard", "/documents", "/docsx", "/pricingx", "/pricing-admin"]) {
-      const res = middleware(anonReq(path));
+      const res = (await middleware(anonReq(path)));
       expect(res.status, path).toBe(307);
       expect(res.headers.get("location"), path).toContain("/auth/login");
     }
   });
 
-  it("does not treat '/' as a prefix: a deep private path stays private", () => {
-    const res = middleware(anonReq("/hr/employees"));
+  it("does not treat '/' as a prefix: a deep private path stays private", async () => {
+    const res = (await middleware(anonReq("/hr/employees")));
     expect(res.status).toBe(307);
   });
 });
@@ -100,23 +100,23 @@ describe("middleware public marketing site", () => {
 // ~28 components render inline <style> elements without a nonce. Inline style
 // ATTRIBUTES are pinned via style-src-attr. Keywords MUST be single-quoted.
 describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
-  function cspOf(path: string): string {
-    return middleware(anonReq(path)).headers.get("Content-Security-Policy") ?? "";
+  async function cspOf(path: string): Promise<string> {
+    return (await middleware(anonReq(path))).headers.get("Content-Security-Policy") ?? "";
   }
 
-  it("keeps inline <style> elements allowed (components render them without a nonce)", () => {
-    const csp = cspOf("/sandbox");
+  it("keeps inline <style> elements allowed (components render them without a nonce)", async () => {
+    const csp = await cspOf("/sandbox");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain("style-src-elem 'self' 'unsafe-inline'");
   });
 
-  it("keeps inline style ATTRIBUTES working via style-src-attr only", () => {
-    const csp = cspOf("/sandbox");
+  it("keeps inline style ATTRIBUTES working via style-src-attr only", async () => {
+    const csp = await cspOf("/sandbox");
     expect(csp).toContain("style-src-attr 'unsafe-inline'");
   });
 
-  it("keeps scripts strict (nonce, no unsafe-inline)", () => {
-    const csp = cspOf("/sandbox");
+  it("keeps scripts strict (nonce, no unsafe-inline)", async () => {
+    const csp = await cspOf("/sandbox");
     expect(csp).toMatch(/script-src 'self' 'nonce-[^']+'/);
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);
   });
@@ -128,19 +128,19 @@ describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
 describe("middleware map assets", () => {
   it.each(["/vendor/leaflet/leaflet.js", "/vendor/leaflet/leaflet.css", "/vendor/leaflet/images/marker-icon.png", "/maps/civitas-map.js"])(
     "lets an anonymous request for %s through",
-    (path) => {
-      const res = middleware(anonReq(path));
+    async (path) => {
+      const res = (await middleware(anonReq(path)));
       expect(res.status).toBe(200);
       expect(res.headers.get("location")).toBeNull();
     },
   );
 
-  it("does not make other /vendor or /maps paths public", () => {
-    for (const path of ["/vendor/other/x.js", "/maps/secret"]) expect(middleware(anonReq(path)).status).toBe(307);
+  it("does not make other /vendor or /maps paths public", async () => {
+    for (const path of ["/vendor/other/x.js", "/maps/secret"]) expect((await middleware(anonReq(path))).status).toBe(307);
   });
 
-  it("allows the configured base-map tile origin in img-src", () => {
-    const csp = middleware(anonReq("/auth/login")).headers.get("content-security-policy") ?? "";
+  it("allows the configured base-map tile origin in img-src", async () => {
+    const csp = (await middleware(anonReq("/auth/login"))).headers.get("content-security-policy") ?? "";
     expect(csp).toMatch(/img-src 'self' data: blob: https:\/\/[^;]*tile/);
   });
 });
@@ -152,8 +152,8 @@ describe("middleware map assets", () => {
 describe("middleware public allow-list segment boundary (V4-A-04)", () => {
   it.each(["/contacts", "/api/contacts", "/authz", "/api/authz", "/verifyx", "/careers-admin", "/api/careersX", "/sandboxes", "/api/metricsx"])(
     "keeps %s private (redirects an anonymous visitor)",
-    (path) => {
-      const res = middleware(anonReq(path));
+    async (path) => {
+      const res = (await middleware(anonReq(path)));
       expect(res.status).toBe(307);
       expect(res.headers.get("location")).toContain("/auth/login");
     },
@@ -177,8 +177,8 @@ describe("middleware public allow-list segment boundary (V4-A-04)", () => {
     "/favicon.ico",
     "/sw.js",
     "/.well-known/security.txt",
-  ])("still lets %s through anonymously", (path) => {
-    const res = middleware(anonReq(path));
+  ])("still lets %s through anonymously", async (path) => {
+    const res = (await middleware(anonReq(path)));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
@@ -187,28 +187,28 @@ describe("middleware public allow-list segment boundary (V4-A-04)", () => {
 // V4-A-09: logout must work without a valid access cookie, and the offline
 // fallback page (precached by sw.js) must render without auth.
 describe("middleware /logout and /offline are public (V4-A-09)", () => {
-  it.each(["/logout", "/offline"])("lets an anonymous request to %s through", (path) => {
-    const res = middleware(anonReq(path));
+  it.each(["/logout", "/offline"])("lets an anonymous request to %s through", async (path) => {
+    const res = (await middleware(anonReq(path)));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it.each(["/logoutx", "/offline-admin"])("does not make %s public", (path) => {
-    expect(middleware(anonReq(path)).status).toBe(307);
+  it.each(["/logoutx", "/offline-admin"])("does not make %s public", async (path) => {
+    expect((await middleware(anonReq(path))).status).toBe(307);
   });
 });
 
 // V4-A-01: the SW purge/precache fetches /offline with credentials omitted; it must
 // not redirect to login or the offline fallback can never be cached.
 describe("middleware public offline fallback", () => {
-  it("lets an anonymous request to /offline through", () => {
-    const res = middleware(anonReq("/offline"));
+  it("lets an anonymous request to /offline through", async () => {
+    const res = (await middleware(anonReq("/offline")));
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("keeps a path that merely shares the /offline prefix private", () => {
-    const res = middleware(anonReq("/offline-reports"));
+  it("keeps a path that merely shares the /offline prefix private", async () => {
+    const res = (await middleware(anonReq("/offline-reports")));
     expect(res.status).toBe(307);
   });
 });
@@ -216,9 +216,9 @@ describe("middleware public offline fallback", () => {
 // Route-scoped officer gates (tenant/_roles.ts) read x-pathname; middleware must
 // always overwrite it so a client-sent value can never widen a layout gate.
 describe("middleware x-pathname request header", () => {
-  it("stamps the real pathname and overrides a spoofed client header", () => {
+  it("stamps the real pathname and overrides a spoofed client header", async () => {
     const req = new NextRequest(new URL("https://demo.test/contact"), { headers: { "x-pathname": "/tenant/consent-exchange" } });
-    const res = middleware(req);
+    const res = (await middleware(req));
     expect(res.headers.get("x-middleware-request-x-pathname")).toBe("/contact");
   });
 });
