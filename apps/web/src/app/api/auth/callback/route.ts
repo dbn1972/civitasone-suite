@@ -5,8 +5,8 @@ import { exchangeAuthorizationCode } from "@civitasone/client-core";
 import { decodeUnverifiedClaims } from "@civitasone/auth";
 import { captureError } from "@civitasone/observability";
 import { getOidcConfig, COOKIE } from "@/lib/auth/config";
+import { sessionCookieSpecs } from "@/lib/auth/sessionCookies";
 
-const SECURE = process.env.NODE_ENV === "production";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -36,10 +36,10 @@ export async function GET(req: Request) {
 
   try {
     const tokens = await exchangeAuthorizationCode(getOidcConfig(), code, verifier);
-    jar.set(COOKIE.ACCESS, tokens.access_token, { httpOnly: true, secure: SECURE, sameSite: "strict", path: "/", maxAge: tokens.expires_in });
-    if (tokens.refresh_token) {
-      jar.set(COOKIE.REFRESH, tokens.refresh_token, { httpOnly: true, secure: SECURE, sameSite: "strict", path: "/", maxAge: 60 * 60 * 24 * 30 });
-    }
+    // A11Y-01: same writer as the middleware's silent refresh; the RT cookie
+    // lives as long as Keycloak says the refresh token does (refresh_expires_in),
+    // not a fixed 30 days.
+    for (const c of sessionCookieSpecs(tokens)) jar.set(c.name, c.value, c.options);
     jar.delete(COOKIE.PKCE_VERIFIER);
     jar.delete(COOKIE.OAUTH_STATE);
 

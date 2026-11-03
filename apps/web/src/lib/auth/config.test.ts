@@ -39,7 +39,8 @@ describe("getOidcConfig", () => {
     const config = getOidcConfig();
     expect(config.scopes).toContain("openid");
     expect(config.scopes).toContain("profile");
-    expect(config.scopes).toContain("offline_access");
+    // A11Y-01: offline tokens bypass the SSO idle/max session lifetimes.
+    expect(config.scopes).not.toContain("offline_access");
   });
 
   it("constructs redirect URI from app URL", () => {

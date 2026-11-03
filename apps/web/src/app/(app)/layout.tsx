@@ -6,6 +6,7 @@ import { SyncProvider } from "@/lib/sync/SyncProvider";
 import { getEnabledModules } from "@/lib/moduleVisibility";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { AppShell, ToastProvider } from "../_components/ds";
+import { SessionTimeoutWarning } from "../_components/session/SessionTimeoutWarning";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin:    "Super Admin",
@@ -69,6 +70,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
       <SyncProvider />
+      <SessionTimeoutWarning />
       <AppShell enabledModules={enabledModules} userName={userName} userRole={userRole} roles={roles}>{children}</AppShell>
     </ToastProvider>
   );
