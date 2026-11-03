@@ -8,11 +8,14 @@ import { ThemeActions } from "../ThemeActions";
 import { ThemeTokenTable } from "../ThemeTokenTable";
 import { ThemeContrastPanel } from "../ThemeContrastPanel";
 import { isCssColour } from "@/lib/colour";
+import { normaliseThemeTokens } from "../tokenShape";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data: themeTokens, source } = await getThemeTokens();
+  const { data: rawTokens, source } = await getThemeTokens();
+  // UAT Phase 1B: the API names a token `name`, the screens read `key`.
+  const themeTokens = normaliseThemeTokens(rawTokens);
 
   // GAP-THEMES-TOKENS-01: a failed read must not look like a healthy, empty
   // tenant that merely needs a publish. Show a real error state with Retry and

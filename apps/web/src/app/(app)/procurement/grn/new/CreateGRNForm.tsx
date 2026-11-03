@@ -59,8 +59,11 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
   const [vendorName, setVendorName] = useState("");
   const [selectedPo, setSelectedPo] = useState<RemoteOption | null>(null);
   const poById = useRef(new Map<string, POOption>());
-  const [, setPoId] = useState("");
-  const [poRef, setPoRef] = useState("");
+  // UAT Phase 1B: the GRN create API resolves `poRef` to the PO's UUID
+  // (`procurement_po:<uuid>`, the same opaque ref stored on every GRN). The form
+  // used to send the human PO number instead, so every GRN failed 404
+  // PO_NOT_FOUND. Keep the chosen PO's id and send that.
+  const [poId, setPoId] = useState("");
   const [poItems, setPoItems] = useState<POItem[]>([]);
   const [receivedDate, setReceivedDate] = useState(todayIST());
   // UAT b10 F95: the inventory store the goods are received into (inventory posts the stock receipt there).
@@ -92,7 +95,6 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
   function clearPo() {
     setSelectedPo(null);
     setPoId("");
-    setPoRef("");
     setVendorId("");
     setVendorName("");
     setPoItems([]);
@@ -111,7 +113,6 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
 
   async function selectPo(po: POOption) {
     setPoId(po.id);
-    setPoRef(po.poNo);
     // GAP-PROCUREMENT-GRN-NEW-04 — the vendor is derived from the PO (never
     // chosen separately), so a GRN cannot be raised against the wrong vendor.
     setVendorName(po.vendor ?? "");
@@ -190,7 +191,7 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
     e.preventDefault();
     setRowErrors({});
     const valid = lines.filter((l) => l.poItemRef.trim() && l.itemCode.trim());
-    if (!vendorId || !poRef.trim() || valid.length === 0) {
+    if (!vendorId || !poId || valid.length === 0) {
       setStatus("error");
       setMessage("Vendor, purchase order and at least one line item are required.");
       return;
@@ -218,7 +219,7 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
     setMessage("");
     // GAP-PROCUREMENT-GRN-NEW-01 — no client-generated grnNo; the server issues it.
     const body = {
-      poRef: poRef.trim(),
+      poRef: `procurement_po:${poId}`,
       vendorId,
       receivedDate,
       ...(storeId ? { storeId } : {}),

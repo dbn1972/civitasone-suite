@@ -95,4 +95,19 @@ describe("BillingInvoicesPage", () => {
     expect(screen.queryByText("No invoices yet")).not.toBeInTheDocument();
     expect(screen.getByText(/don't have permission/i)).toBeInTheDocument();
   });
+
+  // UAT Phase 1B (recon D18): the Invoice column is the stored GST invoice number.
+  it("maps each API row's stored invoiceNumber into the Invoice column (drafts read 'Draft (not numbered)')", async () => {
+    const raw = [
+      { ...row(), reference: undefined, invoiceNumber: "INV-2627-000009" },
+      { ...row({ id: "22222222-2222-3333-4444-555555555555", status: "draft" }), reference: undefined, invoiceNumber: null },
+    ];
+    fetchJsonMock.mockImplementationOnce((_p: unknown, _e: unknown, options: { mapResponse: (p: unknown) => unknown }) =>
+      Promise.resolve({ data: options.mapResponse({ data: raw }), source: "api" }));
+    render(await BillingInvoicesPage());
+    expect(screen.getByText("INV-2627-000009")).toBeInTheDocument();
+    expect(screen.getByText("Draft (not numbered)")).toBeInTheDocument();
+    expect(screen.queryByText(/INV-2026-07-/)).not.toBeInTheDocument();
+  });
 });
+

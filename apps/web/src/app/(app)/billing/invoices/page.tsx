@@ -1,5 +1,6 @@
 import { PageHeader, DataTable, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { invoiceDisplayNumber } from "./invoiceNumber";
 
 export interface InvoiceRow extends Record<string, unknown> {
   id: string;
@@ -12,17 +13,10 @@ export interface InvoiceRow extends Record<string, unknown> {
   issuedAt: string | null;
   paidAt: string | null;
   cancelledAt: string | null;
-  /** GAP-BILLING-INVOICES-02 (interim): a readable, searchable reference derived
-   *  from period + short id. NOT a GST-statutory sequential invoice number (those
-   *  must be minted gaplessly server-side; see the decision note on the GAP). */
+  /** The stored GST invoice number (null for a draft). */
+  invoiceNumber?: string | null;
+  /** What the Invoice column shows: the stored GST invoice number, or "Draft (not numbered)". */
   reference: string;
-}
-
-function deriveReference(id: string, periodMonth: string): string {
-  // "INV-2026-07-ab12cd34" — human-quotable and filterable without inventing a
-  // statutory number. The uuid still lives in the row and the URL.
-  const shortId = id.replace(/-/g, "").slice(0, 8);
-  return `INV-${periodMonth}-${shortId}`;
 }
 
 async function getInvoices(): Promise<LoaderResult<InvoiceRow[]>> {
@@ -31,7 +25,8 @@ async function getInvoices(): Promise<LoaderResult<InvoiceRow[]>> {
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: InvoiceRow[] })?.data;
       if (!Array.isArray(arr)) return null;
-      return arr.map((r) => ({ ...r, reference: deriveReference(r.id, r.periodMonth) }));
+      // UAT Phase 1B (recon D18): the stored GST invoice number, never a synthesised one.
+      return arr.map((r) => ({ ...r, reference: invoiceDisplayNumber(r) }));
     },
   });
 }

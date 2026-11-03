@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getProcurementTenderById } from "../../../../_data/loaders";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { TenderLifecycleActions } from "./TenderLifecycleActions";
 
@@ -76,7 +76,9 @@ export default async function TenderDetailPage(props: { params: Promise<{ id: st
     vendorName: beforeOpening ? `Bidder ${i + 1}` : bid.vendorName,
     // CRITICAL fix: bidAmount is undefined until the financial envelope is
     // opened (sealed-bid two-envelope process).
-    bidAmount: bid.bidAmount !== undefined ? formatMoney(bid.bidAmount) : "Sealed",
+    // UAT Phase 1B: bidAmount (like estimatedValue) arrives in RUPEES (bid_amount / 100 in
+    // tender/queries.ts); formatMoney treats its input as paise and showed it 100x too small.
+    bidAmount: bid.bidAmount !== undefined ? formatRupees(bid.bidAmount) : "Sealed",
     technicalScore: bid.technicalScore != null ? String(bid.technicalScore) : "—",
     financialScore: bid.financialScore != null ? String(bid.financialScore) : "—",
     status: bid.status,
@@ -148,7 +150,7 @@ export default async function TenderDetailPage(props: { params: Promise<{ id: st
           </div>
           <div className="field">
             <span className="label">Est. Value</span>
-            <span>{formatMoney(tender.estimatedValue)}</span>
+            <span>{formatRupees(tender.estimatedValue)}</span>
           </div>
           {/* GAP-PROCUREMENT-TENDERS-DETAIL-05: EMD surfaced on the detail page. */}
           {tender.emdAmountMinor != null && (
@@ -175,7 +177,9 @@ export default async function TenderDetailPage(props: { params: Promise<{ id: st
           )}
           <div className="field">
             <span className="label">Bids Received</span>
-            <span>{tender.bidsReceived}</span>
+            {/* UAT Phase 1B: the stored bids_received counter is not maintained by
+                procurement-service (0 for tenders with bids); count the bids the API returns. */}
+            <span>{Array.isArray(tender.bids) ? tender.bids.length : tender.bidsReceived}</span>
           </div>
           {tender.scope && (
             <div className="field" style={{ gridColumn: "1 / -1" }}>

@@ -149,3 +149,36 @@ describe("GLTable: ledger-wide cards vs filtered footer", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });
+
+// UAT Phase 1B (recon D13): lines carry a head code OR a head UUID, and accountName repeats the code.
+describe("GLTable account columns", () => {
+  const UUID = "56698210-f4b1-444d-9945-40cd3ba6150d";
+  const heads = { "1100": { code: "1100", name: "Bank" }, [UUID]: { code: "2102", name: "Statutory Deductions Payable" } };
+
+  it("resolves a code or a head UUID to the head code and its real name", () => {
+    render(
+      <GLTable
+        entries={[
+          ENTRY({ id: "j1:1100", accountCode: "1100", accountName: "1100" }) as never,
+          ENTRY({ id: `j1:${UUID}`, accountCode: UUID, accountName: UUID }) as never,
+        ]}
+        pagination={pag(2)} totals={totals() as never} view={view()} heads={heads}
+      />,
+    );
+    expect(screen.getByText("Bank")).toBeInTheDocument();
+    expect(screen.getByText("2102")).toBeInTheDocument();
+    expect(screen.getByText("Statutory Deductions Payable")).toBeInTheDocument();
+    expect(screen.queryByText(UUID)).not.toBeInTheDocument();
+  });
+
+  it("an unknown head UUID reads 'Unknown head' and a name that only repeats the code reads —", () => {
+    render(
+      <GLTable
+        entries={[ENTRY({ id: "j1:x", accountCode: "c0f46ca3-0339-422e-842f-8d0eb882b378", accountName: "c0f46ca3-0339-422e-842f-8d0eb882b378" }) as never]}
+        pagination={pag(1)} totals={totals() as never} view={view()}
+      />,
+    );
+    expect(screen.getByText("Unknown head")).toBeInTheDocument();
+    expect(screen.queryByText("c0f46ca3-0339-422e-842f-8d0eb882b378")).not.toBeInTheDocument();
+  });
+});

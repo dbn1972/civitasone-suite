@@ -131,7 +131,7 @@ export default async function VendorDetailPage(props: { params: Promise<{ id: st
       maskedText={masked ?? ""}
       revealPath={`v1/finance/vendors/${params.id}/reveal`}
       revealBody={{ fields: [fieldKey] }}
-      pick={(json) => (json as { values?: Record<string, string | null> })?.values?.[fieldKey]}
+      pickPath={["values", fieldKey]}
       canReveal={canReveal}
       label={label}
       fallback="—"

@@ -3,13 +3,9 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Segmented } from "../../../_components/ds";
 
-export type ReportPeriod = "mtd" | "qtd" | "fy";
+import { PERIOD_LABELS, type ReportPeriod } from "./periods";
 
-export const PERIOD_LABELS: Record<ReportPeriod, string> = {
-  mtd: "Month-to-date",
-  qtd: "Quarter-to-date",
-  fy: "Financial year",
-};
+export type { ReportPeriod };
 
 const OPTIONS = Object.values(PERIOD_LABELS);
 const VALUES = Object.keys(PERIOD_LABELS) as ReportPeriod[];

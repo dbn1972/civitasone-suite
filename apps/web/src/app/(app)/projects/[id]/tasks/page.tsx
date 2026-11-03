@@ -4,12 +4,15 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { orderTaskTree } from "./taskTree";
+import { toPct, formatWeightPct } from "./taskPct";
 import { AddTaskForm } from "./AddTaskForm";
 import { TaskStatusControl } from "./TaskStatusControl";
 
 export default async function ProjectTasksPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const { data: tasks, source } = await getProjectTasks(params.id);
+  const { data: rawTasks, source } = await getProjectTasks(params.id);
+  // UAT Phase 1B: weightPct / progressPct arrive as NUMERIC strings ("30.00").
+  const tasks = rawTasks.map((t) => ({ ...t, progressPct: toPct(t.progressPct) ?? 0 }));
   const errored = source === "error";
 
   // GAP-PROJECTS-DETAIL-TASKS-01: only project managers/officers (project-service
@@ -112,7 +115,7 @@ export default async function ProjectTasksPage(props: { params: Promise<{ id: st
                       {formatIndianDate(t.actualEnd)}
                     </td>
                     <td style={{ textAlign: "end", color: "var(--ink2)", fontSize: "0.88rem" }}>
-                      {t.weightPct.toFixed(1)}%
+                      {formatWeightPct(t.weightPct)}
                     </td>
                     {canManage && (
                       <td>

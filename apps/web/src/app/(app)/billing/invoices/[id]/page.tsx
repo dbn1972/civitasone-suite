@@ -6,6 +6,7 @@ import { InvoiceActions } from "./InvoiceActions";
 // GAP-BILLING-INVOICES-DETAIL-01: gate Generate/Cancel IRN on billing roles.
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { BILLING_INVOICE_READER_ROLES } from "@/lib/auth/adminRoles";
+import { invoiceDisplayNumber } from "../invoiceNumber";
 
 export interface InvoiceItemRow extends Record<string, unknown> {
   id: string;
@@ -28,6 +29,8 @@ export interface InvoiceApprovalRow extends Record<string, unknown> {
 
 export interface InvoiceDetail {
   id: string;
+  /** The stored GST invoice number (null for a draft). */
+  invoiceNumber?: string | null;
   periodMonth: string;
   status: string;
   totalMinor: string;
@@ -147,7 +150,7 @@ export default async function InvoiceDetailPage(props: { params: Promise<{ id: s
       {/* GAP-BILLING-INVOICES-DETAIL-08: back prop removed; AutoBreadcrumb (above)
           is the single back affordance so we don't show two parallel ← links. */}
       <PageHeader
-        title={`Invoice ${invoice.id.replace(/-/g, "").slice(0, 8)}`}
+        title={`Invoice ${invoiceDisplayNumber(invoice)}`}
         subtitle={`Period ${invoice.periodMonth} · ${cur}`}
       />
       <StatGrid>
@@ -158,6 +161,7 @@ export default async function InvoiceDetailPage(props: { params: Promise<{ id: s
       </StatGrid>
       <Card title="Invoice details" padding>
         <div className="fields">
+          <div className="field"><span className="label">Invoice No.</span><span className="mono">{invoiceDisplayNumber(invoice)}</span></div>
           <div className="field"><span className="label">Invoice ID</span><span className="mono" title={invoice.id}>{invoice.id}</span></div>
           <div className="field"><span className="label">Period</span><span>{invoice.periodMonth}</span></div>
           <div className="field"><span className="label">Status</span><span>{humanizeStatus(invoice.status)}</span></div>

@@ -43,6 +43,9 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+/** Why the register's Bids column is "—" (shown under the table). */
+const BIDS_NOTE = "Bids: the number of bids is shown on each tender's page. The register does not have a reliable bid count, so it shows \u201c\u2014\u201d instead of a possibly wrong 0.";
+
 type TenderRow = {
   id: string;
   tenderNo: string;
@@ -53,7 +56,8 @@ type TenderRow = {
   estimatedValue: number;
   publishDate: string;
   bidClosingDate: string;
-  bidsReceived: number;
+  /** Always "—" on the register: see BIDS_NOTE. */
+  bidsReceived: string;
   status: string;
   // GAP-PROCUREMENT-TENDERS-03: overdue cue status word.
   bidWindow: string;
@@ -89,15 +93,14 @@ export default async function TendersPage(
   });
 
   const rows: TenderRow[] = filtered.map((t) => {
-    // GAP-PROCUREMENT-TENDERS-03: a published tender past its bid-close with no
-    // bids looks identical to a fresh one — flag it.
+    // GAP-PROCUREMENT-TENDERS-03: a published tender past its bid-close looks
+    // identical to a fresh one — flag it. UAT Phase 1B review: the cue used to say
+    // "Closed — 0 bids" from the list's bidsReceived counter, which
+    // procurement-service does not maintain (0 for tenders that have bids), so it
+    // now flags only what the register knows: the window closed and bids have
+    // not been opened yet (the tender is still "published").
     const closed = t.bidClosingDate ? t.bidClosingDate < today : false;
-    let bidWindow: string;
-    if (t.status === "published" && closed) {
-      bidWindow = t.bidsReceived === 0 ? "closed_no_bids" : "closed";
-    } else {
-      bidWindow = "open";
-    }
+    const bidWindow = t.status === "published" && closed ? "closed_awaiting_opening" : "open";
     return {
       id: t.id,
       tenderNo: t.tenderNo,
@@ -107,7 +110,10 @@ export default async function TendersPage(
       estimatedValue: t.estimatedValue,
       publishDate: t.publishDate ? formatIndianDate(t.publishDate) : "—",
       bidClosingDate: formatIndianDate(t.bidClosingDate),
-      bidsReceived: t.bidsReceived,
+      // UAT Phase 1B review: the list API carries only the stale bids_received
+      // counter (no bid array); the real count is on the tender's detail page,
+      // which counts the bids themselves. Never show the counter's misleading 0.
+      bidsReceived: "—",
       status: t.status,
       bidWindow,
     };
@@ -207,21 +213,30 @@ export default async function TendersPage(
                     cellType: "status",
                     statusLabels: TYPE_LABELS,
                   },
-                  { key: "estimatedValue", label: "Est. Value", align: "right", cellType: "amount" },
+                  // UAT Phase 1B: procurement-service sends estimatedValue already in RUPEES
+                  // (estimated_minor / 100, tender/queries.ts). cellType "amount" divided it by 100
+                  // again, so every value read 100x too small.
+                  { key: "estimatedValue", label: "Est. Value", align: "right", cellType: "rupees" },
                   { key: "publishDate", label: "Published" },
                   { key: "bidClosingDate", label: "Bid Close" },
-                  { key: "bidsReceived", label: "Bids", align: "right" },
+                  { key: "bidsReceived", label: "Bids", align: "right", sortable: false, csvExclude: true },
                   // GAP-PROCUREMENT-TENDERS-03: overdue cue column.
                   {
                     key: "bidWindow",
                     label: "Bid Window",
                     cellType: "status",
-                    statusLabels: { open: "Open", closed: "Closed", closed_no_bids: "Closed — 0 bids" },
+                    statusLabels: { open: "Open", closed_awaiting_opening: "Closed — bids not yet opened" },
+                    statusVariants: { closed_awaiting_opening: "bad" },
                   },
                   { key: "status", label: "Status", cellType: "status", statusLabels: STATUS_LABELS },
                 ]}
               />
             )}
+            {rows.length > 0 ? (
+              <p role="note" id="tender-bids-note" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--ink2)" }}>
+                {BIDS_NOTE}
+              </p>
+            ) : null}
           </>
         )}
       </Card>

@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const getPage = vi.hoisted(() => vi.fn());
-vi.mock("../../../../_data/loaders", () => ({ getFinanceGLPage: (...a: unknown[]) => getPage(...a) }));
+const getAccounts = vi.hoisted(() => vi.fn());
+vi.mock("../../../../_data/loaders", () => ({
+  getFinanceGLPage: (...a: unknown[]) => getPage(...a),
+  getChartOfAccounts: (...a: unknown[]) => getAccounts(...a),
+}));
 vi.mock("./GLTable", () => ({
-  GLTable: (p: { view: unknown; entries: unknown[]; ledgerTotals?: unknown }) => (
-    <div>gl-table {JSON.stringify(p.view)} rows={p.entries.length} ledger={JSON.stringify(p.ledgerTotals ?? null)}</div>
+  GLTable: (p: { view: unknown; entries: unknown[]; ledgerTotals?: unknown; heads?: unknown }) => (
+    <div>gl-table {JSON.stringify(p.view)} rows={p.entries.length} ledger={JSON.stringify(p.ledgerTotals ?? null)} heads={JSON.stringify(p.heads ?? null)}</div>
   ),
 }));
 vi.mock("../../_components/FyFilter", () => ({ FyFilter: () => <div>fy-filter</div> }));
@@ -17,7 +21,10 @@ import GeneralLedgerPage from "./page";
 const OK = { source: "api", data: { entries: [{ id: "j:1" }], pagination: { limit: 25, offset: 0, total: 1, hasMore: false }, totals: null } };
 
 describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
-  beforeEach(() => { getPage.mockReset(); getPage.mockResolvedValue(OK); });
+  beforeEach(() => {
+    getPage.mockReset(); getPage.mockResolvedValue(OK);
+    getAccounts.mockReset(); getAccounts.mockResolvedValue({ source: "api", data: [] });
+  });
 
   it("fetches one bounded page for the chosen fy / type / search / page, never the whole ledger", async () => {
     render(await GeneralLedgerPage({ searchParams: Promise.resolve({ fy: "2025-26", type: "receipt", q: "V-1", page: "3" }) }));
@@ -54,4 +61,13 @@ describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
     render(await GeneralLedgerPage({ searchParams: Promise.resolve({ posted: "JV-9", state: "queued" }) }));
     expect(screen.getByRole("status")).toHaveTextContent(/JV-9 accepted for processing/);
   });
+
+  // UAT Phase 1B (recon D13): the table gets a chart-of-accounts lookup to name each line's head.
+  it("passes GLTable a head lookup keyed by both head id and code", async () => {
+    getAccounts.mockResolvedValue({ source: "api", data: [{ id: "u-1", code: "1100", name: "Bank", type: "asset", currency: "INR", balanceDisplay: "0", status: "active" }] });
+    render(await GeneralLedgerPage({}));
+    expect(screen.getByText(/heads=/).textContent).toContain('"u-1":{"code":"1100","name":"Bank"}');
+    expect(screen.getByText(/heads=/).textContent).toContain('"1100":{"code":"1100","name":"Bank"}');
+  });
 });
+

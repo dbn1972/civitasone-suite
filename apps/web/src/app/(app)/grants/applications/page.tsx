@@ -2,7 +2,8 @@ import { z } from "zod";
 import { PageHeader, Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { getGrantApplications, type GrantApplicationSummary } from "../_data";
 import { ApplicationsTable } from "./ApplicationsTable";
-import { FilterButton, APPLICATION_FILTERS } from "./FilterButton";
+import { FilterButton } from "./FilterButton";
+import { APPLICATION_FILTERS } from "./filters";
 
 // GAP-GRANTS-APPLICATIONS-02: validate the status filter against the real
 // application-stage statuses; anything else (incl. the old bogus "pending")

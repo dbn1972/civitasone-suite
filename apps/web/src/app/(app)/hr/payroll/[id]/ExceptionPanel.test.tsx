@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import enMessages from "@/messages/en.json";
-import { deriveExceptions } from "./ExceptionPanel";
+import { deriveExceptions } from "./deriveExceptions";
 
 // The page passes its `payrollDetail` translator; mirror it from the real catalogue.
 const detail = enMessages.payrollDetail as Record<string, string>;
@@ -36,5 +36,16 @@ describe("deriveExceptions (GAP-PAYROLL-DETAIL-05)", () => {
     const out = deriveExceptions([{ employeeId: "e5", employeeName: "Z", status: "computed", issues: ["SOMETHING_NEW"] }], t);
     expect(out).toHaveLength(1);
     expect(out[0]!.issue).toBe(detail.exceptionOtherIssue);
+  });
+});
+
+describe("deriveExceptions module boundary (UAT Phase 1B: /hr/payroll/[id] render crash)", () => {
+  it("lives in a module without a \"use client\" directive, so the Server Component page can call it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(join(__dirname, "deriveExceptions.ts"), "utf8");
+    expect(src).not.toMatch(/^\s*["']use client["']/m);
+    const page = readFileSync(join(__dirname, "page.tsx"), "utf8");
+    expect(page).toMatch(/import \{ deriveExceptions \} from "\.\/deriveExceptions"/);
   });
 });

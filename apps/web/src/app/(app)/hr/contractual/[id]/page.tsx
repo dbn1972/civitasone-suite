@@ -4,7 +4,8 @@ import { PageHeader, Card, DataTable, LoadErrorState, StatusPill } from "../../.
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { resolveEmployees } from "@/lib/entityAdapters/employee";
+import type { EntityOption } from "@/app/_components/ds";
+import { mapEmployeeOptions } from "@/lib/entityAdapters/employee";
 import { ContractActions } from "./ContractActions";
 import { toHistoryRows, type HistoryRow } from "../contractRules";
 
@@ -58,9 +59,16 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
         return Array.isArray(a) ? a : null;
       },
     }),
-    resolveEmployees([contract.employeeId]),
+    // A Server Component: resolveEmployees() is the browser adapter (a relative
+    // `/api/proxy/...` fetch), which throws "Failed to parse URL" on the server and
+    // crashed this page for every contract (UAT L1, Phase 1B). Same server-side
+    // lookup as hr/medical: fetchJson + the pure mapEmployeeOptions mapper.
+    fetchJson<unknown, EntityOption[]>(`/api/v1/hrms/employees?ids=${encodeURIComponent(contract.employeeId)}`, [], {
+      telemetryKey: "hr.contractual.employee",
+      mapResponse: mapEmployeeOptions,
+    }),
   ]);
-  const employee = employees[0];
+  const employee = employees.data.find((e) => e.id === contract.employeeId);
 
   return (
     <div className="page-main wrap">
