@@ -8,6 +8,8 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { TASK_ADMIN_ROLES } from "./repo.js";
+import * as delegationRepo from "../delegations/repo.js";
+import { todayIST } from "../../shared/dates.js";
 import { computeDueAt } from "../../shared/sla.js";
 import { normalizeContext } from "../../shared/condition.js";
 import { COMMANDS, EVENTS, DISPATCH, TASK_RESOURCE } from "../../topics.js";
@@ -50,7 +52,7 @@ type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNode
 type CompletePayload = TaskView & {
   decision?: string; sodOverride?: boolean; reason?: string;
   /** Set by the HTTP completeTask path (UAT #2445 review item 5); absent on system/engine completions. */
-  authz?: { roles: string[]; assigneeAtCheck: string | null };
+  authz?: { roles: string[]; assigneeAtCheck: string | null; roleDelegationIds?: string[]; assigneeDelegationIds?: string[] };
 };
 
 export function registerTasksConsumers(queue: Queue): void {
@@ -125,9 +127,18 @@ export function registerTasksConsumers(queue: Queue): void {
       // serialises against it) unless the actor is that new assignee or an admin.
       if (p.authz && !p.authz.roles.some((r) => TASK_ADMIN_ROLES.includes(r))) {
         const locked = await repo.lockTaskTx(tx, p.id, p.tenantId);
-        if (locked && locked.status === "pending"
-            && (locked.assigneeId ?? null) !== (p.authz.assigneeAtCheck ?? null)
-            && locked.assigneeId !== msg.actorId) {
+        // UAT #2445 delta review item 3: a delegate's authority must still hold now.
+        // A role delegation (the actor lacks the task role) must still be active; an
+        // assignee delegation only matters while the task is not assigned to the actor.
+        const today = todayIST();
+        const roleIds = p.authz.roleDelegationIds ?? [];
+        const assigneeIds = p.authz.assigneeDelegationIds ?? [];
+        const roleLost = roleIds.length > 0 && (await delegationRepo.stillActiveIdsTx(tx, p.tenantId, roleIds, today)).length === 0;
+        const assigneeLost = assigneeIds.length > 0 && locked?.assigneeId !== msg.actorId
+          && (await delegationRepo.stillActiveIdsTx(tx, p.tenantId, assigneeIds, today)).length === 0;
+        const reassigned = !!locked && (locked.assigneeId ?? null) !== (p.authz.assigneeAtCheck ?? null) && locked.assigneeId !== msg.actorId;
+        if (locked && locked.status === "pending" && (reassigned || roleLost || assigneeLost)) {
+          const why = reassigned ? "assignee_changed_before_apply" : "delegation_no_longer_active";
           await historyRepo.record(tx, {
             tenantId: p.tenantId,
             instanceId: p.instanceId,
@@ -137,12 +148,12 @@ export function registerTasksConsumers(queue: Queue): void {
             action: "blocked",
             decision,
             actorId: msg.actorId,
-            detail: { reason: "assignee_changed_before_apply" },
+            detail: { reason: why },
           });
           await enqueue(tx, {
             topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { service: "workflow", action: "task.complete.denied", resourceType: "workflow_task", resourceId: p.id, outcome: "denied", reason: "ASSIGNEE_CHANGED" },
+            payload: { service: "workflow", action: "task.complete.denied", resourceType: "workflow_task", resourceId: p.id, outcome: "denied", reason: reassigned ? "ASSIGNEE_CHANGED" : "DELEGATION_NOT_ACTIVE" },
           });
           return; // do not mark complete, do not advance
         }

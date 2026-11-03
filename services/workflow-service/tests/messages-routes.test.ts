@@ -231,7 +231,8 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/workflow/instances/${VALID_UUID}/subscriptions`,
-      headers: authHeader(["workflow_user"]),
+      // UAT #2445 delta review item 2: subscriptions are participant-gated; no instance row exists here, so read as an admin.
+      headers: authHeader(["workflow_admin"]),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.messages).toEqual([]);

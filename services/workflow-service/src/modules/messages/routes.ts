@@ -12,6 +12,7 @@ import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { deliverMessageBody, broadcastSignalBody, instanceIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { canViewInstance } from "../tasks/repo.js";
 
 const ROLES = [
   "workflow_user", "workflow_admin", "super_admin",
@@ -53,6 +54,8 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { instanceId } = instanceIdParam.parse(req.params);
+    // UAT #2445 delta review item 2: an instance's subscriptions for its participants.
+    if (!(await canViewInstance(ctx.tenantId, instanceId, ctx.roles, ctx.actorId))) throw new HttpError(404, "NOT_FOUND", "instance not found");
     const subs = await queries.listSubscriptionsForInstance(instanceId);
     return reply.send({ data: subs });
   });

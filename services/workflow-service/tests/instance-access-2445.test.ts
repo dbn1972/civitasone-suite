@@ -132,6 +132,36 @@ describe("GET /v1/workflow/instances lists only instances the caller participate
   });
 });
 
+describe("sibling per-instance reads are participant-gated too (delta review items 1-2)", () => {
+  const urls = (inst: string) => [
+    `/v1/workflow/history/instance/${inst}`,
+    `/v1/workflow/instances/${inst}/finalization`,
+    `/v1/workflow/instances/${inst}/subscriptions`,
+  ];
+
+  it("a non-participant holding the route roles gets 404 on history, finalization and subscriptions", async () => {
+    const f = await seedInstance();
+    await withApp(async (app) => {
+      for (const url of urls(f.inst)) {
+        const res = await app.inject({ method: "GET", url, headers: auth(f.tenant, ["workflow_user", "hr_officer"]) });
+        expect(res.statusCode, url).toBe(404);
+      }
+    });
+  });
+
+  it("the requester and an admin read them", async () => {
+    const f = await seedInstance();
+    await withApp(async (app) => {
+      for (const h of [auth(f.tenant, ["workflow_user"], f.submitter), auth(f.tenant, ["workflow_admin"])]) {
+        for (const url of urls(f.inst)) {
+          const res = await app.inject({ method: "GET", url, headers: h });
+          expect(res.statusCode, url).toBe(200);
+        }
+      }
+    });
+  });
+});
+
 describe("workbasket tasks resolve over the caller's own pool (item 3)", () => {
   it("a member sees tasks for roles they hold or assigned to them; admins see the whole basket", async () => {
     const f = await seedInstance();
@@ -203,11 +233,98 @@ describe("completion re-checks the assignee under the lock (item 5)", () => {
     expect(audit[0]!).toMatchObject({ actor_id: a, payload: { action: "task.complete.denied", reason: "ASSIGNEE_CHANGED" } });
   });
 
+  it("claim race: unassigned at check, claimed by someone else before apply -> refused", async () => {
+    const a = randomUUID();
+    const { q, tenant, taskId } = await setup(a);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET assignee_id = NULL WHERE id = ${taskId}`);
+    const msg = await issue(tenant, a, taskId);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET assignee_id = ${randomUUID()} WHERE id = ${taskId}`);
+    await q.deliver(COMMANDS.completeTask, msg.payload, { tenantId: tenant, actorId: a, messageId: msg.messageId });
+    expect(await status(tenant, taskId)).toBe("pending");
+    const hist = await sqlAsTenant(tenant, sql`SELECT detail FROM workflow.transition_history WHERE task_id = ${taskId}::uuid AND action = 'blocked'`) as unknown as Array<{ detail: Record<string, unknown> }>;
+    expect(hist.map((h) => h.detail)).toEqual([{ reason: "assignee_changed_before_apply" }]);
+  });
+
+  it("reassigned TO the actor before apply -> still completes", async () => {
+    const a = randomUUID();
+    const { q, tenant, taskId } = await setup(a);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET assignee_id = NULL WHERE id = ${taskId}`);
+    const msg = await issue(tenant, a, taskId);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET assignee_id = ${a} WHERE id = ${taskId}`); // the actor claimed it meanwhile
+    await q.deliver(COMMANDS.completeTask, msg.payload, { tenantId: tenant, actorId: a, messageId: msg.messageId });
+    expect(await status(tenant, taskId)).toBe("completed");
+  });
+
   it("control: with no reassignment the same command completes the task", async () => {
     const a = randomUUID();
     const { q, tenant, taskId } = await setup(a);
     const msg = await issue(tenant, a, taskId);
     await q.deliver(COMMANDS.completeTask, msg.payload, { tenantId: tenant, actorId: a, messageId: msg.messageId });
     expect(await status(tenant, taskId)).toBe("completed");
+  });
+});
+
+describe("a delegate's authority is re-verified under the lock (delta review item 3)", () => {
+  /** A role-less task assigned to `delegator`; `delegate` acts through an active delegation. */
+  async function setupDelegated() {
+    const q = new TestQueue();
+    registerInstancesConsumers(q);
+    registerTasksConsumers(q);
+    const tenant = newTenant();
+    const submitter = randomUUID(), delegator = randomUUID(), delegate = randomUUID();
+    const def = await seedDefinition(tenant, [
+      { nodeKey: "step1", name: "Review", nodeType: "task", sortOrder: 1 },
+      { nodeKey: "step2", name: "Approve", nodeType: "task", sortOrder: 2 },
+    ], [{ fromNode: "step1", toNode: "step2", sortOrder: 1 }]);
+    const instanceId = randomUUID();
+    await q.deliver(COMMANDS.createInstance, { id: instanceId, tenantId: tenant, name: "t", status: "active", version: 1, initialTaskName: "Review", definitionCode: def.code },
+      { tenantId: tenant, actorId: submitter, messageId: instanceId });
+    const [row] = await sqlAsTenant(tenant, sql`SELECT id FROM workflow.tasks WHERE instance_id = ${instanceId} AND status = 'pending' LIMIT 1`) as unknown as Array<{ id: string }>;
+    await sqlAsTenant(tenant, sql`UPDATE workflow.tasks SET assignee_id = ${delegator} WHERE id = ${row!.id}`);
+    const delegationId = randomUUID();
+    await sqlAsTenant(tenant, sql`
+      INSERT INTO workflow.workflow_delegations (id, tenant_id, delegator_id, delegate_id, from_date, to_date, roles, is_active)
+      VALUES (${delegationId}, ${tenant}, ${delegator}, ${delegate}, (now() - interval '2 days')::date, (now() + interval '2 days')::date, ARRAY[]::text[], true)`);
+    return { q, tenant, taskId: row!.id, delegate, delegationId };
+  }
+
+  async function issueAs(tenant: string, actor: string, taskId: string) {
+    const published: Array<{ payload: { authz?: { assigneeDelegationIds?: string[] } }; messageId: string }> = [];
+    vi.spyOn(queue, "publish").mockImplementation(async (topic: string, msg: unknown) => {
+      if (topic === COMMANDS.completeTask) published.push(msg as never);
+      return randomUUID();
+    });
+    const ctx = { tenantId: tenant, actorId: actor, roles: ["workflow_user"], correlationId: randomUUID(), sessionId: "s" } as RequestContext;
+    await asTenant(tenant, () => completeTask(ctx, taskId, "approve"));
+    vi.restoreAllMocks();
+    expect(published).toHaveLength(1);
+    return published[0]!;
+  }
+
+  const taskStatus = async (tenant: string, taskId: string) =>
+    ((await sqlAsTenant(tenant, sql`SELECT status FROM workflow.tasks WHERE id = ${taskId}`)) as unknown as Array<{ status: string }>)[0]!.status;
+  const blocked = async (tenant: string, taskId: string) =>
+    ((await sqlAsTenant(tenant, sql`SELECT detail FROM workflow.transition_history WHERE task_id = ${taskId}::uuid AND action = 'blocked'`)) as unknown as Array<{ detail: Record<string, unknown> }>).map((h) => h.detail);
+
+  it.each([
+    ["revoked", sql`is_active = false`],
+    ["expired", sql`to_date = (now() - interval '1 day')::date`],
+  ])("a delegation %s between the check and apply -> the delegate's completion is refused and audited", async (_label, change) => {
+    const { q, tenant, taskId, delegate, delegationId } = await setupDelegated();
+    const msg = await issueAs(tenant, delegate, taskId);
+    expect(msg.payload.authz?.assigneeDelegationIds).toEqual([delegationId]);
+    await sqlAsTenant(tenant, sql`UPDATE workflow.workflow_delegations SET ${change} WHERE id = ${delegationId}`);
+    await q.deliver(COMMANDS.completeTask, msg.payload, { tenantId: tenant, actorId: delegate, messageId: msg.messageId });
+    expect(await taskStatus(tenant, taskId)).toBe("pending");
+    expect(await blocked(tenant, taskId)).toEqual([{ reason: "delegation_no_longer_active" }]);
+    const audit = await sqlAsTenant(tenant, sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record' AND payload->>'resourceId' = ${taskId} AND payload->>'outcome' = 'denied'`) as unknown as Array<{ payload: Record<string, unknown> }>;
+    expect(audit.map((a) => a.payload.reason)).toEqual(["DELEGATION_NOT_ACTIVE"]);
+  });
+
+  it("control: the delegation still active -> the delegate's completion applies", async () => {
+    const { q, tenant, taskId, delegate } = await setupDelegated();
+    const msg = await issueAs(tenant, delegate, taskId);
+    await q.deliver(COMMANDS.completeTask, msg.payload, { tenantId: tenant, actorId: delegate, messageId: msg.messageId });
+    expect(await taskStatus(tenant, taskId)).toBe("completed");
   });
 });

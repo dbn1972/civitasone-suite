@@ -219,6 +219,15 @@ export async function completeTask(
     }
   }
 
+  // UAT #2445 delta review item 3: the delegations this check relied on, so the
+  // consumer can re-verify under the lock that they are still active.
+  const viaRoleDelegation = !isSuperAdmin && !!existing.roleRef && !ctx.roles.includes(existing.roleRef);
+  const roleDelegationIds = viaRoleDelegation ? (await roleDelegationsFor()).map((d) => d.id) : [];
+  const viaAssigneeDelegation = !isAdminOverride && !!existing.assigneeId && existing.assigneeId !== ctx.actorId;
+  const assigneeDelegationIds = viaAssigneeDelegation
+    ? (await roleDelegationsFor()).filter((d) => d.delegatorId === existing.assigneeId).map((d) => d.id)
+    : [];
+
   const projected: TaskView = { ...existing, status: "completed", decision, version: existing.version + 1 };
   await cache.put(cache.makeKey(ctx.tenantId, TASK_RESOURCE, taskId), projected);
   await queue.publish(COMMANDS.completeTask, {
@@ -231,7 +240,7 @@ export async function completeTask(
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
     // UAT #2445 review item 5: what the consumer re-checks under the row lock.
-    payload: { ...existing, decision, sodOverride, ...(reason ? { reason } : {}), authz: { roles: ctx.roles, assigneeAtCheck: existing.assigneeId ?? null } },
+    payload: { ...existing, decision, sodOverride, ...(reason ? { reason } : {}), authz: { roles: ctx.roles, assigneeAtCheck: existing.assigneeId ?? null, roleDelegationIds, assigneeDelegationIds } },
   });
 
   return { id: taskId, status: "accepted", correlationId: ctx.correlationId };
