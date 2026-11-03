@@ -37,6 +37,7 @@ import { ptYtdMinors } from "../src/modules/payroll/pt-versions-repo.js";
 import { approveRun } from "../src/modules/payroll/commands.js";
 import { buildForm16WithMinor } from "../src/modules/tax/form16.js";
 import { reconcilePeriod } from "../src/modules/statutory-returns/challan-routes.js";
+import { loadPaySnapshot } from "../src/modules/fnf/pay-snapshot.js";
 import { EVENTS } from "../src/topics.js";
 import { payrollTdsChallan } from "../src/modules/statutory/schema.js";
 
@@ -103,7 +104,15 @@ describe("T-STAT D-B1 (A): approval with an exclusion removes the slip statutory
     const ev = await q<{ payload: Record<string, unknown> }>(tenant, sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"}
       AND payload->>${"action"} = ${"statutory_rows_removed"} AND payload->>${"resourceId"} = ${zeroSlip.id}`);
     expect(ev).toHaveLength(1);
-    expect(ev[0]!.payload).toMatchObject({ runId, removed: { esi: 1, tds: 1 } });
+    expect(ev[0]!.payload).toMatchObject({ runId, removed: { pf: 0, esi: 1, nps: 0, gpf: 0, tds: 1 } });
+    // Audit completeness: the payload rebuilds exactly what was removed (business fields only,
+    // no PII beyond the employee id): ESI 0.75% / 3.25% of Rs 3,600 = 27 / 117; TDS nil.
+    expect(ev[0]!.payload.removedRows).toEqual([
+      { table: "payroll_esi", scheme: "ESI", slipId: zeroSlip.id, employeeId: zero, runId, period: "2026-08", currency: "INR",
+        grossMinor: R(3600).toString(), empContribMinor: R(27).toString(), erContribMinor: R(117).toString() },
+      { table: "payroll_tds", scheme: "TDS", slipId: zeroSlip.id, employeeId: zero, runId, period: "2026-08", currency: "INR",
+        annualBasicMinor: "0", taxableMinor: "0", tdsMinor: "0" },
+    ]);
 
     // GL accrual: only the paid slip employer NPS (14% of 50,000 = 7,000).
     const approved = await q<{ payload: { totalEmployerContribMinor: string; totalGrossMinor: string } }>(tenant, sql`
@@ -198,5 +207,24 @@ describe("T-STAT D-B1 (B): ledger rows still attached to an excluded slip are ig
     expect(f24.statusCode).toBe(200);
     expect(f24.body).toContain(paid);
     expect(f24.body).not.toContain(excl);
+  });
+});
+
+describe("T-STAT D-B1 follow-up: an excluded slip never enters the F&F pay snapshot", () => {
+  it("a Rs 0 excluded month is not one of the last 10 wage months (gratuity / leave encashment average)", async () => {
+    const tenant = randomUUID(); const emp = randomUUID();
+    for (const [month, basic, status] of [["2026-06", 40000, "computed"], ["2026-07", 0, "excluded"]] as const) {
+      const runId = await newRun(tenant, month, "approved");
+      await inTenant(tenant, (tx) => repo.insertSlip(tx as never, {
+        id: randomUUID(), tenantId: tenant, runId, employeeId: emp, employeeNo: "R3F", basicMinor: R(basic), grossMinor: R(basic),
+        totalDeductionsMinor: 0n, netPayMinor: R(basic), currency: "INR",
+        components: basic ? [{ code: "BASIC", name: "Basic", type: "earning", amountMinor: basic * 100 }] : [],
+        status, createdBy: creator, updatedBy: creator,
+      }));
+    }
+    const snap = await inTenant(tenant, (tx) => loadPaySnapshot(tx as never, tenant, emp, "2026-07-31"));
+    expect(snap.wageMonths).toBe(1);
+    expect(snap.avgSalaryLast10MonthsMinor).toBe(R(40000).toString());
+    expect(snap.lastDrawnWagesMinor).toBe(R(40000).toString());
   });
 });

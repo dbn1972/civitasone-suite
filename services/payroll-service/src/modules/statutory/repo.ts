@@ -15,14 +15,46 @@ export function notExcludedSlip(slipIdColumn: AnyColumn) {
   return sql`NOT EXISTS (SELECT 1 FROM payroll.payroll_slips xs WHERE xs.id = ${slipIdColumn} AND xs.status = ${"excluded"})`;
 }
 
-/** Delta review D-B1: remove one slip statutory ledger rows (PF / ESI / NPS / GPF / TDS); returns what was removed per ledger. */
-export async function deleteLedgerRowsForSlipTx(tx: Pick<typeof db, "execute">, slipId: string, tenantId: string): Promise<Record<"pf" | "esi" | "nps" | "gpf" | "tds", number>> {
-  const out = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
-  for (const k of Object.keys(out) as Array<keyof typeof out>) {
-    const rows = (await tx.execute(sql`DELETE FROM ${sql.raw(`statutory.payroll_${k}`)} WHERE slip_id = ${slipId}::uuid AND tenant_id = ${tenantId}::uuid RETURNING id`)) as unknown as unknown[];
-    out[k] = rows.length;
+type LedgerKey = "pf" | "esi" | "nps" | "gpf" | "tds";
+/**
+ * Business columns of each ledger, as returned by the DELETE (fixed lists:
+ * no PII, nothing beyond the employee id) -- enough to rebuild every removed
+ * row from the audit trail: wage bases, shares, PF EPF / EPS split, TDS.
+ */
+const LEDGER_AUDIT_COLUMNS: Record<LedgerKey, { scheme: string; columns: string[] }> = {
+  pf:  { scheme: "EPF", columns: ["basic_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor", "eps_contrib_minor", "epf_er_contrib_minor"] },
+  esi: { scheme: "ESI", columns: ["gross_minor", "emp_contrib_minor", "er_contrib_minor"] },
+  nps: { scheme: "NPS", columns: ["basic_minor", "pension_base_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor"] },
+  gpf: { scheme: "GPF", columns: ["basic_minor", "contrib_pct", "emp_contrib_minor"] },
+  tds: { scheme: "TDS", columns: ["annual_basic_minor", "taxable_minor", "tds_minor"] },
+};
+const camel = (c: string) => c.replace(/_([a-z])/g, (_m, ch: string) => ch.toUpperCase());
+
+/** One removed ledger row as recorded on the audit trail (amounts as paise digit strings). */
+export type RemovedLedgerRow = { table: string; scheme: string; slipId: string; employeeId: string; runId: string; period: string; currency: string } & Record<string, string | null>;
+
+/**
+ * Delta review D-B1: remove one slip statutory ledger rows (PF / ESI / NPS /
+ * GPF / TDS) with DELETE ... RETURNING, so the caller can audit exactly what
+ * was removed: per-ledger counts and every removed row business fields.
+ * Bounded: a slip has at most one row per ledger.
+ */
+export async function deleteLedgerRowsForSlipTx(tx: Pick<typeof db, "execute">, slipId: string, tenantId: string): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
+  const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
+  const rows: RemovedLedgerRow[] = [];
+  for (const k of Object.keys(counts) as LedgerKey[]) {
+    const { scheme, columns } = LEDGER_AUDIT_COLUMNS[k];
+    const returning = ["slip_id", "employee_id", "run_id", "period", "currency", ...columns].map((c) => `${c}::text AS ${c}`).join(", ");
+    const removed = (await tx.execute(sql`DELETE FROM ${sql.raw(`statutory.payroll_${k}`)}
+      WHERE slip_id = ${slipId}::uuid AND tenant_id = ${tenantId}::uuid RETURNING ${sql.raw(returning)}`)) as unknown as Array<Record<string, string | null>>;
+    counts[k] = removed.length;
+    for (const r of removed) {
+      const row: Record<string, string | null> = { table: `payroll_${k}`, scheme };
+      for (const [col, v] of Object.entries(r)) row[camel(col)] = v == null ? null : String(v).trim();
+      rows.push(row as RemovedLedgerRow);
+    }
   }
-  return out;
+  return { counts, rows };
 }
 
 export async function insertPf(tx: Writer, row: typeof payrollPf.$inferInsert): Promise<void> {

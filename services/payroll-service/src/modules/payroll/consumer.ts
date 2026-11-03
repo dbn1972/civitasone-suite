@@ -1070,7 +1070,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         // transaction -- they would otherwise reach the GL accrual, the
         // returns, the TDS YTD and Form 16. Audited with what was removed.
         const removed = await statutoryRepo.deleteLedgerRowsForSlipTx(tx, sl.id, p.tenantId);
-        await audit(tx, msg, "statutory_rows_removed", "payroll_slip", sl.id, { runId: p.id, employeeId: sl.employeeId, reason: ex.reason, removed });
+        await audit(tx, msg, "statutory_rows_removed", "payroll_slip", sl.id, {
+          runId: p.id, employeeId: sl.employeeId, reason: ex.reason, removed: removed.counts, removedRows: removed.rows,
+        });
       }
       const excludedSlipIds = new Set(excludedSlips.map((sl) => sl.id));
       const paySlips = slips.filter((sl) => !excludedSlipIds.has(sl.id));
