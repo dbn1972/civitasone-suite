@@ -9,8 +9,15 @@
  * Next.js emits an in-stream redirect as `<meta id="__next-page-redirect"
  * http-equiv="refresh">`, which the browser only follows after the document
  * has finished loading. So "wait for load, then check" is enough to know
- * whether this page is about to be replaced; `pagehide` / `beforeunload`
- * cover every other way of leaving. Nothing here touches the network.
+ * whether this page is about to be replaced; `pagehide` covers every other
+ * way of actually leaving. Nothing here touches the network.
+ *
+ * `beforeunload` is deliberately NOT a leaving signal: it is cancellable (the
+ * dirty-form "Leave site?" prompt, download / mailto navigations), and a page
+ * whose unload was cancelled is still live -- treating it as leaving would
+ * stop the session-timeout warning for good (A11Y-01, WCAG 2.2.1). The flag is
+ * also cleared whenever the page shows again (`pageshow`, incl. bfcache) or
+ * becomes visible again (`visibilitychange`), so it can never stick.
  */
 
 /** id of the <meta http-equiv="refresh"> Next.js inserts for redirect()/permanentRedirect() after streaming began. */
@@ -25,15 +32,23 @@ function install(): void {
   const markLeaving = () => {
     leaving = true;
   };
+  const markLive = () => {
+    leaving = false;
+  };
   window.addEventListener("pagehide", markLeaving);
-  window.addEventListener("beforeunload", markLeaving);
-  // Restored from the back/forward cache: the page is live again.
-  window.addEventListener("pageshow", (e: PageTransitionEvent) => {
-    if (e.persisted) leaving = false;
+  // Shown again (first show, or restored from the back/forward cache): live.
+  window.addEventListener("pageshow", markLive);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") markLive();
   });
 }
 
-/** True while this document is being navigated away from (or is about to be, via a redirect meta). */
+/**
+ * True while this document is being navigated away from (pagehide) or is about
+ * to be replaced (Next.js redirect meta). Without a window (server render)
+ * there is no live page to do client-side session work for, so it reports
+ * true -- callers then simply skip that work.
+ */
 export function isLeavingPage(): boolean {
   if (typeof window === "undefined" || typeof document === "undefined") return true;
   install();

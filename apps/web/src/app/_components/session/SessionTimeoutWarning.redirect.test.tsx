@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { fetchSessionTimes, refreshSession, type SessionTimes } from "@/lib/auth/sessionClient";
 import { NEXT_PAGE_REDIRECT_META_ID, __resetPageLifecycleForTests } from "@/lib/navigation/pageLifecycle";
 import { SessionTimeoutWarning } from "./SessionTimeoutWarning";
@@ -67,6 +67,22 @@ describe("SessionTimeoutWarning on a page that is navigating away (F132)", () =>
     window.dispatchEvent(new Event("pagehide"));
     await advance(5_000);
     expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  // Review of #2447 (HIGH, A11Y-01 regression guard): the dirty-form "Leave
+  // site?" prompt fires beforeunload; the user clicks Stay and keeps working.
+  it("after a cancelled beforeunload the timer keeps running: silent refresh fires and the warning still shows", async () => {
+    render(<SessionTimeoutWarning />);
+    await advance(1_000);
+    const ev = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(ev);
+    ev.preventDefault(); // "Stay on page"
+    fireEvent.keyDown(window, { key: "a" }); // active user inside the 5-min renewal window
+    await advance(2_000);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    // An idle user then still gets the T-2 warning (session ends at T0+4min).
+    await advance(2 * MIN);
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("control: on a normal page the active user's session is still silently renewed", async () => {

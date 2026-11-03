@@ -450,12 +450,13 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 html{scroll-padding-bottom:96px}
 /* UAT-P2-D3 (A11Y-08): native selects follow the dark palette. */
 .dark select{color-scheme:dark}
-/* UAT-P2-D4 (FIN-01): .fields is the read-only 2-column label/value grid. Used
-   on a <form> (the journal voucher entry form) it squeezed the whole form into
-   half the card and pushed line items past the right edge at 1366px. A form
-   with this class lays its sections out vertically; grid children may shrink. */
-form.fields{display:flex;flex-direction:column;gap:14px;background:none}
-.fields>*{min-width:0}
+/* UAT-P2-D4 (FIN-01): .fields is the read-only 2-column label/value grid. On
+   the journal voucher entry form it squeezed the whole form into half the card
+   and pushed line items past the right edge at 1366px. Scoped to that form
+   only (.jv-form) -- other forms that reuse .fields (e.g. the procurement
+   planning filter bar) keep their own layout. */
+form.fields.jv-form{display:flex;flex-direction:column;gap:14px;background:none}
+form.fields.jv-form>*{min-width:0}
 /* UAT-P2-D3 (A11Y-17): breadcrumb links get a usable target height. */
 .tb .crumb a{display:inline-block;padding-block:4px}
 /* UAT-P2-D3 (A11Y-20, GIGW): shell footer (contentinfo) + visible language toggle. */

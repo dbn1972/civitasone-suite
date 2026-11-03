@@ -59,6 +59,32 @@ describe("pageLifecycle", () => {
     expect(isLeavingPage()).toBe(false);
   });
 
+  // Review of #2447 (HIGH): a cancelled unload ("Leave site?" -> Stay) must not
+  // leave the page flagged as leaving, or the session warning stops for good.
+  it("a (cancellable) beforeunload does not mark the page as leaving", async () => {
+    window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    expect(isLeavingPage()).toBe(false);
+    const fn = vi.fn();
+    runWhenPageSettled(fn);
+    await tick();
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("becoming visible again clears a stale leaving flag", () => {
+    window.dispatchEvent(new Event("pagehide"));
+    expect(isLeavingPage()).toBe(true);
+    const spy = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(isLeavingPage()).toBe(false);
+    spy.mockRestore();
+  });
+
+  it("any pageshow (not only bfcache) marks the page live", () => {
+    window.dispatchEvent(new Event("pagehide"));
+    window.dispatchEvent(new Event("pageshow"));
+    expect(isLeavingPage()).toBe(false);
+  });
+
   it("cancel (unmount) prevents the work", async () => {
     const fn = vi.fn();
     const cancel = runWhenPageSettled(fn);
