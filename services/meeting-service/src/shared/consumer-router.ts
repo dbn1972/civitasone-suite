@@ -9,9 +9,9 @@
  * permanent validation or business-rule rejection.
  *
  * Now:
- *   - normaliseThrown(): every thrown value becomes an Error that keeps the original details
- *     (message, status/code, a log-safe reduction of a DB error object), so the log line and the
- *     DLQ reason say what actually failed.
+ *   - normaliseThrown(): every thrown value becomes an Error that says what failed without
+ *     logging input values: a DB error is reduced to its SQLSTATE and safe metadata, a plain
+ *     object to its code/status and key names (see normaliseThrown).
  *   - classifyConsumerFailure(): validation and business-rule failures are non-retryable and are
  *     dead-lettered after ONE attempt: NonRetryableError, an HttpError / status-carrying 4xx (bar
  *     408 / 429), a ZodError, an optimistic-lock VersionConflictError (the command carries a fixed
@@ -41,30 +41,64 @@ export class NonErrorThrown extends Error {
   }
 }
 
-/** Fields of a plain thrown object that are copied onto the Error so classification and logs can use them. */
+/**
+ * A database error reduced to log-safe metadata (#2445 review item 6 / #2452 review). The
+ * Postgres message, detail and hint can echo input values (22P02 "invalid input syntax for type
+ * uuid: <value>", 22007 dates, 23505 key detail), so the message is the fixed
+ * "database error <SQLSTATE>[ on <constraint>]" from safeErr and only code, constraint, table,
+ * schema, column, routine and severity are kept. The original error is NOT kept as `cause`.
+ */
+export class ReducedDatabaseError extends Error {
+  readonly code: string;
+  constructor(reduced: Record<string, unknown> & { message: string }) {
+    super(reduced.message);
+    this.name = "ReducedDatabaseError";
+    this.code = String(reduced.code ?? "");
+    for (const [k, v] of Object.entries(reduced)) {
+      if (k !== "type" && k !== "message" && k !== "stack" && k !== "code") (this as unknown as Record<string, unknown>)[k] = v;
+    }
+  }
+}
+
+/** Fields of a plain thrown object whose values are kept (codes and statuses only). */
 const CARRIED_FIELDS = ["status", "statusCode", "httpStatus", "code"] as const;
 
-/** Turn any thrown value into an Error that keeps the original details. An Error is returned as is. */
+function carriedScalar(v: unknown): string | number | undefined {
+  return typeof v === "number" || (typeof v === "string" && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)) ? v : undefined;
+}
+
+/**
+ * Turn any thrown value into an Error that is safe to log and still says what failed:
+ *  - a Postgres error (an Error instance or a plain object) -> ReducedDatabaseError;
+ *  - an Error whose message embeds a Postgres cause message -> ReducedDatabaseError of the cause;
+ *  - any other Error -> unchanged;
+ *  - a string -> NonErrorThrown with that string;
+ *  - a plain object -> NonErrorThrown carrying only its code/status values and its key NAMES
+ *    (never the other values: a thrown row or payload would otherwise land in the log);
+ *  - anything else -> NonErrorThrown "non-Error value thrown: <String(value)>".
+ */
 export function normaliseThrown(thrown: unknown): Error {
-  if (thrown instanceof Error) return thrown;
-  if (isPostgresError(thrown)) {
-    // A raw DB error object (not an Error instance): keep only the log-safe fields, never the
-    // query / parameters, which carry input values.
-    const reduced = safeErr(thrown);
-    const e = new NonErrorThrown(reduced.message, "PostgresError", reduced);
-    for (const [k, v] of Object.entries(reduced)) {
-      if (k !== "type" && k !== "message" && k !== "stack") (e as unknown as Record<string, unknown>)[k] = v;
+  if (isPostgresError(thrown)) return new ReducedDatabaseError(safeErr(thrown));
+  if (thrown instanceof Error) {
+    const cause = (thrown as { cause?: unknown }).cause;
+    if (isPostgresError(cause) && typeof cause.message === "string" && cause.message.length > 0 && thrown.message.includes(cause.message)) {
+      return new ReducedDatabaseError(safeErr(cause));
     }
-    return e;
+    return thrown;
   }
   if (typeof thrown === "string") return new NonErrorThrown(thrown.length > 0 ? thrown : "empty string thrown", "string");
   if (thrown !== null && typeof thrown === "object") {
     const o = thrown as Record<string, unknown>;
-    const message = typeof o.message === "string" && o.message.length > 0
-      ? o.message
-      : `non-Error object thrown (keys: ${Object.keys(o).slice(0, 10).join(", ") || "none"})`;
-    const e = new NonErrorThrown(message, "object", o);
-    for (const k of CARRIED_FIELDS) if (o[k] !== undefined) (e as unknown as Record<string, unknown>)[k] = o[k];
+    const keys = Object.keys(o).slice(0, 20);
+    const carried: Record<string, string | number> = {};
+    for (const k of CARRIED_FIELDS) {
+      const v = carriedScalar(o[k]);
+      if (v !== undefined) carried[k] = v;
+    }
+    const summary = Object.entries(carried).map(([k, v]) => `${k} ${v}`).join(", ");
+    const message = `non-Error object thrown (${summary ? `${summary}; ` : ""}keys: ${keys.join(", ") || "none"})`;
+    const e = new NonErrorThrown(message, "object", { keys, ...carried });
+    for (const [k, v] of Object.entries(carried)) (e as unknown as Record<string, unknown>)[k] = v;
     return e;
   }
   return new NonErrorThrown(`non-Error value thrown: ${String(thrown)}`, typeof thrown);
@@ -79,13 +113,11 @@ function statusOf(err: Error): number | null {
 }
 
 function pgCodeOf(err: Error): string | null {
+  if (err instanceof ReducedDatabaseError) return err.code || null;
   if (isPostgresError(err)) return String((err as unknown as { code: string }).code);
   const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof ReducedDatabaseError) return cause.code || null;
   if (isPostgresError(cause)) return String(cause.code);
-  if (err instanceof NonErrorThrown && err.thrownType === "PostgresError") {
-    const code = (err as unknown as { code?: unknown }).code;
-    return typeof code === "string" ? code : null;
-  }
   return null;
 }
 
@@ -106,12 +138,12 @@ export function isPermanentFailure(err: Error): boolean {
  * (with the normalised Error as its cause), anything else as the normalised Error.
  */
 export function classifyConsumerFailure(thrown: unknown): Error {
+  // Decided on the ORIGINAL value: a NonRetryableError whose message embeds a DB error is
+  // reduced by normaliseThrown and must stay non-retryable.
+  const wasPermanent = isNonRetryable(thrown);
   const err = normaliseThrown(thrown);
   if (err instanceof NonRetryableError) return err;
-  if (isPermanentFailure(err)) {
-    const permanent = new NonRetryableError(err.message, err);
-    return permanent;
-  }
+  if (wasPermanent || isPermanentFailure(err)) return new NonRetryableError(err.message, err);
   return err;
 }
 

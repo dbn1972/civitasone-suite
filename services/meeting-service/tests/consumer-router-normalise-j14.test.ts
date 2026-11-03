@@ -9,7 +9,7 @@
  * (dead-lettered after one attempt), and the dead letter is handed back to the bus as a
  * NonRetryableError so the original message is parked in the topic DLQ instead of being acked.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -19,7 +19,10 @@ import { NonRetryableError, isNonRetryable, type CommandEnvelope } from "@civita
 import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { HttpError } from "../src/shared/context.js";
 import { VersionConflictError } from "../src/shared/outbox.js";
-import { makeConsumerRouter, normaliseThrown, classifyConsumerFailure, NonErrorThrown } from "../src/shared/consumer-router.js";
+import { makeConsumerRouter, normaliseThrown, classifyConsumerFailure, NonErrorThrown, ReducedDatabaseError } from "../src/shared/consumer-router.js";
+import { sqlClient } from "../src/shared/db.js";
+
+afterAll(async () => { await sqlClient.end(); });
 
 const TOPIC = "meeting.meeting.transition";
 const MSG = {
@@ -76,12 +79,74 @@ describe("normaliseThrown: every thrown value becomes an Error with its details 
     expect((e as NonErrorThrown).thrownType).toBe("string");
   });
 
-  it("a plain object keeps its message, status and code", () => {
+  it("a plain object keeps only its status / code values and its key names (#2452 review)", () => {
     const e = normaliseThrown({ status: 422, code: "MEETING_INVALID_TRANSITION", message: "cannot schedule", details: { unmet: ["agendaItem"] } });
-    expect(e.message).toBe("cannot schedule");
+    expect(e).toBeInstanceOf(NonErrorThrown);
     expect((e as unknown as { status: number }).status).toBe(422);
     expect((e as unknown as { code: string }).code).toBe("MEETING_INVALID_TRANSITION");
-    expect(JSON.stringify((e as NonErrorThrown).details)).toContain("agendaItem");
+    expect(e.message).toBe("non-Error object thrown (status 422, code MEETING_INVALID_TRANSITION; keys: status, code, message, details)");
+    expect((e as NonErrorThrown).details).toEqual({ keys: ["status", "code", "message", "details"], status: 422, code: "MEETING_INVALID_TRANSITION" });
+    const line = JSON.stringify(logLine(e));
+    expect(line).not.toContain("cannot schedule");
+    expect(line).not.toContain("agendaItem");
+  });
+
+  it("a plain object carrying a row is logged without any row value (#2452 review)", async () => {
+    const thrown = () => ({ code: "ROW_REJECTED", row: { name: "Kumari Sensitive", pan: "QWERT6789Z", bank: "000123456789" }, message: "row Kumari Sensitive rejected" });
+    const e = normaliseThrown(thrown());
+    const r = await runWith(thrown);
+    for (const out of [JSON.stringify(logLine(e)), JSON.stringify(logLine(r.dead[0]!.err)), String((r.rethrown as Error).stack), (r.rethrown as Error).message]) {
+      expect(out).not.toContain("Kumari");
+      expect(out).not.toContain("QWERT6789Z");
+      expect(out).not.toContain("000123456789");
+    }
+    expect(e.message).toContain("code ROW_REJECTED");
+    expect(e.message).toContain("keys: code, row, message");
+  });
+
+  it("a code / status value that is not a plain token is not carried", () => {
+    const e = normaliseThrown({ code: "Kumari Sensitive QWERT6789Z", status: "x" });
+    expect(e.message).not.toContain("Kumari");
+    expect((e as unknown as { code?: unknown }).code).toBeUndefined();
+  });
+
+  it("a real 22P02 error with the input value in its message is logged without the value (#2452 review)", async () => {
+    const VALUE = "Kumari-QWERT6789Z";
+    let caught: unknown;
+    try { await sqlClient.unsafe("select $1::uuid as id", [VALUE] as never[]); } catch (err) { caught = err; }
+    // Control: the raw driver error really carries the value in its message.
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain(VALUE);
+    expect((caught as { code: string }).code).toBe("22P02");
+
+    const e = normaliseThrown(caught);
+    expect(e).toBeInstanceOf(ReducedDatabaseError);
+    expect(e.message).toBe("database error 22P02");
+    expect((e as ReducedDatabaseError).code).toBe("22P02");
+    expect((e as { cause?: unknown }).cause).toBeUndefined();
+
+    // Through the router: non-retryable, and neither the dead letter, its log line, the rethrown
+    // error message nor its stack (what the bus console-logs) carries the value.
+    const r = await runWith(() => caught);
+    expect(r.calls).toBe(1);
+    expect(r.rethrown).toBeInstanceOf(NonRetryableError);
+    for (const out of [e.message, String(e.stack), JSON.stringify(logLine(e)), JSON.stringify(logLine(r.dead[0]!.err)),
+      (r.rethrown as Error).message, String((r.rethrown as Error).stack), JSON.stringify(logLine(r.rethrown))]) {
+      expect(out).not.toContain(VALUE);
+      expect(out).not.toContain("QWERT6789Z");
+    }
+    expect(JSON.stringify(logLine(r.dead[0]!.err))).toContain("22P02");
+  });
+
+  it("an Error or NonRetryableError that embeds a DB error message is reduced too, and stays non-retryable", () => {
+    const pg = Object.assign(new Error("invalid input syntax for type uuid: \"Kumari-QWERT6789Z\""), { name: "PostgresError", code: "22P02", routine: "string_to_uuid" });
+    const wrapped = new NonRetryableError(pg.message, pg);
+    const c = classifyConsumerFailure(wrapped);
+    expect(isNonRetryable(c)).toBe(true);
+    expect(c.message).toBe("database error 22P02");
+    expect(JSON.stringify(logLine(c))).not.toContain("Kumari");
+    const plainWrap = new Error(`insert failed: ${pg.message}`, { cause: pg });
+    expect(normaliseThrown(plainWrap).message).toBe("database error 22P02");
   });
 
   it("a plain Postgres error object is reduced to code / constraint, never its parameters", () => {
