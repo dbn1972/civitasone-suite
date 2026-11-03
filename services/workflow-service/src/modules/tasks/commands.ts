@@ -2,6 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, TASK_RESOURCE } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -14,6 +15,39 @@ import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
 import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
+
+/**
+ * UAT follow-up (F108, security): a task with no roleRef used to be completable
+ * (and claimable) by ANY workflow role-holder who knew its id: only the list was
+ * scoped. Now only its assignee (or a delegate standing in for the assignee),
+ * workflow_admin or super_admin may act on it. Anyone else gets 403
+ * TASK_NOT_AUTHORIZED, and the refusal is audited: a "blocked" row in the
+ * append-only transition history plus an audit.event.record outbox event, in
+ * one transaction. Tasks WITH a roleRef keep the role-on-task gate.
+ */
+export const UNRESTRICTED_TASK_ADMIN_ROLES: readonly string[] = ["super_admin", "workflow_admin"];
+
+async function refuseUnrestrictedTask(ctx: RequestContext, task: TaskView, op: "complete" | "claim", decision: string | null): Promise<never> {
+  await db.transaction(async (tx) => {
+    await historyRepo.record(tx, {
+      tenantId: ctx.tenantId,
+      instanceId: task.instanceId,
+      taskId: task.id,
+      fromNode: task.nodeKey ?? null,
+      toNode: null,
+      action: "blocked",
+      decision,
+      actorId: ctx.actorId,
+      detail: { reason: "unrestricted_task_not_authorized", op },
+    });
+    await enqueue(tx, {
+      topic: "audit.event.record", eventType: "audit.event.record",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { service: "workflow", action: `task.${op}.denied`, resourceType: "workflow_task", resourceId: task.id, outcome: "denied", reason: "TASK_NOT_AUTHORIZED" },
+    });
+  });
+  throw new HttpError(403, "TASK_NOT_AUTHORIZED", "this task has no role; only its assignee or a workflow admin may act on it");
+}
 
 /** YYYY-MM-DD in IST (Asia/Kolkata), used to bound active-delegation validity. */
 function today(): string {
@@ -80,6 +114,14 @@ export async function completeTask(
   // delegation with no role scope, never satisfies it.
   if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef) && (await roleDelegationsFor()).length === 0) {
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
+  }
+  // UAT follow-up (F108): a task with no roleRef is no longer open to everyone.
+  if (!existing.roleRef && !ctx.roles.some((r) => UNRESTRICTED_TASK_ADMIN_ROLES.includes(r))) {
+    const isAssigneeOrDelegate = existing.assigneeId != null && (
+      existing.assigneeId === ctx.actorId ||
+      (await roleDelegationsFor()).some((d) => d.delegatorId === existing.assigneeId)
+    );
+    if (!isAssigneeOrDelegate) await refuseUnrestrictedTask(ctx, existing, "complete", decision);
   }
 
   // P1-1 — assignee lock. Once a task is claimed/assigned to a specific user it
@@ -219,6 +261,11 @@ export async function claimTask(ctx: RequestContext, taskId: string): Promise<Ta
     (await delegationRepo.liveRoleDelegations(ctx.tenantId, activeDelegations, existing.roleRef)).length === 0
   ) {
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
+  }
+  // UAT follow-up (F108): an unassigned task with no roleRef is not claimable by
+  // any role-holder; a workflow admin triages and assigns it.
+  if (!existing.roleRef && !ctx.roles.some((r) => UNRESTRICTED_TASK_ADMIN_ROLES.includes(r))) {
+    await refuseUnrestrictedTask(ctx, existing, "claim", null);
   }
 
   const claimed = await repo.claim(taskId, ctx.tenantId, ctx.actorId);
