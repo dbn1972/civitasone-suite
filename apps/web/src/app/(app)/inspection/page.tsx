@@ -15,6 +15,8 @@ const LINKS = [
   { href: "/inspection/inspections", label: "Inspections", note: "Execution records and history." },
   { href: "/inspection/assignments", label: "Assignments", note: "Inspector assignments and tour plans." },
   { href: "/inspection/capa", label: "CAPA", note: "Corrective and preventive actions." },
+  // UAT Phase 2 C3 (J13): inspection reports (create / submit / approve).
+  { href: "/inspection/reports", label: "Inspection reports", note: "Prepare, submit and approve inspection reports." },
 ];
 
 /**

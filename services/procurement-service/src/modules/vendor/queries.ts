@@ -45,6 +45,16 @@ export async function countEmpanelments(tenantId: string): Promise<number> {
   return repo.countEmpanelmentsByTenant(tenantId);
 }
 
+/**
+ * UAT Phase 2 C7 (recon D14): id -> registered name only, for finance-service's
+ * bill read-model (bills raised from a GRN cite the procurement vendor id).
+ * One tenant-scoped IN (...) query; no PII leaves the service.
+ */
+export async function vendorNamesByIds(tenantId: string, ids: string[]): Promise<Array<{ id: string; name: string }>> {
+  const rows = await repo.findVendorsByIds(ids, tenantId);
+  return [...rows.values()].map((v) => ({ id: v.id, name: v.name }));
+}
+
 export async function getVendor(id: string, tenantId: string): Promise<VendorRow | null> {
   return cache.getOrLoad<VendorRow>(
     cache.makeKey(tenantId, "vendor", id),

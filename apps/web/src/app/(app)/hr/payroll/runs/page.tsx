@@ -4,7 +4,8 @@ import { getPayrollRunDetails } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { PayrollRunsTable } from "../PayrollRunsTable";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_RUN_READER_ROLES } from "@/lib/auth/payrollRunRoles";
 import { getTranslations } from "next-intl/server";
 
 export default async function PayrollRunsPage() {
@@ -18,12 +19,13 @@ export default async function PayrollRunsPage() {
   // the rendered HTML, even though GET /v1/payroll/runs 403s anyone outside
   // payroll-service's READER_ROLES. Gate here instead of fetching and
   // failing generically.
-  const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  // UAT Phase 2 C8: run screens admit payroll staff + hr_admin only (payroll-service RUN_READER_ROLES).
+  const canView = roles.some((r) => PAYROLL_RUN_READER_ROLES.includes(r));
   if (!canView) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
-        <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
+        <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_RUN_READER_ROLES} />
       </div>
     );
   }

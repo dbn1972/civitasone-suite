@@ -41,8 +41,11 @@ describe("parsePoStatusParam (GAP-PROCUREMENT-DASHBOARD-02)", () => {
     expect(parsePoStatusParam("partial_grn")).toBe("partial_grn");
   });
 
-  it("maps the first dashboard link's 'active' to approved", () => {
-    expect(parsePoStatusParam("active")).toBe("approved");
+  // UAT Phase 2: "Active POs" now counts every open PO, so `active` is its own filter
+  // (approved + dispatched + GeM-placed + partly received), not `approved`.
+  it("keeps the dashboard link's 'active' as the open-PO filter", () => {
+    expect(parsePoStatusParam("active")).toBe("active");
+    expect(parsePoStatusParam(" Active ")).toBe("active");
   });
 
   it("returns undefined for empty, unknown and prototype-key values (show all)", () => {

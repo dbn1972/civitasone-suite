@@ -125,6 +125,11 @@ describe("getBillDetail — cache-hit shape (netMinor as a string) does not cras
       status: "paid",
       poRef: "PO-1",
       grnRef: "GRN-1",
+      // UAT Phase 2 C7 (D15): "matched" now requires the PO/GRN/invoice amounts to
+      // reconcile, not just both refs. They arrive as strings too (cache-hit shape).
+      grossMinor: "980000",
+      poAmountMinor: "980000",
+      grnAmountMinor: "980000",
     });
     const result = await getBillDetail("bill-1", "tenant-1");
     expect(result?.amount).toBe("980000");

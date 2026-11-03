@@ -12,7 +12,8 @@ import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel } from "./ExceptionPanel";
 import { deriveExceptions } from "./deriveExceptions";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
-import { getSessionRoles, getSessionUserId, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId, PAYROLL_ADMIN_ROLES, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_RUN_READER_ROLES } from "@/lib/auth/payrollRunRoles";
 import { getTranslations } from "next-intl/server";
 
 type SalarySlipRow = {
@@ -72,7 +73,8 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
 
   // GAP-PAYROLL-HOME-02's pattern, applied here: GET /v1/payroll/runs/:id
   // 403s every role outside PAYROLL_READER_ROLES.
-  const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  // UAT Phase 2 C8: run screens admit payroll staff + hr_admin only (payroll-service RUN_READER_ROLES).
+  const canView = roles.some((r) => PAYROLL_RUN_READER_ROLES.includes(r));
   // GAP-PAYROLL-REGISTER-03: link a run to its department register, only for
   // roles the register endpoint itself admits.
   const canViewRegister = roles.some((r) => PAYROLL_REPORT_ROLES.includes(r));
@@ -80,7 +82,7 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
     return (
       <div className="page-main wrap">
         <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
-        <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_READER_ROLES} />
+        <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_RUN_READER_ROLES} />
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { PO_STATUS_LABELS } from "@/lib/procurement-status";
+import { PO_STATUS_LABELS, ACTIVE_PO_FILTER } from "@/lib/procurement-status";
 
 /**
  * GAP-PROCUREMENT-DASHBOARD-02: the dashboard counters are a "snapshot of
@@ -9,14 +9,17 @@ import { PO_STATUS_LABELS } from "@/lib/procurement-status";
  *
  *   pendingIndents -> indents whose status is draft OR pending (the API maps the
  *                     raw `pending` to `pending_approval` for the list page);
- *   activePOs      -> purchase orders whose status is approved.
+ *   activePOs      -> open purchase orders: approved, dispatched, GeM-placed or
+ *                     partly received (UAT Phase 2; was approved only). The
+ *                     list filters `?status=active` to exactly that set
+ *                     (lib/procurement-status ACTIVE_PO_STATUSES).
  */
 
 /** List-page indent statuses behind the "Pending Indents" counter (draft + pending). */
 export const PENDING_INDENT_STATUSES = ["draft", "pending_approval"] as const;
 
-/** PO status behind the "Active POs" counter. */
-export const ACTIVE_PO_STATUS = "approved";
+/** Order-list filter behind the "Active POs" counter (the ACTIVE_PO_STATUSES set). */
+export const ACTIVE_PO_STATUS = ACTIVE_PO_FILTER;
 
 export const PENDING_INDENTS_HREF = `/procurement/indents?status=${PENDING_INDENT_STATUSES.join(",")}`;
 export const ACTIVE_POS_HREF = `/procurement/orders?status=${ACTIVE_PO_STATUS}`;
@@ -68,12 +71,12 @@ export function indentServiceStatusQuery(listStatuses: readonly string[]): strin
 
 /**
  * Parse an orders `?status=` value into a known PO status key, or undefined
- * (show all). `active` is what the first version of the dashboard link carried;
- * it means `approved`.
+ * (show all). `active` is the dashboard "Active POs" drill-through: every open
+ * PO (approved, dispatched, GeM-placed, partly received).
  */
 export function parsePoStatusParam(raw: string | undefined): string | undefined {
   const s = raw?.trim().toLowerCase();
   if (!s) return undefined;
-  const key = s === "active" ? ACTIVE_PO_STATUS : s;
-  return Object.prototype.hasOwnProperty.call(PO_STATUS_LABELS, key) ? key : undefined;
+  if (s === ACTIVE_PO_FILTER) return ACTIVE_PO_FILTER;
+  return Object.prototype.hasOwnProperty.call(PO_STATUS_LABELS, s) ? s : undefined;
 }

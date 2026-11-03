@@ -45,6 +45,10 @@ const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
  */
 export const STATE_RULE_WRITER_ROLES = PAYROLL_ROLES;
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
+// UAT Phase 2 security review #2446 (1): per-employee pay data (salary
+// corrections: component old/new values + arrears) is payroll + HR only, like
+// the run register, slips and structures (payroll/routes.ts PAY_DATA_ROLES).
+const PAY_DATA_ROLES = [...PAYROLL_ROLES, "hr_admin"];
 const ALL_ROLES = [...READER_ROLES, "employee"];
 const ALL_STAFF_ROLES = staffRolesOf(ALL_ROLES);
 
@@ -169,7 +173,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/payroll/corrections", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, PAY_DATA_ROLES);
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, employee_id, component, effective_from::text AS effective_from,

@@ -29,8 +29,10 @@ import { PAY_GROUP_BILL_TYPES } from "./pay-group-domain.js";
 import { assertActiveDdo, payGroupDeactivationBlockers } from "./pay-group-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
-const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const REIMBURSEMENT_ROLES = [...PAYROLL_ROLES, "hr_admin"];
+// UAT Phase 2 follow-up (security): a pensioner record is per-person pay data,
+// payroll + HR only (finance works from aggregate totals).
+const PENSIONER_READ_ROLES = [...PAYROLL_ROLES, "hr_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const reason = z.string().trim().min(10).max(500);
 
@@ -155,7 +157,7 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
   // ─── GAP-PAYROLL-PENSIONERS-03/04 ─────────────────────────────────────────
   app.get("/v1/payroll/pensioners/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, PENSIONER_READ_ROLES);
     const { id } = idParam.parse(req.params);
     // Drizzle select so the encryptedText columns decrypt; only MASKED forms
     // of the identifiers leave this handler (reveal is a separate audited call).

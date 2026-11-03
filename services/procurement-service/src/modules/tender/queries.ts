@@ -25,7 +25,11 @@ export async function listTenders(tenantId: string, limit: number, offset: numbe
     () => repo.listTendersByTenant(tenantId, limit, offset),
     60,
   );
-  return (rows ?? []).map((row) => ({
+  const list = rows ?? [];
+  // UAT Phase 2 C4: the bids_received column is never maintained, so count the
+  // bids themselves (one grouped query for the page).
+  const bidCounts = await repo.countBidsByTenderIds(tenantId, list.map((r) => r.id));
+  return list.map((row) => ({
     id: row.id,
     tenderNo: row.tenderNo,
     title: row.title,
@@ -40,6 +44,7 @@ export async function listTenders(tenantId: string, limit: number, offset: numbe
     // mapTenderStatus still guards against any unknown DB value.
     status: mapTenderStatus(row.status),
     bidsReceived: row.bidsReceived,
+    bidCount: bidCounts.get(row.id) ?? 0,
   }));
 }
 

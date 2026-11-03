@@ -2,6 +2,8 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as mastersRepo from "../masters/repo.js";
 import type { PaymentRow } from "./schema.js";
+import { billThreeWayMatchStatus } from "./domain.js";
+import { fetchProcurementVendorNames } from "../../shared/procurement-client.js";
 
 /**
  * GAP2-FINANCE-BILLS-VENDORNAME-01: shown when a bill's vendor id cannot be
@@ -10,6 +12,20 @@ import type { PaymentRow } from "./schema.js";
  * a raw-UUID-derived token presented as the authoritative payee.
  */
 const UNKNOWN_VENDOR = "Unknown vendor";
+
+/**
+ * UAT Phase 2 C7 (recon D14): payee names for bill vendor ids — finance's own
+ * vendor master first, then (for ids it does not hold, i.e. procurement vendors
+ * on bills raised from a GRN) procurement-service. Unresolved ids are absent.
+ */
+async function billVendorNames(tenantId: string, vendorIds: readonly string[]): Promise<Map<string, string>> {
+  const names = await mastersRepo.getVendorNamesByIds(tenantId, vendorIds);
+  const missing = [...new Set(vendorIds)].filter((id) => !names.has(id));
+  if (missing.length > 0) {
+    for (const [id, name] of await fetchProcurementVendorNames(tenantId, missing)) names.set(id, name);
+  }
+  return names;
+}
 
 
 // Bigint-safe end to end (no Number() conversion) — ports the same
@@ -182,7 +198,7 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
   // GAP2-FINANCE-BILLS-VENDORNAME-01: resolve the payee from the vendor master
   // (batched), not a 4-entry seed fixture. An unresolved vendor shows an honest
   // "Unknown vendor", never a raw-UUID token.
-  const vendorNames = await mastersRepo.getVendorNamesByIds(tenantId, list.map((row) => row.vendorId));
+  const vendorNames = await billVendorNames(tenantId, list.map((row) => row.vendorId));
   return list.map((row) => {
     const netMinor = toMinorBigInt(row.netMinor);
     return {
@@ -198,7 +214,8 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
       poRef: row.poRef ?? undefined,
       // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number snapshotted from the GRN (absent on older / hand-lodged bills).
       poNumber: row.poNumber ?? undefined,
-      threeWayMatch: "na" as const,
+      // UAT Phase 2 C7 (recon D15): the same verdict as the detail and the pass gate (was always "na").
+      threeWayMatch: billThreeWayMatchStatus(row),
       ...billActors(row),
     };
   });
@@ -280,15 +297,19 @@ export async function getBillDetail(id: string, tenantId: string) {
     () => repo.findBillByIdAndTenant(id, tenantId),
   );
   if (!row || row.tenantId !== tenantId) return null;
-  const threeWayMatch: "matched" | "pending" | "na" = (row.poRef && row.grnRef) ? "matched" : (row.poRef || row.grnRef) ? "pending" : "na";
+  // UAT Phase 2 C7 (recon D15): "matched" only when the PO/GRN/invoice amounts
+  // actually reconcile — not merely because both refs are present.
+  const threeWayMatch = billThreeWayMatchStatus(row);
   const netMinor = toMinorBigInt(row.netMinor);
   // GAP2-FINANCE-BILLS-VENDORNAME-01: real master-data vendor name, honest
   // "Unknown vendor" fallback — never a raw-UUID token on a money document.
   const vendor = await mastersRepo.getVendorById(tenantId, row.vendorId);
+  // UAT Phase 2 C7 (D14): a procurement vendor (bill raised from a GRN) is named by procurement-service.
+  const vendorName = vendor?.name ?? (await fetchProcurementVendorNames(tenantId, [row.vendorId])).get(row.vendorId);
   return {
     id: row.id,
     billNo: row.billNo,
-    vendor: vendor?.name ?? UNKNOWN_VENDOR,
+    vendor: vendorName ?? UNKNOWN_VENDOR,
     // H3: string to avoid 2^53 precision loss on large government bill amounts.
     amount: netMinor.toString(),
     amountDisplay: formatMinor(netMinor),

@@ -1,3 +1,4 @@
+import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
 export class DomainError extends Error {
   constructor(public code: string, message: string) {
     super(`[${code}] ${message}`);
@@ -39,6 +40,28 @@ export function assertTransitionAllowed(from: string, to: PoStatus): void {
 export function assertPoRejectable(status: string): void {
   if (status !== "draft" && status !== "pending") {
     throw new DomainError("PO_NOT_AWAITING_APPROVAL", `only a PO awaiting approval can be rejected, got '${status}'`);
+  }
+}
+
+/** #14: a PO above this value (Rs 1,000 in paise) must cite a budget sanction (sanctionRef). */
+export { SANCTION_REQUIRED_ABOVE_MINOR };
+
+/** Total PO value in paise (BigInt — never a float). */
+export function poTotalMinor(items: ReadonlyArray<{ quantity: number; unitPriceMinor: number | string | bigint }>): bigint {
+  return items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
+}
+
+/**
+ * UAT Phase 2 C2 (J2): refuse a high-value PO without a sanction reference up
+ * front (422) instead of accepting it (202) and letting the worker drop it
+ * silently with SANCTION_REF_REQUIRED. The consumer keeps the same check.
+ */
+export function assertSanctionRefPresent(
+  items: ReadonlyArray<{ quantity: number; unitPriceMinor: number | string | bigint }>,
+  sanctionRef: string | undefined,
+): void {
+  if (!sanctionRef?.trim() && poTotalMinor(items) > SANCTION_REQUIRED_ABOVE_MINOR) {
+    throw new DomainError("SANCTION_REF_REQUIRED", "a purchase order above Rs 1,000 must cite an approved budget sanction (sanctionRef)");
   }
 }
 

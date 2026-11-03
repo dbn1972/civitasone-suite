@@ -6,7 +6,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { getPensioners } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "../../../../../lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "../../../../../lib/auth/roleGuard";
+import { PAYROLL_PAY_DATA_ROLES } from "@/lib/auth/payrollRunRoles";
 import type { PensionerSummary } from "@civitasone/types";
 
 type Row = PensionerSummary;
@@ -31,8 +32,8 @@ export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
   const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
-  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
-    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_READER_ROLES} />;
+  if (!roles.some((r) => PAYROLL_PAY_DATA_ROLES.includes(r))) {
+    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_PAY_DATA_ROLES} />;
   }
   const canCreate = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
   const { data: pensioners, source } = await getPensioners();

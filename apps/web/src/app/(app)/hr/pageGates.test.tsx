@@ -44,7 +44,8 @@ const PAGES: { name: string; load: () => Promise<{ default: (p: never) => unknow
   { name: "contractual", load: () => import("./contractual/page"), admits: ["hr_admin", "manager"], denies: ["dept_head", "hiring_manager", "employee"] },
   { name: "goals", load: () => import("./goals/page"), admits: ["dept_head", "employee", "manager", "hr_admin", "payroll_officer", "icc_member"], denies: ["hiring_manager"] },
   { name: "org-chart", load: () => import("./org-chart/page"), admits: ["employee", "manager", "hr_officer"], denies: ["dept_head", "hiring_manager", "finance_officer"] },
-  { name: "salary-structure", load: () => import("./salary-structure/page"), admits: ["payroll_admin", "hr_admin", "finance_officer"], denies: ["dept_head", "hiring_manager", "employee"] },
+  // UAT Phase 2 follow-up (security): pay structures are payroll + HR only.
+  { name: "salary-structure", load: () => import("./salary-structure/page"), admits: ["payroll_admin", "hr_admin"], denies: ["dept_head", "hiring_manager", "employee", "finance_officer"] },
   { name: "skills", load: () => import("./skills/page"), admits: ["employee", "manager", "hr_admin"], denies: ["dept_head", "hiring_manager", "payroll_admin"] },
   { name: "social-feed", load: () => import("./social-feed/page"), admits: ["employee", "manager", "hr_officer"], denies: ["dept_head", "hiring_manager", "finance_admin"] },
   { name: "workforce", load: () => import("./workforce/page"), admits: ["hr_admin", "manager", "finance_officer"], denies: ["dept_head", "hiring_manager", "employee"] },

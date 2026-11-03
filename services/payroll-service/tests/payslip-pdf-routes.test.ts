@@ -377,7 +377,8 @@ describe("GET /v1/payroll/slips/:id/pdf — Happy path", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("200 — finance_officer role can access slips", async () => {
+  // UAT Phase 2 follow-up (security): per-employee payslips are payroll/HR only.
+  it("403 — finance_officer role cannot access another employee's slip", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -386,7 +387,7 @@ describe("GET /v1/payroll/slips/:id/pdf — Happy path", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
   });
 
   it("200 — super_admin role can access slips", async () => {

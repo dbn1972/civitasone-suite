@@ -1,8 +1,17 @@
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, and, or, sql, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementIndents } from "../indent/schema.js";
 import { procurementPos } from "../po/schema.js";
 import { procurementGrns } from "../grn/schema.js";
+
+/**
+ * UAT Phase 2 follow-up: "Active POs" = open obligations working toward
+ * delivery — approved, dispatched, GeM-placed and partly received. It used to
+ * count `approved` only. Closed (fulfilled), cancelled, draft and pending POs
+ * are not active. `partial_grn` is the partly-received state the web shows; it
+ * is listed so a stored value is counted if the service ever records it.
+ */
+export const ACTIVE_PO_STATUSES = ["approved", "dispatched", "gem_placed", "partial_grn"] as const;
 
 export async function getDashboard(tenantId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
@@ -19,7 +28,7 @@ export async function getDashboard(tenantId: string) {
     const [activePosRow] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(procurementPos)
-      .where(and(eq(procurementPos.tenantId, tenantId), eq(procurementPos.status, "approved")));
+      .where(and(eq(procurementPos.tenantId, tenantId), inArray(procurementPos.status, [...ACTIVE_PO_STATUSES])));
 
     // "This month" = the current calendar month in the TENANT timezone
     // (Asia/Kolkata), not the DB server's clock, and only GRNs that were
