@@ -29,6 +29,7 @@ import { postJournalBody } from "../src/modules/gl/validators.js";
 import { withVoucherNarration } from "../src/modules/gl/commands.js";
 import { deriveStatementType } from "../src/modules/gl/queries.js";
 import { natureOf } from "../src/modules/financial-statements/routes.js";
+import { headNatureOf } from "../src/shared/head-nature.js";
 import { expenseHeadIds, PENDING_SANCTION_STATUSES } from "../src/modules/dashboard/queries.js";
 
 // gl.finance_journals and gl.finance_ledger are append-only, so every run uses fresh tenants.
@@ -219,6 +220,17 @@ describe("A5: account typing", () => {
     expect(deriveStatementType(null, "revenue")).toBe("income");
     expect(natureOf("2202", "expense")).toBe("expense");
   });
+
+  it("review follow-up: classification case and blanks never change the nature, for every caller", () => {
+    expect(headNatureOf("2202", " Expense ")).toBe("expense");
+    expect(headNatureOf("4100", "REVENUE")).toBe("income");
+    expect(headNatureOf("3001", "Equity")).toBe("equity");
+    expect(headNatureOf(null, "ASSET")).toBe("asset");
+    expect(natureOf("2202", "EXPENSE")).toBe("expense");
+    expect(deriveStatementType("2202", "Expenditure")).toBe("expenditure");
+    // the dashboard rule (it passed the stored value raw)
+    expect(expenseHeadIds([{ id: "x", code: "2202", classification: "Expense" }, { id: "y", code: "2202", classification: "LIABILITY" }])).toEqual(["x"]);
+  });
 });
 
 describe("A7 (D20): budget monitoring Expended is read from the books; a booked bill leaves commitment", () => {
@@ -317,8 +329,25 @@ describe("J6 reject (final): PATCH /v1/finance/journals/:id/reject and the finan
     await expect(scoped(T, (tx) => tx.update(financeJournals).set({ rejectionReason: "edited" }).where(eq(financeJournals.id, pending)))).rejects.toThrow();
     const approve = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${pending}/approve`, headers: as(CHECKER, ["finance_admin"]) });
     expect(approve.statusCode).toBe(409);
+    // migration 0158: the database itself refuses a rejection without a 10+ character reason
+    await expect(scoped(T, (tx) => tx.update(financeJournals).set({ status: "rejected", rejectionReason: "short" }).where(eq(financeJournals.id, own)))).rejects.toThrow();
+    await expect(scoped(T, (tx) => tx.update(financeJournals).set({ status: "rejected" }).where(eq(financeJournals.id, own)))).rejects.toThrow();
     // a posted journal can never become rejected
     await expect(scoped(T, (tx) => tx.update(financeJournals).set({ status: "rejected" }).where(eq(financeJournals.id, posted)))).rejects.toThrow();
+  });
+
+  it("F107: the maker approving their own journal is a synchronous 403 and nothing is queued", async () => {
+    const spy = vi.spyOn(queue, "publish");
+    try {
+      const res = await app.inject({ method: "PATCH", url: `/v1/finance/journals/${own}/approve`, headers: as(CHECKER, ["finance_admin"]) });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ code: "MAKER_CHECKER_VIOLATION", message: expect.stringMatching(/different officer must approve or reject/) });
+      expect(spy.mock.calls.filter((c) => (c[1] as { type?: string }).type === COMMANDS.journalApprove)).toHaveLength(0);
+      const [row] = await scoped(T, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, own)));
+      expect(row?.status).toBe("pending_approval");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("the rejected journal is listed (read-only, with reason) and kept off the pending queue and the ledger", async () => {

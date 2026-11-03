@@ -227,7 +227,11 @@ export function JournalApprovals({
           : undefined}
         onConfirm={(reason) => void decide(reason)}
         onCancel={() => { if (!busy) setAction(null); }}
-      />
+      >
+        {action?.kind === "reject" ? (
+          <p data-testid="reject-pii-hint" style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--mut)" }}>{t("rejectPersonalDataHint")}</p>
+        ) : null}
+      </ConfirmDialog>
     </>
   );
 }

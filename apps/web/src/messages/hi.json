@@ -17900,7 +17900,8 @@
     "rejectedJournal": "जर्नल",
     "rejectionReason": "अस्वीकृति का कारण",
     "rejectedOn": "अस्वीकृति की तिथि",
-    "raiseNew": "नया वाउचर बनाएँ"
+    "raiseNew": "नया वाउचर बनाएँ",
+    "rejectPersonalDataHint": "कारण में व्यक्तिगत डेटा शामिल न करें।"
   },
   "budgetAllocationNew": {
     "title": "नया बजट आवंटन",

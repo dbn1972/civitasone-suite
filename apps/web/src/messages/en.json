@@ -17973,7 +17973,8 @@
     "rejectedJournal": "Journal",
     "rejectionReason": "Reason for rejection",
     "rejectedOn": "Rejected on",
-    "raiseNew": "Raise a new voucher"
+    "raiseNew": "Raise a new voucher",
+    "rejectPersonalDataHint": "Do not include personal data in the reason."
   },
   "budgetAllocationNew": {
     "title": "New budget allocation",

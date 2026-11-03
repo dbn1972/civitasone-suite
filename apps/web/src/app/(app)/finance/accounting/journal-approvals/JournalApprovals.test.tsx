@@ -79,6 +79,7 @@ describe("UAT P2 J6: journal approval screen", () => {
     const confirm = screen.getByRole("button", { name: "Reject journal" });
     fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "too short" } });
     expect(confirm).toBeDisabled();
+    expect(screen.getByTestId("reject-pii-hint")).toHaveTextContent("Do not include personal data in the reason.");
     fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "Wrong head of account used" } });
     fireEvent.click(confirm);
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
@@ -117,6 +118,14 @@ describe("UAT P2 J6: journal approval screen", () => {
   it("renders in Hindi", () => {
     render(ui([J()], true, "hi"));
     expect(screen.getByRole("button", { name: "स्वीकृत करें और पोस्ट करें" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "अस्वीकृत करें" }));
+    expect(screen.getByTestId("reject-pii-hint")).toHaveTextContent("कारण में व्यक्तिगत डेटा शामिल न करें।");
+  });
+
+  it("the personal-data hint is shown only for a rejection, not on approve", () => {
+    render(ui([J()]));
+    fireEvent.click(screen.getByRole("button", { name: "Approve and post" }));
+    expect(screen.queryByTestId("reject-pii-hint")).not.toBeInTheDocument();
   });
 
   it("maps the API payload and drops malformed rows", () => {

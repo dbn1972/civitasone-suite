@@ -13,8 +13,10 @@
 export type HeadNature = "asset" | "liability" | "equity" | "income" | "expense";
 
 export function headNatureOf(code: string | null | undefined, classification: string | null | undefined): HeadNature {
-  const c = code ?? "";
-  const cls = classification ?? null;
+  const c = (code ?? "").trim();
+  // Review follow-up: case and surrounding blanks in the stored classification never change the nature, for every
+  // caller (the dashboard passed it raw; the statement list lowercased it first).
+  const cls = (classification ?? "").trim().toLowerCase() || null;
   const d = c.charAt(0);
   if (d === "1") return "asset";
   if (d === "4" && (cls === "income" || cls === "revenue")) return "income";

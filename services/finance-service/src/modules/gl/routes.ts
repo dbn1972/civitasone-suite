@@ -120,6 +120,11 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     if (draft.status === "rejected") {
       throw new HttpError(409, "JOURNAL_REJECTED", "this journal was rejected and cannot be approved; raise a new voucher");
     }
+    // F107: the maker approving their own draft is refused now (403), not 202-accepted and dead-lettered later in the
+    // queue. The consumer keeps its own check (assertDistinctMakerChecker) for anything that reaches it another way.
+    if (draft.status === "pending_approval" && draft.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER_VIOLATION", "you drafted this journal; a different officer must approve or reject it");
+    }
     if (draft.status === "pending_approval") {
       await assertPeriodAcceptsPosting(ctx.tenantId, String(draft.postingDate), draft.type);
     }
