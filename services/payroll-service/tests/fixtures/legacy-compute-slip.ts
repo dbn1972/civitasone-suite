@@ -4,7 +4,12 @@
  * a426483c6 (after #1782, FR 53 subsistence) -- i.e. BEFORE PAY-PROFILES.
  * Used only as the oracle for the byte-identity property test
  * (pay-profiles-legacy-oracle.test.ts). Do not edit: it must keep describing
- * the legacy computation exactly.
+ * the legacy computation exactly -- with ONE exception, the statutory
+ * corrections of T-STAT (audit 2026-11-03), marked `T-STAT` below, which
+ * changed the law-mandated result for every profile alike: the s.192 annual
+ * estimate counts ad-hoc earnings (arrears, bonus, reimbursements) once
+ * instead of x12 (F02), and the result reports npsPensionBaseMinor (M-NPS).
+ * Nothing else in the legacy computation differs.
  */
 /* eslint-disable */
 import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, divRoundBig, PLATFORM_DEFAULT_TENANT_ID } from "../../src/modules/tax/engine.js";
@@ -113,7 +118,9 @@ export function legacyComputeSlip(input: SlipInput): SlipResult {
   }
 
   // Ad-hoc components (LOP, EMI, arrears, reimbursements).
+  let oneOffEarningsMinor = 0n; // T-STAT F02
   for (const c of components) {
+    if (c.type === "earning") oneOffEarningsMinor += roundRupee(c.amountMinor); // T-STAT F02
     (c.type === "earning" ? earnings : deductions).push({ ...c, amountMinor: roundRupee(c.amountMinor) });
   }
 
@@ -160,7 +167,7 @@ export function legacyComputeSlip(input: SlipInput): SlipResult {
 
   // Monthly TDS (Sec 192) on real annual TAXABLE income: regime-aware, with
   // Sec 16 std deduction + PT, Sec 10(13A) HRA exemption, and Chapter VI-A (old regime).
-  const annualGross = grossMinor * 12n;
+  const annualGross = (grossMinor - oneOffEarningsMinor) * 12n + oneOffEarningsMinor; // T-STAT F02: one-offs once
   // Additions taxed under BOTH regimes (added before slabs):
   //  - perquisites Sec 17(2) (current employer, not part of cash gross),
   //  - previous-employer taxable salary for the FY (Sec 192(2)),
@@ -260,7 +267,9 @@ export function legacyComputeSlip(input: SlipInput): SlipResult {
     daMinor, hraMinor, earnings, deductions,
     pfEmployeeMinor, pfEmployerMinor, epsMinor, epfEmployerMinor,
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
-    gpfMinor, npsEmployeeMinor, npsEmployerMinor, annualTaxableMinor, negativeNet,
+    gpfMinor, npsEmployeeMinor, npsEmployerMinor,
+    npsPensionBaseMinor: pensionScheme === "NPS" ? (pensionBase > 0n ? pensionBase : 0n) : 0n, // T-STAT M-NPS (no arrear base in legacy inputs)
+    annualTaxableMinor, negativeNet,
   };
 }
 

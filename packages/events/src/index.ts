@@ -30,7 +30,22 @@ export type SessionRevokedPayload = { sessionId: string; userId: string };
 
 export type TenantActivatedPayload = { tenantId: string; plan: string };
 export type TenantSuspendedPayload = { tenantId: string; reason: string };
-export type TenantCreatedPayload = { tenantId: string; plan: string };
+/**
+ * tenant.tenant.created. v1.1 (UAT b15 F133) adds the directory fields a consumer needs to register the tenant; they
+ * are optional so a v1.0 event ({ tenantId, plan }) is still a valid payload. The zod contract is
+ * tenantTenantCreated in ./contracts.
+ */
+export type TenantCreatedPayload = {
+  tenantId: string;
+  plan: string;
+  id?: string;
+  name?: string;
+  domain?: string;
+  edition?: string;
+  status?: string;
+  region?: string;
+  residency?: string;
+};
 export type TenantUpdatedPayload = { tenantId: string };
 
 // Command names (write-path intents) owned by tenant-service.

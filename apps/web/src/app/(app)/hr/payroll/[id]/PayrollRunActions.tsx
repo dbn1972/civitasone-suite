@@ -7,6 +7,7 @@ import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatMinorString } from "@/lib/payroll/runMoney";
 import { useFormError } from "@/lib/useFormError";
+import { APPROVAL_REVIEW_CODES, loadApprovalReview, type ApprovalReview } from "./approvalReview";
 
 type Props = {
   runId: string;
@@ -38,6 +39,16 @@ type Props = {
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
 
+/** The `code` of a failed response (reads a clone, so the body stays available to useFormError); never throws. */
+async function responseCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown } | null;
+    return typeof body?.code === "string" ? body.code : null;
+  } catch {
+    return null;
+  }
+}
+
 /** True when a failed response carries the maker-checker `code`. Reads a clone, so the body stays available to useFormError; never throws. */
 async function isMakerCheckerViolation(res: Response): Promise<boolean> {
   try {
@@ -62,6 +73,15 @@ export function PayrollRunActions({
   approvedBy = null,
 }: Props) {
   const t = useTranslations("payrollRunActions");
+  const tr = useTranslations("payroll.runApproval");
+  // T-STAT review SF7: when the server asks for a review (409 ZERO_BASIC_SLIPS /
+  // ARREARS_REVIEW_REQUIRED) the approve dialog lists the items to exclude /
+  // acknowledge, takes one review note, and re-sends the approval with them.
+  const [review, setReview] = useState<ApprovalReview | null>(null);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  const [reviewNote, setReviewNote] = useState("");
+  const reviewNoteId = useId();
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
   const [busy, setBusy] = useState(false);
@@ -85,7 +105,31 @@ export function PayrollRunActions({
     setSettledAction(null);
   }, [status]);
 
+  const arrearsToAck = review ? review.arrears.employees.filter((e) => e.requiresReview) : [];
+
+  function approveBody(reason?: string): Record<string, unknown> | null {
+    if (!review) return { reason };
+    const note = reviewNote.trim();
+    const complete = note.length >= 10
+      && review.zeroBasic.every((z) => excluded.has(z.employeeId))
+      && arrearsToAck.every((e) => acknowledged.has(e.employeeId));
+    if (!complete) return null;
+    const zeroBasicExclusions = review.zeroBasic.map((z) => ({ employeeId: z.employeeId, reason: note }));
+    const arrearsAcknowledgements = arrearsToAck.map((e) => ({ employeeId: e.employeeId, reason: note }));
+    return {
+      reason,
+      ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
+      ...(arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements } : {}),
+    };
+  }
+
   async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
+    let body: Record<string, unknown> = { reason };
+    if (action === "approve") {
+      const b = approveBody(reason);
+      if (!b) { setError(tr("reviewIncomplete")); return; }
+      body = b;
+    }
     setBusy(true);
     setError(undefined);
     const path =
@@ -98,9 +142,19 @@ export function PayrollRunActions({
       const res = await fetch(path, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
+        if (action === "approve" && res.status === 409) {
+          const code = await responseCode(res);
+          if (code && APPROVAL_REVIEW_CODES.has(code)) {
+            const loaded = await loadApprovalReview(runId);
+            if (!loaded) { setError(tr("reviewLoadFailed")); return; }
+            setReview(loaded);
+            setError(tr("reviewNeededIntro"));
+            return;
+          }
+        }
         // The shared catalogue words MAKER_CHECKER_VIOLATION as "needs approval from
         // someone other than the person who made it", which is right for approve but
         // wrong for disburse (the rule there is: the approver cannot disburse). Only
@@ -247,6 +301,49 @@ export function PayrollRunActions({
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
             {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
+            {review && (
+              <div style={{ marginTop: 12 }}>
+                {review.zeroBasic.length > 0 && (
+                  <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
+                    <legend><strong>{tr("zeroBasicHeading")}</strong></legend>
+                    {review.zeroBasic.map((z) => (
+                      <label key={z.employeeId} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={excluded.has(z.employeeId)}
+                          onChange={(ev) => setExcluded((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(z.employeeId); else next.delete(z.employeeId); return next; })}
+                        />
+                        {tr("zeroBasicExclude", { employee: z.employeeNo })}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {arrearsToAck.length > 0 && (
+                  <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
+                    <legend><strong>{tr("arrearsHeading")}</strong></legend>
+                    {arrearsToAck.map((e) => (
+                      <label key={e.employeeId} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={acknowledged.has(e.employeeId)}
+                          onChange={(ev) => setAcknowledged((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(e.employeeId); else next.delete(e.employeeId); return next; })}
+                        />
+                        {tr("arrearsAcknowledge", { amount: formatMinorString(e.arrearsMinor), employee: e.employeeNo })}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                <label htmlFor={reviewNoteId} style={{ display: "block", fontWeight: 600 }}>{tr("reviewNoteLabel")}</label>
+                <textarea
+                  id={reviewNoteId}
+                  value={reviewNote}
+                  maxLength={500}
+                  rows={2}
+                  style={{ width: "100%" }}
+                  onChange={(ev) => setReviewNote(ev.target.value)}
+                />
+              </div>
+            )}
           </>
         )}
         onConfirm={(reason) => void runAction("approve", reason)}

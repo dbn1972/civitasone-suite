@@ -66,6 +66,8 @@ async function seedRun(status: "processing" | "approved", opts: { grossMinor: bi
     });
     await tx.insert(payrollSlips).values({
       id: slipId, tenantId: TENANT, runId, employeeId: randomUUID(), employeeNo: "EMP-TEST",
+      // T-STAT M-ZERO: a real slip carries basic pay (a Rs 0-basic slip now blocks approval).
+      basicMinor: opts.grossMinor,
       grossMinor: opts.grossMinor, netPayMinor: opts.netMinor, status: "computed",
       createdBy: CREATOR, updatedBy: CREATOR,
     });

@@ -17,6 +17,19 @@
  * HRMS feed carries no pay profiles (an employee with no approved profile ==
  * govt_scale) and 2026-08 is before any HRA-floor go-live, so PAY-PROFILES
  * must reproduce the legacy run exactly.
+ *
+ * T-STAT (statutory audit 2026-11-03) re-generated the snapshot once, for law
+ * changes that apply to every profile alike; every changed value is one of:
+ *  - SNAP-01 TDS 8,394 -> 3,960: s.87A marginal relief (taxable 12,30,456) (F01);
+ *  - SNAP-06 (joined 10-8-2026) TDS 10,315 -> 0: the s.192 estimate covers the
+ *    8 months from joining, not 12 (F02);
+ *  - taxable of SNAP-03 / SNAP-07 / SNAP-11: arrears counted once and the
+ *    month LOP deducted (F02);
+ *  - SNAP-03 arrear rows: old/new amounts are now the pay drawn / due for the
+ *    month ("due minus drawn", F03; the June / July drawn slips are seeded
+ *    above), tagged source revision_dmd (migration 0160); the differences
+ *    are unchanged;
+ *  - the run, slip and register totals that follow from those.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -109,6 +122,20 @@ async function seed(): Promise<void> {
     await tx.execute(sql`
       INSERT INTO payroll.payroll_salary_revisions (tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor, old_gross_minor, new_gross_minor, revision_type)
       VALUES (${TENANT}::uuid, ${empId(3)}::uuid, '2026-06-01', 4360000, 4490000, 0, 0, 'annual_increment')`);
+    // T-STAT F03: arrears are "due minus drawn", so SNAP-03 drew June and July
+    // at the OLD basic 43,600 (disbursed runs): DA 50% / 55%, HRA Y 20%.
+    for (const [month, da] of [["2026-06", 2_180_000], ["2026-07", 2_398_000]] as const) {
+      const runId = `7a7a7a7a-0000-4000-8000-00000d${month.slice(0, 4)}${month.slice(5)}`;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, run_type, status, created_by, updated_by)
+        VALUES (${runId}::uuid, ${TENANT}::uuid, ${`SNAP-DRAWN-${month}`}, ${month}, ${STRUCTURE}::uuid, ${"regular"}, ${"disbursed"}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+      const lines = [["BASIC", 4_360_000], ["DA", da], ["HRA", 872_000]] as const;
+      const gross = lines.reduce((sum, [, a]) => sum + a, 0);
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_slips (tenant_id, run_id, employee_id, employee_no, basic_minor, gross_minor, net_pay_minor, components, status, created_by, updated_by)
+        VALUES (${TENANT}::uuid, ${runId}::uuid, ${empId(3)}::uuid, ${"SNAP-03"}, 4360000, ${gross}, ${gross},
+          ${JSON.stringify(lines.map(([code, amountMinor]) => ({ code, name: code, type: "earning", amountMinor })))}::jsonb, ${"computed"}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+    }
   });
 }
 

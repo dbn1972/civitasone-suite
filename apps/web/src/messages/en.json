@@ -5596,7 +5596,27 @@
     "statAwaitingDisbursement": "Awaiting Disbursement",
     "statFailed": "Failed",
     "statEmployeesPaidPeriod": "Employees Paid, regular runs ({period})",
-    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})"
+    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})",
+    "runApproval": {
+      "summaryTitle": "Arrears in this run",
+      "summaryTotal": "{count, plural, one {# employee is} other {# employees are}} paid arrears totalling {amount}.",
+      "summaryNeedReview": "{count, plural, one {# needs} other {# need}} an acknowledgement before approval (arrears above the review threshold).",
+      "zeroBasicSummary": "{count, plural, one {# slip has} other {# slips have}} no basic pay (HRMS basic missing) and must be fixed or excluded before approval.",
+      "colEmployee": "Employee",
+      "colArrears": "Arrears",
+      "colRegularGross": "Regular monthly gross",
+      "colReview": "Review",
+      "needsReview": "Needs acknowledgement",
+      "withinThreshold": "Within threshold",
+      "reviewNeededIntro": "This run needs a review before it can be approved.",
+      "zeroBasicHeading": "Slips with no basic pay",
+      "zeroBasicExclude": "Exclude {employee} from this run (not paid)",
+      "arrearsHeading": "Arrears above the review threshold",
+      "arrearsAcknowledge": "I have checked the arrears of {amount} for {employee}",
+      "reviewNoteLabel": "Review note (recorded with each exclusion and acknowledgement)",
+      "reviewIncomplete": "Exclude every slip with no basic pay, acknowledge every arrears line listed, and enter a review note of at least 10 characters.",
+      "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again."
+    }
   },
   "payrollRunsTable": {
     "colPeriod": "Period",
@@ -7846,6 +7866,7 @@
     "loading": "Loading…",
     "loadFailed": "Could not load your uploaded documents. Your files are safe — try again.",
     "retry": "Retry",
+    "noEmployeeRecord": "Your sign-in is not linked to an employee record, so there are no documents of your own to upload here. Ask HR to link your employee record.",
     "employeeOnly": "Document upload is available to employees filing their own declaration. Payroll staff verify documents from the verification queue.",
     "backLabel": "Back to payroll",
     "errorArea": "investment proofs",
@@ -18308,5 +18329,61 @@
     "backToReports": "Back to reports",
     "createFromInspection": "Create inspection report",
     "viewReports": "View reports for this inspection"
+  },
+  "helpFallback": {
+    "intro": "A full guide for this module is not written yet. Here is what it is for.",
+    "openModule": "Open {name}",
+    "backToHelp": "Back to Help Centre",
+    "moreTopics": "Need a different topic? Go back to the Help Centre.",
+    "topics": {
+      "ai": {
+        "name": "AI Assistant",
+        "summary": "Ask questions in plain language and get help with the work in this application."
+      },
+      "cdp": {
+        "name": "Customer Data",
+        "summary": "Profiles and segments built from the records your office already holds about the people it serves."
+      },
+      "crm": {
+        "name": "CRM",
+        "summary": "Contacts, leads and the follow-ups your office keeps with them."
+      },
+      "field": {
+        "name": "Field Work",
+        "summary": "Work carried out away from the office: visits, tasks and the updates recorded on site."
+      },
+      "identity": {
+        "name": "Identity",
+        "summary": "Users, sign-in and the roles that decide what each person can see and do."
+      },
+      "inspection": {
+        "name": "Inspection",
+        "summary": "Inspections planned and carried out, with their findings."
+      },
+      "journeys": {
+        "name": "Customer Journeys",
+        "summary": "How people move through your services, step by step."
+      },
+      "locations": {
+        "name": "Locations",
+        "summary": "The offices, sites and areas your work is organised by."
+      },
+      "loyalty": {
+        "name": "Loyalty",
+        "summary": "Loyalty programmes and the points or benefits members earn."
+      },
+      "plugins": {
+        "name": "Plugins",
+        "summary": "Add-ons that extend what this application can do for your office."
+      },
+      "recommendations": {
+        "name": "Recommendations",
+        "summary": "Suggestions the application makes from your data, for you to review."
+      },
+      "themes": {
+        "name": "Themes",
+        "summary": "The look of the application for your office: colours, logo and branding."
+      }
+    }
   }
 }

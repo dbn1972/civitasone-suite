@@ -1114,7 +1114,7 @@ export const SalarySlipDetailSchema = SalarySlipSummarySchema.extend({
   // retryable-error branch instead of the slip. Accept every real DB value
   // (plus the list's draft/finalized); print gating stays on
   // isPrintableSlipStatus, which is unaffected.
-  status: z.enum(["draft", "finalized", "paid", "computed", "approved", "held", "exception"]),
+  status: z.enum(["draft", "finalized", "paid", "computed", "approved", "held", "exception", "excluded"]),
   employeeNo: z.string(),
   payPeriod: z.string().nullable(),
   paidDate: z.string().nullable(),

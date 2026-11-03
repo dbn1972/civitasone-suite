@@ -80,6 +80,10 @@ export default defineConfig({
       // extra-income sign, the previously-uncovered old-regime branch, the
       // zero-component omission guards and the recovery floor.
       "tests/quality-program/L10-domain-correctness/payroll-slip-mutants.test.ts",
+      // Mutation burn-down (T-STAT, PR #2449): the s.192 projection terms, NPS base
+      // on arrears, PT-on-gross resolver, unrecorded FY months, pensioner estimate,
+      // arrears review / zero-basic approval helpers, recovery trimming, pension lines.
+      "tests/quality-program/L10-domain-correctness/payroll-statutory-mutants.test.ts",
       // Targets the maker-checker SoD guard (was entirely NoCoverage), the
       // three-way positivity guard and the tolerance boundaries.
       "tests/quality-program/L10-domain-correctness/payments-domain-mutants.test.ts",

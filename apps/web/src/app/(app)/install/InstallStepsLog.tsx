@@ -6,6 +6,7 @@ import { Card, DataTable, StatusPill, EmptyState, RefreshErrorState } from "@/ap
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import type { InstallStepSummary } from "@civitasone/types";
+import { stepNotice, NOTHING_IMPORTED_COPY } from "./stepNotice";
 
 /**
  * GAP-INSTALL-STEPS-04: /install/steps used to pipe install-service steps
@@ -54,8 +55,13 @@ const COLUMNS: StepCol[] = [
     // A failed step surfaces its real errorMessage; a completed step shows when;
     // otherwise "—". This is the lossy-duplicate fix: the status word alone is
     // no longer all a failed step shows.
+    // UAT b15 item 4: an activation that imported nothing is an empty result (stepNotice.ts), not an alert.
     render: (row) =>
-      row.errorMessage ? (
+      stepNotice(row.errorMessage)?.kind === "nothingImported" ? (
+        <span>
+          {NOTHING_IMPORTED_COPY.title}. <Link href={NOTHING_IMPORTED_COPY.href}>{NOTHING_IMPORTED_COPY.linkLabel}</Link>
+        </span>
+      ) : row.errorMessage ? (
         <span role="alert" className="text-red-600">
           {row.errorMessage}
         </span>

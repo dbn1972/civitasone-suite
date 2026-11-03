@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as allocRepo from "./allocation-repo.js";
 import { findHeadLabels } from "./repo.js";
-import { bookedLines } from "./monitoring-books.js";
+import { bookedLines, lineFor } from "./monitoring-books.js";
 import {
   availableMinor, burnRateBps, utilisationBps, fractionElapsedBps,
   forecastYearEndMinor, classifyException, summarisePortfolio,
@@ -18,17 +18,13 @@ function asOfDate(s?: string): Date {
   return s ? new Date(`${s}T00:00:00Z`) : new Date();
 }
 
-function lineOf(r: BudgetAllocationRow): MonitorLine {
-  return { allocatedMinor: r.allocatedMinor, committedMinor: r.committedMinor, actualMinor: r.actualMinor };
-}
-
 type HeadLabels = Map<string, { code: string; name: string }>;
 type Books = Map<string, MonitorLine>;
 
 // UAT P2 (A7, recon D20): every figure below is the books-based line (monitoring-books.ts): Expended is what the
 // ledger has booked to the head in the FY (it read the allocation's payment-settled actual, so a Rs 270 JV showed
 // Rs 0), and Committed excludes bills already booked, so nothing is counted twice.
-const bookOf = (r: BudgetAllocationRow, books: Books): MonitorLine => books.get(r.id) ?? lineOf(r);
+const bookOf = (r: BudgetAllocationRow, books: Books): MonitorLine => lineFor(r, books);
 
 function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint, labels: HeadLabels, books: Books) {
   const line = bookOf(r, books);

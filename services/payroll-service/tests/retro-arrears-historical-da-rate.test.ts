@@ -49,6 +49,24 @@ describe("generateRetroArrears -- historical DA rate per period (HIGH, payroll-c
           (tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor, old_gross_minor, new_gross_minor)
         VALUES (${tenant}::uuid, ${employeeId}::uuid, '2026-02-15'::date, 5000000, 6000000, 8000000, 9000000)
       `);
+      // T-STAT F03: arrears are "due minus drawn" -- Feb..Apr were drawn (disbursed
+      // regular slips) at the OLD basic 50,000, at each month own DA rate and HRA tier.
+      for (const [month, da, hra] of [["2026-02", 2000000, 1350000], ["2026-03", 2000000, 1350000], ["2026-04", 2500000, 1500000]] as const) {
+        const runId = randomUUID();
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, run_type, status, created_by, updated_by)
+          VALUES (${runId}::uuid, ${tenant}::uuid, ${"DRAWN-" + month}, ${month}, ${randomUUID()}::uuid, ${"regular"}, ${"disbursed"}, ${actorId}::uuid, ${actorId}::uuid)
+        `);
+        const components = JSON.stringify([
+          { code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: 5000000 },
+          { code: "DA", name: "Dearness Allowance", type: "earning", amountMinor: da },
+          { code: "HRA", name: "House Rent Allowance", type: "earning", amountMinor: hra },
+        ]);
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_slips (tenant_id, run_id, employee_id, employee_no, basic_minor, gross_minor, net_pay_minor, components, status, created_by, updated_by)
+          VALUES (${tenant}::uuid, ${runId}::uuid, ${employeeId}::uuid, ${"DRAWN"}, 5000000, ${5000000 + da + hra}, ${5000000 + da + hra}, ${components}::jsonb, ${"computed"}, ${actorId}::uuid, ${actorId}::uuid)
+        `);
+      }
     }));
 
     await runWithTenant(tenant, () => db.transaction(async (tx) => {

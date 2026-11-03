@@ -5,7 +5,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody } from "./validators.js";
+import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody, approveRunBody, runApprovalReviewResponse } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
@@ -152,9 +152,20 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     await requirePermissionKey(ctx, "payroll.run.approve");
     const { id } = idParam.parse(req.params);
-    const body = runActionBody.parse(req.body ?? {});
+    const body = approveRunBody.parse(req.body ?? {});
     await requireRun(id, ctx.tenantId);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason, body.zeroBasicExclusions ?? [], body.arrearsAcknowledgements ?? []));
+  });
+
+  // T-STAT review SF4 / SF5: what approving this run needs reviewed -- the
+  // Rs 0-basic slips (to fix or exclude) and the arrears paid (total,
+  // per employee, and which exceed the review threshold).
+  app.get("/v1/payroll/runs/:id/approval-review", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const { id } = idParam.parse(req.params);
+    await requireRun(id, ctx.tenantId);
+    sendValidated(reply, runApprovalReviewResponse, await queries.getRunApprovalReview(id, ctx.tenantId));
   });
 
   app.patch("/v1/payroll/runs/:id/disburse", async (req, reply) => {
