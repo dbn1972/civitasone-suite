@@ -3732,7 +3732,7 @@
     "expenditureYtd": "Ledger debits, all heads (FY)",
     "paymentsMtd": "Payments (MTD)",
     "pendingApprovals": "Sanctions pending (incl. drafts)",
-    "budgetChart": "Budget Utilisation",
+    "budgetChart": "Ledger debits vs budget estimate",
     "modules": "Finance Modules",
     "printPage": "Print",
     "exportMis": "Export MIS (CSV)",

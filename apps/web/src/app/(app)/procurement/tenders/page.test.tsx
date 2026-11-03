@@ -54,11 +54,25 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
     expect(published).toHaveAttribute("href", expect.stringContaining("status=published"));
   });
 
-  it("TENDERS-03: a published tender past its close with 0 bids shows the 'Closed — 0 bids' cue", async () => {
+  // UAT Phase 1B review: the cue no longer claims "0 bids" from the unmaintained bidsReceived
+  // counter; a published tender past its close is flagged as closed with bids not yet opened.
+  it("TENDERS-03: a published tender past its close shows the 'Closed — bids not yet opened' cue", async () => {
     route(TENDERS);
     render(await TendersPage({ searchParams: Promise.resolve({}) }));
-    const cue = screen.getByText("Closed — 0 bids");
+    const cue = screen.getByText("Closed — bids not yet opened");
     expect(cue).toHaveClass("pill", "bad");
+    expect(screen.queryByText("Closed — 0 bids")).not.toBeInTheDocument();
+  });
+
+  it("the Bids column shows — (not the stale counter) with a note pointing to the tender page", async () => {
+    route(TENDERS);
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
+    const desks = screen.getByText("Desks").closest("tr")!;
+    // t3 carries bidsReceived: 3 from the unmaintained counter; the register must not show it.
+    const cells = Array.from(desks.querySelectorAll("td")).map((td) => td.textContent?.trim());
+    expect(cells).toContain("—");
+    expect(cells).not.toContain("3");
+    expect(screen.getByRole("note")).toHaveTextContent(/number of bids is shown on each tender's page/);
   });
 
   it("TENDERS-03: a Type filter reduces the rows", async () => {
