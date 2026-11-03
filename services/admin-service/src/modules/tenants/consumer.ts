@@ -6,6 +6,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE_TENANT } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { TenantView } from "./domain.js";
+import type { TenantCreatedEvent } from "@civitasone/events/contracts";
+import { resolveTenantCreated, makeTenantServiceFetcher, type FetchTenant } from "./tenant-created.js";
 
 const log = pino({ name: "admin-tenants-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -13,7 +15,7 @@ const TENANT_BOOTSTRAP = "tenant.tenant.create";
 
 function keyFor(id: string) { return cache.makeKey(id, RESOURCE_TENANT, id); }
 
-export function registerTenantConsumers(queue: Queue): void {
+export function registerTenantConsumers(queue: Queue, deps: { fetchTenant?: FetchTenant } = {}): void {
   queue.subscribe<TenantView>(COMMANDS.tenantCreate, async (msg) => {
     try {
       await db.transaction(async (tx) => {
@@ -37,28 +39,34 @@ export function registerTenantConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ id: string; tenantId: string; name: string; domain: string; edition: string; status?: string; region: string; residency: string; settings?: Record<string, unknown> }>(
+  // F133 (UAT b15): tenant-service owns tenants; this registers a tenant it created in the admin directory. The event
+  // used to carry only { tenantId, plan } while this read id/name/domain/..., so the insert had no id and no new tenant
+  // ever reached /admin/tenants. resolveTenantCreated reads the v1.1 payload and, for a v1.0 event, fetches the missing
+  // directory fields from tenant-service. A failure is logged AND rethrown so the queue retries / dead-letters it:
+  // swallowing it here is how every new tenant went missing without a trace.
+  queue.subscribe<TenantCreatedEvent>(
     "tenant.tenant.created",
     async (msg) => {
     try {
+      const fetchTenant = deps.fetchTenant ?? makeTenantServiceFetcher({ correlationId: msg.correlationId });
+      const t = await resolveTenantCreated(msg.payload, fetchTenant);
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const p = msg.payload;
-        const edition = p.edition === "govt" ? "govt_dept" : p.edition;
-        const existing = await repo.findByIdTx(tx, p.id);
+        const existing = await repo.findByIdTx(tx, t.id);
         if (existing) {
-          await repo.update(tx, p.id, { name: p.name, domain: p.domain, edition, updatedBy: msg.actorId });
+          await repo.update(tx, t.id, { name: t.name, domain: t.domain, edition: t.edition, updatedBy: msg.actorId });
         } else {
           await repo.insert(tx, {
-            id: p.id, tenantId: p.id, name: p.name, domain: p.domain,
-            edition, status: p.status ?? "draft", region: p.region, residency: p.residency,
-            settings: p.settings ?? {}, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+            id: t.id, tenantId: t.id, name: t.name, domain: t.domain,
+            edition: t.edition, status: t.status, region: t.region, residency: t.residency,
+            settings: {}, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
           });
         }
       });
-      await cache.invalidate(keyFor(msg.payload.id));
+      await cache.invalidate(keyFor(t.id));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "tenant.tenant.created" }, "Consumer processing failed");
+      throw err;
     }
   });
 }

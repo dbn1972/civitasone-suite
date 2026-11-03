@@ -89,3 +89,13 @@ export {
   procurementGrnAccepted,
   apIntakeContracts,
 } from "./ap-intake.js";
+
+// ─── Tenant lifecycle: tenant-service -> admin-service (UAT b15 F133) ───
+export {
+  tenantTenantCreated,
+  tenantLifecycleContracts,
+  TENANT_DIRECTORY_FIELDS,
+  missingTenantDirectoryFields,
+  type TenantDirectoryField,
+  type TenantCreatedEvent,
+} from "./tenant-lifecycle.js";
