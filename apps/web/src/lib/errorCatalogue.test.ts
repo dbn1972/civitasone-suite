@@ -103,7 +103,7 @@ describe("error catalogue: standard wording", () => {
   it("an unclassified thrown error (no status, kind unknown) is honest about the cause", () => {
     const w = resolveHumanError({ forceKind: "unknown", ctx: { area: "leave request", intent: "save", locale: "en" } });
     expect(`${w.what} ${w.next}`).toBe(
-      "We couldn't save the leave request. Your changes haven't been saved. Try again in a few minutes. If it keeps happening, contact your support team.",
+      "We couldn't save the leave request. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
     );
     const r = resolveHumanError({ forceKind: "unknown", ctx: { area: "payslips", intent: "load", locale: "en" } });
     expect(`${r.what} ${r.next}`).toBe("We couldn't load the payslips. Try again in a few minutes. If it keeps happening, contact your support team.");

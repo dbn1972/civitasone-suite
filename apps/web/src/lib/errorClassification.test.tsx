@@ -128,3 +128,38 @@ describe("messageForThrown: raw text is replaced by mapped copy", () => {
     expect(isPresentableMessage("Choose a date in an open period.")).toBe(true);
   });
 });
+
+describe("review of #2451: cancels, loader timeouts and HTTP reason phrases", () => {
+  it("a user or navigation cancel (AbortError) shows nothing", () => {
+    const abort = Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+    expect(classifyThrown(abort)).toBe("aborted");
+    expect(messageForThrown(abort)).toEqual({ message: "", reference: null, aborted: true });
+  });
+  it("an AbortError caused by a timeout signal is a timeout", () => {
+    const abort = Object.assign(new Error("aborted"), { name: "AbortError", cause: { name: "TimeoutError" } });
+    expect(classifyThrown(abort)).toBe("timeout");
+    expect(messageForThrown(abort, { kind: "load", area: "bills" }).message).toMatch(/in time/);
+  });
+  it("a server-side loader timeout says taking longer than usual", () => {
+    render(createElement(LoadErrorState, { result: { status: undefined, timedOut: true }, area: "pending journals" }));
+    expect(screen.getByText("We couldn't load the pending journals in time.")).toBeInTheDocument();
+    expect(screen.getByText(/taking longer than usual/)).toBeInTheDocument();
+  });
+  it.each([
+    "Internal Server Error", "Bad Gateway", "Service Unavailable", "Not Found", "Too Many Requests", "Request failed: 502",
+    "500: Internal Server Error", "Failed with 503", "Server returned 500", "NetworkError when attempting to fetch resource.",
+    "timeout of 30000ms exceeded", "Upstream answered 404 for this call", "Error: something broke", "at Object.run (worker.js:12:4) failed",
+  ])("never shows the raw text %s", (raw) => {
+    expect(isPresentableMessage(raw)).toBe(false);
+    expect(messageForThrown(new Error(raw)).message).not.toContain(raw);
+  });
+  it.each(["Reason must be 500 characters or fewer.", "Enter an amount above ₹500 for this head.", "Complete the form first."])("keeps the deliberate sentence %s", (s) => {
+    expect(isPresentableMessage(s)).toBe(true);
+  });
+  it("the cause-unknown save copy does not claim the changes are unsaved", () => {
+    const r = resolveHumanError({ forceKind: "unknown", ctx: { locale: "en", intent: "save", area: "bill" } });
+    expect(r.next).toMatch(/may not have been saved/);
+    const h = resolveHumanError({ forceKind: "unknown", ctx: { locale: "hi", intent: "save", area: "बिल" } });
+    expect(h.next).toMatch(/हो सकता है/);
+  });
+});

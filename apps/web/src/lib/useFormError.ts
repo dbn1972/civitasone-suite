@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { humanErrorFromFailure, type MessageKind } from "./messages";
 import { referenceFromHeaders } from "./errorCatalogue";
-import { UserFacingError, isNetworkFailure, isTimeoutFailure } from "./userFacingError";
+import { UserFacingError, isNetworkFailure, isTimeoutFailure, isUserAbort } from "./userFacingError";
 
 /**
  * Per-field message from a backend validation failure. Backend services
@@ -131,6 +131,9 @@ export function useFormError(area: string): UseFormErrorResult {
       let next: FormErrorState;
       if (err instanceof UserFacingError) {
         next = { message: err.message, fieldErrors: {}, reference: err.reference };
+      } else if (err !== undefined && isUserAbort(err)) {
+        // A user or navigation cancel: nothing went wrong, so nothing is shown.
+        next = { message: "", fieldErrors: {}, reference: null };
       } else {
         // A fetch that never got a response is a connection problem; a timeout is the
         // server being slow; a thrown error we cannot classify (or no error passed)

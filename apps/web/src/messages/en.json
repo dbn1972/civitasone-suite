@@ -3002,8 +3002,8 @@
     "andJoiner": " and ",
     "errColumnCountRow": "Row {lineNo}: expected {expected} columns, found {found} — check for an unquoted comma in a value.",
     "errRowSave": "Row {lineNo} ({fullName}): {message}",
-    "errRowNetwork": "Row {lineNo} ({fullName}): not imported because the connection dropped. Import this row again.",
-    "errRowNetworkShort": "not imported because the connection dropped; import this row again",
+    "errRowNetwork": "Row {lineNo} ({fullName}): the connection dropped, so this row may not have been imported. Check the employee list before you import it again.",
+    "errRowNetworkShort": "the connection dropped, so this row may not have been imported; check the employee list before importing it again",
     "importingProgress": "Importing… ({success}/{total})",
     "resultImported": "{success} submitted",
     "resultFailedSuffix": ", {failed} failed",
@@ -7903,7 +7903,7 @@
       "storageNotConfigured": "Document storage is not available right now. Please try again later.",
       "forbidden": "You do not have permission to do this.",
       "viewFailed": "Could not open the document. Please try again.",
-      "generic": "We couldn't complete this for your tax proofs. Nothing you entered was lost. Try again in a few minutes.",
+      "generic": "We couldn't complete this action on the tax proofs. Nothing entered on this screen was lost. Try again in a few minutes; if it keeps happening, contact your support team.",
       "amountRequired": "Enter the amount shown on the document before accepting it."
     },
     "queue": {

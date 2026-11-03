@@ -50,7 +50,8 @@ export function useConfirmAction({ onConfirm, onSuccess }: UseConfirmActionOptio
       } catch (e) {
         // A bare-fetch onConfirm rejects with TypeError("Failed to fetch"), a service code or a raw
         // body: never show that. UserFacingError copy and deliberate plain-language messages are kept.
-        setError(messageForThrown(e, { kind: "save" }).message);
+        const shown = messageForThrown(e, { kind: "save" });
+        setError(shown.aborted ? undefined : shown.message);
       } finally {
         setBusy(false);
       }

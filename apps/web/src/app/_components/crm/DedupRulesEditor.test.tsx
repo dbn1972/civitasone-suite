@@ -225,7 +225,7 @@ describe("DedupRulesEditor (DQ-001 admin) — restored", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><DedupRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    expect(await screen.findByText("We couldn't save the matching rules. Your changes haven't been saved. Try again in a few minutes. If it keeps happening, contact your support team.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't save the matching rules. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.")).toBeInTheDocument();
     expect(screen.queryByText(/BAD: nope/i)).not.toBeInTheDocument();
   });
 

@@ -8,7 +8,7 @@ export interface LoadErrorStateProps {
    * The failed `fetchJson()` loader's result (or just the `status` /
    * `errorMessage` slice of it). `errorMessage` (the backend's own text) is never rendered; it is only forwarded to PermissionDenied, which logs it in development.
    */
-  result: Pick<LoaderResult<unknown>, "status" | "errorMessage"> & { errorCode?: string };
+  result: Pick<LoaderResult<unknown>, "status" | "errorMessage"> & { errorCode?: string; timedOut?: boolean };
   /** Plain noun for the generic "couldn't load X, try again" copy (toHumanError's `area`). */
   area: string;
   /**
@@ -69,7 +69,7 @@ export function LoadErrorState({ result, area, backHref, backLabel, module }: Lo
   // failure except 401 (sign in again instead) -- 403 is handled above.
   // No status: a server-side loader that got no answer (never the user's connection) unless the
   // browser itself reports it is offline. See loadFailureKind.
-  const forceKind = loadFailureKind(result.status);
+  const forceKind = result.timedOut ? "timeout" : loadFailureKind(result.status);
   const error: HumanError = {
     ...humanErrorForStatus(result.status, { area, intent: "load", code: result.errorCode, ...(forceKind ? { forceKind } : {}) }),
     actions: result.status === 401 ? ["signin", "help"] : ["retry", "back", "help"],

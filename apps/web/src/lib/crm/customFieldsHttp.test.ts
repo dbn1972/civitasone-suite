@@ -125,7 +125,7 @@ describe("customFields HTTP client", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "CUSTOM_FIELD_LIMIT_REACHED", message: "too many" }, { status: 422 }));
     await expect(
       cf.createCustomField({ ...cf.blankDraft("leads"), fieldName: "n" }),
-    ).rejects.toThrow("This goes over an allowed limit. Reduce the amount or number and try again. Ask your administrator if the limit needs to change.");
+    ).rejects.toThrow("This is more than the allowed limit. Enter a lower amount or number, then try again. Ask your administrator if the limit needs to change.");
     fetchMock.mockResolvedValueOnce(res({ code: "CUSTOM_FIELD_LIMIT_REACHED", message: "too many" }, { status: 422 }));
     await expect(
       cf.createCustomField({ ...cf.blankDraft("leads"), fieldName: "n" }),

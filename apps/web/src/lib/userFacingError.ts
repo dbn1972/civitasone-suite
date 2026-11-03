@@ -45,19 +45,30 @@ export function isNetworkFailure(err: unknown): boolean {
   return false;
 }
 
-/** True for a request that was abandoned because it took too long (an abort or a timeout signal). */
+/**
+ * True for a request abandoned because it took too long: a TimeoutError (AbortSignal.timeout)
+ * or an AbortError whose reason is a TimeoutError. A plain AbortError is a cancel (see isUserAbort).
+ * browserFetch turns its own timer into a UserFacingError with the timeout copy.
+ */
 export function isTimeoutFailure(err: unknown): boolean {
-  const name = (err as { name?: unknown } | null)?.name;
-  return name === "TimeoutError" || name === "AbortError";
+  const e = err as { name?: unknown; cause?: { name?: unknown } } | null;
+  if (e?.name === "TimeoutError") return true;
+  return e?.name === "AbortError" && e.cause?.name === "TimeoutError";
 }
 
-/** How a thrown value should be explained to the user. */
-export type ThrownKind = "userFacing" | "network" | "timeout" | "unknown";
+/** True for a request the user or a navigation cancelled: nothing went wrong, so nothing is shown. */
+export function isUserAbort(err: unknown): boolean {
+  return (err as { name?: unknown } | null)?.name === "AbortError" && !isTimeoutFailure(err);
+}
+
+/** How a thrown value should be explained to the user ("aborted" means: show nothing). */
+export type ThrownKind = "userFacing" | "network" | "timeout" | "aborted" | "unknown";
 
 export function classifyThrown(err: unknown): ThrownKind {
   if (err instanceof UserFacingError) return "userFacing";
   if (isNetworkFailure(err)) return "network";
   if (isTimeoutFailure(err)) return "timeout";
+  if (isUserAbort(err)) return "aborted";
   return "unknown";
 }
 

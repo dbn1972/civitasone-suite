@@ -192,6 +192,12 @@ export function isPresentableMessage(message: unknown): message is string {
   if (/\b[a-z]+(?:_[a-z0-9]+)+\b/.test(m)) return false; // snake_case key
   if (/\b(?:HTTP|status(?: code)?)\s*[45]\d\d\b|\([45]\d\d\)|\b[45]\d\d (?:Internal|Bad|Not|Forbidden|Unauthorized|Service|Gateway)/i.test(m)) return false;
   if (/^[[{<]/.test(m) || /\bat \S+ \(|undefined|null\b|is not a function|Cannot read propert|Unexpected token|JSON|fetch failed|Failed to fetch/i.test(m)) return false;
+  // HTTP reason phrases and transport errors (Internal Server Error, Bad Gateway, timeout of 30000ms exceeded).
+  if (/\b(internal server error|bad gateway|service unavailable|gateway time-?out|not found|bad request|too many requests|unauthori[sz]ed|forbidden|request failed|failed with|server returned|networkerror|network error|timeout of \d+ ?ms|timed out|econn\w*|etimedout|enotfound|socket hang up|stack trace)\b/i.test(m)) return false;
+  // Any HTTP status number (a 4xx/5xx standing on its own), but not an amount or a count of something.
+  if (/(?<![\d₹.,])\b[45]\d\d\b(?![.,]\d)(?!\s*(characters?|chars|words|days?|months?|years?|rupees|rs\.?|lakh|crore|%|kb|mb|items?|rows?|employees?|records?|pages?|units?|nos?\.?|ms\b))/i.test(m)) return false;
+  // Stack-like lines: "at Foo (file.js:1:2)", "file.ts:12:3", "Error:" anywhere.
+  if (/\.(m?[jt]sx?):\d+|\n\s*at\s|\bError:/.test(m)) return false;
   return true;
 }
 
@@ -206,10 +212,11 @@ export function isPresentableMessage(message: unknown): message is string {
 export function messageForThrown(
   err: unknown,
   ctx?: { kind?: MessageKind; area?: string },
-): { message: string; reference: string | null } {
+): { message: string; reference: string | null; aborted?: true } {
   const kind = ctx?.kind ?? "save";
   const intent = kind === "load" || kind === "unknownStatus" ? "load" : "save";
   const c = classifyThrown(err);
+  if (c === "aborted") return { message: "", reference: null, aborted: true };
   if (c === "userFacing") return { message: (err as UserFacingError).message, reference: (err as UserFacingError).reference };
   if (c === "network" || c === "timeout") {
     const h = humanErrorForStatus(undefined, { area: ctx?.area, intent, forceKind: c });
@@ -221,8 +228,8 @@ export function messageForThrown(
   const lead = /^([A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)(?:\s*:.*)?$/s.exec(bare);
   if (lead) {
     const code = lead[1].toUpperCase();
-    // A known code (its own entry or a naming family) explains itself; an unknown one is "cause not known".
-    const known = resolveServiceCode(code) !== null || Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, code);
+    // Only a hand-written entry explains a bare code; a naming family alone is too weak without a status.
+    const known = resolveServiceCode(code)?.source === "explicit" || Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, code);
     const h = humanErrorForStatus(undefined, { area: ctx?.area, intent, code, ...(known ? {} : { forceKind: "unknown" as const }) });
     return { message: `${h.what} ${h.next}`, reference: null };
   }

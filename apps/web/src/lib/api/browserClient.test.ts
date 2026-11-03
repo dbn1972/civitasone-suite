@@ -34,7 +34,7 @@ describe("errorMessageFromResponse", () => {
     );
     expect(msg).not.toContain("ALREADY_CLOSED");
     expect(msg).not.toContain("period is already hard-closed");
-    expect(msg).toBe("This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.");
+    expect(msg).toBe("This item has already been decided or is not at this step. Refresh to see its current status.");
   });
 
   it("never echoes a bare message with no code either", async () => {

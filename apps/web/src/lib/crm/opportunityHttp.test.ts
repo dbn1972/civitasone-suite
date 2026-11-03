@@ -34,7 +34,7 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(op.deletePipeline("p1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
-    await expect(op.deletePipeline("p1")).rejects.toThrow("This record was changed by someone else. Refresh to see the latest version, then try again.");
+    await expect(op.deletePipeline("p1")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
     await expect(op.deletePipeline("p1")).rejects.not.toThrow(/CONFLICT/);
   });

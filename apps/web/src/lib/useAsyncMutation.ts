@@ -225,8 +225,15 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
     } catch (err) {
       if (isCurrent()) {
         // Never the raw thrown text (a code, a stack line or a backend body): mapped copy instead.
-        setError(messageForThrown(err, { kind: "save" }).message);
-        setPhase("error");
+        // A user or navigation cancel is not a failure: no banner, back to idle.
+        const shown = messageForThrown(err, { kind: "save" });
+        if (shown.aborted) {
+          setError(null);
+          setPhase("idle");
+        } else {
+          setError(shown.message);
+          setPhase("error");
+        }
       }
       runningRef.current = false;
       return;

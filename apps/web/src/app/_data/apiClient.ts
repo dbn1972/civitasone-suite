@@ -39,6 +39,8 @@ export type LoaderResult<T> = {
   errorCode?: string;
   /** The backend's own plain-language reason (HttpError's `message`), when a response body could be parsed. */
   errorMessage?: string;
+  /** True when the loader gave up because the gateway took longer than its timeout (no status then). */
+  timedOut?: boolean;
 };
 
 export interface FetchJsonOptions<TApi, TOutput> {
@@ -246,7 +248,8 @@ export async function fetchJson<TApi, TOutput>(
     return { data: mapped, source: "api" };
   } catch {
     emitError(options.telemetryKey, "network_error", path);
-    return { data: empty, source: "error" };
+    // Our own timer fired: say "taking longer than usual", not "a problem on our side".
+    return controller.signal.aborted ? { data: empty, source: "error", timedOut: true } : { data: empty, source: "error" };
   } finally {
     // Cleared only after the body is read too, so a stalled body is bounded by the same timer.
     clearTimeout(timer);

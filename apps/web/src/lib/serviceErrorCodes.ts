@@ -19,11 +19,27 @@
 import type { ErrorLocale, ErrorStatusKind, StandardAction } from "./errorCatalogue";
 
 export type CodeCopy = { what: string; next: string };
-export type ServiceCodeMessage = { en: CodeCopy; hi: CodeCopy; actions?: StandardAction[] };
+/** serverSide: the message stays true for a 5xx / 429 / 408 / 401 answer too (otherwise the status copy wins there). */
+export type ServiceCodeMessage = { en: CodeCopy; hi: CodeCopy; actions?: StandardAction[]; serverSide?: boolean };
 
 const RECORD = { en: "record", hi: "रिकॉर्ड" };
 
-const msg = (en: CodeCopy, hi: CodeCopy, actions: StandardAction[] = ["back", "help"]): ServiceCodeMessage => ({ en, hi, actions });
+const msg = (en: CodeCopy, hi: CodeCopy, actions: StandardAction[] = ["back", "help"], serverSide = false): ServiceCodeMessage =>
+  serverSide ? { en, hi, actions, serverSide } : { en, hi, actions };
+
+const CIRCUIT_OPEN_MESSAGE = msg(
+  { what: "A connected service is not responding right now, so requests to it are paused.", next: "Nothing was sent. Try again in a few minutes." },
+  { what: "एक जुड़ी हुई सेवा अभी उत्तर नहीं दे रही है, इसलिए उसे भेजे जाने वाले अनुरोध रोके गए हैं।", next: "कुछ भी नहीं भेजा गया। कुछ मिनट बाद फिर प्रयास करें।" },
+  ["retry", "help"],
+  true,
+);
+
+const RATE_LIMIT_MESSAGE = msg(
+  { what: "Too many attempts in a short time.", next: "Wait a minute, then try again." },
+  { what: "थोड़े समय में बहुत ज़्यादा प्रयास हो गए हैं।", next: "एक मिनट रुकें, फिर दोबारा प्रयास करें।" },
+  ["retry", "help"],
+  true,
+);
 
 const NO_EMPLOYEE_LINK_MESSAGE = msg(
   {
@@ -62,20 +78,21 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
       next: "Choose the sanction reference in the Sanction field, then submit again.",
     },
     {
-      what: "₹1,000 से अधिक के क्रय आदेश के लिए स्वीकृत बजट संस्वीकृति आवश्यक है।",
+      what: "₹1,000 से अधिक के क्रय आदेश के लिए अनुमोदित बजट संस्वीकृति का संदर्भ आवश्यक है।",
       next: "संस्वीकृति फ़ील्ड में संस्वीकृति संदर्भ चुनें, फिर दोबारा जमा करें।",
     },
     ["retry", "help"],
   ),
-  // finance-service: the commitment or posting would go over the available budget of the head.
+  // finance-service (budget head commitment) and hrms flexi-benefit (elected amount over the plan budget):
+  // the copy names neither, so it is true for both.
   BUDGET_EXCEEDED: msg(
     {
-      what: "This amount is more than the budget still available under this head.",
-      next: "Reduce the amount, or ask your budget officer for a re-appropriation, then try again.",
+      what: "This amount is more than the budget available for it.",
+      next: "Enter a lower amount, or ask the officer who manages this budget whether it can be increased, then try again.",
     },
     {
-      what: "यह राशि इस शीर्ष में शेष बजट से अधिक है।",
-      next: "राशि कम करें, या अपने बजट अधिकारी से पुनर्विनियोजन करवाएँ, फिर प्रयास करें।",
+      what: "यह राशि इसके लिए उपलब्ध बजट से अधिक है।",
+      next: "कम राशि दर्ज करें, या इस बजट का प्रबंधन करने वाले अधिकारी से पूछें कि क्या इसे बढ़ाया जा सकता है, फिर प्रयास करें।",
     },
   ),
   // payroll-service: a run holding Rs 0-basic slips is not approved unless each one is excluded with a reason.
@@ -86,7 +103,7 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     },
     {
       what: "इस रन की कुछ वेतन पर्चियों में मूल वेतन नहीं है, क्योंकि कर्मचारी रिकॉर्ड में मूल वेतन दर्ज नहीं है।",
-      next: "एचआर रिकॉर्ड में मूल वेतन ठीक करके वेतन दोबारा चलाएँ, या अनुमोदन करते समय इन कर्मचारियों को कारण सहित अलग करें।",
+      next: "एचआर रिकॉर्ड में मूल वेतन ठीक करके वेतन रन दोबारा चलाएँ, या अनुमोदन करते समय कारण दर्ज करके इन कर्मचारियों को बाहर रखें।",
     },
   ),
   // hrms-service: the signed-in user has no employee record (self-service pages).
@@ -108,16 +125,16 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     { what: "This is the only active administrator for your office.", next: "Make another user an administrator first, then try again." },
     { what: "यह आपके कार्यालय का एकमात्र सक्रिय प्रशासक है।", next: "पहले किसी दूसरे उपयोगकर्ता को प्रशासक बनाएँ, फिर प्रयास करें।" },
   ),
-  // payroll-service (GPF / CPF): a withdrawal or advance larger than the balance.
+  // hrms (CPF / GPF / NPS withdrawals) and estab consumables (issue above stock): neutral copy for both.
   INSUFFICIENT_BALANCE: msg(
-    { what: "The amount is more than the balance available in the account.", next: "Enter an amount within the available balance, then try again." },
-    { what: "राशि खाते में उपलब्ध शेष से अधिक है।", next: "उपलब्ध शेष के भीतर की राशि दर्ज करें, फिर प्रयास करें।" },
+    { what: "There isn't enough available for this.", next: "Enter a smaller amount or quantity, within what is available, then try again." },
+    { what: "इसके लिए पर्याप्त शेष उपलब्ध नहीं है।", next: "उपलब्ध शेष के भीतर कम राशि या मात्रा दर्ज करें, फिर प्रयास करें।" },
     ["retry", "help"],
   ),
-  // procurement-service: a requisition type with no approval chain cannot be submitted.
+  // hrms recruitment (requisition-routes): a requisition with no approval chain cannot be submitted.
   NO_APPROVAL_CHAIN: msg(
     { what: "No approval chain is set up for this request.", next: "Ask your administrator to set up the approval chain, then submit again. What you entered is kept." },
-    { what: "इस अनुरोध के लिए कोई अनुमोदन श्रृंखला तय नहीं है।", next: "अपने प्रशासक से अनुमोदन श्रृंखला तय करवाएँ, फिर दोबारा जमा करें। आपकी भरी हुई जानकारी सुरक्षित है।" },
+    { what: "इस अनुरोध के लिए कोई अनुमोदन शृंखला तय नहीं है।", next: "अपने प्रशासक से अनुमोदन शृंखला तय करवाएँ, फिर दोबारा जमा करें। आपकी भरी हुई जानकारी सुरक्षित है।" },
   ),
   // hrms-service attendance: today is a gazetted holiday.
   HOLIDAY: msg(
@@ -127,7 +144,7 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
   // Many services: a PATCH with no fields.
   NO_CHANGES: NO_CHANGE_MESSAGE,
   NO_CHANGE: NO_CHANGE_MESSAGE,
-  // finance-service bills: the deduction lines are more than the bill gross.
+  // works-service billing: the deduction lines are more than the bill gross.
   DEDUCTIONS_EXCEED_GROSS: msg(
     { what: "The deductions add up to more than the gross amount of the bill.", next: "Reduce the deductions or correct the gross amount, then save again." },
     { what: "कटौतियों का योग बिल की सकल राशि से अधिक है।", next: "कटौतियाँ कम करें या सकल राशि ठीक करें, फिर दोबारा सहेजें।" },
@@ -217,8 +234,8 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     ["retry", "help"],
   ),
   OVER_RECEIPT: msg(
-    { what: "The quantity received is more than the quantity ordered.", next: "Enter a quantity within the order, then try again." },
-    { what: "प्राप्त मात्रा आदेशित मात्रा से अधिक है।", next: "आदेश के भीतर की मात्रा दर्ज करें, फिर प्रयास करें।" },
+    { what: "The quantity received is more than the quantity still to be received on this order.", next: "Enter a quantity within what is still open on the order, then try again." },
+    { what: "प्राप्त मात्रा इस आदेश पर अभी प्राप्त होने वाली शेष मात्रा से अधिक है।", next: "आदेश पर शेष मात्रा के भीतर की मात्रा दर्ज करें, फिर प्रयास करें।" },
     ["retry", "help"],
   ),
   OVER_ACCEPT: msg(
@@ -290,6 +307,121 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     { what: "दावे की राशि इस पॉलिसी की बीमित राशि से अधिक है।", next: "बीमित राशि के भीतर की राशि दर्ज करें, फिर दावा दोबारा दर्ज करें।" },
     ["retry", "help"],
   ),
+  // ---- Dedicated messages that stay true whatever the status (marked serverSide) ----
+  // billing gstn / finance pfms / citizen ai: the circuit breaker in front of an external service is open (503).
+  CIRCUIT_OPEN: CIRCUIT_OPEN_MESSAGE,
+  GATEWAY_CIRCUIT_OPEN: CIRCUIT_OPEN_MESSAGE,
+  RATE_LIMITED: RATE_LIMIT_MESSAGE,
+  TOO_MANY_REQUESTS: RATE_LIMIT_MESSAGE,
+  DEVICE_RATE_LIMIT: RATE_LIMIT_MESSAGE,
+  OTP_RATE_LIMITED: RATE_LIMIT_MESSAGE,
+  // payroll bank-file signing: the signature did not verify against its own key after signing (500).
+  SIGNING_SELF_CHECK_FAILED: msg(
+    { what: "The signing check failed on our side, so nothing was signed or sent.", next: "Try again in a few minutes. If it keeps happening, contact your support team." },
+    { what: "हमारी ओर से हस्ताक्षर जाँच विफल रही, इसलिए कुछ भी हस्ताक्षरित या भेजा नहीं गया।", next: "कुछ मिनट बाद फिर प्रयास करें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।" },
+    ["retry", "help"],
+    true,
+  ),
+  // ---- One-time codes ----
+  OTP_INVALID: msg(
+    { what: "The code you entered is not correct.", next: "Check the code in the latest message and enter it again." },
+    { what: "आपके द्वारा दर्ज किया गया कोड सही नहीं है।", next: "नवीनतम संदेश में आया कोड जाँचें और उसे फिर से दर्ज करें।" },
+    ["retry", "help"],
+  ),
+  OTP_LOCKED: msg(
+    { what: "Too many wrong codes were entered, so the code is locked.", next: "Wait a few minutes, then ask for a new code." },
+    { what: "कई बार ग़लत कोड दर्ज किया गया, इसलिए कोड लॉक कर दिया गया है।", next: "कुछ मिनट रुकें, फिर नया कोड माँगें।" },
+  ),
+  OTP_REQUIRED: msg(
+    { what: "A one-time code is needed to continue.", next: "Enter the code sent to your registered mobile number or email." },
+    { what: "आगे बढ़ने के लिए एक बार उपयोग होने वाला कोड (OTP) आवश्यक है।", next: "अपने पंजीकृत मोबाइल नंबर या ईमेल पर भेजा गया कोड दर्ज करें।" },
+    ["retry", "help"],
+  ),
+  OTP_NOT_ENABLED: msg(
+    { what: "Sign-in codes are not switched on for this account.", next: "Ask your administrator to switch on one-time codes for your account." },
+    { what: "इस खाते के लिए एक बार उपयोग होने वाले कोड चालू नहीं हैं।", next: "अपने प्रशासक से अपने खाते के लिए OTP चालू करवाएँ।" },
+  ),
+  // ---- Codes the naming rules would read wrongly ----
+  CONFLICT_OF_INTEREST: msg(
+    { what: "You have a declared conflict of interest in this matter, so you can't act on it.", next: "Another officer needs to do this. Ask the officer in charge to reassign it." },
+    { what: "इस मामले में आपका हितों का टकराव घोषित है, इसलिए आप इस पर कार्रवाई नहीं कर सकते।", next: "यह कार्य किसी दूसरे अधिकारी को करना होगा। प्रभारी अधिकारी से इसे दोबारा सौंपने को कहें।" },
+  ),
+  SIGNING_CONFIG_CONFLICT: msg(
+    { what: "This signing setting doesn't fit with the other bank-file settings.", next: "Check the bank file signing settings, change the format or key, then save again." },
+    { what: "यह हस्ताक्षर सेटिंग बैंक फ़ाइल की अन्य सेटिंग से मेल नहीं खाती।", next: "बैंक फ़ाइल हस्ताक्षर सेटिंग जाँचें, प्रारूप या कुंजी बदलें, फिर दोबारा सहेजें।" },
+    ["retry", "help"],
+  ),
+  STATE_CODE_INVALID: msg(
+    { what: "The state code is not a valid GST state code.", next: "Enter the 2-digit GST state code (for example 21 for Odisha), then try again." },
+    { what: "राज्य कोड मान्य जीएसटी राज्य कोड नहीं है।", next: "2 अंकों का जीएसटी राज्य कोड दर्ज करें (जैसे ओडिशा के लिए 21), फिर प्रयास करें।" },
+    ["retry", "help"],
+  ),
+  AADHAAR_NOT_ACCEPTED: msg(
+    { what: "An Aadhaar number can't be used here.", next: "Use another identity document listed on the form." },
+    { what: "यहाँ आधार संख्या का उपयोग नहीं किया जा सकता।", next: "फ़ॉर्म में दिया गया कोई दूसरा पहचान दस्तावेज़ उपयोग करें।" },
+    ["retry", "help"],
+  ),
+  ACCOUNT_NOT_ON_FILE: msg(
+    { what: "No account is on file for this employee.", next: "Add the account in the employee record first, then try again." },
+    { what: "इस कर्मचारी का कोई खाता दर्ज नहीं है।", next: "पहले कर्मचारी रिकॉर्ड में खाता जोड़ें, फिर प्रयास करें।" },
+  ),
+  FEE_NOT_SET: msg(
+    { what: "No fee has been set up for this.", next: "Ask your administrator to set the fee in the fee schedule, then try again." },
+    { what: "इसके लिए कोई शुल्क तय नहीं किया गया है।", next: "अपने प्रशासक से शुल्क अनुसूची में शुल्क तय करवाएँ, फिर प्रयास करें।" },
+  ),
+  ATTACHMENT_NOT_UPLOADED: msg(
+    { what: "The attachment hasn't finished uploading.", next: "Upload the file again and wait until it shows as uploaded, then try again." },
+    { what: "संलग्नक का अपलोड पूरा नहीं हुआ है।", next: "फ़ाइल फिर से अपलोड करें और अपलोड हो जाने तक प्रतीक्षा करें, फिर प्रयास करें।" },
+    ["retry", "help"],
+  ),
+  ACTOR_NOT_EMPLOYEE: NO_EMPLOYEE_LINK_MESSAGE,
+  FNF_EMPLOYEE_NOT_IN_HR: msg(
+    { what: "This employee is not in the HR records, so a full and final settlement can't be worked out.", next: "Check the employee number, or ask HR to add the employee record first." },
+    { what: "यह कर्मचारी एचआर रिकॉर्ड में नहीं है, इसलिए पूर्ण एवं अंतिम निपटान की गणना नहीं हो सकती।", next: "कर्मचारी क्रमांक जाँचें, या एचआर से पहले कर्मचारी रिकॉर्ड जुड़वाएँ।" },
+  ),
+  CTC_PROFILE_NOT_SUPPORTED: msg(
+    { what: "This pay profile can't be used for a CTC breakdown.", next: "Choose a pay profile that has CTC components, then try again." },
+    { what: "इस वेतन प्रोफ़ाइल से सीटीसी विवरण नहीं बनाया जा सकता।", next: "सीटीसी घटकों वाली कोई वेतन प्रोफ़ाइल चुनें, फिर प्रयास करें।" },
+    ["retry", "help"],
+  ),
+  PT_GENDER_UNKNOWN: msg(
+    { what: "The employee's gender is not recorded, so professional tax can't be worked out.", next: "Record the gender in the employee record, then run payroll again." },
+    { what: "कर्मचारी का लिंग दर्ज नहीं है, इसलिए व्यवसाय कर की गणना नहीं हो सकती।", next: "कर्मचारी रिकॉर्ड में लिंग दर्ज करें, फिर वेतन रन दोबारा चलाएँ।" },
+  ),
+  PT_STATE_UNKNOWN: msg(
+    { what: "The employee's work state is not recorded, so professional tax can't be worked out.", next: "Record the work location state in the employee record, then run payroll again." },
+    { what: "कर्मचारी के कार्य-राज्य की जानकारी दर्ज नहीं है, इसलिए व्यवसाय कर की गणना नहीं हो सकती।", next: "कर्मचारी रिकॉर्ड में कार्य स्थान का राज्य दर्ज करें, फिर वेतन रन दोबारा चलाएँ।" },
+  ),
+  SUSPENDED_PAY_WITHHELD: msg(
+    { what: "Pay is withheld while this employee is under suspension.", next: "Pay subsistence allowance through the suspension process instead." },
+    { what: "निलंबन की अवधि में इस कर्मचारी का वेतन रोका गया है।", next: "इसके बजाय निलंबन प्रक्रिया के माध्यम से जीवन निर्वाह भत्ता दें।" },
+  ),
+  // payroll-service (fix/uat-p3-payroll-stat): arrears above the review threshold need an acknowledgement on approval.
+  ARREARS_REVIEW_REQUIRED: msg(
+    { what: "Some employees have large arrears in this run.", next: "Review and acknowledge each one before approving." },
+    { what: "इस रन में कुछ कर्मचारियों का बकाया (एरियर) अधिक है।", next: "अनुमोदन से पहले हर एक की समीक्षा करके उसकी पुष्टि करें।" },
+  ),
+  UNSIGNED_NOT_ALLOWED_IN_PRODUCTION: msg(
+    { what: "Unsigned bank files can't be used in production.", next: "Choose a signing method in Bank file signing, then try again." },
+    { what: "उत्पादन परिवेश में बिना हस्ताक्षर वाली बैंक फ़ाइल का उपयोग नहीं किया जा सकता।", next: "बैंक फ़ाइल हस्ताक्षर में कोई हस्ताक्षर विधि चुनें, फिर प्रयास करें।" },
+    ["back", "help"],
+  ),
+  ROOM_AT_CAPACITY: msg(
+    { what: "This room is already full for that time.", next: "Choose another room or a different time, then try again." },
+    { what: "उस समय के लिए यह कक्ष पहले से भरा हुआ है।", next: "कोई दूसरा कक्ष या दूसरा समय चुनें, फिर प्रयास करें।" },
+    ["retry", "help"],
+  ),
+  // finance: a cheque or draft older than its validity period.
+  INSTRUMENT_STALE: msg(
+    { what: "This cheque or draft is past its validity period.", next: "Ask for a fresh instrument, then record that one." },
+    { what: "यह चेक या ड्राफ़्ट अपनी वैधता अवधि पार कर चुका है।", next: "नया लिखत माँगें, फिर उसे दर्ज करें।" },
+  ),
+  MISSING_OTP: msg(
+    { what: "A one-time code is needed to continue.", next: "Enter the code sent to your registered mobile number or email." },
+    { what: "आगे बढ़ने के लिए एक बार उपयोग होने वाला कोड (OTP) आवश्यक है।", next: "अपने पंजीकृत मोबाइल नंबर या ईमेल पर भेजा गया कोड दर्ज करें।" },
+    ["retry", "help"],
+  ),
+  EMPTY_PATCH: NO_CHANGE_MESSAGE,
   CALL_TASK: msg(
     { what: "This step is done by a phone call, not on this screen.", next: "Make the call, then record the outcome on the task." },
     { what: "यह चरण फ़ोन कॉल से पूरा होता है, इस स्क्रीन से नहीं।", next: "कॉल करें, फिर कार्य पर परिणाम दर्ज करें।" },
@@ -298,7 +430,10 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
 
 type Family = {
   id: string;
+  /** Unambiguous naming rule. Ambiguous names are left to the status copy (the unmapped fallback). */
   pattern: RegExp;
+  /** Names that match the pattern but mean something else. */
+  except?: RegExp;
   /** The family reuses the status copy of this kind: it is already the right message. */
   kind?: ErrorStatusKind;
   message?: ServiceCodeMessage;
@@ -306,26 +441,40 @@ type Family = {
   deferToFieldErrors?: boolean;
   /** Object noun when the caller gave none. */
   object?: { en: string; hi: string };
+  /** Statuses for which the family does not apply (the status copy is truer there). */
+  notForStatus?: number[];
 };
 
 /**
- * Naming families, in priority order (first match wins). Built from the codes in
- * services/* (about 1,400); see serviceErrorCodes.test.ts.
+ * Naming families, in priority order (first match wins). They refine a 4xx answer only
+ * (resolveHumanError never applies them to 401, 408, 429, 5xx or 504) and only where the
+ * name says one thing. A code that matches none of them gets the status copy: an honest
+ * generic message is better than a guessed specific one.
  */
 export const CODE_FAMILIES: Family[] = [
+  // Real edit conflicts only: a version or ETag check failed because someone else saved first.
   {
-    id: "unknownReference",
-    pattern: /^UNKNOWN_|_UNKNOWN$|_UNKNOWN_|^UNMAPPED_/,
+    id: "versionConflict",
+    pattern: /^STALE_|VERSION_CONFLICT$|VERSION_MISMATCH$|^CONCURRENT_|_CONCURRENT_(EDIT|UPDATE|MODIFICATION)$|ETAG|^EDIT_CONFLICT$|^PRECONDITION_FAILED$/,
+    kind: "conflict",
+    object: RECORD,
+  },
+  {
+    id: "alreadyBooked",
+    pattern: /^(BOOKING|ROOM|VEHICLE|SLOT|VENUE|HALL|DRIVER|RESOURCE)_CONFLICT$|_SLOT_CONFLICT$|DOUBLE_BOOKED|_ALREADY_BOOKED$/,
     message: msg(
-      { what: "Something you chose is no longer available.", next: "Refresh the page, choose again, then try again." },
-      { what: "आपके द्वारा चुनी गई कोई चीज़ अब उपलब्ध नहीं है।", next: "पेज रीफ़्रेश करें, फिर से चुनें और दोबारा प्रयास करें।" },
+      { what: "This is already booked for that time.", next: "Choose a different time, or a different room, vehicle or slot, then try again." },
+      { what: "उस समय के लिए यह पहले से बुक है।", next: "कोई दूसरा समय, या दूसरा कक्ष, वाहन या स्लॉट चुनें, फिर प्रयास करें।" },
       ["retry", "help"],
     ),
   },
-  { id: "notFound", pattern: /NOT_FOUND|^NO_SUCH_/, kind: "notFound", object: RECORD },
+  { id: "fileTooLarge", pattern: /^(FILE|DOCUMENT|ARTEFACT|ARTIFACT|PROOF|PAYLOAD|UPLOAD|ATTACHMENT|IMAGE|PHOTO|SCAN)_TOO_(LARGE|BIG)$/, kind: "tooLarge" },
+  { id: "notFound", pattern: /_NOT_FOUND$|^NOT_FOUND$|^NO_SUCH_/, kind: "notFound", object: RECORD },
+  { id: "duplicate", pattern: /^DUPLICATE_|_DUPLICATE$|_ALREADY_EXISTS$|_EXISTS$|_TAKEN$/, except: /_NOT_EXISTS$|^NOT_EXISTS$/ },
   {
     id: "separationOfDuties",
-    pattern: /^SELF_|_SELF_|^SOD_|SEGREGATION_OF_DUTIES|PAYER_IS_PASSER|MAKER_CHECKER|MAKER_CANNOT|INITIATOR_EQUALS|SAME_ACTOR|REPEAT_ACTOR|_OWN_/,
+    pattern: /^SELF_(APPROVAL|DECISION|REVIEW|DISBURSE|VERIFY|VERIFICATION|SIGN|ASSIGN)|_SELF_APPROVAL|^SOD_|SEGREGATION_OF_DUTIES|MAKER_CHECKER|MAKER_CANNOT_CHECK|INITIATOR_EQUALS_APPROVER|SAME_ACTOR|REPEAT_ACTOR|PAYER_IS_PASSER/,
+    except: /^OVERRIDE_VIA_MAKER_CHECKER$/,
     message: msg(
       { what: "You can't act on something you created or requested yourself.", next: "Another officer needs to do this." },
       { what: "आप अपने द्वारा बनाए या माँगे गए कार्य पर स्वयं कार्रवाई नहीं कर सकते।", next: "यह कार्य किसी दूसरे अधिकारी को करना होगा।" },
@@ -333,8 +482,8 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "permission",
-    pattern:
-      /FORBIDDEN|_DENIED$|DENIED_|NOT_AUTHORI[SZ]ED|UNAUTHORI[SZ]ED|^NOT_(ASSIGNEE|ASSIGNED|REQUESTER|CASE_OWNER|STAGE_OWNER|DELEGATOR|YOUR_[A-Z_]+|A_MEMBER|A_PANELIST|ON_PANEL|AN_OPERATOR|PERMITTED|OWNER)$|READONLY|READ_ONLY|EDITION_RESTRICTED|FEATURE_AUTHORITY|INSUFFICIENT_CLEARANCE|ROLE_REQUIRED|REQUIRES_ROLE|ROLE_NOT_HELD|OPERATOR_REQUIRES_APPROVAL|NOT_PRODUCTION|NOT_HR_OFFICER|NOT_REVEALABLE/,
+    except: /^CONSENT_DENIED$/,
+    pattern: /_FORBIDDEN$|^FORBIDDEN_|_DENIED$|NOT_AUTHORI[SZ]ED|UNAUTHORI[SZ]ED_|^NOT_(ASSIGNEE|REQUESTER|CASE_OWNER|STAGE_OWNER|DELEGATOR|OWNER)$|^NOT_YOUR_|_ROLE_REQUIRED$|ROLE_NOT_HELD|INSUFFICIENT_CLEARANCE/,
     message: msg(
       {
         what: "This action isn't available to you.",
@@ -346,94 +495,32 @@ export const CODE_FAMILIES: Family[] = [
       },
     ),
   },
-  { id: "duplicate", pattern: /^DUPLICATE|_DUPLICATE|_EXISTS$|ALREADY_EXISTS|_TAKEN$|^NAME_TAKEN$|_ASSIGNED$|DOUBLE_BOOKED|_CLASH$/ },
-  { id: "session", pattern: /^UNAUTHENTICATED$|SESSION_ENDED|SESSION_EXPIRED|UPSTREAM_UNAUTHENTICATED|TOKEN_EXPIRED|INVALID_TOKEN/, kind: "unauthenticated" },
+  { id: "rateLimited", pattern: /RATE_LIMIT|TOO_MANY_REQUESTS|THROTTLED/, kind: "rateLimited" },
+  // The item is no longer waiting for this decision (approved, rejected, closed, or not yet at this step).
   {
-    id: "wait",
-    pattern: /COOLDOWN|RECENTLY_REQUESTED/,
+    id: "alreadyDecided",
+    pattern: /_NOT_PENDING$|^NOT_PENDING$|_NOT_PENDING_|NOT_IN_PROGRESS|^NO_PENDING_|^ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED|INACTIVE|ARCHIVED|RETIRED|REVOKED|FROZEN)$|_ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED)$/,
+    object: { en: "item", hi: "मद" },
     message: msg(
-      { what: "This was done very recently.", next: "Wait a few minutes before trying again." },
-      { what: "यह कार्य अभी हाल ही में किया गया है।", next: "दोबारा प्रयास करने से पहले कुछ मिनट रुकें।" },
-    ),
-  },
-  {
-    // An overlapping range (PT slabs, licence-fee periods, memberships, windows) is a rule about the values,
-    // not a concurrent edit: it must not read as "changed by someone else".
-    id: "overlap",
-    pattern: /OVERLAP/,
-    message: msg(
-      { what: "This clashes with an existing entry.", next: "Change the dates or the range so they don't clash with it, then try again." },
-      { what: "यह किसी मौजूदा प्रविष्टि से टकराता है।", next: "तिथियाँ या सीमा इस तरह बदलें कि वे आपस में न टकराएँ, फिर प्रयास करें।" },
-      ["retry", "help"],
-    ),
-  },
-  { id: "conflict", pattern: /^STALE|_STALE$|_STALE_|_CHANGED$|CHANGED_|_CONFLICT$|^CONFLICT|VERSION_MISMATCH|SUPERSEDED|CONCURRENT/, kind: "conflict", object: RECORD },
-  {
-    id: "inProgress",
-    pattern: /_IN_PROGRESS$|_PENDING$|_PENDING_|^PENDING_|_IN_FLIGHT$|_RUNNING$|_QUEUED$|STILL_OUT/,
-    object: RECORD,
-    message: msg(
-      { what: "Another action on this {object} is still being processed.", next: "Wait a few minutes, refresh the page, then try again." },
-      { what: "इस {object} पर एक दूसरी कार्रवाई अभी चल रही है।", next: "कुछ मिनट रुकें, पेज रीफ़्रेश करें, फिर दोबारा प्रयास करें।" },
+      { what: "This item has already been decided or is not at this step.", next: "Refresh to see its current status." },
+      { what: "इस मद पर पहले ही निर्णय हो चुका है, या यह इस चरण पर नहीं है।", next: "इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।" },
       ["retry", "help"],
     ),
   },
   {
-    id: "expired",
-    pattern: /EXPIRED|_REPLAYED$|_REUSED$|^OTP_|NO_CHALLENGE|_USED$/,
+    id: "windowClosed",
+    pattern: /_WINDOW_(EXPIRED|CLOSED|PASSED)$|^DEADLINE_PASSED$|_DEADLINE_PASSED$|^CLOSING_DATE_PAST$|^DEADLINE_IN_PAST$/,
     message: msg(
-      { what: "This link or code has expired or has already been used.", next: "Start this step again to get a new one." },
-      { what: "यह लिंक या कोड समाप्त हो चुका है या पहले ही इस्तेमाल हो चुका है।", next: "नया पाने के लिए यह चरण फिर से शुरू करें।" },
+      { what: "The time allowed for this has passed.", next: "Ask the officer in charge whether the time limit can be extended." },
+      { what: "इसके लिए निर्धारित समय सीमा बीत चुकी है।", next: "प्रभारी अधिकारी से पूछें कि क्या समय सीमा बढ़ाई जा सकती है।" },
     ),
   },
+  // Real state codes: an explicit state or transition rule, or a "not <state>" / "not <...>able" statement.
   {
-    id: "virusScan",
-    pattern: /INFECTED|MALWARE|^SCAN_/,
-    message: msg(
-      { what: "The file didn't pass the virus check, so it wasn't accepted.", next: "Upload a clean copy of the file." },
-      { what: "फ़ाइल वायरस जाँच में सफल नहीं हुई, इसलिए स्वीकार नहीं की गई।", next: "फ़ाइल की कोई सुरक्षित प्रति अपलोड करें।" },
-      ["retry", "help"],
-    ),
-  },
-  {
-    id: "inactive",
+    id: "stateTransition",
     pattern:
-      /INACTIVE|_DISABLED$|^DISABLED|NOT_CONFIGURED|_UNCONFIGURED$|NOT_ENABLED|NOT_PROVISIONED|NOT_IMPLEMENTED|DEACTIVATED|SUSPENDED|BLACKLISTED|SANDBOX_ONLY|UNSUPPORTED_PROVIDER|NOT_AVAILABLE|NOT_YET_AVAILABLE|TEST_SEND_UNSUPPORTED|NOT_BUILT|NOT_READY|NOT_TRUSTED|NOT_ENTITLED|NOT_EMPANELLED/,
-    message: msg(
-      { what: "This isn't available, because it has been switched off, deactivated or not set up.", next: "Choose an active one, or ask your administrator to switch it on." },
-      { what: "यह उपलब्ध नहीं है, क्योंकि इसे बंद, निष्क्रिय या अभी तय नहीं किया गया है।", next: "कोई सक्रिय विकल्प चुनें, या अपने प्रशासक से इसे चालू करवाएँ।" },
-    ),
-  },
-  {
-    id: "nothingToDo",
-    pattern: /^NOTHING_|_NOTHING_|NO_COPIES/,
-    message: msg(
-      { what: "There is nothing to process for this right now.", next: "Check your selection or the period, then try again." },
-      { what: "अभी इसके लिए संसाधित करने को कुछ नहीं है।", next: "अपना चयन या अवधि जाँचें, फिर प्रयास करें।" },
-    ),
-  },
-  {
-    id: "limit",
-    pattern: /EXCEED|OUT_OF_RANGE|^OVER_|OVERCLAIM|OVERPAYMENT|CEILING|_MIN_|_MAX_|_LIMIT|LIMIT_|^TOO_|_TOO_|^MAX_|_MAX$|INSUFFICIENT_|BELOW_|_ABOVE_|CAP_REACHED|AT_CAPACITY|SMALL_COHORT|_BOUND$|NON_POSITIVE|_ZERO_|^ZERO_|EXHAUSTED/,
-    message: msg(
-      { what: "This goes over an allowed limit.", next: "Reduce the amount or number and try again. Ask your administrator if the limit needs to change." },
-      { what: "यह अनुमत सीमा से अधिक है।", next: "राशि या संख्या कम करके फिर प्रयास करें। सीमा बदलनी हो तो अपने प्रशासक से पूछें।" },
-      ["retry", "help"],
-    ),
-  },
-  {
-    id: "date",
-    pattern: /_IN_PAST$|_IN_FUTURE$|^OUTSIDE_|^DATE_|_DATE_|_DATE$|_PASSED$|DEADLINE|OUTSIDE_WINDOW|BAD_WINDOW|_WINDOW$|BACKDATE|_BEFORE_|_AFTER_|NOT_LATER|_RANGE$|BAD_RANGE|WITHIN_MONTH|_DATES?_|NOT_LAPSED|NOT_ELAPSED|ON_FUTURE|OUT_OF_ORDER/,
-    message: msg(
-      { what: "This date isn't allowed for this action.", next: "Check the date against the rules shown on the form, then try again." },
-      { what: "इस कार्रवाई के लिए यह तिथि मान्य नहीं है।", next: "फ़ॉर्म पर दिए नियमों के अनुसार तिथि जाँचें, फिर प्रयास करें।" },
-      ["retry", "help"],
-    ),
-  },
-  {
-    id: "stage",
-    pattern:
-      /INVALID_STATE|_STATE$|STATE_|TRANSITION|WRONG_STAGE|STAGE_|^NOT_[A-Z_]+$|_NOT_[A-Z_]+$|^ALREADY_|_ALREADY_|_CLOSED$|^CLOSED|_LOCKED$|LOCKED_|FROZEN|FINALI[SZ]ED|TERMINAL|IMMUTABLE|^CANCELL?ED$|_CANCELL?ED$|WITHDRAWN|ARCHIVED|RETIRED|^EXECUTED$|^APPROVED$|REVOKED|^CANNOT_|_CANNOT_|NOT_ALLOWED|NOT_EDITABLE|_RECORDED$|_RESOLVED$|_ENDED$|_ACTIVE$|^USE_|_PURGED$|REJECTED|PROTECTED|LEGAL_HOLD|^HAS_|_HAS_|ATTESTED|_EXITED$|IN_USE|_WITHHELD$|BLOCKED|_OPEN$|_ONLY$|_USES_|_AT_CURRENT_RATE$|_ON_HOLD$|HANDED_OFF/,
+      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
+    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$/,
     object: RECORD,
     message: msg(
       { what: "This {object} is not at a stage that allows this action.", next: "Refresh the page to see its current status, then choose an action that is available." },
@@ -441,17 +528,109 @@ export const CODE_FAMILIES: Family[] = [
       ["retry", "help"],
     ),
   },
+  // Only links, tokens, codes and sessions "expire and can be requested again".
+  { id: "session", pattern: /^UNAUTHENTICATED$|^SESSION_(EXPIRED|ENDED)$|^TOKEN_EXPIRED$|^INVALID_TOKEN$|^UPSTREAM_UNAUTHENTICATED$/, kind: "unauthenticated" },
   {
-    id: "setupMissing",
-    pattern: /^NO_|_NOT_SET$|_NO_[A-Z]+|AMBIGUOUS_|UNLINKED|^MISSING_|CONFIG_INCOMPLETE|INCOMPLETE|NOT_ON_FILE|NOT_EMPLOYEE|NOT_IN_HR|NOT_IN_TENANT|NOT_IN_TARGET|_AND_CELL$|USE_VERSIONS/,
+    id: "linkExpired",
+    pattern: /^(OTP|TOKEN|LINK|INVITE|INVITATION|RESET|RESET_TOKEN|MAGIC_LINK|CHALLENGE|NONCE|CALLBACK|VERIFICATION|VERIFICATION_CODE|CODE|DOWNLOAD_LINK|SIGNED_URL|URL)_EXPIRED$|^(TOKEN|LINK|CODE|BILL_TOKEN|INVITE)_(USED|REPLAYED|REUSED)$|_TOKEN_(EXPIRED|USED)$|_LINK_EXPIRED$/,
     message: msg(
-      { what: "This can't be done yet, because something it needs hasn't been set up.", next: "Ask your administrator to complete the setup, then try again." },
-      { what: "यह अभी नहीं हो सकता, क्योंकि इसके लिए ज़रूरी कोई व्यवस्था अभी तय नहीं की गई है।", next: "अपने प्रशासक से व्यवस्था पूरी करवाएँ, फिर प्रयास करें।" },
+      { what: "This link or code has expired or has already been used.", next: "Start this step again to get a new one." },
+      { what: "यह लिंक या कोड समाप्त हो चुका है या पहले ही इस्तेमाल हो चुका है।", next: "नया पाने के लिए यह चरण फिर से शुरू करें।" },
+    ),
+  },
+  {
+    id: "documentExpired",
+    pattern: /^(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|BG|BANK_GUARANTEE|INSURANCE|DSC|PERMIT|AGREEMENT|LEASE|MANDATE|NOC|ACCREDITATION|VALIDITY)_EXPIRED$|_(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|PERMIT|AGREEMENT|LEASE|MANDATE|DSC)_EXPIRED$/,
+    message: msg(
+      { what: "This has expired.", next: "Renew it first (its record shows the expiry date), then try again." },
+      { what: "इसकी वैधता समाप्त हो चुकी है।", next: "पहले इसका नवीनीकरण करें (इसके रिकॉर्ड में समाप्ति तिथि दी है), फिर प्रयास करें।" },
+    ),
+  },
+  {
+    id: "tooLow",
+    pattern: /_BELOW_|_BELOW$|^BELOW_|_MIN_|^MIN_|_TOO_(LOW|FEW|SMALL|SHORT)(_|$)|^NON_POSITIVE_|_NON_POSITIVE$|_ZERO_AMOUNT$|^ZERO_AMOUNT$|_NOT_POSITIVE$/,
+    message: msg(
+      { what: "This is too low, or there are too few.", next: "Check the minimum shown on the form, enter a higher amount or add more, then try again." },
+      { what: "यह बहुत कम है, या संख्या पर्याप्त नहीं है।", next: "फ़ॉर्म पर दी गई न्यूनतम सीमा देखें, अधिक राशि दर्ज करें या संख्या बढ़ाएँ, फिर प्रयास करें।" },
+      ["retry", "help"],
+    ),
+  },
+  {
+    id: "tooHigh",
+    pattern: /_EXCEEDS?_|_EXCEEDED$|^EXCEEDS_|_EXCEEDS$|^OVER_|_ABOVE_|_ABOVE$|_TOO_(HIGH|LARGE|MANY|LONG|BIG)(_|$)|_MAX_|_LIMIT_(REACHED|EXCEEDED)$|_CAP_REACHED$|OVERCLAIM|OVERPAYMENT|_AT_CAPACITY$/,
+    except: /^MAX_ATTEMPTS$/,
+    message: msg(
+      { what: "This is more than the allowed limit.", next: "Enter a lower amount or number, then try again. Ask your administrator if the limit needs to change." },
+      { what: "यह अनुमत सीमा से अधिक है।", next: "कम राशि या संख्या दर्ज करें, फिर प्रयास करें। सीमा बदलनी हो तो अपने प्रशासक से पूछें।" },
+      ["retry", "help"],
+    ),
+  },
+  {
+    id: "overlap",
+    pattern: /_OVERLAP$|^OVERLAPPING_|_OVERLAPS$/,
+    message: msg(
+      { what: "This clashes with an existing entry.", next: "Change the dates or the range so they don't clash with it, then try again." },
+      { what: "यह किसी मौजूदा प्रविष्टि से टकराता है।", next: "तिथियाँ या सीमा इस तरह बदलें कि वे आपस में न टकराएँ, फिर प्रयास करें।" },
+      ["retry", "help"],
+    ),
+  },
+  {
+    id: "date",
+    pattern: /_IN_PAST$|_IN_FUTURE$|^DATE_IN_|_DATE_(BEFORE|AFTER)_|BACKDATE/,
+    except: /_REQUIRED$/,
+    message: msg(
+      { what: "This date isn't allowed for this action.", next: "Check the date against the rules shown on the form, then try again." },
+      { what: "इस कार्रवाई के लिए यह तिथि मान्य नहीं है।", next: "फ़ॉर्म पर दिए नियमों के अनुसार तिथि जाँचें, फिर प्रयास करें।" },
+      ["retry", "help"],
+    ),
+  },
+  {
+    id: "notConfigured",
+    pattern: /_NOT_CONFIGURED$|^NOT_CONFIGURED$|_UNCONFIGURED$|_NOT_SET$|_NOT_SET_UP$|^CONFIG_INCOMPLETE$/,
+    message: msg(
+      { what: "This hasn't been set up yet.", next: "Ask your administrator to complete the setup, then try again." },
+      { what: "इसकी व्यवस्था अभी नहीं की गई है।", next: "अपने प्रशासक से व्यवस्था पूरी करवाएँ, फिर प्रयास करें।" },
+    ),
+  },
+  {
+    id: "disabled",
+    pattern: /_DISABLED$|^DISABLED$|_NOT_ENABLED$|_NOT_ENTITLED$|_NOT_PROVISIONED$/,
+    message: msg(
+      { what: "This is switched off for your office.", next: "Ask your administrator to switch it on, then try again." },
+      { what: "यह आपके कार्यालय के लिए बंद है।", next: "अपने प्रशासक से इसे चालू करवाएँ, फिर प्रयास करें।" },
+    ),
+  },
+  {
+    id: "inactive",
+    pattern: /_INACTIVE$|^INACTIVE$|_DEACTIVATED$/,
+    object: RECORD,
+    message: msg(
+      { what: "This {object} is inactive.", next: "Choose an active one, or ask your administrator to reactivate it." },
+      { what: "यह {object} निष्क्रिय है।", next: "कोई सक्रिय विकल्प चुनें, या अपने प्रशासक से इसे फिर से सक्रिय करवाएँ।" },
+    ),
+  },
+  {
+    id: "blacklisted",
+    pattern: /_BLACKLISTED$|_DEBARRED$/,
+    message: msg(
+      { what: "This party is blacklisted and can't be used.", next: "Choose another one. Ask the officer in charge if you think this is wrong." },
+      { what: "यह पक्ष काली सूची में है और इसका उपयोग नहीं किया जा सकता।", next: "कोई दूसरा चुनें। यदि आपको लगता है कि यह ग़लत है तो प्रभारी अधिकारी से पूछें।" },
+    ),
+  },
+  {
+    id: "virusScan",
+    pattern: /INFECTED|MALWARE/,
+    message: msg(
+      { what: "The file didn't pass the virus check, so it wasn't accepted.", next: "Upload a clean copy of the file." },
+      { what: "फ़ाइल वायरस जाँच में सफल नहीं हुई, इसलिए स्वीकार नहीं की गई।", next: "फ़ाइल की कोई सुरक्षित प्रति अपलोड करें।" },
+      ["retry", "help"],
     ),
   },
   {
     id: "required",
-    pattern: /_REQUIRED$|REQUIRED_|NEEDS_|_MISSING$|^EMPTY_|_EMPTY$|^EMPTY$|WITHOUT_|_REQUIRES_|NOT_UPLOADED/,
+    pattern: /_REQUIRED$|^MISSING_|_MISSING$|^MANDATORY_[A-Z_]*MISSING$|_NOT_UPLOADED$|^EMPTY_|_EMPTY$/,
+    // A missing approval, role, consent or technical header is not "information the user left out".
+    except: /(APPROVAL|ADMIN|WORKFLOW|CONSENT|IDENTITY|REQUISITION|NIT|REDIRECT|IDEMPOTENCY_KEY|ACK|APPEAL|OPERATOR|CHECKER|AGENT|ROLE|OTP|SANCTION|BASELINE|TS)_REQUIRED$|^MISSING_(TENANT|SESSION_ID|AUTHORITY|OTP|SIGNATURE|URL)$|_(KEY|CONFIG)_MISSING$|^CONFIG_MISSING$|^EMPTY_PATCH$|^REGISTRY_EMPTY$/,
     deferToFieldErrors: true,
     message: msg(
       { what: "Some required information is missing.", next: "Fill in the missing details, then try again." },
@@ -459,27 +638,26 @@ export const CODE_FAMILIES: Family[] = [
       ["retry", "help"],
     ),
   },
-  { id: "timeout", pattern: /TIMEOUT|TIMED_OUT/, kind: "timeout" },
-  {
-    id: "upstream",
-    pattern: /UNAVAILABLE|UPSTREAM|GATEWAY|CIRCUIT|EXTERNAL_|_FAILED$|^FAILED|_FAILURE$|_ERROR$|^INTERNAL|DOWNSTREAM|PROVIDER_|_UNREACHABLE$|UNVERIFIABLE|UNVERIFIED|UNSIGNED|SIGNATURE|UNRESOLVABLE|NOT_INVOCABLE/,
-    kind: "server",
-  },
   {
     id: "mismatch",
-    pattern: /MISMATCH|DOES_NOT_MATCH|NOT_AN_EXACT|NOT_MATCH|UNMATCHABLE|_NOT_EQUAL|UNBALANCED|_DIFFERS|_NOT_100$/,
+    pattern: /_MISMATCH$|^MISMATCH_|_UNBALANCED$|^UNBALANCED_/,
+    // A 403 "mismatch" is a scope check (wrong department, gate, location), not a typing error.
+    notForStatus: [401, 403],
+    except: /^(TENANT|SIGNEDINFO|RESOURCE|SUBJECT|DOMAIN|INITIATOR|DEPT|LOCATION|GATE_BINDING|SERVICE)_MISMATCH$/,
     message: msg(
       { what: "Some details don't match.", next: "Check the values against the source document, then try again." },
       { what: "कुछ विवरण आपस में मेल नहीं खाते।", next: "मूल दस्तावेज़ से मान जाँचें, फिर प्रयास करें।" },
       ["retry", "help"],
     ),
   },
+  // A 4xx carrying an upstream code (a gateway in front of a down service) is our problem, not the user's.
+  // Only names that clearly name a service of ours (ADMIT_CARD_UNAVAILABLE, VARIANT_UNAVAILABLE are not outages).
   {
-    id: "validation",
-    pattern:
-      /INVALID|MALFORMED|^BAD_|_BAD_|UNSUPPORTED|UNPROCESSABLE|PAYLOAD|SCHEMA|^NOT_AN?_|^SAME_|_SAME_|EMPTY_PATCH|CYCLE|CIRCULAR|UNINDEXABLE|UNCLASSIFIABLE|UNREADABLE|_VIOLATION$|VALIDATION|_RULE_|_FORMAT|^REQUEST_|^IDEMPOTENCY|_NOT_SUPPORTED|_EQUAL$|WRONG_|ILLEGAL|_UNCHANGED$|NOT_ACCEPTED|_REGRESSION$|RESERVED/,
-    kind: "validation",
+    id: "upstream",
+    pattern: /CIRCUIT_OPEN|^SERVICE_UNAVAILABLE$|_SERVICE_UNAVAILABLE$|^UPSTREAM_|^GATEWAY_(TIMEOUT|UNREACHABLE|ERROR)$|^DOWNSTREAM_|^(HRMS|FINANCE|PAYROLL|IDENTITY|DIRECTORY|OFFICER_DIRECTORY|STORAGE|AUDIT|ENCRYPTION|POLICY|ML|AI|SEARCH|SCAN|PDF_RENDERER|ROLE_LOOKUP|ORG_SERVICE|MODULE_GUARD|PO_VALIDATION|RECIPIENTS|STOCK|CLEARANCE|DOCUMENT_CHECK|FNF_HR_VERIFICATION|TEMPLATE_SERVICE|KNOWLEDGE_SERVICE|LOCATION_SERVICE)_UNAVAILABLE$/,
+    kind: "server",
   },
+  { id: "validation", pattern: /^INVALID_|_INVALID$|_INVALID_|^MALFORMED_|_MALFORMED$|^BAD_REQUEST$|^UNSUPPORTED_|_NOT_SUPPORTED$|^UNPROCESSABLE$|^PAYLOAD_|_SCHEMA_VIOLATION$/, kind: "validation" },
 ];
 
 export type ServiceCodeResolution =
@@ -493,19 +671,45 @@ export function isServiceCode(code: unknown): code is string {
   return typeof code === "string" && /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(code);
 }
 
-/** How a service code is explained: its own message, a family message, a family that reuses the copy of a kind, or null. */
-export function resolveServiceCode(code: string | null | undefined, opts?: { hasFieldErrors?: boolean }): ServiceCodeResolution | null {
-  if (!code) return null;
-  if (Object.prototype.hasOwnProperty.call(SERVICE_CODE_MESSAGES, code)) {
-    return { source: "explicit", id: code, message: SERVICE_CODE_MESSAGES[code] };
-  }
+/** The naming family a code belongs to, or null (then the status copy is used). */
+export function codeFamily(code: string): Family | null {
   for (const f of CODE_FAMILIES) {
-    if (!f.pattern.test(code)) continue;
-    if (f.id === "duplicate") return { source: "family", id: "duplicate", duplicate: true };
-    if (f.deferToFieldErrors && opts?.hasFieldErrors) return { source: "family", id: f.id, kind: "validation" };
-    if (f.kind) return { source: "family", id: f.id, kind: f.kind, object: f.object };
-    if (f.message) return { source: "family", id: f.id, message: f.message, object: f.object };
+    if (f.pattern.test(code) && !(f.except && f.except.test(code))) return f;
   }
+  return null;
+}
+
+/**
+ * The HTTP statuses whose own copy always wins: the server failed (5xx), timed out
+ * (408/504), refused for load (429) or the session ended (401). A code can only add a
+ * dedicated message there when its entry is marked serverSide.
+ */
+export function isStatusAuthoritative(status: number | undefined): boolean {
+  return status !== undefined && (status >= 500 || status === 429 || status === 408 || status === 401);
+}
+
+/** How a service code is explained: its own message, a family message, a family that reuses the copy of a kind, or null. */
+export function resolveServiceCode(
+  code: string | null | undefined,
+  opts?: { hasFieldErrors?: boolean; status?: number },
+): ServiceCodeResolution | null {
+  if (!code) return null;
+  const authoritative = isStatusAuthoritative(opts?.status);
+  if (Object.prototype.hasOwnProperty.call(SERVICE_CODE_MESSAGES, code)) {
+    const m = SERVICE_CODE_MESSAGES[code];
+    if (!authoritative || m.serverSide) return { source: "explicit", id: code, message: m };
+    return null;
+  }
+  // Families refine a 4xx answer only; with no status (a bare code thrown in the browser) they also apply.
+  if (authoritative) return null;
+  if (opts?.status !== undefined && (opts.status < 400 || opts.status >= 500)) return null;
+  const f = codeFamily(code);
+  if (!f) return null;
+  if (f.notForStatus && opts?.status !== undefined && f.notForStatus.includes(opts.status)) return null;
+  if (f.id === "duplicate") return { source: "family", id: "duplicate", duplicate: true };
+  if (f.deferToFieldErrors && opts?.hasFieldErrors) return { source: "family", id: f.id, kind: "validation" };
+  if (f.kind) return { source: "family", id: f.id, kind: f.kind, object: f.object };
+  if (f.message) return { source: "family", id: f.id, message: f.message, object: f.object };
   return null;
 }
 

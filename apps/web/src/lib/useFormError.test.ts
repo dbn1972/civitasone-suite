@@ -183,7 +183,7 @@ describe("useFormError", () => {
         result.current.fromException("save", new Error("pg: connection refused 10.0.0.4"));
       });
       expect(result.current.message).toBe(
-        "We couldn't save the leave request. Your changes haven't been saved. Try again in a few minutes. If it keeps happening, contact your support team.",
+        "We couldn't save the leave request. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
       );
       expect(result.current.message).not.toContain("pg:");
     });

@@ -11,7 +11,7 @@
  * Group error-message guidelines, and WCAG 2.2 SC 3.3.1 / 3.3.3 / 4.1.3.
  */
 
-import { resolveServiceCode } from "./serviceErrorCodes";
+import { isStatusAuthoritative, resolveServiceCode } from "./serviceErrorCodes";
 
 export type ErrorLocale = "en" | "hi";
 
@@ -118,7 +118,7 @@ const EN: Catalogue = {
     // Cause not known: say so honestly, without naming the user's connection as the cause.
     unknown: {
       what: "We couldn't {verb} the {object}.",
-      next: "Your changes haven't been saved. Try again in a few minutes. If it keeps happening, contact your support team.",
+      next: "Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
       nextRead: "Try again in a few minutes. If it keeps happening, contact your support team.",
     },
   },
@@ -192,7 +192,7 @@ const HI: Catalogue = {
     },
     unknown: {
       what: "हम {object} को {verb} सके।",
-      next: "आपके बदलाव सहेजे नहीं गए हैं। कुछ मिनट बाद फिर प्रयास करें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।",
+      next: "हो सकता है आपके बदलाव सहेजे न गए हों। दोबारा प्रयास करने से पहले जाँच लें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।",
       nextRead: "कुछ मिनट बाद फिर प्रयास करें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।",
     },
   },
@@ -221,7 +221,8 @@ export const ERROR_CATALOGUE: Record<ErrorLocale, Catalogue> = { en: EN, hi: HI 
  * own request") instead of a generic conflict. The code itself is never shown.
  * Extend this table as codes are catalogued.
  */
-export type DomainMessage = { en: Entry; hi: Entry; actions?: StandardAction[] };
+/** serverSide: the message stays true for a 5xx / 429 / 408 / 401 answer too. */
+export type DomainMessage = { en: Entry; hi: Entry; actions?: StandardAction[]; serverSide?: boolean };
 
 const SELF_APPROVAL_MESSAGE: DomainMessage = {
     en: {
@@ -501,6 +502,7 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
       next: "उनसे अपना ईमेल देखने को कहें, या दूसरा भेजने से पहले कुछ मिनट प्रतीक्षा करें।",
     },
     actions: ["back", "help"],
+    serverSide: true,
   },
   // GAP-TENANT-ADMIN-SETTINGS-07: admin-service tenant module toggle answers
   // 404 MODULE_NOT_PROVISIONED for a module the tenant does not hold.
@@ -644,9 +646,12 @@ export function resolveHumanError(input: {
   const cat = ERROR_CATALOGUE[locale];
   const intent: ErrorIntent = ctx.intent ?? "save";
 
-  const domain = input.code && Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, input.code)
+  // 5xx / 408 / 429 / 401: the status copy wins; a code never turns a server failure into a user-fault message.
+  const authoritative = isStatusAuthoritative(input.status);
+  const domainEntry = input.code && Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, input.code)
     ? DOMAIN_CODE_MESSAGES[input.code]
     : undefined;
+  const domain = domainEntry && (!authoritative || domainEntry.serverSide) ? domainEntry : undefined;
   if (domain) {
     const e = domain[locale];
     return { kind: "domain", source: "domain", what: e.what, next: e.next, actions: domain.actions ?? ["retry", "help"] };
@@ -654,7 +659,7 @@ export function resolveHumanError(input: {
 
   // Service error codes (serviceErrorCodes.ts): an explicit entry always wins; a naming
   // family wins over the bare status unless the caller pinned the situation (forceKind).
-  const svc = resolveServiceCode(input.code, { hasFieldErrors: ctx.hasFieldErrors });
+  const svc = resolveServiceCode(input.code, { hasFieldErrors: ctx.hasFieldErrors, status: input.status });
   const svcVars = (object?: { en: string; hi: string }) => ({
     object: ctx.area?.trim() || object?.[locale] || cat.defaultObject,
     verb: cat.verbs[intent],
@@ -681,7 +686,7 @@ export function resolveHumanError(input: {
     limit: ctx.limit?.trim() || cat.defaultLimit,
     types: ctx.types?.trim() || cat.defaultTypes,
   };
-  if (input.code && (input.code.startsWith("DUPLICATE_") || DUPLICATE_LIKE_CODES.has(input.code) || (svc && "duplicate" in svc))) {
+  if (!authoritative && input.code && (input.code.startsWith("DUPLICATE_") || DUPLICATE_LIKE_CODES.has(input.code) || (svc && "duplicate" in svc))) {
     const d = DUPLICATE_RECORD[locale];
     // "A record with these details already exists" -- never "A information ...".
     const dv = { ...vars, object: ctx.area?.trim() || (locale === "hi" ? "रिकॉर्ड" : "record") };
