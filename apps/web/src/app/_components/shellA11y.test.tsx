@@ -211,7 +211,7 @@ describe("GIGW footer / contentinfo (A11Y-20, DEFERRED-content)", () => {
     for (const l of GIGW_FOOTER_LINKS) {
       expect(screen.getByRole("link", { name: (enMessages.shell as Record<string, string>)[l.key] })).toHaveAttribute("href", l.href);
     }
-    expect(container.querySelector('[data-deferred-content="owner"]')).toHaveTextContent("[Content pending");
+    expect(container.querySelector('[data-deferred-content="owner"]')).toHaveTextContent("[Content to be supplied");
     expect(container.querySelector('[data-deferred-content="last-updated"]')).not.toBeNull();
     expect(await axeViolations(container)).toEqual([]);
   });
@@ -349,5 +349,26 @@ describe("shared display formatter: raw ISO dates and enum codes (GLB-08, GLB-10
     expect(screen.getByText("Pending Approval")).toBeInTheDocument();
     expect(screen.getByText("03 Nov 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-11-03")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------- A11Y-08 theme on load
+describe("saved theme is applied on every page load (A11Y-08)", () => {
+  afterEach(() => {
+    localStorage.clear();
+    document.documentElement.classList.remove("dark");
+  });
+
+  it("ThemeInit applies a stored dark theme without the account menu being opened", async () => {
+    const { ThemeInit } = await import("./ThemeInit");
+    localStorage.setItem("civitas-theme", "dark");
+    rtlRender(<ThemeInit />);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("no stored value keeps the light default", async () => {
+    const { ThemeInit } = await import("./ThemeInit");
+    rtlRender(<ThemeInit />);
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 });
