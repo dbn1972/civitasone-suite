@@ -1,4 +1,4 @@
-import { eq, and, ne, gte, lte, sql, asc, type SQL } from "drizzle-orm";
+import { eq, and, ne, gte, lte, sql, asc, desc, inArray, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
@@ -158,6 +158,39 @@ export async function listJournalsByTenant(tenantId: string, limit: number, offs
 }
 
 /**
+ * UAT P2 (J6, D4): the manual journals waiting for a checker (status pending_approval), newest first, so the
+ * approval screen can list them. Tenant-scoped; bounded by limit/offset.
+ */
+export async function listPendingJournals(tenantId: string, limit: number, offset = 0): Promise<JournalRow[]> {
+  return scopedRead((tx) => tx.select().from(financeJournals)
+    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.status, "pending_approval")))
+    .orderBy(desc(financeJournals.createdAt), asc(financeJournals.id))
+    .limit(limit)
+    .offset(offset));
+}
+
+/**
+ * UAT P2 (A6): ledger lines reference a head either by its UUID or by its account code (both are accepted at
+ * posting), so counting distinct raw references counted one head twice. Resolve each reference to the head it
+ * names; a reference that matches no head of this tenant is kept as itself (counted once, never dropped).
+ * Runs on the caller's read transaction (no nested transaction).
+ */
+export async function countDistinctHeadsTx(tx: Pick<typeof db, "select">, tenantId: string, refs: readonly string[]): Promise<number> {
+  const unique = [...new Set(refs.filter((r) => r !== ""))];
+  if (unique.length === 0) return 0;
+  const isUuid = (r: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r);
+  const codes = unique.filter((r) => !isUuid(r));
+  const byCode = new Map<string, string>();
+  if (codes.length > 0) {
+    const rows = await tx.select({ id: financeHeads.id, code: financeHeads.code })
+      .from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, codes)));
+    for (const r of rows) byCode.set(r.code, r.id);
+  }
+  return new Set(unique.map((r) => (isUuid(r) ? r.toLowerCase() : byCode.get(r)?.toLowerCase() ?? `code:${r}`))).size;
+}
+
+/**
  * Trial balance summed per period (YYYY-MM from posting_date), with the
  * balanced check: sum(debit) must equal sum(credit) for every period.
  */
@@ -239,13 +272,15 @@ export async function pageJournalLines(f: JournalLinePageFilter) {
     const totalsOf = async (b: SQL) => {
       const tot = await tx.execute(sql`
         SELECT count(*)::int AS lines, count(DISTINCT j.id)::int AS vouchers,
-               count(DISTINCT coalesce(ln.elem->>'accountCode', ln.elem->>'account'))::int AS accounts,
+               coalesce(array_agg(DISTINCT coalesce(ln.elem->>'accountCode', ln.elem->>'account')), '{}')::text[] AS account_refs,
                coalesce(sum(coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)), 0)::text AS debit,
                coalesce(sum(coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0')::numeric(40,0)), 0)::text AS credit
         ${b}`);
-      const t = (tot as unknown as Array<{ lines: number; vouchers: number; accounts: number; debit: string; credit: string }>)[0];
+      const t = (tot as unknown as Array<{ lines: number; vouchers: number; account_refs: string[] | null; debit: string; credit: string }>)[0];
       return {
-        entryLines: t?.lines ?? 0, vouchers: t?.vouchers ?? 0, accountsActive: t?.accounts ?? 0,
+        entryLines: t?.lines ?? 0, vouchers: t?.vouchers ?? 0,
+        // UAT P2 (A6): distinct HEADS, not distinct spellings of a head (UUID vs code).
+        accountsActive: await countDistinctHeadsTx(tx as unknown as Pick<typeof db, "select">, f.tenantId, t?.account_refs ?? []),
         debitMinor: t?.debit ?? "0", creditMinor: t?.credit ?? "0",
       };
     };

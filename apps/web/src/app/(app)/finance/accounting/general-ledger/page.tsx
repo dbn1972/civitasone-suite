@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Alert, PageHeader, LoadErrorState } from "../../../../_components/ds";
 import { getChartOfAccounts, getFinanceGLPage } from "../../../../_data/loaders";
 import { buildHeadLookup } from "../../_components/headLookup";
@@ -28,6 +29,7 @@ export default async function GeneralLedgerPage(
     getChartOfAccounts(),
   ]);
   const heads = buildHeadLookup(accounts.source === "error" ? [] : accounts.data);
+  const tj = await getTranslations("journalApprovals");
 
   return (
     <>
@@ -38,6 +40,8 @@ export default async function GeneralLedgerPage(
           <>
             <FyFilter />
             <PrintExportButton label="Print / Save as PDF" documentTitle="General Ledger" />
+            {/* UAT P2 (J6): a posted voucher waits here for a checker before it reaches this ledger. */}
+            <a href="/finance/accounting/journal-approvals" className="btn ghost">{tj("navLink")}</a>
             <a href="/finance/accounting/vouchers/new" className="btn primary">+ New Voucher</a>
           </>
         }

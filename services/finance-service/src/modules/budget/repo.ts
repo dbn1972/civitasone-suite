@@ -279,6 +279,26 @@ export async function findHeadLabels(
   return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name }]));
 }
 
+/**
+ * UAT P2 (A7): per head, the paise the GL has posted against that head's budget estimate for the FY
+ * (finance_budgets.utilised_minor, maintained by the posting consumer's budget check). A head with no budget
+ * estimate row for the FY is absent from the map.
+ */
+export async function findBudgetUtilisedByHead(
+  tenantId: string,
+  fy: string,
+  headIds: readonly string[],
+): Promise<Map<string, bigint>> {
+  const unique = [...new Set(headIds)];
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx.select({ headId: financeBudgets.headId, utilisedMinor: financeBudgets.utilisedMinor })
+      .from(financeBudgets)
+      .where(and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.fy, fy), inArray(financeBudgets.headId, unique)))
+  );
+  return new Map(rows.map((r) => [r.headId, BigInt(r.utilisedMinor)]));
+}
+
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {
   const rows = await (tx as typeof db).select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
   return rows[0] ?? null;

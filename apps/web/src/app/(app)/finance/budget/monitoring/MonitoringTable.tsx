@@ -59,7 +59,11 @@ function progressBar(utilisationBps: unknown, exception: unknown): React.ReactNo
   );
 }
 
-export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; source?: "api" | "error" }) {
+/**
+ * `postedLabel`: UAT P2 (A7) -- when given (the page passes the translated label), a column shows what the GL has
+ * posted against the head's budget estimate beside Expended (bill payments drawn from the allocation).
+ */
+export function MonitoringTable({ lines, source = "api", postedLabel }: { lines: Row[]; source?: "api" | "error"; postedLabel?: string }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
     "finance.budget-monitoring-lines", lines, source, (d) => d.length === 0
   );
@@ -89,6 +93,7 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
           { key: "allocatedMinor", label: "Allocated", align: "right", cellType: "amount" },
           { key: "committedMinor", label: "Committed", align: "right", cellType: "amount" },
           { key: "actualMinor",    label: "Expended",  align: "right", cellType: "amount" },
+          ...(postedLabel ? [{ key: "postedMinor", label: postedLabel, align: "right" as const, cellType: "amount" as const }] : []),
           { key: "availableMinor", label: "Available", align: "right", cellType: "amount" },
           // Render the bar via the column API — DataTable String()-ifies a bare
           // ReactNode cell value (would show "[object Object]"); key stays a real

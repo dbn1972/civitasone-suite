@@ -156,6 +156,16 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit, q.offset));
   });
 
+  // UAT P2 (J6, D4): the checker's queue -- manual journals awaiting approval, with their lines and narration.
+  // Readable by every finance reader; only JOURNAL_APPROVE_ROLES can act on them (PATCH .../:id/approve).
+  app.get("/v1/finance/journals/pending", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listPendingJournals(ctx.tenantId, ctx.actorId, q.limit, q.offset);
+    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+  });
+
   // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: bounded, filtered ledger LINES with whole-set totals.
   app.get("/v1/finance/journals/lines", async (req, reply) => {
     const ctx = resolveContext(req);

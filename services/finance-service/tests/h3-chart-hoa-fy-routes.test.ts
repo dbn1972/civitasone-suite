@@ -16,6 +16,7 @@ import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { financeLedger } from "../src/modules/gl/schema.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
 import { setFinanceSettings, clearFinanceSettings } from "./_finance-settings.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -156,6 +157,8 @@ describe("GET /v1/finance/dashboard?fy=", () => {
       const headId = randomUUID();
       await runWithTenant(TENANT_A, () =>
         db.transaction(async (tx) => {
+          // UAT P2 (A4): the dashboard counts expenditure on EXPENSE heads only, so the postings go to one.
+          await tx.insert(financeHeads).values({ id: headId, tenantId: TENANT_A, code: "5100", name: "Expense head", level: 0, classification: "expense", createdBy: ACTOR, updatedBy: ACTOR });
           await tx.insert(financeLedger).values([
             { tenantId: TENANT_A, headId, debitMinor: 100000n, voucherNo: "FY-A-1", postingDate: "2025-06-15", createdBy: ACTOR, updatedBy: ACTOR },
             { tenantId: TENANT_A, headId, debitMinor: 250000n, voucherNo: "FY-B-1", postingDate: "2026-06-15", createdBy: ACTOR, updatedBy: ACTOR },

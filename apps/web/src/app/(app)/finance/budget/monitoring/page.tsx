@@ -4,6 +4,7 @@ import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/a
 import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYear";
 import { formatMoneyCompact } from "@/lib/formatters";
 import { FyFilter } from "../../_components/FyFilter";
+import { getTranslations } from "next-intl/server";
 import { MonitoringTable } from "./MonitoringTable";
 import { exceptionCount, onTrackCount, type MonitoringTotals as Totals } from "../_lib/monitoringTotals";
 
@@ -130,7 +131,7 @@ export default async function BudgetMonitoringPage(
             <RefreshErrorState error={toHumanError("load", { area: "budget monitoring lines" })} backHref="/finance" />
           </div>
         ) : (
-          <MonitoringTable lines={lines} source="api" />
+          <MonitoringTable lines={lines} source="api" postedLabel={(await getTranslations("budgetMonitoringPosted"))("column")} />
         )}
       </Card>
     </div>

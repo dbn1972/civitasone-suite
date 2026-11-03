@@ -39,6 +39,10 @@ export const VENDOR_EXPORT_ROLES = ["finance_officer", "finance_admin", "account
 export const BANK_ACCOUNT_REVEAL_ROLES = ["finance_officer", "finance_admin", "accounts_officer", "super_admin"] as const;
 /** POST /v1/finance/reappropriations/:id/submit-approval -> FINANCE_ROLES in budget/routes.ts. */
 export const REAPPROPRIATION_SUBMIT_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+/** UAT P2 (J6): PATCH /v1/finance/journals/:id/approve -> JOURNAL_APPROVE_ROLES in gl/routes.ts. */
+export const JOURNAL_APPROVE_ROLES = ["finance_admin", "super_admin"] as const;
+/** UAT P2 (J7): POST /v1/finance/budget-allocations -> FINANCE_ROLES in budget/allocation-routes.ts. */
+export const ALLOCATION_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 /** Record a department reply / escalate an audit para. */
 export const AUDIT_PARA_ACT_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 /** Settle (close) an audit para. */

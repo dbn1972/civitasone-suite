@@ -15,7 +15,7 @@ export type JournalLine = {
   accountCode: string;
   debitMinor:  MinorAmount;
   creditMinor: MinorAmount;
-  narration?:  string;
+  narration?:  string | undefined;
 };
 
 export const financeJournals = glSchema.table("finance_journals", {

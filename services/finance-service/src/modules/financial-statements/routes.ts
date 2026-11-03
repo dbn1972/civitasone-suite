@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { headNatureOf, type HeadNature } from "../../shared/head-nature.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
@@ -37,24 +38,9 @@ function bi(v: string | number | null | undefined): bigint {
  *   asset/expense  -> debit-normal  (balance = dr - cr)
  *   liability/equity/income -> credit-normal (balance = cr - dr)
  */
-export function natureOf(code: string, classification: string | null): "asset" | "liability" | "equity" | "income" | "expense" {
-  const d = code.charAt(0);
-  if (d === "1") return "asset";
-  if (d === "4" && (classification === "income" || classification === "revenue")) return "income";
-  if (d === "5" || d === "6") return "expense";
-  if (code === "4200") return "expense"; // gain/loss on disposal
-  if (d === "4") return "income";
-  if (d === "3" && classification === "equity") return "equity";
-  // A CGA expenditure major head (2xxx/3xxx, e.g. 2202 General Education, the default bill head) explicitly classified
-  // as an expense is an expense, not a liability: the prefix rule alone put bill expenditure on the liability side.
-  if ((d === "2" || d === "3") && (classification === "expense" || classification === "expenditure")) return "expense";
-  if (d === "2" || d === "3") return "liability";
-  // fall back to the stored classification
-  if (classification === "asset") return "asset";
-  if (classification === "equity") return "equity";
-  if (classification === "income" || classification === "revenue") return "income";
-  if (classification === "expense" || classification === "expenditure") return "expense";
-  return "liability";
+export function natureOf(code: string, classification: string | null): HeadNature {
+  // UAT P2 (A5): one shared rule (shared/head-nature.ts) so the statement list and the dashboard agree with this.
+  return headNatureOf(code, classification);
 }
 
 async function loadTrialBalance(tenantId: string, end: string): Promise<TbRow[]> {

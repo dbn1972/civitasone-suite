@@ -3124,6 +3124,8 @@ export const BudgetMonitoringLineSchema = z.object({
   allocatedMinor: z.string(),
   committedMinor: z.string(),
   actualMinor: z.string(),
+  // UAT P2 (A7): paise posted in the GL against the head's budget estimate (null = no BE for the FY).
+  postedMinor: z.string().nullable().optional(),
   availableMinor: z.string(),
   burnRateBps: z.string(),
   utilisationBps: z.string(),
