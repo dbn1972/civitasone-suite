@@ -63,3 +63,12 @@ export async function bookedLines(tenantId: string, rows: readonly BudgetAllocat
   }
   return out;
 }
+
+/**
+ * UAT b15 (R-N1): the one line every allocation read shows -- the books-based line when it was computed, else the stored
+ * columns. Budget Monitoring and the Budget Allocation list/detail both read it, so the two screens cannot disagree
+ * (the allocation list returned the stored actual_minor, Rs 0, while monitoring showed the Rs 270 the ledger holds).
+ */
+export function lineFor(r: Pick<BudgetAllocationRow, "id" | "allocatedMinor" | "committedMinor" | "actualMinor">, books: ReadonlyMap<string, BookedLine>): BookedLine {
+  return books.get(r.id) ?? { allocatedMinor: r.allocatedMinor, committedMinor: r.committedMinor, actualMinor: r.actualMinor };
+}
