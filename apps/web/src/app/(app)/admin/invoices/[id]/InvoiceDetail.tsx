@@ -5,9 +5,11 @@ import type { AdminInvoiceApproval, AdminInvoiceDetail, AdminInvoiceItem } from 
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { invoiceStatusTone } from "../invoiceStats";
 import { InvoiceOpsPanel, type InvoiceOpsData } from "./InvoiceOpsPanel";
+import { InvoiceIssuePanel } from "./InvoiceIssuePanel";
 
 export type InvoiceDetailState =
-  | { kind: "ready"; invoice: AdminInvoiceDetail; ops?: InvoiceOpsData }
+  // UAT P2 (J8): currentUserId lets the issue panel hide Approve on the viewer's own issue request.
+  | { kind: "ready"; invoice: AdminInvoiceDetail; ops?: InvoiceOpsData; currentUserId?: string | null }
   | { kind: "not-found" }
   | { kind: "error"; status?: number };
 
@@ -60,6 +62,7 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
           {inv.cancelledAt && (<><dt style={{ color: "var(--mut)" }}>{t("cancelled")}</dt><dd style={{ margin: 0 }}>{formatIndianDate(inv.cancelledAt)}{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</dd></>)}
         </dl>
       </Card>
+      {state.ops?.canOperate && <InvoiceIssuePanel invoice={inv} currentUserId={state.currentUserId ?? null} />}
       {state.ops && <InvoiceOpsPanel invoice={inv} initial={state.ops} />}
       <Card title={t("items")}>
         <DataTable<ItemRow>

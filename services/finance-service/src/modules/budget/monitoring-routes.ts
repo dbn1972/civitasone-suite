@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as allocRepo from "./allocation-repo.js";
 import { findHeadLabels } from "./repo.js";
+import { bookedLines } from "./monitoring-books.js";
 import {
   availableMinor, burnRateBps, utilisationBps, fractionElapsedBps,
   forecastYearEndMinor, classifyException, summarisePortfolio,
@@ -22,9 +23,15 @@ function lineOf(r: BudgetAllocationRow): MonitorLine {
 }
 
 type HeadLabels = Map<string, { code: string; name: string }>;
+type Books = Map<string, MonitorLine>;
 
-function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint, labels: HeadLabels) {
-  const line = lineOf(r);
+// UAT P2 (A7, recon D20): every figure below is the books-based line (monitoring-books.ts): Expended is what the
+// ledger has booked to the head in the FY (it read the allocation's payment-settled actual, so a Rs 270 JV showed
+// Rs 0), and Committed excludes bills already booked, so nothing is counted twice.
+const bookOf = (r: BudgetAllocationRow, books: Books): MonitorLine => books.get(r.id) ?? lineOf(r);
+
+function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint, labels: HeadLabels, books: Books) {
+  const line = bookOf(r, books);
   const head = labels.get(r.headId);
   return {
     id: r.id, headId: r.headId,
@@ -32,13 +39,13 @@ function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint, labels: HeadL
     // not uuid. null when the head no longer resolves in this tenant.
     headCode: head?.code ?? null, headName: head?.name ?? null,
     fy: r.fy,
-    allocatedMinor: r.allocatedMinor.toString(),
-    committedMinor: r.committedMinor.toString(),
-    actualMinor: r.actualMinor.toString(),
+    allocatedMinor: line.allocatedMinor.toString(),
+    committedMinor: line.committedMinor.toString(),
+    actualMinor: line.actualMinor.toString(),
     availableMinor: availableMinor(line).toString(),
-    burnRateBps: burnRateBps(r.allocatedMinor, r.actualMinor).toString(),
+    burnRateBps: burnRateBps(line.allocatedMinor, line.actualMinor).toString(),
     utilisationBps: utilisationBps(line).toString(),
-    forecastYearEndMinor: forecastYearEndMinor(r.actualMinor, elapsedBps).toString(),
+    forecastYearEndMinor: forecastYearEndMinor(line.actualMinor, elapsedBps).toString(),
     exception: classifyException(line, elapsedBps),
   };
 }
@@ -58,14 +65,17 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
-    const labels = await findHeadLabels(ctx.tenantId, rows.map((r) => r.headId));
-    const totals = summarisePortfolio(rows.map(lineOf), elapsedBps);
+    const [labels, books] = await Promise.all([
+      findHeadLabels(ctx.tenantId, rows.map((r) => r.headId)),
+      bookedLines(ctx.tenantId, rows),
+    ]);
+    const totals = summarisePortfolio(rows.map((r) => bookOf(r, books)), elapsedBps);
     return reply.send({
       fy: q.fy,
       asOf: (q.asOf ?? new Date().toISOString().slice(0, 10)),
       fractionElapsedBps: elapsedBps.toString(),
       totals: serializeTotals(totals),
-      lines: rows.map((r) => serializeLine(r, elapsedBps, labels)),
+      lines: rows.map((r) => serializeLine(r, elapsedBps, labels, books)),
     });
   });
 
@@ -82,8 +92,11 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
-    const labels = await findHeadLabels(ctx.tenantId, rows.map((r) => r.headId));
-    const lines = rows.map((r) => serializeLine(r, elapsedBps, labels)).filter((l) => l.exception !== "on_track");
+    const [labels, books] = await Promise.all([
+      findHeadLabels(ctx.tenantId, rows.map((r) => r.headId)),
+      bookedLines(ctx.tenantId, rows),
+    ]);
+    const lines = rows.map((r) => serializeLine(r, elapsedBps, labels, books)).filter((l) => l.exception !== "on_track");
     return reply.send({ fy: q.fy, count: lines.length, lines });
   });
 
@@ -100,7 +113,8 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
-    return reply.send({ fy: q.fy, fractionElapsedBps: elapsedBps.toString(), totals: serializeTotals(summarisePortfolio(rows.map(lineOf), elapsedBps)) });
+    const books = await bookedLines(ctx.tenantId, rows);
+    return reply.send({ fy: q.fy, fractionElapsedBps: elapsedBps.toString(), totals: serializeTotals(summarisePortfolio(rows.map((r) => bookOf(r, books)), elapsedBps)) });
   });
 
   app.setErrorHandler(financeErrorHandler);

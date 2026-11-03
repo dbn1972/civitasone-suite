@@ -16,6 +16,14 @@ describe("classifyBudgetHead (GAP-FINANCE-BUDGET-FORMULATION-NEW-02, LMMHA range
     expect(classifyBudgetHead({ classification: "revenue", code: "0029" })).toEqual({ type: "income", budgetable: false });
     expect(isBudgetableHead({ classification: null, code: "1250" })).toBe(false);
   });
+  it("UAT P2 A5: capital-classified 1xxx GL heads (1200 fixed assets, 1250 accumulated depreciation) are assets, not income", () => {
+    expect(classifyBudgetHead({ classification: "capital", code: "1200" })).toEqual({ type: "asset", budgetable: false });
+    expect(classifyBudgetHead({ classification: "capital", code: "1250" })).toEqual({ type: "asset", budgetable: false });
+    // other 1xxx heads keep the LMMHA receipt rule, and capital outlay stays budgetable
+    expect(classifyBudgetHead({ classification: "revenue", code: "1475" })).toEqual({ type: "income", budgetable: false });
+    expect(classifyBudgetHead({ classification: "capital", code: "0029" })).toEqual({ type: "income", budgetable: false });
+    expect(classifyBudgetHead({ classification: "capital", code: "4059" })).toEqual({ type: "expense", budgetable: true });
+  });
   it("public-account head 8xxx is rejected", () => {
     expect(classifyBudgetHead({ classification: null, code: "8443" })).toEqual({ type: "liability", budgetable: false });
   });

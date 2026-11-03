@@ -1,6 +1,7 @@
 import { getAdminInvoiceDetail, getInvoiceOpsData } from "@/app/_data/loaders";
 import { AdminAccessDenied, sessionHasAnyRole } from "../../_components/AdminAccessGate";
 import { BILLING_INVOICE_OPERATOR_ROLES, BILLING_INVOICE_READER_ROLES } from "@/lib/auth/adminRoles";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { InvoiceDetail } from "./InvoiceDetail";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,5 +20,5 @@ export default async function InvoiceDetailPage(props: { params: Promise<{ id: s
   if (res.source === "error" || !res.data) return <InvoiceDetail state={{ kind: "error", status: res.status }} />;
   const canOperate = sessionHasAnyRole(BILLING_INVOICE_OPERATOR_ROLES);
   const ops = await getInvoiceOpsData(params.id, canOperate);
-  return <InvoiceDetail state={{ kind: "ready", invoice: res.data, ops: { ...ops, canOperate } }} />;
+  return <InvoiceDetail state={{ kind: "ready", invoice: res.data, ops: { ...ops, canOperate }, currentUserId: getSessionUserId() }} />;
 }

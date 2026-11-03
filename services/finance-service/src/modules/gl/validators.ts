@@ -13,10 +13,20 @@ const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 const noNul = (v: string) => !v.includes("\u0000");
 const NO_NUL_MESSAGE = "must not contain NUL (\\u0000) characters";
 
+// UAT P2 (J6, D10): the narration typed on the voucher form. It was not part of this schema, so zod stripped it and
+// the stored journal had none. Optional per line and for the whole voucher; commands.ts copies the voucher
+// narration onto each line that has none (lines are the jsonb the ledger, search and approver read it from).
+// A blank narration is "none" (it used to be silently dropped too), not a 400.
+const narrationField = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().trim().max(500).refine(noNul, NO_NUL_MESSAGE).optional(),
+);
+
 const journalLine = z.object({
   accountCode: z.string().min(1).refine(noNul, NO_NUL_MESSAGE),
   debitMinor:  zMoneyMinor,
   creditMinor: zMoneyMinor,
+  narration:   narrationField,
 }).refine(
   (l) => !(l.debitMinor > 0n && l.creditMinor > 0n),
   // LOWER-PRIORITY FIX (accounting-critical, related): a single line with
@@ -35,6 +45,7 @@ export const postJournalBody = z.object({
   type:        z.enum(["journal", "payment", "receipt", "contra"]),
   postingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "postingDate must be YYYY-MM-DD"),
   lines:       z.array(journalLine).min(2),
+  narration:   narrationField,
   // DOM-007: explicit override of the per-head budget check in gl/consumer.ts.
   // Setting this true requires BUDGET_OVERRIDE_ROLES (gl/routes.ts) — a plain
   // finance_officer cannot post over budget even by sending this flag.
@@ -73,6 +84,12 @@ export const ledgerQueryParams = z.object({
   limit:  z.coerce.number().int().positive().max(200).default(50),
 });
 export type LedgerQueryParams = z.infer<typeof ledgerQueryParams>;
+
+/** UAT P2 (J6): a rejection is final, so the checker must say why (min 10 characters). */
+export const rejectJournalBody = z.object({
+  reason: z.string().trim().min(10, "Give a reason of at least 10 characters").max(500).refine(noNul, NO_NUL_MESSAGE),
+});
+export type RejectJournalBody = z.infer<typeof rejectJournalBody>;
 
 export const reverseParam = z.object({
   id: z.string().uuid(),

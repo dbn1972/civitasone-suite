@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getFinanceAllocations, getFinanceBudgetsForReappropriation } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
@@ -5,7 +7,7 @@ import { toHumanError } from "@/lib/messages";
 import { AllocationTable } from "./AllocationTable";
 import { ReappropriateWithApproval } from "./ReappropriateWithApproval";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { canWrite, REAPPROPRIATION_SUBMIT_ROLES } from "@/lib/finance/writeRoles";
+import { canWrite, REAPPROPRIATION_SUBMIT_ROLES, ALLOCATION_WRITE_ROLES } from "@/lib/finance/writeRoles";
 import { reappropriationOptionsFrom } from "@/lib/finance/reappropriation";
 
 export default async function AllocationPage() {
@@ -28,6 +30,9 @@ export default async function AllocationPage() {
   const budgetsResult = canReappropriate ? await getFinanceBudgetsForReappropriation() : null;
   const reappropriationOptions = reappropriationOptionsFrom(budgetsResult?.data ?? []);
   const committed = allocations.filter((a) => BigInt(a.committedMinor || "0") > 0n).length;
+  // UAT P2 (J7): the allocation create screen, offered to the roles finance-service admits on the POST.
+  const t = await getTranslations("budgetAllocationNew");
+  const canAllocate = canWrite(getSessionRoles(), ALLOCATION_WRITE_ROLES);
 
   return (
     <div className="page-main wrap">
@@ -35,6 +40,7 @@ export default async function AllocationPage() {
         title="Budget Allocation"
         subtitle="Allocation, commitment and expenditure by budget head and financial year."
         back="/finance"
+        actions={canAllocate ? <Link href="/finance/budget/allocation/new" className="btn primary">{t("newLink")}</Link> : undefined}
       />
       {canReappropriate ? (
         <div style={{ marginBottom: 16 }}>

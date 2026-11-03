@@ -1,6 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import { fyDateBounds } from "../dashboard/queries.js";
 import * as repo from "./repo.js";
+import { headNatureOf } from "../../shared/head-nature.js";
 import type { JournalLine } from "./schema.js";
 import type { LedgerQueryParams } from "./validators.js";
 
@@ -98,25 +99,83 @@ type StatementType = "asset" | "liability" | "income" | "expenditure";
  * bucket — folded into "liability"; "expense" renamed "expenditure" to match
  * FinancialStatementSummarySchema in packages/schemas/src/web.ts).
  */
-function deriveStatementType(code: string | null, classification: string | null): StatementType {
-  const d = code?.charAt(0) ?? "";
-  if (d === "1") return "asset";
-  if (d === "4" && (classification === "income" || classification === "revenue")) return "income";
-  if (d === "5" || d === "6") return "expenditure";
-  // REVIEW FOLLOW-UP: natureOf() (financial-statements/routes.ts) special-cases
-  // 4200 (gain/loss on disposal, GAIN_LOSS in gl/consumer.ts) as expense before
-  // its generic "4" -> income fallback; this dropped that special case, so
-  // 4200 would misclassify as income. Reconciled to match.
-  if (code === "4200") return "expenditure";
-  if (d === "4") return "income";
-  if (d === "2" || d === "3") return "liability";
-  // No usable code prefix (e.g. an orphaned ledger row) — fall back to the
-  // stored classification directly.
-  const c = (classification ?? "").toLowerCase();
-  if (c === "asset") return "asset";
-  if (c === "income" || c === "revenue") return "income";
-  if (c === "expense" || c === "expenditure") return "expenditure";
-  return "liability";
+export function deriveStatementType(code: string | null, classification: string | null): StatementType {
+  // UAT P2 (A5): the hand-copied rule here had drifted from natureOf() (financial-statements/routes.ts): it typed a
+  // 2xxx head explicitly classified as an expense (2202 General Education, the default bill head) as a liability.
+  // Both now use the one shared rule; equity folds into "liability" and expense is "expenditure" in this schema.
+  const nature = headNatureOf(code, classification?.toLowerCase() ?? null);
+  if (nature === "expense") return "expenditure";
+  if (nature === "equity") return "liability";
+  return nature;
+}
+
+/** UAT P2 (J6, D4): a manual journal waiting for a checker, as the approval screen shows it. */
+export type PendingJournalView = {
+  id: string;
+  voucherNo: string | null;
+  type: string;
+  postingDate: string;
+  narration: string | null;
+  totalMinor: string;
+  lines: Array<{ accountCode: string; debitMinor: string; creditMinor: string; narration: string | null }>;
+  createdBy: string;
+  createdAt: string;
+  /** True when the caller drafted it: the screen shows no Approve (approver must differ from maker). */
+  isOwn: boolean;
+  /** UAT P2 (J6): for a rejected journal, why, who decided and when; null while pending. */
+  rejectionReason: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+};
+
+export async function listPendingJournals(tenantId: string, actorId: string, limit: number, offset = 0): Promise<PendingJournalView[]> {
+  return listJournalsInReview(tenantId, actorId, "pending_approval", limit, offset);
+}
+
+/** UAT P2 (J6): rejected manual journals (final, read-only), most recently rejected first. */
+export async function listRejectedJournals(tenantId: string, actorId: string, limit: number, offset = 0): Promise<PendingJournalView[]> {
+  return listJournalsInReview(tenantId, actorId, "rejected", limit, offset);
+}
+
+async function listJournalsInReview(
+  tenantId: string, actorId: string, status: "pending_approval" | "rejected", limit: number, offset: number,
+): Promise<PendingJournalView[]> {
+  const rows = await cache.getOrLoad(
+    cache.makeKey(tenantId, "journals", `${status === "rejected" ? "rejected" : "pending"}:${limit}:${offset}`),
+    () => repo.listJournalsInReview(tenantId, status, limit, offset),
+    30,
+  );
+  return (rows ?? []).map((j) => {
+    const lines = (Array.isArray(j.lines) ? j.lines : []).map((raw) => {
+      const r = raw as Record<string, unknown>;
+      const line = normalizeLine(r);
+      return {
+        accountCode: line.accountCode,
+        debitMinor: String(line.debitMinor),
+        creditMinor: String(line.creditMinor),
+        narration: typeof r.narration === "string" && r.narration !== "" ? r.narration : null,
+      };
+    });
+    const total = lines.reduce((s, l) => s + BigInt(l.debitMinor), 0n);
+    const voucherNo = String(j.voucherNo);
+    return {
+      id: j.id,
+      // DRAFT-<id> is the placeholder a pending draft holds until the number is allocated on approval.
+      voucherNo: voucherNo.startsWith("DRAFT-") ? null : voucherNo,
+      type: j.type,
+      postingDate: String(j.postingDate).slice(0, 10),
+      narration: lines.find((l) => l.narration)?.narration ?? null,
+      totalMinor: total.toString(),
+      lines,
+      createdBy: j.createdBy,
+      // Through the cache a Date arrives as an ISO string.
+      createdAt: new Date(j.createdAt as unknown as string).toISOString(),
+      isOwn: j.createdBy === actorId,
+      rejectionReason: j.status === "rejected" ? (j.rejectionReason ?? null) : null,
+      decidedBy: j.status === "rejected" ? j.updatedBy : null,
+      decidedAt: j.status === "rejected" ? new Date(j.updatedAt as unknown as string).toISOString() : null,
+    };
+  });
 }
 
 export async function listFinancialStatements(tenantId: string) {
