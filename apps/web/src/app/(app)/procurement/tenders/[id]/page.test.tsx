@@ -124,4 +124,25 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
     render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.queryByText(/approver must differ/)).not.toBeInTheDocument();
   });
+
+  // UAT Phase 1B (recon D06/D07): estimatedValue and bidAmount are RUPEES on the wire; the stored
+  // bidsReceived counter can lag the real bids.
+  it("shows Est. Value and opened bid amounts in rupees (not divided by 100 again) and counts the real bids", async () => {
+    fetchJsonMock.mockImplementation((_p: unknown, _e: unknown, options?: { mapResponse?: (p: unknown) => unknown }) => {
+      const tender = {
+        id: TENDER_ID, tenderNo: "T-2026/12", title: "Supply of laptops", type: "open", estimatedValue: 500000,
+        bidClosingDate: "2026-03-01", status: "financial_evaluation", bidsReceived: 0,
+        bids: [
+          { bidId: "b1", vendorId: "v1", vendorName: "Acme", status: "financial_opened", financialOpened: true, bidAmount: 450000 },
+          { bidId: "b2", vendorId: "v2", vendorName: "Beta", status: "technically_rejected", financialOpened: false },
+        ],
+      };
+      return Promise.resolve({ data: options?.mapResponse ? options.mapResponse(tender) : tender, source: "api" });
+    });
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
+    expect(screen.getByText("Est. Value").closest(".field")).toHaveTextContent("₹5,00,000.00");
+    expect(screen.getAllByText("₹4,50,000.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("Bids Received").closest(".field")).toHaveTextContent("2");
+  });
 });
+

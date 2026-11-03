@@ -1,5 +1,6 @@
 import { Alert, PageHeader, LoadErrorState } from "../../../../_components/ds";
-import { getFinanceGLPage } from "../../../../_data/loaders";
+import { getChartOfAccounts, getFinanceGLPage } from "../../../../_data/loaders";
+import { buildHeadLookup } from "../../_components/headLookup";
 import { GLTable } from "./GLTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { PrintHeader } from "../../_components/PrintHeader";
@@ -19,9 +20,14 @@ export default async function GeneralLedgerPage(
   // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: fiscal year / voucher type / search / page are URL state;
   // the server returns one bounded page plus totals over the whole filtered set.
   const view = parseGlView(searchParams);
-  const result = await getFinanceGLPage({
-    fy: view.fy, type: GL_TAB_TYPE[view.tab], q: view.q || undefined, page: view.page, pageSize: GL_PAGE_SIZE,
-  });
+  const [result, accounts] = await Promise.all([
+    getFinanceGLPage({
+      fy: view.fy, type: GL_TAB_TYPE[view.tab], q: view.q || undefined, page: view.page, pageSize: GL_PAGE_SIZE,
+    }),
+    // UAT Phase 1B (recon D13): resolve line account codes / head UUIDs to real head names.
+    getChartOfAccounts(),
+  ]);
+  const heads = buildHeadLookup(accounts.source === "error" ? [] : accounts.data);
 
   return (
     <>
@@ -51,7 +57,7 @@ export default async function GeneralLedgerPage(
       {result.source === "error" ? (
         <LoadErrorState result={result} area="general ledger" backHref="/finance" />
       ) : (
-        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} />
+        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} heads={heads} />
       )}
     </>
   );

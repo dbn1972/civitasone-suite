@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
-import { RevealableValue } from "./RevealableValue";
+import { RevealableValue, pickByPath } from "./RevealableValue";
 
 function render(ui: React.ReactElement) {
   return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
@@ -122,3 +122,29 @@ describe("RevealableValue (audited reveal)", () => {
     expect(confirm).not.toBeDisabled();
   });
 });
+
+// UAT Phase 1B: Server Component pages (vendor detail, cheque detail, contractor detail) passed a
+// `pick` function prop, which cannot cross the RSC boundary and crashed the page render. They now
+// pass the serialisable `pickPath`.
+describe("RevealableValue pickPath (serialisable picker for Server Components)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("pickByPath reads a nested string and never throws on a missing/odd shape", () => {
+    expect(pickByPath({ values: { pan: "ABCDE1234F" } }, ["values", "pan"])).toBe("ABCDE1234F");
+    expect(pickByPath({ data: { value: null } }, ["data", "value"])).toBeUndefined();
+    expect(pickByPath(null, ["values", "pan"])).toBeUndefined();
+    expect(pickByPath({ values: "x" }, ["values", "pan"])).toBeUndefined();
+  });
+
+  it("reveals via pickPath when no pick function is given", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ values: { bankAccount: "123456789012" } }), { status: 200 }));
+    const { pick: _omit, ...rest } = props;
+    void _omit;
+    render(<RevealableValue {...rest} pickPath={["values", "bankAccount"]} canReveal />);
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "TDS challan" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    expect(await screen.findByText("123456789012")).toBeInTheDocument();
+  });
+});
+

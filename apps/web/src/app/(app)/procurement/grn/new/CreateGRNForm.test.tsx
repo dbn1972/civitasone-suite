@@ -223,4 +223,26 @@ describe("CreateGRNForm - receiving store (UAT b10 F95)", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(JSON.parse(calls[0]!.body!)).toMatchObject({ storeId: STORES[0]!.id });
   });
+
+  // UAT Phase 1B: the API resolves poRef to the PO's UUID; the human PO number 404s (PO_NOT_FOUND).
+  it("sends the chosen PO's id as poRef (procurement_po:<uuid>), never the PO number", async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") calls.push({ url, body: String(init.body) });
+      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
+      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+      if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm stores={STORES} />);
+    await fillAccepted();
+    fireEvent.change(screen.getByLabelText("Receiving store"), { target: { value: STORES[0]!.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const body = JSON.parse(calls[0]!.body!) as { poRef: string; vendorId: string };
+    expect(body.poRef).toBe(`procurement_po:${PO.id}`);
+    expect(body.poRef).not.toContain(PO.poNo);
+    expect(body.vendorId).toBe(VENDOR.id);
+  });
 });

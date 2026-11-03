@@ -17,6 +17,11 @@ vi.mock("@/app/_data/loaders", () => ({
   getHRDashboard: (...args: unknown[]) => getHRDashboardMock(...args),
 }));
 
+// UAT Phase 1B: the page reads the directory's all-status total through fetchJson. Default: the
+// API reports none (null), so the existing headcount-based expectations below are unchanged.
+const fetchJsonMock = vi.fn();
+vi.mock("@/app/_data/apiClient", () => ({ fetchJson: (...args: unknown[]) => fetchJsonMock(...args) }));
+
 let mockRoles: string[] = ["hr_admin"];
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles,
@@ -56,6 +61,8 @@ describe("EmployeeDirectoryPage", () => {
     getEmployeesMock.mockReset();
     getHRDashboardMock.mockReset();
     getHRDashboardMock.mockResolvedValue({ data: DASHBOARD_EMPTY, source: "api" });
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
     mockRoles = ["hr_admin"];
   });
 
@@ -297,6 +304,28 @@ describe("EmployeeDirectoryPage", () => {
         expect(cardValue("Others")).toBe("52");
         unmount();
       }
+    });
+
+    // UAT Phase 1B (recon D19): headcount (non-separated) excluded separated staff from Total, so
+    // Others -- which by its legend includes retired/terminated/separated -- was always 0.
+    it("Total counts every employee record (incl. separated) from the directory total; Others is the remainder", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: { ...TENANT, headcount: 115, servingCount: 115, onLeave: 0 }, source: "api" });
+      fetchJsonMock.mockImplementation((path: string, _e: unknown, opts: { mapResponse: (p: unknown) => unknown }) =>
+        Promise.resolve({ data: opts.mapResponse({ data: [], pagination: { total: 120, hasMore: true } }), source: "api" }));
+      await renderPage();
+      expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/employees?limit=1", null, expect.anything());
+      expect(cardValue("Total")).toBe("120");
+      expect(cardValue("Others")).toBe("5");
+    });
+
+    it("falls back to the dashboard headcount when the directory reports no total", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: TENANT, source: "api" });
+      fetchJsonMock.mockImplementation((_p: string, _e: unknown, opts: { mapResponse: (p: unknown) => unknown }) =>
+        Promise.resolve({ data: opts.mapResponse({ data: [] }), source: "api" }));
+      await renderPage();
+      expect(cardValue("Total")).toBe("214");
     });
 
     it("shows a dash for Active and Others (not a computed guess) when the backend does not report servingCount", async () => {

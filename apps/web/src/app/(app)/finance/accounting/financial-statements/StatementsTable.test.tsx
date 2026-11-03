@@ -46,7 +46,7 @@ describe("StatementsTable", () => {
     expect(fees.textContent).not.toContain("₹5.00");
     const rent = screen.getByText("Rent").closest("tr")!;
     expect(rent.textContent).toContain("₹200.00");
-    expect(screen.getByLabelText("Receipts ₹500.00")).toBeInTheDocument();
+    expect(screen.getByLabelText("Credits ₹500.00")).toBeInTheDocument();
     expect(screen.getByText("Total Income").closest(".stat")).toHaveTextContent("₹500.00");
   });
 
@@ -94,7 +94,32 @@ describe("StatementsTable", () => {
     seed(big, "live");
     render(<StatementsTable statements={big as never} />);
     // every one of the 16 paise digits survives (a double would print ...992 or ...994)
-    const cell = screen.getAllByLabelText(/^Receipts ₹/)[0]!;
+    const cell = screen.getAllByLabelText(/^Credits ₹/)[0]!;
     expect(cell.getAttribute("aria-label")!.replace(/\D/g, "")).toBe("9007199254740993");
   });
+
+  // UAT Phase 1B (recon D11): UUID heads, credits shown as "receipts" for cash heads, and
+  // closing balances negative for every debit-balance head.
+  it("shows head code · name (never the UUID), Debits/Credits columns and Dr/Cr closing balances", () => {
+    const UUID = "75736d77-f140-4a00-97ac-be4878934248";
+    const rows = [{ id: UUID, head: UUID, type: "asset", openingBalance: "0", receipts: "250000", payments: "500000", closingBalance: "-250000" }];
+    seed(rows, "live");
+    const { container } = render(<StatementsTable statements={rows as never} heads={{ [UUID]: { code: "1100", name: "Bank" } }} />);
+    expect(screen.getByText("1100 · Bank")).toBeInTheDocument();
+    expect(container.textContent).not.toContain(UUID);
+    // Bank: Rs 5,000 debited (money in), Rs 2,500 credited (money out) -> Rs 2,500 debit balance.
+    expect(screen.getByLabelText("Debits ₹5,000.00")).toBeInTheDocument();
+    expect(screen.getByLabelText("Credits ₹2,500.00")).toBeInTheDocument();
+    expect(screen.getByLabelText("Closing ₹2,500.00 Dr")).toBeInTheDocument();
+    expect(screen.queryByText("Receipts")).not.toBeInTheDocument();
+  });
+
+  it("a credit-balance head reads Cr and an unknown UUID head reads 'Unknown head'", () => {
+    const rows = [{ id: "x", head: "c0f46ca3-0339-422e-842f-8d0eb882b378", type: "liability", openingBalance: "0", receipts: "70000", payments: "0", closingBalance: "70000" }];
+    seed(rows, "live");
+    render(<StatementsTable statements={rows as never} />);
+    expect(screen.getByText("Unknown head")).toBeInTheDocument();
+    expect(screen.getByLabelText("Closing ₹700.00 Cr")).toBeInTheDocument();
+  });
 });
+

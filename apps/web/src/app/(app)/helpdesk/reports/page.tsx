@@ -2,7 +2,8 @@ import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorStat
 import { getTicketAnalytics } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { formatDurationHours, humanizeStatus } from "@/lib/formatters";
-import { ReportPeriodNav, PERIOD_LABELS, type ReportPeriod } from "./ReportPeriodNav";
+import { ReportPeriodNav } from "./ReportPeriodNav";
+import { PERIOD_LABELS, type ReportPeriod } from "./periods";
 
 type PriorityRow = {
   priority: string;

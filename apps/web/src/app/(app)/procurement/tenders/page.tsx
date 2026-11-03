@@ -207,7 +207,10 @@ export default async function TendersPage(
                     cellType: "status",
                     statusLabels: TYPE_LABELS,
                   },
-                  { key: "estimatedValue", label: "Est. Value", align: "right", cellType: "amount" },
+                  // UAT Phase 1B: procurement-service sends estimatedValue already in RUPEES
+                  // (estimated_minor / 100, tender/queries.ts). cellType "amount" divided it by 100
+                  // again, so every value read 100x too small.
+                  { key: "estimatedValue", label: "Est. Value", align: "right", cellType: "rupees" },
                   { key: "publishDate", label: "Published" },
                   { key: "bidClosingDate", label: "Bid Close" },
                   { key: "bidsReceived", label: "Bids", align: "right" },

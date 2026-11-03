@@ -5,7 +5,8 @@ import { getRFQById } from "../../../../_data/loaders";
 import { formatIndianDate, formatInternalRef } from "@/lib/formatters";
 import { opaqueRefHref, parseOpaqueRef } from "@/lib/refs";
 import { toHumanError } from "@/lib/messages";
-import { ComparativeStatement, computeL1 } from "./ComparativeStatement";
+import { ComparativeStatement } from "./ComparativeStatement";
+import { computeL1 } from "./computeL1";
 import { RFQActions } from "./RFQActions";
 
 type LineItemRow = Record<string, unknown> & {

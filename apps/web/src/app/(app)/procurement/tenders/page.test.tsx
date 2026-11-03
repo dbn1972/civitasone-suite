@@ -75,4 +75,13 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
     expect(screen.getByText("Chairs")).toBeInTheDocument();
     expect(screen.queryByText("Laptops")).not.toBeInTheDocument();
   });
+
+  // UAT Phase 1B (recon D06): estimatedValue is RUPEES on the wire; it must not be divided by 100 again.
+  it("shows Est. Value in rupees as sent by the API", async () => {
+    route([{ id: "t9", tenderNo: "TND/2026/0006", title: "Big", type: "open", estimatedValue: 5000000, bidClosingDate: TOMORROW, status: "draft", bidsReceived: 0 }]);
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getAllByText("₹50,00,000.00").length).toBeGreaterThan(0);
+    expect(screen.queryByText("₹50,000.00")).not.toBeInTheDocument();
+  });
 });
+

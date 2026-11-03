@@ -3,14 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/app/_components/ds";
-
-/**
- * GAP-GRANTS-APPLICATIONS-02: the real application-stage statuses the list can
- * be filtered by (NOT the old bogus "pending"). Exported so the page validates
- * ?status= against the same source of truth.
- */
-export const APPLICATION_FILTERS = ["submitted", "under_review", "approved", "rejected", "withdrawn"] as const;
-export type ApplicationFilter = (typeof APPLICATION_FILTERS)[number];
+import { APPLICATION_FILTERS, type ApplicationFilter } from "./filters";
 
 const LABELS: Record<ApplicationFilter, string> = {
   submitted: "Submitted",

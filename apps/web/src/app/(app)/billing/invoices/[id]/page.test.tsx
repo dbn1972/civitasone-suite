@@ -158,4 +158,23 @@ describe("InvoiceDetailPage", () => {
     // It must be absent now that we rely on AutoBreadcrumb.
     expect(screen.queryByRole("link", { name: "Back" })).not.toBeInTheDocument();
   });
+
+  // UAT Phase 1B (recon D18): the title / Invoice No. is the stored GST invoice number.
+  it("titles the invoice by its stored GST invoice number, not a uuid fragment", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { ...invoice, invoiceNumber: "INV-2627-000009" }, source: "api" })
+      .mockResolvedValueOnce({ data: null, source: "error", status: 404 });
+    render(await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Invoice INV-2627-000009");
+    expect(screen.queryByText(/Invoice 11111111/)).not.toBeInTheDocument();
+  });
+
+  it("a draft without a number is titled 'Draft (not numbered)'", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { ...invoice, status: "draft", invoiceNumber: null }, source: "api" })
+      .mockResolvedValueOnce({ data: null, source: "error", status: 404 });
+    render(await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Invoice Draft (not numbered)");
+  });
 });
+

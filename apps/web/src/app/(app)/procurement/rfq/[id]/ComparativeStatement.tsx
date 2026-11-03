@@ -3,6 +3,7 @@
 import { StatusPill } from "../../../../_components/ds";
 import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
 import type { RFQDetail } from "@civitasone/types";
+import { computeL1, toPaise } from "./computeL1";
 
 type Resp = RFQDetail["responses"][number];
 type LineItem = RFQDetail["lineItems"][number];
@@ -19,27 +20,6 @@ type LineItem = RFQDetail["lineItems"][number];
  * (not withdrawn/rejected). Compared in integer paise (BigInt) so float
  * rounding can never pick the wrong winner.
  */
-
-function toPaise(minor: string | undefined): bigint | null {
-  if (minor === undefined || !/^\d+$/.test(minor)) return null;
-  return BigInt(minor);
-}
-
-/** The L1 response (lowest total among in-the-running, unsealed responses), or null. */
-export function computeL1(responses: Resp[]): Resp | null {
-  let best: Resp | null = null;
-  let bestPaise: bigint | null = null;
-  for (const r of responses) {
-    if (r.status === "rejected" || r.status === "withdrawn") continue;
-    const p = toPaise(r.totalAmountMinor);
-    if (p === null) continue;
-    if (bestPaise === null || p < bestPaise) {
-      bestPaise = p;
-      best = r;
-    }
-  }
-  return best;
-}
 
 export function ComparativeStatement({
   responses,

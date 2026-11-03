@@ -1,5 +1,6 @@
 import { PageHeader, Card, LoadErrorState } from "../../../../_components/ds";
-import { getFinancialStatements } from "../../../../_data/loaders";
+import { getChartOfAccounts, getFinancialStatements } from "../../../../_data/loaders";
+import { buildHeadLookup } from "../../_components/headLookup";
 import { StatementsTable } from "./StatementsTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { PrintHeader } from "../../_components/PrintHeader";
@@ -11,8 +12,10 @@ import { PrintHeader } from "../../_components/PrintHeader";
  * "cumulative, all periods" instead (GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-02).
  */
 export default async function FinancialStatementsPage() {
-  const result = await getFinancialStatements();
+  const [result, accounts] = await Promise.all([getFinancialStatements(), getChartOfAccounts()]);
   const { data: statements, source } = result;
+  // UAT Phase 1B (recon D11): the feed names each head by its UUID; resolve to code · name.
+  const heads = buildHeadLookup(accounts.source === "error" ? [] : accounts.data);
 
   return (
     <>
@@ -28,7 +31,7 @@ export default async function FinancialStatementsPage() {
         <LoadErrorState result={result} area="financial statements" backHref="/finance" />
       ) : (
         <Card title="Financial Statements · cumulative, all periods">
-          <StatementsTable statements={statements} source={source} />
+          <StatementsTable statements={statements} source={source} heads={heads} />
         </Card>
       )}
     </>

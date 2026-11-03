@@ -1,6 +1,6 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, StatIcon, LoadErrorState } from "../../../_components/ds";
-import { getFinanceDashboard } from "../../../_data/loaders";
+import { getFinanceDashboard, getFinanceSanctionsSummary } from "../../../_data/loaders";
 import Link from "next/link";
 import { BudgetChart } from "./BudgetChart";
 import { PrintExportButton } from "../_components/PrintExportButton";
@@ -31,8 +31,13 @@ export default async function FinanceDashboardPage(props: { searchParams?: Promi
   // the figures; the applied FY is shown in the subtitle.
   const requestedFy = searchParams?.fy;
   const fy = requestedFy && recentFinancialYears().includes(requestedFy) ? requestedFy : currentFinancialYear();
-  const result = await getFinanceDashboard(fy);
+  const [result, sanctionsSummary] = await Promise.all([getFinanceDashboard(fy), getFinanceSanctionsSummary()]);
   const { data, source } = result;
+  // UAT Phase 1B (recon D02): the dashboard endpoint's `pendingSanctions` counts only
+  // status = 'pending', but sanctions are stored as 'pending_approval' (and 'draft'), so the
+  // card read 0 while sanctions waited. The sanctions register's own server-side summary
+  // buckets every undecided status (draft / pending / pending_approval) as pending; use it.
+  const pendingSanctions = sanctionsSummary.source === "error" ? null : sanctionsSummary.data.pending;
   // UX-013: `source` was already fetched but only wired to the badge below --
   // never to the stat values themselves, so a failed load rendered "0" /
   // "₹0.00" (data's zero-valued fallback defaults), indistinguishable from a
@@ -74,6 +79,11 @@ export default async function FinanceDashboardPage(props: { searchParams?: Promi
       {/* GAP-FINANCE-DASHBOARD-03: the utilisation percentage is shown once (first
           card); the old "Approved" caption and the repeated percentage on the
           expenditure card were not measures, so they are gone. */}
+      {/* UAT Phase 1B (recon D01): finance-service's dashboard `totalExpenditure` is the sum of
+          ALL ledger debits in the FY (every head, incl. asset/cash/bank legs), not expenditure on
+          expense heads, and budgetUtilisationPct is derived from it. Until finance-service returns
+          an expense-head figure, the cards are labelled for what they actually are (see the
+          financeDashboard.* messages) rather than as expenditure / utilisation. */}
       <StatGrid>
         <StatCard
           icon="💰"
@@ -98,7 +108,7 @@ export default async function FinanceDashboardPage(props: { searchParams?: Promi
           icon="⏳"
           tone="warn"
           label={t("pendingApprovals")}
-          value={errored ? "—" : data.pendingSanctions}
+          value={errored || pendingSanctions === null ? "—" : pendingSanctions}
           up={false}
         />
       </StatGrid>

@@ -11,7 +11,6 @@ vi.mock("../../../../_components/ds", async (orig) => {
 vi.mock("./ContractActions", () => ({ ContractActions: () => null }));
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => ["hr_admin"] }));
-vi.mock("@/lib/entityAdapters/employee", () => ({ resolveEmployees: async () => [{ id: "e1", label: "Asha" }] }));
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({ fetchJson: (...a: unknown[]) => fetchJsonMock(...a) }));
 
@@ -31,7 +30,10 @@ describe("ContractDetailPage (GAP-HR-CONTRACTUAL-05)", () => {
     dataTableProps.mockReset();
     fetchJsonMock.mockReset();
     fetchJsonMock.mockImplementation((url: string) =>
-      Promise.resolve(String(url).includes("/history") ? { data: history, source: "api" } : { data: contract, source: "api" }));
+      Promise.resolve(
+        String(url).includes("/history") ? { data: history, source: "api" }
+        : String(url).includes("/hrms/employees") ? { data: [{ id: "e1", label: "Asha (EMP-1)" }], source: "api" }
+        : { data: contract, source: "api" }));
   });
 
   it("never sends terms/compensation to the client DataTable", async () => {
@@ -41,5 +43,18 @@ describe("ContractDetailPage (GAP-HR-CONTRACTUAL-05)", () => {
     expect(rows).toHaveLength(1);
     expect(Object.keys(rows[0]!).sort()).toEqual(["contractNo", "endDate", "id", "startDate", "status"]);
     expect(JSON.stringify(rows)).not.toMatch(/terms|compensation/);
+  });
+
+  // UAT Phase 1B: the page called the browser-only resolveEmployees() (relative
+  // /api/proxy fetch) during the server render and crashed. It must resolve the
+  // employee through the server fetch client instead.
+  it("resolves the employee name server-side through fetchJson, not the browser proxy", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const ui = await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) });
+    const { getByText } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/employees?ids=e1", [], expect.objectContaining({ telemetryKey: "hr.contractual.employee" }));
+    expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/proxy/"))).toBe(false);
+    expect(getByText("Asha (EMP-1)")).toBeTruthy();
+    fetchSpy.mockRestore();
   });
 });
