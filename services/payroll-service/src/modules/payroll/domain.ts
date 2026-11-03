@@ -80,6 +80,31 @@ export interface SlipInput {
   tdsYtdMinor?: bigint;
   monthsRemaining?: number;
   /**
+   * T-STAT F02 (s.192): salary actually paid to this employee earlier in the
+   * same FY -- gross of the earlier approved / disbursed slips less their loss
+   * of pay, and the number of months they cover. `unrecordedMonths`: earlier
+   * FY months in which the employee was already in service but no slip exists
+   * in this system (e.g. before go-live); they are estimated at the current
+   * regular salary (see unrecordedFyMonths). With it (and monthsRemaining)
+   * the annual estimate is
+   *   fyPaidToDate + regular x unrecordedMonths + this month (less LOP)
+   *   + regular salary x (monthsRemaining - 1) + this month one-offs once.
+   * Omitted (a preview with no run context): regular salary x 12 + one-offs once.
+   */
+  fyPaidToDate?: { grossMinor: bigint; months: number; unrecordedMonths?: number };
+  /**
+   * T-STAT M-NPS (F04): the Basic + DA part of the arrears paid on this slip
+   * (a recovery counts negative). Added to the NPS base only: NPS employee 10%
+   * / employer 14% fall on arrears of pay and DA as on pay itself.
+   */
+  arrearPensionBaseMinor?: bigint;
+  /**
+   * T-STAT M-PT-BASIS (F08): resolve the month professional tax from the
+   * monthly salary (gross earnings of the slip less loss of pay). When given
+   * it replaces `ptMinor`; the slab data itself is unchanged.
+   */
+  ptForSalaryMinor?: (monthlySalaryMinor: bigint) => bigint;
+  /**
    * P3: protected-net floor (paise). Recovery deductions (LOP, loan EMI, arrears
    * recovery) are capped so net pay never drops below this floor; the uncapped
    * remainder is reported as `recoveryCarryForwardMinor` to be recovered later.
@@ -227,6 +252,8 @@ export interface SlipResult {
   gpfMinor: bigint;
   npsEmployeeMinor: bigint;
   npsEmployerMinor: bigint;
+  /** The base the NPS 10% / 14% were applied to (Basic + DA, plus the Basic + DA part of arrears). */
+  npsPensionBaseMinor: bigint;
   annualTaxableMinor: bigint;
   negativeNet: boolean;
   /** P3: recovery (LOP/EMI/arrears) deferred because it would breach the net floor. */
@@ -363,6 +390,8 @@ export function computeSlip(input: SlipInput): SlipResult {
     declaration = {},
     tdsYtdMinor,
     monthsRemaining,
+    fyPaidToDate,
+    arrearPensionBaseMinor = 0n,
     protectedNetFloorMinor = 0n,
     ltcExemptTotalMinor = 0n,
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
@@ -426,11 +455,19 @@ export function computeSlip(input: SlipInput): SlipResult {
   }
 
   // Ad-hoc components (LOP, EMI, arrears, reimbursements).
+  // T-STAT F02: every ad-hoc EARNING (arrears, bonus, reimbursements, any
+  // one-off line) is paid once -- it is counted once in the annual estimate,
+  // never multiplied by the months remaining.
+  let oneOffEarningsMinor = 0n;
   for (const c of components) {
-    (c.type === "earning" ? earnings : deductions).push({ ...c, amountMinor: roundRupee(c.amountMinor) });
+    const line = { ...c, amountMinor: roundRupee(c.amountMinor) };
+    if (line.type === "earning") oneOffEarningsMinor += line.amountMinor;
+    (line.type === "earning" ? earnings : deductions).push(line);
   }
 
   const grossMinor = earnings.reduce((s, e) => s + e.amountMinor, 0n);
+  const regularGrossMinor = grossMinor - oneOffEarningsMinor;
+  const lopMinor = deductions.filter((d) => d.code === "LOP").reduce((s, d) => s + d.amountMinor, 0n);
 
   // Pension contributions are computed on Basic + DA. FR 53 suspension: only
   // the regular days' Basic + DA (FR 53(2)(ii): no GPF subscription from
@@ -440,6 +477,9 @@ export function computeSlip(input: SlipInput): SlipResult {
   let pfEmployeeMinor = 0n, pfEmployerMinor = 0n, epsMinor = 0n, epfEmployerMinor = 0n;
   let gpfMinor = 0n, npsEmployeeMinor = 0n, npsEmployerMinor = 0n;
 
+  // T-STAT M-NPS: NPS also falls on the Basic + DA part of arrears.
+  const npsBaseRaw = pensionBase + arrearPensionBaseMinor;
+  const npsPensionBaseMinor = pensionScheme === "NPS" ? (npsBaseRaw > 0n ? npsBaseRaw : 0n) : 0n;
   if (pensionScheme === "GPF") {
     gpfMinor = pct(pensionBase, GPF_PCT);
   } else if (pensionScheme === "NPS") {
@@ -450,8 +490,8 @@ export function computeSlip(input: SlipInput): SlipResult {
     // for an NPS-scheme employee of a type with statutoryNps=false, with no
     // fall-through to EPF. statutoryNps is retained on SlipInput for callers but
     // no longer suppresses a scheme-driven contribution.)
-    npsEmployeeMinor = pct(pensionBase, NPS_EMP_PCT);
-    npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
+    npsEmployeeMinor = pct(npsPensionBaseMinor, NPS_EMP_PCT);
+    npsEmployerMinor = pct(npsPensionBaseMinor, NPS_ER_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
@@ -468,12 +508,30 @@ export function computeSlip(input: SlipInput): SlipResult {
   const esiMinor         = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployeeRateBps) / 10000n) : 0n;
   const esiEmployerMinor = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployerRateBps) / 10000n) : 0n;
 
-  const pt = roundRupee(ptMinor);
+  // T-STAT M-PT-BASIS: PT slab on the monthly salary (gross less LOP) when a resolver is given.
+  const pt = roundRupee(input.ptForSalaryMinor ? input.ptForSalaryMinor(grossMinor - lopMinor) : ptMinor);
   if (pt > 0n) deductions.push({ code: "PT", name: "Professional Tax", type: "deduction", amountMinor: pt });
 
   // Monthly TDS (Sec 192) on real annual TAXABLE income: regime-aware, with
   // Sec 16 std deduction + PT, Sec 10(13A) HRA exemption, and Chapter VI-A (old regime).
-  const annualGross = grossMinor * 12n;
+  //
+  // T-STAT F02: the estimate is no longer this month gross x 12. With the FY
+  // history (run context) it is the salary actually paid earlier in the FY +
+  // this month (less LOP) + regular salary for the months still to come +
+  // one-off items once; months in the FY the employee is paid for =
+  // fyPaidToDate.months + unrecordedMonths + monthsRemaining (a mid-year
+  // joiner gets fewer than 12, which also scales the old-regime HRA exemption
+  // and PT below).
+  // Without it (preview callers) the regular salary is annualised x 12 and
+  // one-offs are still counted once.
+  const projected = fyPaidToDate != null && monthsRemaining != null;
+  const remaining = BigInt(monthsRemaining != null && monthsRemaining > 1 ? monthsRemaining : 1);
+  const unrecorded = projected ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
+  const annualGross = projected
+    ? fyPaidToDate.grossMinor + regularGrossMinor * unrecorded
+      + (regularGrossMinor - lopMinor) + regularGrossMinor * (remaining - 1n) + oneOffEarningsMinor
+    : regularGrossMinor * 12n + oneOffEarningsMinor;
+  const fyMonths = projected ? BigInt(fyPaidToDate.months) + unrecorded + remaining : 12n;
   // Additions taxed under BOTH regimes (added before slabs):
   //  - perquisites Sec 17(2) (current employer, not part of cash gross),
   //  - previous-employer taxable salary for the FY (Sec 192(2)),
@@ -491,14 +549,14 @@ export function computeSlip(input: SlipInput): SlipResult {
   // for this same pair, so this adds no new failure mode.
   const stdDeductionMinor = BigInt(stdDeduction(taxRegime, fyStartYear, taxTenantId)) * 100n;
   if (taxRegime === "old") {
-    const salaryHraAnnual   = (earningsOverride ? earningsOverride.hraSalaryMinor : basicMinor + daMinor) * 12n;
-    const hraReceivedAnnual = hraMinor * 12n;
+    const salaryHraAnnual   = (earningsOverride ? earningsOverride.hraSalaryMinor : basicMinor + daMinor) * fyMonths;
+    const hraReceivedAnnual = hraMinor * fyMonths;
     const rentAnnual        = declaration.rentPaidAnnualMinor ?? 0n;
     const hraExempt = hraExemptionMinor(salaryHraAnnual, hraReceivedAnnual, rentAnnual, cityClass === "X");
     const d80c = declaration.ded80cMinor ?? 0n; const c80c = d80c > statutoryConfig.sec80cCapMinor ? statutoryConfig.sec80cCapMinor : d80c;
     const d80d = declaration.ded80dMinor ?? 0n; const c80d = d80d > statutoryConfig.sec80dCapMinor ? statutoryConfig.sec80dCapMinor : d80d;
     const other = declaration.otherDedMinor ?? 0n;
-    annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - hraExempt - c80c - c80d - other - pt * 12n - ltcExemptTotalMinor;
+    annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - hraExempt - c80c - c80d - other - pt * fyMonths - ltcExemptTotalMinor;
   } else {
     annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - ltcExemptTotalMinor; // new regime: standard deduction + LTC exempt
   }
@@ -573,8 +631,57 @@ export function computeSlip(input: SlipInput): SlipResult {
     daMinor, hraMinor, earnings, deductions,
     pfEmployeeMinor, pfEmployerMinor, epsMinor, epfEmployerMinor,
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
-    gpfMinor, npsEmployeeMinor, npsEmployerMinor, annualTaxableMinor, negativeNet,
+    gpfMinor, npsEmployeeMinor, npsEmployerMinor, npsPensionBaseMinor, annualTaxableMinor, negativeNet,
   };
+}
+
+/**
+ * T-STAT F02 (s.192): FY months before `runMonth` in which the employee was
+ * already in service (from the later of April of the FY and the joining
+ * month) but which have no paid slip in this system -- e.g. months paid
+ * before go-live. The annual estimate counts them at the current regular
+ * salary, as the old x12 estimate implicitly did, while a genuine mid-year
+ * joiner (joined this FY) is projected only from the joining month. No
+ * joining date known: in service for the whole FY. Pure.
+ */
+export function unrecordedFyMonths(fyStartYear: number, runMonth: string, dateOfJoining: string | null | undefined, recordedMonths: number): number {
+  const idx = (period: string) => { const [y, m] = period.split("-").map(Number) as [number, number]; return y * 12 + (m - 1); };
+  const fyStartIdx = fyStartYear * 12 + 3; // April
+  const dojIdx = dateOfJoining && /^\d{4}-\d{2}/.test(dateOfJoining) ? idx(dateOfJoining.slice(0, 7)) : fyStartIdx;
+  const fromIdx = Math.max(fyStartIdx, dojIdx);
+  const inService = Math.max(0, idx(runMonth) - fromIdx);
+  return Math.max(0, inService - recordedMonths);
+}
+
+/** T-STAT M-ZERO: an explicit, reasoned exclusion of one Rs 0-basic slip from the approval guard. */
+export interface ZeroBasicExclusion { employeeId: string; reason: string }
+
+/**
+ * T-STAT M-ZERO (F05): the Rs 0-basic slips of a run that are NOT explicitly
+ * excluded (with a non-blank reason). Approval is refused while any remain. Pure.
+ */
+export function unexcludedZeroBasicSlips<T extends { employeeId: string }>(zeroBasic: T[], exclusions: ZeroBasicExclusion[] = []): T[] {
+  const excluded = new Set(exclusions.filter((e) => e.reason.trim().length > 0).map((e) => e.employeeId));
+  return zeroBasic.filter((z) => !excluded.has(z.employeeId));
+}
+
+/**
+ * T-STAT M-ZERO (F05): the slips of a run with no basic pay (HRMS basic
+ * missing). An FR 53 subsistence slip (a SUBSISTENCE_ALLOWANCE line) is not
+ * one: its regular-days basic is legitimately 0 for a fully suspended month,
+ * and a withheld employee has no slip at all. Pure.
+ */
+export function zeroBasicSlipsOf<T extends { basicMinor: bigint; components?: Array<{ code: string }> | null }>(slips: T[]): T[] {
+  return slips.filter((sl) => sl.basicMinor === 0n && !(sl.components ?? []).some((c) => c.code === "SUBSISTENCE_ALLOWANCE"));
+}
+
+export const ZERO_BASIC_SLIPS = "ZERO_BASIC_SLIPS";
+
+export function zeroBasicSlipsMessage(slips: Array<{ employeeNo: string }>): string {
+  const sample = slips.slice(0, 20).map((z) => z.employeeNo).join(", ");
+  const more = slips.length > 20 ? ", ..." : "";
+  return `${slips.length} slip(s) in this run have no basic pay (HRMS basic missing): ${sample}${more}. `
+    + "Fix the basic pay in HRMS and re-run, or approve with zeroBasicExclusions [{ employeeId, reason }] for each of them";
 }
 
 // ============================ Pensioner payroll ============================

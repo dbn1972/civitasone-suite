@@ -64,6 +64,19 @@ export const runActionBody = z.object({
 });
 export type RunActionBody = z.infer<typeof runActionBody>;
 
+/**
+ * T-STAT M-ZERO: PATCH /runs/:id/approve. `zeroBasicExclusions` explicitly
+ * excludes named Rs 0-basic slips (HRMS basic missing) from the approval
+ * guard, each with a reason that is recorded on the approval audit event.
+ */
+export const approveRunBody = runActionBody.extend({
+  zeroBasicExclusions: z.array(z.object({
+    employeeId: z.string().uuid(),
+    reason: z.string().trim().min(10).max(500),
+  })).max(5000).optional(),
+});
+export type ApproveRunBody = z.infer<typeof approveRunBody>;
+
 // Multi-DDO admin
 export const createDdoBody = z.object({
   ddoCode: z.string().min(1).max(32),

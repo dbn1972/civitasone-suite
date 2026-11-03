@@ -64,6 +64,22 @@ const MIXED = [
 
 let app: FastifyInstance;
 
+/**
+ * T-STAT F03: retro arrears are "due minus DRAWN", so each revised month must
+ * have been drawn -- a disbursed regular slip at the pre-revision pay.
+ */
+async function seedDrawn(emp: string, month: string, lines: Array<[string, number]>): Promise<void> {
+  const runId = randomUUID();
+  const tag = `DRAWN-${runId.slice(0, 8)}`;
+  const gross = lines.reduce((sum, [, amount]) => sum + amount, 0);
+  const basic = lines.find(([code]) => code === "BASIC")?.[1] ?? 0;
+  const components = JSON.stringify(lines.map(([code, amountMinor]) => ({ code, name: code, type: "earning", amountMinor })));
+  await q(sql`INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, run_type, ddo_code, status, created_by, updated_by)
+    VALUES (${runId}::uuid, ${TENANT}::uuid, ${tag}, ${month}, ${STRUCTURE}::uuid, ${"regular"}, ${tag}, ${"disbursed"}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+  await q(sql`INSERT INTO payroll.payroll_slips (tenant_id, run_id, employee_id, employee_no, basic_minor, gross_minor, net_pay_minor, components, status, created_by, updated_by)
+    VALUES (${TENANT}::uuid, ${runId}::uuid, ${emp}::uuid, ${tag}, ${basic}, ${gross}, ${gross}, ${components}::jsonb, ${"computed"}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+}
+
 async function startRun(runNo: string, month = MONTH): Promise<string> {
   const res = await app.inject({ method: "POST", url: "/v1/payroll/runs", headers: hdr(), payload: { runNo, month, structureId: STRUCTURE } });
   expect([201, 202]).toContain(res.statusCode);
@@ -170,6 +186,8 @@ describe("retro arrears honour the HRA floor", () => {
     const emp = randomUUID();
     await q(sql`INSERT INTO payroll.payroll_salary_revisions (tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor, old_gross_minor, new_gross_minor, revision_type)
       VALUES (${TENANT}::uuid, ${emp}::uuid, '2026-11-01', 1400000, 1600000, 0, 0, 'annual_increment')`);
+    // T-STAT F03: drawn at the old 14,000 -- DA 55% 7,700, HRA floor 5,400 (30% = 4,200).
+    for (const m of ["2026-11", "2026-12"]) await seedDrawn(emp, m, [["BASIC", 1400000], ["DA", 770000], ["HRA", 540000]]);
     await asTenant((tx) => generateRetroArrears(tx as unknown as typeof db, TENANT, emp, "2027-01", "X", ACTOR, { hraFloorForPeriod: () => 540_000n }));
     const rows = await q(sql`SELECT from_period, difference_minor::text FROM payroll.payroll_arrears WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${emp}::uuid ORDER BY from_period`);
     // per month: basic +2,000, DA 55% +1,100, HRA max(30%,5,400) both sides = 5,400 -> +0
@@ -179,6 +197,8 @@ describe("retro arrears honour the HRA floor", () => {
     const emp = randomUUID();
     await q(sql`INSERT INTO payroll.payroll_salary_revisions (tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor, old_gross_minor, new_gross_minor, revision_type)
       VALUES (${TENANT}::uuid, ${emp}::uuid, '2026-11-01', 1400000, 1600000, 0, 0, 'annual_increment')`);
+    // T-STAT F03: drawn at the old 14,000 -- DA 55% 7,700, HRA 30% 4,200 (no floor).
+    await seedDrawn(emp, "2026-11", [["BASIC", 1400000], ["DA", 770000], ["HRA", 420000]]);
     await asTenant((tx) => generateRetroArrears(tx as unknown as typeof db, TENANT, emp, "2026-12", "X", ACTOR));
     const rows = await q(sql`SELECT difference_minor::text FROM payroll.payroll_arrears WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${emp}::uuid`);
     expect(rows).toEqual([{ difference_minor: "370000" }]); // 2,000 + 1,100 + 600
@@ -188,6 +208,8 @@ describe("retro arrears honour the HRA floor", () => {
     await q(sql`INSERT INTO payroll.payroll_salary_revisions (tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor, old_gross_minor, new_gross_minor, revision_type)
       VALUES (${TENANT}::uuid, ${emp}::uuid, '2026-11-01', 4400000, 4600000, 0, 0, 'annual_increment')`);
     const allowance = { mode: "auto" as const, fixedMinor: 0n, stationType: "other" as const, rule: { rateBps: 1000n, capMinor: 900_000n } };
+    // T-STAT F03: drawn at the old 44,000 -- parent DA 40% 17,600, HRA Y 18% 7,920, DEP_ALLOW 10% 4,400.
+    await seedDrawn(emp, "2026-11", [["BASIC", 4400000], ["DA", 1760000], ["HRA", 792000], ["DEP_ALLOW", 440000]]);
     await asTenant((tx) => generateRetroArrears(tx as unknown as typeof db, TENANT, emp, "2026-12", "Y", ACTOR, {
       daRateBpsOverride: 4000n,
       deputationAllowanceForPeriod: (_p, basic) => deputationAllowanceMinor(basic, allowance).amountMinor,

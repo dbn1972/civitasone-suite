@@ -14,6 +14,7 @@ import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT
 import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
 import { MAKER_CHECKER_VIOLATION, runMakerCheckerDenial, type RunMakerCheckerAction } from "./run-maker-checker.js";
+import { unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
@@ -250,13 +251,29 @@ function runCommandMessageId(ctx: RequestContext, action: "approve" | "disburse"
   return deterministicUuid(`payroll-${action}:${ctx.tenantId}:${runId}:${ctx.idempotencyKey}`);
 }
 
-export async function approveRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
+/**
+ * T-STAT M-ZERO (F05): a run holding Rs 0-basic slips (HRMS basic missing) is
+ * not approved unless every such employee is explicitly excluded, with a
+ * reason. 409 ZERO_BASIC_SLIPS names them. The consumer re-asserts the rule
+ * inside the approval transaction.
+ */
+async function assertNoUnexcludedZeroBasicSlips(ctx: RequestContext, id: string, exclusions: ZeroBasicExclusion[]): Promise<void> {
+  const zero = zeroBasicSlipsOf(await scopedRead((tx) => repo.listSlipsByRunTx(tx, id, ctx.tenantId)));
+  const blocking = unexcludedZeroBasicSlips(zero, exclusions);
+  if (blocking.length > 0) throw new HttpError(409, ZERO_BASIC_SLIPS, zeroBasicSlipsMessage(blocking));
+}
+
+export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = []): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "approve", id, reason);
+  await assertNoUnexcludedZeroBasicSlips(ctx, id, zeroBasicExclusions);
   await queue.publish(COMMANDS.runApprove, {
     messageId: runCommandMessageId(ctx, "approve", id),
     type: COMMANDS.runApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}) },
+    payload: {
+      id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}),
+      ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
+    },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

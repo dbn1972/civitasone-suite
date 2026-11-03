@@ -6,7 +6,7 @@
         "run_type": "regular",
         "status": "processing",
         "total_gross_minor": "81324400",
-        "total_net_minor": "64066900"
+        "total_net_minor": "65541800"
       }
     ]
   },
@@ -17,8 +17,8 @@
         "employee_no": "SNAP-01",
         "basic_minor": "5610000",
         "gross_minor": "10878800",
-        "total_deductions_minor": "1719000",
-        "net_pay_minor": "9159800",
+        "total_deductions_minor": "1275600",
+        "net_pay_minor": "9603200",
         "components": [
           {
             "code": "BASIC",
@@ -63,7 +63,7 @@
         "nps_employee_minor": "869600",
         "nps_employer_minor": "1217400",
         "esi_minor": "0",
-        "tds_minor": "839400",
+        "tds_minor": "396000",
         "status": "computed",
         "currency": "INR"
       },
@@ -304,8 +304,8 @@
         "employee_no": "SNAP-06",
         "basic_minor": "6770000",
         "gross_minor": "11699800",
-        "total_deductions_minor": "5137400",
-        "net_pay_minor": "6562400",
+        "total_deductions_minor": "4105900",
+        "net_pay_minor": "7593900",
         "components": [
           {
             "code": "BASIC",
@@ -356,7 +356,7 @@
         "nps_employee_minor": "1049400",
         "nps_employer_minor": "1469100",
         "esi_minor": "0",
-        "tds_minor": "1031500",
+        "tds_minor": "0",
         "status": "computed",
         "currency": "INR"
       },
@@ -709,7 +709,7 @@
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000001",
         "annual_basic_minor": "67320000",
         "taxable_minor": "123045600",
-        "tds_minor": "839400",
+        "tds_minor": "396000",
         "period": "2026-08"
       },
       {
@@ -722,7 +722,7 @@
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
         "annual_basic_minor": "53880000",
-        "taxable_minor": "97839600",
+        "taxable_minor": "91288500",
         "tds_minor": "0",
         "period": "2026-08"
       },
@@ -743,14 +743,14 @@
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000006",
         "annual_basic_minor": "81240000",
-        "taxable_minor": "132897600",
-        "tds_minor": "1031500",
+        "taxable_minor": "83051900",
+        "tds_minor": "0",
         "period": "2026-08"
       },
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000007",
         "annual_basic_minor": "42000000",
-        "taxable_minor": "75570000",
+        "taxable_minor": "75045000",
         "tds_minor": "0",
         "period": "2026-08"
       },
@@ -771,7 +771,7 @@
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000011",
         "annual_basic_minor": "48000000",
-        "taxable_minor": "77220000",
+        "taxable_minor": "77020000",
         "tds_minor": "0",
         "period": "2026-08"
       }
@@ -784,8 +784,8 @@
         "component_code": "ARREAR",
         "from_period": "2026-06",
         "to_period": "2026-06",
-        "old_amount_minor": "4360000",
-        "new_amount_minor": "4490000",
+        "old_amount_minor": "7412000",
+        "new_amount_minor": "7633000",
         "difference_minor": "221000",
         "status": "paid",
         "source": "revision"
@@ -795,8 +795,8 @@
         "component_code": "ARREAR",
         "from_period": "2026-07",
         "to_period": "2026-07",
-        "old_amount_minor": "4360000",
-        "new_amount_minor": "4490000",
+        "old_amount_minor": "7630000",
+        "new_amount_minor": "7857500",
         "difference_minor": "227500",
         "status": "paid",
         "source": "revision"
@@ -809,11 +809,11 @@
         "department_id": "7a7a7a7a-0000-4000-8000-00000000d001",
         "employee_count": 7,
         "total_gross_minor": "66091900",
-        "total_deductions_minor": "15818100",
-        "total_net_minor": "50273800",
+        "total_deductions_minor": "14343200",
+        "total_net_minor": "51748700",
         "total_pf_minor": "328800",
         "total_esi_minor": "13400",
-        "total_tds_minor": "6816900",
+        "total_tds_minor": "5342000",
         "total_pt_minor": "0",
         "period": "2026-08"
       },
