@@ -5,12 +5,13 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsProfilePhotos, hrmsFaceVerificationLog, hrmsFaceConfig } from "./schema.js";
-const log = pino({ name: "hrms-f3-face-verification" });
+const log = pino({ name: "hrms-f3-face-verification", serializers: SAFE_LOG_SERIALIZERS });
 export function registerF3_face_verification_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;

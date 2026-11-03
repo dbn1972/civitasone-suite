@@ -1,10 +1,11 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrms360Feedback, hrmsAparDisclosures, hrmsRatingAppeals } from "./schema.js";
-const log = pino({ name: "hrms-f3-appraisals" });
+const log = pino({ name: "hrms-f3-appraisals", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * F3 leftover fix (same bug class as leave/f3-consumer `leave_policy_admin_routes__0`):

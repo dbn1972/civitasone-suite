@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeVacancy, allocateRoster } from "./domain.js";
-const log = pino({ name: "hrms-f3-manpower-planning" });
+const log = pino({ name: "hrms-f3-manpower-planning", serializers: SAFE_LOG_SERIALIZERS });
 
 // Mirrors the module-private `AUDIT` constant in manpower-planning/routes.ts.
 const AUDIT = "audit.event.record";

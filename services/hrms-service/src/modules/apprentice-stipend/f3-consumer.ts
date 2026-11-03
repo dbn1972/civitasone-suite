@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -8,7 +9,7 @@ import { HttpError } from "../../shared/context.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { computeStipend } from "./domain.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-apprentice-stipend" });
+const log = pino({ name: "hrms-f3-apprentice-stipend", serializers: SAFE_LOG_SERIALIZERS });
 /**
  * HR-A deep-verify fix (F3 batch 5). The F3 code-gen lifted each route's WRITE
  * into the switch below but dropped the "fetch the current record + compute the

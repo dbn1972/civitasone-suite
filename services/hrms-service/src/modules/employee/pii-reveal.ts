@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
@@ -88,7 +89,7 @@ export async function employeePiiRevealRoutes(app: FastifyInstance): Promise<voi
   });
 }
 
-const log = pino({ name: "hrms-employee-pii-reveal" });
+const log = pino({ name: "hrms-employee-pii-reveal", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerEmployeePiiRevealConsumer(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {

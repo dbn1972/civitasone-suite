@@ -3102,6 +3102,7 @@
     "benefitLeaveEncashment": "Leave encashment"
   },
   "employeeWizard": {
+    "employeeNoExists": "An employee with Employee ID {employeeNo} already exists. Check the ID, or open the existing record.",
     "pageTitle": "Add Employee",
     "pageSubtitle": "Complete all five steps to create a new employee record.",
     "backLabel": "Employees",

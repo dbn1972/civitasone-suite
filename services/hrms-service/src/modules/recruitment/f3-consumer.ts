@@ -3,6 +3,7 @@ import { toStoredCategory } from "./reference-domain.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
@@ -71,7 +72,7 @@ import * as screeningRepo from "./screening-repo.js";
 import * as selectionRepo from "./selection-repo.js";
 import * as skillsRepo from "./skills-repo.js";
 
-const log = pino({ name: "hrms-f3-recruitment" });
+const log = pino({ name: "hrms-f3-recruitment", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * UAT B9-hrms1: the legal SOURCE statuses of each offer state transition -- the

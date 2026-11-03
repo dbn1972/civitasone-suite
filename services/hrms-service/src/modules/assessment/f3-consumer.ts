@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -13,7 +14,7 @@ import {
   type SubmittedAnswer,
 } from "./domain.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-assessment" });
+const log = pino({ name: "hrms-f3-assessment", serializers: SAFE_LOG_SERIALIZERS });
 export function registerF3_assessment_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;

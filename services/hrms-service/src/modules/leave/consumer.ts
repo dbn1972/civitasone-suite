@@ -14,9 +14,10 @@ import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { registerCompOffConsumers } from "./comp-off-consumer.js";
 
-const log = pino({ name: "hrms-leave-consumer" });
+const log = pino({ name: "hrms-leave-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 const AUDIT = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";

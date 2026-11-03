@@ -1,12 +1,13 @@
 // @ts-nocheck — generated F3 leftover consumer
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
-const log = pino({ name: "hrms-f3-rti" });
+const log = pino({ name: "hrms-f3-rti", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerF3_rti_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {

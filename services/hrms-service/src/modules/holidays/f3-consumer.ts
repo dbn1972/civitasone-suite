@@ -1,12 +1,13 @@
 // @ts-nocheck — generated F3 leftover consumer; locals closed over from route txs
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsHolidays } from "./schema.js";
-const log = pino({ name: "hrms-f3-holidays" });
+const log = pino({ name: "hrms-f3-holidays", serializers: SAFE_LOG_SERIALIZERS });
 export function registerF3_holidays_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;

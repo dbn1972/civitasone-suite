@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-cpf" });
+const log = pino({ name: "hrms-f3-cpf", serializers: SAFE_LOG_SERIALIZERS });
 /**
  * HR-A deep-verify fix (F3 batch 5). The F3 code-gen lifted each route's WRITE
  * into the switch below but dropped the preamble that resolved the account and

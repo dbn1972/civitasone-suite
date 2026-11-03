@@ -21,6 +21,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { idempotentId } from "@civitasone/auth";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead, sqlClient } from "../../shared/db.js";
 import { queue as sharedQueue } from "../../shared/infra.js";
@@ -30,7 +31,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { isExitedStatus } from "../employee/status.js";
 import { hrmsOnboardingTasks } from "./schema.js";
 
-const log = pino({ name: "hrms-onboarding-template" });
+const log = pino({ name: "hrms-onboarding-template", serializers: SAFE_LOG_SERIALIZERS });
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const AUDIT = "audit.event.record";
 

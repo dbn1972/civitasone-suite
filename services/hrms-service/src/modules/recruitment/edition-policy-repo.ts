@@ -3,10 +3,11 @@ import { db, scopedRead } from "../../shared/db.js";
 import { uuid, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { recruitmentSchema } from "./schema.js";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { fetchTenantEdition } from "../../shared/tenant-client.js";
 import { DEFAULT_POLICY, EDITIONS, editionFromTenant, requisitionRequired, type Edition, type EditionPolicy } from "./edition-policy.js";
 
-const log = pino({ name: "recruitment-edition-policy" });
+const log = pino({ name: "recruitment-edition-policy", serializers: SAFE_LOG_SERIALIZERS });
 
 export const hrmsRecruitmentEditionPolicy = recruitmentSchema.table("hrms_recruitment_edition_policy", {
   tenantId:           uuid("tenant_id").primaryKey(),

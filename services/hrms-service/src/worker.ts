@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "./shared/safe-error-log.js";
 import { sql } from "drizzle-orm";
 import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
@@ -16,7 +17,7 @@ import EventEmitter from "node:events";
 // 60+ consumers x timer listeners per connection otherwise triggers the warning.
 EventEmitter.defaultMaxListeners = 64;
 
-const log = pino({ name: "hrms-worker" });
+const log = pino({ name: "hrms-worker", serializers: SAFE_LOG_SERIALIZERS });
 
 // Wrap queue.subscribe to set tenant context from message — consumers run
 // db.transaction() and RLS policies require app.tenant_id GUC to be set.

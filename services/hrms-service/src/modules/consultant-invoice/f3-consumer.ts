@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -8,7 +9,7 @@ import { HttpError } from "../../shared/context.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { computeInvoiceTax } from "./domain.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-consultant-invoice" });
+const log = pino({ name: "hrms-f3-consultant-invoice", serializers: SAFE_LOG_SERIALIZERS });
 
 /** 194J FY threshold: ₹30,000 => 3,000,000 paise. Mirrors routes.ts. */
 const TDS_194J_THRESHOLD_MINOR = 3_000_000n;

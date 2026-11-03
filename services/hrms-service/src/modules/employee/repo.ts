@@ -1,5 +1,6 @@
 import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
@@ -8,7 +9,7 @@ import {
   type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
 } from "./schema.js";
 
-const log = pino({ name: "employee-repo" });
+const log = pino({ name: "employee-repo", serializers: SAFE_LOG_SERIALIZERS });
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 

@@ -2,6 +2,7 @@
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -9,7 +10,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { hrmsServiceBookEntries } from "./schema.js";
 
-const log = pino({ name: "hrms-f3-service-book" });
+const log = pino({ name: "hrms-f3-service-book", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 // SEC-CRIT-002: local HR audit trail for service-book mutations. Mirrors the
