@@ -7912,6 +7912,9 @@
     "introCutoff": "After {date}, only accepted documents count towards your tax deduction (TDS)."
   },
   "taxDeclarationForm": {
+    "noEmployeeRecord": "Your sign-in is not linked to an employee record, so there is no declaration of your own to file here. Ask HR to link your employee record.",
+    "staffFilingNote": "You are filing on behalf of an employee. Choose the employee whose declaration you want to view or file.",
+    "staffEmployeeLabel": "Employee",
     "loadingText": "Loading declaration…",
     "loadFailedWarning": "⚠ Could not load your existing declaration — blank amounts will overwrite previous values if you save.",
     "retryBtn": "Retry",
@@ -10748,7 +10751,99 @@
     "confirmDescription": "{name} — {amount} {frequency}, next run {nextRun}. {detail}",
     "submitted": "Change submitted — the list updates once it has been processed."
   },
+  "disciplinaryOpenCase": {
+    "button": "Open case",
+    "title": "Open a disciplinary case",
+    "description": "Record a new case against an employee. It opens in the Opened state; issue the charge memo from the case page.",
+    "confirm": "Open case",
+    "employee": "Employee",
+    "caseNo": "Case number",
+    "proceedingType": "Proceeding",
+    "major": "Major penalty proceeding",
+    "minor": "Minor penalty proceeding",
+    "allegation": "Allegation",
+    "opened": "Case {caseNo} opened.",
+    "viewCase": "Open the case",
+    "errEmployeeNotFound": "That employee record was not found. Pick the employee again.",
+    "errForbidden": "You don't have permission to open disciplinary cases.",
+    "errNetwork": "Couldn't reach the server. Check your connection and try again."
+  },
+  "contractLifecycle": {
+    "heading": "Contract approval and status",
+    "noneAvailable": "No further actions for this contract.",
+    "makerNote": "You created this contract, so a different officer must approve or terminate it.",
+    "submitted": "Submitted. The contract status updates in a moment.",
+    "noteLabel": "Note (optional)",
+    "reasonLabel": "Reason for termination",
+    "errMaker": "You cannot approve or terminate a contract you created. Ask another officer.",
+    "errWrongState": "The contract is no longer in a state that allows this. Refresh the page.",
+    "errNetwork": "Couldn't reach the server. Check your connection and try again.",
+    "actions": {
+      "approve": {
+        "label": "Approve contract",
+        "title": "Approve this contract?",
+        "description": "The contract moves to Approved. It can then be activated.",
+        "confirm": "Yes, approve"
+      },
+      "activate": {
+        "label": "Activate contract",
+        "title": "Activate this contract?",
+        "description": "The contract comes into force. Milestones and amendments apply from now.",
+        "confirm": "Yes, activate"
+      },
+      "close": {
+        "label": "Close contract",
+        "title": "Close this contract?",
+        "description": "Use this when all obligations are discharged. A closed contract cannot be reopened.",
+        "confirm": "Yes, close"
+      },
+      "terminate": {
+        "label": "Terminate contract",
+        "title": "Terminate this contract?",
+        "description": "This ends the contract early and cannot be undone. Record why.",
+        "confirm": "Yes, terminate"
+      }
+    }
+  },
+  "meetingLifecycle": {
+    "moved": "Meeting moved to “{state}”.",
+    "adjournReason": "Reason for adjournment",
+    "agendaTitle": "New agenda item",
+    "agendaOutcome": "Outcome",
+    "addAgenda": "Add agenda item",
+    "agendaAdded": "Agenda item added. It appears in the agenda in a moment.",
+    "actions": {
+      "schedule": "Schedule meeting",
+      "lockAgenda": "Lock agenda",
+      "unlockAgenda": "Unlock agenda",
+      "start": "Start meeting",
+      "adjourn": "Adjourn meeting",
+      "end": "End meeting",
+      "resume": "Resume meeting",
+      "moveToMinutes": "Move to minutes",
+      "close": "Close meeting"
+    },
+    "blockers": {
+      "needChair": "Assign a chairperson before scheduling.",
+      "needAgenda": "Add at least one agenda item before scheduling.",
+      "needFutureDate": "Set a meeting date in the future before scheduling."
+    },
+    "outcome": {
+      "decision": "Decision",
+      "discussion": "Discussion",
+      "information": "Information",
+      "ratification": "Ratification"
+    },
+    "err": {
+      "MEETING_INVALID_TRANSITION": "The meeting can't move to that stage from where it is now. Refresh the page and try the next step shown.",
+      "MEETING_QUORUM_NOT_MET": "Quorum isn't established yet. Check in enough members before starting.",
+      "MEETING_SHORT_NOTICE": "The meeting date gives less notice than this office requires.",
+      "VERSION_CONFLICT": "Someone else changed this meeting. Refresh the page and try again.",
+      "FORBIDDEN": "Only the meeting's chairperson or a meeting admin can do this."
+    }
+  },
   "disciplinaryActions": {
+    "errPenaltyBeforeMemo": "The penalty date cannot be before the charge memo date.",
     "heading": "Case actions",
     "notOwner": "Only the case creator or the assigned inquiry officer can progress this case.",
     "noneAvailable": "No further actions are available at this stage.",
