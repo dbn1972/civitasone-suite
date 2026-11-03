@@ -5314,6 +5314,13 @@
     "tryAgainOrHelp": "Please try again, or open help if it keeps happening.",
     "checkConnection": "Check your internet connection and try again."
   },
+  "uxMessages": {
+    "leaveRoutingFailedTitle": "{count, plural, one {# leave request could not be sent for approval} other {# leave requests could not be sent for approval}}",
+    "leaveRoutingFailedNext": "This usually means no approver is set up for the employee. Ask your HR administrator to check the leave approval chain for {count, plural, one {this employee} other {these employees}}.",
+    "leaveRoutingFailedDays": "{count, plural, one {# day} other {# days}}",
+    "onboardingOverdueNotice": "{count, plural, one {# joinee has overdue onboarding tasks} other {# joinees have overdue onboarding tasks}}, highlighted in amber below. Open a joinee to complete or reassign the tasks.",
+    "dataSourceLoadFailed": "We couldn't load this information, so nothing is shown here. Refresh the page to try again."
+  },
   "nachMandateForm": {
     "employeeRefLabel": "Employee",
     "amountLabel": "Amount (₹)",
@@ -18308,12 +18315,5 @@
     "backToReports": "Back to reports",
     "createFromInspection": "Create inspection report",
     "viewReports": "View reports for this inspection"
-  },
-  "uxMessages": {
-    "leaveRoutingFailedTitle": "{count, plural, one {# leave request could not be sent for approval} other {# leave requests could not be sent for approval}}",
-    "leaveRoutingFailedNext": "This usually means no approver is set up for the employee. Ask your HR administrator to check the leave approval chain for {count, plural, one {this employee} other {these employees}}.",
-    "leaveRoutingFailedDays": "{count, plural, one {# day} other {# days}}",
-    "onboardingOverdueNotice": "{count, plural, one {# joinee has overdue onboarding tasks} other {# joinees have overdue onboarding tasks}}, highlighted in amber below. Open a joinee to complete or reassign the tasks.",
-    "dataSourceLoadFailed": "We couldn't load this information, so nothing is shown here. Refresh the page to try again."
   }
 }
