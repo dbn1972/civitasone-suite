@@ -35,6 +35,7 @@ import {
   writeSharedActivity,
   type SessionTimes,
 } from "@/lib/auth/sessionClient";
+import { isLeavingPage, runWhenPageSettled } from "@/lib/navigation/pageLifecycle";
 
 /** Warn this long before the session ends. */
 export const WARNING_LEAD_MS = 2 * 60_000;
@@ -136,6 +137,8 @@ export function SessionTimeoutWarning() {
 
   const silentRefresh = useCallback(async () => {
     const tr = t.current;
+    // F132: never start a refresh on a page that is being navigated away from.
+    if (isLeavingPage()) return;
     tr.refreshing = true;
     tr.lastAttemptAt = Date.now();
     const res = await refreshSession();
@@ -157,7 +160,8 @@ export function SessionTimeoutWarning() {
 
   const tick = useCallback(async () => {
     const tr = t.current;
-    if (tr.ending || tr.syncing) return;
+    // F132: a page that is redirecting / unloading does no session work at all.
+    if (tr.ending || tr.syncing || isLeavingPage()) return;
     const shared = readSharedActivity();
     const otherTabActive = shared > tr.lastActivity;
     tr.lastActivity = Math.max(tr.lastActivity, shared);
@@ -222,14 +226,21 @@ export function SessionTimeoutWarning() {
   }, [close, deadline, expire, resync, silentRefresh]);
 
   // Initial timing + the 1 s clock.
+  // F132: the first timing read waits until the document has loaded and is
+  // skipped when the page is redirecting (e.g. /estab/files -> /estab/list),
+  // so a page the user never sees makes no /api/auth/refresh call that the
+  // navigation then aborts. Unmounting before that point cancels it.
   useEffect(() => {
     let cancelled = false;
-    void fetchSessionTimes().then((times) => {
-      if (!cancelled && times) applyTimes(times, false);
+    const cancelInitialRead = runWhenPageSettled(() => {
+      void fetchSessionTimes().then((times) => {
+        if (!cancelled && times) applyTimes(times, false);
+      });
     });
     const id = window.setInterval(() => void tick(), TICK_MS);
     return () => {
       cancelled = true;
+      cancelInitialRead();
       window.clearInterval(id);
     };
   }, [applyTimes, tick]);

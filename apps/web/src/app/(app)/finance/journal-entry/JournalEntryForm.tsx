@@ -369,7 +369,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
 
   /* ── render ─────────────────────────────────────────────────── */
   return (
-    <form className="fields" onSubmit={handleSubmit} noValidate aria-describedby={message ? errId : undefined}>
+    <form className="fields jv-form" onSubmit={handleSubmit} noValidate aria-describedby={message ? errId : undefined}>
       {/* ── header fields ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
         <div className="field">

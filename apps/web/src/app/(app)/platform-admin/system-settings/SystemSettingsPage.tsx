@@ -319,13 +319,16 @@ export function SystemSettingsPage({ initial }: { initial: AdminSettings }) {
             </div>
           </>
         ) : (
-          <dl style={fullRow}>
-            <div style={row}>
+          <div style={fullRow}>
+            {/* UAT-P2-D3 (A11Y-15): one <dl> per visual row -- dt/dd were nested two divs deep. */}
+            <dl style={{ ...row, margin: 0 }}>
               <ReadField label="Session timeout" value={security.sessionTimeoutMin ? `${security.sessionTimeoutMin} min` : ""} />
               <ReadField label="MFA" value={security.mfaRequired ? "Required" : "Optional"} />
-            </div>
-            <ReadField label="IP whitelist" value={security.ipWhitelist ? security.ipWhitelist.split(/\r?\n/).filter(Boolean).join(", ") : "Allow all"} />
-          </dl>
+            </dl>
+            <dl style={{ margin: 0 }}>
+              <ReadField label="IP whitelist" value={security.ipWhitelist ? security.ipWhitelist.split(/\r?\n/).filter(Boolean).join(", ") : "Allow all"} />
+            </dl>
+          </div>
         )}
       </SectionCard>
 
@@ -353,16 +356,17 @@ export function SystemSettingsPage({ initial }: { initial: AdminSettings }) {
             </div>
           </>
         ) : (
-          <dl style={fullRow}>
-            <div style={row}>
+          <div style={fullRow}>
+            {/* UAT-P2-D3 (A11Y-15): one <dl> per visual row -- dt/dd were nested two divs deep. */}
+            <dl style={{ ...row, margin: 0 }}>
               <ReadField label="PFMS API endpoint" value={integrations.pfmsUrl} />
               <ReadField label="NIC gateway URL" value={integrations.nicGatewayUrl} />
-            </div>
-            <div style={row}>
+            </dl>
+            <dl style={{ ...row, margin: 0 }}>
               <ReadField label="DigiLocker" value={integrations.digiLockerEnabled ? "Enabled" : "Disabled"} />
               <ReadField label="UMANG" value={integrations.umangEnabled ? "Enabled" : "Disabled"} />
-            </div>
-          </dl>
+            </dl>
+          </div>
         )}
       </SectionCard>
 

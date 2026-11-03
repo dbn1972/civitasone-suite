@@ -533,12 +533,14 @@ function tenantLoader(
   path: string,
   key: string,
   mapper: (payload: unknown) => ModuleRowSummary[] = mapTenantRows,
+  opts: { notFoundAsEmpty?: boolean } = {},
 ) {
   return (): Promise<LoaderResult<ModuleRowSummary[]>> =>
     fetchJson<unknown, ModuleRowSummary[]>(path, [] as ModuleRowSummary[], {
       revalidateSeconds: 30,
       telemetryKey: key,
       mapResponse: mapper,
+      ...(opts.notFoundAsEmpty ? { notFoundAsEmpty: true } : {}),
     });
 }
 
@@ -590,7 +592,9 @@ export function getTenantImportBatches(): Promise<LoaderResult<ImportBatchSummar
 }
 
 /** Core tenant profile (11th backend module). */
-export const getTenantOverview = tenantLoader("/api/v1/tenant/current", "tenant.overview", mapOverviewRows);
+// UAT-P2-D1: a 404 NOT_FOUND from tenant-service means the office has no
+// tenant record yet -> empty profile, not "We couldn't load office profile".
+export const getTenantOverview = tenantLoader("/api/v1/tenant/current", "tenant.overview", mapOverviewRows, { notFoundAsEmpty: true });
 export const getTenantQuotas = tenantLoader("/api/v1/tenant/usage", "tenant.quotas", mapQuotaRows);
 export const getTenantSettings = tenantLoader("/api/v1/tenant/settings", "tenant.settings", mapSettingRows);
 export const getTenantSubscriptions = tenantLoader(

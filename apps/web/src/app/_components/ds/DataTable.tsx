@@ -7,7 +7,7 @@ import { csvFormulaSafe } from "@/lib/csv";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney, formatRupees, formatIndianDate, formatIndianDateTime, formatPercent, formatPeriod, formatMoneyIn } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate, formatIndianDateTime, formatPercent, formatPeriod, formatMoneyIn, formatDisplayText } from "@/lib/formatters";
 import { minorToDecimalString } from "@/lib/money";
 import { downloadCsvFile, tableExportGuard, TABLE_EXPORT_NOT_RECORDED, type ExportGuard } from "@/lib/export/csvExport";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
@@ -354,6 +354,8 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
       );
     }
   }
+  // UAT-P2-D4: raw ISO dates / lower-case enum codes in a plain column get the shared display format.
+  if (typeof raw === "string") return formatDisplayText(raw, col.key);
   return String(raw ?? "");
 }
 

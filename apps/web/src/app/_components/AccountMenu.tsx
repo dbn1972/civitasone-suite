@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { Avatar } from "./ds/Avatar";
+import { useMenuKeyboard } from "./ds/useMenuKeyboard";
 import { DarkModeToggle } from "./DarkModeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { performLogout } from "@/lib/sync/logout";
@@ -10,6 +11,12 @@ import { performLogout } from "@/lib/sync/logout";
 export function AccountMenu({ name = "User" }: { name?: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const close = useCallback(() => setOpen(false), []);
+  // UAT-P2-D3 (A11Y-09): Escape / arrow keys / focus in and back / click outside.
+  useMenuKeyboard(open, close, triggerRef, menuRef);
 
   async function onSignOut() {
     setBusy(true);
@@ -19,10 +26,12 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
   return (
     <div style={{ position: "relative" }}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         aria-label="Account menu"
         style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
       >
@@ -30,7 +39,10 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
       </button>
       {open ? (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
+          aria-label="Account menu"
           style={{
             position: "absolute",
             right: 0,
@@ -56,19 +68,21 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
 
           {/* Dark mode toggle row */}
           <div
-            role="menuitem"
+            role="group"
+            aria-labelledby={`${menuId}-appearance`}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 6, fontSize: 13 }}
           >
-            <span>Appearance</span>
+            <span id={`${menuId}-appearance`}>Appearance</span>
             <DarkModeToggle />
           </div>
 
           {/* Language switcher row */}
           <div
-            role="menuitem"
+            role="group"
+            aria-labelledby={`${menuId}-language`}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 6, fontSize: 13, marginBottom: 4 }}
           >
-            <span>Language</span>
+            <span id={`${menuId}-language`}>Language</span>
             <LanguageSwitcher />
           </div>
 

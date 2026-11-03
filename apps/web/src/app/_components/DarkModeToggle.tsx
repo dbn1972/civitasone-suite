@@ -63,6 +63,7 @@ export function DarkModeToggle() {
 
   const icon = theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "💻";
   const label = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System";
+  const nextLabel = theme === "dark" ? "System" : theme === "light" ? "Dark" : "Light";
 
   return (
     <button
@@ -70,9 +71,11 @@ export function DarkModeToggle() {
       type="button"
       className="iconbtn"
       title={`Theme: ${label}`}
+      // UAT-P2-D3 (A11Y-11): the name was the emoji ("sun"); say the state and the action.
+      aria-label={`Theme: ${label}. Switch to ${nextLabel}`}
       style={{ position: "relative" }}
     >
-      {icon}
+      <span aria-hidden="true">{icon}</span>
     </button>
   );
 }

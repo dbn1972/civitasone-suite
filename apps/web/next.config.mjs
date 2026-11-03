@@ -110,6 +110,12 @@ const nextConfig = {
       // children such as /establishment/foo (GAP-ESTABLISHMENT-HOME-02).
       { source: '/establishment', destination: '/estab', permanent: true },
       { source: '/establishment/files', destination: '/estab/list', permanent: true },
+      // F132 (UAT-P2-D2): /estab/files is a grouping segment whose page only
+      // permanentRedirect()s to /estab/list. As a page-level redirect it ran
+      // inside estab/loading.tsx's Suspense boundary, so the app shell was
+      // streamed and hydrated first and its session calls were aborted by the
+      // redirect. A config redirect answers 308 before any HTML is sent.
+      { source: '/estab/files', destination: '/estab/list', permanent: true },
       { source: '/stock/:path*', destination: '/inventory/:path*', permanent: true },
     ];
   },
