@@ -119,7 +119,7 @@ describe("IntegrationDrawer", () => {
       fireEvent.click(screen.getByText(/Propose change/));
 
       const alert = await screen.findByRole("alert");
-      await waitFor(() => expect(alert).toHaveTextContent(/This Anthropic \(Claude\) was changed by someone else\. Refresh to see the latest version, then try again\./));
+      await waitFor(() => expect(alert).toHaveTextContent(/This action can.t be done on this Anthropic \(Claude\) right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
       expect(alert.textContent).not.toMatch(/version conflict/i);
       expect(alert.textContent).not.toMatch(/\b409\b/);
     });

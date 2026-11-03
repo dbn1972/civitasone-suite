@@ -299,10 +299,10 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     await fillAndSubmit();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This action can.t be done on this leave request right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(alert.textContent).not.toMatch(/leave-service/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
-    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/This action can.t be done on this leave request right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
   });
 
   it("shows a clerk-safe message when there is no response at all (network failure, not queued)", async () => {

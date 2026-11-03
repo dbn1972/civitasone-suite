@@ -20,7 +20,8 @@ import type { ErrorLocale, ErrorStatusKind, StandardAction } from "./errorCatalo
 
 export type CodeCopy = { what: string; next: string };
 /** serverSide: the message stays true for a 5xx / 429 / 408 / 401 answer too (otherwise the status copy wins there). */
-export type ServiceCodeMessage = { en: CodeCopy; hi: CodeCopy; actions?: StandardAction[]; serverSide?: boolean };
+/** alsoAt401: the message also wins over a 401 (an OTP refused on a public, signed-out page is not "session ended"). */
+export type ServiceCodeMessage = { en: CodeCopy; hi: CodeCopy; actions?: StandardAction[]; serverSide?: boolean; alsoAt401?: boolean };
 
 const RECORD = { en: "record", hi: "रिकॉर्ड" };
 
@@ -323,24 +324,24 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     true,
   ),
   // ---- One-time codes ----
-  OTP_INVALID: msg(
+  OTP_INVALID: { ...msg(
     { what: "The code you entered is not correct.", next: "Check the code in the latest message and enter it again." },
     { what: "आपके द्वारा दर्ज किया गया कोड सही नहीं है।", next: "नवीनतम संदेश में आया कोड जाँचें और उसे फिर से दर्ज करें।" },
     ["retry", "help"],
-  ),
-  OTP_LOCKED: msg(
+  ), alsoAt401: true },
+  OTP_LOCKED: { ...msg(
     { what: "Too many wrong codes were entered, so the code is locked.", next: "Wait a few minutes, then ask for a new code." },
     { what: "कई बार ग़लत कोड दर्ज किया गया, इसलिए कोड लॉक कर दिया गया है।", next: "कुछ मिनट रुकें, फिर नया कोड माँगें।" },
-  ),
-  OTP_REQUIRED: msg(
+  ), alsoAt401: true },
+  OTP_REQUIRED: { ...msg(
     { what: "A one-time code is needed to continue.", next: "Enter the code sent to your registered mobile number or email." },
     { what: "आगे बढ़ने के लिए एक बार उपयोग होने वाला कोड (OTP) आवश्यक है।", next: "अपने पंजीकृत मोबाइल नंबर या ईमेल पर भेजा गया कोड दर्ज करें।" },
     ["retry", "help"],
-  ),
-  OTP_NOT_ENABLED: msg(
+  ), alsoAt401: true },
+  OTP_NOT_ENABLED: { ...msg(
     { what: "Sign-in codes are not switched on for this account.", next: "Ask your administrator to switch on one-time codes for your account." },
     { what: "इस खाते के लिए एक बार उपयोग होने वाले कोड चालू नहीं हैं।", next: "अपने प्रशासक से अपने खाते के लिए OTP चालू करवाएँ।" },
-  ),
+  ), alsoAt401: true },
   // ---- Codes the naming rules would read wrongly ----
   CONFLICT_OF_INTEREST: msg(
     { what: "You have a declared conflict of interest in this matter, so you can't act on it.", next: "Another officer needs to do this. Ask the officer in charge to reassign it." },
@@ -403,7 +404,7 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
   ),
   UNSIGNED_NOT_ALLOWED_IN_PRODUCTION: msg(
     { what: "Unsigned bank files can't be used in production.", next: "Choose a signing method in Bank file signing, then try again." },
-    { what: "उत्पादन परिवेश में बिना हस्ताक्षर वाली बैंक फ़ाइल का उपयोग नहीं किया जा सकता।", next: "बैंक फ़ाइल हस्ताक्षर में कोई हस्ताक्षर विधि चुनें, फिर प्रयास करें।" },
+    { what: "लाइव प्रणाली में बिना हस्ताक्षर वाली बैंक फ़ाइल का उपयोग नहीं किया जा सकता।", next: "बैंक फ़ाइल हस्ताक्षर में कोई हस्ताक्षर विधि चुनें, फिर प्रयास करें।" },
     ["back", "help"],
   ),
   ROOM_AT_CAPACITY: msg(
@@ -416,11 +417,11 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     { what: "This cheque or draft is past its validity period.", next: "Ask for a fresh instrument, then record that one." },
     { what: "यह चेक या ड्राफ़्ट अपनी वैधता अवधि पार कर चुका है।", next: "नया लिखत माँगें, फिर उसे दर्ज करें।" },
   ),
-  MISSING_OTP: msg(
+  MISSING_OTP: { ...msg(
     { what: "A one-time code is needed to continue.", next: "Enter the code sent to your registered mobile number or email." },
     { what: "आगे बढ़ने के लिए एक बार उपयोग होने वाला कोड (OTP) आवश्यक है।", next: "अपने पंजीकृत मोबाइल नंबर या ईमेल पर भेजा गया कोड दर्ज करें।" },
     ["retry", "help"],
-  ),
+  ), alsoAt401: true },
   EMPTY_PATCH: NO_CHANGE_MESSAGE,
   CALL_TASK: msg(
     { what: "This step is done by a phone call, not on this screen.", next: "Make the call, then record the outcome on the task." },
@@ -456,7 +457,7 @@ export const CODE_FAMILIES: Family[] = [
   {
     id: "versionConflict",
     pattern: /^STALE_|VERSION_CONFLICT$|VERSION_MISMATCH$|^CONCURRENT_|_CONCURRENT_(EDIT|UPDATE|MODIFICATION)$|ETAG|^EDIT_CONFLICT$|^PRECONDITION_FAILED$/,
-    kind: "conflict",
+    kind: "concurrentEdit",
     object: RECORD,
   },
   {
@@ -515,12 +516,30 @@ export const CODE_FAMILIES: Family[] = [
       { what: "इसके लिए निर्धारित समय सीमा बीत चुकी है।", next: "प्रभारी अधिकारी से पूछें कि क्या समय सीमा बढ़ाई जा सकती है।" },
     ),
   },
+  {
+    id: "inUse",
+    pattern: /_IN_USE$|^IN_USE$|^HAS_ACTIVE_|_HAS_ACTIVE_|_HAS_(MEMBERS|ANSWERS|CHILDREN|DEPENDENTS|LINKS|ITEMS|ENTRIES|EMPLOYEES|RECORDS|TRANSACTIONS)$/,
+    object: RECORD,
+    message: msg(
+      { what: "This {object} is still in use.", next: "Remove or reassign the linked items first, then try again." },
+      { what: "यह {object} अभी उपयोग में है।", next: "पहले इससे जुड़ी प्रविष्टियाँ हटाएँ या किसी दूसरे को सौंपें, फिर प्रयास करें।" },
+    ),
+  },
+  {
+    id: "alreadyDone",
+    pattern: /^ALREADY_[A-Z_]+$|_ALREADY_[A-Z_]+$/,
+    message: msg(
+      { what: "This has already been done.", next: "Refresh to see its current status." },
+      { what: "यह कार्य पहले ही हो चुका है।", next: "इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।" },
+      ["retry", "help"],
+    ),
+  },
   // Real state codes: an explicit state or transition rule, or a "not <state>" / "not <...>able" statement.
   {
     id: "stateTransition",
     pattern:
-      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
-    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$/,
+      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|^WRONG_STATE$|_WRONG_STATE$|^CANNOT_[A-Z_]+$|_BLOCKED$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACTIVE|FINAL|PASSED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY|ACTIVE|FINAL|PASSED)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
+    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$|^SSRF_BLOCKED$|INJECTION_BLOCKED$/,
     object: RECORD,
     message: msg(
       { what: "This {object} is not at a stage that allows this action.", next: "Refresh the page to see its current status, then choose an action that is available." },
@@ -697,7 +716,7 @@ export function resolveServiceCode(
   const authoritative = isStatusAuthoritative(opts?.status);
   if (Object.prototype.hasOwnProperty.call(SERVICE_CODE_MESSAGES, code)) {
     const m = SERVICE_CODE_MESSAGES[code];
-    if (!authoritative || m.serverSide) return { source: "explicit", id: code, message: m };
+    if (!authoritative || m.serverSide || (m.alsoAt401 && opts?.status === 401)) return { source: "explicit", id: code, message: m };
     return null;
   }
   // Families refine a 4xx answer only; with no status (a bare code thrown in the browser) they also apply.

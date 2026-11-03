@@ -166,7 +166,7 @@ describe("document-types + verify (DM-002)", () => {
     const body = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(body).toMatchObject({ status: "rejected", reason: "blurry scan" });
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
-    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
+    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow("This action can't be done on this record right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
     await expect(dm.verifyDocument("d1", "verified")).rejects.not.toThrow(/E/);
   });

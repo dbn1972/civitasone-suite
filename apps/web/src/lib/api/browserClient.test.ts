@@ -199,7 +199,7 @@ describe("errorMessageForStatus", () => {
       "We couldn't save the professional tax slab because of a problem on our side. Your changes haven't been saved. Try again in a few minutes.",
     );
     expect(await errorMessageForStatus(mockRes(409, {}))).toBe(
-      "This information was changed by someone else. Refresh to see the latest version, then try again.",
+      "This action can't be done on this record right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status.",
     );
     expect(await errorMessageForStatus(mockRes(404, {}))).toBe(
       "We couldn't find this information. It may have been removed or the link may be wrong.",

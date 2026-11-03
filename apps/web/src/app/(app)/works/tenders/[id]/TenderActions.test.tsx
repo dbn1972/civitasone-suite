@@ -187,7 +187,7 @@ describe("TenderActions — UX-016 clerk-safe errors", () => {
     await waitFor(() => expect((screen.getByLabelText(/Accepted Amount/i) as HTMLInputElement).value).toBe("50000.00"));
     fireEvent.click(screen.getByRole("button", { name: "Create Award" }));
 
-    await waitFor(() => expect(screen.getByText(/changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/can.t be done on this [\w -]+ right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./)).toBeInTheDocument());
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
 

@@ -92,7 +92,7 @@ describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
     fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Create booking" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/This booking was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/This action can.t be done on this booking right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(screen.getByRole("alert").textContent).not.toMatch(/room already booked/i);
     expect(screen.getByRole("alert").textContent).not.toMatch(/\b409\b/);
   });

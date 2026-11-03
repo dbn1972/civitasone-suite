@@ -56,7 +56,7 @@ describe("error catalogue: standard wording", () => {
     [401, "Your session has ended. Sign in again to continue."],
     [403, "You don't have permission to do this. Ask your administrator if you need access."],
     [404, "We couldn't find this leave request. It may have been removed or the link may be wrong."],
-    [409, "This leave request was changed by someone else. Refresh to see the latest version, then try again."],
+    [409, "This action can't be done on this leave request right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status."],
     [413, "The file is too large. Upload a file smaller than 5 MB."],
     [415, "This file type isn't accepted. Upload a PDF file."],
     [429, "Too many attempts. Wait a minute, then try again."],
@@ -199,7 +199,7 @@ describe("error catalogue: standard wording", () => {
 
   it("an unknown code falls back to the status copy and is never echoed", () => {
     const r = resolveHumanError({ status: 409, code: "TOTALLY_NEW_CODE", ctx: { locale: "en" } });
-    expect(r.what).toBe("This information was changed by someone else.");
+    expect(r.what).toBe("This action can't be done on this record right now.");
     expect(`${r.what} ${r.next}`).not.toContain("TOTALLY_NEW_CODE");
   });
 
@@ -233,7 +233,8 @@ describe("error catalogue: standard wording", () => {
   it("maps statuses to kinds", () => {
     expect(statusToKind(418)).toBe("server");
     expect(statusToKind(0)).toBe("network");
-    expect(statusToKind(412)).toBe("conflict");
+    expect(statusToKind(412)).toBe("concurrentEdit");
+    expect(statusToKind(409)).toBe("conflict");
   });
 });
 

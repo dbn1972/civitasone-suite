@@ -193,9 +193,11 @@ export function isPresentableMessage(message: unknown): message is string {
   if (/\b(?:HTTP|status(?: code)?)\s*[45]\d\d\b|\([45]\d\d\)|\b[45]\d\d (?:Internal|Bad|Not|Forbidden|Unauthorized|Service|Gateway)/i.test(m)) return false;
   if (/^[[{<]/.test(m) || /\bat \S+ \(|undefined|null\b|is not a function|Cannot read propert|Unexpected token|JSON|fetch failed|Failed to fetch/i.test(m)) return false;
   // HTTP reason phrases and transport errors (Internal Server Error, Bad Gateway, timeout of 30000ms exceeded).
-  if (/\b(internal server error|bad gateway|service unavailable|gateway time-?out|not found|bad request|too many requests|unauthori[sz]ed|forbidden|request failed|failed with|server returned|networkerror|network error|timeout of \d+ ?ms|timed out|econn\w*|etimedout|enotfound|socket hang up|stack trace)\b/i.test(m)) return false; // status-leak-ok: rejects raw reason phrases; never rendered
+  if (/\b(internal server error|bad gateway|service unavailable|gateway time-?out|too many requests|request failed|failed with|server returned|networkerror|network error|timeout of \d+ ?ms|timed out|econn\w*|etimedout|enotfound|socket hang up|stack trace)\b/i.test(m)) return false; // status-leak-ok: rejects raw reason phrases; never rendered
+  // A bare reason phrase on its own ("Not Found", "Forbidden").
+  if (/^(not found|bad request|unauthori[sz]ed|forbidden|conflict)\.?$/i.test(m)) return false;
   // Any HTTP status number (a 4xx/5xx standing on its own), but not an amount or a count of something.
-  if (/(?<![\d₹.,])\b[45]\d\d\b(?![.,]\d)(?!\s*(characters?|chars|words|days?|months?|years?|rupees|rs\.?|lakh|crore|%|kb|mb|items?|rows?|employees?|records?|pages?|units?|nos?\.?|ms\b))/i.test(m)) return false;
+  if (/(?<![\d₹.,])(?<!\b(?:Rs|INR)\.?\s?)\b[45]\d\d\b(?![.,]\d)(?!\s*(characters?|chars|words|days?|months?|years?|rupees|rs\.?|lakh|crore|%|kb|mb|items?|rows?|employees?|records?|pages?|units?|files?|nos?\.?|ms\b))/i.test(m)) return false;
   // Stack-like lines: "at Foo (file.js:1:2)", "file.ts:12:3", "Error:" anywhere.
   if (/\.(m?[jt]sx?):\d+|\n\s*at\s|\bError:/.test(m)) return false;
   return true;

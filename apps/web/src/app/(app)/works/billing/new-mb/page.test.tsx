@@ -164,7 +164,7 @@ describe("Issue Measurement Book form", () => {
 
     const alert = await screen.findByRole("alert");
     await waitFor(() =>
-      expect(alert).toHaveTextContent(/This measurement book was changed by someone else\. Refresh to see the latest version, then try again\./),
+      expect(alert).toHaveTextContent(/This action can.t be done on this measurement book right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./),
     );
     expect(alert.textContent).not.toMatch(/mb_number already exists/i);
     expect(alert.textContent).not.toMatch(/\b409\b/);

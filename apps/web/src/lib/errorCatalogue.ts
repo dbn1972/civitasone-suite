@@ -21,7 +21,10 @@ export type ErrorStatusKind =
   | "unauthenticated"
   | "forbidden"
   | "notFound"
+  /** 409 / a state rule: neutral, never claims a concurrent edit (most 409s are state or in-use rules). */
   | "conflict"
+  /** A genuine concurrent edit: 412, or a version / ETag / STALE / CONCURRENT code. */
+  | "concurrentEdit"
   | "tooLarge"
   | "unsupportedType"
   | "rateLimited"
@@ -91,6 +94,10 @@ const EN: Catalogue = {
       next: "It may have been removed or the link may be wrong.",
     },
     conflict: {
+      what: "This action can't be done on this {object} right now.",
+      next: "It may have changed, or be in a state that doesn't allow it. Refresh to see its current status.",
+    },
+    concurrentEdit: {
       what: "This {object} was changed by someone else.",
       next: "Refresh to see the latest version, then try again.",
     },
@@ -161,6 +168,10 @@ const HI: Catalogue = {
       next: "हो सकता है इसे हटा दिया गया हो या लिंक गलत हो।",
     },
     conflict: {
+      what: "यह कार्रवाई अभी इस {object} पर नहीं की जा सकती।",
+      next: "हो सकता है इसमें बदलाव हुआ हो, या यह ऐसी स्थिति में हो जिसमें यह कार्रवाई संभव नहीं है। इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।",
+    },
+    concurrentEdit: {
       what: "यह {object} किसी और ने बदल दिया है।",
       next: "नवीनतम संस्करण देखने के लिए पेज रीफ़्रेश करें, फिर दोबारा प्रयास करें।",
     },
@@ -583,7 +594,8 @@ export function statusToKind(status: number | undefined): ErrorStatusKind {
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
   if (status === 404) return "notFound";
-  if (status === 409 || status === 412) return "conflict";
+  if (status === 412) return "concurrentEdit";
+  if (status === 409) return "conflict";
   if (status === 413) return "tooLarge";
   if (status === 415) return "unsupportedType";
   if (status === 429) return "rateLimited";
@@ -606,6 +618,7 @@ function actionsFor(kind: ErrorStatusKind): StandardAction[] {
     case "notFound":
       return ["back", "help"];
     case "conflict":
+    case "concurrentEdit":
       return ["retry", "help"];
     default:
       return ["retry", "help"];
@@ -681,7 +694,7 @@ export function resolveHumanError(input: {
   const kind = input.forceKind ?? familyKind ?? statusToKind(input.status);
   const entry = cat.kinds[kind];
   const vars = {
-    object: ctx.area?.trim() || familyObject?.[locale] || cat.defaultObject,
+    object: ctx.area?.trim() || familyObject?.[locale] || ((kind === "conflict" || kind === "concurrentEdit") ? (locale === "hi" ? "रिकॉर्ड" : "record") : cat.defaultObject),
     verb: cat.verbs[intent],
     limit: ctx.limit?.trim() || cat.defaultLimit,
     types: ctx.types?.trim() || cat.defaultTypes,

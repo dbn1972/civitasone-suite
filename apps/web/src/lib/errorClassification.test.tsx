@@ -153,7 +153,7 @@ describe("review of #2451: cancels, loader timeouts and HTTP reason phrases", ()
     expect(isPresentableMessage(raw)).toBe(false);
     expect(messageForThrown(new Error(raw)).message).not.toContain(raw);
   });
-  it.each(["Reason must be 500 characters or fewer.", "Enter an amount above ₹500 for this head.", "Complete the form first."])("keeps the deliberate sentence %s", (s) => {
+  it.each(["Reason must be 500 characters or fewer.", "Enter an amount above ₹500 for this head.", "Complete the form first.", "Enter an amount up to Rs 500.", "Upload up to 500 files at a time.", "Employee not found in this office. Check the number."])("keeps the deliberate sentence %s", (s) => {
     expect(isPresentableMessage(s)).toBe(true);
   });
   it("the cause-unknown save copy does not claim the changes are unsaved", () => {

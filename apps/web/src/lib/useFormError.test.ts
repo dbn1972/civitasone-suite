@@ -115,7 +115,7 @@ describe("useFormError", () => {
     it.each([
       [401, "Your session has ended. Sign in again to continue."],
       [404, "We couldn't find this leave request. It may have been removed or the link may be wrong."],
-      [409, "This leave request was changed by someone else. Refresh to see the latest version, then try again."],
+      [409, "This action can't be done on this leave request right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status."],
       [429, "Too many attempts. Wait a minute, then try again."],
       [500, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     ])("status %s", async (status, expected) => {

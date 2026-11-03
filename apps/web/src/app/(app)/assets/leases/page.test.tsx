@@ -60,7 +60,7 @@ describe("LeasesPage register", () => {
     await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
     // plain copy, never the raw response body
-    expect(await screen.findByText(/This lease was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
+    expect(await screen.findByText(/This action can.t be done on this lease right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./)).toBeInTheDocument();
     expect(screen.queryByText(/duplicate lease number/)).not.toBeInTheDocument();
   });
 

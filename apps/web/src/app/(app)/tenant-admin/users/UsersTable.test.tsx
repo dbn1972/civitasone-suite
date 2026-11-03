@@ -55,7 +55,7 @@ describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
     fireEvent.change(within(dialog).getByLabelText(/^Email/i), { target: { value: "asha@gov.in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Send invite" }));
 
-    await waitFor(() => expect(dialog.textContent).toMatch(/This invitation was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(dialog.textContent).toMatch(/This action can.t be done on this invitation right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(dialog.textContent).not.toMatch(/duplicate email constraint/i);
     expect(dialog.textContent).not.toMatch(/\b409\b/);
   });
