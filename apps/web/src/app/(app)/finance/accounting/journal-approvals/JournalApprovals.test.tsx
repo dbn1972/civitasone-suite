@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -71,6 +71,42 @@ describe("UAT P2 J6: journal approval screen", () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("pending-journal")).toBeInTheDocument();
     expect(screen.queryByText(/Journal approved/)).not.toBeInTheDocument();
+  });
+
+  it("a checker rejects with a reason of at least 10 characters; the journal moves to the read-only rejected list", async () => {
+    render(ui([J()]));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    const confirm = screen.getByRole("button", { name: "Reject journal" });
+    fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "too short" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "Wrong head of account used" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchSpy.mock.calls[0]! as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/finance/journals/8582e532-7041-45d3-93ef-1d8a89066f81/reject");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Wrong head of account used" });
+    expect(await screen.findByText(/Journal rejected/)).toBeInTheDocument();
+    expect(screen.queryByTestId("pending-journal")).not.toBeInTheDocument();
+    const rej = screen.getByTestId("rejected-journal");
+    expect(rej).toHaveTextContent("Wrong head of account used");
+    // read-only: no Approve / Reject on a rejected journal
+    expect(within(rej).queryByRole("button", { name: /Approve|Reject/ })).toBeNull();
+  });
+
+  it("the maker sees their rejected journal with the reason and a link to raise a fresh voucher", () => {
+    render(ui([]));
+    expect(screen.getByText("No rejected journals")).toBeInTheDocument();
+  });
+
+  it("lists rejected journals passed in (final), and the maker gets 'Raise a new voucher'", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <JournalApprovals initial={[]} rejected={[J({ isOwn: true, rejectionReason: "Duplicate of JV 12", decidedAt: "2026-11-03T05:00:00.000Z" })]} canApprove heads={heads} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByTestId("rejected-journal")).toHaveTextContent("Duplicate of JV 12");
+    expect(screen.getByRole("link", { name: "Raise a new voucher" })).toHaveAttribute("href", "/finance/accounting/vouchers/new");
   });
 
   it("an empty queue says so", () => {

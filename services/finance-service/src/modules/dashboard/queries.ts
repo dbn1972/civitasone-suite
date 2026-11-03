@@ -94,7 +94,8 @@ export async function getDashboard(tenantId: string, fy?: string) {
             .where(and(eq(financeSanctions.tenantId, tenantId), inArray(financeSanctions.status, [...PENDING_SANCTION_STATUSES]))),
           tx.select({ count: sql<number>`count(*)::int` })
             .from(financePayments)
-            .where(eq(financePayments.tenantId, tenantId)),
+            // UAT P2: "this month" = since the 1st of the current calendar month in India (it counted every payment).
+            .where(and(eq(financePayments.tenantId, tenantId), sql`${financePayments.createdAt} >= (date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`)),
           expenseIds.length === 0
             ? Promise.resolve([{ total: 0 }])
             : tx.select({ total: sql<number>`coalesce(sum(${financeLedger.debitMinor} - ${financeLedger.creditMinor}), 0)::bigint` })

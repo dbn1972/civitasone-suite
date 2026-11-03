@@ -85,6 +85,12 @@ export const ledgerQueryParams = z.object({
 });
 export type LedgerQueryParams = z.infer<typeof ledgerQueryParams>;
 
+/** UAT P2 (J6): a rejection is final, so the checker must say why (min 10 characters). */
+export const rejectJournalBody = z.object({
+  reason: z.string().trim().min(10, "Give a reason of at least 10 characters").max(500).refine(noNul, NO_NUL_MESSAGE),
+});
+export type RejectJournalBody = z.infer<typeof rejectJournalBody>;
+
 export const reverseParam = z.object({
   id: z.string().uuid(),
 });

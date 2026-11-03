@@ -17958,7 +17958,22 @@
     "confirmTitle": "Approve this journal?",
     "confirmLabel": "Approve journal",
     "confirmBody": "Approving posts {count} lines totalling {amount} to the general ledger and allocates the voucher number. A posted journal cannot be edited; it can only be reversed.",
-    "approvedNotice": "Journal approved. It is being posted and will appear in the General Ledger shortly."
+    "approvedNotice": "Journal approved. It is being posted and will appear in the General Ledger shortly.",
+    "reject": "Reject",
+    "rejectTitle": "Reject this journal?",
+    "rejectConfirmLabel": "Reject journal",
+    "rejectBody": "Rejection is final. Nothing is posted for this {amount} journal; it is kept read-only for audit, and the maker raises a fresh voucher if one is still needed.",
+    "rejectReasonLabel": "Reason for rejection (at least 10 characters)",
+    "rejectedNotice": "Journal rejected. Nothing was posted; it is kept below, read-only.",
+    "rejectedTitle": "Rejected journals",
+    "rejectedHelp": "Rejected journals are final and read-only. They are kept for audit and never reach the ledger.",
+    "rejectedLoadError": "Rejected journals could not be loaded. Refresh the page to try again.",
+    "rejectedEmptyTitle": "No rejected journals",
+    "rejectedEmptyMessage": "No journal voucher has been rejected.",
+    "rejectedJournal": "Journal",
+    "rejectionReason": "Reason for rejection",
+    "rejectedOn": "Rejected on",
+    "raiseNew": "Raise a new voucher"
   },
   "budgetAllocationNew": {
     "title": "New budget allocation",
@@ -18057,8 +18072,5 @@
     "reasonLabel": "Reason",
     "approvedNotice": "Issue approved. The invoice is being issued.",
     "rejectedNotice": "Issue rejected. The invoice stays a draft."
-  },
-  "budgetMonitoringPosted": {
-    "column": "Posted in ledger"
   }
 }

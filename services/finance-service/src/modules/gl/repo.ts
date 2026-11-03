@@ -1,4 +1,4 @@
-import { eq, and, ne, gte, lte, sql, asc, desc, inArray, type SQL } from "drizzle-orm";
+import { eq, and, gte, lte, sql, asc, desc, inArray, notInArray, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
@@ -79,6 +79,44 @@ export async function markPendingJournalPosted(tx: Writer, id: string, fields: {
     .where(eq(financeJournals.id, id));
 }
 
+/**
+ * UAT P2 (J6): pending_approval -> rejected, guarded on the current status so a concurrent approval and rejection
+ * cannot both apply. Returns false when the journal was no longer pending.
+ */
+export async function markPendingJournalRejected(tx: Writer, id: string, fields: { reason: string; updatedBy: string }): Promise<boolean> {
+  const rows = await tx.update(financeJournals)
+    .set({ status: "rejected", rejectionReason: fields.reason, updatedBy: fields.updatedBy, updatedAt: new Date() })
+    .where(and(eq(financeJournals.id, id), eq(financeJournals.status, "pending_approval")))
+    .returning({ id: financeJournals.id });
+  return rows.length > 0;
+}
+
+/**
+ * UAT P2 (A7): net debits (debit - credit) booked in the ledger per head between two dates (inclusive), for the
+ * given heads. A head with no ledger line is absent from the map.
+ */
+export async function sumLedgerNetByHead(tenantId: string, headIds: readonly string[], from: string, to: string): Promise<Map<string, bigint>> {
+  const unique = [...new Set(headIds)];
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) => tx.select({
+    headId: financeLedger.headId,
+    net: sql<string>`coalesce(sum(${financeLedger.debitMinor}) - sum(${financeLedger.creditMinor}), 0)::text`,
+  })
+    .from(financeLedger)
+    .where(and(eq(financeLedger.tenantId, tenantId), inArray(financeLedger.headId, unique), gte(financeLedger.postingDate, from), lte(financeLedger.postingDate, to)))
+    .groupBy(financeLedger.headId));
+  return new Map(rows.map((r) => [r.headId, BigInt(r.net)]));
+}
+
+/** UAT P2 (A7): the ids, among `ids`, of this tenant's journals that are posted (booked in the ledger). */
+export async function findPostedJournalIds(tenantId: string, ids: readonly string[]): Promise<Set<string>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Set();
+  const rows = await scopedRead((tx) => tx.select({ id: financeJournals.id }).from(financeJournals)
+    .where(and(eq(financeJournals.tenantId, tenantId), inArray(financeJournals.id, unique), eq(financeJournals.status, "posted"))));
+  return new Set(rows.map((r) => r.id));
+}
+
 /** Resolve a headId that may be a UUID or a 4-digit account code. Returns the UUID or null. */
 export async function resolveHeadId(tenantId: string, headIdOrCode: string): Promise<string | null> {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(headIdOrCode);
@@ -151,7 +189,8 @@ export async function getTrialBalanceWithClassification(tenantId: string) {
  */
 export async function listJournalsByTenant(tenantId: string, limit: number, offset = 0): Promise<JournalRow[]> {
   return scopedRead((tx) => tx.select().from(financeJournals)
-    .where(and(eq(financeJournals.tenantId, tenantId), ne(financeJournals.status, "pending_approval")))
+    // UAT P2 (J6): a rejected draft never posted, so it is not on the ledger either.
+    .where(and(eq(financeJournals.tenantId, tenantId), notInArray(financeJournals.status, ["pending_approval", "rejected"])))
     .orderBy(financeJournals.postingDate)
     .limit(limit)
     .offset(offset));
@@ -161,10 +200,10 @@ export async function listJournalsByTenant(tenantId: string, limit: number, offs
  * UAT P2 (J6, D4): the manual journals waiting for a checker (status pending_approval), newest first, so the
  * approval screen can list them. Tenant-scoped; bounded by limit/offset.
  */
-export async function listPendingJournals(tenantId: string, limit: number, offset = 0): Promise<JournalRow[]> {
+export async function listJournalsInReview(tenantId: string, status: "pending_approval" | "rejected", limit: number, offset = 0): Promise<JournalRow[]> {
   return scopedRead((tx) => tx.select().from(financeJournals)
-    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.status, "pending_approval")))
-    .orderBy(desc(financeJournals.createdAt), asc(financeJournals.id))
+    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.status, status)))
+    .orderBy(desc(status === "rejected" ? financeJournals.updatedAt : financeJournals.createdAt), asc(financeJournals.id))
     .limit(limit)
     .offset(offset));
 }
@@ -234,7 +273,7 @@ export async function pageJournalLines(f: JournalLinePageFilter) {
   // The scope every figure shares: this tenant's visible journals inside the requested fiscal year.
   const ledgerConds: SQL[] = [
     sql`j.tenant_id = ${f.tenantId}::uuid`,
-    sql`j.status <> 'pending_approval'`,
+    sql`j.status NOT IN ('pending_approval', 'rejected')`,
   ];
   if (f.from) ledgerConds.push(sql`j.posting_date >= ${f.from}::date`);
   if (f.to) ledgerConds.push(sql`j.posting_date <= ${f.to}::date`);

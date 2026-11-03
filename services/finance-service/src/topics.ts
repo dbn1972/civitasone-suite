@@ -21,6 +21,8 @@ export const COMMANDS = {
   // unaffected and still publish/consume journalPost directly.
   journalCreate:        "finance.gl.create",
   journalApprove:       "finance.gl.approve",
+  // UAT P2 (J6): a checker rejects a pending manual journal (final; nothing posts).
+  journalReject:        "finance.gl.reject",
   // treasury
   challanCreate:        "finance.challan.create",
   depositCreate:        "finance.deposit.create",

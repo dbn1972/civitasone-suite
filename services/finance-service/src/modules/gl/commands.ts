@@ -64,6 +64,20 @@ export async function approveJournal(ctx: RequestContext, id: string): Promise<A
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * UAT P2 (J6) — a checker rejects a pending manual journal (final). Deterministic messageId per (tenant, journal) so
+ * a double-click dedupes; the consumer enforces approver != maker and the pending-only guard.
+ */
+export async function rejectJournal(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  const messageId = idempotentId({ idempotencyKey: `journal-reject:${id}`, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.journalReject, {
+    messageId, type: COMMANDS.journalReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function reverseJournal(ctx: RequestContext, journalId: string): Promise<Accepted> {
   // Deterministic message + reversing-journal id keyed off the source journal,
   // so a double-submit / redelivery cannot create two mirror journals.

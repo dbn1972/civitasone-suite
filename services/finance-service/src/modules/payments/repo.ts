@@ -7,6 +7,22 @@ import { financeBills, financePayments, financePaymentEvents, financeAdvances, f
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
 
+/**
+ * UAT P2 (A7): bills on these heads that are passed (booked in the GL at pass) and not yet paid -- the ones whose
+ * net is still in the allocation's committed amount. Read-only; budget monitoring uses it to count a booked bill
+ * once (as expended) instead of also as committed.
+ */
+export async function listPassedUnpaidBillsForHeads(tenantId: string, headIds: readonly string[]) {
+  const unique = [...new Set(headIds)];
+  if (unique.length === 0) return [];
+  return scopedRead((tx) => tx.select({
+    id: financeBills.id, headId: financeBills.headId, netMinor: financeBills.netMinor,
+    billDate: financeBills.billDate, createdAt: financeBills.createdAt,
+  })
+    .from(financeBills)
+    .where(and(eq(financeBills.tenantId, tenantId), inArray(financeBills.headId, unique), eq(financeBills.status, "passed"))));
+}
+
 // ── R5: AP three-way-match read-model (populated from procurement.grn.accepted) ─
 
 /** Upsert the authoritative PO + GRN(accepted) values for a GRN (keyed by tenant+grnRef). */

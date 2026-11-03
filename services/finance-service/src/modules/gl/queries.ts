@@ -122,12 +122,27 @@ export type PendingJournalView = {
   createdAt: string;
   /** True when the caller drafted it: the screen shows no Approve (approver must differ from maker). */
   isOwn: boolean;
+  /** UAT P2 (J6): for a rejected journal, why, who decided and when; null while pending. */
+  rejectionReason: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
 };
 
 export async function listPendingJournals(tenantId: string, actorId: string, limit: number, offset = 0): Promise<PendingJournalView[]> {
+  return listJournalsInReview(tenantId, actorId, "pending_approval", limit, offset);
+}
+
+/** UAT P2 (J6): rejected manual journals (final, read-only), most recently rejected first. */
+export async function listRejectedJournals(tenantId: string, actorId: string, limit: number, offset = 0): Promise<PendingJournalView[]> {
+  return listJournalsInReview(tenantId, actorId, "rejected", limit, offset);
+}
+
+async function listJournalsInReview(
+  tenantId: string, actorId: string, status: "pending_approval" | "rejected", limit: number, offset: number,
+): Promise<PendingJournalView[]> {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "journals", `pending:${limit}:${offset}`),
-    () => repo.listPendingJournals(tenantId, limit, offset),
+    cache.makeKey(tenantId, "journals", `${status === "rejected" ? "rejected" : "pending"}:${limit}:${offset}`),
+    () => repo.listJournalsInReview(tenantId, status, limit, offset),
     30,
   );
   return (rows ?? []).map((j) => {
@@ -156,6 +171,9 @@ export async function listPendingJournals(tenantId: string, actorId: string, lim
       // Through the cache a Date arrives as an ISO string.
       createdAt: new Date(j.createdAt as unknown as string).toISOString(),
       isOwn: j.createdBy === actorId,
+      rejectionReason: j.status === "rejected" ? (j.rejectionReason ?? null) : null,
+      decidedBy: j.status === "rejected" ? j.updatedBy : null,
+      decidedAt: j.status === "rejected" ? new Date(j.updatedAt as unknown as string).toISOString() : null,
     };
   });
 }
