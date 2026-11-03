@@ -77,7 +77,7 @@ describe("tax declaration: no probing requests for staff or non-employees (UAT b
 
 describe("tax declaration roles mirror the payroll-service route contract", () => {
   it("staff roles = READER_ROLES of GET /v1/payroll/tax-declarations minus employee", () => {
-    const src = readFileSync(join(process.cwd(), "../../services/payroll-service/src/modules/tax/routes.ts"), "utf8");
+    const src = readFileSync(join(__dirname, "../../../../../../../../services/payroll-service/src/modules/tax/routes.ts"), "utf8");
     const list = (name: string) => {
       const m = new RegExp(`const ${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(src);
       if (!m) throw new Error(`${name} not found`);

@@ -20,7 +20,8 @@ export default async function TaxDeclarationPage() {
   const roles = getSessionRoles();
   const canVerify = hasAnyRole(roles, TAX_PROOF_VIEWER_ROLES);
   // UAT b15 item 3: the roles decide the mode up front (staff file on behalf; only the employee role has own proofs),
-  // instead of the loaders reading it from a 400 / 403 on every load.
+  // instead of the loaders reading it from a 400 / 403 on every load. A staff member who also holds the employee
+  // role keeps their own proofs (GET tax-proofs/mine needs only the employee role) -- PR #2450 review.
   const staff = isTaxDeclarationStaff(roles);
   const selfService = isSelfServiceEmployee(roles);
   return (
@@ -38,7 +39,7 @@ export default async function TaxDeclarationPage() {
         }
       />
       <TaxDeclarationForm staff={staff} />
-      <TaxProofsPanel fy={currentFinancialYear()} selfService={selfService && !staff} />
+      <TaxProofsPanel fy={currentFinancialYear()} selfService={selfService} />
     </div>
   );
 }
