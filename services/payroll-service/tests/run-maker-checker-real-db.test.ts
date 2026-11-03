@@ -73,7 +73,7 @@ beforeAll(async () => {
       await repo.insertRun(tx, {
         id: runId, tenantId, runNo: "MC-RUN-1", month: "2026-09", departmentId: null, structureId,
         runType: "regular", ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR",
-        status: "processing", createdBy: MAKER, updatedBy: MAKER,
+        status: "computed", createdBy: MAKER, updatedBy: MAKER,
       });
       await repo.insertSlip(tx, {
         id: randomUUID(), tenantId, runId, employeeId, employeeNo: "EMP-MC-1",
@@ -101,7 +101,7 @@ describe("payroll run maker-checker (GAP-PAYROLL-DETAIL-02)", () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("MAKER_CHECKER_VIOLATION");
-    expect((await runRow())?.status).toBe("processing");
+    expect((await runRow())?.status).toBe("computed");
     expect((await runRow())?.approvedBy).toBeNull();
 
     const denied = deniedAudits();
@@ -110,7 +110,7 @@ describe("payroll run maker-checker (GAP-PAYROLL-DETAIL-02)", () => {
       actorId: MAKER,
       payload: {
         service: "payroll", action: "approve", resourceType: "payroll_run", resourceId: runId,
-        outcome: "denied", denialCode: "MAKER_CHECKER_VIOLATION", status: "processing",
+        outcome: "denied", denialCode: "MAKER_CHECKER_VIOLATION", status: "computed",
         reason: "approving my own run",
       },
     });
@@ -122,7 +122,7 @@ describe("payroll run maker-checker (GAP-PAYROLL-DETAIL-02)", () => {
       headers: bearer(CHECKER, ["super_admin"]), payload: { reason: "x" },
     });
     expect(res.statusCode).toBe(400);
-    expect((await runRow())?.status).toBe("processing");
+    expect((await runRow())?.status).toBe("computed");
   });
 
   it("approve by a different person is accepted (202) and lands: status approved, approved_by = the checker, exact paise totals", async () => {

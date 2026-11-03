@@ -929,15 +929,75 @@ export function computePension(input: PensionInput): PensionResult {
   };
 }
 
+/**
+ * Payroll run lifecycle. UAT L2-N3: "processing" used to mean both "the slips are
+ * being computed" and "computed, awaiting approval", so a run could be approved
+ * while its computation was still running. "processing" now only ever means the
+ * computation is in flight; it ends in "computed" (slips and totals written,
+ * ready for review and approval) or "failed". The payroll_runs status CHECK
+ * (payroll_runs_status_check_extended, migrations 0027/0047) already allows
+ * "computed".
+ *
+ *   draft -> processing -> computed -> approved (L1) -> disbursed (L2)
+ *                       -> failed -> draft (revert)
+ */
+export const RUN_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
+  draft:      ["processing"],
+  processing: ["computed", "failed"],
+  computed:   ["approved"],
+  approved:   ["disbursed"],
+  disbursed:  [],
+  failed:     ["draft"],
+};
+
+export const RUN_NOT_READY_FOR_APPROVAL = "RUN_NOT_READY_FOR_APPROVAL";
+export const RUN_ALREADY_APPROVED = "RUN_ALREADY_APPROVED";
+export const RUN_NOT_READY_FOR_DISBURSEMENT = "RUN_NOT_READY_FOR_DISBURSEMENT";
+export const RUN_ALREADY_DISBURSED = "RUN_ALREADY_DISBURSED";
+export const RUN_NOT_REVERTIBLE = "RUN_NOT_REVERTIBLE";
+
+export type RunLifecycleAction = "approve" | "disburse" | "revert";
+
+/**
+ * Why `action` may not be taken on a run in `status`, or null when it may.
+ * The single rule both commands.ts (synchronous 409) and the consumers (re-
+ * checked under the run row lock) apply: approve only from computed, disburse
+ * only from approved, revert only from failed.
+ */
+export function runActionDenial(action: RunLifecycleAction, status: string): { code: string; message: string } | null {
+  if (action === "approve") {
+    if (status === "computed") return null;
+    if (status === "approved" || status === "disbursed") {
+      return { code: RUN_ALREADY_APPROVED, message: `this payroll run is already ${status}` };
+    }
+    return {
+      code: RUN_NOT_READY_FOR_APPROVAL,
+      message: status === "processing"
+        ? "this payroll run is still being computed; it can be approved once its status is computed"
+        : `a payroll run can only be approved once it is computed (current status: ${status})`,
+    };
+  }
+  if (action === "disburse") {
+    if (status === "approved") return null;
+    if (status === "disbursed") return { code: RUN_ALREADY_DISBURSED, message: "this payroll run is already disbursed" };
+    return { code: RUN_NOT_READY_FOR_DISBURSEMENT, message: `a payroll run can only be disbursed after it is approved (current status: ${status})` };
+  }
+  if (status === "failed") return null;
+  return { code: RUN_NOT_REVERTIBLE, message: `only a failed payroll run can be reverted to draft (current status: ${status})` };
+}
+
+/**
+ * A computation pass (runCreate, including its M1 resume / redelivery) may only
+ * write slips into a run that is being computed, or re-run over one that has
+ * finished computing (every employee is then skipped as already computed).
+ * Never into an approved, disbursed, failed or draft run.
+ */
+export function runAcceptsComputation(status: string): boolean {
+  return status === "processing" || status === "computed";
+}
+
 export function assertRunStatusTransition(current: string, next: string): void {
-  const allowed: Record<string, string[]> = {
-    draft:      ["processing"],
-    processing: ["approved", "failed"],
-    approved:   ["disbursed"],
-    disbursed:  [],
-    failed:     ["draft"],
-  };
-  if (!(allowed[current] ?? []).includes(next)) {
+  if (!(RUN_TRANSITIONS[current] ?? []).includes(next)) {
     throw new DomainError("INVALID_STATUS_TRANSITION", `cannot move payroll run from '${current}' to '${next}'`);
   }
 }

@@ -59,7 +59,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await queue.stop(); await app.close(); await sqlClient.end(); });
 
-async function newRun(tenant: string, month: string, status = "processing"): Promise<string> {
+async function newRun(tenant: string, month: string, status = "computed"): Promise<string> {
   const runId = randomUUID();
   await inTenant(tenant, (tx) => repo.insertRun(tx as never, {
     id: runId, tenantId: tenant, runNo: `R3-${runId.slice(0, 8)}`, month, departmentId: null, structureId: randomUUID(), runType: "regular",

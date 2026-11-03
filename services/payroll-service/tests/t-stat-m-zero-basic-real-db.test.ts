@@ -42,7 +42,7 @@ async function seedRun(month: string): Promise<string> {
     await repo.insertRun(tx, {
       id: runId, tenantId, runNo: `TSTAT-ZERO-${month}`, month, departmentId: null, structureId: randomUUID(),
       runType: "regular", ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR",
-      status: "processing", createdBy: creatorId, updatedBy: creatorId,
+      status: "computed", createdBy: creatorId, updatedBy: creatorId,
     });
     for (const [employeeId, basic] of [[zeroEmp, 0], [paidEmp, 50000]] as const) {
       await repo.insertSlip(tx, {
@@ -79,7 +79,7 @@ describe("T-STAT M-ZERO: a run with Rs 0-basic slips cannot be approved silently
     expect((err as HttpError).code).toBe("ZERO_BASIC_SLIPS");
     expect((err as HttpError).message).toContain("Z-0");
     await memQueue.drain();
-    expect(await runStatus(runId)).toBe("processing");
+    expect(await runStatus(runId)).toBe("computed");
   });
 
   it("an exclusion for a different employee does not unlock it", async () => {
@@ -112,7 +112,7 @@ describe("T-STAT M-ZERO (F06): no EPF row for a GPF/NPS member", () => {
       await repo.insertRun(tx, {
         id: runId, tenantId, runNo: "TSTAT-EPF", month: "2026-07", departmentId: null, structureId: randomUUID(),
         runType: "regular", ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR",
-        status: "processing", createdBy: creatorId, updatedBy: creatorId,
+        status: "computed", createdBy: creatorId, updatedBy: creatorId,
       });
       await computeAndInsertSlip(tx, { actorId: creatorId }, {
         runId, tenantId, employeeId, employeeNo: "NPS-0", basicMinor: 0n, month: "2026-07",

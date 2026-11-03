@@ -26,6 +26,8 @@ function statusToStepIndex(status: string): number {
   switch (status) {
     case "draft":      return 0;
     case "processing": return 1;
+    // UAT L2-N3: calculated, waiting on a reviewer to check and approve.
+    case "computed":   return 2;
     case "completed":  return 4;
     case "paid":       return 4;
     case "disbursed":  return 4; // defensive synonym; not sent by this endpoint

@@ -17,7 +17,7 @@ import * as lopRepo from "../integration/lop-repo.js";
 import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, runActionDenial, runAcceptsComputation, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
@@ -1013,6 +1013,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // gets the untruncated error via the rethrow below.
       const reason = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
       await db.transaction(async (tx) => {
+        // UAT L2-N3: only a run still being computed is failed; a redelivered
+        // pass that throws on an already computed / approved / disbursed run
+        // must not overwrite that state (processing -> failed is the only
+        // failure transition).
+        const current = await repo.findRunByIdForUpdateTx(tx, p.id);
+        if (current && current.status !== "processing") return;
         await repo.updateRun(tx, p.id, { status: "failed", lastError: reason, updatedBy: msg.actorId });
         // GAP-PAYROLL-REGISTER-WRITER: a failed run never counts in the
         // register/comparison. This pass's rows already rolled back with its
@@ -1036,6 +1042,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       if (run.createdBy === p.approvedBy) {
         throw new DomainError("SELF_APPROVAL_FORBIDDEN", "payroll run approver must differ from its creator");
       }
+      // UAT L2-N3: re-checked under the row lock -- only a computed run is approved
+      // (never one still "processing"); the command already answered 409 for this.
+      const approveDenial = runActionDenial("approve", run.status);
+      if (approveDenial) throw new NonRetryableError(`${approveDenial.code}: ${approveDenial.message}`);
       assertRunStatusTransition(run.status, "approved");
       // Reads through the caller's already-open `tx` (listSlipsByRunTx /
       // sumEmployerContribByRunTx), not the scopedRead-based variants, which
@@ -1142,6 +1152,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       if (runMakerCheckerDenial("disburse", msg.actorId, { createdBy: run.createdBy, approvedBy: run.approvedBy })) {
         throw new DomainError(MAKER_CHECKER_VIOLATION, MAKER_CHECKER_MESSAGES.disburse);
       }
+      // UAT L2-N3: only an approved run releases money (re-checked under the lock).
+      const disburseDenial = runActionDenial("disburse", run.status);
+      if (disburseDenial) throw new NonRetryableError(`${disburseDenial.code}: ${disburseDenial.message}`);
       assertRunStatusTransition(run.status, "disbursed");
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
@@ -1186,6 +1199,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       if (!run) throw new Error(`payroll run ${p.id} not found`);
       // Duplicate revert: already back in draft -> no-op.
       if (run.status === "draft") return;
+      const revertDenial = runActionDenial("revert", run.status);
+      if (revertDenial) throw new NonRetryableError(`${revertDenial.code}: ${revertDenial.message}`);
       assertRunStatusTransition(run.status, "draft");
       await repo.updateRun(tx, p.id, { status: "draft", updatedBy: msg.actorId });
       await audit(tx, msg, "revert", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
@@ -2032,6 +2047,16 @@ async function processPayrollRun(
   const registerDepartments = await resolveRegisterDepartments(p.tenantId, input.employees, { runId: p.id });
 
   await db.transaction(async (tx) => {
+    // UAT L2-N3: lock the run row for the whole computation pass and write only
+    // into a run that is being (or has finished being) computed. A redelivered
+    // runCreate for a run already approved or disbursed used to recompute it and
+    // reset its status; approve/disburse take the same lock, so they also cannot
+    // interleave with a pass in flight.
+    const lockedRun = await repo.findRunByIdForUpdateTx(tx, p.id);
+    if (lockedRun && !runAcceptsComputation(lockedRun.status)) {
+      log.warn({ runId: p.id, status: lockedRun.status }, "payroll run computation skipped: run is no longer processing/computed");
+      return;
+    }
     // PERF-021 (Site A): compute the run's actual employee set ONCE (the
     // same filters the loop applied per-iteration before this change --
     // department/DDO scope, M1 already-computed, DIC payroll-eligibility)
@@ -2508,7 +2533,10 @@ async function processPayrollRun(
     await repo.updateRun(tx, p.id, {
       totalGrossMinor: runGross,
       totalNetMinor: runNet,
-      status: "processing",
+      // UAT L2-N3: the computation is finished -- the run is now ready for
+      // review and approval (it was left at "processing", which made a run
+      // being computed indistinguishable from one ready to approve).
+      status: "computed",
       updatedBy: msg.actorId,
     });
 
@@ -2694,6 +2722,16 @@ async function processPensionRun(
   const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
 
   await db.transaction(async (tx) => {
+    // UAT L2-N3: lock the run row for the whole computation pass and write only
+    // into a run that is being (or has finished being) computed. A redelivered
+    // runCreate for a run already approved or disbursed used to recompute it and
+    // reset its status; approve/disburse take the same lock, so they also cannot
+    // interleave with a pass in flight.
+    const lockedRun = await repo.findRunByIdForUpdateTx(tx, p.id);
+    if (lockedRun && !runAcceptsComputation(lockedRun.status)) {
+      log.warn({ runId: p.id, status: lockedRun.status }, "payroll run computation skipped: run is no longer processing/computed");
+      return;
+    }
     // MEDIUM: batched YTD-TDS pre-fetch, reusing resolveTdsYtdMinorsTx as-is —
     // pensioner TDS rows live in the SAME statutory.payroll_tds table as the
     // salary path, keyed by employee_id = pensioner id and joined to
@@ -2792,7 +2830,7 @@ async function processPensionRun(
     const runNet = allSlips.reduce((s, sl) => s + sl.netPayMinor, 0n);
     await repo.updateRun(tx, p.id, {
       totalGrossMinor: runGross, totalNetMinor: runNet,
-      status: "processing", updatedBy: msg.actorId,
+      status: "computed", updatedBy: msg.actorId, // UAT L2-N3: see processPayrollRun
     });
   });
 }

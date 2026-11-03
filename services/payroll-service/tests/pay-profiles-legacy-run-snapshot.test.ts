@@ -30,6 +30,9 @@
  *    above), tagged source revision_dmd (migration 0160); the differences
  *    are unchanged;
  *  - the run, slip and register totals that follow from those.
+ *
+ * UAT L2-N3 (bundle 16) changed one non-money value: the run status after a
+ * finished computation is "computed" (it used to stay "processing").
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

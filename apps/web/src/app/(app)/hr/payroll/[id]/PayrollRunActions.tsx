@@ -205,7 +205,12 @@ export function PayrollRunActions({
   // string "approved" can never match anything the API actually sends. That
   // made Disburse a dead button: canDisburse was never true for any real
   // run, no matter how far along it was.
-  const canApprove  = canAdminister && status === "processing" && settledAction !== "approve";
+  //
+  // UAT L2-N3: "processing" now only ever means the slip computation is still
+  // running. A run is approvable once the computation has finished, which the
+  // API reports as "computed"; the server answers 409 RUN_NOT_READY_FOR_APPROVAL
+  // from any other state.
+  const canApprove  = canAdminister && status === "computed" && settledAction !== "approve";
   const canDisburse = canAdminister && status === "completed"  && settledAction !== "disburse";
   const canRevert   = canAdminister && status === "failed"     && settledAction !== "revert";
 

@@ -18,6 +18,7 @@ import {
   unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion,
   invalidZeroBasicExclusions, INVALID_ZERO_BASIC_EXCLUSION, arrearsReviewOf, unacknowledgedArrears, arrearsReviewMessage,
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
+  runActionDenial, type RunLifecycleAction,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import type {
@@ -243,6 +244,24 @@ async function assertRunMakerChecker(
 }
 
 /**
+ * UAT L2-N3: synchronous state guard for approve / disburse / revert. The
+ * consumer used to be the only place the state machine was enforced, and its
+ * approve accepted a run still "processing" (being computed). The caller now
+ * gets a 409 with a stable code (RUN_NOT_READY_FOR_APPROVAL,
+ * RUN_ALREADY_APPROVED, RUN_NOT_READY_FOR_DISBURSEMENT, RUN_ALREADY_DISBURSED,
+ * RUN_NOT_REVERTIBLE) instead of a 202 for a command that can never apply. The
+ * consumer re-asserts the same rule (domain.ts runActionDenial) under the run
+ * row lock. An unknown run is left to the route 404 / the consumer, as in
+ * assertRunMakerChecker above.
+ */
+async function assertRunActionAllowed(ctx: RequestContext, action: RunLifecycleAction, id: string): Promise<void> {
+  const run = await repo.findRunById(id, ctx.tenantId);
+  if (!run) return;
+  const denial = runActionDenial(action, run.status);
+  if (denial) throw new HttpError(409, denial.code, denial.message);
+}
+
+/**
  * messageId for a run lifecycle command (approve / disburse / revert). It is PER INVOCATION: the old
  * deterministicUuid(`payroll-<action>:<runId>`) was stable for the run's whole life, and
  * markProcessed() keys _inbox.processed on message_id alone, so a second approve after a revert (or a
@@ -281,6 +300,7 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
 
 export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = [], arrearsAcknowledgements: ArrearsAcknowledgement[] = []): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "approve", id, reason);
+  await assertRunActionAllowed(ctx, "approve", id);
   await assertApprovalReviewed(ctx, id, zeroBasicExclusions, arrearsAcknowledgements);
   await queue.publish(COMMANDS.runApprove, {
     messageId: runCommandMessageId(ctx, "approve", id),
@@ -298,6 +318,7 @@ export async function approveRun(ctx: RequestContext, id: string, reason?: strin
 
 export async function disburseRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "disburse", id, reason);
+  await assertRunActionAllowed(ctx, "disburse", id);
   await queue.publish(COMMANDS.runDisburse, {
     messageId: runCommandMessageId(ctx, "disburse", id),
     type: COMMANDS.runDisburse,
@@ -309,6 +330,7 @@ export async function disburseRun(ctx: RequestContext, id: string, reason?: stri
 }
 
 export async function revertRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
+  await assertRunActionAllowed(ctx, "revert", id);
   await queue.publish(COMMANDS.runRevert, {
     messageId: runCommandMessageId(ctx, "revert", id),
     type: COMMANDS.runRevert,

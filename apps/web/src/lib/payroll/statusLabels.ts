@@ -29,7 +29,7 @@ type TFn = ReturnType<typeof useTranslations>;
  * philosophy StatusPill's own humanizeStatus default already uses.
  */
 
-const PAYROLL_RUN_STATUSES = ["draft", "processing", "completed", "paid", "disbursed", "failed"] as const;
+const PAYROLL_RUN_STATUSES = ["draft", "processing", "computed", "completed", "paid", "disbursed", "failed"] as const;
 
 /** PayrollRunDetail.status (packages/types) -- "failed" is the real status PR #1566 added. */
 export function payrollRunStatusLabel(status: string, t: TFn): string {
@@ -53,6 +53,8 @@ export function payrollRunStatusLabel(status: string, t: TFn): string {
 const PAYROLL_RUN_VARIANT: Record<(typeof PAYROLL_RUN_STATUSES)[number], PillVariant> = {
   draft: "mut",
   processing: "warn",
+  // UAT L2-N3: computed = slips calculated, awaiting approval (the only state Approve accepts).
+  computed: "info",
   completed: "info",
   paid: "good",
   disbursed: "good",

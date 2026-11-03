@@ -13,7 +13,8 @@ import { PayrollRunActions } from "./PayrollRunActions";
 // GAP-PAYROLL-HOME-01: integer-paise strings (Rs 5,00,000.00 gross / Rs 4,50,000.00 net).
 const PROPS = {
   runId: "r1",
-  status: "processing",
+  // UAT L2-N3: "computed" is the only state Approve is offered in.
+  status: "computed",
   employeeCount: 50,
   // GAP-PAYROLL-RUNS-01: exact paise strings (Rs 5,00,000.00 / Rs 4,50,000.00).
   grossMinor: "50000000",
@@ -121,6 +122,25 @@ describe("PayrollRunActions — GAP-PAYROLL-DETAIL-02 maker-checker", () => {
     expect(approve).toHaveAttribute("aria-describedby", hint.id);
     fireEvent.click(approve);
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("UAT L2-N3: offers no Approve while the run is still processing (slips not yet computed)", () => {
+    renderActions({ status: "processing", currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    expect(screen.queryByRole("button", { name: /approve run/i })).not.toBeInTheDocument();
+  });
+
+  it("UAT L2-N3: offers no Approve on a draft or an already-approved run", () => {
+    const { unmount } = renderActions({ status: "draft", currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    expect(screen.queryByRole("button", { name: /approve run/i })).not.toBeInTheDocument();
+    unmount();
+    renderActions({ status: "completed", currentUserId: OTHER, createdBy: ME, approvedBy: ME });
+    expect(screen.queryByRole("button", { name: /approve run/i })).not.toBeInTheDocument();
+  });
+
+  it("UAT L2-N3: offers Approve once the run is computed", () => {
+    renderActions({ status: "computed", currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    expect(screen.getByRole("button", { name: /approve run/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /disburse/i })).not.toBeInTheDocument();
   });
 
   it("keeps Approve enabled for a different user", () => {

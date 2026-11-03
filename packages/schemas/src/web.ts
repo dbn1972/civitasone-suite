@@ -1029,7 +1029,9 @@ export const PayrollRunDetailSchema = z.object({
   // threw indistinguishable from a healthy new one. failureReason carries
   // the recorded cause when available (migration 0046 payroll_runs.last_error);
   // null for every other status or when no reason was recorded.
-  status: z.enum(["draft", "processing", "completed", "paid", "failed"]),
+  // UAT L2-N3: computed = slips calculated, awaiting approval ("processing" is
+  // the computation still running; only a computed run can be approved).
+  status: z.enum(["draft", "processing", "computed", "completed", "paid", "failed"]),
   failureReason: z.string().nullable().optional(),
 });
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);

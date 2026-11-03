@@ -1021,7 +1021,7 @@ export type PayrollRunDetail = {
    * list of runs must only count the regular ones.
    */
   runType?: "regular" | "supplementary" | "arrears" | "pensioner";
-  status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
+  status: "draft" | "processing" | "computed" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {

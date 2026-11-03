@@ -20,10 +20,13 @@ import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsU
  * so a genuinely failed run is visually and semantically distinct from a
  * healthy draft everywhere this status flows (runs list, run detail).
  */
-function mapRunStatus(status: string): "draft" | "processing" | "completed" | "paid" | "failed" {
+function mapRunStatus(status: string): "draft" | "processing" | "computed" | "completed" | "paid" | "failed" {
   if (status === "disbursed") return "paid";
   if (status === "approved") return "completed";
   if (status === "processing") return "processing";
+  // UAT L2-N3: computed = slips written, awaiting approval (the only state the
+  // web offers Approve in); processing = the computation is still running.
+  if (status === "computed") return "computed";
   if (status === "draft") return "draft";
   if (status === "failed") return "failed";
   return "processing";

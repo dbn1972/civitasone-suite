@@ -31,7 +31,7 @@ function run(over: Record<string, unknown> = {}) {
     // legacy rupee floats deliberately DISAGREE with the paise strings: only the paise are rendered
     grossAmount: 1, netAmount: 1, deductions: 1,
     grossMinor: "50000000", netMinor: "42000000", deductionsMinor: "8000000",
-    status: "processing", failureReason: null,
+    status: "computed", failureReason: null,
     createdBy: OTHER, approvedBy: null,
     salarySlips: [
       { id: "s1", employeeId: "e1", employeeName: "Asha Rao", gross: 1, deductions: 1, net: 1, grossMinor: "30000000", deductionsMinor: "5000000", netMinor: "25000000", status: "computed", issues: [] },
