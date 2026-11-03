@@ -46,6 +46,7 @@ import {
   computeFinancialYear,
   computeNoticeDays,
   isDirectMeetingOwner,
+  holdsMeetingAdminRole,
   isMeetingState,
   CHAIR_STANDING_ROLES,
   SECRETARIAL_STANDING_ROLES,
@@ -103,6 +104,8 @@ interface MeetingUpdatePayload {
   meetingId: string;
   version: number;
   patch: MeetingPatch;
+  /** Verified token roles stamped by the route (UAT J14); absent on older messages. */
+  actorRoles?: string[];
 }
 
 interface MeetingTransitionPayload {
@@ -112,12 +115,16 @@ interface MeetingTransitionPayload {
   reason?: string;
   nextMeetingDate?: string;
   shortNoticeWaiver?: boolean;
+  /** Verified token roles stamped by the route (UAT J14); absent on older messages. */
+  actorRoles?: string[];
 }
 
 interface MeetingCancelPayload {
   meetingId: string;
   version: number;
   reason: string;
+  /** Verified token roles stamped by the route (UAT J14); absent on older messages. */
+  actorRoles?: string[];
 }
 
 interface SeriesCreatePayload {
@@ -205,24 +212,27 @@ function asPermanent(err: unknown): never {
 
 /**
  * Ownership/standing check (IDOR fix, Req 1.1, 1.3–1.6) — consumer-side defense-in-depth.
- * `meeting-core/routes.ts`'s `assertMeetingOwnership` guards the HTTP boundary (where JWT
- * roles are available, so admins get the documented bypass); THIS function guards the write
- * itself, reachable independently of the route (this fix's own regression test invokes the
- * handler directly to prove it). A `CommandEnvelope` carries only `actorId` — no role claim
- * (see services/queue-service/src/bus.ts's `CommandEnvelope` shape) — so there is nothing
- * here to safely trust for an admin bypass; this enforces the DB-verifiable ownership
- * invariant (chairperson/secretary of THIS meeting, or matching committee standing)
- * unconditionally for every caller. JUDGMENT CALL: this means a `meeting_admin`/
- * `tenant_admin`/`super_admin` acting on a meeting they have no chair/secretary/committee
- * relationship to is rejected here even though the route would have let them through — see
- * the PR description for the full writeup of this tradeoff.
+ * `meeting-core/routes.ts`'s `assertMeetingOwnership` guards the HTTP boundary; THIS function
+ * guards the write itself, reachable independently of the route. The caller must be this
+ * meeting's chairperson/secretary, hold matching committee standing, or hold one of the
+ * MEETING_ADMIN_ROLES (the documented Full CRUD bypass the route also applies).
+ *
+ * UAT J14 (bundle 15): a `CommandEnvelope` carries only `actorId`, so this check used to enforce
+ * ownership for every caller, admins included, while the route let admins through. A meeting
+ * admin who created a meeting and named other users as chairperson and secretary got 202 for
+ * "Schedule" and the command could only dead-letter. The route now stamps the verified token
+ * roles on the command payload (`actorRoles`, written after the body so a client cannot supply
+ * them; same trust boundary as `actorId`, and the pattern revenue-service uses for its settings
+ * commands). A message without `actorRoles` (published before this change) gets no bypass.
  */
 async function assertMeetingOwnership(
   tx: DrizzleTx,
   actorId: string,
   meeting: { id: string; tenantId: string; committeeId: string | null; chairpersonId: string | null; secretaryId: string | null },
   standingRoles: readonly string[],
+  actorRoles?: readonly string[],
 ): Promise<void> {
+  if (holdsMeetingAdminRole(actorRoles)) return;
   if (isDirectMeetingOwner(actorId, meeting)) return;
   if (meeting.committeeId) {
     const rows = await tx
@@ -500,7 +510,7 @@ async function handleMeetingUpdate(msg: CommandEnvelope<MeetingUpdatePayload>): 
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
     try {
-      await assertMeetingOwnership(tx, msg.actorId, meeting, SECRETARIAL_STANDING_ROLES);
+      await assertMeetingOwnership(tx, msg.actorId, meeting, SECRETARIAL_STANDING_ROLES, p.actorRoles);
     } catch (err) {
       asPermanent(err);
     }
@@ -741,7 +751,7 @@ async function handleMeetingTransition(msg: CommandEnvelope<MeetingTransitionPay
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
     try {
-      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES);
+      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES, p.actorRoles);
     } catch (err) {
       asPermanent(err);
     }
@@ -934,7 +944,7 @@ async function handleMeetingCancel(msg: CommandEnvelope<MeetingCancelPayload>): 
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
     try {
-      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES);
+      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES, p.actorRoles);
     } catch (err) {
       asPermanent(err);
     }
