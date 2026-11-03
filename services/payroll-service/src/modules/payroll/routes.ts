@@ -26,6 +26,12 @@ async function requireRun(id: string, tenantId: string): Promise<void> {
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
+// UAT Phase 2 C8 (security, roles-11021730 R1 / F108): payroll RUNS carry every
+// employee's period gross / deductions / net. They are payroll + HR data, so
+// finance_officer is no longer a reader of the run register or a run's detail
+// (finance_admin already was not). Payroll's GL / payment hand-off to finance
+// is service-to-service and unaffected.
+const RUN_READER_ROLES = [...PAYROLL_ROLES, "hr_admin"];
 // payroll-critical fix: an employee viewing their OWN payslip, layered on
 // top of READER_ROLES below (never in place of it).
 const SLIP_ROLES = [...READER_ROLES, "employee"];
@@ -45,7 +51,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/payroll/runs", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, RUN_READER_ROLES);
     const q = listRunsQuery.parse(req.query);
     sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit, q.month));
   });
@@ -67,7 +73,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/payroll/runs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, RUN_READER_ROLES);
     const { id } = idParam.parse(req.params);
     const run = await queries.getRunDetail(id, ctx.tenantId);
     if (!run) throw new HttpError(404, "NOT_FOUND", "run not found");

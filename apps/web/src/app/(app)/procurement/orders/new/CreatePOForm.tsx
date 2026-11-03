@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Field, Input } from "@/app/_components/ds";
+import { Button, Field, Input, Select } from "@/app/_components/ds";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { minorToRupeesInput } from "@/lib/money";
 import { RemoteSearchSelect, type RemoteOption, type RemoteSearchState } from "../../_components/RemoteSearchSelect";
@@ -21,6 +21,11 @@ type IndentLine = { itemCode?: string; itemName?: string; description?: string; 
 type GfrBand = { id: string; nameKey: string; notesKey: string; requiresTender: boolean };
 type ModeState = "idle" | "loading" | "ready" | "error";
 type CopyState = "idle" | "loading" | "error" | "empty";
+type SanctionOption = { id: string; label: string };
+
+// UAT Phase 2 C2 (J2): procurement-service refuses a PO above this value
+// (Rs 1,000 in paise) unless it cites a budget sanction (#14, po/domain.ts).
+const SANCTION_REQUIRED_ABOVE_MINOR = 100000;
 
 /** Machine `code` of a JSON error body, or undefined when the body is not JSON. */
 function errorCode(text: string): string | undefined {
@@ -61,6 +66,11 @@ export function CreatePOForm() {
   const [gemOrderRef, setGemOrderRef] = useState("");
   const [tenders, setTenders] = useState<Array<{ id: string; label: string }>>([]);
   const [tendersFailed, setTendersFailed] = useState(false);
+  // UAT Phase 2 C2: the approved finance sanction the PO draws on (sanctionRef).
+  const [sanctionId, setSanctionId] = useState("");
+  const [sanctions, setSanctions] = useState<SanctionOption[]>([]);
+  const [sanctionsState, setSanctionsState] = useState<"loading" | "ready" | "error">("loading");
+  const [sanctionsNonce, setSanctionsNonce] = useState(0);
 
   const today = todayIST();
   const vendorId = vendor?.id ?? "";
@@ -106,6 +116,33 @@ export function CreatePOForm() {
   // GAP-PROCUREMENT-ORDERS-NEW-04: reconcile PO total against the sanctioned
   // indent value. Exceeding it is a block (overspend against a sanctioned indent).
   const exceedsIndent = indentTotalMinor != null && poTotalMinor > indentTotalMinor;
+  const needsSanction = poTotalMinor > SANCTION_REQUIRED_ABOVE_MINOR;
+
+  // UAT Phase 2 C2: approved budget sanctions (finance-service admits
+  // procurement_officer as a reader). Only approved ones can fund a PO.
+  useEffect(() => {
+    const controller = new AbortController();
+    setSanctionsState("loading");
+    fetch("/api/proxy/v1/finance/sanctions?limit=100", { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("sanctions lookup failed");
+        const body = await res.json() as unknown;
+        const rows = (Array.isArray(body) ? body : ((body as { data?: unknown[] })?.data ?? [])) as Array<{ id?: string; sanctionNo?: string; subject?: string; amount?: string | number; status?: string }>;
+        setSanctions(rows
+          .filter((s) => s.id && s.status === "approved")
+          .map((s) => ({
+            id: String(s.id),
+            label: [s.sanctionNo ?? String(s.id), s.subject, s.amount != null ? formatMoney(Number(s.amount)) : null].filter(Boolean).join(" — "),
+          })));
+        setSanctionsState("ready");
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setSanctions([]);
+        setSanctionsState("error");
+      });
+    return () => controller.abort();
+  }, [sanctionsNonce]);
 
   // GAP-PROCUREMENT-ORDERS-NEW-04: the GFR band for the PO total. A failed lookup
   // is reported as such (the tender-requirement check did not run), never as a
@@ -205,6 +242,11 @@ export function CreatePOForm() {
       setMessage("The PO total exceeds the sanctioned indent value. Reduce the lines or choose a larger indent.");
       return;
     }
+    if (needsSanction && !sanctionId) {
+      setStatus("error");
+      setMessage(t("procurement.poForm.sanctionRequired"));
+      return;
+    }
     setStatus("submitting");
     setMessage("");
     // GAP-PROCUREMENT-ORDERS-NEW-02: the PO number is issued by the server from
@@ -213,6 +255,7 @@ export function CreatePOForm() {
       vendorId,
       indentRef: `procurement_indent:${indentId}`,
       deliveryDate: deliveryDate || undefined,
+      ...(sanctionId ? { sanctionRef: `finance_sanction:${sanctionId}` } : {}),
       ...(tenderId ? { tenderId } : {}),
       ...(gemOrderRef.trim() ? { gemOrderRef: gemOrderRef.trim() } : {}),
       items: validItems.map((it) => ({
@@ -238,6 +281,10 @@ export function CreatePOForm() {
         // page loaded. Show a fixed, translated message -- never the raw server text.
         if (res.status === 422 && errorCode(text) === "VENDOR_BLACKLISTED") {
           setMessage(t("procurement.poForm.vendorBlacklisted"));
+          return;
+        }
+        if (res.status === 422 && errorCode(text) === "SANCTION_REF_REQUIRED") {
+          setMessage(t("procurement.poForm.sanctionRequired"));
           return;
         }
         // D4c #28: no empanelment record -> ask for an awarded tender / GeM reference.
@@ -293,6 +340,22 @@ export function CreatePOForm() {
               error: tw("indentPicker.error"), retry: tw("indentPicker.retry"), clear: tw("indentPicker.clear"),
             }}
           />
+        </Field>
+
+        <Field id="po-sanction" label={t("procurement.poForm.sanctionLabel")} required={needsSanction}>
+          <Select value={sanctionId} onChange={(e) => setSanctionId(e.target.value)} aria-describedby="po-sanction-hint">
+            <option value="">{t("procurement.poForm.sanctionNone")}</option>
+            {sanctions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </Select>
+          <span id="po-sanction-hint" style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>{t("procurement.poForm.sanctionHint")}</span>
+          {sanctionsState === "error" ? (
+            <span role="alert" style={{ fontSize: "0.8125rem", color: "var(--bad)" }}>
+              {t("procurement.poForm.sanctionsFailed")}{" "}
+              <button type="button" className="btn ghost" style={{ padding: "2px 8px" }} onClick={() => setSanctionsNonce((n) => n + 1)}>{tv("retry")}</button>
+            </span>
+          ) : sanctionsState === "ready" && sanctions.length === 0 ? (
+            <span role="status" style={{ fontSize: "0.8125rem" }}>{t("procurement.poForm.sanctionsEmpty")}</span>
+          ) : null}
         </Field>
 
         {needsBasis ? (

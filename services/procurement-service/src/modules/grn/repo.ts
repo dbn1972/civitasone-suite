@@ -134,10 +134,12 @@ export type GrnListFilter = { q?: string; status?: string; vendorId?: string };
 
 /**
  * Pre-decision GRN states: the register counts all of them as "awaiting inspection".
- * The stored `partial` is included because list rows render it as `draft`
- * (queries.mapGrnStatus has no partial), so the cards stay consistent with the rows.
+ * UAT Phase 2 C5: the stored `partial` is NOT one of them — it is the decided,
+ * partly-rejected outcome (list rows now render it as `partially_rejected`), so
+ * it counts with the rejected GRNs instead.
  */
-export const GRN_AWAITING_STATUSES = ["draft", "under_inspection", "received", "quality_check", "partial"] as const;
+export const GRN_AWAITING_STATUSES = ["draft", "under_inspection", "received", "quality_check"] as const;
+export const GRN_REJECTED_STATUSES = ["rejected", "partially_rejected", "partial"] as const;
 
 function grnWhere(tenantId: string, f: GrnListFilter): SQL {
   const conds: SQL[] = [eq(procurementGrns.tenantId, tenantId)];

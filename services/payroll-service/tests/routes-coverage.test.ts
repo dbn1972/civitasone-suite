@@ -46,11 +46,12 @@ describe("GET /v1/payroll/runs — coverage", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("200: returns array for finance_officer", async () => {
+  // UAT Phase 2 C8 (security): payroll runs are payroll/HR data; finance_officer is refused.
+  it("403: finance_officer cannot read the payroll run register", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/payroll/runs", headers: { authorization: `Bearer ${makeToken(["finance_officer"])}` } });
     await app.close();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
   });
 
   it("401: no token", async () => {

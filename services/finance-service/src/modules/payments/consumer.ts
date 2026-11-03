@@ -10,7 +10,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, resolveThreeWayTolerancePct, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -87,22 +87,6 @@ function asRefusal(cls: new (...a: never[]) => Error, fn: () => void): void {
 }
 async function asRefusalAsync(cls: new (...a: never[]) => Error, fn: () => Promise<void>): Promise<void> {
   try { await fn(); } catch (e) { throw e instanceof cls ? new NonRetryableError(e.message) : e; }
-}
-
-/**
- * Resolve the 3-way-match tolerance from env.
- *
- * `Number(raw) || undefined` was WRONG on the money path: `FINANCE_THREE_WAY_TOLERANCE_PCT=0`
- * is falsy, so an operator asking for ZERO tolerance silently got the 2% default
- * and overage up to 2% was admitted. Only an unset/blank/non-finite/negative
- * value falls back to the default; 0 is an explicit, valid setting.
- */
-function resolveThreeWayTolerancePct(fallbackPct: number = DEFAULT_THREE_WAY_TOLERANCE_PCT): number {
-  const raw = process.env.FINANCE_THREE_WAY_TOLERANCE_PCT;
-  if (raw == null || raw.trim() === "") return fallbackPct;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallbackPct;
-  return parsed;
 }
 
 export function registerPaymentsConsumers(queue: Queue): void {

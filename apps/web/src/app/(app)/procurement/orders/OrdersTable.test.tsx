@@ -79,6 +79,18 @@ describe("OrdersTable — committed value (GAP-PROCUREMENT-ORDERS-02)", () => {
     // Would be ₹3,00,000.00 if draft/cancelled were wrongly included.
     expect(within(card).queryByText("₹3,00,000.00")).not.toBeInTheDocument();
   });
+
+  // UAT Phase 2 C6: a closed PO was approved and fulfilled; its value stays committed.
+  it("counts a closed PO in Committed value, but not a pending-approval one", () => {
+    mockData = [
+      order({ id: "a", status: "gem_placed", amount: LAKH }),
+      order({ id: "b", status: "closed", amount: LAKH }),
+      order({ id: "c", status: "pending", amount: LAKH }),
+    ];
+    render(<OrdersTable orders={mockData as never} source="api" />);
+    const card = screen.getByText("Committed value").closest(".stat") as HTMLElement;
+    expect(within(card).getByText("₹2,00,000.00")).toBeInTheDocument();
+  });
 });
 
 describe("OrdersTable — status chips (GAP-PROCUREMENT-ORDERS-04)", () => {

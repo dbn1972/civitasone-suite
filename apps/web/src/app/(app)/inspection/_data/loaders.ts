@@ -195,4 +195,83 @@ export function getInspectionsPage(page: number): Promise<LoaderResult<ListResul
   );
 }
 
+/**
+ * UAT Phase 2 C3 (J13): inspection reports (inspection-service reports module,
+ * GET /v1/inspection/reports -> `{ data: rows, page, pageSize }`).
+ */
+export const InspectionReportSchema = z
+  .object({
+    id: z.string(),
+    inspectionId: z.string().optional(),
+    entityId: z.string().optional(),
+    inspectorId: z.string().optional(),
+    reportType: z.string().optional(),
+    status: z.string().optional(),
+    summary: z.string().nullish(),
+    recommendations: z.string().nullish(),
+    overallGrade: z.string().nullish(),
+    submittedAt: z.string().nullish(),
+    submittedBy: z.string().nullish(),
+    approvedAt: z.string().nullish(),
+    approvedBy: z.string().nullish(),
+    createdAt: z.string().optional(),
+    createdBy: z.string().optional(),
+    updatedBy: z.string().optional(),
+  })
+  .passthrough();
+export type InspectionReport = z.infer<typeof InspectionReportSchema>;
+
+export type InspectionObservation = {
+  id: string; category: string; severity: string; description: string; location?: string | null;
+};
+export type InspectionReportDetail = InspectionReport & { observations: InspectionObservation[] };
+
+function asReports(payload: unknown): InspectionReport[] {
+  return asRows(payload).flatMap((r) => {
+    const parsed = InspectionReportSchema.safeParse(r);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+export function getInspectionReports(inspectionId?: string): Promise<LoaderResult<InspectionReport[]>> {
+  const qs = new URLSearchParams({ pageSize: "100" });
+  if (inspectionId) qs.set("inspectionId", inspectionId);
+  return fetchJson<unknown, InspectionReport[]>(`/api/v1/inspection/reports?${qs.toString()}`, [], {
+    revalidateSeconds: 0,
+    telemetryKey: "inspection.reports",
+    mapResponse: asReports,
+  });
+}
+
+export function getInspectionReportById(id: string): Promise<LoaderResult<InspectionReportDetail | null>> {
+  return fetchJson<unknown, InspectionReportDetail | null>(
+    `/api/v1/inspection/reports/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "inspection.report.detail",
+      mapResponse: (payload) => {
+        const body = payload && typeof payload === "object" && "data" in payload ? (payload as { data?: unknown }).data : payload;
+        const parsed = InspectionReportSchema.safeParse(body);
+        if (!parsed.success) return null;
+        const obs = Array.isArray((body as { observations?: unknown }).observations)
+          ? ((body as { observations: unknown[] }).observations as Array<Record<string, unknown>>)
+          : [];
+        return {
+          ...parsed.data,
+          observations: obs
+            .filter((o) => typeof o.id === "string")
+            .map((o) => ({
+              id: String(o.id),
+              category: typeof o.category === "string" ? o.category : "—",
+              severity: typeof o.severity === "string" ? o.severity : "minor",
+              description: typeof o.description === "string" ? o.description : "",
+              location: typeof o.location === "string" ? o.location : null,
+            })),
+        };
+      },
+    },
+  );
+}
+
 export type { LoaderResult };

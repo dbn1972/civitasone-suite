@@ -148,7 +148,7 @@ export function OrdersTable({
           icon="💰"
           tone="warn"
           label="Committed value"
-          hint="Total value of POs that represent a real commitment (approved, dispatched, partially/fully received, GeM-placed). Excludes draft and cancelled POs."
+          hint="Total value of POs that represent a real commitment (approved, dispatched, partially/fully received, GeM-placed or closed). Excludes draft, pending-approval and cancelled POs."
           value={erroredNoData ? null : formatMoney(stats.committedMinor)}
         />
         <StatCard icon="✅" tone="good" label="Fully Received" value={erroredNoData ? null : stats.fullyReceived} />

@@ -42,6 +42,28 @@ export function assertPoRejectable(status: string): void {
   }
 }
 
+/** #14: a PO above this value (Rs 1,000 in paise) must cite a budget sanction (sanctionRef). */
+export const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
+
+/** Total PO value in paise (BigInt — never a float). */
+export function poTotalMinor(items: ReadonlyArray<{ quantity: number; unitPriceMinor: number | string | bigint }>): bigint {
+  return items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
+}
+
+/**
+ * UAT Phase 2 C2 (J2): refuse a high-value PO without a sanction reference up
+ * front (422) instead of accepting it (202) and letting the worker drop it
+ * silently with SANCTION_REF_REQUIRED. The consumer keeps the same check.
+ */
+export function assertSanctionRefPresent(
+  items: ReadonlyArray<{ quantity: number; unitPriceMinor: number | string | bigint }>,
+  sanctionRef: string | undefined,
+): void {
+  if (!sanctionRef?.trim() && poTotalMinor(items) > SANCTION_REQUIRED_ABOVE_MINOR) {
+    throw new DomainError("SANCTION_REF_REQUIRED", "a purchase order above Rs 1,000 must cite an approved budget sanction (sanctionRef)");
+  }
+}
+
 export function assertBudgetSufficient(available: bigint, requested: bigint): void {
   if (requested > available) {
     throw new DomainError("BUDGET_EXCEEDED", `PO value ${requested} paise exceeds sanction available ${available} paise`);

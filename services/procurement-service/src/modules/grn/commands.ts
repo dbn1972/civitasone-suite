@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as poRepo from "../po/repo.js";
-import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError, needsReceivingStore } from "./domain.js";
+import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError, needsReceivingStore, normalizePoItemRef } from "./domain.js";
 import type { CreateGrnBody, AmendGrnBody, AcceptGrnBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -15,12 +15,12 @@ export type Accepted = { id: string; status: string; correlationId: string };
 // cannot be a real PO and is rejected as not-found before touching the DB.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function createGrn(ctx: RequestContext, body: CreateGrnBody): Promise<Accepted> {
+export async function createGrn(ctx: RequestContext, input: CreateGrnBody): Promise<Accepted> {
   // GAP-PROCUREMENT-GRN-NEW-04 — reject a GRN whose vendor does not match the
   // referenced PO's vendor BEFORE queueing, so the caller gets an immediate
   // 4xx (a GRN against the wrong vendor would corrupt the three-way match).
   // The PO must also exist and belong to this tenant.
-  const poId = body.poRef.replace(/^procurement_po:/, "");
+  const poId = input.poRef.replace(/^procurement_po:/, "");
   // A poRef that is not a well-formed UUID can never match a PO id (the id
   // column is UUID-typed, so querying it with a free-form string would raise a
   // Postgres "invalid input syntax for type uuid" error and surface as a 500).
@@ -32,12 +32,14 @@ export async function createGrn(ctx: RequestContext, body: CreateGrnBody): Promi
   if (!po || po.tenantId !== ctx.tenantId) {
     throw new HttpError(404, "PO_NOT_FOUND", "referenced purchase order not found");
   }
-  if (po.vendorId && body.vendorId && po.vendorId !== body.vendorId) {
+  if (po.vendorId && input.vendorId && po.vendorId !== input.vendorId) {
     throw new HttpError(422, "VENDOR_PO_MISMATCH", "GRN vendor does not match the purchase order's vendor");
   }
   // GAP-PROCUREMENT-GRN-NEW-06 - synchronous over-receipt check so the caller
   // gets an immediate 422 (the consumer re-checks under a per-PO lock).
   const poItems = await poRepo.findPoItemsByPoId(poId, ctx.tenantId);
+  // F131: every line ref is carried forward as the PO item's own id.
+  const body: CreateGrnBody = { ...input, items: input.items.map((i) => ({ ...i, poItemRef: normalizePoItemRef(i.poItemRef, poId, poItems) })) };
   const orderedByRef = new Map(poItems.map((pi) => [pi.id, pi.quantity]));
   const committed = await db.transaction((tx) => repo.committedQtyByPoItemTx(tx, ctx.tenantId, poId));
   try {

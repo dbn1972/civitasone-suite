@@ -12,7 +12,7 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, assertPoRejectable, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertCanDispatch, assertPoRejectable, assertSanctionRefPresent, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import * as poRepo from "./repo.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 
@@ -32,6 +32,16 @@ const PO_REJECT_ROLES = ["procurement_admin", "super_admin"];
  *  - GAP-PROCUREMENT-EMPANELMENT-05 / ORDERS-NEW-06: reject a vendor whose
  *    empanelment has lapsed. Applied to both POST aliases.
  */
+/** UAT Phase 2 C2: synchronous 422 for a high-value PO with no sanction reference. */
+function assertPoSanction(body: { items: Array<{ quantity: number; unitPriceMinor: number }>; sanctionRef?: string | undefined }): void {
+  try {
+    assertSanctionRefPresent(body.items, body.sanctionRef);
+  } catch (err) {
+    if (err instanceof PoDomainError) throw new HttpError(422, err.code, err.message);
+    throw err;
+  }
+}
+
 async function assertVendorEligible(tenantId: string, vendorId: string, basis: { tenderId?: string | undefined; gemOrderRef?: string | undefined } = {}): Promise<void> {
   const vendor = await vendorRepo.findVendorById(vendorId, tenantId);
   const blacklisted =
@@ -103,6 +113,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
+    assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
@@ -190,6 +201,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
+    assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));

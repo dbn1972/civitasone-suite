@@ -100,6 +100,36 @@ export function assertGrnAmendable(grn: { status: string }): void {
  * "unbounded" (orderedQty <= 0 disables the over-accept cap in
  * assertQtyValid/computeThreeWayMatch — the same shape as the :156 bypass).
  */
+/**
+ * F131 — a GRN line's `poItemRef` is the PO item's own id (the uuid PO detail
+ * returns as `lineItems[].id`). Two other shapes reached the API from the web
+ * GRN form and are resolved here so they do not dead-letter the command:
+ *   - the opaque ref `procurement_po_item:<itemId>` (house rule 13), and
+ *   - the legacy composite `procurement_po_item:<poId>:<itemCode>` the form
+ *     built while PO detail carried no item id. It resolves only when <poId> is
+ *     the GRN's own PO and exactly one item on that PO has <itemCode>.
+ * Anything else is returned unchanged, so assertPoItemsResolved still rejects it.
+ */
+const PO_ITEM_REF_PREFIX = "procurement_po_item:";
+
+export function normalizePoItemRef(
+  ref: string,
+  poId: string,
+  items: ReadonlyArray<{ id: string; itemCode: string }>,
+): string {
+  if (items.some((i) => i.id === ref)) return ref;
+  if (!ref.startsWith(PO_ITEM_REF_PREFIX)) return ref;
+  const rest = ref.slice(PO_ITEM_REF_PREFIX.length);
+  if (items.some((i) => i.id === rest)) return rest;
+  const sep = rest.indexOf(":");
+  if (sep <= 0) return ref;
+  const refPoId = rest.slice(0, sep);
+  const code = rest.slice(sep + 1);
+  if (refPoId !== poId || !code) return ref;
+  const matches = items.filter((i) => i.itemCode === code);
+  return matches.length === 1 ? matches[0]!.id : ref;
+}
+
 export function assertPoItemsResolved(refs: string[], resolved: ReadonlySet<string>): void {
   for (const ref of refs) {
     if (!resolved.has(ref)) {

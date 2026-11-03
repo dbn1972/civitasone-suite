@@ -245,4 +245,26 @@ describe("CreateGRNForm - receiving store (UAT b10 F95)", () => {
     expect(body.poRef).not.toContain(PO.poNo);
     expect(body.vendorId).toBe(VENDOR.id);
   });
+
+  // F131: procurement-service's PO detail returns the item under lineItems[] with its
+  // own id; the GRN line must carry that id, never procurement_po_item:<poId>:<code>.
+  it("sends each line's poItemRef as the PO item id from PO detail lineItems", async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    const ITEM_ID = "66666666-6666-4666-8666-666666666666";
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") calls.push({ url, body: String(init.body) });
+      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify({ id: PO.id, vendorId: VENDOR.id, lineItems: [{ id: ITEM_ID, itemCode: "PAPER-A4", quantity: 10, unit: "reams" }] }), { status: 200 }));
+      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+      if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm stores={STORES} />);
+    await fillAccepted();
+    fireEvent.change(screen.getByLabelText("Receiving store"), { target: { value: STORES[0]!.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const body = JSON.parse(calls[0]!.body!) as { items: Array<{ poItemRef: string }> };
+    expect(body.items.map((i) => i.poItemRef)).toEqual([ITEM_ID]);
+  });
 });

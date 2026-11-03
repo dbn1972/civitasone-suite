@@ -330,3 +330,83 @@ describe("CreatePOForm — D4c #28 non-empanelled vendor basis", () => {
     expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ gemOrderRef: "GEM/2026/B/55" });
   });
 });
+
+// UAT Phase 2 C2 (J2 D1): a PO above ₹1,000 must cite an approved budget sanction.
+describe("CreatePOForm — budget sanction reference", () => {
+  beforeEach(() => { vi.restoreAllMocks(); pushMock.mockReset(); });
+
+  const SANCTIONS = [
+    { id: "s-ok", sanctionNo: "SAN/2026/007", subject: "Stationery", amount: "5000000", status: "approved" },
+    { id: "s-pend", sanctionNo: "SAN/2026/008", subject: "Pending one", amount: "100", status: "pending" },
+  ];
+
+  function mockWithSanctions(post?: Response) {
+    const base = mockFetch(post ? { post } : undefined);
+    const inner = base.getMockImplementation()!;
+    base.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/finance/sanctions")) return new Response(JSON.stringify(SANCTIONS), { status: 200 });
+      return inner(input, init);
+    });
+    return base;
+  }
+
+  async function fillHighValuePo() {
+    await pickVendor();
+    await pickIndent(); // ₹10,000
+    fillOneLine();
+    fireEvent.change(screen.getByLabelText(/Unit price, row 1/), { target: { value: "6002" } });
+  }
+
+  it("lists only approved sanctions", async () => {
+    mockWithSanctions();
+    render(<CreatePOForm />);
+    expect(await screen.findByRole("option", { name: /SAN\/2026\/007/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /SAN\/2026\/008/ })).toBeNull();
+  });
+
+  it("blocks a ₹6,002 PO with no sanction chosen and posts nothing", async () => {
+    const fetchSpy = mockWithSanctions();
+    render(<CreatePOForm />);
+    await fillHighValuePo();
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    expect(await screen.findByText(/must cite an approved budget sanction/)).toBeInTheDocument();
+    expect(posted(fetchSpy)).toBeUndefined();
+  });
+
+  it("sends the chosen sanction as sanctionRef finance_sanction:<id>", async () => {
+    const fetchSpy = mockWithSanctions();
+    render(<CreatePOForm />);
+    await fillHighValuePo();
+    await screen.findByRole("option", { name: /SAN\/2026\/007/ });
+    fireEvent.change(screen.getByLabelText(/Budget sanction/), { target: { value: "s-ok" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    await waitFor(() => expect(posted(fetchSpy)).toBeTruthy());
+    const body = JSON.parse((posted(fetchSpy)![1] as RequestInit).body as string);
+    expect(body.sanctionRef).toBe("finance_sanction:s-ok");
+  });
+
+  it("shows a readable message when the server answers 422 SANCTION_REF_REQUIRED", async () => {
+    mockWithSanctions(new Response(JSON.stringify({ code: "SANCTION_REF_REQUIRED", message: "raw" }), { status: 422 }));
+    render(<CreatePOForm />);
+    await pickVendor();
+    await pickIndent();
+    fillOneLine();
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    expect(await screen.findByText(/must cite an approved budget sanction/)).toBeInTheDocument();
+    expect(screen.queryByText("raw")).toBeNull();
+  });
+
+  it("a PO of ₹1,000 or less needs no sanction", async () => {
+    const fetchSpy = mockWithSanctions();
+    render(<CreatePOForm />);
+    await pickVendor();
+    await pickIndent();
+    fillOneLine();
+    fireEvent.change(screen.getByLabelText(/Unit price, row 1/), { target: { value: "800" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    await waitFor(() => expect(posted(fetchSpy)).toBeTruthy());
+    const body = JSON.parse((posted(fetchSpy)![1] as RequestInit).body as string);
+    expect(body.sanctionRef).toBeUndefined();
+  });
+});

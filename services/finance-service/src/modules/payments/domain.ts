@@ -93,6 +93,60 @@ export function assertThreeWayMatchPresent(poRef: string | null | undefined, grn
 /** Default 3-way-match tolerance (percent). Overridable via env at the gate. */
 export const DEFAULT_THREE_WAY_TOLERANCE_PCT = 2;
 
+/**
+ * Resolve the 3-way-match tolerance from env.
+ *
+ * `Number(raw) || undefined` was WRONG on the money path: `FINANCE_THREE_WAY_TOLERANCE_PCT=0`
+ * is falsy, so an operator asking for ZERO tolerance silently got the 2% default
+ * and overage up to 2% was admitted. Only an unset/blank/non-finite/negative
+ * value falls back to the default; 0 is an explicit, valid setting.
+ * (Moved from consumer.ts so the bill read-model reports the same verdict the pass gate applies.)
+ */
+export function resolveThreeWayTolerancePct(fallbackPct: number = DEFAULT_THREE_WAY_TOLERANCE_PCT): number {
+  const raw = process.env.FINANCE_THREE_WAY_TOLERANCE_PCT;
+  if (raw == null || raw.trim() === "") return fallbackPct;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallbackPct;
+  return parsed;
+}
+
+export type BillThreeWayMatch = "matched" | "unmatched" | "pending" | "na";
+
+/**
+ * UAT Phase 2 C7 (recon D15): the 3-way-match state a bill shows, on the list
+ * AND the detail. The list hard-coded "na" while the detail said "matched" as
+ * soon as both a PO and a GRN ref were present — without checking any amount.
+ * Now both read the same verdict the pass gate (assertThreeWayMatch) applies:
+ *   - no PO and no GRN ref                       -> "na" (not a procurement bill)
+ *   - one ref only, or no PO/GRN amount snapshot -> "pending" (cannot be verified yet)
+ *   - amounts present and within tolerance       -> "matched"
+ *   - amounts present but they do not reconcile  -> "unmatched"
+ */
+export function billThreeWayMatchStatus(
+  bill: {
+    poRef: string | null | undefined;
+    grnRef: string | null | undefined;
+    poAmountMinor: bigint | string | number | null | undefined;
+    grnAmountMinor: bigint | string | number | null | undefined;
+    grossMinor: bigint | string | number;
+  },
+  tolerancePct: number = resolveThreeWayTolerancePct(),
+): BillThreeWayMatch {
+  if (!bill.poRef && !bill.grnRef) return "na";
+  if (!bill.poRef || !bill.grnRef || bill.poAmountMinor == null || bill.grnAmountMinor == null) return "pending";
+  try {
+    assertThreeWayMatch(bill.poRef, bill.grnRef, {
+      poAmountMinor: BigInt(bill.poAmountMinor),
+      grnAmountMinor: BigInt(bill.grnAmountMinor),
+      invoiceMinor: BigInt(bill.grossMinor),
+    }, tolerancePct);
+    return "matched";
+  } catch (err) {
+    if (err instanceof DomainError) return "unmatched";
+    throw err;
+  }
+}
+
 export interface ThreeWayLegs {
   poAmountMinor: bigint;   // authoritative ordered value (from PO)
   grnAmountMinor: bigint;  // authoritative accepted/received value (from GRN)

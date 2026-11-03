@@ -11,7 +11,7 @@ import {
   computeThreeWayMatch, assertQtyValid, assertGrnAmendable,
   assertPoItemsResolved, assertGrnLinesResolved, assertDistinctReceiverInspector,
   assertGrnInspectable, assertWithinOpenQty,
-  inferItemType,
+  inferItemType, normalizePoItemRef,
 } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
@@ -23,7 +23,7 @@ const AUDIT_TOPIC = "audit.event.record";
 
 export function registerGrnConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.grnCreate, async (msg) => {
-    const p = msg.payload as {
+    const raw = msg.payload as {
       id: string; tenantId: string; grnNo: string; poRef: string; vendorId: string;
       receivedDate?: string; notes?: string; storeId?: string;
       items: Array<{ poItemRef: string; itemCode: string; orderedQty: number; receivedQty: number; acceptedQty: number; unit: string }>;
@@ -36,9 +36,12 @@ export function registerGrnConsumers(queue: Queue): void {
     // past the over-accept guard below. A poItemRef that doesn't resolve
     // against the PO's real items is rejected rather than silently treated
     // as "unbounded" (see assertPoItemsResolved).
-    const poId = p.poRef.replace(/^procurement_po:/, "");
-    const poItems = await findPoItemsByPoId(poId, p.tenantId);
+    const poId = raw.poRef.replace(/^procurement_po:/, "");
+    const poItems = await findPoItemsByPoId(poId, raw.tenantId);
     const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
+    // F131: resolve opaque / legacy composite line refs to the PO item id
+    // (the commands already in a DLQ carry the composite form).
+    const p = { ...raw, items: raw.items.map((i) => ({ ...i, poItemRef: normalizePoItemRef(i.poItemRef, poId, poItems) })) };
     assertPoItemsResolved(p.items.map((i) => i.poItemRef), new Set(poItemMap.keys()));
 
     const guardItems = p.items.map((i) => ({

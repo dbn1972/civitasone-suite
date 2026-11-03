@@ -55,6 +55,11 @@ export function grnStatusLabel(status: string | null | undefined): string {
  * PO statuses that represent a real financial commitment to a vendor. Used to
  * compute "Committed value" (GAP-PROCUREMENT-ORDERS-02): draft and cancelled
  * POs must NOT inflate committed spend.
+ *
+ * UAT Phase 2 C6: a `closed` PO is one that was approved / dispatched / GeM-
+ * placed and then closed once every deliverable was in (procurement-service
+ * assertClosable). It remains money committed to the vendor, so it counts
+ * here; it was being dropped from the KPI.
  */
 export const COMMITTED_PO_STATUSES = new Set<string>([
   "approved",
@@ -62,6 +67,7 @@ export const COMMITTED_PO_STATUSES = new Set<string>([
   "partial_grn",
   "fully_received",
   "gem_placed",
+  "closed",
 ]);
 
 /** True when a PO's delivery is overdue: past the delivery date and not terminal. */

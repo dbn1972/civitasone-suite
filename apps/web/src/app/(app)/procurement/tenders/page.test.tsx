@@ -90,6 +90,32 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
     expect(screen.queryByText("Laptops")).not.toBeInTheDocument();
   });
 
+  // UAT Phase 2 C4 (recon D22): drafts and awarded tenders read "Open" in the Bid Window column.
+  it("C4: the bid window is 'Not yet published' for a draft and 'Closed' for an awarded tender, never 'Open'", async () => {
+    route([
+      { id: "d1", tenderNo: "T-D", title: "Draft one", type: "limited", estimatedValue: 1, bidClosingDate: TOMORROW, status: "draft", bidsReceived: 0, bidCount: 0 },
+      { id: "a1", tenderNo: "T-A", title: "Awarded one", type: "limited", estimatedValue: 1, bidClosingDate: YESTERDAY, status: "awarded", bidsReceived: 0, bidCount: 2 },
+      { id: "p1", tenderNo: "T-P", title: "Live one", type: "limited", estimatedValue: 1, bidClosingDate: TOMORROW, status: "published", bidsReceived: 0, bidCount: 1 },
+    ]);
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
+    const cells = (title: string) => Array.from(screen.getByText(title).closest("tr")!.querySelectorAll("td")).map((td) => td.textContent?.trim());
+    expect(cells("Draft one")).toContain("Not yet published");
+    expect(cells("Draft one")).not.toContain("Open");
+    expect(cells("Awarded one")).toContain("Closed");
+    expect(cells("Awarded one")).not.toContain("Open");
+    expect(cells("Live one")).toContain("Open");
+  });
+
+  it("C4: the Bids column shows the real bid count from the API and drops the '—' note", async () => {
+    route([
+      { id: "a1", tenderNo: "T-A", title: "Awarded one", type: "limited", estimatedValue: 1, bidClosingDate: YESTERDAY, status: "awarded", bidsReceived: 0, bidCount: 3 },
+    ]);
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
+    const cells = Array.from(screen.getByText("Awarded one").closest("tr")!.querySelectorAll("td")).map((td) => td.textContent?.trim());
+    expect(cells).toContain("3");
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
   // UAT Phase 1B (recon D06): estimatedValue is RUPEES on the wire; it must not be divided by 100 again.
   it("shows Est. Value in rupees as sent by the API", async () => {
     route([{ id: "t9", tenderNo: "TND/2026/0006", title: "Big", type: "open", estimatedValue: 5000000, bidClosingDate: TOMORROW, status: "draft", bidsReceived: 0 }]);

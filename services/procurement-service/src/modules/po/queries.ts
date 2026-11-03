@@ -43,6 +43,8 @@ export async function getPo(id: string, tenantId: string): Promise<Record<string
     deliveryDate: po.deliveryDate ? String(po.deliveryDate).slice(0, 10) : undefined,
     totalAmount: Number(po.totalMinor),
     lineItems: items.map((i) => ({
+      // F131: the PO item's own id — the value a GRN line must send as poItemRef.
+      id: i.id,
       itemCode: i.itemCode,
       itemName: i.description,
       description: i.description,
