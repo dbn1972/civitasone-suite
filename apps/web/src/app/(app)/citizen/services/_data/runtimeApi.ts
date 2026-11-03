@@ -1,26 +1,13 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
-import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
-import { formDesignFromService } from "@/app/_components/ds/designer/StatusTimeline";
+import { parsePublishedService, type PublishedServiceRuntime } from "@/app/_data/publishedService";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
-export interface PublishedServiceRuntime {
-  id: string;
-  serviceKey: string;
-  name: string;
-  servicePattern: string;
-  description: string;
-  slaDays: number | null;
-  channels: string[];
-  allowedApplicantTypes: string[];
-  applicantTypeRejectMessage: string | null;
-  requiredDocuments: { docType: string; label: string; mandatory: boolean }[];
-  feeFromMinor: number | null;
-  feeCurrency: string;
-  formDesign: FormDesignState | null;
-}
+// UAT-P1A-05: the parser lives in a server-safe module so the RSC loader
+// (loadService.ts) can call it; this "use client" module re-exports it.
+export { parsePublishedService, type PublishedServiceRuntime };
 
 export interface ApplicationDraft {
   id: string;
@@ -53,39 +40,6 @@ function num(v: unknown): number | null {
   return typeof v === "number" ? v : null;
 }
 
-export function parsePublishedService(raw: unknown): PublishedServiceRuntime | null {
-  if (!isRecord(raw)) return null;
-  const forms = Array.isArray(raw.forms) ? raw.forms : [];
-  const firstForm = forms[0];
-  const runtimeMeta = isRecord(firstForm) && isRecord(firstForm.runtimeMeta) ? firstForm.runtimeMeta : null;
-  const feeFromMinor =
-    num(runtimeMeta?.feeFromMinor) ??
-    (typeof raw.feeFromMinor === "number" ? raw.feeFromMinor : null);
-
-  return {
-    id: str(raw.id),
-    serviceKey: str(raw.serviceKey),
-    name: str(raw.name),
-    servicePattern: str(raw.servicePattern) || "certificate",
-    description: str(runtimeMeta?.description ?? raw.description) || "Government service application",
-    slaDays: num(raw.slaDays),
-    channels: Array.isArray(raw.channels) ? raw.channels.map(str) : ["portal"],
-    allowedApplicantTypes: Array.isArray(raw.allowedApplicantTypes) && raw.allowedApplicantTypes.length > 0
-      ? raw.allowedApplicantTypes.map(str)
-      : ["citizen"],
-    applicantTypeRejectMessage: raw.applicantTypeRejectMessage ? str(raw.applicantTypeRejectMessage) : null,
-    requiredDocuments: Array.isArray(raw.requiredDocuments)
-      ? raw.requiredDocuments.filter(isRecord).map((d) => ({
-          docType: str(d.docType),
-          label: str(d.label),
-          mandatory: d.mandatory !== false,
-        }))
-      : [],
-    feeFromMinor,
-    feeCurrency: str(runtimeMeta?.feeCurrency ?? "INR"),
-    formDesign: formDesignFromService(forms),
-  };
-}
 
 export async function fetchPublishedByKey(serviceKey: string): Promise<PublishedServiceRuntime> {
   const res = await fetch(
