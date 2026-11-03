@@ -7,12 +7,12 @@ import {
   UserDetailSchema,
   RoleDetailSchema,
   AdminRoleSummaryListSchema,
-} from "./web.js";
+} from "../src/web.js";
 
 const po = (status: string) => ({ id: "po-1", poNo: "PO/2026/0001", vendor: "V", amountDisplay: "₹1", totalMinor: "100", orderDate: "2026-08-12", status });
 
 describe("purchase order status (UAT-P1A-02)", () => {
-  // procurement-service migrations/0008_competitive_procurement.sql procurement_pos_status_check.
+  // Mirrors procurement-service migration 0008 (0008_competitive_procurement.sql), CHECK po.procurement_pos_status_check.
   const dbCheck = ["draft", "pending", "approved", "rejected", "gem_placed", "dispatched", "closed", "cancelled"];
 
   it("covers every status the PO CHECK constraint allows", () => {
