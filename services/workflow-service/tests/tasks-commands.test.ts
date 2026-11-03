@@ -95,7 +95,9 @@ describe("tasks/commands — completeTask", () => {
 
     const tenantId = newTenant();
     const actorId = randomUUID();
-    const { taskId } = await setupTask(tenantId, actorId);
+    // UAT F108 follow-up: a task with no role is only actionable by its assignee or a
+    // workflow admin, so this fixture targets the caller role to reach the gate under test.
+    const { taskId } = await setupTask(tenantId, actorId, { roleRef: "workflow_user" });
 
     // Same actorId who created the instance tries to complete the task (non-super_admin)
     const ctx = makeCtx(tenantId, actorId, ["workflow_user"]);
@@ -143,7 +145,9 @@ describe("tasks/commands — completeTask", () => {
 
     const tenantId = newTenant();
     const actorId = randomUUID();
-    const { taskId } = await setupTask(tenantId, actorId);
+    // UAT F108 follow-up: a task with no role is only actionable by its assignee or a
+    // workflow admin, so this fixture targets the caller role to reach the gate under test.
+    const { taskId } = await setupTask(tenantId, actorId, { roleRef: "workflow_user" });
 
     const assignedTo = randomUUID();
     await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${assignedTo} WHERE id = ${taskId}`);

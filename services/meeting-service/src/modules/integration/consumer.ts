@@ -34,6 +34,7 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -46,7 +47,7 @@ import { resolutions } from "../decision/schema.js";
 import { committeeMembers } from "../committee/schema.js";
 import { actionItems } from "../action-item/schema.js";
 
-const log = pino({ name: "meeting-integration-consumer" });
+const log = pino({ name: "meeting-integration-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Nil-UUID actor for system-initiated (cross-service) writes — carries no human actor. */
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";

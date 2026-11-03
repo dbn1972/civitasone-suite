@@ -78,6 +78,7 @@
  */
 import { sql } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { recordScheduledJobRun } from "@civitasone/observability";
 import { runWithTenant } from "@civitasone/db";
 import type { Db } from "../../shared/db.js";
@@ -94,7 +95,7 @@ export const EFFECTIVE_CHANGES_JOB_NAME = "hrms_lifecycle_effective_changes";
  */
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 
-const log = pino({ name: EFFECTIVE_CHANGES_JOB_NAME });
+const log = pino({ name: EFFECTIVE_CHANGES_JOB_NAME, serializers: SAFE_LOG_SERIALIZERS });
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);

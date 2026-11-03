@@ -30,6 +30,7 @@ import { resolveOwnEmployeeIdIfBareEmployee } from "../../shared/self-scope.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import {
   buildUpsertPayload, toInsuranceView, tryDecrypt, upsertInsuranceBody, REVEALABLE_INSURANCE_FIELDS, MEDICAL_INSURANCE_REVEAL_OP,
   type InsuranceDbRow, type RevealableInsuranceField,
@@ -38,7 +39,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 
 import * as insuranceCommands from "./insurance-commands.js";
 
-const insuranceLog = pino({ name: "hrms-medical-insurance" });
+const insuranceLog = pino({ name: "hrms-medical-insurance", serializers: SAFE_LOG_SERIALIZERS });
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 const SELF_ROLES = [...HR_ROLES, "manager", "employee"];

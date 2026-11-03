@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -10,7 +11,7 @@ import type { LinkType } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-const log = pino({ name: "workflow-case-links-consumer" });
+const log = pino({ name: "workflow-case-links-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 export function registerCaseLinksConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.createCaseLink, async (msg) => {

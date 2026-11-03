@@ -52,6 +52,9 @@ async function seedInstance(tenant: string): Promise<string> {
  * Bulk-seed `count` pending tasks. `ageSeconds` shifts updated_at into the past,
  * so tasks with a larger age sort LATER in the (updated_at DESC) inbox order.
  */
+// UAT R2 / F108: a task with no roleRef is no longer listed to every role-holder
+// (tasks/repo.ts taskVisibilityPredicate), so inbox fixtures target the caller's role.
+// Default roleRef is therefore "manager", the role the listTasks callers below hold.
 async function seedTasks(
   tenant: string,
   instanceId: string,
@@ -61,7 +64,7 @@ async function seedTasks(
   const actor = randomUUID();
   await sqlAsTenant(tenant, sql`
     INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, ref_type, ref_id, is_call, created_by, updated_by, updated_at)
-    SELECT gen_random_uuid(), ${tenant}::uuid, ${instanceId}::uuid, 'Approve ' || g, ${opts.status ?? "pending"}::varchar, ${opts.roleRef ?? null}::varchar,
+    SELECT gen_random_uuid(), ${tenant}::uuid, ${instanceId}::uuid, 'Approve ' || g, ${opts.status ?? "pending"}::varchar, ${opts.roleRef === undefined ? "manager" : opts.roleRef}::varchar,
            ${opts.refType}::varchar, gen_random_uuid(), ${opts.isCall ?? false}::boolean, ${actor}::uuid, ${actor}::uuid,
            now() - make_interval(secs => (${opts.ageSeconds}::int + g))
     FROM generate_series(1, ${count}::int) AS g
@@ -109,8 +112,10 @@ describe("listTasks refType narrowing (GAP-PROCUREMENT-APPROVALS-01)", () => {
     // Narrowing never widens: the payroll_admin-only tasks appear only for that role.
     const asPayroll = await asTenant(tenant, () =>
       queries.listTasks(tenant, 50, 0, { ...pendingAs(["payroll_admin"]), refTypes: ["procurement_po"] }));
-    expect(asPayroll.data).toHaveLength(2 + 1); // 2 payroll-only + the 1 unrestricted procurement_po task
-    expect(asPayroll.pagination.total).toBe(3);
+    // UAT R2 / F108: the manager-role procurement_po task is not visible to payroll_admin
+    // (it used to be: it had no roleRef, and an unrestricted task was in every inbox).
+    expect(asPayroll.data).toHaveLength(2);
+    expect(asPayroll.pagination.total).toBe(2);
   });
 
   it("pages through the filtered set until exhausted (total/hasMore describe the filtered set)", async () => {
@@ -165,9 +170,9 @@ describe("GET /v1/workflow/tasks?refType= (route)", () => {
   it("honours repeated and single refType params, and ignores no param (unfiltered stays unchanged)", async () => {
     const tenant = newTenant();
     const inst = await seedInstance(tenant);
-    await seedTasks(tenant, inst, 4, { refType: "leave_app", ageSeconds: 0 });
-    await seedTasks(tenant, inst, 2, { refType: "procurement_indent", ageSeconds: 1_000 });
-    await seedTasks(tenant, inst, 1, { refType: "procurement_po", ageSeconds: 2_000 });
+    await seedTasks(tenant, inst, 4, { refType: "leave_app", roleRef: "procurement_admin", ageSeconds: 0 });
+    await seedTasks(tenant, inst, 2, { refType: "procurement_indent", roleRef: "procurement_admin", ageSeconds: 1_000 });
+    await seedTasks(tenant, inst, 1, { refType: "procurement_po", roleRef: "procurement_admin", ageSeconds: 2_000 });
     const app = await buildApp();
     const auth = signToken({ sub: randomUUID(), tid: tenant, roles: ["procurement_admin"], sid: "sess-reftype" }, SECRET, 3600);
     try {

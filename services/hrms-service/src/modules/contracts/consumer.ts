@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -23,7 +24,7 @@ import { eq, and } from "drizzle-orm";
 import type { ContractStatus } from "./types.js";
 import { uuidV5 } from "../../shared/ids.js";
 
-const log = pino({ name: "contract-consumer" });
+const log = pino({ name: "contract-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 const NOTIFICATION_SEND = "notification.send";
 

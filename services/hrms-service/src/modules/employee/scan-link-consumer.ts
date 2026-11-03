@@ -17,13 +17,14 @@ import {
   type LinkResult, type UnlinkResult,
 } from "@civitasone/scan-link";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "./schema.js";
 import { hrmsEmployeeScannedDocuments as t } from "./scan-link-schema.js";
 
-const log = pino({ name: "hrms-scan-link" });
+const log = pino({ name: "hrms-scan-link", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

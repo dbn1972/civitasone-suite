@@ -9,6 +9,7 @@ import { getContractMilestones, getContractBonds, getContractObligations } from 
 import { MilestoneActions } from "./MilestoneActions";
 import { BondActions } from "./BondActions";
 import { ObligationsPanel } from "./ObligationsPanel";
+import { ContractLifecycleSection } from "./ContractLifecycleActions";
 import { deriveContractDisplayFields } from "./page.helpers";
 import { ArrowLeft } from "lucide-react";
 
@@ -228,6 +229,15 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
             />
           )}
         </div>
+      </div>
+
+      {/* UAT J10 / D6: approve / activate / close / terminate on screen. */}
+      <div style={{ marginTop: 18 }}>
+        <ContractLifecycleSection
+          contractId={params.id}
+          status={statusLower}
+          createdBy={typeof contract.createdBy === "string" ? contract.createdBy : null}
+        />
       </div>
 
       <RaiseEOfficeNote

@@ -32,8 +32,9 @@ import { enqueue } from "../../../shared/outbox.js";
 import { isPostingEventsEnabled } from "../config.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../../shared/safe-error-log.js";
 
-const log = pino({ name: "workforce-core-legacy-bridge" });
+const log = pino({ name: "workforce-core-legacy-bridge", serializers: SAFE_LOG_SERIALIZERS });
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 

@@ -7,6 +7,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { OpenCaseAction } from "./_components/OpenCaseAction";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
@@ -147,9 +148,14 @@ export default async function DisciplinaryListPage(
         // and label text alone already read as navigation, so this stays a
         // link rather than being converted into an in-place filter chip).
         actions={
-          <Link href="/hr/vigilance" className="btn-outline" aria-label={t("vigilanceOnlyAriaLabel")}>
-            {t("vigilanceOnly")} →
-          </Link>
+          <>
+            {/* UAT J11 / D7: open a case on screen. DISCIPLINARY_ROLES is the
+                backend's VIGILANCE_ROLES for the create route as well. */}
+            <OpenCaseAction />
+            <Link href="/hr/vigilance" className="btn-outline" aria-label={t("vigilanceOnlyAriaLabel")}>
+              {t("vigilanceOnly")} →
+            </Link>
+          </>
         }
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />

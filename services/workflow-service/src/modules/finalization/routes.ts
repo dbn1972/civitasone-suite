@@ -7,6 +7,7 @@ import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as instancesRepo from "../instances/repo.js";
+import { canViewInstance } from "../tasks/repo.js";
 import { canReverse, assessImpact, assertEditable, type Dependency } from "./domain.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
@@ -48,6 +49,11 @@ export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/instances/:id/finalization", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // UAT #2445 delta review item 2: an instance's finalization state for its participants.
+    // This route's ADMIN_ROLES may finalize / reverse any instance, so they read any state.
+    if (!hasRole(ctx.roles, ADMIN_ROLES) && !(await canViewInstance(ctx.tenantId, id, ctx.roles, ctx.actorId))) {
+      throw new HttpError(404, "NOT_FOUND", "instance not found");
+    }
     const row = await repo.findByInstance(id, ctx.tenantId);
     return reply.send({ data: repo.toState(row) });
   });

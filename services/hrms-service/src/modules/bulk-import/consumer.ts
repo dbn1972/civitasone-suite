@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { CommandEnvelope, Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -10,7 +11,7 @@ import * as importRepo from "./repo.js";
 import { IMPORT_FAILURE, type ImportFailureCode } from "./failure.js";
 import type { BulkImportItem, BulkImportNotQueuedPayload, BulkImportRecordItem, BulkImportRecordPayload } from "./command.js";
 
-const log = pino({ name: "hrms.bulk-import.consumer" });
+const log = pino({ name: "hrms.bulk-import.consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 /**

@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import type { Queue } from "@civitasone/queue";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -8,7 +9,7 @@ import { COMMANDS } from "../../topics.js";
 import { computeSeniority } from "./engine.js";
 import { hrmsSeniorityLists, hrmsSeniorityListEntries } from "./schema.js";
 
-const log = pino({ name: "seniority-consumer" });
+const log = pino({ name: "seniority-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 /**

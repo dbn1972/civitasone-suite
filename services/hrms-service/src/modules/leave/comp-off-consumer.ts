@@ -6,13 +6,14 @@
 import type { Queue } from "@civitasone/queue";
 import { and, eq, sql } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsCompOff } from "./schema.js";
 
-const log = pino({ name: "hrms-comp-off-consumer" });
+const log = pino({ name: "hrms-comp-off-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
 
 export function registerCompOffConsumers(rawQueue: Queue): void {

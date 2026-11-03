@@ -14,6 +14,7 @@ export {
 // service and worker calls so PM2 knows when a process can actually take
 // traffic/work versus just having started.
 export { signalReady, registerGracefulShutdown, type GracefulShutdownOptions } from "./lifecycle.js";
+export { safeErr, isPostgresError, isUniqueViolation, SAFE_LOG_SERIALIZERS, type SafeErr } from "./safe-error-log.js";
 
 type AppLike = {
   get: (path: string, handler: (...args: unknown[]) => unknown) => void;

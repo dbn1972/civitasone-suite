@@ -2,6 +2,7 @@ import { minorToSafeNumber } from "@civitasone/schemas/money";
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
@@ -10,7 +11,7 @@ import { COMMANDS } from "../../topics.js";
 import * as employeeRepo from "../employee/repo.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 
-const log = pino({ name: "hrms-f3-pay-matrix" });
+const log = pino({ name: "hrms-f3-pay-matrix", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Mirrors routes.ts's IncrementPlanItem — the exact, precomputed decision
  * the route made synchronously. This consumer applies these fields verbatim

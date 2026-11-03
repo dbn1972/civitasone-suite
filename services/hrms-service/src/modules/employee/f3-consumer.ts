@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, boolean } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
@@ -12,7 +13,7 @@ import { hrmsEmployees } from "./schema.js";
 import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
-const log = pino({ name: "hrms-f3-employee" });
+const log = pino({ name: "hrms-f3-employee", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Central audit topic (same constant/payload shape as ./consumer.ts). */
 const AUDIT = "audit.event.record";

@@ -1,9 +1,10 @@
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { cache } from "../../shared/infra.js";
 import * as employeeRepo from "../employee/repo.js";
 import { batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 
-const log = pino({ name: "orgchart-queries" });
+const log = pino({ name: "orgchart-queries", serializers: SAFE_LOG_SERIALIZERS });
 
 type OrgNode = {
   id: string;

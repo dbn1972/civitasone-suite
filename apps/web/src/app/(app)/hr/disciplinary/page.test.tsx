@@ -15,6 +15,9 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
+// UAT J11 / D7: the client "Open case" dialog is covered by its own test.
+vi.mock("./_components/OpenCaseAction", () => ({ OpenCaseAction: () => <button type="button">Open case</button> }));
+
 import DisciplinaryPage from "./page";
 
 // GAP-HR-DISCIPLINARY-04: the backend response now carries pagination/stat
@@ -120,5 +123,11 @@ describe("DisciplinaryPage", () => {
     expect(openCard!.querySelector(".val")?.textContent).toBe("5");
     const majorCard = screen.getByText("Major (Vigilance)").closest(".stat");
     expect(majorCard!.querySelector(".val")?.textContent).toBe("12");
+  });
+
+  it("UAT J11 / D7: the register offers Open case to an HR role-holder", async () => {
+    fetchJsonMock.mockResolvedValue(apiResult([], { major: 0, minor: 0, open: 0 }));
+    render(await DisciplinaryPage({}));
+    expect(screen.getByRole("button", { name: /open case/i })).toBeInTheDocument();
   });
 });

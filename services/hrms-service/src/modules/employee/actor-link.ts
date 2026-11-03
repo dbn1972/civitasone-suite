@@ -1,12 +1,13 @@
 import { eq, and, isNull, notInArray } from "drizzle-orm";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { scopedRead, db } from "../../shared/db.js";
 import { hrmsEmployees, type EmployeeRow } from "./schema.js";
 import { HttpError } from "../../shared/context.js";
 import { fetchVerifiedActorEmail } from "../../shared/identity-client.js";
 import { LINK_INELIGIBLE_STATUSES, findOtherHolder, lockLogin } from "./login-holder.js";
 
-const log = pino({ name: "hrms.actor-link" });
+const log = pino({ name: "hrms.actor-link", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * Resolve the hrmsEmployees row linked to a request's actor.

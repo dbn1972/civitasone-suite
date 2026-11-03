@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -9,7 +10,7 @@ import { stageOwner } from "./routes.js";
 import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
-const log = pino({ name: "hrms-f3-apar" });
+const log = pino({ name: "hrms-f3-apar", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * F3 leftover write consumer for the APAR / SPARROW appraisal workflow.

@@ -32,7 +32,9 @@ export async function requireOwnEmployeeId(ctx: RequestContext): Promise<string>
     }
     throw err;
   }
-  if (!own) throw new HttpError(403, "FORBIDDEN", "no employee record is linked to this user");
+  // UAT #2445 review item 7: a specific code, so a screen can tell "you have no employee
+  // record" apart from a genuine permission refusal (both are 403).
+  if (!own) throw new HttpError(403, "NO_EMPLOYEE_RECORD", "no employee record is linked to this user");
   return own;
 }
 

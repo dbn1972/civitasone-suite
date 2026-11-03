@@ -1,6 +1,7 @@
 import { parseMinor } from "@civitasone/schemas/money";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
@@ -9,7 +10,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { computePension, summariseNonQualifying, type PensionResult, type ServiceBookEvent } from "./engine.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import * as repo from "./repo.js";
-const log = pino({ name: "hrms-f3-pension" });
+const log = pino({ name: "hrms-f3-pension", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Recursively convert bigint -> string for JSON. Mirrors the helper in pension/routes.ts. */
 function jsonSafe(v: unknown): unknown {

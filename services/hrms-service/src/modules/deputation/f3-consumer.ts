@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
@@ -8,7 +9,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
 import { payTermsColumns, payTermsSchema } from "./pay-terms.js";
-const log = pino({ name: "hrms-f3-deputation" });
+const log = pino({ name: "hrms-f3-deputation", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * Shared close logic for repatriate (op "deputation_routes__1") and cancel

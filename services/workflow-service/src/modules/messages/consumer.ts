@@ -11,8 +11,9 @@ import * as historyRepo from "../history/repo.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 
-const log = pino({ name: "workflow-messages-consumer" });
+const log = pino({ name: "workflow-messages-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT_TOPIC = "audit.event.record";
 const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000a1";
 

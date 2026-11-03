@@ -54,8 +54,9 @@ describe("listTasks pagination.total (GAP-APPROVALS-HOME-01)", () => {
   it("reports the exact total of a role-holder's pending inbox and makes a later page reachable", async () => {
     const tenant = newTenant();
     const instanceId = await seedInstance(tenant);
-    // 40 pending tasks visible to the manager role (unrestricted roleRef=null).
-    for (let i = 0; i < 40; i++) await seedTask(tenant, instanceId, { roleRef: null });
+    // 40 pending tasks visible to the manager role (UAT R2 / F108: targeted at it;
+    // an unrestricted roleRef=null task is no longer in every inbox).
+    for (let i = 0; i < 40; i++) await seedTask(tenant, instanceId, { roleRef: "manager" });
     // Noise that must NOT be counted in the pending-for-roles total:
     await seedTask(tenant, instanceId, { status: "completed", roleRef: null }); // not pending
     await seedTask(tenant, instanceId, { status: "pending", roleRef: null, isCall: true }); // call task
@@ -80,7 +81,7 @@ describe("listTasks pagination.total (GAP-APPROVALS-HOME-01)", () => {
   it("hasMore is false when the last page exactly fills the limit", async () => {
     const tenant = newTenant();
     const instanceId = await seedInstance(tenant);
-    for (let i = 0; i < 30; i++) await seedTask(tenant, instanceId, { roleRef: null });
+    for (let i = 0; i < 30; i++) await seedTask(tenant, instanceId, { roleRef: "manager" });
 
     const opts = { status: "pending", roles: ["manager"] };
     // Second page of 15 is the last page and is exactly full — the old
@@ -96,7 +97,7 @@ describe("listTasks subject enrichment (GAP-WORKFLOW-MY-TASKS-02)", () => {
   it("attaches the parent instance name and requester to each task", async () => {
     const tenant = newTenant();
     const instanceId = await seedInstance(tenant);
-    await seedTask(tenant, instanceId, { roleRef: null });
+    await seedTask(tenant, instanceId, { roleRef: "manager" });
     const res = await asTenant(tenant, () => queries.listTasks(tenant, 10, 0, { status: "pending", roles: ["manager"] }));
     expect(res.data[0]).toMatchObject({ instanceName: "Inbox fixture" });
     expect(res.data[0]!.requesterId).toMatch(/^[0-9a-f-]{36}$/);

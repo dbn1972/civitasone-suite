@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
+import { canViewInstance } from "../tasks/repo.js";
 import { isDefinitionConfigured } from "../definitions/configured.js";
 
 const VIEW_ROLES = [
@@ -18,6 +19,8 @@ export async function historyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIEW_ROLES);
     const { instanceId } = z.object({ instanceId: z.string().uuid() }).parse(req.params);
+    // UAT #2445 delta review item 1: same participant gate as /instances/:id/history.
+    if (!(await canViewInstance(ctx.tenantId, instanceId, ctx.roles, ctx.actorId))) throw new HttpError(404, "NOT_FOUND", "instance not found");
     const rows = await repo.listForInstance(instanceId, ctx.tenantId);
     return reply.code(200).send({ data: rows });
   });

@@ -76,6 +76,18 @@ describe("AddEmployeeWizard — UX-016 clerk-safe errors", () => {
     await waitFor(() => expect(alert).toHaveTextContent(/This employee was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate employeeNo/);
   });
+
+  it("a duplicate Employee ID (409 EMPLOYEE_NO_EXISTS) names the ID in plain language", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ code: "EMPLOYEE_NO_EXISTS", message: "an employee with this employee number already exists" }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await driveToFinalStepAndSubmit();
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/Employee ID NIC\/2026\/0001 already exists/));
+  });
 });
 
 /**

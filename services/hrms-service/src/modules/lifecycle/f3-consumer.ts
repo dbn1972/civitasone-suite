@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
@@ -8,7 +9,7 @@ import { HttpError } from "../../shared/context.js";
 import { hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsOnboardingDocuments } from "./schema.js";
 import { hrmsBgvChecks, hrmsPropertyReturns, hrmsMandatoryDocConfigs, hrmsPolicyAcknowledgements } from "./schema.js";
 import { hrmsEmployeeHolds } from "./schema.js";
-const log = pino({ name: "hrms-f3-lifecycle" });
+const log = pino({ name: "hrms-f3-lifecycle", serializers: SAFE_LOG_SERIALIZERS });
 
 /**
  * F3 leftover write consumer for the lifecycle module.

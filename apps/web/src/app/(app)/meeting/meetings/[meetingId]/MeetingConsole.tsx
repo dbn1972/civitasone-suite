@@ -4,6 +4,7 @@ import { actionErrorText } from "../../_data/errorText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
 import type { HumanError } from "@/lib/messages";
 import {
@@ -32,6 +33,10 @@ import {
   fetchLiveAttendance,
   initiateVote,
   transitionMeeting,
+  addAgendaItem,
+  AGENDA_OUTCOME_TYPES,
+  MeetingTransitionError,
+  type AgendaOutcomeType,
 } from "../../_data/client";
 
 type Src = "api" | "error";
@@ -79,19 +84,54 @@ const fieldStyle: React.CSSProperties = {
   fontFamily: "inherit",
 };
 
-/** Contextual next state-machine transitions the console offers (Req 1.3–1.6). */
-function nextTransitions(status: string): { toState: string; label: string; danger?: boolean }[] {
+/**
+ * Contextual next state-machine transitions the console offers (Req 1.3–1.6).
+ * UAT J14 / D9: mirrors meeting-service meeting-core/domain.ts BASE_TRANSITIONS.
+ * A draft meeting used to offer nothing, and "Start meeting" was offered from
+ * `scheduled`, an edge the service refuses (only agenda_locked → in_progress).
+ * Minutes approval stays on the minutes page; cancel has its own route.
+ * `key` names the label in the meetingLifecycle messages.
+ */
+export type ConsoleTransition = { toState: string; key: string; danger?: boolean; needsReason?: boolean };
+export function nextTransitions(status: string): ConsoleTransition[] {
   switch (status) {
+    case "draft":
+      return [{ toState: "scheduled", key: "schedule" }];
     case "scheduled":
+      return [{ toState: "agenda_locked", key: "lockAgenda" }];
     case "agenda_locked":
-      return [{ toState: "in_progress", label: "Start meeting" }];
+      return [{ toState: "in_progress", key: "start" }, { toState: "scheduled", key: "unlockAgenda" }];
     case "in_progress":
-      return [{ toState: "adjourned", label: "Adjourn meeting", danger: true }];
+      return [
+        { toState: "adjourned", key: "adjourn", danger: true, needsReason: true },
+        { toState: "minutes_pending", key: "end", danger: true },
+      ];
     case "adjourned":
-      return [{ toState: "minutes_pending", label: "Move to minutes", danger: true }];
+      return [{ toState: "in_progress", key: "resume" }, { toState: "minutes_pending", key: "moveToMinutes", danger: true }];
+    case "minutes_approved":
+      return [{ toState: "closed", key: "close", danger: true }];
     default:
       return [];
   }
+}
+
+/**
+ * draft → scheduled prerequisites the service checks (validateDraftToScheduled):
+ * a chairperson, at least one agenda item and a future date. Returned as
+ * meetingLifecycle message keys so the console can say what is missing instead
+ * of offering a button whose command is refused in the worker.
+ */
+export function scheduleBlockers(
+  m: { chairpersonId: string | null; scheduledAt: string | null },
+  agendaCount: number,
+  now: Date = new Date(),
+): string[] {
+  const out: string[] = [];
+  if (!m.chairpersonId) out.push("needChair");
+  if (agendaCount < 1) out.push("needAgenda");
+  const at = m.scheduledAt ? Date.parse(m.scheduledAt) : NaN;
+  if (!Number.isFinite(at) || at <= now.getTime()) out.push("needFutureDate");
+  return out;
 }
 
 /**
@@ -178,7 +218,11 @@ export function MeetingConsole({
   viewerPermissions,
 }: Props) {
   const router = useRouter();
+  const tl = useTranslations("meetingLifecycle");
   const [status, setStatus] = useState(meeting.status);
+  // UAT J14: optimistic-lock version the transition command carries; each
+  // accepted transition bumps it by one (meeting-core consumer versionedUpdate).
+  const [version, setVersion] = useState(meeting.version);
   const [attendance, setAttendance] = useState<LiveAttendance | null>(initialAttendance);
   const [attState, setAttState] = useState<Src>(attendanceSource);
   const [votes, setVotes] = useState<ActiveVote[]>(initialActiveVotes);
@@ -195,7 +239,7 @@ export function MeetingConsole({
   // Danger-transition confirmation (Adjourn meeting, and any future
   // danger-marked transition) — gated the same way MinutesPanel gates
   // approve/reject: a pending choice + its own dialog-scoped error.
-  const [pendingTransition, setPendingTransition] = useState<{ toState: string; label: string } | null>(
+  const [pendingTransition, setPendingTransition] = useState<{ toState: string; label: string; needsReason?: boolean } | null>(
     null,
   );
   const [transitionErr, setTransitionErr] = useState<string | undefined>(undefined);
@@ -257,37 +301,72 @@ export function MeetingConsole({
     };
   }, [status, refreshAttendance, refreshVotes]);
 
+  /** A refusal the service explained, in the user's language; anything else via the catalogue. */
+  function transitionErrorText(err: unknown): string {
+    if (err instanceof MeetingTransitionError) {
+      const known = ["MEETING_INVALID_TRANSITION", "MEETING_QUORUM_NOT_MET", "MEETING_SHORT_NOTICE", "VERSION_CONFLICT", "FORBIDDEN"];
+      if (known.includes(err.code)) return tl(`err.${err.code}`);
+    }
+    return actionErrorText(err);
+  }
+
+  function applied(toState: string) {
+    setStatus(toState as Meeting["status"]);
+    setVersion((v) => v + 1);
+    setToast(tl("moved", { state: humanize(toState) }));
+    router.refresh();
+  }
+
   async function onTransition(toState: string) {
     setBusy(`transition:${toState}`);
     setError(null);
     setToast(null);
     try {
-      await transitionMeeting(meeting.id, toState);
-      setStatus(toState as Meeting["status"]);
-      setToast(`Meeting moved to “${humanize(toState)}”.`);
+      await transitionMeeting(meeting.id, toState, version);
+      applied(toState);
     } catch (err) {
-      setError(actionErrorText(err));
+      setError(transitionErrorText(err));
     } finally {
       setBusy(null);
     }
   }
 
   /** Danger-transition path: runs only after the user confirms in the dialog. */
-  async function onConfirmTransition() {
+  async function onConfirmTransition(reason?: string) {
     if (!pendingTransition) return;
     const { toState } = pendingTransition;
     setBusy(`transition:${toState}`);
     setTransitionErr(undefined);
     setToast(null);
     try {
-      await transitionMeeting(meeting.id, toState);
-      setStatus(toState as Meeting["status"]);
-      setToast(`Meeting moved to “${humanize(toState)}”.`);
+      await transitionMeeting(meeting.id, toState, version, reason);
+      applied(toState);
       setPendingTransition(null);
     } catch (err) {
-      setTransitionErr(
-        actionErrorText(err),
-      );
+      setTransitionErr(transitionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // UAT J14: a draft/scheduled meeting needs agenda items before it can be
+  // scheduled; there was no screen to add one.
+  const [agendaTitle, setAgendaTitle] = useState("");
+  const [agendaOutcome, setAgendaOutcome] = useState<AgendaOutcomeType>("discussion");
+  async function onAddAgenda(e: React.FormEvent) {
+    e.preventDefault();
+    const title = agendaTitle.trim();
+    if (!title) return;
+    setBusy("agenda:add");
+    setError(null);
+    setToast(null);
+    try {
+      await addAgendaItem(meeting.id, { title, outcomeType: agendaOutcome });
+      setAgendaTitle("");
+      setToast(tl("agendaAdded"));
+      router.refresh();
+    } catch (err) {
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -320,6 +399,7 @@ export function MeetingConsole({
   }
 
   const transitions = nextTransitions(status);
+  const blockers = status === "draft" && agendaSource === "api" ? scheduleBlockers(meeting, agenda.length) : [];
 
   return (
     <>
@@ -372,17 +452,18 @@ export function MeetingConsole({
                   key={t.toState}
                   type="button"
                   className={t.danger ? "btn danger" : "btn primary"}
-                  disabled={busy !== null}
+                  disabled={busy !== null || (t.toState === "scheduled" && blockers.length > 0)}
+                  aria-describedby={t.toState === "scheduled" && blockers.length > 0 ? "mtg-schedule-blockers" : undefined}
                   onClick={() => {
                     if (t.danger) {
                       setTransitionErr(undefined);
-                      setPendingTransition({ toState: t.toState, label: t.label });
+                      setPendingTransition({ toState: t.toState, label: tl(`actions.${t.key}`), ...(t.needsReason ? { needsReason: true } : {}) });
                     } else {
                       void onTransition(t.toState);
                     }
                   }}
                 >
-                  {busy === `transition:${t.toState}` ? "…" : t.label}
+                  {busy === `transition:${t.toState}` ? "…" : tl(`actions.${t.key}`)}
                 </button>
               ))}
             <Link className="btn ghost" href={`/meeting/meetings/${meeting.id}/minutes`}>
@@ -390,6 +471,30 @@ export function MeetingConsole({
             </Link>
           </div>
         </div>
+        {viewerPermissions.canTransition && blockers.length > 0 && (
+          <ul id="mtg-schedule-blockers" style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13, color: "var(--ink2)" }}>
+            {blockers.map((b) => <li key={b}>{tl(`blockers.${b}`)}</li>)}
+          </ul>
+        )}
+        {viewerPermissions.canTransition && (status === "draft" || status === "scheduled") && (
+          <form onSubmit={(e) => void onAddAgenda(e)} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
+            <div style={{ flex: "1 1 220px" }}>
+              <label htmlFor="mtg-agenda-title" style={labelStyle}>{tl("agendaTitle")}</label>
+              <input id="mtg-agenda-title" style={fieldStyle} value={agendaTitle} maxLength={500}
+                onChange={(e) => setAgendaTitle(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="mtg-agenda-outcome" style={labelStyle}>{tl("agendaOutcome")}</label>
+              <select id="mtg-agenda-outcome" style={fieldStyle} value={agendaOutcome}
+                onChange={(e) => setAgendaOutcome(e.target.value as AgendaOutcomeType)}>
+                {AGENDA_OUTCOME_TYPES.map((o) => <option key={o} value={o}>{tl(`outcome.${o}`)}</option>)}
+              </select>
+            </div>
+            <button type="submit" className="btn" disabled={busy !== null || agendaTitle.trim() === ""}>
+              {busy === "agenda:add" ? "…" : tl("addAgenda")}
+            </button>
+          </form>
+        )}
       </Card>
 
       {/* GAP-MEETING-MEETINGS-MEETINGID-07: in-page anchor nav for narrow screens.
@@ -698,9 +803,12 @@ export function MeetingConsole({
         description={pendingTransition ? transitionConsequence(pendingTransition.toState) : undefined}
         confirmLabel={pendingTransition?.label}
         danger
+        requireReason={pendingTransition?.needsReason === true}
+        reasonLabel={tl("adjournReason")}
+        maxReasonLength={2000}
         busy={busy !== null}
         errorMessage={transitionErr}
-        onConfirm={() => void onConfirmTransition()}
+        onConfirm={(reason) => void onConfirmTransition(reason)}
         onCancel={() => {
           if (busy === null) setPendingTransition(null);
         }}

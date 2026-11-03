@@ -11,13 +11,14 @@
  */
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { emitAudit } from "./audit-emit.js";
 import * as settingsRepo from "./settings-repo.js";
 
-const log = pino({ name: "hrms-recruitment-finish" });
+const log = pino({ name: "hrms-recruitment-finish", serializers: SAFE_LOG_SERIALIZERS });
 
 export const FINISH_OPS = ["recruitment_settings_routes__0", "recruitment_pii_reveal__0"] as const;
 
