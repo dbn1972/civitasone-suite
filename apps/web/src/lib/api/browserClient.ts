@@ -98,9 +98,9 @@ export async function browserFetch(path: string, init: BrowserFetchInit = {}): P
       },
     });
   } catch (err) {
-    // Our own timeout is a network failure for the user, not a caller abort.
+    // Our own timeout: the server took too long. Not the user's connection, and not a caller abort.
     if (timedOut && !callerSignal?.aborted) {
-      const human = humanErrorFromFailure({ kind: "offline" });
+      const human = humanErrorFromFailure({ kind: init.method && init.method.toUpperCase() !== "GET" ? "save" : "load", forceKind: "timeout" });
       throw new UserFacingError(`${human.what} ${human.next}`);
     }
     // A fetch that never got a response rejects with a raw browser TypeError

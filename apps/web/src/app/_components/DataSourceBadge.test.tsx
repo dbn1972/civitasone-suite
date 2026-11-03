@@ -11,7 +11,7 @@ describe("DataSourceBadge", () => {
 
     it("renders the honest default badge when source is 'error'", () => {
       render(<DataSourceBadge source="error" />);
-      expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+      expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     });
 
     // Fails-before / passes-after guard. The fetch layer (apiClient.fetchJson)
@@ -31,8 +31,8 @@ describe("DataSourceBadge", () => {
     });
 
     it("renders a custom message when provided", () => {
-      render(<DataSourceBadge source="error" message="Couldn't load — showing nothing" />);
-      expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+      render(<DataSourceBadge source="error" message="We couldn't load this information, so nothing is shown here. Refresh the page to try again." />);
+      expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     });
 
     it("lets a surface pass a more specific truthful message", () => {
@@ -55,7 +55,7 @@ describe("DataSourceBadge", () => {
       expect(nodes[0]).toHaveTextContent(/from/i);
       expect(nodes[0]).toHaveTextContent(/could not refresh/i);
       // The whole point of UX-002: this state must never also claim "showing nothing".
-      expect(nodes[0]).not.toHaveTextContent(/showing nothing/i);
+      expect(nodes[0]).not.toHaveTextContent(/nothing is shown here/i);
     });
 
     it("appends an offline note for provenance='cached' when offline", () => {
@@ -67,7 +67,7 @@ describe("DataSourceBadge", () => {
       render(<DataSourceBadge provenance="error-no-data" />);
       const nodes = screen.getAllByRole("status");
       expect(nodes).toHaveLength(1);
-      expect(nodes[0]).toHaveTextContent("Couldn't load — showing nothing");
+      expect(nodes[0]).toHaveTextContent("We couldn't load this information, so nothing is shown here. Refresh the page to try again.");
       // And never simultaneously claim saved data is on screen.
       expect(nodes[0]).not.toHaveTextContent(/Showing saved data/i);
     });

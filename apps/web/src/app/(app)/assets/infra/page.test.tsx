@@ -50,7 +50,7 @@ describe("InfraAssetsPage failure + labels", () => {
     render(await InfraAssetsPage());
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /try again|retry/i }).length).toBeGreaterThan(0);
   });
 });

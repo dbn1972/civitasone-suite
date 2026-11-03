@@ -53,7 +53,7 @@ export default async function MeetingsPage(
   return (
     <>
       {errored && (
-        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+        <DataSourceBadge source={source} />
       )}
       <PageHeader
         title="Meeting Management"

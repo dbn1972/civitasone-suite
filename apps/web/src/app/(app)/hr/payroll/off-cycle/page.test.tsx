@@ -81,7 +81,7 @@ describe("OffCyclePage", () => {
 
     await renderPage();
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the off-cycle runs, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   const DRAFT = {

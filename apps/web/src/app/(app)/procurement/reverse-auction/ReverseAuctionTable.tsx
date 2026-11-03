@@ -152,7 +152,6 @@ export function ReverseAuctionTable({ auctions, source = "api" }: { auctions: Re
             provenance={provenance ?? "live"}
             cachedAt={cachedAt}
             offline={offline}
-            message={errorNoData ? "Couldn't load — showing nothing" : undefined}
           />
           {updatedAt ? (
             <span aria-live="polite" style={{ fontSize: 12, color: "var(--muted)" }}>

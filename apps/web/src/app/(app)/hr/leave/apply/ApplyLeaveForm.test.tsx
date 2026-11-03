@@ -490,7 +490,7 @@ describe("ApplyLeaveForm — offline fallback (preview unreachable)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/you are applying for 14 days but only have 10 days balance/i);
+    expect(dialog).toHaveTextContent(/you are applying for 14 days but have a balance of only 10 days/i);
     expect(fetchOrQueue).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: /submit anyway/i }));

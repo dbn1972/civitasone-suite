@@ -340,7 +340,7 @@ describe("NewJobOpeningForm", () => {
       let calls = 0;
       stubFetch({ [DEPT_URL]: () => (calls++ === 0 ? new Response("", { status: 500 }) : json({ data: [{ id: DEPT_ID, name: "Finance" }] })) });
       renderForm();
-      expect(await screen.findByText(/could not load departments/i)).toBeInTheDocument();
+      expect(await screen.findByText(/We couldn.t load the departments\./)).toBeInTheDocument();
       const dept = screen.getByLabelText(/^department/i);
       expect(dept.tagName).toBe("SELECT");
       expect(dept).toBeDisabled();

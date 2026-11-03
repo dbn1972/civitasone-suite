@@ -113,7 +113,7 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
               <Link href={`/procurement/orders/${po.id}/amend`} className="btn ghost">Request amendment</Link>
             ) : null}
             <DispatchPOActions poId={po.id} status={po.status} canDispatchRole={canWrite} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </div>
         }
       />

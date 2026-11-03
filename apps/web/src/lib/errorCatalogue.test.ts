@@ -63,7 +63,7 @@ describe("error catalogue: standard wording", () => {
     [500, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     [503, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     [undefined, "We couldn't connect. Check your internet connection and try again."],
-    [504, "We couldn't connect. Check your internet connection and try again."],
+    [504, "We couldn't save the leave request in time. The system is taking longer than usual. Check whether your changes were saved before you try again."],
   ])("status %s", (status, expected) => {
     expect(text(status as number | undefined)).toBe(expected);
   });
@@ -103,10 +103,10 @@ describe("error catalogue: standard wording", () => {
   it("an unclassified thrown error (no status, kind unknown) is honest about the cause", () => {
     const w = resolveHumanError({ forceKind: "unknown", ctx: { area: "leave request", intent: "save", locale: "en" } });
     expect(`${w.what} ${w.next}`).toBe(
-      "We couldn't save the leave request. Your changes haven't been saved. Check your internet connection and try again in a few minutes.",
+      "We couldn't save the leave request. Your changes haven't been saved. Try again in a few minutes. If it keeps happening, contact your support team.",
     );
     const r = resolveHumanError({ forceKind: "unknown", ctx: { area: "payslips", intent: "load", locale: "en" } });
-    expect(`${r.what} ${r.next}`).toBe("We couldn't load the payslips. Check your internet connection and try again in a few minutes.");
+    expect(`${r.what} ${r.next}`).toBe("We couldn't load the payslips. Try again in a few minutes. If it keeps happening, contact your support team.");
   });
 
   it("400 with field errors points at the highlighted fields; without them it is action-neutral", () => {

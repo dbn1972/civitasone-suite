@@ -23,13 +23,13 @@ describe("ScoreHistoryView (LQ-002)", () => {
     expect(screen.getAllByText("80").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Current score").nextElementSibling).toHaveTextContent("80");
     expect(screen.getByText("email opened")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   it("gates the current score behind source==='error' (shows — + saved-info badge)", async () => {
     vi.mocked(lq.getScoreHistory).mockResolvedValue({ data: [], source: "error" });
     render(<ScoreHistoryView leadId="l1" />);
-    await waitFor(() => expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument());
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.getByText(/score history unavailable/i)).toBeInTheDocument();
   });
@@ -39,6 +39,6 @@ describe("ScoreHistoryView (LQ-002)", () => {
     render(<ScoreHistoryView leadId="l1" />);
     await waitFor(() => expect(screen.getByText(/no score changes yet/i)).toBeInTheDocument());
     expect(screen.getByText("—")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 });

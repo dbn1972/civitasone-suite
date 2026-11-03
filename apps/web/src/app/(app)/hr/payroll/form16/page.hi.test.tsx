@@ -62,8 +62,8 @@ describe("Form16Page — Hindi locale (GAP-PAYROLL-FORM16-08)", () => {
     const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     const { container } = render(<NextIntlClientProvider locale="hi" messages={hiMessages}>{ui}</NextIntlClientProvider>);
     fireEvent.click(screen.getByText(/^विफलता विवरण \(/));
-    expect(screen.getByText("EMP-0109: PDF को भंडारण में सहेजा नहीं जा सका।")).toBeInTheDocument();
-    expect(screen.getByText("EMP-0110: PDF पर डिजिटल हस्ताक्षर नहीं किए जा सके।")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0109: PDF सहेजा नहीं जा सका। कुछ मिनट बाद दोबारा जनरेट करें।")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0110: PDF पर डिजिटल हस्ताक्षर नहीं हो सके। जाँचें कि DSC जुड़ा हुआ और वैध है, फिर दोबारा जनरेट करें।")).toBeInTheDocument();
     expect(container.textContent).not.toContain("AccessDenied");
   });
 });

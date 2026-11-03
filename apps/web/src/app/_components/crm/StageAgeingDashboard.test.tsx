@@ -192,10 +192,10 @@ describe("StageAgeingDashboard (OP-005)", () => {
     render(<StageAgeingDashboard />);
     const retry = await screen.findByRole("button", { name: /retry/i });
     expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
-    // ONE message: the "Couldn't load — showing nothing" badge is not stacked on top of the
+    // ONE message: the "We couldn't load this information, so nothing is shown here. Refresh the page to try again." badge is not stacked on top of the
     // error state (GAP-CRM-OPPORTUNITY-AGEING-04 rescan).
     expect(screen.getByText(/couldn.t load the ageing list/i)).toBeInTheDocument();
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByText("Recovered deal")).toBeInTheDocument());
   });

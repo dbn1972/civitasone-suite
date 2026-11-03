@@ -79,7 +79,7 @@ describe("PromoteWithApproval lookups (GAP-HR-PROMOTION-05)", () => {
     renderWidget();
 
     fireEvent.change(field("Promote to (new designation)"), { target: { value: "Under" } });
-    expect(await screen.findByText("Could not load designations. Check your connection and try again.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load the designations. Try again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/ID/)).not.toBeInTheDocument();
     // Next is held back while the required lookup is failed and nothing is selected. The picker
@@ -97,7 +97,7 @@ describe("PromoteWithApproval lookups (GAP-HR-PROMOTION-05)", () => {
     renderWidget();
 
     fireEvent.change(field("Employee"), { target: { value: "Asha" } });
-    expect(await screen.findByText(/Could not load employees/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t search the employees\./)).toBeInTheDocument();
     expect(screen.queryByText("No matching employees")).not.toBeInTheDocument();
     // The failed state reaches the form from an effect AFTER the error text renders, so wait for it.
     await waitFor(() => expect(next()).toBeDisabled());

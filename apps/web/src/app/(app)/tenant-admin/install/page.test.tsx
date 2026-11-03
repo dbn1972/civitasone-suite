@@ -107,8 +107,8 @@ describe("InstallStatusPage", () => {
     render(await InstallStatusPage());
     // RefreshErrorState renders a retry affordance
     const alerts = screen.getAllByText(/couldn't|could not|unavailable|try again|retry/i);
-    // Only the RefreshErrorState copy — no separate amber "Couldn't load — showing nothing" badge
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    // Only the RefreshErrorState copy — no separate amber "We couldn't load this information, so nothing is shown here. Refresh the page to try again." badge
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
     expect(alerts.length).toBeGreaterThanOrEqual(1);
     // progress shows "—"
     expect(screen.getByText("Progress").closest(".stat")).toHaveTextContent("—");

@@ -84,7 +84,6 @@ export function PreBidTable({ conferences, source = "api" }: { conferences: PreB
           provenance={provenance ?? "live"}
           cachedAt={cachedAt}
           offline={offline}
-          message={errorNoData ? "Couldn't load — showing nothing" : undefined}
         />
         {errorNoData ? (
           <RefreshErrorState error={toHumanError("load", { area: "pre-bid conferences" })} />

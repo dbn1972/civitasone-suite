@@ -56,7 +56,7 @@ describe("OrdersTable — error provenance (GAP-PROCUREMENT-ORDERS-01)", () => {
     expect(screen.queryByText("No purchase orders found")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
     // An actual retry affordance is present.
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     // No fabricated zero value anywhere in the stat grid.
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
   });

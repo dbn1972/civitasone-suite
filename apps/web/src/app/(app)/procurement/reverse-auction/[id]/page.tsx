@@ -34,7 +34,7 @@ export default async function ReverseAuctionDetailPage(props: { params: Promise<
         actions={
           <>
             <StatusPill status={auction.status} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

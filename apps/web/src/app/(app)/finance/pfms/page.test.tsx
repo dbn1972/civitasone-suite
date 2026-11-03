@@ -90,7 +90,7 @@ describe("PfmsOpsConsolePage", () => {
     const ui = await PfmsOpsConsolePage();
     renderPage(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   // GAP2-FINANCE-PFMS-08: a failed /pfms/batches read must dash the count/value

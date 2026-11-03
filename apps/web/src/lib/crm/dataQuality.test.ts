@@ -342,7 +342,7 @@ describe("client calls", () => {
   });
   it("mergeEntities throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValue(fail(409, { code: "CONFLICT", message: "busy" }));
-    await expect(mergeEntities("contacts", "a", "b")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
+    await expect(mergeEntities("contacts", "a", "b")).rejects.toThrow("This record was changed by someone else. Refresh to see the latest version, then try again.");
     await expect(mergeEntities("contacts", "a", "b")).rejects.not.toThrow(/CONFLICT|busy/);
   });
   it("getDataQuality returns source:api on success", async () => {

@@ -47,7 +47,7 @@ describe("RtiActions — Assign PIO picker", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
     const box = await openAssign();
     fireEvent.change(box, { target: { value: "Pia" } });
-    expect(await screen.findByRole("alert", {}, { timeout: 2000 })).toHaveTextContent(/could not load/i);
+    expect(await screen.findByRole("alert", {}, { timeout: 2000 })).toHaveTextContent(/We couldn.t search the list\./);
     expect(screen.queryByText(/no matching users/i)).not.toBeInTheDocument();
   });
 });

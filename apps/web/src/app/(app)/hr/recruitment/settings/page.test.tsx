@@ -57,7 +57,7 @@ describe("Recruitment settings page", () => {
   it("a failed load offers Retry", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("x", { status: 500 })));
     renderPage();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/We couldn.t load the settings\./);
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

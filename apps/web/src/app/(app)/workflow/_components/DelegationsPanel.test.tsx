@@ -80,7 +80,7 @@ describe("DelegationsPanel: list states are distinct", () => {
   it("shows an error with a working retry (not the empty state) when the list fails", async () => {
     stub({ lists: [() => new Response("boom", { status: 500 }), () => list([row()])] });
     panel();
-    expect(await screen.findByText("We couldn’t load your delegations.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load your delegations. Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.queryByText("No active delegations")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("button", { name: /Revoke delegation to/ })).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("DelegationsPanel: list states are distinct", () => {
   it("shows an error, not an empty list, when the body is not the documented envelope", async () => {
     stub({ lists: [() => new Response(JSON.stringify({ unexpected: true }), { status: 200 })] });
     panel();
-    expect(await screen.findByText("We couldn’t load your delegations.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load your delegations. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("shows two empty states when there are no delegations", async () => {

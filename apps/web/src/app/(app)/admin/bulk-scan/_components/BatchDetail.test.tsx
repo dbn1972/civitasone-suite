@@ -26,7 +26,7 @@ describe("BatchDetail", () => {
   it("shows a human-readable reason for every failure code, quarantine and scan-pending hold", () => {
     renderIntl(<BatchDetail batchResult={batchResult({ counts: { failed: 4 } })} filesResult={filesResult(FILES)} />);
     expect(screen.getByText(/password protected/i)).toBeInTheDocument();
-    expect(screen.getByText(/stopped\. Retrying will not help/i)).toBeInTheDocument();
+    expect(screen.getByText(/was stopped\. Retrying won.t help until the cause is fixed/i)).toBeInTheDocument();
     expect(screen.getByText(/malware scanner is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/Quarantined: the malware scan found a threat/)).toBeInTheDocument();
     expect(screen.getByText(/larger than the allowed size per file/)).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("BatchDetail", () => {
     renderIntl(<BatchDetail batchResult={batchResult({ counts: { queued: 1 } })} filesResult={filesResult([file("a", "queued")])} />);
     await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
     expect(screen.getByText(/may be out of date/)).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("The batch could not be refreshed.");
+    expect(screen.getByRole("alert")).toHaveTextContent("We couldn't refresh the batch. Refresh the page to try again.");
     expect(screen.getByText("a.pdf")).toBeInTheDocument();
     const calls = f.mock.calls.length;
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });

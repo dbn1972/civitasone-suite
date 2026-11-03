@@ -179,7 +179,7 @@ describe("SalaryRevisionsPage", () => {
   it("shows the saved-information badge when the source is error", async () => {
     mockRevisionsAndNames([], "error");
     await renderPage();
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the salary revisions, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   // GAP-PAYROLL-SALARY-REVISIONS-05 / PR #1756 review H2: the page gate

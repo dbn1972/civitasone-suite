@@ -119,7 +119,7 @@ export default async function TenderDetailPage(props: { params: Promise<{ id: st
             <Link href={`/procurement/tenders/${tender.id}/documents`} className="btn ghost">
               Documents{docCount > 0 ? ` (${docCount})` : ""}
             </Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

@@ -180,7 +180,7 @@ describe("TaxProofQueue (GAP-PAYROLL-TAX-DECLARATION-02)", () => {
     browserFetch.mockReset();
     browserFetch.mockResolvedValueOnce(new Response("", { status: 500 }));
     ui();
-    await screen.findByText("Could not load the verification queue.");
+    await screen.findByText("We couldn't load the verification queue. Refresh the page to try again.");
     expect(screen.queryByText("No documents match these filters.")).not.toBeInTheDocument();
   });
 });

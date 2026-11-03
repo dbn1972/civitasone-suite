@@ -20,11 +20,45 @@ export class UserFacingError extends Error {
   }
 }
 
-/** True for a fetch that never got a response (offline, DNS, CORS, abort, timeout). */
+/**
+ * The messages browsers (and node fetch in tests) use when fetch() never got a response.
+ * Chrome/Edge: "Failed to fetch"; Firefox: "NetworkError when attempting to fetch resource.";
+ * Safari: "Load failed"; undici: "fetch failed"; React Native/polyfills: "Network request failed".
+ * "no response" is what our own offline-queue callers throw when fetchOrQueue got no Response.
+ */
+const FETCH_FAILURE_MESSAGE = /failed to fetch|networkerror|load failed|fetch failed|network request failed|network error|^no response$/i; // status-leak-ok: matches browser fetch() rejection text; never rendered
+
+/**
+ * True only for a genuine browser-side network failure: fetch() rejected before any
+ * response arrived (offline, DNS, dropped connection), or the browser reports it is
+ * offline. A TypeError thrown by a bug in our own code ("Cannot read properties of
+ * undefined") is NOT a network failure, so the user is never told to check an internet
+ * connection that is working. Aborts and timeouts are classified separately.
+ */
 export function isNetworkFailure(err: unknown): boolean {
-  if (err instanceof TypeError) return true; // fetch rejects with TypeError("Failed to fetch")
   const name = (err as { name?: unknown } | null)?.name;
-  return name === "AbortError" || name === "TimeoutError" || name === "NetworkError";
+  if (name === "NetworkError") return true;
+  if (err instanceof TypeError) {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+    return FETCH_FAILURE_MESSAGE.test(err.message);
+  }
+  return false;
+}
+
+/** True for a request that was abandoned because it took too long (an abort or a timeout signal). */
+export function isTimeoutFailure(err: unknown): boolean {
+  const name = (err as { name?: unknown } | null)?.name;
+  return name === "TimeoutError" || name === "AbortError";
+}
+
+/** How a thrown value should be explained to the user. */
+export type ThrownKind = "userFacing" | "network" | "timeout" | "unknown";
+
+export function classifyThrown(err: unknown): ThrownKind {
+  if (err instanceof UserFacingError) return "userFacing";
+  if (isNetworkFailure(err)) return "network";
+  if (isTimeoutFailure(err)) return "timeout";
+  return "unknown";
 }
 
 /** The support reference a thrown value carries, if it is a UserFacingError. */

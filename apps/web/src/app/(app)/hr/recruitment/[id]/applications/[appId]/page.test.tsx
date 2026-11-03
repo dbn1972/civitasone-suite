@@ -147,7 +147,7 @@ describe("ApplicationDetailPage", () => {
     });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "View resume" }));
-    expect(await screen.findByText("The resume could not be opened.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't open the resume. Try again in a few minutes.")).toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
   });
@@ -183,7 +183,7 @@ describe("ApplicationDetailPage", () => {
       "/api/proxy/v1/hrms/applications/app-2/offers": () => json({ data: [] }),
     });
     renderPage();
-    expect(await screen.findByText(/could not load the fee status/i)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t load the fee status\./)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
     expect(await screen.findByText("No offers have been made yet.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -270,7 +270,7 @@ describe("ApplicationDetailPage", () => {
     });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
-    expect(await screen.findByText("Could not load departments.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load the departments. Refresh the page to try again.")).toBeInTheDocument();
     const dept = screen.getByLabelText("Department", { exact: false }) as HTMLSelectElement;
     expect(dept.tagName).toBe("SELECT");
     expect(dept).toBeDisabled();

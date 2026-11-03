@@ -71,7 +71,8 @@ describe("LocationsPage", () => {
   it("shows the generic retryable error on a non-403 failure, and does not double-announce it", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("We couldn't connect.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the locations.")).toBeInTheDocument();
+    expect(screen.queryByText(/internet connection/)).not.toBeInTheDocument();
     // DataSourceBadge must not also render on the error path (GAP-HR-LOCATIONS-04)
     expect(screen.queryByText(/showing cached|live data/i)).not.toBeInTheDocument();
   });

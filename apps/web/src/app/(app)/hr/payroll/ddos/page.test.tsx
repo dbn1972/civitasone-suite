@@ -55,7 +55,7 @@ describe("DdosPage", () => {
   it("says department names are unavailable (not 'None', not raw ids) when the names fetch fails", async () => {
     routeFetch([{ ddoCode: "DDO01", name: "Treasury", departmentIds: [D1, D2] }, { ddoCode: "DDO02", name: "Empty", departmentIds: [] }], "api", "error");
     await renderPage();
-    expect(screen.getByText("Department names couldn't be loaded (2 mapped)")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the department names (2 mapped). Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.queryByText(new RegExp(D1))).not.toBeInTheDocument();
     // A DDO with genuinely no mapped departments still reads "None".
     expect(screen.getByText("None")).toBeInTheDocument();

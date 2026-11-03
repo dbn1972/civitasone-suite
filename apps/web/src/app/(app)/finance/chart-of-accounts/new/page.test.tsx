@@ -363,7 +363,7 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
     fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "boom" } });
 
-    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    const alert = await screen.findByText("We couldn't search the account heads. Try again in a few minutes.");
     expect(alert).toHaveAttribute("role", "alert");
     expect(screen.queryByText("No head at the right level matches that search.")).not.toBeInTheDocument();
     expect(screen.queryByText(/\b503\b|TypeError|Failed to fetch/)).not.toBeInTheDocument();
@@ -378,7 +378,7 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
     render(<MapHeadOfAccountPage />);
     await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
     fireEvent.change(screen.getByLabelText("Find a head by code or name"), { target: { value: "boom" } });
-    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    const alert = await screen.findByText("We couldn't search the account heads. Try again in a few minutes.");
     expect(alert).toHaveAttribute("role", "alert");
     expect(screen.queryByText("No head matches that search.")).not.toBeInTheDocument();
 

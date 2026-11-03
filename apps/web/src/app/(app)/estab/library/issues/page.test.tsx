@@ -78,7 +78,7 @@ describe("LibraryIssuesPage", () => {
     render(ui);
 
     expect(screen.queryByText("No loans yet")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("GAP-ESTAB-LIBRARY-ISSUES-02: 'On Loan' counts issued + overdue; 'Overdue' is a subset", async () => {

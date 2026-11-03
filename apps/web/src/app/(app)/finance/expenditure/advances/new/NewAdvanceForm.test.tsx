@@ -281,7 +281,7 @@ describe("NewAdvancePage", () => {
     mockApi(undefined, { employees: () => new Response("", { status: 500 }) });
     renderPage(<NewAdvancePage />);
     fireEvent.change(payeeInput(), { target: { value: "sharma" } });
-    expect(await screen.findByText(/Could not load employees/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t search the employees\./)).toBeInTheDocument();
     expect(screen.queryByText("No matching employees")).not.toBeInTheDocument();
   });
 

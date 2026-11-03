@@ -224,7 +224,7 @@ describe("leadQualification client calls", () => {
       clone: () => ({ json: async () => ({ code: "INVALID_TRANSITION", message: "not allowed" }) }),
     });
     await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.toThrow(
-      "This information was changed by someone else. Refresh to see the latest version, then try again.",
+      "This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.",
     );
     await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.not.toThrow(
       /INVALID_TRANSITION|not allowed/,

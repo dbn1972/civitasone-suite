@@ -48,7 +48,7 @@ describe("DocumentTypesEditor error state (GAP-CRM-DOCUMENT-TYPES-04)", () => {
     vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [], source: "error" });
     render(<DocumentTypesEditor />);
     // Exactly one DataSourceBadge (header only — no duplicate inline badge).
-    await waitFor(() => expect(screen.getAllByText(/showing nothing/i).length).toBe(1));
+    await waitFor(() => expect(screen.getAllByText(/nothing is shown here/i).length).toBe(1));
     // A real retry action is offered (ErrorState).
     const retry = screen.getByRole("button", { name: /try again|retry/i });
     expect(retry).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe("DocumentTypesEditor (DM-002)", () => {
     render(<DocumentTypesEditor />);
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     // The header data-source badge marks the failed load (never a fabricated empty catalogue).
-    expect(screen.getByText(/showing nothing/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is shown here/i)).toBeInTheDocument();
     expect(screen.queryByText(/no document types yet/i)).not.toBeInTheDocument();
   });
 

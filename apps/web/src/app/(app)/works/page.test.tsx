@@ -73,7 +73,7 @@ describe("WorksHub — GAP-WORKS-HOME-01 FAILMASK", () => {
     const dashes = Array.from(container.querySelectorAll(".stat .val")).map((n) => n.textContent);
     expect(dashes).toEqual(["—", "—", "—", "—", "—"]);
     // the honest load-failure badge is shown
-    expect(screen.getByText("Couldn't load dashboard figures")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the dashboard figures. Refresh the page to try again.")).toBeInTheDocument();
     // and no fabricated 0 is rendered as a stat value
     expect(dashes).not.toContain("0");
   });

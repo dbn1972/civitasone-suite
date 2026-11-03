@@ -158,7 +158,7 @@ describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest 
 
     // The DataSourceBadge above the table is the one place this file reports
     // a failed fetch (UX-012) -- it must say so...
-    expect(screen.getByText(/Couldn't load — showing nothing/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn't load this information, so nothing is shown here\./i)).toBeInTheDocument();
     // ...but the table's own empty state must NOT layer a second, specific,
     // and in this case WRONG narrative about Keycloak account sync on top of
     // a genuine fetch failure that has nothing to do with Keycloak sync.

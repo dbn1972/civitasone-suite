@@ -154,7 +154,7 @@ describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
 
     // Scoped to the toHumanError "area" text (not just /couldn't load/i)
     // since this panel's own DataSourceBadge also shows a generic
-    // "Couldn't load — showing nothing" pill on this same error state.
+    // "We couldn't load this information, so nothing is shown here. Refresh the page to try again." pill on this same error state.
     await waitFor(() => expect(screen.getByText(/We couldn't load the leave application because of a problem on our side\. Try again in a few minutes\./)).toBeInTheDocument());
     expect(screen.queryByText(/workflow-service/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
@@ -287,7 +287,7 @@ describe("LeaveApprovalsPanel — fail-open containment (GAP-HR-SF-16 item 4)", 
     renderPanel();
 
     const banner = await screen.findByRole("alert"); // the enrichError banner — no other alert-role element exists at this point
-    expect(banner).toHaveTextContent(/employee details couldn't be loaded/i);
+    expect(banner).toHaveTextContent(/We couldn.t load employee details for some requests/);
     // The task itself is NOT reported as failed — this is a distinct concern.
     expect(screen.queryByText("Could not load approvals")).not.toBeInTheDocument();
 

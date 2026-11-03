@@ -33,10 +33,11 @@ describe("LoadErrorState", () => {
     expect(screen.queryByText(/hr_admin/)).not.toBeInTheDocument();
   });
 
-  it("says it could not connect, with Try again, when there is no status (a network error)", () => {
+  it("with no status in an online browser, names the object and never blames the connection (UAT P3), with Try again", () => {
     render(<LoadErrorState result={{ status: undefined }} area="employee" backHref="/hr/employees" />);
-    expect(screen.getByRole("heading", { name: "We couldn't connect." })).toBeInTheDocument();
-    expect(screen.getByText("Check your internet connection and try again.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "We couldn't load the employee." })).toBeInTheDocument();
+    expect(screen.getByText("Try again in a few minutes. If it keeps happening, contact your support team.")).toBeInTheDocument();
+    expect(screen.queryByText(/internet connection/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
   });

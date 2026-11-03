@@ -93,7 +93,7 @@ describe("EmdBgTable", () => {
     expect(screen.getByText("Active Bank Guarantees").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("Total Active Security (EMD + BG)").closest(".stat")).toHaveTextContent("—");
     // Never "showing nothing" while EMD rows are visible.
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
   });
 
   // GAP-PROCUREMENT-EMD-BG-01: both healthy -> unchanged, full combined stats.
@@ -103,7 +103,7 @@ describe("EmdBgTable", () => {
     const table = screen.getByRole("table");
     expect(within(table).getByText("Alpha Co")).toBeInTheDocument();
     expect(within(table).getByText("Gamma Co")).toBeInTheDocument();
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
   });
 
   // GAP-PROCUREMENT-EMD-BG-05: "expiring within 30 days" filter.

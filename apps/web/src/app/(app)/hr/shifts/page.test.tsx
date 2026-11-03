@@ -93,7 +93,7 @@ describe("ShiftsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await ShiftsPage());
     // The error UI is shown...
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     // ...and nothing else claims to be real data underneath it: no fake
     // rows, and no honest-empty-state message either (that would wrongly
     // imply the load succeeded and the tenant just has no shifts).

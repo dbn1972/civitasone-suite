@@ -72,7 +72,7 @@ describe("TaxProofSettingsCard (GAP-PAYROLL-TAX-DECLARATION-02)", () => {
     browserFetch.mockReset();
     browserFetch.mockResolvedValueOnce(new Response("", { status: 500 }));
     ui();
-    await screen.findByText("Could not load the retention setting.");
+    await screen.findByText("We couldn't load the retention setting. Refresh the page to try again.");
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 

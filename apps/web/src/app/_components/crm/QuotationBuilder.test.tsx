@@ -297,7 +297,7 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     render(<QuotationBuilder />);
     await waitFor(() => expect(screen.getByText(/^standard$/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
-    expect(await screen.findByText(/version history couldn.t be loaded/i)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t load the version history\./)).toBeInTheDocument();
     expect(screen.queryByText(/saved information/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^retry$/i }));
     await waitFor(() => expect(qp.getQuotationVersions).toHaveBeenCalledTimes(2));

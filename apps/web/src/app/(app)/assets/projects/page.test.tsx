@@ -65,7 +65,7 @@ describe("ProjectsAucPage", () => {
     const ui = await ProjectsAucPage();
     render(ui);
 
-    const badges = screen.getAllByText("Couldn't load — showing nothing");
+    const badges = screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.");
     expect(badges.length).toBeGreaterThan(0);
     expect(screen.queryByText("No AUC projects yet")).not.toBeInTheDocument();
   });

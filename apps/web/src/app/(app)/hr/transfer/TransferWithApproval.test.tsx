@@ -256,7 +256,7 @@ describe("TransferWithApproval", () => {
       render(<TransferWithApproval />);
       fireEvent.click(screen.getByRole("button", { name: "+ Transfer with approval" }));
 
-      await waitFor(() => expect(screen.getByText("Couldn't load departments.")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText("We couldn't load the departments. Refresh the page to try again.")).toBeInTheDocument());
       expect(screen.queryByPlaceholderText(/Department ID/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/Department ID/i)).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -324,7 +324,7 @@ describe("TransferWithApproval", () => {
       fireEvent.click(screen.getByRole("button", { name: "+ Transfer with approval" }));
       fireEvent.change(screen.getByLabelText(/^Employee/), { target: { value: "Asha" } });
 
-      expect(await screen.findByText(/Could not load employees/)).toBeInTheDocument();
+      expect(await screen.findByText(/We couldn.t search the employees\./)).toBeInTheDocument();
       expect(screen.queryByText("No matching employees")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
       fireEvent.mouseDown(await screen.findByText("Asha Verma (E-001)"));

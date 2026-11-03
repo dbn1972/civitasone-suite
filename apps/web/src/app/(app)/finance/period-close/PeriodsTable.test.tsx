@@ -112,7 +112,7 @@ describe("PeriodsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hard-close" }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This period action was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This period action is not at a stage that allows this action\. Refresh the page to see its current status, then choose an action that is available\./));
     expect(alert.textContent).not.toMatch(/ALREADY_CLOSED/);
     expect(alert.textContent).not.toMatch(/period is already hard-closed/);
   });

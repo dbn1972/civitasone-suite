@@ -59,7 +59,7 @@ describe("AdjustmentsPage", () => {
     const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("shows a retry error state when the demands fetch fails (ADJUSTMENTS-04)", async () => {

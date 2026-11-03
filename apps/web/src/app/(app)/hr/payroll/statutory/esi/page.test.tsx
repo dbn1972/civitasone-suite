@@ -81,7 +81,7 @@ describe("EsiStatutoryPage", () => {
   it("shows the saved-information badge when the loader errors", async () => {
     mockLedger(null, [], "error");
     renderPage(await EsiStatutoryPage({}));
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the ESI details, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("GAP-PAYROLL-STATUTORY-ESI-01: shows Access restricted to employee/manager without calling the API", async () => {

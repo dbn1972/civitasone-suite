@@ -69,7 +69,7 @@ describe("InvoiceActions", () => {
     await waitFor(() => expect(screen.getByText("Generate e-invoice (IRN)?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate IRN" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This isn.t available, because it has been switched off, deactivated or not set up\./)).toBeInTheDocument());
     expect(screen.queryByText(/INTEGRATION_DISABLED: GSTN integration is not available/)).not.toBeInTheDocument();
   });
 

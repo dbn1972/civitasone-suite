@@ -164,7 +164,7 @@ describe("LeaveManagementPage", () => {
     it("a page past the end says so (with the real total) and links back, rather than claiming there are no requests", async () => {
       fetchJsonMock.mockResolvedValue({ data: pageOf([], { total: 340, hasMore: false, page: 9, pageSize: 100 }), source: "api" });
       await renderPage({ page: "9" });
-      expect(screen.getByText("There are no requests on this page. 340 requests exist in total.")).toBeInTheDocument();
+      expect(screen.getByText("There are no requests on this page. 340 requests exist in total; go back to the first page.")).toBeInTheDocument();
       const nav = screen.getByRole("navigation", { name: "Leave requests pages" });
       expect(nav.querySelector('a[rel="prev"]')).toHaveAttribute("href", "/hr/leave?page=4");
     });

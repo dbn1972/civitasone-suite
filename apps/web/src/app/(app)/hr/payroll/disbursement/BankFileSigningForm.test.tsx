@@ -111,7 +111,8 @@ describe("BankFileSigningForm", () => {
   });
 
   it("a network failure shows a retryable message", async () => {
-    fetchMock.mockRejectedValue(new Error("offline"));
+    // A dropped connection: fetch rejects with the browser TypeError.
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Save signing setting" }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });

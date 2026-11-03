@@ -135,7 +135,7 @@ describe("HRDashboardPage", () => {
     render(await HRDashboardPage());
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
     expect(screen.queryByText("We couldn't load employees.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   // Regression: the page's own (sr-only) #hr-dash-heading h1 and
@@ -150,7 +150,7 @@ describe("HRDashboardPage", () => {
   describe("profile absence is not a page failure", () => {
     // Regression for: a user with no linked employee record (e.g. an
     // admin/test account) got a false "We couldn't load employees" and a
-    // false page-level "Couldn't load — showing nothing" banner, even
+    // false page-level "We couldn't load this information, so nothing is shown here. Refresh the page to try again." banner, even
     // though the employee list itself had genuinely loaded, because
     // profileResult's legitimate 404 kept the page's broad `anyError` flag
     // true and the employee table gated on that broad flag instead of its
@@ -169,7 +169,7 @@ describe("HRDashboardPage", () => {
     it("does not show the page-level error banner for that same case", async () => {
       mockedProfile.mockResolvedValue({ data: null, source: "api", status: 404 });
       render(await HRDashboardPage());
-      expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+      expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     });
 
     it("keeps the employee table honest even if profileResult itself still comes back source:\"error\" (page-level guard, independent of the loaders.ts normalization)", async () => {
@@ -225,13 +225,14 @@ describe("HRDashboardPage", () => {
       // testid, not role: PayrollBanner is role="status" and this alert is
       // role="alert" -- disjoint now, but the testid keeps this test's
       // intent explicit either way.
-      expect(screen.getByTestId("routing-failed-alert")).toHaveTextContent(/could not be routed for approval/i);
+      expect(screen.getByTestId("routing-failed-alert")).toHaveTextContent(/uxMessages\.leaveRoutingFailedTitle/);
+      expect(screen.getByTestId("routing-failed-alert")).toHaveTextContent(/uxMessages\.leaveRoutingFailedNext/);
       expect(screen.getByText(/Kiran Kumar/)).toBeInTheDocument();
     });
 
     it("shows no routing-failure alert when there are none", async () => {
       render(await HRDashboardPage());
-      expect(screen.queryByText(/could not be routed for approval/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/uxMessages\.leaveRoutingFailedTitle/)).not.toBeInTheDocument();
     });
   });
 
@@ -253,7 +254,7 @@ describe("HRDashboardPage", () => {
     it("does not render the routing-failed alert when the inbox load itself failed", async () => {
       mockedInbox.mockResolvedValue({ data: { data: [], routingFailed: [] }, source: "error" });
       render(await HRDashboardPage());
-      expect(screen.queryByText(/could not be routed for approval/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/uxMessages\.leaveRoutingFailedTitle/)).not.toBeInTheDocument();
     });
   });
 
@@ -395,7 +396,7 @@ describe("HRDashboardPage", () => {
 
     it("renders genuinely useful self-service content with no error banner", async () => {
       render(await HRDashboardPage());
-      expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+      expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
       expect(screen.queryByText(/We couldn't load your pending actions/)).not.toBeInTheDocument();
       // Both the KPI tile ("Leave Balance") and the quick action ("My Leave
       // Balance") legitimately match this text -- getAllByText on purpose.
@@ -426,7 +427,7 @@ describe("HRDashboardPage", () => {
       mockedBalance.mockResolvedValue({ data: [], source: "error" });
       render(await HRDashboardPage());
       expect(screen.getAllByText("—").length).toBeGreaterThan(0);
-      expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+      expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     });
 
     it("does not show the admin employee directory table", async () => {

@@ -75,7 +75,7 @@ describe("AllotmentDetailActions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Allot quarter" })[1]);
 
     expect(
-      await screen.findByText("MAKER_CHECKER_VIOLATION: allotment approver cannot be the applicant"),
+      await screen.findByText("This needs approval from someone other than the person who made it. Another approver needs to do this."),
     ).toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe("AllotmentDetailActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
 
     expect(await screen.findByText(/could not be verified/)).toBeInTheDocument();
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
     expect(screen.queryByText(/No licence-fee rate is configured/)).not.toBeInTheDocument();
   });
 
@@ -155,7 +155,7 @@ describe("AllotmentDetailActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
 
     expect(await screen.findByText(/No licence-fee rate is configured/)).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 });
 

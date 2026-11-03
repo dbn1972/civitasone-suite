@@ -34,7 +34,7 @@ describe("errorMessageFromResponse", () => {
     );
     expect(msg).not.toContain("ALREADY_CLOSED");
     expect(msg).not.toContain("period is already hard-closed");
-    expect(msg).toBe("This information was changed by someone else. Refresh to see the latest version, then try again.");
+    expect(msg).toBe("This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.");
   });
 
   it("never echoes a bare message with no code either", async () => {
@@ -185,10 +185,10 @@ describe("errorMessageForStatus", () => {
     expect(msg).not.toContain("FORBIDDEN");
   });
 
-  it("maps 400 and 422 to a not-accepted message", async () => {
+  it("maps 400 and 422 with an overlap code to the overlap rule, never the code or the raw text", async () => {
     for (const status of [400, 422]) {
       const msg = await errorMessageForStatus(mockRes(status, { code: "PT_SLAB_OVERLAP", message: "slab 0-1 overlaps" }));
-      expect(msg).toBe("Some details weren't accepted. Check what you entered and try again.");
+      expect(msg).toBe("This clashes with an existing entry. Change the dates or the range so they don't clash with it, then try again.");
       expect(msg).not.toContain("PT_SLAB_OVERLAP");
       expect(msg).not.toContain("overlaps");
     }

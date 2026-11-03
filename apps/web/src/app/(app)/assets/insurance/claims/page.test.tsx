@@ -63,7 +63,7 @@ describe("InsuranceClaimsPage", () => {
 
     render(await InsuranceClaimsPage({}));
 
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /retry|try again/i })).toHaveLength(1);
     expect(screen.queryByText("Total Claims")).not.toBeInTheDocument();
     expect(screen.queryByText("Claims", { selector: "h3" })).not.toBeInTheDocument();

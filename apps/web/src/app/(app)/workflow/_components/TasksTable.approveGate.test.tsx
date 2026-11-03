@@ -82,9 +82,9 @@ describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () =>
       { docType: "photo", mandatory: false, provided: false },
     ]));
     render(<TasksTable tasks={[appTask("aaaa0003-0000-0000-0000-000000000003")]} currentUserId={ME} showStatusFilter={false} />);
-    await waitFor(() => expect(screen.getByText(/2 mandatory document\(s\) missing/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/2 mandatory documents are missing/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Approve" })).toHaveAccessibleDescription(/mandatory document\(s\) missing/);
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveAccessibleDescription(/mandatory documents are missing/);
     expect(screen.getByRole("button", { name: "Return" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled();
   });
@@ -96,7 +96,7 @@ describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () =>
     ]));
     render(<TasksTable tasks={[appTask("aaaa0004-0000-0000-0000-000000000004")]} currentUserId={ME} showStatusFilter={false} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled());
-    expect(screen.queryByText(/mandatory document\(s\) missing/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/mandatory documents? (is|are) missing/)).not.toBeInTheDocument();
   });
 
   it("does not gate tasks that have no document checklist (non-application tasks)", () => {

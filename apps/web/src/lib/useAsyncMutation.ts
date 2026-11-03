@@ -39,8 +39,7 @@
  * about confirming a single mutation's write actually landed).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { humanErrorFromFailure } from "./messages";
-import { isNetworkFailure } from "./userFacingError";
+import { messageForThrown } from "./messages";
 
 export type AsyncMutationPhase =
   | "idle"
@@ -225,12 +224,8 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
       mutated = await optionsRef.current.mutate();
     } catch (err) {
       if (isCurrent()) {
-        if (isNetworkFailure(err)) {
-          const h = humanErrorFromFailure({ kind: "save", forceKind: "network" });
-          setError(`${h.what} ${h.next}`);
-        } else {
-          setError(err instanceof Error ? err.message : String(err));
-        }
+        // Never the raw thrown text (a code, a stack line or a backend body): mapped copy instead.
+        setError(messageForThrown(err, { kind: "save" }).message);
         setPhase("error");
       }
       runningRef.current = false;

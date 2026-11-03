@@ -330,7 +330,7 @@ describe("ProcurementApprovalsPanel — value, requester and amendment link", ()
   it("when the lookup fails the columns show '—' and the failure is reported (not a value of zero)", async () => {
     stubSummaries(false);
     render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
-    expect(await screen.findByText(/Couldn’t load the value and requester/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t load the value and requester/)).toBeInTheDocument();
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     // The bare id is the honest fallback; the amendment is plain text (no parent PO known).
     expect(screen.queryByRole("link", { name: AMD })).not.toBeInTheDocument();
