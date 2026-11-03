@@ -7,7 +7,8 @@
  * tenant record) instead of being guessed. A name or domain is never fabricated: if the owner does not know the
  * tenant the event is refused, so it is retried / dead-lettered loudly rather than registering a wrong row.
  */
-import { missingTenantDirectoryFields, type TenantCreatedEvent } from "@civitasone/events/contracts";
+import { NonRetryableError } from "@civitasone/queue";
+import { missingTenantDirectoryFields, tenantTenantCreated, type TenantCreatedEvent } from "@civitasone/events/contracts";
 
 export type TenantDirectoryRow = {
   id: string;
@@ -23,7 +24,11 @@ export type TenantDirectoryRow = {
 export type FetchedTenant = Partial<Pick<TenantCreatedEvent, "id" | "name" | "domain" | "edition" | "status" | "region" | "residency">>;
 export type FetchTenant = (tenantId: string) => Promise<FetchedTenant | null>;
 
-export class TenantCreatedIncompleteError extends Error {
+/**
+ * The event cannot become a directory row (contract violation, no tenant id, the owner does not know the tenant, or a
+ * field is still missing). Retrying cannot help, so it is a NonRetryableError: the queue dead-letters it at once.
+ */
+export class TenantCreatedIncompleteError extends NonRetryableError {
   constructor(message: string) {
     super(message);
     this.name = "TenantCreatedIncompleteError";
@@ -40,6 +45,14 @@ export function adminEdition(edition: string): string {
 export async function resolveTenantCreated(p: TenantCreatedEvent, fetchTenant: FetchTenant): Promise<TenantDirectoryRow> {
   const id = text(p.id) ?? text(p.tenantId);
   if (!id) throw new TenantCreatedIncompleteError("tenant.tenant.created carries no tenant id");
+  const check = tenantTenantCreated.validate(p);
+  if (!check.ok) {
+    const fields = check.violation?.issues.map((i) => i.path).join(", ") ?? "payload";
+    throw new TenantCreatedIncompleteError(`tenant.tenant.created violates the contract (${fields})`);
+  }
+  if (text(p.id) && text(p.tenantId) && p.id !== p.tenantId) {
+    throw new TenantCreatedIncompleteError("tenant.tenant.created: id and tenantId name different tenants");
+  }
 
   let fetched: FetchedTenant | null = null;
   if (missingTenantDirectoryFields(p).length > 0) {
