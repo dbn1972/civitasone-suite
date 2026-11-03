@@ -32,8 +32,8 @@ describe("OrdersPage ?status= (GAP-PROCUREMENT-DASHBOARD-02)", () => {
     expect(await initialStatusFor({ status: "approved" })).toBe("approved");
   });
 
-  it("understands the first dashboard link's 'active' and takes the first value of a repeated param", async () => {
-    expect(await initialStatusFor({ status: "active" })).toBe("approved");
+  it("understands the dashboard link's 'active' (open POs) and takes the first value of a repeated param", async () => {
+    expect(await initialStatusFor({ status: "active" })).toBe("active");
     expect(await initialStatusFor({ status: ["approved", "draft"] })).toBe("approved");
   });
 

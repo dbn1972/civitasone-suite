@@ -287,6 +287,15 @@ export function CreatePOForm() {
           setMessage(t("procurement.poForm.sanctionRequired"));
           return;
         }
+        // UAT Phase 2 follow-up: the sanction balance is now checked before the PO is accepted.
+        if (res.status === 422 && errorCode(text) === "BUDGET_EXCEEDED") {
+          setMessage(t("procurement.poForm.budgetExceeded"));
+          return;
+        }
+        if (res.status === 422 && errorCode(text) === "SANCTION_NOT_FOUND") {
+          setMessage(t("procurement.poForm.sanctionNotFound"));
+          return;
+        }
         // D4c #28: no empanelment record -> ask for an awarded tender / GeM reference.
         if (res.status === 422 && errorCode(text) === "VENDOR_NOT_EMPANELLED") {
           setNeedsBasis(true);

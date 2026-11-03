@@ -19,7 +19,10 @@ import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 
-const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+// UAT Phase 2 follow-up (security): a payslip download is per-employee pay data
+// -- payroll + HR staff see any slip; everyone else (an employee, including a
+// finance officer who is also an employee) only their own.
+const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "employee"];
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 const pathParamSchema = z.object({ id: z.string().uuid() });

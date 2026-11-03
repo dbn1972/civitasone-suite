@@ -8,7 +8,8 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { PAYROLL_SALARY_ADMIN_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { PAYROLL_PAY_DATA_ROLES } from "@/lib/auth/payrollRunRoles";
 
 // GAP-HR-SALARY-STRUCTURE-05: this page rendered the full pay-structure
 // list, the per-structure component composition, the full component
@@ -20,7 +21,8 @@ import { PAYROLL_SALARY_ADMIN_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/work
 // already 403 everyone outside this list -- same convention as
 // payroll/pensioners/page.tsx's PENSIONER_VIEW_ROLES and
 // payroll/salary-slips/page.tsx's SALARY_ADMIN_ROLES.
-const STRUCTURES_VIEW_ROLES = PAYROLL_SALARY_ADMIN_ROLES;
+// UAT Phase 2 follow-up: pay structures are payroll + HR only (payroll-service PAY_DATA_ROLES).
+const STRUCTURES_VIEW_ROLES = PAYROLL_PAY_DATA_ROLES;
 
 // Matches the backend's PAYROLL_ROLES for POST /v1/payroll/structures
 // (payroll-service payroll/routes.ts) -- a strict subset of

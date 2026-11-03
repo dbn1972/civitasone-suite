@@ -12,7 +12,8 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, assertPoRejectable, assertSanctionRefPresent, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertCanDispatch, assertPoRejectable, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { fetchSanctionBalance, rupeesFromMinor } from "./finance-budget-client.js";
 import * as poRepo from "./repo.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 
@@ -32,6 +33,30 @@ const PO_REJECT_ROLES = ["procurement_admin", "super_admin"];
  *  - GAP-PROCUREMENT-EMPANELMENT-05 / ORDERS-NEW-06: reject a vendor whose
  *    empanelment has lapsed. Applied to both POST aliases.
  */
+/**
+ * UAT Phase 2 follow-up: synchronous budget check. A PO citing a sanction whose
+ * available balance is below the PO total used to be accepted (202) and then
+ * dropped by the worker (BUDGET_EXCEEDED). Ask finance first (HTTP, outside any
+ * transaction) and refuse with a readable 422. If finance cannot be asked, fall
+ * through to the async path: the consumer re-checks and retries (never a
+ * silent drop on unavailability).
+ */
+async function assertPoBudget(ctx: { tenantId: string; correlationId?: string }, body: { items: Array<{ quantity: number; unitPriceMinor: number }>; sanctionRef?: string | undefined }): Promise<void> {
+  if (!body.sanctionRef?.trim()) return;
+  const total = poTotalMinor(body.items);
+  const balance = await fetchSanctionBalance(ctx.tenantId, body.sanctionRef, ctx.correlationId);
+  if (balance.kind === "not_found") {
+    throw new HttpError(422, "SANCTION_NOT_FOUND", "The budget sanction cited on this purchase order was not found. Choose an approved sanction.");
+  }
+  if (balance.kind === "ok" && total > balance.available) {
+    throw new HttpError(
+      422,
+      "BUDGET_EXCEEDED",
+      `The purchase order total ${rupeesFromMinor(total)} exceeds the ${rupeesFromMinor(balance.available)} still available on the cited budget sanction. Reduce the order or cite a sanction with enough balance.`,
+    );
+  }
+}
+
 /** UAT Phase 2 C2: synchronous 422 for a high-value PO with no sanction reference. */
 function assertPoSanction(body: { items: Array<{ quantity: number; unitPriceMinor: number }>; sanctionRef?: string | undefined }): void {
   try {
@@ -116,6 +141,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+    await assertPoBudget(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 
@@ -204,6 +230,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+    await assertPoBudget(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 

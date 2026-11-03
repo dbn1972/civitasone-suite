@@ -4,7 +4,7 @@ import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, requirePermissionKey, isSelfServiceEmployee, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -12,6 +12,7 @@ import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { lockedThroughMonth } from "../pay-profiles/rules-api.js";
+import { isRouteStaff } from "../../shared/employee-scope.js";
 import { maskPpoNo } from "./fin03-domain.js";
 import * as repo from "./repo.js";
 
@@ -32,9 +33,31 @@ const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 // (finance_admin already was not). Payroll's GL / payment hand-off to finance
 // is service-to-service and unaffected.
 const RUN_READER_ROLES = [...PAYROLL_ROLES, "hr_admin"];
+// UAT Phase 2 follow-up (security): per-employee pay data -- the salary-slip
+// register, a single slip, pay structures and pensioner records -- is payroll +
+// HR only, exactly like the run register (C8). Finance (DDO / PAO) works from
+// aggregate totals: GET /v1/payroll/runs/totals below.
+const PAY_DATA_ROLES = RUN_READER_ROLES;
+// Aggregate per-run totals (no per-employee rows): payroll + HR + finance.
+const RUN_TOTALS_ROLES = [...RUN_READER_ROLES, "finance_officer", "finance_admin"];
 // payroll-critical fix: an employee viewing their OWN payslip, layered on
 // top of READER_ROLES below (never in place of it).
 const SLIP_ROLES = [...READER_ROLES, "employee"];
+// A single slip: pay-data staff see any slip; everyone else (an employee,
+// including a finance officer who is also an employee) only their own.
+const SINGLE_SLIP_ROLES = [...PAY_DATA_ROLES, "employee"];
+
+/** Aggregate run totals for finance: period, type, status, head-count and paise sums only. */
+const RunTotalsSchema = z.array(z.object({
+  id: z.string(),
+  payPeriod: z.string(),
+  runType: z.string().optional(),
+  status: z.string(),
+  employeeCount: z.number().int().nonnegative(),
+  grossMinor: z.string().regex(/^-?\d+$/),
+  deductionsMinor: z.string().regex(/^-?\d+$/),
+  netMinor: z.string().regex(/^-?\d+$/),
+}).strict());
 
 export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -56,9 +79,32 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit, q.month));
   });
 
+  /**
+   * UAT Phase 2 follow-up: aggregate salary-bill totals per run for finance
+   * (DDO / PAO) -- the figures a salary bill is passed on -- without any
+   * per-employee row. Same aggregation as the run register.
+   */
+  app.get("/v1/payroll/runs/totals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RUN_TOTALS_ROLES);
+    const q = listRunsQuery.parse(req.query);
+    const runs = await queries.listRuns(ctx.tenantId, q.limit, q.month);
+    const totals = runs.map((r) => ({
+      id: r.id,
+      payPeriod: r.payPeriod,
+      ...(r.runType ? { runType: r.runType } : {}),
+      status: r.status,
+      employeeCount: r.employeeCount,
+      grossMinor: String(r.grossMinor ?? "0"),
+      deductionsMinor: String(r.deductionsMinor ?? "0"),
+      netMinor: String(r.netMinor ?? "0"),
+    }));
+    return reply.send(RunTotalsSchema.parse(totals));
+  });
+
   app.get("/v1/payroll/structures", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, PAY_DATA_ROLES);
     const q = listQuerySchema.parse(req.query);
     return reply.send(await queries.listStructures(ctx.tenantId, q.limit));
   });
@@ -82,7 +128,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/payroll/salary-slips", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, PAY_DATA_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, SalarySlipSummaryListSchema, await queries.listSalarySlips(ctx.tenantId, q.limit));
   });
@@ -171,11 +217,11 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/payroll/slips/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, SLIP_ROLES);
+    requireRole(ctx, SINGLE_SLIP_ROLES);
     const { id } = idParam.parse(req.params);
     const slip = await queries.getSlip(id, ctx.tenantId);
     if (!slip) throw new HttpError(404, "NOT_FOUND", "slip not found");
-    if (isSelfServiceEmployee(ctx)) {
+    if (!isRouteStaff(ctx, PAY_DATA_ROLES)) {
       let ownEmployeeId: string | null;
       try {
         ownEmployeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId);
@@ -227,7 +273,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   // ===================== Pensioner master =====================
   app.get("/v1/payroll/pensioners", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, PAY_DATA_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
              basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,

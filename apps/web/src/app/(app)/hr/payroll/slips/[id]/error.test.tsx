@@ -59,7 +59,8 @@ describe("slipBackTarget", () => {
     [["payroll_admin"], "/hr/payroll/salary-slips"],
     [["payroll_officer"], "/hr/payroll/salary-slips"],
     [["super_admin"], "/hr/payroll/salary-slips"],
-    [["finance_officer"], "/hr/payroll/salary-slips"],
+    // UAT Phase 2 follow-up: finance_officer is no longer a slip admin -> own payslips.
+    [["finance_officer"], "/hr/payroll/my-slips"],
     [["hr_admin"], "/hr/payroll/salary-slips"],
     [["employee"], "/hr/payroll/my-slips"],
     [["employee", "manager"], "/hr/payroll/my-slips"],

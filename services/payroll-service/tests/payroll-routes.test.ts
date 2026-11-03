@@ -435,7 +435,8 @@ describe("GET /v1/payroll/salary-slips", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/payroll/salary-slips",
-      headers: authHeader(["finance_officer"]),
+      // UAT Phase 2 follow-up (security): the slip register is payroll/HR only.
+      headers: authHeader(["hr_admin"]),
     });
     await app.close();
     expect(res.statusCode).toBe(200);

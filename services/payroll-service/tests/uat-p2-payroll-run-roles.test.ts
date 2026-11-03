@@ -57,8 +57,12 @@ describe("C8 payroll runs are payroll/HR only", () => {
     });
   }
 
-  it("finance_officer keeps its other payroll reads (structures 200)", async () => {
-    const res = await app.inject({ method: "GET", url: "/v1/payroll/structures", headers: auth(["finance_officer"]) });
-    expect(res.statusCode).toBe(200);
+  // Follow-up: pay structures are now payroll/HR only too (uat-p2-pay-data-roles.test.ts);
+  // finance keeps the aggregate run totals and the non-personal component master.
+  it("finance_officer keeps aggregate run totals and the component master (200)", async () => {
+    for (const url of ["/v1/payroll/runs/totals", "/v1/payroll/components"]) {
+      const res = await app.inject({ method: "GET", url, headers: auth(["finance_officer"]) });
+      expect(res.statusCode, url).toBe(200);
+    }
   });
 });

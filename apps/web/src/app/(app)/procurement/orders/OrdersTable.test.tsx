@@ -80,16 +80,44 @@ describe("OrdersTable — committed value (GAP-PROCUREMENT-ORDERS-02)", () => {
     expect(within(card).queryByText("₹3,00,000.00")).not.toBeInTheDocument();
   });
 
-  // UAT Phase 2 C6: a closed PO was approved and fulfilled; its value stays committed.
-  it("counts a closed PO in Committed value, but not a pending-approval one", () => {
+  // UAT Phase 2: "committed" = open obligations. A closed PO is fulfilled (actual,
+  // not committed) and is valued on its own "Completed (closed) value" tile.
+  it("keeps a closed PO out of Committed value and shows it as Completed (closed) value", () => {
     mockData = [
       order({ id: "a", status: "gem_placed", amount: LAKH }),
-      order({ id: "b", status: "closed", amount: LAKH }),
+      order({ id: "b", status: "closed", amount: 2 * LAKH }),
       order({ id: "c", status: "pending", amount: LAKH }),
     ];
     render(<OrdersTable orders={mockData as never} source="api" />);
-    const card = screen.getByText("Committed value").closest(".stat") as HTMLElement;
-    expect(within(card).getByText("₹2,00,000.00")).toBeInTheDocument();
+    const committed = screen.getByText("Committed value").closest(".stat") as HTMLElement;
+    expect(within(committed).getByText("₹1,00,000.00")).toBeInTheDocument();
+    const completed = screen.getByText("Completed (closed) value").closest(".stat") as HTMLElement;
+    expect(within(completed).getByText("₹2,00,000.00")).toBeInTheDocument();
+  });
+
+  it("uses the translated labels the page passes in", () => {
+    mockData = [order({ id: "b", status: "closed", amount: LAKH })];
+    render(<OrdersTable orders={mockData as never} source="api" labels={{ completedValue: "पूर्ण (बंद) मूल्य", completedValueHint: "h", activeFilter: "सक्रिय" }} />);
+    expect(screen.getByText("पूर्ण (बंद) मूल्य")).toBeInTheDocument();
+  });
+});
+
+describe("OrdersTable — ?status=active drill-through (dashboard Active POs)", () => {
+  beforeEach(() => { mockData = []; mockProvenance = "live"; });
+
+  it("shows exactly the open POs (approved, dispatched, GeM-placed) and nothing closed / draft / cancelled", () => {
+    mockData = [
+      order({ id: "1", poNo: "PO-APP", status: "approved" }),
+      order({ id: "2", poNo: "PO-DIS", status: "dispatched" }),
+      order({ id: "3", poNo: "PO-GEM", status: "gem_placed" }),
+      order({ id: "4", poNo: "PO-CLO", status: "closed" }),
+      order({ id: "5", poNo: "PO-DRA", status: "draft" }),
+      order({ id: "6", poNo: "PO-CAN", status: "cancelled" }),
+    ];
+    render(<OrdersTable orders={mockData as never} source="api" initialStatus="active" />);
+    for (const no of ["PO-APP", "PO-DIS", "PO-GEM"]) expect(screen.getByText(no)).toBeInTheDocument();
+    for (const no of ["PO-CLO", "PO-DRA", "PO-CAN"]) expect(screen.queryByText(no)).toBeNull();
+    expect(screen.getAllByText("Active (3)").length).toBeGreaterThan(0);
   });
 });
 

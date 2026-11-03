@@ -7,3 +7,12 @@
  * (not roleGuard.ts) so page tests that mock roleGuard keep the real list.
  */
 export const PAYROLL_RUN_READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
+
+/**
+ * UAT Phase 2 follow-up (security): roles that may open per-employee pay data
+ * screens -- the salary-slip register, a slip, pay structures and pensioner
+ * records. Mirrors payroll-service PAY_DATA_ROLES (= RUN_READER_ROLES). An
+ * employee still opens their OWN slip through the self-service gate. Finance
+ * roles work from aggregate totals (GET /v1/payroll/runs/totals).
+ */
+export const PAYROLL_PAY_DATA_ROLES = PAYROLL_RUN_READER_ROLES;

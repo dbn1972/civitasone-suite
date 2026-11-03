@@ -6261,7 +6261,9 @@
       "sanctionHint": "Required when the PO total is above ₹1,000. Only approved sanctions are listed.",
       "sanctionRequired": "A purchase order above ₹1,000 must cite an approved budget sanction. Choose one under Budget sanction.",
       "sanctionsFailed": "Couldn’t load approved sanctions.",
-      "sanctionsEmpty": "No approved sanctions found. A PO above ₹1,000 can be raised once finance approves a sanction."
+      "sanctionsEmpty": "No approved sanctions found. A PO above ₹1,000 can be raised once finance approves a sanction.",
+      "budgetExceeded": "The PO total is more than the balance still available on the chosen budget sanction. Reduce the order or choose a sanction with enough balance.",
+      "sanctionNotFound": "The chosen budget sanction was not found. Choose an approved sanction."
     },
     "gfr": {
       "band": {
@@ -6408,6 +6410,11 @@
       "bidWindowAwaitingOpening": "Closed — bids not yet opened",
       "bidWindowClosed": "Closed",
       "bidsNote": "Bids: the number of bids is shown on each tender's page. The register does not have a reliable bid count, so it shows “—” instead of a possibly wrong 0."
+    },
+    "ordersKpi": {
+      "completedValue": "Completed (closed) value",
+      "completedValueHint": "Total value of POs fulfilled and closed. Their value has moved from committed to actual expenditure, so it is not part of Committed value.",
+      "activeFilter": "Active"
     }
   },
   "promotion": {

@@ -397,6 +397,18 @@ describe("CreatePOForm — budget sanction reference", () => {
     expect(screen.queryByText("raw")).toBeNull();
   });
 
+  it("shows a readable message when the server answers 422 BUDGET_EXCEEDED (sanction balance too low)", async () => {
+    mockWithSanctions(new Response(JSON.stringify({ code: "BUDGET_EXCEEDED", message: "raw" }), { status: 422 }));
+    render(<CreatePOForm />);
+    await fillHighValuePo();
+    await screen.findByRole("option", { name: /SAN\/2026\/007/ });
+    fireEvent.change(screen.getByLabelText(/Budget sanction/), { target: { value: "s-ok" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    expect(await screen.findByText(/more than the balance still available/)).toBeInTheDocument();
+    expect(screen.queryByText("raw")).toBeNull();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it("a PO of ₹1,000 or less needs no sanction", async () => {
     const fetchSpy = mockWithSanctions();
     render(<CreatePOForm />);
