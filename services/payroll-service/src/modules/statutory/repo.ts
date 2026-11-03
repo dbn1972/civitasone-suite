@@ -1,8 +1,29 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, type AnyColumn } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * T-STAT delta review D-B1 (defence in depth): ledger rows whose slip was
+ * EXCLUDED on approval (a Rs 0-basic slip that is never paid) are never
+ * counted. Approval already removes those rows (deleteLedgerRowsForSlipTx);
+ * every ledger reader also filters them, so rows written before that fix --
+ * or any future path -- cannot reach the GL accrual, a return or Form 16.
+ */
+export function notExcludedSlip(slipIdColumn: AnyColumn) {
+  return sql`NOT EXISTS (SELECT 1 FROM payroll.payroll_slips xs WHERE xs.id = ${slipIdColumn} AND xs.status = ${"excluded"})`;
+}
+
+/** Delta review D-B1: remove one slip statutory ledger rows (PF / ESI / NPS / GPF / TDS); returns what was removed per ledger. */
+export async function deleteLedgerRowsForSlipTx(tx: Pick<typeof db, "execute">, slipId: string, tenantId: string): Promise<Record<"pf" | "esi" | "nps" | "gpf" | "tds", number>> {
+  const out = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
+  for (const k of Object.keys(out) as Array<keyof typeof out>) {
+    const rows = (await tx.execute(sql`DELETE FROM ${sql.raw(`statutory.payroll_${k}`)} WHERE slip_id = ${slipId}::uuid AND tenant_id = ${tenantId}::uuid RETURNING id`)) as unknown as unknown[];
+    out[k] = rows.length;
+  }
+  return out;
+}
 
 export async function insertPf(tx: Writer, row: typeof payrollPf.$inferInsert): Promise<void> {
   await tx.insert(payrollPf).values(row);
@@ -35,12 +56,12 @@ export async function insertNps(tx: Writer, row: typeof payrollNps.$inferInsert)
  * month instead of filtering an arbitrary, unordered first page client-side.
  */
 export async function listPfByTenant(tenantId: string, limit = 100, period?: string) {
-  const where = period ? and(eq(payrollPf.tenantId, tenantId), eq(payrollPf.period, period)) : eq(payrollPf.tenantId, tenantId);
+  const where = and(period ? and(eq(payrollPf.tenantId, tenantId), eq(payrollPf.period, period)) : eq(payrollPf.tenantId, tenantId), notExcludedSlip(payrollPf.slipId));
   return scopedRead((tx) => tx.select().from(payrollPf).where(where).orderBy(desc(payrollPf.period), payrollPf.id).limit(limit));
 }
 
 export async function listEsiByTenant(tenantId: string, limit = 100, period?: string) {
-  const where = period ? and(eq(payrollEsi.tenantId, tenantId), eq(payrollEsi.period, period)) : eq(payrollEsi.tenantId, tenantId);
+  const where = and(period ? and(eq(payrollEsi.tenantId, tenantId), eq(payrollEsi.period, period)) : eq(payrollEsi.tenantId, tenantId), notExcludedSlip(payrollEsi.slipId));
   return scopedRead((tx) => tx.select().from(payrollEsi).where(where).orderBy(desc(payrollEsi.period), payrollEsi.id).limit(limit));
 }
 
@@ -69,7 +90,7 @@ async function ledgerPeriodSummary(
 ): Promise<LedgerPeriodSummary> {
   return scopedRead(async (tx) => {
     const periodRows = await tx.selectDistinct({ period: tbl.period }).from(tbl)
-      .where(eq(tbl.tenantId, tenantId))
+      .where(and(eq(tbl.tenantId, tenantId), notExcludedSlip(tbl.slipId)))
       .orderBy(desc(tbl.period))
       .limit(LEDGER_SUMMARY_MAX_PERIODS);
     const periods = periodRows.map((r: { period: string }) => r.period);
@@ -79,7 +100,7 @@ async function ledgerPeriodSummary(
       n: sql<string>`count(*)`,
       emp: sql<string>`coalesce(sum(${tbl.empContribMinor}), 0)`,
       er: sql<string>`coalesce(sum(${tbl.erContribMinor}), 0)`,
-    }).from(tbl).where(and(eq(tbl.tenantId, tenantId), eq(tbl.period, period)));
+    }).from(tbl).where(and(eq(tbl.tenantId, tenantId), eq(tbl.period, period), notExcludedSlip(tbl.slipId)));
     return {
       periods,
       period,
@@ -99,7 +120,7 @@ export async function summariseEsiPeriod(tenantId: string, period?: string): Pro
 }
 
 export async function listTdsByTenant(tenantId: string, limit = 100) {
-  return scopedRead((tx) => tx.select().from(payrollTds).where(eq(payrollTds.tenantId, tenantId)).limit(limit));
+  return scopedRead((tx) => tx.select().from(payrollTds).where(and(eq(payrollTds.tenantId, tenantId), notExcludedSlip(payrollTds.slipId))).limit(limit));
 }
 
 export async function listGratuityByTenant(tenantId: string, limit = 100) {
@@ -107,11 +128,11 @@ export async function listGratuityByTenant(tenantId: string, limit = 100) {
 }
 
 export async function listGpfByTenant(tenantId: string, limit = 100) {
-  return scopedRead((tx) => tx.select().from(payrollGpf).where(eq(payrollGpf.tenantId, tenantId)).limit(limit));
+  return scopedRead((tx) => tx.select().from(payrollGpf).where(and(eq(payrollGpf.tenantId, tenantId), notExcludedSlip(payrollGpf.slipId))).limit(limit));
 }
 
 export async function listNpsByTenant(tenantId: string, limit = 100) {
-  return scopedRead((tx) => tx.select().from(payrollNps).where(eq(payrollNps.tenantId, tenantId)).limit(limit));
+  return scopedRead((tx) => tx.select().from(payrollNps).where(and(eq(payrollNps.tenantId, tenantId), notExcludedSlip(payrollNps.slipId))).limit(limit));
 }
 
 /**
@@ -121,7 +142,7 @@ export async function listNpsByTenant(tenantId: string, limit = 100) {
 export async function sumEmployerContribByRun(runId: string, tenantId: string): Promise<bigint> {
   const sumOf = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps): Promise<bigint> => {
     const rows = await scopedRead((tx) => tx.select({ v: tbl.erContribMinor }).from(tbl)
-      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId))));
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId), notExcludedSlip(tbl.slipId))));
     return rows.reduce((s: bigint, r: { v: bigint }) => s + (r.v ?? 0n), 0n);
   };
   // payrollPf.erContribMinor is the full employer 12% (EPS + EPF-er); do not also
@@ -143,7 +164,7 @@ export async function sumEmployerContribByRun(runId: string, tenantId: string): 
 export async function sumEmployerContribByRunTx(tx: Writer, runId: string, tenantId: string): Promise<bigint> {
   const sumOf = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps): Promise<bigint> => {
     const rows = await tx.select({ v: tbl.erContribMinor }).from(tbl)
-      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId)));
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId), notExcludedSlip(tbl.slipId)));
     return rows.reduce((s: bigint, r: { v: bigint }) => s + (r.v ?? 0n), 0n);
   };
   return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));

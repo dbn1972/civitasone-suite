@@ -10,6 +10,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { payrollTds, payrollNps, payrollTdsNonSalary, payrollTdsChallan } from "../statutory/schema.js";
+import { notExcludedSlip } from "../statutory/repo.js";
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
@@ -152,7 +153,7 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
 
   const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
-    .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months))));
+    .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
 
   // GAP-PAYROLL-RETURNS-06: accumulate in exact bigint paise. This used to
   // sum float rupees (tdsMinor / 100) and re-multiply by 100, so the paise
@@ -277,7 +278,7 @@ async function buildForm24Q(
     .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
   const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
-    .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
+    .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
   const challanBigs = months.map((month) => ({
     month,
     minor: challanTdsRows
@@ -573,7 +574,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     }
 
     const npsRows = await scopedRead((tx) => tx.select().from(payrollNps)
-      .where(and(eq(payrollNps.tenantId, ctx.tenantId), eq(payrollNps.period, month))));
+      .where(and(eq(payrollNps.tenantId, ctx.tenantId), eq(payrollNps.period, month), notExcludedSlip(payrollNps.slipId))));
     if (npsRows.length === 0) {
       throw new HttpError(404, "NOT_FOUND", `No NPS records found for period ${month}`);
     }

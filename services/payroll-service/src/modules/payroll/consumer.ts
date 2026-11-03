@@ -275,6 +275,7 @@ export async function resolveTdsYtdMinorsTx(tx: typeof db, tenantId: string, emp
     WHERE t.tenant_id = ${tenantId}::uuid AND t.employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
       AND t.period >= ${`${fyStart}-04`} AND t.period < ${beforeMonth}
       AND r.status IN ('approved', 'disbursed')
+      AND NOT EXISTS (SELECT 1 FROM payroll.payroll_slips xs WHERE xs.id = t.slip_id AND xs.status = 'excluded') -- delta review D-B1
     GROUP BY t.employee_id
   `)) as unknown as Array<{ employee_id: string; ytd: string | number }>;
   for (const r of rows) result.set(r.employee_id, BigInt(r.ytd));
@@ -312,6 +313,7 @@ export async function resolveFyPaidToDateTx(tx: typeof db, tenantId: string, emp
     WHERE s.tenant_id = ${tenantId}::uuid AND s.employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
       AND r.month >= ${`${fyStart}-04`} AND r.month < ${beforeMonth}
       AND r.status IN ('approved', 'disbursed')
+      AND s.status <> 'excluded' -- delta review D-B1: an excluded slip was never paid
     GROUP BY s.employee_id
   `)) as unknown as Array<{ employee_id: string; paid: string | number; recorded: string[] }>;
   for (const r of rows) {
@@ -459,10 +461,10 @@ export interface RetroArrearsOutcome {
 export const ARREARS_DMD_SOURCE = "revision_dmd";
 const REVISION_SOURCES = new Set(["revision", ARREARS_DMD_SOURCE]);
 
-type RetroSlip = { period: string; components: Array<{ code: string; type: string; amountMinor: number | string }> | null; pay_profile: string | null; suspended: boolean; created_us: string };
+type RetroSlip = { period: string; components: Array<{ code: string; type: string; amountMinor: number | string }> | null; pay_profile: string | null; suspended: boolean };
 type RetroPrior = { from_period: string; to_period: string; component_code: string; source: string; difference_minor: string | number; pension_base_minor: string | number | null; old_amount_minor: string | number; new_amount_minor: string | number };
 type RetroRevision = { new_basic_minor: string | number; eff_month: string };
-type RetroDaRow = { effective_from: string; rate_bps: number | string; created_us: string };
+type RetroDaRow = { effective_from: string; rate_bps: number | string };
 
 /**
  * T-STAT review SF3: every input the arrears step needs, read ONCE for all
@@ -512,7 +514,7 @@ export async function prefetchRetroArrearsTx(tx: typeof db, tenantId: string, em
   `)) as unknown as Array<RetroRevision & { employee_id: string }>;
   for (const r of revs) pushTo(pre.revisions, r.employee_id, r);
   pre.daRows = (await tx.execute(sql`
-    SELECT effective_from::text AS effective_from, rate_bps, (extract(epoch FROM created_at) * 1000000)::bigint::text AS created_us
+    SELECT effective_from::text AS effective_from, rate_bps
     FROM payroll.dearness_allowance_rates WHERE tenant_id = ${tenantId}::uuid ORDER BY effective_from ASC
   `)) as unknown as RetroDaRow[];
   const lookback = addMonthsToPeriod(runMonth, -12);
@@ -522,7 +524,6 @@ export async function prefetchRetroArrearsTx(tx: typeof db, tenantId: string, em
   if (!windowStart || windowStart >= runMonth) return pre;
   const slips = (await tx.execute(sql`
     SELECT s.employee_id::text AS employee_id, r.month::text AS period, s.components, s.pay_profile,
-           (extract(epoch FROM s.created_at) * 1000000)::bigint::text AS created_us,
            EXISTS (SELECT 1 FROM payroll.payroll_run_suspensions x
                    WHERE x.tenant_id = s.tenant_id AND x.run_id = s.run_id AND x.employee_id = s.employee_id) AS suspended
     FROM payroll.payroll_slips s
@@ -644,11 +645,25 @@ export async function generateRetroArrears(
       continue;
     }
     const priorRows = prior.filter((a) => a.from_period === period && a.to_period === period);
-    const daRow = override != null ? undefined : daRowFor(period);
-    const slipComputedUs = drawnSlips.reduce((mx, sl) => (BigInt(sl.created_us) > mx ? BigInt(sl.created_us) : mx), 0n);
-    const retroDa = daRow != null && BigInt(daRow.created_us) > slipComputedUs;
+    // Delta review: a DA change is detected from the slip itself -- the DA it
+    // drew differs from basic x the DA rate applicable for the month NOW
+    // (integer paise, exact compare). Catches a retrospective DA order, a rate
+    // edited in place and a slip drawn at a stale rate alike; a month drawn at
+    // the rate in force is never re-priced. No rate configured for the month:
+    // not a DA change (and never a DA_RATE_NOT_CONFIGURED failure from here).
+    const rowRate = override ?? (daRowFor(period) ? BigInt(daRowFor(period)!.rate_bps) : null);
+    const staleDa = rowRate != null && drawnSlips.some((sl) => {
+      if (sl.suspended || (sl.pay_profile != null && !SCALE_PAY_PROFILES.has(sl.pay_profile))) return false;
+      let b = 0n, d = 0n;
+      for (const c of sl.components ?? []) {
+        if (c.type !== "earning") continue;
+        if (c.code === "BASIC") b += BigInt(c.amountMinor);
+        if (c.code === "DA") d += BigInt(c.amountMinor);
+      }
+      return d !== roundRupee((b * rowRate) / 10000n);
+    });
     // Only months where something is being settled are re-priced.
-    if (!rev && !retroDa && priorRows.length === 0) continue;
+    if (!rev && !staleDa && priorRows.length === 0) continue;
     const manualSpan = prior.some((a) => !REVISION_SOURCES.has(a.source) && a.from_period !== a.to_period
       && a.from_period <= period && a.to_period >= period && (ARREAR_PAY_CODES.has(a.component_code) || a.component_code === "ARREAR"));
     if (manualSpan || drawnSlips.some((sl) => sl.suspended || (sl.pay_profile != null && !SCALE_PAY_PROFILES.has(sl.pay_profile)))) {
@@ -1050,6 +1065,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           WHERE id = ${sl.id}::uuid AND tenant_id = ${p.tenantId}::uuid`);
         const ex = exclusions.find((e) => e.employeeId === sl.employeeId)!;
         await audit(tx, msg, "exclude", "payroll_slip", sl.id, { runId: p.id, employeeId: sl.employeeId, employeeNo: sl.employeeNo, reason: ex.reason });
+        // Delta review D-B1: an excluded slip is never paid, so its statutory
+        // ledger rows (PF / ESI / NPS / GPF / TDS) are removed in this same
+        // transaction -- they would otherwise reach the GL accrual, the
+        // returns, the TDS YTD and Form 16. Audited with what was removed.
+        const removed = await statutoryRepo.deleteLedgerRowsForSlipTx(tx, sl.id, p.tenantId);
+        await audit(tx, msg, "statutory_rows_removed", "payroll_slip", sl.id, { runId: p.id, employeeId: sl.employeeId, reason: ex.reason, removed });
       }
       const excludedSlipIds = new Set(excludedSlips.map((sl) => sl.id));
       const paySlips = slips.filter((sl) => !excludedSlipIds.has(sl.id));

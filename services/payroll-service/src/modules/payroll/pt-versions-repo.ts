@@ -71,6 +71,7 @@ export async function ptYtdMinors(tx: Tx, tenantId: string, employeeIds: readonl
        AND c.value ->> 'code' = 'PT'
        AND r.month >= ${`${fyStart}-04`} AND r.month < ${beforeMonth}
        AND r.status IN ('approved', 'disbursed')
+       AND s.status <> 'excluded'
      GROUP BY s.employee_id
   `)) as unknown as Array<{ employee_id: string; ytd: string }>;
   for (const r of rows) result.set(r.employee_id, BigInt(r.ytd));

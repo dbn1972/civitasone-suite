@@ -11,10 +11,10 @@
  * where the payable share is 1 - LOP / (Basic + DA + allowance) of the drawn
  * slip -- the same days the slip itself paid.
  *
- * Also: a DA change is only settled for months whose slip was computed BEFORE
- * the DA rate was recorded (a retrospective DA order); months already priced
- * with the rate in force are never re-priced, so there is no blanket 12-month
- * re-pricing. And the arrears step reads its inputs once per run, not per
+ * Also: a DA change is settled only for months whose slip drew a DA different
+ * from basic x the DA rate now applicable for the month (delta review: a value
+ * check, not a timestamp); months already drawn at the rate in force are never
+ * re-priced, so there is no blanket 12-month re-pricing. And the arrears step reads its inputs once per run, not per
  * employee.
  */
 import { describe, it, expect, afterAll } from "vitest";
@@ -126,13 +126,13 @@ describe("T-STAT B1: arrears follow the days actually payable", () => {
     expect(out.notDrawnPeriods).toEqual(["2026-10"]);
   });
 
-  it("a DA rate recorded BEFORE the month was paid is not re-priced (no blanket 12-month window)", async () => {
+  it("months drawn at the DA rate in force are never re-priced (no blanket 12-month window)", async () => {
     const tenant = randomUUID(); const emp = randomUUID();
     await da(tenant, "2026-01-01", 5000);
-    await da(tenant, "2026-07-01", 5500); // recorded first ...
-    // ... then July / August were paid (here at a stale 50%): that is not a DA order being settled.
-    await drawn(tenant, emp, "2026-07", { basic: 40000, da: 20000, hra: 12000 });
-    await drawn(tenant, emp, "2026-08", { basic: 40000, da: 20000, hra: 12000 });
+    await da(tenant, "2026-07-01", 5500);
+    // July / August drawn at the 55% in force (delta review: the check is on the drawn DA value).
+    await drawn(tenant, emp, "2026-07", { basic: 40000, da: 22000, hra: 12000 });
+    await drawn(tenant, emp, "2026-08", { basic: 40000, da: 22000, hra: 12000 });
     const out = await run(tenant, emp, "2026-09");
     expect(await raised(tenant, emp)).toEqual([]);
     expect(out.notDrawnPeriods).toEqual([]);
