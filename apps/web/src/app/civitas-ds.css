@@ -7,16 +7,29 @@
   /* --accent was referenced by 11 components but never defined (fallbacks removed in 53f343019),
      so accent borders and badges rendered transparent. Alias it to the brand primary. */
   --accent:var(--primary);
-  --indigo:#6366f1; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
+  /* UAT-P2-D3 (A11Y-07): --indigo was #6366f1 = 4.46:1 on white, just under
+     AA for the ID / file links that use it (estab + procurement approvals).
+     #4f46e5 is 6.29:1. */
+  --indigo:#4f46e5; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
   /* --mut was #98a2b3, which is 2.58:1 on --panel/#ffffff and fails WCAG 2.2 AA
      (SC 1.4.3 requires 4.5:1 for body text). It is used by the sidebar brand
      subtitle, group headings and role label, which appear on EVERY page, so a
      single token failed accessibility on ~50 of 52 audited routes. #667085 is
      4.97:1 on white. Verified by tests/a11y/design-tokens.spec.ts. */
-  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#667085; --muted:#667085;
+  /* UAT-P2-D3 (A11Y-07): #667085 measured 4.07:1 on --primary-soft (selected
+     rows, /admin/roles) and 4.59:1 on --bg. #5d6679 is >= 4.7:1 on every
+     tinted surface in this file (white 5.77, --bg 5.32, --primary-soft 4.73). */
+  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#5d6679; --muted:#5d6679;
   --line:#eaecf0; --line2:#f2f4f7;
+  /* UAT-P2-D3 (A11Y-03, WCAG 1.4.11): --line (#eaecf0, 1.18:1) is for dividers
+     only. Form-control boundaries use --control-border: 3.72:1 on white,
+     3.44:1 on --bg. --on-primary is the text colour on a --primary fill
+     (referenced by tenant-admin/plans but never defined -> ink on blue, 1.92:1). */
+  --control-border:#7a8599; --on-primary:#ffffff;
   --good:#067647; --goodbg:#ecfdf3; --goodbd:#abefc6;
-  --warn:#b54708; --warnbg:#fffaeb; --warnbd:#fedf89;
+  /* UAT-P2-D3 (A11Y-07): #b54708 dropped to 4.42:1 on the 14% warn tint used by
+     inline warn chips (/admin/org); #9c3f0a is 5.4:1 there, 6.43:1 on --warnbg. */
+  --warn:#9c3f0a; --warnbg:#fffaeb; --warnbd:#fedf89;
   --bad:#b42318; --badbg:#fef3f2; --badbd:#fecdca;
   --info:#175cd3; --infobg:#eff8ff; --infobd:#b2ddff;
   --r:14px; --r-sm:10px;
@@ -39,6 +52,8 @@ a{color:inherit;text-decoration:none}
 .sb-bs{font-size:11px;color:var(--mut);margin-top:-2px}
 .sb-nav{flex:1;overflow:auto;padding:6px 12px}
 .sb-grp{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:14px 10px 6px}
+/* UAT-P2-D3 (A11Y-17): the collapsible group toggles were 15px tall; 28px minimum target. */
+button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
 .sb-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:var(--ink2);
   font-size:13.5px;font-weight:550;margin-bottom:2px;transition:.12s}
 .sb-item .i{width:18px;text-align:center;font-size:15px}
@@ -116,7 +131,7 @@ a{color:inherit;text-decoration:none}
 .g-main{grid-template-columns:1fr 360px;align-items:start}
 .g-main-l{grid-template-columns:300px 1fr;align-items:start}
 @media(max-width:1080px){.g-4{grid-template-columns:repeat(2,1fr)}.g-main,.g-main-l,.g-3,.g-2{grid-template-columns:1fr}}
-@media(max-width:768px){.sb{position:fixed;top:0;left:0;z-index:40;height:100dvh;overflow-y:auto;transform:translateX(-100%);transition:transform .22s ease}.app.nav-open .sb{transform:translateX(0)}.mob-overlay{display:block !important}.wrap{padding:16px 16px 40px}.tb-search{display:none}.mob-menu-btn{display:flex !important}}
+@media(max-width:768px){.sb{position:fixed;top:0;left:0;z-index:40;height:100dvh;overflow-y:auto;transform:translateX(-100%);transition:transform .22s ease,visibility 0s linear .22s;visibility:hidden}.app.nav-open .sb{transform:translateX(0);visibility:visible;transition:transform .22s ease,visibility 0s}.mob-overlay{display:block !important}.wrap{padding:16px 16px 40px}.tb-search{display:none}.mob-menu-btn{display:flex !important}}
 .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:39;cursor:pointer}
 .mob-menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--line);border-radius:10px;background:transparent;cursor:pointer;font-size:18px;flex-shrink:0}
 
@@ -363,6 +378,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .dark{
   --bg:#0f1419; --panel:#1a2332; --ink:#e7e9ed; --ink2:#9da5b4; --mut:#8b95a5; --muted:#8b95a5;
   --line:#2d3748; --line2:#1e2a3a;
+  /* UAT-P2-D3 (A11Y-03/08): field boundary 3.62:1 on --panel; dark text on the light-blue primary fill (7.7:1). */
+  --control-border:#6b7a90; --on-primary:#0f1419;
   --good:#34d399; --goodbg:#064e3b; --goodbd:#065f46;
   --warn:#fbbf24; --warnbg:#451a03; --warnbd:#78350f;
   --bad:#f87171; --badbg:#450a0a; --badbd:#7f1d1d;
@@ -391,7 +408,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .dark .mtile .ic{--tile-ic-bg:rgba(148,163,184,.16)}
 .dark .alert{background:var(--panel);border-color:var(--line)}
 .dark .cd-panel{background:var(--panel)}
-.dark .cd-field input,.dark .cd-field textarea{background:var(--bg);border-color:var(--line);color:var(--ink)}
+.dark .cd-field input,.dark .cd-field textarea{background:var(--bg);border-color:var(--control-border);color:var(--ink)}
 
 /* ============================================================
    ACCESSIBILITY FOUNDATIONS (WCAG 2.2 AA)
@@ -426,6 +443,29 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 }
 .skip-link:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
 
+/* UAT-P2-D3/D4 (A11Y-06, GLB-01/02, WCAG 2.4.7): the fixed "Ask" button sits in
+   the bottom-right corner of every page. Keyboard focus scrolls clear of it,
+   and the shell footer (.app-foot) reserves a gutter under the content, so it
+   never covers the focused control or the last table rows / form actions. */
+html{scroll-padding-bottom:96px}
+/* UAT-P2-D3 (A11Y-08): native selects follow the dark palette. */
+.dark select{color-scheme:dark}
+/* UAT-P2-D4 (FIN-01): .fields is the read-only 2-column label/value grid. Used
+   on a <form> (the journal voucher entry form) it squeezed the whole form into
+   half the card and pushed line items past the right edge at 1366px. A form
+   with this class lays its sections out vertically; grid children may shrink. */
+form.fields{display:flex;flex-direction:column;gap:14px;background:none}
+.fields>*{min-width:0}
+/* UAT-P2-D3 (A11Y-17): breadcrumb links get a usable target height. */
+.tb .crumb a{display:inline-block;padding-block:4px}
+/* UAT-P2-D3 (A11Y-20, GIGW): shell footer (contentinfo) + visible language toggle. */
+.app-foot{border-top:1px solid var(--line);padding:14px 24px 96px;font-size:12.5px;color:var(--ink2)}
+.app-foot-owner{margin:0 0 6px}
+.app-foot-links{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;margin:0;padding:0}
+.app-foot-links a{color:var(--primary);display:inline-block;padding-block:4px;text-decoration:underline}
+.tb-lang{min-height:36px;padding:6px 10px;font-size:13px}
+@media(max-width:768px){.app-foot{padding:14px 16px 96px}}
+
 /* Screen-reader-only utility (visible to AT, hidden visually). */
 .sr-only{
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
@@ -448,7 +488,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   outline:2px solid var(--focus-ring);outline-offset:-2px;background:var(--primary-soft);
 }
 .dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-.dt-filter{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);
+.dt-filter{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--control-border);
   border-radius:10px;padding:8px 12px;min-width:240px}
 .dt-filter input{border:0;background:transparent;width:100%;font-size:13px;color:var(--ink)}
 .dt-filter input:focus{outline:none}
@@ -467,7 +507,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .cd-desc{color:var(--ink2);font-size:13.5px;line-height:1.5}
 .cd-field{margin-top:14px;display:flex;flex-direction:column;gap:6px}
 .cd-field label{font-size:12.5px;font-weight:650;color:var(--ink2)}
-.cd-field input,.cd-field textarea{border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+.cd-field input,.cd-field textarea{border:1px solid var(--control-border);border-radius:10px;padding:9px 12px;
   font-size:13.5px;color:var(--ink);background:#fff;font-family:inherit}
 .cd-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}

@@ -29,7 +29,8 @@ describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
     // the raw UUID fragment must not be visible
     expect(screen.queryByText("3fa1c111")).not.toBeInTheDocument();
     // status appears exactly once (not duplicated into a Detail column)
-    expect(screen.getAllByText("anonymous")).toHaveLength(1);
+    // UAT-P2-D4: the shared display formatter now labels the raw status code.
+    expect(screen.getAllByText("Anonymous")).toHaveLength(1);
   });
 
   it("shows the 'first 50 / more may exist' truncation via the pager line", async () => {

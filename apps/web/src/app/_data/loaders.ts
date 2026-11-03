@@ -1110,6 +1110,10 @@ export async function getCurrentTenantOrgType(): Promise<LoaderResult<{ tenantId
     {
       revalidateSeconds: 30,
       telemetryKey: "tenant.org_type",
+      // UAT-P2-D1: tenant-service 404 NOT_FOUND = the office has no tenant
+      // record yet. Render the selector read-only (tenantId null) instead of
+      // a "couldn't load" error.
+      notFoundAsEmpty: true,
       mapResponse: (p) => {
         const view = (p && typeof p === "object" && "data" in p ? (p as { data?: unknown }).data : p) as
           | { tenantId?: unknown; id?: unknown; settings?: unknown }
@@ -5962,6 +5966,10 @@ export async function getTenantConfig(): Promise<LoaderResult<AdminTenantConfig 
   return fetchJson<unknown, AdminTenantConfig | null>("/api/v1/admin/tenant-config", null, {
     revalidateSeconds: 60,
     telemetryKey: "admin.tenant-config",
+    // UAT-P2-D1: admin-service answers 404 NOT_FOUND when no admin_tenants row
+    // exists for the caller's office -- that is "no configuration on record"
+    // (the page's EmptyState), not a load failure.
+    notFoundAsEmpty: true,
     mapResponse: (payload) => {
       const data = isRecord(payload) && isRecord((payload as Record<string, unknown>).data)
         ? ((payload as Record<string, unknown>).data as Record<string, unknown>)

@@ -23,10 +23,25 @@ export async function upsertGeoPoint(
   });
 }
 
-async function geofenceExists(): Promise<boolean> {
-  const rows = await scopedRead((tx) => tx.execute(sql`SELECT to_regclass('geofence.geofences') AS reg`));
+/**
+ * UAT-P2-D1 (/locations/maps/monitoring 500): the parcel branch reads
+ * location.cadastral_parcels, created by migration 0014, which needs PostGIS
+ * (geometry column + ST_Centroid). On a cluster without PostGIS that
+ * migration never applied, the relation is missing, and the whole UNION
+ * failed with 42P01 -> HTTP 500 for every caller, hiding the assets that do
+ * exist. location.geo_points (0019) needs PostGIS too, so it is probed the
+ * same way. Optional sources are now probed first (same
+ * to_regclass pattern the geofence branch already used) and skipped when
+ * absent, so the feed degrades to what the database actually holds.
+ */
+async function optionalSources(): Promise<{ parcels: boolean; geoPoints: boolean; geofences: boolean }> {
+  const rows = await scopedRead((tx) =>
+    tx.execute(sql`SELECT to_regclass('location.cadastral_parcels') AS parcels,
+                          to_regclass('location.geo_points') AS geo_points,
+                          to_regclass('geofence.geofences') AS geofences`),
+  );
   const r = (rows as unknown as Row[])[0];
-  return !!(r && r.reg);
+  return { parcels: !!(r && r.parcels), geoPoints: !!(r && r.geo_points), geofences: !!(r && r.geofences) };
 }
 
 /**
@@ -46,15 +61,20 @@ export async function markers(
   },
   limit: number,
 ): Promise<Marker[]> {
+  const sources = await optionalSources();
   const branches: SQL[] = [
     sql`SELECT id::text AS id, 'infrastructure' AS domain, id::text AS ref_id, lat::float8 AS lat, lng::float8 AS lng, name AS label, status, created_at
         FROM location.infrastructure_assets WHERE tenant_id = ${tenantId}`,
-    sql`SELECT id::text AS id, 'parcel' AS domain, id::text AS ref_id, ST_Y(ST_Centroid(geom))::float8 AS lat, ST_X(ST_Centroid(geom))::float8 AS lng, parcel_no AS label, status, created_at
-        FROM location.cadastral_parcels WHERE tenant_id = ${tenantId} AND geom IS NOT NULL`,
-    sql`SELECT id::text AS id, domain, ref_id, lat::float8 AS lat, lng::float8 AS lng, label, status, created_at
-        FROM location.geo_points WHERE tenant_id = ${tenantId}`,
   ];
-  if (await geofenceExists()) {
+  if (sources.parcels) {
+    branches.push(sql`SELECT id::text AS id, 'parcel' AS domain, id::text AS ref_id, ST_Y(ST_Centroid(geom))::float8 AS lat, ST_X(ST_Centroid(geom))::float8 AS lng, parcel_no AS label, status, created_at
+        FROM location.cadastral_parcels WHERE tenant_id = ${tenantId} AND geom IS NOT NULL`);
+  }
+  if (sources.geoPoints) {
+    branches.push(sql`SELECT id::text AS id, domain, ref_id, lat::float8 AS lat, lng::float8 AS lng, label, status, created_at
+        FROM location.geo_points WHERE tenant_id = ${tenantId}`);
+  }
+  if (sources.geofences) {
     branches.push(sql`SELECT id::text AS id, 'geofence' AS domain, id::text AS ref_id, center_lat::float8 AS lat, center_lng::float8 AS lng, name AS label,
         CASE WHEN active THEN 'active' ELSE 'inactive' END AS status, created_at
         FROM geofence.geofences WHERE tenant_id = ${tenantId}`);

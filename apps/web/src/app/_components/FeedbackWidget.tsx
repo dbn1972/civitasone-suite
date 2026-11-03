@@ -16,6 +16,12 @@
  * Actually submitting a rating still only silences that one exact page for
  * 24h, since "was this page helpful" is a legitimately page-specific
  * question.
+ *
+ * UAT-P2-D4 (GLB-01) / A11Y-06 (WCAG 2.4.7): it used to float position:fixed
+ * in the bottom-right corner, where it covered table Status/Action columns
+ * and form buttons (and the keyboard focus on them) at 1366px. It now renders
+ * inline at the end of the page content, so it can never sit on top of a
+ * control, and it asks at most once per browser session.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -26,6 +32,24 @@ const STORAGE_PREFIX = "civitasone.feedback.";
 const GLOBAL_DISMISS_KEY = `${STORAGE_PREFIX}dismissedUntil`;
 const HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
 const SHOW_DELAY_MS = 5000; // let the clerk see the page before we ask about it
+/** sessionStorage: the prompt has already been shown in this browser session. */
+export const SESSION_SHOWN_KEY = `${STORAGE_PREFIX}shownThisSession`;
+
+function shownThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_SHOWN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function markShownThisSession(): void {
+  try {
+    sessionStorage.setItem(SESSION_SHOWN_KEY, String(Date.now()));
+  } catch {
+    /* storage blocked: the 24h dismiss rule still applies */
+  }
+}
 
 function recentlyMarked(key: string): boolean {
   try {
@@ -70,11 +94,14 @@ export function FeedbackWidget() {
     // don't ask again yet — don't make the clerk re-earn the prompt's
     // silence on every one of the app's 70+ routes just because the
     // pathname changed.
-    if (recentlyMarked(GLOBAL_DISMISS_KEY) || recentlyMarked(`${STORAGE_PREFIX}${pathname}`)) {
+    if (recentlyMarked(GLOBAL_DISMISS_KEY) || recentlyMarked(`${STORAGE_PREFIX}${pathname}`) || shownThisSession()) {
       return;
     }
 
-    const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+    const timer = setTimeout(() => {
+      markShownThisSession();
+      setVisible(true);
+    }, SHOW_DELAY_MS);
     return () => clearTimeout(timer);
   }, [pathname]);
 
@@ -127,14 +154,14 @@ export function FeedbackWidget() {
   if (!visible) return null;
 
   return (
-    <div
-      role="complementary"
+    <section
       aria-label="Page feedback"
+      data-testid="feedback-widget"
       style={{
-        position: "fixed",
-        bottom: 24,
-        right: 24,
-        zIndex: 1000,
+        // Inline, after the page content (never position:fixed over it).
+        width: "fit-content",
+        marginTop: 24,
+        marginLeft: "auto",
         background: "var(--surface, #fff)",
         border: "1px solid #e5e7eb",
         borderRadius: 12,
@@ -221,6 +248,6 @@ export function FeedbackWidget() {
           </div>
         </form>
       )}
-    </div>
+    </section>
   );
 }

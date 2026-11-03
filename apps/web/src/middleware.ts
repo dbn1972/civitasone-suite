@@ -26,7 +26,9 @@ const PUBLIC_EXACT = ["/"];
 // /offline: the service-worker fallback page; user-agnostic (locale only) and must be
 // fetchable anonymously so the SW can (re)precache it after logout (V4-A-01, V4-A-09).
 const PUBLIC_SEGMENT = ["/pricing", "/docs"];
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known", "/logout", "/offline"];
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known", "/logout", "/offline",
+  // UAT-P2-D3 (A11Y-19, GIGW 3.0): compliance pages must be readable without signing in.
+  "/accessibility-statement", "/screen-reader-access", "/website-policies"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).

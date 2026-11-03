@@ -74,7 +74,7 @@ export function LanguageSwitcher() {
         aria-label={`Language: ${LOCALE_LABELS[locale]}`}
         title="Switch language"
       >
-        {currentFlag}
+        <span aria-hidden="true">{currentFlag}</span>
       </button>
 
       {open && (
@@ -101,6 +101,8 @@ export function LanguageSwitcher() {
               <button
                 type="button"
                 role="option"
+                // UAT-P2-D3 (A11Y-10, WCAG 3.1.2): each label is spoken in its own language.
+                lang={loc}
                 aria-selected={loc === locale}
                 onClick={() => handleSelect(loc)}
                 style={{

@@ -116,6 +116,8 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
       </Field>
       <Field label="Resource attributes (JSON)" error={resourceError || undefined}>
         <textarea
+          // UAT-P2-D3 (A11Y-15): Field does not wire a raw <textarea>; name it explicitly.
+          aria-label="Resource attributes (JSON)"
           value={resourceJson}
           onChange={(e) => setResourceJson(e.target.value)}
           rows={4}

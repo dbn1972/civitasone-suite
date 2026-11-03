@@ -7,6 +7,7 @@ import { syncMailbox } from "@/lib/sync/engine";
 import { resolveNamespace } from "@/lib/sync/identity";
 import { buildSyncHeaders, setTrustToken } from "@/lib/sync/headers";
 import { flushRequestQueue } from "@/lib/sync/requestQueue";
+import { runWhenPageSettled } from "@/lib/navigation/pageLifecycle";
 
 const MAILBOXES = ["approvals", "notifications", "applications"] as const;
 
@@ -72,10 +73,14 @@ export function SyncProvider() {
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "CIVITASONE_SYNC") flush();
     };
-    flush();
+    // F132: the mount-time replay resolves the session namespace
+    // (GET /api/auth/session). Wait for the document to load and skip it on a
+    // page that is redirecting, so a redirect no longer aborts that call.
+    const cancelMountFlush = runWhenPageSettled(flush);
     window.addEventListener("online", flush);
     navigator.serviceWorker?.addEventListener?.("message", onMessage);
     return () => {
+      cancelMountFlush();
       window.removeEventListener("online", flush);
       navigator.serviceWorker?.removeEventListener?.("message", onMessage);
     };

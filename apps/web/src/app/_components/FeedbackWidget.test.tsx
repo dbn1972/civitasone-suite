@@ -10,6 +10,7 @@ const PAGE_KEY = "civitasone.feedback./";
 describe("FeedbackWidget", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.useFakeTimers();
   });
 

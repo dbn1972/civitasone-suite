@@ -9,13 +9,15 @@ import { MobileNavToggle } from "../MobileNavToggle";
 interface TopBarProps {
   crumb?: ReactNode;
   userName?: string;
+  /** UAT-P2-D3 (A11Y-20, GIGW bilingual): a visible language toggle in the header. Optional; omitted = unchanged. */
+  languageToggle?: ReactNode;
 }
 
 function openSearch() {
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }));
 }
 
-export function TopBar({ crumb, userName }: TopBarProps) {
+export function TopBar({ crumb, userName, languageToggle }: TopBarProps) {
   return (
     <header className="tb">
       <MobileNavToggle />
@@ -39,6 +41,7 @@ export function TopBar({ crumb, userName }: TopBarProps) {
       </button>
       {/* H-08/H-09: reduced from 8 controls to 3; DarkMode + Language moved to AccountMenu */}
       <div className="tb-actions">
+        {languageToggle}
         <ConnectionStatus />
         <NotificationBell />
         <AccountMenu name={userName} />
