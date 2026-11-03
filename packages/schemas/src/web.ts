@@ -111,6 +111,29 @@ export const vendorSummarySchema = z.object({
   address: z.string().optional(),
 });
 
+/**
+ * UAT-P1A-02: every status procurement-service stores on a PO --
+ * po.procurement_pos_status_check (migration 0008: draft, pending, approved,
+ * rejected, gem_placed, dispatched, closed, cancelled) plus the GRN-progress
+ * states the web derives (partial_grn, fully_received). procurement-service
+ * validates GET /v1/procurement/pos against posListResponseSchema, so a value
+ * missing here (e.g. 'closed', written by the amendment consumer on PO
+ * closure) turned the whole list into 400 VALIDATION_FAILED.
+ */
+export const PURCHASE_ORDER_STATUSES = [
+  "draft",
+  "pending",
+  "approved",
+  "rejected",
+  "gem_placed",
+  "dispatched",
+  "partial_grn",
+  "fully_received",
+  "closed",
+  "cancelled",
+] as const;
+export const purchaseOrderStatusSchema = z.enum(PURCHASE_ORDER_STATUSES);
+
 export const purchaseOrderSchema = z.object({
   id: z.string(),
   poNo: z.string().optional(),
@@ -120,7 +143,7 @@ export const purchaseOrderSchema = z.object({
   orderDate: z.string().optional(),
   deliveryDate: z.string().nullable().optional(),
   grnStatus: z.string().optional(),
-  status: z.enum(["draft", "pending", "approved", "dispatched", "partial_grn", "fully_received", "cancelled", "gem_placed"]),
+  status: purchaseOrderStatusSchema,
 });
 
 export const approvalSummarySchema = z.object({
@@ -320,10 +343,12 @@ export const chatTranscriptSchema = z.object({
  * over one legacy row.
  */
 const copilotCitationApiSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().optional(),
-  url: z.string().optional(),
-  score: z.number().optional(),
+  // UAT-P1A-03: legacy rows store explicit nulls (e.g. url: null for an
+  // internal document); null reads as absent instead of failing the screen.
+  id: z.string().nullish().transform((v) => v ?? undefined),
+  title: z.string().nullish().transform((v) => v ?? undefined),
+  url: z.string().nullish().transform((v) => v ?? undefined),
+  score: z.number().nullish().transform((v) => v ?? undefined),
 });
 
 const copilotTurnApiSchema = z.object({
@@ -1491,7 +1516,7 @@ export const PurchaseOrderListItemSchema = z.object({
   orderDate: z.string(),
   deliveryDate: z.string().optional(),
   grnStatus: z.string().optional(),
-  status: z.enum(["draft", "pending", "approved", "dispatched", "partial_grn", "fully_received", "cancelled", "gem_placed"]),
+  status: purchaseOrderStatusSchema,
 });
 export const PurchaseOrderListItemListSchema = z.array(PurchaseOrderListItemSchema);
 
@@ -1503,7 +1528,7 @@ export const PODetailSchema = z.object({
   orderDate: z.string(),
   deliveryDate: z.string().optional(),
   totalAmount: z.number(),
-  status: z.enum(["draft", "approved", "partial_grn", "fully_received", "cancelled"]),
+  status: purchaseOrderStatusSchema,
   lineItems: z.array(z.object({
     itemCode: z.string(),
     itemName: z.string(),
@@ -2706,8 +2731,12 @@ export const UserDetailSchema = z.object({
   roles: z.array(z.string()).default([]),
   mfaEnabled: z.boolean().default(false),
   lastLoginAt: z.string().optional(),
-  status: z.enum(["active", "inactive", "suspended", "pending_verification"]),
-  createdAt: z.string(),
+  // UAT-P1A-04: users.users_status_check (identity 0027) also allows
+  // 'locked' and 'deactivated'; the older literals stay for compatibility.
+  status: z.enum(["active", "inactive", "suspended", "pending_verification", "locked", "deactivated"]),
+  // identity-service GET /identity/users/:id does not return createdAt;
+  // requiring it failed every user detail page. Absent renders as "—".
+  createdAt: z.string().optional(),
   sessions: z.array(z.object({
     id: z.string(),
     ipAddress: z.string().optional(),
@@ -2729,7 +2758,8 @@ export const RoleDetailSchema = z.object({
     allowed: z.boolean(),
   })).default([]),
   userCount: z.number().default(0),
-  createdAt: z.string(),
+  // UAT-P1A-04: policy-service GET /policy/roles/:id does not return createdAt.
+  createdAt: z.string().optional(),
 });
 
 export const SubscriptionSummarySchema = z.object({
@@ -2780,7 +2810,8 @@ export const AdminRoleSummarySchema = z.object({
   description: z.string().optional(),
   isSystemRole: z.boolean().default(false),
   userCount: z.number().default(0),
-  createdAt: z.string(),
+  // UAT-P1A-04: policy-service GET /policy/roles does not return createdAt.
+  createdAt: z.string().optional(),
 });
 export const AdminRoleSummaryListSchema = z.array(AdminRoleSummarySchema);
 

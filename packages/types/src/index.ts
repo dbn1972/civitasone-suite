@@ -1430,7 +1430,7 @@ export type PurchaseOrderListItem = {
   orderDate: string;
   deliveryDate?: string;
   grnStatus?: string;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed";
+  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
 };
 
 export type PODetail = {
@@ -1441,7 +1441,7 @@ export type PODetail = {
   orderDate: string;
   deliveryDate?: string;
   totalAmount: number;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed";
+  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
   lineItems: Array<{
     itemCode: string;
     itemName: string;
@@ -2537,8 +2537,9 @@ export type UserDetail = {
   roles: string[];
   mfaEnabled: boolean;
   lastLoginAt?: string;
-  status: "active" | "inactive" | "suspended" | "pending_verification";
-  createdAt: string;
+  status: "active" | "inactive" | "suspended" | "pending_verification" | "locked" | "deactivated";
+  /** Absent when identity-service does not return it (rendered as "—"). */
+  createdAt?: string;
   sessions: Array<{
     id: string;
     ipAddress?: string;
@@ -2560,7 +2561,8 @@ export type RoleDetail = {
     allowed: boolean;
   }>;
   userCount: number;
-  createdAt: string;
+  /** Absent when policy-service does not return it (rendered as "—"). */
+  createdAt?: string;
 };
 
 export type SessionSummary = {

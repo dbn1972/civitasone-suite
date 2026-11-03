@@ -3640,14 +3640,23 @@ export async function getProcurementGRNById(id: string): Promise<LoaderResult<GR
 
 /** Store Receipt Note for a GRN — inventory-service, gates payment on the three-way-match consumer. */
 export async function getSrnByGrn(grnId: string): Promise<LoaderResult<SrnDetail | null>> {
-  return fetchJson<unknown, SrnDetail | null>(`/api/v1/inventory/srn/${grnId}`, null, {
+  // UAT-P1A-06: inventory-service answers 200 `{ data: null }` for a GRN that has
+  // no SRN yet. That is a valid "none", not a bad payload: mapping it to null
+  // made fetchJson report source:"error", so the page showed "We couldn't load
+  // Store Receipt Note" instead of its "No Store Receipt Note yet" state. The
+  // wrapper keeps "none" (srn: null) apart from a malformed body (mapper null).
+  const result = await fetchJson<unknown, { srn: SrnDetail | null }>(`/api/v1/inventory/srn/${grnId}`, { srn: null }, {
     revalidateSeconds: 15,
     telemetryKey: "inventory.srn.byGrn",
     mapResponse: (p) => {
-      const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
-      return data ? mapSrnDetail(data) : null;
+      if (!isRecord(p) || !("data" in p)) return null;
+      const data = (p as { data: unknown }).data;
+      if (data === null) return { srn: null };
+      const srn = mapSrnDetail(data);
+      return srn ? { srn } : null;
     },
   });
+  return { ...result, data: result.data.srn };
 }
 
 /** Single goods return (item back from issue) awaiting/undergoing QC — inventory-service. */

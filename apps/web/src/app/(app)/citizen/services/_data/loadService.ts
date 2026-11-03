@@ -1,5 +1,6 @@
 import { fetchJson } from "@/app/_data/apiClient";
-import { parsePublishedService, type PublishedServiceRuntime } from "./runtimeApi";
+// Not "./runtimeApi": that module is "use client" and its exports cannot be called here.
+import { parsePublishedService, type PublishedServiceRuntime } from "@/app/_data/publishedService";
 
 export interface LoadServiceResult {
   service: PublishedServiceRuntime | null;
