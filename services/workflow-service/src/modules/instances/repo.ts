@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead, scopedExecute } from "../../shared/db.js";
 import { instances, type InstanceRow, type InstanceInsert, type InstanceView } from "./schema.js";
 
@@ -76,11 +76,42 @@ export type InstanceListRow = InstanceView & {
  * status/version and a raw-UUID name fallback). LEFT JOIN to the same-service
  * definitions table (same module boundary already used by searchInstances).
  */
+/** Who is reading an instance list (UAT #2445 review items 4 and the instance-list follow-up). */
+export type InstanceViewer = { roles: readonly string[]; actorId?: string | undefined };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** super_admin / workflow_admin read every instance; nobody else is unscoped. */
+export function isInstanceAdmin(viewer: InstanceViewer | undefined): boolean {
+  return !!viewer && viewer.roles.some((r) => r === "super_admin" || r === "workflow_admin");
+}
+
+/**
+ * SQL condition on alias `i` (workflow.instances): the viewer participates in the
+ * instance, as the requester or as holder / assignee / completer of one of its tasks
+ * (the same rule as tasks/repo.ts canViewInstance). Shared by search and the plain
+ * list. Empty (no narrowing) for admins and for internal callers that pass no viewer.
+ */
+export function participantFilterSql(viewer: InstanceViewer | undefined): SQL {
+  if (!viewer || isInstanceAdmin(viewer)) return sql``;
+  const actor = viewer.actorId && UUID_RE.test(viewer.actorId) ? viewer.actorId : null;
+  const roleList = viewer.roles.length ? sql.join(viewer.roles.map((r) => sql`${r}`), sql`, `) : sql`NULL`;
+  return sql` AND (
+      ${actor === null ? sql`false` : sql`i.created_by = ${actor}::uuid`}
+      OR EXISTS (
+        SELECT 1 FROM workflow.tasks t
+        WHERE t.instance_id = i.id AND t.tenant_id = i.tenant_id
+          AND (t.role_ref IN (${roleList})${actor === null ? sql`` : sql` OR t.assignee_id = ${actor}::uuid OR t.completed_by = ${actor}::uuid`})
+      )
+    )`;
+}
+
 export async function listByTenantEnriched(
   tenantId: string,
   limit: number,
   offset: number,
   definitionId?: string,
+  viewer?: InstanceViewer,
 ): Promise<InstanceListRow[]> {
   // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — optional per-definition filter so the
   // "View instances" control on a definition detail page shows only that
@@ -94,7 +125,7 @@ export async function listByTenantEnriched(
            d.code AS definition_code, d.name AS definition_name
     FROM workflow.instances i
     LEFT JOIN workflow.definitions d ON d.id = i.definition_id
-    WHERE i.tenant_id = ${tenantId}${defFilter}
+    WHERE i.tenant_id = ${tenantId}${defFilter}${participantFilterSql(viewer)}
     ORDER BY i.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `) as unknown as Array<{

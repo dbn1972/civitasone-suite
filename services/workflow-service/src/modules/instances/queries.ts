@@ -5,14 +5,17 @@ import { INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as defRepo from "../definitions/repo.js";
 
-export async function listInstances(tenantId: string, limit: number, offset: number, definitionId?: string) {
+export async function listInstances(tenantId: string, limit: number, offset: number, definitionId?: string, viewer?: repo.InstanceViewer) {
   // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — definitionId is part of the cache key
   // so a filtered list is never served from (or written to) the unfiltered slot.
-  const key = `list:${limit}:${offset}${definitionId ? `:def:${definitionId}` : ""}`;
+  // UAT #2445 instance-list follow-up: a non-admin page is participant-scoped, so the
+  // viewer (roles + actor) keys the cache; admins share the unscoped slot.
+  const scope = viewer && !repo.isInstanceAdmin(viewer) ? `:v:${[...new Set(viewer.roles)].sort().join("+")}@${viewer.actorId ?? "-"}` : "";
+  const key = `list:${limit}:${offset}${definitionId ? `:def:${definitionId}` : ""}${scope}`;
   return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, key, async () => {
     // GAP-WORKFLOW-LIST-03 — enriched rows (subject/definition/current step/
     // dates) so the list surface can show what each instance is about.
-    const rows = await repo.listByTenantEnriched(tenantId, limit, offset, definitionId);
+    const rows = await repo.listByTenantEnriched(tenantId, limit, offset, definitionId, viewer);
     return {
       data: rows,
       pagination: {
@@ -101,18 +104,7 @@ export async function searchInstances(tenantId: string, filters: SearchFilters, 
 
   // UAT #2445 review item 4: a non-admin only finds instances they participate in
   // (requester, or holder/assignee/completer of one of its tasks), as canViewInstance.
-  if (viewer && !viewer.roles.some((r) => r === "super_admin" || r === "workflow_admin")) {
-    const actor = viewer.actorId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(viewer.actorId) ? viewer.actorId : null;
-    const roleList = viewer.roles.length ? sql.join(viewer.roles.map((r) => sql`${r}`), sql`, `) : sql`NULL`;
-    query = sql`${query} AND (
-      ${actor === null ? sql`false` : sql`i.created_by = ${actor}::uuid`}
-      OR EXISTS (
-        SELECT 1 FROM workflow.tasks t
-        WHERE t.instance_id = i.id AND t.tenant_id = i.tenant_id
-          AND (t.role_ref IN (${roleList})${actor === null ? sql`` : sql` OR t.assignee_id = ${actor}::uuid OR t.completed_by = ${actor}::uuid`})
-      )
-    )`;
-  }
+  query = sql`${query}${repo.participantFilterSql(viewer)}`;
 
   if (filters.assignee) {
     query = sql`${query} AND EXISTS (

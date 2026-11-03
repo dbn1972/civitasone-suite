@@ -104,6 +104,34 @@ describe("instance task list and instance reads are for participants (items 2 an
   });
 });
 
+describe("GET /v1/workflow/instances lists only instances the caller participates in (instance-list follow-up)", () => {
+  const listIds = async (app: FastifyInstance, h: Record<string, string>) => {
+    const res = await app.inject({ method: "GET", url: "/v1/workflow/instances?limit=50", headers: h });
+    expect(res.statusCode).toBe(200);
+    return (res.json() as { data: Array<{ id: string }> }).data.map((r) => r.id);
+  };
+
+  it("a non-participant HR officer does not see the instance in the plain list", async () => {
+    const f = await seedInstance();
+    await withApp(async (app) => {
+      expect(await listIds(app, auth(f.tenant, ["hr_officer", "workflow_user"]))).not.toContain(f.inst);
+    });
+  });
+
+  it("participants and admins do; a cached admin page is never served to a non-participant", async () => {
+    const f = await seedInstance();
+    await withApp(async (app) => {
+      expect(await listIds(app, auth(f.tenant, ["workflow_admin"]))).toContain(f.inst); // warms the unscoped slot
+      expect(await listIds(app, auth(f.tenant, ["hr_officer", "workflow_user"]))).not.toContain(f.inst);
+      expect(await listIds(app, auth(f.tenant, ["super_admin"]))).toContain(f.inst);
+      expect(await listIds(app, auth(f.tenant, ["workflow_user", "manager"]))).toContain(f.inst);
+      expect(await listIds(app, auth(f.tenant, ["workflow_user"], f.submitter))).toContain(f.inst);
+      expect(await listIds(app, auth(f.tenant, ["workflow_user"], f.completer))).toContain(f.inst);
+      expect(await listIds(app, auth(f.tenant, ["workflow_user"], f.assignee))).toContain(f.inst);
+    });
+  });
+});
+
 describe("workbasket tasks resolve over the caller's own pool (item 3)", () => {
   it("a member sees tasks for roles they hold or assigned to them; admins see the whole basket", async () => {
     const f = await seedInstance();

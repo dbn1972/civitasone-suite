@@ -47,7 +47,8 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(
       reply,
       instancesListSchema,
-      await queries.listInstances(ctx.tenantId, q.limit, q.offset, definitionId),
+      // UAT #2445 instance-list follow-up: participants only (admins: all), as search.
+      await queries.listInstances(ctx.tenantId, q.limit, q.offset, definitionId, { roles: ctx.roles, actorId: ctx.actorId }),
     );
   });
 
