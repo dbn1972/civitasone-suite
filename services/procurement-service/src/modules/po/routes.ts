@@ -39,10 +39,12 @@ const PO_REJECT_ROLES = ["procurement_admin", "super_admin"];
  * dropped by the worker (BUDGET_EXCEEDED). Ask finance first (HTTP, outside any
  * transaction) and refuse with a readable 422. If finance cannot be asked, fall
  * through to the async path: the consumer re-checks and retries (never a
- * silent drop on unavailability).
+ * silent drop on unavailability). Returns the reason the synchronous check was
+ * skipped (finance unavailable), or null, so the route can log it once the PO
+ * id is known (security review #2446 (4): fail-open must be visible).
  */
-async function assertPoBudget(ctx: { tenantId: string; correlationId?: string }, body: { items: Array<{ quantity: number; unitPriceMinor: number }>; sanctionRef?: string | undefined }): Promise<void> {
-  if (!body.sanctionRef?.trim()) return;
+async function assertPoBudget(ctx: { tenantId: string; correlationId?: string }, body: { items: Array<{ quantity: number; unitPriceMinor: number }>; sanctionRef?: string | undefined }): Promise<string | null> {
+  if (!body.sanctionRef?.trim()) return null;
   const total = poTotalMinor(body.items);
   const balance = await fetchSanctionBalance(ctx.tenantId, body.sanctionRef, ctx.correlationId);
   if (balance.kind === "not_found") {
@@ -55,6 +57,7 @@ async function assertPoBudget(ctx: { tenantId: string; correlationId?: string },
       `The purchase order total ${rupeesFromMinor(total)} exceeds the ${rupeesFromMinor(balance.available)} still available on the cited budget sanction. Reduce the order or cite a sanction with enough balance.`,
     );
   }
+  return balance.kind === "unavailable" ? balance.reason : null;
 }
 
 /** UAT Phase 2 C2: synchronous 422 for a high-value PO with no sanction reference. */
@@ -141,8 +144,13 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-    await assertPoBudget(ctx, body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
+    const budgetSkipped = await assertPoBudget(ctx, body);
+    const accepted = await commands.createPo(ctx, body);
+    // Review #2446 (4): the synchronous sanction-balance check failed open
+    // (finance unreachable) — the consumer will re-check. Log only the PO id,
+    // correlation id and the transport reason (no PII, no amounts).
+    if (budgetSkipped) req.log.warn({ poId: accepted.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+    return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 
   // F102: direct reject of a PO awaiting approval (draft / pending ->
@@ -230,8 +238,13 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     assertPoSanction(body);
     await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
     await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-    await assertPoBudget(ctx, body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
+    const budgetSkipped = await assertPoBudget(ctx, body);
+    const accepted = await commands.createPo(ctx, body);
+    // Review #2446 (4): the synchronous sanction-balance check failed open
+    // (finance unreachable) — the consumer will re-check. Log only the PO id,
+    // correlation id and the transport reason (no PII, no amounts).
+    if (budgetSkipped) req.log.warn({ poId: accepted.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+    return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 
   // Alias: GET /v1/procurement/purchase-orders/:id -> same as GET /pos/:id (REST compat)

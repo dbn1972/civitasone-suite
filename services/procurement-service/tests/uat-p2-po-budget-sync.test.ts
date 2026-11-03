@@ -111,12 +111,28 @@ describe("POST create: synchronous sanction-balance check", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("finance unreachable -> accepted on the async path (the consumer re-checks and retries)", async () => {
+  it("finance unreachable -> accepted on the async path, with a warn log naming the PO id and reason only", async () => {
     stubServices("down");
     const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
+    const lines: string[] = [];
+    const write = process.stdout.write.bind(process.stdout);
+    const spy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown, ...rest: unknown[]) => {
+      lines.push(String(chunk));
+      return (write as (...a: unknown[]) => boolean)(chunk, ...rest);
+    }) as typeof process.stdout.write);
     const res = await post("/v1/procurement/pos", 150050);
+    spy.mockRestore();
     expect(res.statusCode).toBe(202);
     expect(publish).toHaveBeenCalledTimes(1);
+    const warn = lines.map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } })
+      .find((l) => l?.msg === "po budget pre-check skipped: finance-service unavailable");
+    expect(warn).toBeTruthy();
+    expect(warn!.level).toBe(40);
+    expect(warn!.poId).toBe(res.json().id);
+    expect(String(warn!.reason)).toContain("finance-service unreachable");
+    // No PO content (vendor, amounts, items) in the log line.
+    expect(JSON.stringify(warn)).not.toContain(VENDOR);
+    expect(JSON.stringify(warn)).not.toContain("150050");
   });
 
   it("a PO of ₹1,000 or less with no sanction does not call finance", async () => {

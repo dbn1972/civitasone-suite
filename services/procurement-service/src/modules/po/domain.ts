@@ -1,3 +1,4 @@
+import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
 export class DomainError extends Error {
   constructor(public code: string, message: string) {
     super(`[${code}] ${message}`);
@@ -43,7 +44,7 @@ export function assertPoRejectable(status: string): void {
 }
 
 /** #14: a PO above this value (Rs 1,000 in paise) must cite a budget sanction (sanctionRef). */
-export const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
+export { SANCTION_REQUIRED_ABOVE_MINOR };
 
 /** Total PO value in paise (BigInt — never a float). */
 export function poTotalMinor(items: ReadonlyArray<{ quantity: number; unitPriceMinor: number | string | bigint }>): bigint {

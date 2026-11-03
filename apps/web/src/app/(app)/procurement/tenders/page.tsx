@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementTenders } from "../../../_data/loaders";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { tenderBidWindow } from "./bidWindow";
 
@@ -81,7 +81,9 @@ export default async function TendersPage(
   const awarded = tenders.filter((t) => t.status === "awarded").length;
   const singleSource = tenders.filter((t) => t.type === "single_source").length;
 
-  const today = todayIST();
+  // Review #2446 (8): the bid window compares the closing instant with "now"
+  // (bidWindow.ts); IST is only used to read a date-only close and to display.
+  const now = new Date();
 
   const typeFilter = searchParams?.type ?? "";
   const statusFilter = searchParams?.status ?? "";
@@ -96,7 +98,7 @@ export default async function TendersPage(
     // GAP-PROCUREMENT-TENDERS-03 / UAT Phase 2 C4: the window is open only while
     // the tender is published and before its bid-close; drafts are not yet
     // published and evaluated / awarded / cancelled tenders are closed.
-    const bidWindow = tenderBidWindow(t.status, t.bidClosingDate, today);
+    const bidWindow = tenderBidWindow(t.status, t.bidClosingDate, now);
     return {
       id: t.id,
       tenderNo: t.tenderNo,

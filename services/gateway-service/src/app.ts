@@ -29,6 +29,7 @@ import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
+import { isInternalServicePath } from "./internal-path.js";
 import {
   BILLING_WEBHOOK_PREFIX,
   TELEPHONY_WEBHOOK_PREFIX,
@@ -156,11 +157,15 @@ async function proxyHandler(
       .send({ code: "NOT_FOUND", message: "no upstream for path" });
   }
 
-  // Service-to-service-only surface: workflow-service internal lookups
-  // (e.g. POST /v1/workflow/internal/open-task-refs, called by hrms-service
-  // directly with the service secret) must never be reachable from external
-  // traffic through this proxy, whatever credentials the caller presents.
-  if (/^\/api\/v1\/workflow\/internal(\/|$)/i.test(pathname)) {
+  // Service-to-service-only surface: every service's internal route group
+  // (e.g. POST /v1/workflow/internal/open-task-refs, GET /v1/procurement/
+  // internal/vendor-names, /v1/payroll/internal/*, /v1/hrms/internal/*,
+  // /identity/internal/*) is called service-to-service directly with the
+  // service secret and must never be reachable from external traffic through
+  // this proxy, whatever credentials the caller presents. Generic: an
+  // `internal` segment right after the service prefix, versioned or not
+  // (UAT Phase 2 security review #2446 (3); was workflow-only).
+  if (isInternalServicePath(pathname)) {
     return reply
       .code(403)
       .send({ code: "FORBIDDEN", message: "internal endpoint", correlationId: req.id });

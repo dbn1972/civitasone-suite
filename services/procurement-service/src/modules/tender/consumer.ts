@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -17,9 +18,8 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
-// C2: award value above this (Rs 1,000 in paise) must carry a sanctionRef,
-// matching po/consumer's SANCTION_REQUIRED_ABOVE_MINOR gate.
-const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
+// C2: award value above this (Rs 1,000 in paise) must carry a sanctionRef — the
+// same shared threshold as the PO gate.
 
 /**
  * G-ASYNC-1: persist this command's terminal outcome so

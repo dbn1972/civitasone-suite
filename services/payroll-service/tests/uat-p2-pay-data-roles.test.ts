@@ -56,7 +56,8 @@ afterAll(async () => {
 });
 
 const get = (url: string, roles: string[]) => app.inject({ method: "GET", url, headers: auth(roles) });
-const PAY_DATA_URLS = ["/v1/payroll/salary-slips", "/v1/payroll/structures", "/v1/payroll/pensioners", `/v1/payroll/pensioners/${randomUUID()}`];
+// Review #2446 (1): salary corrections (per-employee component old/new + arrears) too.
+const PAY_DATA_URLS = ["/v1/payroll/salary-slips", "/v1/payroll/structures", "/v1/payroll/pensioners", `/v1/payroll/pensioners/${randomUUID()}`, "/v1/payroll/corrections", `/v1/payroll/corrections?employeeId=${COLLEAGUE}`];
 
 describe("per-employee pay data is payroll/HR only", () => {
   for (const roles of [["finance_officer"], ["finance_admin"], ["finance_officer", "budget_officer"]]) {
@@ -82,7 +83,7 @@ describe("per-employee pay data is payroll/HR only", () => {
 
   for (const role of ["payroll_admin", "payroll_officer", "hr_admin"]) {
     it(`${role}: 200 on the slip register, structures, pensioners and any slip`, async () => {
-      for (const url of ["/v1/payroll/salary-slips", "/v1/payroll/structures", "/v1/payroll/pensioners", `/v1/payroll/slips/${OTHER_SLIP}`]) {
+      for (const url of ["/v1/payroll/salary-slips", "/v1/payroll/structures", "/v1/payroll/pensioners", "/v1/payroll/corrections", `/v1/payroll/slips/${OTHER_SLIP}`]) {
         expect((await get(url, [role])).statusCode, url).toBe(200);
       }
     });

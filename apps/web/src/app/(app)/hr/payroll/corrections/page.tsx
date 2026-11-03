@@ -3,7 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_PAY_DATA_ROLES } from "@/lib/auth/payrollRunRoles";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { CreateCorrectionForm } from "./CreateCorrectionForm";
@@ -45,11 +46,12 @@ export default async function CorrectionsPage() {
   // admits employee/manager too -- they get an explanation, not a failed
   // fetch of every employee's retroactive pay changes, and no form.
   const roles = getSessionRoles();
-  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
+  // UAT Phase 2 security review: corrections are per-employee pay data (payroll + HR only).
+  if (!roles.some((r) => PAYROLL_PAY_DATA_ROLES.includes(r))) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
-        <PermissionDenied module="salary corrections" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+        <PermissionDenied module="salary corrections" requiredRoles={PAYROLL_PAY_DATA_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
     );
   }
