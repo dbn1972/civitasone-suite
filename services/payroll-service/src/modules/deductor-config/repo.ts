@@ -2,7 +2,7 @@
  * UAT P3 b19 D-15: where the TDS deductor identity comes from.
  *
  *   1. the tenant configuration: payroll.payroll_settings.deductor_name /
- *      deductor_tan / deductor_pan (migration 0163), set through
+ *      deductor_tan / deductor_pan (migration 0166), set through
  *      PUT /v1/payroll/settings/deductor (audited);
  *   2. only when the tenant has none of the three: the deployment-wide
  *      EMPLOYER_NAME / EMPLOYER_TAN / EMPLOYER_PAN env (a single-deductor
