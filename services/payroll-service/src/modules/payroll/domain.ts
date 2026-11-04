@@ -114,6 +114,12 @@ export interface SlipInput {
    */
   fyPaidToDate?: { grossMinor: bigint; months: number; unrecordedMonths?: number; unrecordedLopMinor?: bigint };
   /**
+   * PR #2459 delta review SF1: the caller (the run) already decided which
+   * months are presumed -- opening YTD coverage, previous employer, go-live
+   * boundary -- so a declared previous-employer salary does not zero them again.
+   */
+  presumedMonthsAuthoritative?: boolean;
+  /**
    * T-STAT M-NPS (F04): the Basic + DA part of the arrears paid on this slip
    * (a recovery counts negative). Added to the NPS base only: NPS employee 10%
    * / employer 14% fall on arrears of pay and DA as on pay itself.
@@ -143,7 +149,7 @@ export interface SlipInput {
    * FY month or the separation month. Omitted: 10000 (no ceiling beyond the
    * protected-net floor -- also the tenant value when
    * payroll_settings.deduction_cap_applies is false). Tenant value:
-   * payroll.payroll_settings.max_deduction_share_bps (migration 0164).
+   * payroll.payroll_settings.max_deduction_share_bps (migration 0165).
    */
   maxDeductionShareBps?: number;
   /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
@@ -691,7 +697,7 @@ export function computeSlip(input: SlipInput): SlipResult {
   const projected = fyPaidToDate != null && monthsRemaining != null;
   const remaining = BigInt(monthsRemaining != null && monthsRemaining > 1 ? monthsRemaining : 1);
   const declaredPrevSalary = (declaration.prevEmployerSalaryMinor ?? 0n) > 0n;
-  const unrecorded = projected && !declaredPrevSalary ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
+  const unrecorded = projected && (!declaredPrevSalary || input.presumedMonthsAuthoritative === true) ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
   const unrecordedLop = unrecorded > 0n ? (fyPaidToDate?.unrecordedLopMinor ?? 0n) : 0n;
   const annualGross = projected
     ? fyPaidToDate.grossMinor + regularGrossMinor * unrecorded - unrecordedLop
@@ -1048,6 +1054,12 @@ export function presumptionBoundaryMonth(goLiveDate: string | null | undefined, 
   return live && live > first ? live : first;
 }
 
+/** The month after a YYYY-MM month. Pure. */
+export function nextMonthOf(month: string): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
 export function splitUnrecordedMonths(unrecorded: readonly string[], boundaryMonth: string, hasOpeningYtd: boolean): { presumed: string[]; gaps: string[] } {
   if (hasOpeningYtd) return { presumed: [], gaps: [...unrecorded] };
   return { presumed: unrecorded.filter((m) => m < boundaryMonth), gaps: unrecorded.filter((m) => m >= boundaryMonth) };
@@ -1065,7 +1077,7 @@ export interface TdsReviewItem {
 
 /**
  * The per-employee TDS / deduction signals of a run, from the slip columns
- * (migration 0164). Acknowledgement is required for presumed months and for a
+ * (migration 0165). Acknowledgement is required for presumed months and for a
  * TDS shortfall in the last FY month or the separation month (no later
  * true-up exists); an excess and a recovery deferral are shown only. Pure.
  */
@@ -1102,8 +1114,8 @@ export function tdsReviewText(i: TdsReviewItem): string {
       return `${i.employeeNo}: TDS deducted this FY exceeds the estimated liability by ${rs}; no TDS is deducted this month. The excess is refundable to the employee through the income-tax return`;
     case "shortfall":
       return i.finalMonth
-        ? `${i.employeeNo}: ${rs} of TDS cannot be deducted within the deduction limit and cannot be recovered through payroll this FY -- collect separately or adjust before Form 16`
-        : `${i.employeeNo}: ${rs} of TDS is not deducted this month (deduction limit); the next month s.192 true-up recomputes it over the months left in the FY, within the same limit`;
+        ? `${i.employeeNo}: ${rs} of TDS cannot be deducted within the deduction limit (Code on Wages 2019 s.18(2)) and cannot be recovered through payroll this FY -- collect separately or adjust before Form 16`
+        : `${i.employeeNo}: ${rs} of TDS is not deducted this month (deduction limit, Code on Wages 2019 s.18(2)); the next month s.192 true-up recomputes it over the months left in the FY, within the same limit`;
     case "recovery_deferred":
       return `${i.employeeNo}: ${rs} of loan / arrear recovery is deferred to keep total deductions within the limit`;
   }

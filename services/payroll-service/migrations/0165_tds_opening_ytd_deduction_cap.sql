@@ -1,4 +1,4 @@
--- 0164_tds_opening_ytd_deduction_cap.sql
+-- 0165_tds_opening_ytd_deduction_cap.sql
 --
 -- UAT T-PERIOD D-02b (2026-11-04, CRITICAL) and the PR #2459 review (ERP-head
 -- decisions 2026-11-05). The March 2027 s.192 true-up deducted TDS Rs 2,70,847
@@ -11,8 +11,11 @@
 --      source prior_employer income and TDS of a previous employer in the FY
 --                            (Form 12B, s.192(2)), with the employer name and TAN.
 --    Maker-checker: entered_by records it, a different approved_by approves it;
---    only approved rows are used. One live (pending/approved) row per employee,
---    FY and source. Every change is audited by the consumer.
+--    only approved rows are used. A correction is a NEW version (supersedes_id)
+--    that, once approved, marks the old one superseded (kept). One approved and
+--    one pending row per employee, FY, source and -- for prior_employer --
+--    employer (TAN, else name): several previous employers in a year are fine.
+--    Every change is audited by the consumer.
 -- 2. payroll.payroll_settings:
 --      payroll_go_live_date     TDS is presumed (flagged, acknowledged) only for
 --                               in-service months BEFORE the later of this date
@@ -31,11 +34,16 @@
 --    TDS deducted above the liability, TDS not deducted because of the cap
 --    (and whether it was the last FY / separation month, when payroll cannot
 --    recover it), recoveries deferred by the cap.
+-- 4. payroll.payroll_arrears.carried_from_run_id: an arrear (overpayment)
+--    recovery the cap deferred is re-raised as a new approved ARREAR_RECOVERY
+--    row (source carry_forward) for the next month, linked to the run that
+--    deferred it; the original rows are recovered only by what was deducted.
 --
 -- Additive and idempotent; old code ignores the new columns and table.
 --
 -- Rollback:
 --   DROP TABLE IF EXISTS payroll.payroll_opening_ytd;
+--   ALTER TABLE payroll.payroll_arrears DROP COLUMN IF EXISTS carried_from_run_id;
 --   ALTER TABLE payroll.payroll_settings DROP CONSTRAINT IF EXISTS payroll_settings_max_deduction_share_chk;
 --   ALTER TABLE payroll.payroll_settings DROP COLUMN IF EXISTS max_deduction_share_bps,
 --     DROP COLUMN IF EXISTS deduction_cap_applies, DROP COLUMN IF EXISTS payroll_go_live_date;
@@ -76,6 +84,7 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_opening_ytd (
   prior_employer_tan  varchar(10),
   note                text         NOT NULL,
   status              varchar(16)  NOT NULL DEFAULT 'pending',
+  supersedes_id       uuid,
   entered_by          uuid         NOT NULL,
   approved_by         uuid,
   decided_at          timestamptz,
@@ -84,7 +93,7 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_opening_ytd (
   updated_at          timestamptz  NOT NULL DEFAULT now(),
   version             integer      NOT NULL DEFAULT 1,
   CONSTRAINT payroll_opening_ytd_source_chk CHECK (source IN ('pre_go_live', 'prior_employer')),
-  CONSTRAINT payroll_opening_ytd_status_chk CHECK (status IN ('pending', 'approved', 'rejected')),
+  CONSTRAINT payroll_opening_ytd_status_chk CHECK (status IN ('pending', 'approved', 'rejected', 'superseded')),
   CONSTRAINT payroll_opening_ytd_fy_chk CHECK (fy ~ '^[0-9]{4}-[0-9]{2}$'),
   CONSTRAINT payroll_opening_ytd_amounts_chk CHECK (salary_minor >= 0 AND tds_minor >= 0 AND months BETWEEN 0 AND 11),
   CONSTRAINT payroll_opening_ytd_note_chk CHECK (length(btrim(note)) >= 10),
@@ -93,10 +102,17 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_opening_ytd (
     (status = 'pending' AND approved_by IS NULL) OR (status <> 'pending' AND approved_by IS NOT NULL AND approved_by <> entered_by))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_payroll_opening_ytd_live
-  ON payroll.payroll_opening_ytd (tenant_id, employee_id, fy, source) WHERE status <> 'rejected';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payroll_opening_ytd_approved
+  ON payroll.payroll_opening_ytd (tenant_id, employee_id, fy, source, (COALESCE(prior_employer_tan, lower(prior_employer_name), '')))
+  WHERE status = 'approved';
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payroll_opening_ytd_pending
+  ON payroll.payroll_opening_ytd (tenant_id, employee_id, fy, source, (COALESCE(prior_employer_tan, lower(prior_employer_name), '')))
+  WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS ix_payroll_opening_ytd_tenant_fy
   ON payroll.payroll_opening_ytd (tenant_id, fy, status);
+
+ALTER TABLE payroll.payroll_arrears
+  ADD COLUMN IF NOT EXISTS carried_from_run_id uuid;
 
 ALTER TABLE payroll.payroll_opening_ytd ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll.payroll_opening_ytd FORCE ROW LEVEL SECURITY;

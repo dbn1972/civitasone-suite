@@ -329,7 +329,7 @@ export const updateSettingsBody = z.object({
   // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant maker != checker switch for
   // salary revisions (default ON when never set).
   salaryRevisionSecondApprover: z.boolean().optional(),
-  // UAT T-PERIOD D-02b / PR #2459 review (migration 0164): ceiling on a slip
+  // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): ceiling on a slip
   // total deductions, TDS and recoveries included, as a share of the wages
   // earned (bps). Omitted keeps the stored value (default 5000 = 50%, Code on
   // Wages 2019 s.18(2)).

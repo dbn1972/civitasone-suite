@@ -178,7 +178,28 @@ export function halfYearCredit(kind: "EL" | "HPL", half: Pick<HalfYear, "start" 
 
 export interface YearEndAlloc { id: string; leaveTypeId: string; label: string; totalDays: number; balanceDays: number }
 export interface YearEndLeaveType { id: string; code: string; maxDays: number }
-export interface YearEndEmployee { id: string; employeeNo: string; dateOfJoining: string | null; employeeType: string; status: string; dateOfBirth?: string | null }
+export interface YearEndEmployee {
+  id: string; employeeNo: string; dateOfJoining: string | null; employeeType: string; status: string; dateOfBirth?: string | null;
+  /** Age of superannuation for this employee (tenant config per employee type); null / absent = not superannuated (e.g. contract). */
+  superannuationAge?: number | null;
+  /** Last working day of an approved / completed separation (resignation, VRS, ...), if any. */
+  separationDate?: string | null;
+}
+
+/** Default superannuation ages per employee type (contract: not superannuated). */
+export const DEFAULT_SUPERANNUATION_AGES: Readonly<Record<string, number>> = { permanent: 60, temporary: 60, deputation: 60 };
+
+/**
+ * The exit date that ends the credit (Rule 27(2)(a)): the earlier of
+ * superannuation (FR 56, at the employee age) and the last working day of a
+ * separation (resignation / VRS ...). Pure.
+ */
+export function exitDateOf(e: Pick<YearEndEmployee, "dateOfBirth" | "superannuationAge" | "separationDate">): string | null {
+  const sup = e.superannuationAge != null ? superannuationDate(e.dateOfBirth ?? null, e.superannuationAge) : null;
+  const sep = e.separationDate ? e.separationDate.slice(0, 10) : null;
+  if (sup && sep) return sup < sep ? sup : sep;
+  return sup ?? sep;
+}
 
 export type YearEndAction = "carry_forward" | "cap_lapse" | "credit" | "lapse";
 export interface YearEndEntry { action: YearEndAction; days: number; allocId: string | null; note?: string }
@@ -223,9 +244,11 @@ export function planEmployeeYearEnd(input: {
   const ops: YearEndOp[] = [];
   if (!IN_SERVICE_STATUSES.has(employee.status)) return ops;
   if (employee.dateOfJoining && employee.dateOfJoining.slice(0, 10) > half.end) return ops;
-  const exitDate = superannuationDate(employee.dateOfBirth ?? null);
-  if (exitDate && exitDate < half.start) return ops; // superannuated before the half-year
   const ccs = CCS_LEAVE_TYPES.has(employee.employeeType);
+  // Delta review SF4: superannuation only for the types configured for it (not
+  // contract staff), at their own age; a separation (resignation...) also ends it.
+  const exitDate = exitDateOf(employee);
+  if (exitDate && exitDate < half.start) return ops; // left service before the half-year
   const label = half.leaveYearLabel;
   // Review SF5(d): an allocation for a LATER leave year (e.g. an FY-labelled EL
   // 2027-28 row typed in by HR) would double-allocate beside this one.
@@ -243,7 +266,10 @@ export function planEmployeeYearEnd(input: {
     const target = allocs.find((a) => a.leaveTypeId === t.id && a.label.trim() === label) ?? null;
     const entries: YearEndEntry[] = [];
     const warnings: string[] = [...futureWarnings(t.id)];
-    if (credit.basis === "pro_rata" && exitDate && exitDate <= half.end) warnings.push(`retires on ${exitDate} (FR 56): credit ${credit.days} day(s) for ${credit.completedMonths ?? 0} completed month(s), Rule 27(2)(a)`);
+    if (credit.basis === "pro_rata" && exitDate && exitDate <= half.end) {
+      const why = employee.separationDate && exitDate === employee.separationDate.slice(0, 10) ? "leaves service (separation)" : "retires (FR 56)";
+      warnings.push(`${why} on ${exitDate}: credit ${credit.days} day(s) for ${credit.completedMonths ?? 0} completed month(s), Rule 27(2)(a)`);
+    }
     let opening: number;
     let baseTotal: number;
     let source: YearEndAlloc | null = null;
@@ -312,6 +338,11 @@ export function planEmployeeYearEnd(input: {
  * Rule 27(3): dies non days of the service book (entry_type dies_non) inside
  * [from, to] -- "from=YYYY-MM-DD;to=YYYY-MM-DD" spans are clipped to the
  * window; a "days=<n>" entry counts when its effective date is inside it. Pure.
+ * KNOWN LIMITATION (delta review SF4): the service book has no structured
+ * from / to / days columns (entry_type, effective_date, free-text description
+ * only), so the span is read from the description, the same convention as
+ * pension/engine.ts parseNonQualifyingDays. Follow-up: structured dies-non
+ * fields on hrms_service_book_entries.
  */
 export function diesNonDaysWithin(entries: Array<{ entryType: string; effectiveDate: string; description: string }>, from: string, to: string): number {
   let days = 0;

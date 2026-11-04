@@ -60,7 +60,7 @@ describe("RunApprovalReviewPanel", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><RunApprovalReviewPanel runId="r1" /></NextIntlClientProvider>);
     const region = await screen.findByRole("region", { name: /review before approval/i });
     expect(region).toHaveTextContent(/TP-EMP-01: 9 earlier month\(s\) with no slip and no opening YTD/);
-    expect(region).toHaveTextContent(/TP-EMP-02: ₹5,000\.00 of TDS not deducted this month \(deduction limit\)\. This cannot be recovered through payroll this FY -- collect separately or adjust before Form 16\./);
+    expect(region).toHaveTextContent(/TP-EMP-02: ₹5,000\.00 of TDS not deducted this month \(deduction limit, Code on Wages 2019 s\.18\(2\)\)\. This cannot be recovered through payroll this FY -- collect separately or adjust before Form 16\./);
     expect(region).toHaveTextContent(/TP-EMP-03: TDS deducted this year exceeds the estimated tax by ₹67,711\.00/);
   });
 

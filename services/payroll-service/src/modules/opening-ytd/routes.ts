@@ -2,7 +2,7 @@
  * PR #2459 review B1: opening YTD (pre-go-live / previous employer) per
  * employee and FY -- the authoritative s.192 input.
  *   GET   /v1/payroll/opening-ytd?employeeId=&fy=
- *   POST  /v1/payroll/opening-ytd               (maker; 202)
+ *   POST  /v1/payroll/opening-ytd               (maker; 202; supersedesId = correction of an approved one)
  *   PATCH /v1/payroll/opening-ytd/:id/approve   (checker != maker; 202)
  *   PATCH /v1/payroll/opening-ytd/:id/reject    (checker != maker; 202)
  */
@@ -13,7 +13,8 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import * as commands from "./commands.js";
 import { createOpeningYtdBody, decideOpeningYtdBody, listOpeningYtdQuery, idParam } from "./validators.js";
 
-const READ_ROLES = ["payroll_admin", "payroll_officer", "hr_admin", "super_admin"];
+// Delta review nit: aligned with the web card (payroll staff only).
+const READ_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const MAKER_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const CHECKER_ROLES = ["payroll_admin", "super_admin"];
 
@@ -27,7 +28,7 @@ export async function openingYtdRoutes(app: FastifyInstance): Promise<void> {
       id: r.id, employeeId: r.employeeId, fy: r.fy, source: r.source, months: r.months,
       salaryMinor: r.salaryMinor.toString(), tdsMinor: r.tdsMinor.toString(),
       priorEmployerName: r.priorEmployerName, priorEmployerTan: r.priorEmployerTan, note: r.note,
-      status: r.status, enteredBy: r.enteredBy, approvedBy: r.approvedBy, decidedAt: r.decidedAt?.toISOString() ?? null, decisionNote: r.decisionNote,
+      status: r.status, supersedesId: r.supersedesId, enteredBy: r.enteredBy, approvedBy: r.approvedBy, decidedAt: r.decidedAt?.toISOString() ?? null, decisionNote: r.decisionNote,
     })) });
   });
 

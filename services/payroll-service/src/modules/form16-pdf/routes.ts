@@ -58,11 +58,13 @@ th,td{border:1px solid #333;padding:6px 8px} .amount{text-align:right}
 <tr><td>Q2 (Jul–Sep)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q2)}</td></tr>
 <tr><td>Q3 (Oct–Dec)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q3)}</td></tr>
 <tr><td>Q4 (Jan–Mar)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q4)}</td></tr>
+${a.preGoLiveTds > 0 ? `<tr><td>Before go-live here (approved opening YTD)</td><td class="amount">₹ ${inr(a.preGoLiveTds)}</td></tr>` : ""}
 <tr><td><strong>Total</strong></td><td class="amount"><strong>₹ ${inr(a.totalTdsDeposited)}</strong></td></tr>
 </table>
 <h2>Part B — Details of Salary Paid and Tax Deducted (${esc(b.regime)} regime)</h2>
 <table>
 ${row("Gross Salary", b.grossSalary)}
+${(b.prevEmployers ?? []).map((p) => row(`Previous employer (Form 12B, s.192(2)): ${esc(p.name)}${p.tan ? ` (${esc(p.tan)})` : ""} -- salary`, p.salary) + row(`Previous employer TDS: ${esc(p.name)}`, p.tds)).join("")}
 ${row("Standard Deduction (Sec 16)", b.standardDeduction)}
 ${row("HRA Exemption (Sec 10(13A))", b.hraExempt)}
 ${row("Deduction 80C", b.section80c)}

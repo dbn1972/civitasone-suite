@@ -18,7 +18,7 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, nextMonthOf, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
 import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
@@ -386,7 +386,7 @@ export async function resolveArrearsReviewThresholdBps(tx: typeof db, tenantId: 
  * scopedRead, so the wrapper sets the GUC before this reads.
  */
 /**
- * UAT T-PERIOD D-02b / PR #2459 review (migration 0164): the tenant deduction
+ * UAT T-PERIOD D-02b / PR #2459 review (migration 0165): the tenant deduction
  * ceiling (bps of wages earned; default 50%, Code on Wages 2019 s.18(2)),
  * whether it applies at all (deduction_cap_applies, default true), and the
  * payroll go-live date (TDS presumption boundary; NULL = first slip only).
@@ -440,7 +440,11 @@ export async function resolveOpeningYtdTx(tx: typeof db, tenantId: string, emplo
   for (const r of rows) {
     const entry = result.get(r.employee_id) ?? {};
     const part = { salaryMinor: BigInt(r.salary), tdsMinor: BigInt(r.tds), months: Number(r.months) };
-    if (r.source === "pre_go_live") entry.preGoLive = part; else entry.priorEmployer = part;
+    // Delta review SF2: several previous employers in an FY are summed (Form 12B each).
+    if (r.source === "pre_go_live") entry.preGoLive = part;
+    else entry.priorEmployer = entry.priorEmployer
+      ? { salaryMinor: entry.priorEmployer.salaryMinor + part.salaryMinor, tdsMinor: entry.priorEmployer.tdsMinor + part.tdsMinor, months: 0 }
+      : part;
     result.set(r.employee_id, entry);
   }
   return result;
@@ -2262,6 +2266,8 @@ async function processPayrollRun(
     const firstSlipMonthByEmployee = await resolveFirstSlipMonthsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds);
     const openingYtdByEmployee = await resolveOpeningYtdTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStr);
     const fyGaps: Array<{ employee: string; months: string[] }> = [];
+    const openingMismatch: Array<{ employee: string; openingMonths: number; preGoLiveMonths: number }> = [];
+    const arrearRecoveryCarried: Array<{ employee: string; employeeId: string; requestedMinor: string; recoveredMinor: string; carriedMinor: string; toPeriod: string }> = [];
     const recoveryDeferred: Array<{ employee: string; employeeId: string; deferredMinor: string }> = [];
     // UAT T-PERIOD D-02b: TDS deducted above the FY liability / TDS held back by the net-pay cap.
     const tdsExcess: Array<{ employee: string; employeeId: string; liabilityMinor: string; deductedMinor: string; excessMinor: string }> = [];
@@ -2519,7 +2525,18 @@ async function processPayrollRun(
       const paid = fyPaidByEmployee.get(emp.id) ?? { grossMinor: 0n, months: 0, recordedMonths: [] };
       const unrecordedAll = unrecordedFyMonthList(fyStart, p.month, emp.dateOfJoining, paid.recordedMonths);
       const boundary = presumptionBoundaryMonth(tdsSettings.goLiveDate, firstSlipMonthByEmployee.get(emp.id) ?? null, p.month);
-      const split = splitUnrecordedMonths(unrecordedAll, boundary, opening != null || prevSalaryMinor > 0n);
+      // Delta review SF1: a pre-go-live opening YTD covers only the months it
+      // states (the earliest pre-boundary months); the rest are still presumed
+      // (acknowledged). A previous-employer opening alone never disables the
+      // presumption for this employer months. The legacy tax-declaration
+      // previous salary (T-STAT SF1) keeps replacing the estimate.
+      const legacyDeclaredPrev = !priorEmployer && (decl?.prevEmployerSalaryMinor ?? 0n) > 0n;
+      const rawSplit = splitUnrecordedMonths(unrecordedAll, boundary, legacyDeclaredPrev);
+      const covered = preGoLive ? Math.min(preGoLive.months, rawSplit.presumed.length) : 0;
+      const split = { presumed: rawSplit.presumed.slice(covered), gaps: rawSplit.gaps };
+      if (preGoLive && preGoLive.months !== rawSplit.presumed.length) {
+        openingMismatch.push({ employee: emp.employeeNo ?? emp.id, openingMonths: preGoLive.months, preGoLiveMonths: rawSplit.presumed.length });
+      }
       let unrecordedLopMinor = 0n;
       {
         const ledger = unrecordedLopByEmployee.get(emp.id);
@@ -2534,7 +2551,7 @@ async function processPayrollRun(
         }
       }
       if (split.presumed.length > 0) unrecordedEstimated.push({ employee: emp.employeeNo ?? emp.id, months: split.presumed });
-      if (split.gaps.length > 0 && opening == null) fyGaps.push({ employee: emp.employeeNo ?? emp.id, months: split.gaps });
+      if (split.gaps.length > 0 && !legacyDeclaredPrev) fyGaps.push({ employee: emp.employeeNo ?? emp.id, months: split.gaps });
       const fyPaidForTds = {
         grossMinor: paid.grossMinor + (preGoLive?.salaryMinor ?? 0n), months: paid.months + (preGoLive?.months ?? 0),
         unrecordedMonths: split.presumed.length, unrecordedLopMinor,
@@ -2591,6 +2608,7 @@ async function processPayrollRun(
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
         fyPaidToDate: fyPaidForTds,
+        presumedMonthsAuthoritative: true,
         tdsFlags: { presumedMonths: split.presumed.length, finalMonth: finalTdsMonth },
         arrearPensionBaseMinor: earned.arrearPensionBaseMinor,
         protectedNetFloorMinor,
@@ -2614,6 +2632,27 @@ async function processPayrollRun(
       }
       if (result.recoveryCarryForwardMinor > 0n) {
         recoveryDeferred.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, deferredMinor: result.recoveryCarryForwardMinor.toString() });
+      }
+      // Delta review B3: an arrear (overpayment) recovery trimmed by the deduction
+      // limit / protected net pay is NOT lost: the part not deducted is re-raised
+      // as an approved ARREAR_RECOVERY row for the next month (source
+      // carry_forward, linked to this run), collected there under the same rules
+      // (statutory first, then recoveries, within the cap). The collected source
+      // rows are closed by this run; together they recover exactly the total.
+      {
+        const requested = adHoc.filter((c) => c.code === "ARREAR_RECOVERY").reduce((s, c) => s + c.amountMinor, 0n);
+        const recovered = result.deductions.filter((d) => d.code === "ARREAR_RECOVERY").reduce((s, d) => s + d.amountMinor, 0n);
+        const carried = requested - recovered;
+        if (carried > 0n) {
+          const toPeriod = nextMonthOf(p.month);
+          await tx.execute(sql`
+            INSERT INTO payroll.payroll_arrears (tenant_id, employee_id, component_code, from_period, to_period, old_amount_minor, new_amount_minor, difference_minor, reason, status, source, carried_from_run_id, created_by)
+            VALUES (${p.tenantId}::uuid, ${emp.id}::uuid, ${"ARREAR_RECOVERY"}, ${toPeriod}, ${toPeriod}, 0, 0, ${carried},
+              ${`Recovery deferred by the deduction limit in ${p.month} (run ${p.id.slice(0, 8)}); Rs ${(recovered / 100n).toString()} of Rs ${(requested / 100n).toString()} recovered`},
+              ${"approved"}, ${"carry_forward"}, ${p.id}::uuid, ${msg.actorId}::uuid)
+          `);
+          arrearRecoveryCarried.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, requestedMinor: requested.toString(), recoveredMinor: recovered.toString(), carriedMinor: carried.toString(), toPeriod });
+        }
       }
       const appliedEmi = result.deductions.find((d) => d.code === "LOAN_EMI")?.amountMinor ?? 0n;
       let emiToAllocate = appliedEmi;
@@ -2779,10 +2818,26 @@ async function processPayrollRun(
         employees: tdsCapped.slice(0, 200),
       });
     }
+    if (arrearRecoveryCarried.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "ARREAR_RECOVERY_CARRIED_FORWARD",
+        message: `${arrearRecoveryCarried.length} employee(s) had part of an overpayment (arrear) recovery deferred by the deduction limit; the balance is raised as an outstanding ARREAR_RECOVERY for the next month (visible in the employee arrears)`,
+        count: arrearRecoveryCarried.length,
+        employees: arrearRecoveryCarried.slice(0, 200),
+      });
+    }
+    if (openingMismatch.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "OPENING_YTD_MONTHS_MISMATCH",
+        message: `${openingMismatch.length} employee(s) have a pre-go-live opening YTD covering a different number of months than they were in service before go-live / their first slip here; months not covered are presumed (acknowledgement required)`,
+        count: openingMismatch.length,
+        employees: openingMismatch.slice(0, 200),
+      });
+    }
     if (recoveryDeferred.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "RECOVERY_DEFERRED_BY_DEDUCTION_CAP",
-        message: `${recoveryDeferred.length} employee(s) have loan / arrear recovery deferred: statutory deductions come first and the total stays within the deduction limit and the protected net pay`,
+        message: `${recoveryDeferred.length} employee(s) have loan / arrear recovery deferred: statutory deductions come first and the total stays within the deduction limit (Code on Wages 2019 s.18(2)) and the protected net pay. A loan keeps its outstanding balance (its tenure extends); an arrear recovery balance is re-raised for the next month`,
         count: recoveryDeferred.length,
         employees: recoveryDeferred.slice(0, 200),
       });
@@ -3074,6 +3129,8 @@ export async function computeAndInsertSlip(
     maxDeductionShareBps?: number;
     /** PR #2459 review B2: presumed months used, and whether this is the last FY / separation month. */
     tdsFlags?: { presumedMonths: number; finalMonth: boolean };
+    /** Delta review SF1: fyPaidToDate.unrecordedMonths is final (see SlipInput). */
+    presumedMonthsAuthoritative?: boolean;
     /** T-STAT F02: salary actually paid earlier in the FY (s.192 estimate). */
     fyPaidToDate?: { grossMinor: bigint; months: number };
     /** T-STAT M-NPS: Basic + DA part of the arrears on this slip. */
@@ -3125,6 +3182,7 @@ export async function computeAndInsertSlip(
     ...(params.tdsYtdMinor != null ? { tdsYtdMinor: params.tdsYtdMinor } : {}),
     ...(params.monthsRemaining != null ? { monthsRemaining: params.monthsRemaining } : {}),
     ...(params.fyPaidToDate ? { fyPaidToDate: params.fyPaidToDate } : {}),
+    ...(params.presumedMonthsAuthoritative ? { presumedMonthsAuthoritative: true } : {}),
     ...(params.arrearPensionBaseMinor != null ? { arrearPensionBaseMinor: params.arrearPensionBaseMinor } : {}),
     ...(params.ptForSalaryMinor ? { ptForSalaryMinor: params.ptForSalaryMinor } : {}),
     ...(params.protectedNetFloorMinor != null ? { protectedNetFloorMinor: params.protectedNetFloorMinor } : {}),

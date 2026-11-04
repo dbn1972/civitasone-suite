@@ -1,4 +1,4 @@
--- 0263_leave_year_end_entries.sql
+-- 0264_leave_year_end_entries.sql
 --
 -- UAT T-PERIOD D-14 (ERP-head decision 2026-11-05): leave year = calendar year
 -- per the CCS (Leave) Rules 1972 -- EL credited in advance, 15 days on 1 Jan and
@@ -18,11 +18,19 @@
 -- calendar year) is the per-tenant switch; 4 keeps a financial leave year
 -- (half-years from 1 Apr / 1 Oct). Only 1 or 4 are accepted from now on.
 --
+-- leave.hrms_leave_year_config.superannuation_ages (PR #2459 delta review SF4):
+-- age of superannuation per employee type for the Rule 27(2)(a) retirement
+-- half-year credit (FR 56: the last day of the month of attaining it). Default
+-- 60 for permanent / temporary / deputation; a type that is not listed (e.g.
+-- contract) is never superannuated by the job. Resignation / VRS etc. come
+-- from the approved / completed lifecycle.hrms_separations last working date.
+--
 -- Additive and idempotent. FORCE RLS tenant policy like every leave table.
 --
 -- Rollback:
 --   DROP TABLE IF EXISTS leave.hrms_leave_year_end_entries;
 --   ALTER TABLE leave.hrms_leave_year_config DROP CONSTRAINT IF EXISTS hrms_leave_year_config_start_month_chk;
+--   ALTER TABLE leave.hrms_leave_year_config DROP COLUMN IF EXISTS superannuation_ages;
 
 SET lock_timeout = '5s';
 
@@ -67,5 +75,13 @@ END $$;
 DO $$ BEGIN
   ALTER TABLE leave.hrms_leave_year_config
     ADD CONSTRAINT hrms_leave_year_config_start_month_chk CHECK (year_start_month IN (1, 4)) NOT VALID;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE leave.hrms_leave_year_config
+  ADD COLUMN IF NOT EXISTS superannuation_ages jsonb NOT NULL DEFAULT '{"permanent": 60, "temporary": 60, "deputation": 60}'::jsonb;
+DO $$ BEGIN
+  ALTER TABLE leave.hrms_leave_year_config
+    ADD CONSTRAINT hrms_leave_year_config_superannuation_ages_chk CHECK (jsonb_typeof(superannuation_ages) = 'object') NOT VALID;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import {
   halfYearOf, isCreditDate, completedCalendarMonths, halfYearCredit, planEmployeeYearEnd, eolDaysWithin,
-  leaveYearLabel, leaveYearStartOfLabel, normaliseStartMonth, superannuationDate, diesNonDaysWithin, type YearEndAlloc,
+  leaveYearLabel, leaveYearStartOfLabel, normaliseStartMonth, superannuationDate, diesNonDaysWithin, exitDateOf, type YearEndAlloc,
 } from "../src/modules/leave/year-end.js";
 
 const EL = { id: "t-el", code: "EL", maxDays: 30 };
@@ -83,10 +83,25 @@ describe("PR #2459 review SF5: retirement half-year, dies non, later allocations
   it("Rule 27(2)(a): the retirement half-year gets 2.5 days per completed month up to retirement, not 15 in advance", () => {
     expect(halfYearCredit("EL", h1, "2000-01-01", 0, "2027-04-30")).toMatchObject({ days: 10, basis: "pro_rata", completedMonths: 4 });
     expect(halfYearCredit("EL", h1, "2000-01-01", 0, "2026-12-31")).toMatchObject({ days: 0, basis: "none" });
-    const ops = planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1967-04-15" }, types: { EL }, allocs: [alloc("el", "t-el", "2026-27", 100, 100)], eolDaysPrevHalf: 0 });
+    const ops = planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1967-04-15", superannuationAge: 60 }, types: { EL }, allocs: [alloc("el", "t-el", "2026-27", 100, 100)], eolDaysPrevHalf: 0 });
     expect(ops[0]!.entries.find((e) => e.action === "credit")!.days).toBe(10);
-    expect(ops[0]!.warnings.join(" ")).toMatch(/retires on 2027-04-30/);
-    expect(planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1966-11-20" }, types: { EL, CL }, allocs: [], eolDaysPrevHalf: 0 })).toEqual([]);
+    expect(ops[0]!.warnings.join(" ")).toMatch(/retires \(FR 56\) on 2027-04-30/);
+    expect(planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1966-11-20", superannuationAge: 60 }, types: { EL, CL }, allocs: [], eolDaysPrevHalf: 0 })).toEqual([]);
+  });
+
+  it("delta review SF4: the age comes from the employee type (62 here); contract staff are not superannuated; resignation is proportional too", () => {
+    const half = halfYearOf("2027-01-01", 1);
+    // at 62 the same DOB retires in 2029: full 15 in 2027
+    const at62 = planEmployeeYearEnd({ half, employee: { ...emp(), dateOfBirth: "1967-04-15", superannuationAge: 62 }, types: { EL }, allocs: [], eolDaysPrevHalf: 0 });
+    expect(at62[0]!.entries.find((e) => e.action === "credit")!.days).toBe(15);
+    // a contract employee past 60 keeps getting CL
+    const contract = planEmployeeYearEnd({ half, employee: { ...emp({ employeeType: "contract" }), dateOfBirth: "1960-01-15", superannuationAge: null }, types: { EL, CL }, allocs: [], eolDaysPrevHalf: 0 });
+    expect(contract.map((o) => o.code)).toEqual(["CL"]);
+    // resignation with last working day 31 Mar 2027: Jan..Mar = 3 months x 2.5 = 8 (7.5 rounded)
+    const resigning = planEmployeeYearEnd({ half, employee: { ...emp(), separationDate: "2027-03-31" }, types: { EL }, allocs: [], eolDaysPrevHalf: 0 });
+    expect(resigning[0]!.entries.find((e) => e.action === "credit")!.days).toBe(8);
+    expect(resigning[0]!.warnings.join(" ")).toMatch(/leaves service \(separation\) on 2027-03-31/);
+    expect(exitDateOf({ dateOfBirth: "1967-04-15", superannuationAge: 60, separationDate: "2027-02-28" })).toBe("2027-02-28");
   });
   it("Rule 27(3): dies non (service book) counts with EOL in the reduction", () => {
     const entries = [

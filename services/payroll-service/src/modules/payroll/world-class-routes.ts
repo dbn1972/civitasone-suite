@@ -29,7 +29,10 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/payroll/arrears", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const rows = await repo.listArrears(ctx.tenantId);
+    // PR #2459 delta review B3: ?employeeId= shows one employee arrears, incl. an
+    // outstanding recovery carried forward by the deduction limit (source carry_forward).
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query ?? {});
+    const rows = await repo.listArrears(ctx.tenantId, q.employeeId);
     return reply.send({ data: rows });
   });
 

@@ -6,7 +6,7 @@
  *    GET /v1/hrms/leave/year-end/preview and scripts/leave-year-end.ts.
  *  - planLeaveYearEnd(dryRun: false) -> applies it, one transaction per
  *    employee under the employee leave lock. Idempotent: every change writes a
- *    leave.hrms_leave_year_end_entries row (migration 0263, UNIQUE per tenant /
+ *    leave.hrms_leave_year_end_entries row (migration 0264, UNIQUE per tenant /
  *    credit date / employee / leave type / action); an employee + leave type
  *    with entries for the credit date is never processed again.
  *  - runLeaveYearEndTickOnce: the scheduled run (worker tick). OFF unless
@@ -30,7 +30,7 @@ import * as repo from "./repo.js";
 import { and, eq } from "drizzle-orm";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import {
-  halfYearOf, isCreditDate, normaliseStartMonth, planEmployeeYearEnd, eolDaysWithin, diesNonDaysWithin,
+  halfYearOf, isCreditDate, normaliseStartMonth, planEmployeeYearEnd, eolDaysWithin, diesNonDaysWithin, DEFAULT_SUPERANNUATION_AGES,
   type HalfYear, type LeaveYearStartMonth, type YearEndAlloc, type YearEndLeaveType, type YearEndOp,
 } from "./year-end.js";
 
@@ -83,6 +83,14 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
     throw new LeaveYearEndError("NOT_A_CREDIT_DATE", `${runDate} is not a leave credit date for this tenant (half-years start on ${h.start} and the 1st of the month six months later)`, { halfYearStart: h.start });
   }
   const half = halfYearOf(runDate, startMonth);
+  // Delta review SF4: superannuation age per employee type (tenant config; default 60, contract never).
+  const cfg = await rows(tx, sql`SELECT superannuation_ages FROM leave.hrms_leave_year_config WHERE tenant_id = ${tenantId}::uuid LIMIT 1`);
+  const rawAges = cfg[0]?.superannuation_ages;
+  const ages: Record<string, number> = rawAges && typeof rawAges === "object" ? (rawAges as Record<string, number>) : { ...DEFAULT_SUPERANNUATION_AGES };
+  // Resignation / VRS ...: last working day of an approved or completed separation.
+  const seps = await rows(tx, sql`SELECT employee_id::text AS employee_id, MIN(COALESCE(last_working_date, effective_date))::text AS exit_date
+    FROM lifecycle.hrms_separations WHERE tenant_id = ${tenantId}::uuid AND status IN (${"approved"}, ${"completed"}) GROUP BY employee_id`);
+  const separationByEmployee = new Map(seps.map((s) => [String(s.employee_id), String(s.exit_date)]));
   const typeRows = await rows(tx, sql`SELECT id::text AS id, upper(code) AS code, max_days FROM leave.hrms_leave_types WHERE tenant_id = ${tenantId}::uuid ORDER BY created_at ASC, id ASC`);
   const types: Snapshot["types"] = {};
   const eolTypeIds: string[] = [];
@@ -139,7 +147,15 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
   }
   return {
     half, startMonth, types, allocsByEmployee, eolByEmployee, done,
-    employees: emps.map((e) => ({ id: String(e.id), employeeNo: String(e.employee_no ?? e.id), dateOfJoining: e.doj ? String(e.doj) : null, dateOfBirth: e.dob ? String(e.dob) : null, employeeType: String(e.employee_type), status: String(e.status) })),
+    employees: emps.map((e) => {
+      const age = ages[String(e.employee_type)];
+      return {
+        id: String(e.id), employeeNo: String(e.employee_no ?? e.id), dateOfJoining: e.doj ? String(e.doj) : null, dateOfBirth: e.dob ? String(e.dob) : null,
+        employeeType: String(e.employee_type), status: String(e.status),
+        superannuationAge: typeof age === "number" && age > 0 ? age : null,
+        separationDate: separationByEmployee.get(String(e.id)) ?? null,
+      };
+    }),
   };
 }
 

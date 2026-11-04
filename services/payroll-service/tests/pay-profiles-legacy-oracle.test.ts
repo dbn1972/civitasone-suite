@@ -102,21 +102,29 @@ function legacyView(r: ReturnType<typeof computeSlip>): Omit<ReturnType<typeof c
 }
 /** s.288B (PR #2459 review): TDS is now rounded to the rupee; the legacy last-month balance could carry paise. */
 const rupee = (x: bigint): bigint => ((x + 50n) / 100n) * 100n;
+/** Every field neither the rupee rounding nor the cap can move. */
+const untouched = (r: Record<string, unknown>) => {
+  const { tdsMinor: _t, totalDeductionsMinor: _d, netPayMinor: _n, deductions: _x, recoveryCarryForwardMinor: _r, negativeNet: _g, tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
+  return rest;
+};
 function capBinds(actual: ReturnType<typeof computeSlip>, expected: ReturnType<typeof legacyComputeSlip>): boolean {
   if (actual.tdsShortfallMinor === 0n && expected.tdsMinor % 100n === 0n) return false;
+  expect(untouched(actual as unknown as Record<string, unknown>)).toEqual(untouched(expected as unknown as Record<string, unknown>));
   if (actual.tdsShortfallMinor === 0n) {
-    // legacy TDS with paise (final-month balance): the same TDS, rounded to the rupee
+    // legacy TDS with paise (final-month balance): the same TDS rounded to the rupee (s.288B);
+    // net and total move by exactly the rounding difference when no recovery is trimmed,
+    // and the non-TDS deduction lines are identical.
+    const d = rupee(expected.tdsMinor) - expected.tdsMinor;
     expect(actual.tdsMinor).toBe(rupee(expected.tdsMinor));
+    if (actual.recoveryCarryForwardMinor === expected.recoveryCarryForwardMinor) {
+      expect(actual.totalDeductionsMinor).toBe(expected.totalDeductionsMinor + d);
+      expect(actual.netPayMinor).toBe(expected.negativeNet ? 0n : expected.netPayMinor - d);
+      expect(actual.deductions.filter((x) => x.code !== "TDS")).toEqual(expected.deductions.filter((x) => x.code !== "TDS"));
+    }
     return true;
   }
   expect(rupee(expected.tdsMinor)).toBe(actual.tdsMinor + actual.tdsShortfallMinor);
   expect(actual.negativeNet).toBe(false);
-  // review nit: every field the cap cannot move is still identical
-  const untouched = (r: Record<string, unknown>) => {
-    const { tdsMinor: _t, totalDeductionsMinor: _d, netPayMinor: _n, deductions: _x, recoveryCarryForwardMinor: _r, negativeNet: _g, tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
-    return rest;
-  };
-  expect(untouched(actual as unknown as Record<string, unknown>)).toEqual(untouched(expected as unknown as Record<string, unknown>));
   return true;
 }
 

@@ -93,7 +93,7 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   payProfile:            varchar("pay_profile", { length: 32 }),
   profileSnapshot:       jsonb("profile_snapshot").$type<Record<string, unknown>>(),
   pfWageMinor:           bigint("pf_wage_minor", { mode: "bigint" }),
-  // UAT T-PERIOD D-02b / PR #2459 review (migration 0164): the TDS signals the
+  // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): the TDS signals the
   // approver must see -- presumed months, excess, capped shortfall (final: the
   // last FY / separation month, not recoverable by payroll), deferred recovery.
   tdsPresumedMonths:     integer("tds_presumed_months").notNull().default(0),
@@ -109,7 +109,7 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
 });
 
 /**
- * PR #2459 review B1 (migration 0164): the opening year-to-date of an employee
+ * PR #2459 review B1 (migration 0165): the opening year-to-date of an employee
  * for an FY -- salary paid and TDS deducted by this employer before go-live
  * (pre_go_live, months covered) or by a previous employer (prior_employer,
  * Form 12B). Maker-checker; only approved rows feed the s.192 projection, as
@@ -128,6 +128,8 @@ export const payrollOpeningYtd = payrollSchema.table("payroll_opening_ytd", {
   priorEmployerTan:  varchar("prior_employer_tan", { length: 10 }),
   note:              text("note").notNull(),
   status:            varchar("status", { length: 16 }).notNull().default("pending"),
+  /** Delta review SF2: the approved version this one corrects (superseded on approval, kept). */
+  supersedesId:      uuid("supersedes_id"),
   enteredBy:         uuid("entered_by").notNull(),
   approvedBy:        uuid("approved_by"),
   decidedAt:         timestamp("decided_at", { withTimezone: true }),

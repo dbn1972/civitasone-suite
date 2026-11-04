@@ -282,14 +282,16 @@ const FY_2026_27_MONTHS = [
 const GROSS_PAISE = 150_000_000n;
 
 /**
- * The 17 reads buildForm16 makes for one deductee with no tax declaration (new
- * regime): runs, slips, 12 monthly TDS reads (the Rs 35,000 sits in 2027-01, a Q4
- * month), declaration, proof-plan, statutory config.
+ * The 18 reads buildForm16 makes for one deductee with no tax declaration (new
+ * regime): runs, slips, the approved opening YTD (PR #2459 delta review B2; none
+ * here), 12 monthly TDS reads (the Rs 35,000 sits in 2027-01, a Q4 month),
+ * declaration, proof-plan, statutory config.
  */
 function queueForm16() {
   const runs = [{ id: "run-1", status: "approved" }];
   readQueue.push(runs);
   readQueue.push([{ runId: "run-1", grossMinor: GROSS_PAISE }]);
+  readQueue.push([]);   // approved opening YTD: none
   for (const month of FY_2026_27_MONTHS) {
     readQueue.push(month === "2027-01" ? [{ runId: "run-1", tdsMinor: BigInt(TDS_PAISE) }] : []);
   }
@@ -340,6 +342,9 @@ const ANNEXURE_II_PAISE = {
   prevEmployerTdsMinor: 0,
   balanceTaxPayableMinor: 6_250_000,
   refundDueMinor: 0,
+  // PR #2459 delta review B2: the approved opening YTD (none here)
+  preGoLiveSalaryMinor: 0,
+  preGoLiveTdsMinor: 0,
   regime: "new",
 };
 

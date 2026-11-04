@@ -225,8 +225,10 @@ export async function markSlipsPaidForRun(tx: Writer, runId: string, actorId: st
 
 // ─── Arrears ──────────────────────────────────────────────────────────────────
 
-export async function listArrears(tenantId: string) {
-  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_arrears WHERE tenant_id=${tenantId}::uuid ORDER BY created_at DESC LIMIT 100`));
+export async function listArrears(tenantId: string, employeeId?: string) {
+  return scopedRead((tx) => tx.execute(employeeId
+    ? sql`SELECT * FROM payroll.payroll_arrears WHERE tenant_id=${tenantId}::uuid AND employee_id=${employeeId}::uuid ORDER BY created_at DESC LIMIT 100`
+    : sql`SELECT * FROM payroll.payroll_arrears WHERE tenant_id=${tenantId}::uuid ORDER BY created_at DESC LIMIT 100`));
 }
 
 export type ArrearInsert = {

@@ -28,6 +28,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { registerOpeningYtdConsumers } from "../src/modules/opening-ytd/consumer.js";
 import { computeSlip } from "../src/modules/payroll/domain.js";
+import { buildForm16WithMinor } from "../src/modules/tax/form16.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -38,6 +39,9 @@ const STRUCTURE = randomUUID();
 const DEPT = randomUUID();
 const E1 = randomUUID();
 const E2 = randomUUID();
+const E3 = randomUUID(); // Form 16 (delta review B2)
+const E4 = randomUUID(); // arrear recovery carry-forward (delta review B3)
+const E5 = randomUUID(); // partial opening coverage (delta review SF1)
 const R = (rupees: number): bigint => BigInt(rupees) * 100n;
 const GROSS = 231_428; // 1,23,100 + DA 58% 71,398 + HRA X 30% 36,930
 
@@ -104,8 +108,8 @@ describe("PR #2459 review B1: opening YTD API (maker-checker)", () => {
     const bad = await app.inject({ method: "POST", url: "/v1/payroll/opening-ytd", headers: hdr(MAKER, ["payroll_officer"]), payload: { employeeId: E2, fy: "2026-27", source: "pre_go_live", months: 0, salaryMinor: "1", tdsMinor: "0", note: "missing months" } });
     expect(bad.statusCode).toBe(400);
     const res = await app.inject({ method: "POST", url: "/v1/payroll/opening-ytd", headers: hdr(MAKER, ["payroll_officer"]), payload: {
-      employeeId: E2, fy: "2026-27", source: "pre_go_live", months: 10, salaryMinor: String(R(GROSS * 10)), tdsMinor: String(R(250_000)),
-      note: "Legacy payroll Apr 2026 - Feb 2027, reconciled to 24Q Q1-Q3 and the Feb challan",
+      employeeId: E2, fy: "2026-27", source: "pre_go_live", months: 11, salaryMinor: String(R(GROSS * 11)), tdsMinor: String(R(250_000)),
+      note: "Legacy payroll Apr 2026 - Feb 2027 (11 months), reconciled to 24Q Q1-Q3 and the Feb challan",
     } });
     expect(res.statusCode).toBe(202);
     const id = res.json().id as string;
@@ -118,7 +122,7 @@ describe("PR #2459 review B1: opening YTD API (maker-checker)", () => {
     expect(ok.statusCode).toBe(202);
     await waitFor(async () => (await q(sql`SELECT 1 FROM payroll.payroll_opening_ytd WHERE id = ${id}::uuid AND status = ${"approved"}`))[0], "approval");
     const list = await app.inject({ method: "GET", url: `/v1/payroll/opening-ytd?employeeId=${E2}`, headers: hdr(CHECKER, ["payroll_admin"]) });
-    expect(list.json().data[0]).toMatchObject({ source: "pre_go_live", months: 10, status: "approved", enteredBy: MAKER, approvedBy: CHECKER, tdsMinor: String(R(250_000)) });
+    expect(list.json().data[0]).toMatchObject({ source: "pre_go_live", months: 11, status: "approved", enteredBy: MAKER, approvedBy: CHECKER, tdsMinor: String(R(250_000)) });
     const audit = await q(sql`SELECT payload->>${"action"} AS action FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"resourceId"} = ${id} ORDER BY created_at`);
     expect(audit.map((a) => a.action)).toEqual(["opening_ytd_enter", "opening_ytd_approve"]);
   });
@@ -126,7 +130,14 @@ describe("PR #2459 review B1: opening YTD API (maker-checker)", () => {
 
 describe("PR #2459 review B1/B2: the March 2027 run", () => {
   beforeAll(async () => {
-    vi.mocked(fetchPayrollInput).mockResolvedValue({ month: "2027-03", employees: [employee(E1, "TP-EMP-01"), employee(E2, "TP-EMP-02")], lopDays: {}, overtimeHours: {} } as unknown as Awaited<ReturnType<typeof fetchPayrollInput>>);
+    // E5: approved pre-go-live opening covering only Apr-Sep (6 of the 11 earlier months) + a previous employer.
+    await asTenant(async (tx) => {
+      await tx.execute(sql`INSERT INTO payroll.payroll_opening_ytd (tenant_id, employee_id, fy, source, months, salary_minor, tds_minor, note, status, entered_by, approved_by, decided_at)
+        VALUES (${TENANT}::uuid, ${E5}::uuid, ${"2026-27"}, ${"pre_go_live"}, 6, ${R(GROSS * 6)}, ${R(150_000)}, ${"Legacy payroll Apr-Sep 2026"}, ${"approved"}, ${MAKER}::uuid, ${CHECKER}::uuid, now()),
+               (${TENANT}::uuid, ${E5}::uuid, ${"2026-27"}, ${"prior_employer"}, 0, ${R(50_000)}, ${R(2_000)}, ${"Form 12B from the previous office"}, ${"approved"}, ${MAKER}::uuid, ${CHECKER}::uuid, now())`);
+      await tx.execute(sql`UPDATE payroll.payroll_opening_ytd SET prior_employer_name = ${"Old Office"} WHERE employee_id = ${E5}::uuid AND source = ${"prior_employer"}`);
+    });
+    vi.mocked(fetchPayrollInput).mockResolvedValue({ month: "2027-03", employees: [employee(E1, "TP-EMP-01"), employee(E2, "TP-EMP-02"), employee(E5, "TP-EMP-05")], lopDays: {}, overtimeHours: {} } as unknown as Awaited<ReturnType<typeof fetchPayrollInput>>);
     const res = await app.inject({ method: "POST", url: "/v1/payroll/runs", headers: hdr(MAKER, ["payroll_admin"]), payload: { runNo: "B19R-MAR", month: "2027-03", structureId: STRUCTURE } });
     expect([201, 202]).toContain(res.statusCode);
     marchRun = res.json().data?.id ?? res.json().id;
@@ -155,9 +166,22 @@ describe("PR #2459 review B1/B2: the March 2027 run", () => {
     expect(Number(s!.presumed)).toBe(0);
     const expected = computeSlip({
       basicMinor: R(123_100), daRateBps: 5800n, cityClass: "X", pensionScheme: "NPS", taxRegime: "new", fyStartYear: 2026, statutoryEsi: false,
-      monthsRemaining: 1, tdsYtdMinor: R(250_000), fyPaidToDate: { grossMinor: R(GROSS * 10), months: 10, unrecordedMonths: 0 }, maxDeductionShareBps: 5000,
+      monthsRemaining: 1, tdsYtdMinor: R(250_000), fyPaidToDate: { grossMinor: R(GROSS * 11), months: 11, unrecordedMonths: 0 }, maxDeductionShareBps: 5000,
     });
     expect(BigInt(String(s!.tds))).toBe(expected.tdsMinor);
+  });
+
+  it("delta review SF1: a partial pre-go-live opening (6 months) leaves the other 5 pre-boundary months presumed; a previous-employer row does not switch presumption off", async () => {
+    const [s] = await q(sql`SELECT tds_minor::text AS tds, tds_presumed_months AS presumed FROM payroll.payroll_slips WHERE run_id = ${marchRun}::uuid AND employee_id = ${E5}::uuid`);
+    expect(Number(s!.presumed)).toBe(5);
+    const expected = computeSlip({
+      basicMinor: R(123_100), daRateBps: 5800n, cityClass: "X", pensionScheme: "NPS", taxRegime: "new", fyStartYear: 2026, statutoryEsi: false,
+      monthsRemaining: 1, tdsYtdMinor: R(150_000 + 2_000), fyPaidToDate: { grossMinor: R(GROSS * 6), months: 6, unrecordedMonths: 5 }, maxDeductionShareBps: 5000,
+      declaration: { prevEmployerSalaryMinor: R(50_000) }, presumedMonthsAuthoritative: true,
+    });
+    expect(BigInt(String(s!.tds))).toBe(expected.tdsMinor);
+    const warn = await q(sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"resourceId"} = ${marchRun} AND payload->>${"code"} = ${"OPENING_YTD_MONTHS_MISMATCH"}`);
+    expect(JSON.stringify(warn[0]!.payload)).toContain("TP-EMP-05");
   });
 
   it("approval is refused while the presumed months are unacknowledged; approval-review lists them; acknowledged -> approved and audited", async () => {
@@ -175,11 +199,135 @@ describe("PR #2459 review B1/B2: the March 2027 run", () => {
     expect(refused.json().code).toBe("UNRECORDED_FY_MONTHS_ESTIMATED");
 
     const reason = "Apr-Dec paid by the legacy system; opening YTD to follow";
-    const ok = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${marchRun}/approve`, headers: hdr(CHECKER, ["super_admin"]), payload: { tdsAcknowledgements: [{ employeeId: E1, reason }] } });
+    // TP-EMP-02: the March balance above the 50% limit cannot be recovered through payroll (final month) -> acknowledged too
+    expect(items.find((i) => i.employeeId === E2 && i.kind === "shortfall")).toMatchObject({ requiresAck: true });
+    expect(items.find((i) => i.employeeId === E2 && i.kind === "shortfall")!.message).toContain("cannot be recovered through payroll this FY -- collect separately or adjust before Form 16");
+    const partial = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${marchRun}/approve`, headers: hdr(CHECKER, ["super_admin"]), payload: { tdsAcknowledgements: [{ employeeId: E1, reason }, { employeeId: E5, reason }] } });
+    expect(partial.statusCode).toBe(409);
+    expect(partial.json().code).toBe("TDS_SHORTFALL_UNRECOVERABLE");
+    const ok = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${marchRun}/approve`, headers: hdr(CHECKER, ["super_admin"]), payload: { tdsAcknowledgements: [{ employeeId: E1, reason }, { employeeId: E5, reason }, { employeeId: E2, reason }] } });
     expect(ok.statusCode).toBe(202);
     await waitFor(async () => (await q(sql`SELECT 1 FROM payroll.payroll_runs WHERE id = ${marchRun}::uuid AND status = ${"approved"}`))[0], "approved");
     const [a] = await q(sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"action"} = ${"approve"} AND payload->>${"resourceId"} = ${marchRun}`);
     const acks = (a!.payload as { tdsAcknowledgements: Array<{ employeeId: string; reason: string; items: Array<{ kind: string; presumedMonths: number }> }> }).tdsAcknowledgements;
-    expect(acks).toEqual([{ employeeId: E1, reason, items: [{ kind: "presumed_months", amountMinor: "0", presumedMonths: 9, finalMonth: false }] }]);
+    expect(acks[0]).toEqual({ employeeId: E1, reason, items: [{ kind: "presumed_months", amountMinor: "0", presumedMonths: 9, finalMonth: false }] });
+  });
+});
+
+describe("PR #2459 delta review SF2: correcting an approved opening YTD, several previous employers", () => {
+  it("a correction is a new version (supersedesId), maker-checker; on approval the old one is superseded and kept; two previous employers can coexist", async () => {
+    const list = async () => (await app.inject({ method: "GET", url: `/v1/payroll/opening-ytd?employeeId=${E2}`, headers: hdr(CHECKER, ["payroll_admin"]) })).json().data as Array<{ id: string; status: string; source: string; tdsMinor: string; supersedesId: string | null; priorEmployerName: string | null }>;
+    const old = (await list()).find((r) => r.source === "pre_go_live" && r.status === "approved")!;
+    const again = await app.inject({ method: "POST", url: "/v1/payroll/opening-ytd", headers: hdr(MAKER, ["payroll_officer"]), payload: { employeeId: E2, fy: "2026-27", source: "pre_go_live", months: 11, salaryMinor: String(R(GROSS * 11)), tdsMinor: String(R(240_000)), note: "plain re-entry without supersedes" } });
+    expect(again.statusCode).toBe(409);
+    const fix = await app.inject({ method: "POST", url: "/v1/payroll/opening-ytd", headers: hdr(MAKER, ["payroll_officer"]), payload: { employeeId: E2, fy: "2026-27", source: "pre_go_live", months: 11, salaryMinor: String(R(GROSS * 11)), tdsMinor: String(R(240_000)), note: "Corrected TDS per the Q3 24Q statement", supersedesId: old.id } });
+    expect(fix.statusCode).toBe(202);
+    const fixId = fix.json().id as string;
+    await waitFor(async () => (await q(sql`SELECT 1 FROM payroll.payroll_opening_ytd WHERE id = ${fixId}::uuid`))[0], "correction row");
+    expect((await app.inject({ method: "PATCH", url: `/v1/payroll/opening-ytd/${fixId}/approve`, headers: hdr(MAKER, ["payroll_admin"]), payload: { reason: "my own correction" } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "PATCH", url: `/v1/payroll/opening-ytd/${fixId}/approve`, headers: hdr(CHECKER, ["payroll_admin"]), payload: { reason: "Checked the Q3 statement" } })).statusCode).toBe(202);
+    await waitFor(async () => (await q(sql`SELECT 1 FROM payroll.payroll_opening_ytd WHERE id = ${fixId}::uuid AND status = ${"approved"}`))[0], "correction approved");
+    const after = await list();
+    expect(after.find((r) => r.id === old.id)!.status).toBe("superseded");
+    expect(after.find((r) => r.id === fixId)).toMatchObject({ status: "approved", supersedesId: old.id, tdsMinor: String(R(240_000)) });
+    // two previous employers in the same FY
+    for (const [name, tan] of [["First Office", "ABCD12345E"], ["Second Office", "WXYZ54321K"]] as const) {
+      const r = await app.inject({ method: "POST", url: "/v1/payroll/opening-ytd", headers: hdr(MAKER, ["payroll_officer"]), payload: { employeeId: E2, fy: "2026-27", source: "prior_employer", salaryMinor: String(R(40_000)), tdsMinor: String(R(1_000)), priorEmployerName: name, priorEmployerTan: tan, note: "Form 12B received from the office" } });
+      expect(r.statusCode).toBe(202);
+    }
+    await waitFor(async () => (await list()).filter((r) => r.source === "prior_employer").length === 2 ? true : null, "two prior employers");
+  });
+});
+
+describe("PR #2459 delta review B2: Form 16 Part B and 24Q Annexure II use the approved opening YTD", () => {
+  beforeAll(async () => {
+    // E3 = the T-PERIOD case: one slip here (TDS 1,35,423), the other 11 months paid by this employer before go-live.
+    await asTenant(async (tx) => {
+      const run = randomUUID(), slip = randomUUID();
+      await tx.execute(sql`INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, run_type, total_gross_minor, total_net_minor, currency, status, created_by, updated_by)
+        VALUES (${run}::uuid, ${TENANT}::uuid, ${"B19R-F16"}, ${"2027-02"}, ${STRUCTURE}::uuid, ${"regular"}, ${R(GROSS)}, ${R(GROSS - 135_423)}, ${"INR"}, ${"approved"}, ${MAKER}::uuid, ${MAKER}::uuid)`);
+      await tx.execute(sql`INSERT INTO payroll.payroll_slips (id, tenant_id, run_id, employee_id, employee_no, basic_minor, gross_minor, total_deductions_minor, net_pay_minor, tds_minor, status, created_by, updated_by)
+        VALUES (${slip}::uuid, ${TENANT}::uuid, ${run}::uuid, ${E3}::uuid, ${"TP-EMP-03"}, ${R(123_100)}, ${R(GROSS)}, ${R(135_423)}, ${R(GROSS - 135_423)}, ${R(135_423)}, ${"computed"}, ${MAKER}::uuid, ${MAKER}::uuid)`);
+      await tx.execute(sql`INSERT INTO statutory.payroll_tds (tenant_id, slip_id, employee_id, run_id, tds_minor, period, created_by, updated_by)
+        VALUES (${TENANT}::uuid, ${slip}::uuid, ${E3}::uuid, ${run}::uuid, ${R(135_423)}, ${"2027-02"}, ${MAKER}::uuid, ${MAKER}::uuid)`);
+    });
+  });
+
+  it("without an opening YTD: the false refund (tax on one month 0, the whole TDS refundable)", async () => {
+    const { form16 } = await runWithTenant(TENANT, () => buildForm16WithMinor(TENANT, E3, "2026-27"));
+    expect(form16.form16PartB.grossSalary).toBe(GROSS);
+    expect(form16.form16PartB.totalTaxLiability).toBe(0);
+    expect(form16.form16PartB.refundDue).toBe(135_423);
+  });
+
+  it("with the approved pre-go-live opening and a previous employer: full-year salary, all TDS credited, no false refund; Annexure II carries the same", async () => {
+    await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.payroll_opening_ytd (tenant_id, employee_id, fy, source, months, salary_minor, tds_minor, note, status, entered_by, approved_by, decided_at)
+      VALUES (${TENANT}::uuid, ${E3}::uuid, ${"2026-27"}, ${"pre_go_live"}, 11, ${R(GROSS * 11)}, 0, ${"Legacy payroll Apr 2026 - Mar 2027"}, ${"approved"}, ${MAKER}::uuid, ${CHECKER}::uuid, now()),
+             (${TENANT}::uuid, ${E3}::uuid, ${"2026-27"}, ${"prior_employer"}, 0, 0, 0, ${"Form 12B: no salary there this FY"}, ${"approved"}, ${MAKER}::uuid, ${CHECKER}::uuid, now())`));
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_opening_ytd SET prior_employer_name = ${"Earlier Office"}, prior_employer_tan = ${"PQRS11111T"} WHERE employee_id = ${E3}::uuid AND source = ${"prior_employer"}`));
+    const first = (await runWithTenant(TENANT, () => buildForm16WithMinor(TENANT, E3, "2026-27"))).form16;
+    expect(first.form16PartB.grossSalary).toBe(GROSS * 12);
+    const liability = first.form16PartB.totalTaxLiability;
+    expect(liability).toBeGreaterThan(400_000);
+    // the legacy system deducted the rest of the liability before go-live
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_opening_ytd SET tds_minor = ${R(liability - 135_423)} WHERE employee_id = ${E3}::uuid AND source = ${"pre_go_live"}`));
+    const { form16, partBMinor } = await runWithTenant(TENANT, () => buildForm16WithMinor(TENANT, E3, "2026-27"));
+    expect(form16.form16PartA.preGoLiveTds).toBe(liability - 135_423);
+    expect(form16.form16PartA.totalTdsDeposited).toBe(liability);
+    expect(form16.form16PartB).toMatchObject({ preGoLiveSalary: GROSS * 11, totalTdsDeducted: liability, refundDue: 0, balanceTaxPayable: 0 });
+    expect(form16.form16PartB.prevEmployers).toEqual([{ name: "Earlier Office", tan: "PQRS11111T", salary: 0, tds: 0 }]);
+    expect(partBMinor.preGoLiveSalaryMinor).toBe(R(GROSS * 11));
+
+    // Annexure II (24Q Q4, force-filed: the quarter has no challans in this test tenant)
+    const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/form24q/force-file", headers: hdr(CHECKER, ["super_admin"]), payload: { fy: "2026-27", quarter: "Q4", confirmForce: true, reason: "test: Annexure II from the opening YTD" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { annexureII?: Array<Record<string, unknown>>; annexureIIPrevEmployers?: Array<Record<string, unknown>> };
+    const annexure = body.annexureII ?? [];
+    const row = annexure.find((r) => r.employeeId === E3)!;
+    expect(row).toMatchObject({ grossSalaryMinor: Number(R(GROSS * 12)), preGoLiveSalaryMinor: Number(R(GROSS * 11)), totalTdsDeductedMinor: Number(R(liability)), refundDueMinor: 0 });
+    expect((body.annexureIIPrevEmployers ?? []).filter((p) => p.employeeId === E3)).toEqual([{ employeeId: E3, name: "Earlier Office", tan: "PQRS11111T", salaryMinor: 0, tdsMinor: 0 }]);
+  });
+});
+
+describe("PR #2459 delta review B3: an arrear (overpayment) recovery deferred by the 50% limit is carried forward, not lost", () => {
+  const runFor = async (month: string, runNo: string): Promise<string> => {
+    vi.mocked(fetchPayrollInput).mockResolvedValue({ month, employees: [employee(E4, "TP-EMP-04")], lopDays: {}, overtimeHours: {} } as unknown as Awaited<ReturnType<typeof fetchPayrollInput>>);
+    const res = await app.inject({ method: "POST", url: "/v1/payroll/runs", headers: hdr(MAKER, ["payroll_admin"]), payload: { runNo, month, structureId: STRUCTURE } });
+    expect([201, 202]).toContain(res.statusCode);
+    const id = (res.json().data?.id ?? res.json().id) as string;
+    await waitFor(async () => (await q(sql`SELECT 1 FROM payroll.payroll_register WHERE run_id = ${id}::uuid LIMIT 1`))[0], `${month} computed`);
+    return id;
+  };
+  const recovered = async (run: string): Promise<bigint> => {
+    const [s] = await q(sql`SELECT components FROM payroll.payroll_slips WHERE run_id = ${run}::uuid AND employee_id = ${E4}::uuid`);
+    return (s!.components as Array<{ code: string; amountMinor: number }>).filter((c) => c.code === "ARREAR_RECOVERY").reduce((a, c) => a + BigInt(c.amountMinor), 0n);
+  };
+
+  it("November recovers what fits, re-raises the rest for December; December collects it; the total is recovered or still outstanding", async () => {
+    await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.payroll_arrears (tenant_id, employee_id, component_code, from_period, to_period, old_amount_minor, new_amount_minor, difference_minor, reason, status, source, created_by)
+      VALUES (${TENANT}::uuid, ${E4}::uuid, ${"ARREAR_RECOVERY"}, ${"2026-11"}, ${"2026-11"}, 0, 0, ${R(150_000)}, ${"Excess pay Jul-Sep recovered"}, ${"approved"}, ${"manual"}, ${MAKER}::uuid)`));
+    const nov = await runFor("2026-11", "B19R-NOV");
+    const r1 = await recovered(nov);
+    expect(r1).toBeGreaterThan(0n);
+    expect(r1).toBeLessThan(R(150_000));
+    const [carry1] = await q(sql`SELECT difference_minor::text AS amt, from_period, status, source, carried_from_run_id::text AS from_run FROM payroll.payroll_arrears WHERE employee_id = ${E4}::uuid AND source = ${"carry_forward"} AND run_id IS NULL`);
+    expect(carry1).toMatchObject({ from_period: "2026-12", status: "approved", source: "carry_forward", from_run: nov });
+    expect(BigInt(String(carry1!.amt))).toBe(R(150_000) - r1);
+    const [slip1] = await q(sql`SELECT total_deductions_minor::text AS ded, gross_minor::text AS gross FROM payroll.payroll_slips WHERE run_id = ${nov}::uuid AND employee_id = ${E4}::uuid`);
+    expect(BigInt(String(slip1!.ded))).toBeLessThanOrEqual(BigInt(String(slip1!.gross)) / 2n);
+    const warn = await q(sql`SELECT 1 FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"resourceId"} = ${nov} AND payload->>${"code"} = ${"ARREAR_RECOVERY_CARRIED_FORWARD"}`);
+    expect(warn).toHaveLength(1);
+    // the employee record (arrears list) shows the outstanding recovery
+    const list = await app.inject({ method: "GET", url: `/v1/payroll/arrears?employeeId=${E4}`, headers: hdr(MAKER, ["payroll_admin"]) });
+    expect((list.json().data as Array<{ source: string; status: string }>).some((a) => a.source === "carry_forward" && a.status === "approved")).toBe(true);
+
+    const dec = await runFor("2026-12", "B19R-DEC");
+    const r2 = await recovered(dec);
+    expect(r2).toBeGreaterThan(0n);
+    const outstanding = await q(sql`SELECT COALESCE(SUM(difference_minor), 0)::text AS amt FROM payroll.payroll_arrears WHERE employee_id = ${E4}::uuid AND source = ${"carry_forward"} AND run_id IS NULL`);
+    // November recovered + December recovered + still outstanding (for January) = the whole overpayment
+    expect(r1 + r2 + BigInt(String(outstanding[0]!.amt))).toBe(R(150_000));
+    const [consumed] = await q(sql`SELECT status, run_id::text AS run FROM payroll.payroll_arrears WHERE employee_id = ${E4}::uuid AND source = ${"carry_forward"} AND from_period = ${"2026-12"}`);
+    expect(consumed).toMatchObject({ status: "paid", run: dec });
   });
 });

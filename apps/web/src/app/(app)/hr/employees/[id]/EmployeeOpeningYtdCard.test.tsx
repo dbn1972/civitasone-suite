@@ -45,6 +45,20 @@ describe("EmployeeOpeningYtdCard", () => {
     expect(await screen.findByText(/pending approval/i)).toBeInTheDocument();
   });
 
+  it("delta review SF2: an approved record is corrected by a new version (prefilled, supersedesId)", async () => {
+    const approved = { ...PENDING, status: "approved" };
+    fetchMock.mockResolvedValueOnce(json({ data: [approved] })).mockResolvedValueOnce(json({ id: "y", status: "accepted" }, 202)).mockResolvedValueOnce(json({ data: [approved] }));
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><EmployeeOpeningYtdCard employeeId={EMP} canEnter canDecide={false} /></NextIntlClientProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /correct 2026-27/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText(/tds deducted/i)).toHaveValue("304702.00");
+    fireEvent.change(within(dialog).getByLabelText(/tds deducted/i), { target: { value: "300000" } });
+    fireEvent.change(within(dialog).getByLabelText(/note/i), { target: { value: "Corrected per Q3 24Q statement" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /submit for approval/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string)).toMatchObject({ tdsMinor: "30000000", months: 9, supersedesId: PENDING.id, note: "Corrected per Q3 24Q statement" });
+  });
+
   it("a checker approves a pending record with a note; the maker-checker refusal is explained (Hindi)", async () => {
     fetchMock.mockResolvedValueOnce(json({ data: [PENDING] })).mockResolvedValueOnce(json({ code: "MAKER_CHECKER_VIOLATION" }, 403));
     render(<NextIntlClientProvider locale="hi" messages={hiMessages}><EmployeeOpeningYtdCard employeeId={EMP} canEnter={false} canDecide /></NextIntlClientProvider>);

@@ -1,6 +1,6 @@
 /**
  * UAT T-PERIOD D-14 -- the leave year-end job against Postgres
- * (modules/leave/year-end-job.ts, migration 0263):
+ * (modules/leave/year-end-job.ts, migration 0264):
  *  - dry run (GET /v1/hrms/leave/year-end/preview, the script default) writes nothing;
  *  - apply on 1 Jan 2027 (calendar leave year): EL carried + 15 credited into a
  *    2027-CY allocation, the 2026-27 row emptied; CL lapsed and re-credited;

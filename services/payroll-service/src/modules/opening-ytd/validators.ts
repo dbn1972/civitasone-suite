@@ -23,6 +23,8 @@ export const createOpeningYtdBody = z.object({
   priorEmployerName: z.string().trim().min(2).max(200).optional(),
   priorEmployerTan: z.string().trim().toUpperCase().regex(/^[A-Z]{4}[0-9]{5}[A-Z]$/, "TAN must look like ABCD12345E").optional(),
   note: z.string().trim().min(10).max(1000),
+  /** Delta review SF2: correct an APPROVED record -- a new version that supersedes it once approved (the old one is kept). */
+  supersedesId: z.string().uuid().optional(),
 }).superRefine((b, ctx) => {
   if (b.source === "pre_go_live" && b.months < 1) ctx.addIssue({ code: "custom", path: ["months"], message: "pre_go_live needs the number of months it covers (1..11)" });
   if (b.source === "prior_employer" && !b.priorEmployerName) ctx.addIssue({ code: "custom", path: ["priorEmployerName"], message: "prior_employer needs the employer name (Form 12B)" });

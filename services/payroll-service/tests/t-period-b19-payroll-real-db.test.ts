@@ -4,7 +4,7 @@
  *         net; a slip that pays nothing blocks approval (409
  *         NET_PAY_NON_POSITIVE) until acknowledged with a reason, which is
  *         audited; GET approval-review lists it; the deduction ceiling
- *         defaults to 75% (migration 0164).
+ *         defaults to 75% (migration 0165).
  *  D-11   a FAILED run no longer keeps its month pending_finalisation, so TDS
  *         reconciliation (and the 24Q gate) can match; a draft run still does.
  */

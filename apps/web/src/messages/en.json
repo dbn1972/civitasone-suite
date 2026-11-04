@@ -5631,8 +5631,8 @@
       "tdsKind": {
         "presumed_months": "{employee}: {months} earlier month(s) with no slip and no opening YTD -- salary estimated and TDS presumed deducted. Enter the opening YTD to replace the estimate.",
         "excess": "{employee}: TDS deducted this year exceeds the estimated tax by {amount}; no TDS this month (refundable through the income-tax return).",
-        "shortfall": "{employee}: {amount} of TDS not deducted this month (deduction limit).",
-        "recovery_deferred": "{employee}: {amount} of loan / arrear recovery deferred to keep deductions within the limit."
+        "shortfall": "{employee}: {amount} of TDS not deducted this month (deduction limit, Code on Wages 2019 s.18(2)).",
+        "recovery_deferred": "{employee}: {amount} of loan / arrear recovery deferred to keep deductions within the limit (Code on Wages 2019 s.18(2))."
       }
     }
   },
@@ -18476,7 +18476,8 @@
     "status": {
       "pending": "Pending approval",
       "approved": "Approved",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "superseded": "Superseded by a correction"
     },
     "addButton": "Add opening year-to-date",
     "dialogTitle": "Opening year-to-date",
@@ -18507,7 +18508,11 @@
       "OPENING_YTD_EXISTS": "An opening year-to-date for this year and source already exists. Reject it first to replace it.",
       "OPENING_YTD_DECIDED": "This record has already been decided.",
       "MAKER_CHECKER_VIOLATION": "Someone other than the officer who entered it must approve or reject it.",
+      "OPENING_YTD_PENDING": "A record for this year and source is already waiting for approval.",
+      "OPENING_YTD_SUPERSEDE_INVALID": "Only an approved record of the same year, source and employer can be corrected.",
       "generic": "Could not save. Try again."
-    }
+    },
+    "correctButton": "Correct {fy}",
+    "correctHelp": "Enter the corrected figures. They replace the approved record once another payroll administrator approves them; the old record is kept."
   }
 }

@@ -30,12 +30,32 @@ export async function findOpeningYtd(tenantId: string, id: string): Promise<Open
   return rows[0] ?? null;
 }
 
+/**
+ * The identity of an opening record: employee, FY, source and -- for a previous
+ * employer -- the employer (TAN, else the name), so several previous employers
+ * in one FY each have their own record (Form 12B per employer). Pure.
+ */
+export function openingYtdKey(r: { source: string; priorEmployerTan?: string | null | undefined; priorEmployerName?: string | null | undefined }): string {
+  return r.source === "prior_employer" ? `prior:${(r.priorEmployerTan ?? "").toUpperCase() || (r.priorEmployerName ?? "").trim().toLowerCase()}` : "pre_go_live";
+}
+
 export async function createOpeningYtd(ctx: RequestContext, body: CreateOpeningYtdBody): Promise<Accepted> {
-  const live = await scopedRead((tx) => tx.select({ id: payrollOpeningYtd.id }).from(payrollOpeningYtd).where(and(
+  const rows = await scopedRead((tx) => tx.select().from(payrollOpeningYtd).where(and(
     eq(payrollOpeningYtd.tenantId, ctx.tenantId), eq(payrollOpeningYtd.employeeId, body.employeeId),
     eq(payrollOpeningYtd.fy, body.fy), eq(payrollOpeningYtd.source, body.source), ne(payrollOpeningYtd.status, "rejected"),
-  )).limit(1));
-  if (live.length > 0) throw new HttpError(409, "OPENING_YTD_EXISTS", `an opening YTD (${body.source}) for ${body.fy} already exists for this employee; reject it first to replace it`);
+  )));
+  const key = openingYtdKey(body);
+  const same = rows.filter((r) => openingYtdKey(r) === key);
+  if (same.some((r) => r.status === "pending")) throw new HttpError(409, "OPENING_YTD_PENDING", `an opening YTD (${body.source}) for ${body.fy} is already pending approval for this employee`);
+  const approved = same.find((r) => r.status === "approved");
+  if (body.supersedesId) {
+    const target = rows.find((r) => r.id === body.supersedesId);
+    if (!target || target.status !== "approved" || openingYtdKey(target) !== key) {
+      throw new HttpError(422, "OPENING_YTD_SUPERSEDE_INVALID", "supersedesId must name the APPROVED opening YTD of the same employee, FY, source and employer");
+    }
+  } else if (approved) {
+    throw new HttpError(409, "OPENING_YTD_EXISTS", `an approved opening YTD (${body.source}) for ${body.fy} already exists for this employee; send a correction with supersedesId`);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.openingYtdCreate, {
     messageId: id, type: COMMANDS.openingYtdCreate,

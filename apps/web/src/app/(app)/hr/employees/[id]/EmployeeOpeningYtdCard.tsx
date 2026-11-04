@@ -18,10 +18,10 @@ import { formatMinorString } from "@/lib/payroll/runMoney";
 export interface OpeningYtd {
   id: string; fy: string; source: "pre_go_live" | "prior_employer"; months: number;
   salaryMinor: string; tdsMinor: string; priorEmployerName: string | null; priorEmployerTan: string | null;
-  note: string; status: "pending" | "approved" | "rejected"; decisionNote: string | null;
+  note: string; status: "pending" | "approved" | "rejected" | "superseded"; decisionNote: string | null; supersedesId?: string | null;
 }
 
-const KNOWN_ERRORS = ["OPENING_YTD_EXISTS", "OPENING_YTD_DECIDED", "MAKER_CHECKER_VIOLATION"] as const;
+const KNOWN_ERRORS = ["OPENING_YTD_EXISTS", "OPENING_YTD_PENDING", "OPENING_YTD_SUPERSEDE_INVALID", "OPENING_YTD_DECIDED", "MAKER_CHECKER_VIOLATION"] as const;
 type KnownError = (typeof KNOWN_ERRORS)[number];
 
 /** The current Indian financial year label (YYYY-YY) for a date. */
@@ -45,6 +45,8 @@ export function EmployeeOpeningYtdCard(props: { employeeId: string; canEnter: bo
   const [tan, setTan] = useState("");
   const [note, setNote] = useState("");
   const [decisionNote, setDecisionNote] = useState("");
+  // Delta review SF2: a correction of an approved record is a new version (supersedesId).
+  const [supersedesId, setSupersedesId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -87,11 +89,12 @@ export function EmployeeOpeningYtdCard(props: { employeeId: string; canEnter: bo
         body: JSON.stringify({
           employeeId, fy, source, months: source === "pre_go_live" ? m : 0, salaryMinor, tdsMinor, note: note.trim(),
           ...(source === "prior_employer" ? { priorEmployerName: name.trim(), ...(tan.trim() ? { priorEmployerTan: tan.trim().toUpperCase() } : {}) } : {}),
+          ...(supersedesId ? { supersedesId } : {}),
         }),
       });
       if (!res.ok) { setFormError(await errorText(res)); return; }
       setOpen(false);
-      setSalary(""); setTds(""); setMonths(""); setName(""); setTan(""); setNote("");
+      setSalary(""); setTds(""); setMonths(""); setName(""); setTan(""); setNote(""); setSupersedesId(null);
       setMessage({ kind: "ok", text: t("submitted") });
       await load();
     } catch {
@@ -147,6 +150,15 @@ export function EmployeeOpeningYtdCard(props: { employeeId: string; canEnter: bo
                 <td>{formatMinorString(r.tdsMinor)}</td>
                 <td>
                   {t(`status.${r.status}`)}
+                  {r.status === "approved" && canEnter && (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" className="btn ghost" disabled={busy} style={{ minHeight: 44 }} onClick={() => {
+                        setFormError(null); setSupersedesId(r.id); setFy(r.fy); setSource(r.source); setMonths(String(r.months));
+                        setSalary((Number(r.salaryMinor) / 100).toFixed(2)); setTds((Number(r.tdsMinor) / 100).toFixed(2));
+                        setName(r.priorEmployerName ?? ""); setTan(r.priorEmployerTan ?? ""); setNote(""); setOpen(true);
+                      }}>{t("correctButton", { fy: r.fy })}</button>
+                    </div>
+                  )}
                   {r.status === "pending" && canDecide && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                       <button type="button" className="btn" disabled={busy} onClick={() => void decide(r, "approve")} style={{ minHeight: 44 }}>{t("approveButton", { fy: r.fy })}</button>
@@ -166,12 +178,12 @@ export function EmployeeOpeningYtdCard(props: { employeeId: string; canEnter: bo
         </>
       )}
       {canEnter && (
-        <button type="button" className="btn" onClick={() => { setFormError(null); setOpen(true); }} style={{ minHeight: 44 }}>{t("addButton")}</button>
+        <button type="button" className="btn" onClick={() => { setFormError(null); setSupersedesId(null); setOpen(true); }} style={{ minHeight: 44 }}>{t("addButton")}</button>
       )}
       {message && <p role={message.kind === "error" ? "alert" : "status"} style={{ margin: "10px 0 0", fontSize: 13 }}>{message.text}</p>}
 
       <Modal open={open} onClose={() => !busy && setOpen(false)} title={t("dialogTitle")} describedById={ids.help}>
-        <p id={ids.help} style={{ margin: "0 0 10px", color: "var(--mut)", fontSize: 13 }}>{t("dialogHelp")}</p>
+        <p id={ids.help} style={{ margin: "0 0 10px", color: "var(--mut)", fontSize: 13 }}>{supersedesId ? t("correctHelp") : t("dialogHelp")}</p>
         <div style={{ display: "grid", gap: 10 }}>
           <label htmlFor={ids.fy} className="l">{t("fyLabel")}</label>
           <input id={ids.fy} className="inp" value={fy} onChange={(e) => setFy(e.target.value)} placeholder="2026-27" aria-required="true" style={{ minHeight: 44 }} />
