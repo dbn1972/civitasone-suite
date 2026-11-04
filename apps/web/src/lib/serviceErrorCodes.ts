@@ -423,6 +423,23 @@ export const SERVICE_CODE_MESSAGES: Record<string, ServiceCodeMessage> = {
     ["retry", "help"],
   ), alsoAt401: true },
   EMPTY_PATCH: NO_CHANGE_MESSAGE,
+  // hrms device trust: an administrator blocked this device (403). A security block: refreshing never helps.
+  DEVICE_BLOCKED: msg(
+    { what: "This device has been blocked for security reasons.", next: "Contact your administrator." },
+    { what: "सुरक्षा कारणों से इस उपकरण को अवरुद्ध कर दिया गया है।", next: "अपने प्रशासक से संपर्क करें।" },
+    ["back", "help"],
+  ),
+  // ai-agent-service: the input was stopped by the safety guardrails (422).
+  GUARDRAIL_BLOCKED: msg(
+    { what: "The assistant can't help with this request.", next: "Rephrase it, or contact your administrator if you think this is wrong." },
+    { what: "सहायक इस अनुरोध में मदद नहीं कर सकता।", next: "इसे दूसरे शब्दों में लिखें, या यदि आपको लगता है कि यह ग़लत है तो अपने प्रशासक से संपर्क करें।" },
+    ["retry", "help"],
+  ),
+  // estab linkage: the initiating officer is not enrolled as an eOffice operator with initiate rights.
+  CANNOT_INITIATE: msg(
+    { what: "You don't have the eOffice rights to start this file.", next: "Ask your eOffice administrator to enrol you as an operator with initiate rights, or ask an officer who has them." },
+    { what: "यह फ़ाइल शुरू करने के लिए आपके पास ई-ऑफ़िस के अधिकार नहीं हैं।", next: "अपने ई-ऑफ़िस प्रशासक से स्वयं को आरंभ करने के अधिकार वाले संचालक के रूप में नामांकित करवाएँ, या ऐसे अधिकार वाले किसी अधिकारी से कहें।" },
+  ),
   CALL_TASK: msg(
     { what: "This step is done by a phone call, not on this screen.", next: "Make the call, then record the outcome on the task." },
     { what: "यह चरण फ़ोन कॉल से पूरा होता है, इस स्क्रीन से नहीं।", next: "कॉल करें, फिर कार्य पर परिणाम दर्ज करें।" },
@@ -444,6 +461,8 @@ type Family = {
   object?: { en: string; hi: string };
   /** Statuses for which the family does not apply (the status copy is truer there). */
   notForStatus?: number[];
+  /** The family applies only to these statuses (a name whose meaning depends on the status). */
+  onlyForStatus?: number[];
 };
 
 /**
@@ -462,10 +481,10 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "alreadyBooked",
-    pattern: /^(BOOKING|ROOM|VEHICLE|SLOT|VENUE|HALL|DRIVER|RESOURCE)_CONFLICT$|_SLOT_CONFLICT$|DOUBLE_BOOKED|_ALREADY_BOOKED$/,
+    pattern: /^(BOOKING|ROOM|VEHICLE|SLOT|VENUE|HALL|DRIVER|RESOURCE)_CONFLICT$|_SLOT_CONFLICT$|DOUBLE_BOOKED|_ALREADY_(BOOKED|OCCUPIED|ALLOTTED|RESERVED)$/,
     message: msg(
-      { what: "This is already booked for that time.", next: "Choose a different time, or a different room, vehicle or slot, then try again." },
-      { what: "उस समय के लिए यह पहले से बुक है।", next: "कोई दूसरा समय, या दूसरा कक्ष, वाहन या स्लॉट चुनें, फिर प्रयास करें।" },
+      { what: "This is already booked or allotted to someone else.", next: "Choose a different one, or a different time, then try again." },
+      { what: "यह पहले से किसी और के लिए बुक या आवंटित है।", next: "कोई दूसरा विकल्प या दूसरा समय चुनें, फिर प्रयास करें।" },
       ["retry", "help"],
     ),
   },
@@ -526,8 +545,17 @@ export const CODE_FAMILIES: Family[] = [
     ),
   },
   {
+    id: "alreadyPending",
+    pattern: /(^|_)ALREADY_PENDING(_|$)|^REQUEST_ALREADY_OPEN$/,
+    message: msg(
+      { what: "A request for this is already pending.", next: "Wait for it to be decided, then try again if you still need to." },
+      { what: "इसके लिए एक अनुरोध पहले से लंबित है।", next: "उस पर निर्णय होने तक प्रतीक्षा करें, फिर ज़रूरत हो तो दोबारा प्रयास करें।" },
+    ),
+  },
+  {
     id: "alreadyDone",
     pattern: /^ALREADY_[A-Z_]+$|_ALREADY_[A-Z_]+$/,
+    except: /PENDING|_OPEN$/,
     message: msg(
       { what: "This has already been done.", next: "Refresh to see its current status." },
       { what: "यह कार्य पहले ही हो चुका है।", next: "इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।" },
@@ -538,8 +566,35 @@ export const CODE_FAMILIES: Family[] = [
   {
     id: "stateTransition",
     pattern:
-      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|^WRONG_STATE$|_WRONG_STATE$|^CANNOT_[A-Z_]+$|_BLOCKED$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACTIVE|FINAL|PASSED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY|ACTIVE|FINAL|PASSED)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
-    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$|^SSRF_BLOCKED$|INJECTION_BLOCKED$/,
+      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|^WRONG_STATE$|_WRONG_STATE$|_BLOCKED$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACTIVE|FINAL|PASSED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY|ACTIVE|FINAL|PASSED)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
+    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$|^SSRF_BLOCKED$|INJECTION_BLOCKED$|^DEVICE_BLOCKED$|^GUARDRAIL_BLOCKED$/,
+    object: RECORD,
+    message: msg(
+      { what: "This {object} is not at a stage that allows this action.", next: "Refresh the page to see its current status, then choose an action that is available." },
+      { what: "यह {object} ऐसे चरण में नहीं है जहाँ यह कार्रवाई की जा सके।", next: "इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें, फिर उपलब्ध कार्रवाई चुनें।" },
+      ["retry", "help"],
+    ),
+  },
+  // CANNOT_<verb>: a state rule at 409/422, a permission refusal at 403; at any other status the status copy.
+  {
+    id: "cannotPermission",
+    pattern: /^CANNOT_[A-Z_]+$/,
+    onlyForStatus: [403],
+    message: msg(
+      {
+        what: "This action isn't available to you.",
+        next: "Only an officer with the right role can do it. Ask your administrator if you need access.",
+      },
+      {
+        what: "यह कार्रवाई आपके लिए उपलब्ध नहीं है।",
+        next: "इसे केवल उपयुक्त भूमिका वाले अधिकारी कर सकते हैं। पहुँच चाहिए तो अपने प्रशासक से कहें।",
+      },
+    ),
+  },
+  {
+    id: "cannotState",
+    pattern: /^CANNOT_[A-Z_]+$/,
+    onlyForStatus: [409, 422],
     object: RECORD,
     message: msg(
       { what: "This {object} is not at a stage that allows this action.", next: "Refresh the page to see its current status, then choose an action that is available." },
@@ -690,10 +745,13 @@ export function isServiceCode(code: unknown): code is string {
   return typeof code === "string" && /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(code);
 }
 
-/** The naming family a code belongs to, or null (then the status copy is used). */
-export function codeFamily(code: string): Family | null {
+/** The naming family a code belongs to at a status, or null (then the status copy is used). */
+export function codeFamily(code: string, status?: number): Family | null {
   for (const f of CODE_FAMILIES) {
-    if (f.pattern.test(code) && !(f.except && f.except.test(code))) return f;
+    if (!f.pattern.test(code) || (f.except && f.except.test(code))) continue;
+    if (f.onlyForStatus && (status === undefined || !f.onlyForStatus.includes(status))) continue;
+    if (f.notForStatus && status !== undefined && f.notForStatus.includes(status)) continue;
+    return f;
   }
   return null;
 }
@@ -722,9 +780,8 @@ export function resolveServiceCode(
   // Families refine a 4xx answer only; with no status (a bare code thrown in the browser) they also apply.
   if (authoritative) return null;
   if (opts?.status !== undefined && (opts.status < 400 || opts.status >= 500)) return null;
-  const f = codeFamily(code);
+  const f = codeFamily(code, opts?.status);
   if (!f) return null;
-  if (f.notForStatus && opts?.status !== undefined && f.notForStatus.includes(opts.status)) return null;
   if (f.id === "duplicate") return { source: "family", id: "duplicate", duplicate: true };
   if (f.deferToFieldErrors && opts?.hasFieldErrors) return { source: "family", id: f.id, kind: "validation" };
   if (f.kind) return { source: "family", id: f.id, kind: f.kind, object: f.object };

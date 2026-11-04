@@ -117,7 +117,7 @@ describe("service error codes: harvest and coverage", () => {
   it("every code thrown with 409 that has no entry and no family reads as the neutral 409 copy", () => {
     expect(at409.size).toBeGreaterThan(100);
     for (const code of at409) {
-      if (handMapped(code) || codeFamily(code)) continue;
+      if (handMapped(code) || codeFamily(code, 409)) continue;
       const e = resolveHumanError({ status: 409, code, ctx: { locale: "en" } });
       expect(e.what + " " + e.next, code).toBe(NEUTRAL_409_EN);
       const h = resolveHumanError({ status: 409, code, ctx: { locale: "hi" } });
@@ -129,7 +129,7 @@ describe("service error codes: harvest and coverage", () => {
     for (const code of codes) {
       const e = resolveHumanError({ status: 409, code, ctx: { locale: "en" } });
       if (/changed by someone else/.test(e.what)) {
-        expect(DOMAIN_CODE_MESSAGES[code] !== undefined || codeFamily(code)?.id === "versionConflict", code).toBe(true);
+        expect(DOMAIN_CODE_MESSAGES[code] !== undefined || codeFamily(code, 409)?.id === "versionConflict", code).toBe(true);
       }
     }
   });
@@ -182,7 +182,7 @@ type Cat =
   | "status" | "serverSide" | "explicit" | "versionConflict" | "alreadyBooked" | "notFound" | "duplicate" | "separationOfDuties"
   | "permission" | "rateLimited" | "alreadyDecided" | "stateTransition" | "linkExpired" | "documentExpired" | "windowClosed"
   | "tooLow" | "tooHigh" | "overlap" | "notConfigured" | "disabled" | "inactive" | "required" | "validation" | "upstream" | "domain"
-  | "fileTooLarge" | "mismatch" | "inUse" | "alreadyDone";
+  | "fileTooLarge" | "mismatch" | "inUse" | "alreadyDone" | "alreadyPending" | "cannotState" | "cannotPermission";
 const TABLE: Array<[code: string, status: number, cat: Cat]> = [
   // 5xx / 429 never turn into a user-fault message
   ["CIRCUIT_OPEN", 503, "serverSide"], ["GATEWAY_CIRCUIT_OPEN", 503, "serverSide"], ["SIGNING_SELF_CHECK_FAILED", 500, "serverSide"],
@@ -231,12 +231,18 @@ const TABLE: Array<[code: string, status: number, cat: Cat]> = [
   ["UNSIGNED_NOT_ALLOWED_IN_PRODUCTION", 422, "explicit"],
   // delta review: 409 state, already-done and in-use rules
   ["WRONG_STATE", 409, "stateTransition"], ["NOT_ACTIVE", 409, "stateTransition"], ["LOAN_NOT_ACTIVE", 409, "stateTransition"], ["INSTANCE_NOT_ACTIVE", 409, "stateTransition"],
-  ["SLIP_NOT_FINAL", 409, "stateTransition"], ["TEST_NOT_PASSED", 409, "stateTransition"], ["CANNOT_REOPEN", 409, "stateTransition"], ["REOPEN_BLOCKED", 409, "stateTransition"],
+  ["SLIP_NOT_FINAL", 409, "stateTransition"], ["TEST_NOT_PASSED", 409, "stateTransition"], ["CANNOT_REOPEN", 409, "cannotState"], ["REOPEN_BLOCKED", 409, "stateTransition"],
   ["CLOSE_BLOCKED", 409, "stateTransition"], ["ARCHIVE_BLOCKED", 409, "stateTransition"],
   ["IN_USE", 409, "inUse"], ["DDO_IN_USE", 409, "inUse"], ["TYPE_IN_USE", 409, "inUse"], ["STAGE_IN_USE", 409, "inUse"], ["PIPELINE_IN_USE", 409, "inUse"],
   ["HAS_ACTIVE_CHILDREN", 409, "inUse"], ["HAS_ACTIVE_POSITIONS", 409, "inUse"], ["PAY_GROUP_HAS_MEMBERS", 409, "inUse"], ["QUESTION_HAS_ANSWERS", 409, "inUse"],
   ["ALREADY_FILED", 409, "alreadyDone"], ["ALREADY_PUBLISHED", 409, "alreadyDone"], ["ALREADY_ENROLLED", 409, "alreadyDone"], ["ALREADY_ASSIGNED", 409, "alreadyDone"],
-  ["ALREADY_ACTIVE", 409, "alreadyDone"], ["ALREADY_PENDING", 409, "alreadyDone"], ["ALREADY_PENDING_APPROVAL", 409, "alreadyDone"], ["REQUEST_ALREADY_OPEN", 409, "alreadyDone"],
+  ["ALREADY_ACTIVE", 409, "alreadyDone"], ["ALREADY_PENDING", 409, "alreadyPending"], ["ALREADY_PENDING_APPROVAL", 409, "alreadyPending"], ["REQUEST_ALREADY_OPEN", 409, "alreadyPending"],
+  // delta review 2
+  ["REQUEST_ALREADY_PENDING", 409, "alreadyPending"], ["APPROVAL_ALREADY_PENDING", 409, "alreadyPending"], ["DISPOSAL_ALREADY_PENDING", 409, "alreadyPending"],
+  ["SLOT_ALREADY_OCCUPIED", 409, "alreadyBooked"], ["SEAT_ALREADY_ALLOTTED", 409, "alreadyBooked"],
+  ["DEVICE_BLOCKED", 403, "explicit"], ["GUARDRAIL_BLOCKED", 422, "explicit"], ["CANNOT_INITIATE", 403, "explicit"], ["CANNOT_INITIATE", 409, "explicit"],
+  ["CANNOT_CANCEL", 403, "cannotPermission"], ["CANNOT_CANCEL", 409, "cannotState"], ["CANNOT_CANCEL", 422, "cannotState"], ["CANNOT_CANCEL", 400, "status"],
+  ["DAO_GATE_BLOCKED", 409, "stateTransition"], ["VERSION_ALREADY_OPEN", 422, "status"], ["REOPEN_BLOCKED", 422, "stateTransition"],
   ["NOT_AN_EXACT_MATCH", 409, "status"], ["ROOM_AT_CAPACITY", 409, "explicit"], ["PT_BACKDATE_REASON_REQUIRED", 422, "required"],
 ];
 
@@ -271,6 +277,19 @@ describe("service error codes: regression table from the #2451 review", () => {
   it("an OTP refused with 401 on a public page says the code is wrong, not that a session ended", () => {
     const r = resolveHumanError({ status: 401, code: "OTP_INVALID", ctx: { locale: "en" } });
     expect(r.what).toBe("The code you entered is not correct.");
+  });
+
+  it("a blocked device and a guardrail refusal never say refresh or stage", () => {
+    const d = resolveHumanError({ status: 403, code: "DEVICE_BLOCKED", ctx: { locale: "en" } });
+    expect(d.what + " " + d.next).toBe("This device has been blocked for security reasons. Contact your administrator.");
+    const g = resolveHumanError({ status: 422, code: "GUARDRAIL_BLOCKED", ctx: { locale: "en" } });
+    expect(g.what + " " + g.next).toBe("The assistant can" + String.fromCharCode(39) + "t help with this request. Rephrase it, or contact your administrator if you think this is wrong.");
+    for (const r of [d, g]) expect(r.what + r.next).not.toMatch(/refresh|stage/i);
+  });
+
+  it("a pending code says a request is already pending, never already done", () => {
+    const r = resolveHumanError({ status: 409, code: "APPROVAL_ALREADY_PENDING", ctx: { locale: "en" } });
+    expect(r.what + " " + r.next).toBe("A request for this is already pending. Wait for it to be decided, then try again if you still need to.");
   });
 
   it("the not-pending family says decided or not at this step, never wait", () => {
