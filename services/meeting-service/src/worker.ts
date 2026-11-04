@@ -32,6 +32,7 @@ import { isNonRetryable } from "@civitasone/queue";
 import { captureError, incrementDlqMessage } from "@civitasone/observability";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { runWithTenant } from "@civitasone/db";
+import { makeConsumerRouter, normaliseThrown } from "./shared/consumer-router.js";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -129,29 +130,36 @@ const MODULE_REGISTRARS: ModuleRegistrar[] = [
 for (const register of MODULE_REGISTRARS) register(registerConsumer);
 
 // ── Routing + DLQ ────────────────────────────────────────────────────────────
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Dead-letter a message with full investigation context. Emits a DLQ metric +
  * captured error + structured ERROR log (the durable record of last resort),
  * then best-effort re-publishes the original envelope onto the service DLQ topic
  * for replay. A DLQ publish failure is logged but never crashes the worker.
+ *
+ * UAT J14: `err` is always an Error here (shared/consumer-router.ts normalises
+ * whatever the handler threw) and it is logged AS the Error, so the safe
+ * serializer keeps its type, message, stack and cause. It used to be logged as
+ * its stack string, which the serializer reduces to "non-Error value thrown".
+ * After this returns the router rethrows a NonRetryableError, so the bus also
+ * parks the original message in the topic DLQ (<topic>__meeting-service-dlq).
  */
-async function deadLetter(originTopic: string, msg: CommandEnvelope, err: unknown): Promise<void> {
-  const reason = err instanceof Error ? err.message : String(err);
+async function deadLetter(originTopic: string, msg: CommandEnvelope, err: Error, attempts: number): Promise<void> {
+  const reason = err.message;
   const context = {
     service: SERVICE,
     topic: originTopic,
     messageId: msg.messageId,
     correlationId: msg.correlationId,
     tenantId: msg.tenantId,
-    attempts: MAX_ATTEMPTS,
+    attempts,
+    retryable: !isNonRetryable(err),
     outcome: "dead-lettered" as const,
   };
 
   incrementDlqMessage(originTopic);
   captureError(err, context);
-  log.error({ ...context, err: err instanceof Error ? err.stack : reason }, "consumer failed — routing to DLQ");
+  log.error({ ...context, err }, "consumer failed — routing to DLQ");
 
   try {
     await queue.publish(DLQ_TOPIC, {
@@ -168,54 +176,35 @@ async function deadLetter(originTopic: string, msg: CommandEnvelope, err: unknow
         originTopic,
         reason,
         failedAt: new Date().toISOString(),
-        attempts: MAX_ATTEMPTS,
+        attempts,
         original: msg,
       },
     });
   } catch (publishErr) {
-    log.error(
-      { ...context, err: publishErr instanceof Error ? publishErr.stack : String(publishErr) },
-      "failed to publish message to DLQ topic",
-    );
+    log.error({ ...context, err: normaliseThrown(publishErr) }, "failed to publish message to DLQ topic");
   }
 }
 
 /**
- * Build the retry+DLQ router for `topic`. Looks up the registered module handler
- * on every delivery (so registrations added at boot are always visible), retries
- * transient failures with exponential backoff, and dead-letters on exhaustion or
- * a NonRetryableError.
+ * Build the retry+DLQ router for `topic` (shared/consumer-router.ts): transient
+ * failures are retried with exponential backoff; a validation or business-rule
+ * failure, or exhaustion, is dead-lettered.
  */
 function makeRouter(topic: string): Handler {
-  return async (msg: CommandEnvelope): Promise<void> => {
-    const handler = consumerRegistry.get(topic);
-    if (!handler) {
-      // No module handler yet (pre-task-19.1) — ack + WARN so the message does
-      // not loop invisibly. Becomes a real route once the module lands.
-      log.warn({ topic, messageId: msg.messageId, tenantId: msg.tenantId }, "no consumer registered for topic — skipping");
-      return;
-    }
-
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        // Establish the tenant context from the message so the consumer's
-        // db.transaction() sets the app.tenant_id GUC — RLS is enforced on the
-        // write path too (not merely on a BYPASSRLS role). REQUIRED now that
-        // meeting.* tables are FORCE ROW LEVEL SECURITY (migration 0005).
-        await runWithTenant(msg.tenantId, () => handler(msg));
-        return;
-      } catch (err) {
-        lastErr = err;
-        // Permanent business rejection — do not waste retries, dead-letter now.
-        if (isNonRetryable(err)) break;
-        if (attempt < MAX_ATTEMPTS) {
-          await sleep(BACKOFF_MS[attempt - 1] ?? 4000);
-        }
-      }
-    }
-    await deadLetter(topic, msg, lastErr);
-  };
+  return makeConsumerRouter({
+    topic,
+    getHandler: (t) => consumerRegistry.get(t),
+    // Establish the tenant context from the message so the handler
+    // db.transaction() sets the app.tenant_id GUC — RLS is enforced on the
+    // write path too (not merely on a BYPASSRLS role). REQUIRED now that
+    // meeting.* tables are FORCE ROW LEVEL SECURITY (migration 0005).
+    runInTenant: async (tenantId, fn) => { await runWithTenant(tenantId, fn); },
+    deadLetter,
+    // No module handler yet — ack + WARN so the message does not loop invisibly.
+    onMissingHandler: (t, msg) => log.warn({ topic: t, messageId: msg.messageId, tenantId: msg.tenantId }, "no consumer registered for topic — skipping"),
+    maxAttempts: MAX_ATTEMPTS,
+    backoffMs: BACKOFF_MS,
+  });
 }
 
 // (2) Subscribe to every owned COMMANDS topic + every CONSUMED_EVENTS topic.

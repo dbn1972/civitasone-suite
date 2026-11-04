@@ -54,7 +54,7 @@ import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, allowedTargets, canTransition, isMeetingState } from "./domain.js";
+import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, MEETING_ADMIN_ROLES, allowedTargets, canTransition, isMeetingState } from "./domain.js";
 import { httpError } from "../../shared/context.js";
 import {
   createMeetingSchema,
@@ -77,7 +77,7 @@ import * as commands from "./commands.js";
 // ─── RBAC role groups (design § Access Control Matrix — Meetings) ────────────
 
 /** Platform/tenant + meeting admins — Full CRUD + tenant config authority. */
-const ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
+const ADMIN_ROLES: string[] = [...MEETING_ADMIN_ROLES];
 /** Create/Edit meetings + series (admins + secretariat). */
 const WRITE_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin", "admin"];
 /** Drive the state machine — transitions incl. cancel (admins + chairperson). */
