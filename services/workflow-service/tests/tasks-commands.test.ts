@@ -104,7 +104,7 @@ describe("tasks/commands — completeTask", () => {
     await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 403, code: "SELF_APPROVAL_DENIED" });
   });
 
-  it("returns 409 for already-completed task", async () => {
+  it("returns 409 TASK_ALREADY_DECIDED (with who decided) for an already-completed task (UAT T-EDGE TE-08)", async () => {
     q = new TestQueue();
     registerInstancesConsumers(q);
     registerTasksConsumers(q);
@@ -113,12 +113,16 @@ describe("tasks/commands — completeTask", () => {
     const actorId = randomUUID();
     const { taskId } = await setupTask(tenantId, actorId);
 
-    // Mark task as completed directly
-    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${taskId}`);
+    // Mark task as completed directly, by another checker
+    const decider = randomUUID();
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed', decision = 'approve', completed_by = ${decider} WHERE id = ${taskId}`);
 
     const completor = randomUUID();
     const ctx = makeCtx(tenantId, completor, ["super_admin"]);
-    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({
+      status: 409, code: "TASK_ALREADY_DECIDED",
+      details: { decision: "approve", decidedBy: { id: decider } },
+    });
   });
 
   it("returns 409 CALL_TASK for a call task", async () => {

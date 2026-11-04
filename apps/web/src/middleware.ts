@@ -206,6 +206,13 @@ async function forgetThenContinue(req: NextRequest): Promise<NextResponse> {
 }
 
 function loginRedirect(req: NextRequest): NextResponse {
+  // UAT T-EDGE TE-10 / TE-14: an API call with no live session used to get a 307 to the
+  // sign-in page, which fetch() followed (a POST then ended in 405), so the form said "a
+  // problem on our side". API calls now get a JSON 401 SESSION_EXPIRED the page can explain
+  // ("Your session has expired. Sign in again ..."), with the typed entries kept.
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
+  }
   const login = new URL(defaultLoginPath(), req.url);
   login.searchParams.set("next", req.nextUrl.pathname);
   return NextResponse.redirect(login);

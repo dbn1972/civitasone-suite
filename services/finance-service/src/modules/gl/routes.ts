@@ -4,7 +4,10 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
-import { findControlAccountRefs } from "../budget/repo.js";
+import { findControlAccountRefs, findHeadByCodeTx } from "../budget/repo.js";
+import { scopedRead } from "../../shared/db.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
+import { idempotentCreate } from "../../shared/idempotency.js";
 import { getPeriodStatusDb } from "../period-close/repo.js";
 import { assertNoControlAccounts, DomainError } from "./domain.js";
 import { periodPostingRefusal, voucherNeedsAllocation } from "./posting-rules.js";
@@ -45,6 +48,43 @@ async function assertPeriodAcceptsPosting(tenantId: string, postingDate: string,
   if (refusal) {
     throw new HttpError(422, refusal.code, refusal.message, [{ field: "postingDate", message: PERIOD_FIELD_MESSAGE[refusal.code] }]);
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * UAT T-EDGE TE-07 (J16): a journal line naming an account code that is not in the chart of
+ * accounts was accepted as a draft that could never post (the posting consumer refuses it as
+ * UNKNOWN_ACCOUNT_CODE). Checked here with the same lookup, as a field error on that line.
+ * A head UUID passes through, exactly as in the consumer.
+ */
+async function assertKnownAccountCodes(tenantId: string, lines: Array<{ accountCode: string }>): Promise<void> {
+  const codes = [...new Set(lines.map((l) => l.accountCode).filter((c) => !UUID_RE.test(c)))];
+  if (codes.length === 0) return;
+  const found = await scopedRead(async (tx) => {
+    const known = new Set<string>();
+    for (const code of codes) if (await findHeadByCodeTx(tx as Parameters<typeof findHeadByCodeTx>[0], tenantId, code)) known.add(code);
+    return known;
+  });
+  const fieldErrors = lines.flatMap((l, i) => (UUID_RE.test(l.accountCode) || found.has(l.accountCode)
+    ? []
+    : [{ field: `lines.${i}.accountCode`, message: "This account code is not in the chart of accounts.", code: "UNKNOWN_ACCOUNT_CODE" }]));
+  if (fieldErrors.length > 0) throw new HttpError(422, "UNKNOWN_ACCOUNT_CODE", "one or more account codes are not in the chart of accounts", fieldErrors);
+}
+
+/**
+ * UAT T-EDGE TE-08: the losing checker of a parallel approval was told 202 "accepted". A journal
+ * that is already posted (decided) is now a synchronous 409 TASK_ALREADY_DECIDED naming who
+ * decided it. Name lookup fails open to null (the web then says "another officer").
+ */
+async function alreadyDecided(tenantId: string, journal: { status: string; updatedBy: string | null; updatedAt?: Date | string | null }): Promise<HttpError> {
+  const names = journal.updatedBy ? await fetchUserNames(tenantId, [journal.updatedBy]) : new Map<string, string>();
+  const decidedByName = journal.updatedBy ? names.get(journal.updatedBy) ?? null : null;
+  return new HttpError(409, "TASK_ALREADY_DECIDED", `this journal was already decided (${journal.status})${decidedByName ? ` by ${decidedByName}` : ""}`, undefined, {
+    decision: journal.status,
+    decidedBy: journal.updatedBy ? { id: journal.updatedBy, name: decidedByName } : null,
+    decidedAt: journal.updatedAt ? new Date(journal.updatedAt).toISOString() : null,
+  });
 }
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
@@ -95,10 +135,14 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
         ]);
       }
     }
+    await assertKnownAccountCodes(ctx.tenantId, body.lines);
     // DOM-024: this now creates a pending_approval draft, not a posted
     // journal — see gl/commands.ts createJournal() / gl/consumer.ts
     // finance.gl.create.
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createJournal(ctx, body));
+    // UAT T-EDGE TE-09: one journal per X-Idempotency-Key (same body replays the first 202,
+    // another body is a 422). The checks above are replay-safe (the duplicate-voucher check
+    // already skips this request own journal id), so only the publish is wrapped.
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.journal.create", body, () => commands.createJournal(ctx, body)));
   });
 
   // DOM-024 R11 (maker-checker) — a checker approves/posts a pending manual
@@ -120,6 +164,8 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     if (draft.status === "rejected") {
       throw new HttpError(409, "JOURNAL_REJECTED", "this journal was rejected and cannot be approved; raise a new voucher");
     }
+    // UAT T-EDGE TE-08: already posted by another checker -> 409 with who decided, not 202.
+    if (draft.status === "posted" || draft.status === "reversed") throw await alreadyDecided(ctx.tenantId, draft);
     // F107: the maker approving their own draft is refused now (403), not 202-accepted and dead-lettered later in the
     // queue. The consumer keeps its own check (assertDistinctMakerChecker) for anything that reaches it another way.
     if (draft.status === "pending_approval" && draft.createdBy === ctx.actorId) {

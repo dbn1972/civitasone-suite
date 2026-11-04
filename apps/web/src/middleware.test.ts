@@ -150,12 +150,24 @@ describe("middleware map assets", () => {
 // future route that merely shares leading letters (/contacts, /authz, /verifyx)
 // would silently skip the session check.
 describe("middleware public allow-list segment boundary (V4-A-04)", () => {
-  it.each(["/contacts", "/api/contacts", "/authz", "/api/authz", "/verifyx", "/careers-admin", "/api/careersX", "/sandboxes", "/api/metricsx"])(
+  it.each(["/contacts", "/authz", "/verifyx", "/careers-admin", "/sandboxes"])(
     "keeps %s private (redirects an anonymous visitor)",
     async (path) => {
       const res = (await middleware(anonReq(path)));
       expect(res.status).toBe(307);
       expect(res.headers.get("location")).toContain("/auth/login");
+    },
+  );
+
+  // UAT T-EDGE TE-10 / TE-14: an API path is just as private, but answers a JSON 401
+  // SESSION_EXPIRED instead of a redirect fetch() would follow into the sign-in page.
+  it.each(["/api/contacts", "/api/authz", "/api/careersX", "/api/metricsx"])(
+    "keeps %s private (401 SESSION_EXPIRED for an anonymous API call)",
+    async (path) => {
+      const res = (await middleware(anonReq(path)));
+      expect(res.status).toBe(401);
+      expect(res.headers.get("location")).toBeNull();
+      expect((await res.json()).code).toBe("SESSION_EXPIRED");
     },
   );
 

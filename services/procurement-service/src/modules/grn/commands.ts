@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
@@ -41,6 +42,14 @@ export async function createGrn(ctx: RequestContext, input: CreateGrnBody): Prom
   // F131: every line ref is carried forward as the PO item's own id.
   const body: CreateGrnBody = { ...input, items: input.items.map((i) => ({ ...i, poItemRef: normalizePoItemRef(i.poItemRef, poId, poItems) })) };
   const orderedByRef = new Map(poItems.map((pi) => [pi.id, pi.quantity]));
+  // UAT T-EDGE TE-04: a line that is not on the PO used to be 202-accepted and then
+  // dead-lettered by the worker (assertPoItemsResolved). Refused here instead.
+  const unknownLine = body.items.findIndex((i) => !orderedByRef.has(i.poItemRef));
+  if (unknownLine >= 0) {
+    throw new HttpError(422, "PO_LINE_NOT_FOUND", "a GRN line does not match any line of the purchase order", [
+      { field: `items.${unknownLine}.poItemRef`, message: "Choose a line of this purchase order.", code: "PO_LINE_NOT_FOUND" },
+    ]);
+  }
   const committed = await db.transaction((tx) => repo.committedQtyByPoItemTx(tx, ctx.tenantId, poId));
   try {
     assertWithinOpenQty(
@@ -53,7 +62,8 @@ export async function createGrn(ctx: RequestContext, input: CreateGrnBody): Prom
     if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
     throw err;
   }
-  const id = randomUUID();
+  // UAT T-EDGE TE-09: id (and messageId) from the X-Idempotency-Key when sent (meeting pattern).
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.grnCreate, {
     messageId: id, type: COMMANDS.grnCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

@@ -103,6 +103,9 @@ export function registerTasksConsumers(queue: Queue): void {
           actorId: msg.actorId,
           detail: { reason: "instance_not_active", instanceStatus: instance.status },
         });
+        // UAT T-EDGE TE-08: the checker whose decision arrived after the instance was
+        // decided / suspended was told 202 and never learned it was not applied.
+        await notifyLateDecision(tx, msg, p, decision, instance.status === "completed" ? "already_decided" : `instance_${instance.status}`);
         return;
       }
 
@@ -190,7 +193,11 @@ export function registerTasksConsumers(queue: Queue): void {
 
       // H2 — optimistic-locked completion (no-op on already-completed task).
       const updated = await repo.markCompleted(tx, p.id, p.tenantId, msg.actorId, decision, sodOverride);
-      if (!updated) return;
+      if (!updated) {
+        // UAT T-EDGE TE-08: lost the race to another checker (optimistic lock): tell this one.
+        await notifyLateDecision(tx, msg, p, decision, "already_decided");
+        return;
+      }
 
       // ---- audit: this task's transition (with SoD override flagged) ----
       await historyRepo.record(tx, {
@@ -1199,6 +1206,44 @@ async function dispatchDomainApprove(
     actorId: msg.actorId,
     correlationId: msg.correlationId,
     payload: { [cfg.idKey]: refId, tenantId: msg.tenantId, approvedBy: msg.actorId },
+  });
+}
+
+/**
+ * UAT T-EDGE TE-08: a human decision (HTTP path, `authz` set) that the consumer could not apply
+ * because the task / instance was already decided (parallel approval) or is no longer active.
+ * Recorded as an audit row and told to that checker in-app, so the 202 they got is not the last
+ * word (the synchronous 409 TASK_ALREADY_DECIDED covers the non-racing case). Engine/system
+ * completions carry no authz and are not notified.
+ */
+async function notifyLateDecision(tx: unknown, msg: CommandEnvelope, p: CompletePayload, decision: string, reason: string): Promise<void> {
+  if (!p.authz) return;
+  const t = tx as Parameters<typeof enqueue>[0];
+  const text = reason === "already_decided"
+    ? "it had already been decided by another officer"
+    : `the workflow is ${reason.replace(/^instance_/, "")}`;
+  await enqueue(t, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "workflow", action: "task.complete.refused", resourceType: "workflow_task", resourceId: p.id, outcome: "denied", reason: reason.toUpperCase() },
+  });
+  await enqueue(t, {
+    topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: buildNotificationPayload({
+      eventType: "workflow.task.decision_not_applied",
+      recipient: msg.actorId,
+      recipientId: msg.actorId,
+      channel: "in_app",
+      variables: {
+        taskId: p.id,
+        instanceId: p.instanceId,
+        decision,
+        status: `rejected: ${text}`,
+        summary: `Your decision (${decision}) on "${p.name}" was not applied: ${text}.`,
+        link: `/workflow/tasks/${p.id}`,
+      },
+    }),
   });
 }
 

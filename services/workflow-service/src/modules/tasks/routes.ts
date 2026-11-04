@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
@@ -137,10 +138,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     }
     if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+      return reply.code(err.status).send({ ...(err.details ?? {}), code: err.code, message: err.message, correlationId, retryable: false });
     }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });

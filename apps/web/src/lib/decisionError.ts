@@ -1,4 +1,5 @@
 import { toHumanError } from "./messages";
+import { taskAlreadyDecidedMessage, type DecidedBy } from "./validationCopy";
 
 /**
  * Plain-language message for a failed approve/reject style decision
@@ -13,18 +14,24 @@ export type DecisionFailure = {
   stale: boolean;
 };
 
-async function readCode(res: Response): Promise<string | undefined> {
+async function readBody(res: Response): Promise<{ code?: string; decidedBy?: DecidedBy }> {
   try {
-    const body = (await res.json()) as { code?: unknown };
-    return typeof body?.code === "string" ? body.code : undefined;
+    const body = (await res.json()) as { code?: unknown; decidedBy?: unknown };
+    return {
+      code: typeof body?.code === "string" ? body.code : undefined,
+      decidedBy: body?.decidedBy && typeof body.decidedBy === "object" ? (body.decidedBy as DecidedBy) : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
 export async function decisionFailure(res: Response, noun: string): Promise<DecisionFailure> {
-  const code = await readCode(res);
+  const { code, decidedBy } = await readBody(res);
   if (res.status === 409) {
+    // UAT T-EDGE TE-08: name the officer who decided first when the answer carries it.
+    const named = code === "TASK_ALREADY_DECIDED" ? taskAlreadyDecidedMessage(decidedBy) : null;
+    if (named) return { message: named, stale: true };
     return {
       message: `Someone else already decided this ${noun}. Refresh to see the latest.`,
       stale: true,

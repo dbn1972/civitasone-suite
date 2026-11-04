@@ -1,5 +1,9 @@
 import { z } from "zod";
+import { zIsoDate, DATE_WINDOWS, istToday, fieldIssue, FIELD_CODES } from "@civitasone/schemas/validators";
 import { LEAVE_DAY_PARTS } from "./domain.js";
+
+/** UAT T-EDGE (TE-03 / TE-07): leave dates may be at most 1 year back and 2 years ahead (IST today). */
+export const leaveDateWindow = () => DATE_WINDOWS.leave(istToday());
 
 export const createLeaveTypeBody = z.object({
   code:         z.string().min(1).max(16),
@@ -48,8 +52,9 @@ export const applyLeaveBody = z.object({
   employeeId:  z.string().uuid(),
   leaveTypeId: z.string().uuid(),
   allocId:     z.string().uuid(),
-  fromDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  toDate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // UAT T-EDGE TE-01: a REAL calendar date (29 Feb 2027 / 31 Apr used to 500).
+  fromDate:    zIsoDate({ window: leaveDateWindow, label: "from date" }),
+  toDate:      zIsoDate({ window: leaveDateWindow, label: "to date" }),
   // GAP-HR-LEAVE-APPLY-05: a whole-day request stays an integer; a half-day /
   // short-leave request (dayPart != 'full') is exactly 0.5 on a single date.
   // Whether the tenant has enabled either is checked server-side in routes.ts
@@ -58,6 +63,12 @@ export const applyLeaveBody = z.object({
   dayPart:     z.enum(LEAVE_DAY_PARTS).default("full"),
   reason:      z.string().max(1000).optional(),
 }).superRefine((v, ctx) => {
+  // UAT T-EDGE TE-03: an end date before the start date was stored (0 days) and then
+  // blocked other leave as an overlap.
+  if (v.toDate < v.fromDate) {
+    fieldIssue(ctx, FIELD_CODES.DATE_ORDER, "the to date must be on or after the from date", ["toDate"]);
+    return;
+  }
   if (v.dayPart === "full") {
     if (!Number.isInteger(v.daysApplied)) {
       ctx.addIssue({ code: "custom", path: ["daysApplied"], message: "must be a whole number of days unless a half-day or short leave is selected" });

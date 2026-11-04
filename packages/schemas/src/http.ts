@@ -8,7 +8,7 @@ import { ZodError } from "zod";
  * strict superset of the instanceof check, so it can only ever catch MORE
  * genuine ZodErrors, never fewer.
  */
-function isZodError(err: unknown): err is { issues: Array<{ path: (string | number)[]; message: string }> } {
+function isZodError(err: unknown): err is { issues: ZodIssueLike[] } {
   if (err instanceof ZodError) return true;
   return (
     typeof err === "object" && err !== null &&
@@ -17,10 +17,33 @@ function isZodError(err: unknown): err is { issues: Array<{ path: (string | numb
   );
 }
 
+/** The parts of a zod issue the envelope reads (a custom issue may carry params.code). */
+export type ZodIssueLike = { path: (string | number)[]; message: string; params?: Record<string, unknown> };
+
+/** One entry of the `fieldErrors` array of the error envelope. */
+export type FieldErrorEntry = { field: string; message: string; code?: string };
+
+/**
+ * UAT T-EDGE bundle 21: zod issues -> `fieldErrors`. A validator in validators.ts tags its
+ * issue with a stable field code (params.code, e.g. DATE_INVALID, AADHAAR_INVALID); it is
+ * passed through as `code` so the web error layer can show en/hi copy instead of the raw
+ * zod wording. Issues without a code keep the old {field, message} shape.
+ */
+export function zodFieldErrors(issues: readonly ZodIssueLike[]): FieldErrorEntry[] {
+  return issues.map((i) => {
+    const code = i.params && typeof i.params.code === "string" ? i.params.code : undefined;
+    return code ? { field: i.path.join("."), message: i.message, code } : { field: i.path.join("."), message: i.message };
+  });
+}
+
 export type HttpErrorLike = {
   status: number;
   code: string;
   message: string;
+  /** Optional per-field messages (same shape as a validation failure). */
+  fieldErrors?: FieldErrorEntry[];
+  /** Optional structured extra fields merged into the body (e.g. who already decided a task). */
+  details?: Record<string, unknown>;
 };
 
 export function isHttpError(err: unknown): err is HttpErrorLike {
@@ -47,7 +70,7 @@ export function createFastifyErrorHandler(getHttpError?: (err: unknown) => HttpE
         message: "invalid request",
         correlationId,
         retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+        fieldErrors: zodFieldErrors(err.issues),
       });
       return;
     }
@@ -63,7 +86,11 @@ export function createFastifyErrorHandler(getHttpError?: (err: unknown) => HttpE
     }
     const http = getHttpError?.(err);
     if (http) {
-      void reply.code(http.status).send({ code: http.code, message: http.message, correlationId, retryable: false });
+      void reply.code(http.status).send({
+        ...(http.details && typeof http.details === "object" ? http.details : {}),
+        code: http.code, message: http.message, correlationId, retryable: false,
+        ...(Array.isArray(http.fieldErrors) && http.fieldErrors.length > 0 ? { fieldErrors: http.fieldErrors } : {}),
+      });
       return;
     }
     req.log.error({ err }, "unhandled error");
