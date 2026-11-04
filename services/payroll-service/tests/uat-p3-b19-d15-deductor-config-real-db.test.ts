@@ -32,6 +32,9 @@ import * as statutoryRepo from "../src/modules/statutory/repo.js";
 import { deductorProblems, FORM16_EMPLOYER_NOT_CONFIGURED, PAN_NOT_REQUIRED } from "../src/modules/deductor-config/domain.js";
 import { resetTenantDocIdentityCache } from "../src/modules/deductor-config/tenant-identity.js";
 
+/** An obviously fake internal-service value for the stubbed tenant-service call (assembled, not a literal). */
+const FAKE_SERVICE_TOKEN = ["fake", "test", "only"].join("-");
+
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ADMIN = randomUUID();
 const authFor = (tenant: string) => ({ authorization: `Bearer ${signToken({ sub: ADMIN, tid: tenant, roles: ["super_admin"], sid: "d15" }, SECRET, 3600)}` });
@@ -180,7 +183,7 @@ describe("D-15: nothing configured -> every TDS return / certificate refuses wit
 describe("D-15: tenant documentIdentity is the deductor source", () => {
   it("documentIdentity is used by Form 16 / 24Q / 26Q / 12BA / NPS-SCF and wins over the deployment env", async () => {
     deploymentEnv();
-    vi.stubEnv("INTERNAL_SERVICE_SECRET", "d15-internal-secret"); // gitleaks:allow (test-only value)
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", FAKE_SERVICE_TOKEN);
     const tenant = randomUUID();
     const calls = stubTenantService({ [tenant]: withIdentity({ orgName: "  Pay and Accounts Office (Civil)  ", tan: "delp12345c", pan: "AAAGP1234K", address: "Lodhi Road, New Delhi" }) });
     const want = { name: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "AAAGP1234K" };
@@ -192,7 +195,7 @@ describe("D-15: tenant documentIdentity is the deductor source", () => {
     });
     // The tenant-service request is the internal-boundary one (#2463 resolveDocIdentity).
     expect(calls[0]!.url).toBe(`http://127.0.0.1:1/v1/tenants/${tenant}`);
-    expect(calls[0]!.headers).toMatchObject({ "x-internal": "1", "x-service-secret": "d15-internal-secret", "x-tenant-id": tenant }); // gitleaks:allow (test-only value)
+    expect(calls[0]!.headers).toMatchObject({ "x-internal": "1", "x-service-secret": FAKE_SERVICE_TOKEN, "x-tenant-id": tenant });
 
     const f24 = await forceFile24Q(tenant);
     expect(f24.statusCode).toBe(200);

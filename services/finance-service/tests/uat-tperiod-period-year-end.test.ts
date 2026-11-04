@@ -28,7 +28,8 @@ import { financeLedger, financeJournals } from "../src/modules/gl/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { COMMANDS } from "../src/topics.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+// the HS256 test signing key comes from vitest.config.ts (env JWT_SECRET); no key literal in this file
+const SECRET = process.env.JWT_SECRET as string;
 const ADMIN_A = "00000000-aaaa-4000-8000-0000000b1901";
 const ADMIN_B = "00000000-aaaa-4000-8000-0000000b1902";
 const OFFICER = "00000000-aaaa-4000-8000-0000000b1903";

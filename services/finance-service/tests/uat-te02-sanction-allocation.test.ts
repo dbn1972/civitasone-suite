@@ -20,7 +20,8 @@ import { currentFyIST } from "../src/shared/ist-date.js";
 import { COMMANDS } from "../src/topics.js";
 import * as budgetRepo from "../src/modules/budget/repo.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+// the HS256 test signing key comes from vitest.config.ts (env JWT_SECRET); no key literal in this file
+const SECRET = process.env.JWT_SECRET as string;
 const T = randomUUID();
 const MAKER = "00000000-aaaa-4000-8000-0000000e0201";
 const CHECK_B = "00000000-aaaa-4000-8000-0000000e0202";
