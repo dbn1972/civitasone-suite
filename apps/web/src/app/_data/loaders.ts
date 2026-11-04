@@ -3,7 +3,6 @@ import { buildOrgTree } from "./orgTree";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { normalizeHexColor } from "@/lib/orgLevels";
 import { pathSeg } from "@/lib/pathSegment";
-import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedDocument } from "@/lib/estab/scannedDocuments";
 import { mapScannedDocuments, scannedDocumentsEndpoint, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
 import type { AuditParaEvent, GlLinesPagination, GlLinesTotals, PaymentContext } from "@/lib/finance/workflowTypes";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
@@ -8397,13 +8396,5 @@ export async function getFinanceScannedDocuments(kind: ScannedDocumentsKind, id:
   });
 }
 
-/**
- * GAP-ADMIN-BULK-SCAN-02: scanned letters / orders filed onto an eOffice file (masked metadata only).
- * A failed load is source:"error", never an empty list.
- */
-export async function getEstabScannedDocuments(fileId: string): Promise<LoaderResult<EstabScannedDocument[]>> {
-  return fetchJson<unknown, EstabScannedDocument[]>(estabScannedDocumentsPath(fileId), [], {
-    telemetryKey: "estab.file.scanned-documents",
-    mapResponse: mapEstabScannedDocuments,
-  });
-}
+// GAP-ADMIN-BULK-SCAN-02: the eOffice file scanned-documents read now loads in the browser after the page
+// (estab/files/[id]/ScannedDocumentsSection.tsx, UX-R5 perf) with the same path + mapper.

@@ -26,6 +26,17 @@ vi.mock("../../../../_components/PrintDocumentLink", () => ({
   PrintDocumentLink: () => <a href="#print">Print PO</a>,
 }));
 
+const { VENDOR, MAKER } = vi.hoisted(() => ({ VENDOR: "33333333-0000-4000-8000-0000000000aa", MAKER: "33333333-0000-4000-8000-000000000001" }));
+vi.mock("@/lib/records/recordRefs", () => ({
+  resolveRecordRefs: async () => ({
+    people: new Map([[MAKER, { name: "S. Iyer", designation: "Procurement officer" }]]),
+    vendors: new Map([[VENDOR, "Dell International Services India Pvt Ltd"]]),
+  }),
+}));
+vi.mock("@/lib/records/linkedRecords", () => ({
+  resolveLinkedRecord: async (_k: string, ref?: string) => (ref ? { label: "IND/2026/0008", href: "/procurement/indents/i1" } : null),
+}));
+
 import PODetailPage from "./page";
 
 function po(over: Record<string, unknown> = {}) {
@@ -104,5 +115,28 @@ describe("PODetailPage — DETAIL-05 shared labels + honest unit", () => {
     render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     const cells = screen.getAllByText("—");
     expect(cells.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("PODetailPage record template (UX-R5)", () => {
+  beforeEach(() => { mockRoles.mockReturnValue(["procurement_officer"]); mockLoad.mockReset(); });
+
+  it("names the vendor (not the 8-hex id fragment the service falls back to), the maker and the indent number", async () => {
+    mockLoad.mockResolvedValue({ data: po({ vendor: "33333333", vendorId: VENDOR, createdById: MAKER, indentRef: "procurement_indent:i1" }), source: "api" });
+    const { container } = render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
+    expect(screen.getAllByText("Dell International Services India Pvt Ltd").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("S. Iyer, Procurement officer").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "IND/2026/0008" })[0]).toHaveAttribute("href", "/procurement/indents/i1");
+    expect(container.textContent).not.toMatch(/\b33333333\b/);
+    expect(container.querySelector("dl[data-detail-list]")).not.toBeNull();
+  });
+
+  it("a cancelled PO shows its outcome and offers no dispatch, amendment or eOffice raise", async () => {
+    mockLoad.mockResolvedValue({ data: po({ status: "cancelled" }), source: "api" });
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
+    expect(screen.getByText("Cancelled.")).toBeInTheDocument();
+    expect(screen.queryByTestId("dispatch")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("raise-eoffice")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Request amendment" })).not.toBeInTheDocument();
   });
 });

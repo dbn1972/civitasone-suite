@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import { fmtDateTime, humanize } from "../../../_data/format";
 import type { Minutes } from "../../../_data/types";
+import { personLabel, type PersonRef } from "@/lib/records/labels";
+import { minutesAreSealed } from "@/lib/records/status/meeting";
 import {
   approveMinutes,
   createMinutes,
@@ -34,6 +36,12 @@ type Props = {
    * Approve/Return buttons are hidden (the server is the authoritative gate).
    */
   canApprove?: boolean;
+  /**
+   * UX-R5 (names, not ids): maker / checker ids resolved server-side (lib/records/recordRefs) to
+   * "Name, Designation". An id missing here falls back to the name the service sent, then to the honest
+   * "Name not available (ID ending ...)" -- the raw id is never printed.
+   */
+  people?: Record<string, PersonRef>;
 };
 
 const monoStyle: React.CSSProperties = {
@@ -66,7 +74,9 @@ export function MinutesPanel({
   notDrafted = true,
   currentUserId = null,
   canApprove = true,
+  people = {},
 }: Props) {
+  const peopleMap = new Map(Object.entries(people));
   const [minutes, setMinutes] = useState<Minutes | null>(initialMinutes);
   const [content, setContent] = useState(initialMinutes?.content ?? "");
   const [busy, setBusy] = useState<string | null>(null);
@@ -236,7 +246,8 @@ export function MinutesPanel({
 
   const isDraft = minutes.status === "draft";
   const isSubmitted = minutes.status === "submitted";
-  const isApproved = minutes.status === "approved" || minutes.status === "signed" || minutes.status === "circulated";
+  // UX-R5 / DS-3: approved / signed / circulated minutes are sealed (lib/records/status/meeting.ts).
+  const isApproved = minutesAreSealed(minutes.status);
 
   return (
     <>
@@ -267,30 +278,12 @@ export function MinutesPanel({
         >
           <dt style={{ color: "var(--ink2)" }}>Drafter (maker)</dt>
           <dd>
-            {minutes.createdByName ? (
-              <>
-                <span style={{ fontWeight: 600 }}>{minutes.createdByName}</span>{" "}
-                <span style={{ ...monoStyle, fontSize: 12, color: "var(--ink2)" }}>
-                  ({minutes.createdBy})
-                </span>
-              </>
-            ) : (
-              <span style={monoStyle}>{minutes.createdBy || "—"}</span>
-            )}
+            <span style={{ fontWeight: 600 }}>{personLabel(peopleMap, minutes.createdBy, minutes.createdByName)}</span>
           </dd>
           <dt style={{ color: "var(--ink2)" }}>Approver (checker)</dt>
           <dd>
             {minutes.approvedBy ? (
-              minutes.approvedByName ? (
-                <>
-                  <span style={{ fontWeight: 600 }}>{minutes.approvedByName}</span>{" "}
-                  <span style={{ ...monoStyle, fontSize: 12, color: "var(--ink2)" }}>
-                    ({minutes.approvedBy})
-                  </span>
-                </>
-              ) : (
-                <span style={monoStyle}>{minutes.approvedBy}</span>
-              )
+              <span style={{ fontWeight: 600 }}>{personLabel(peopleMap, minutes.approvedBy, minutes.approvedByName)}</span>
             ) : (
               <span style={{ color: "var(--ink2)" }}>— pending —</span>
             )}

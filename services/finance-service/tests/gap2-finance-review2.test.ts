@@ -234,3 +234,31 @@ describe("GAP2-FINANCE-SANCTIONS-APPROVE-REASON-07: approve captures an optional
     expect(approveSanctionBody.parse({})).toEqual({});
   });
 });
+
+// UX-R5 (names, not ids): the detail payloads carry the ids behind each name, so the web record resolver can add
+// the designation, and say "Name not available (ID ending ...)" honestly when no name exists.
+describe("UX-R5: record detail payloads carry the ids behind the names", () => {
+  it("sanction detail: sanctionedById and each trail actorId", async () => {
+    b_findSanctionByIdAndTenant.mockResolvedValue({
+      id: "s1", tenantId: TENANT, sanctionNo: "SN-1", purpose: "x", amountMinor: 500000n,
+      createdBy: MAKER, updatedBy: CHECKER, status: "approved", headId: "h1",
+      createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-02T00:00:00.000Z",
+      efileSubmittedAt: null, efileFileNo: null,
+    });
+    b_findHeadById.mockResolvedValue({ id: "h1", code: "2055", name: "Police" });
+    i_fetchUserNames.mockResolvedValue(new Map([[MAKER, "Sh. Maker"]]));
+    const out = await budgetQueries.getSanctionDetail("s1", TENANT);
+    expect(out?.sanctionedById).toBe(MAKER);
+    expect(out?.approvalTrail.map((s) => s.actorId)).toEqual([MAKER, CHECKER]);
+    // The checker name could not be resolved: still the honest label, never the id, as the display name.
+    expect(out?.approvalTrail[1].actor).toBe("Unknown officer");
+  });
+
+  it("bill detail: vendorId behind the vendor name", async () => {
+    p_findBillByIdAndTenant.mockResolvedValue({ id: "bill-9", tenantId: TENANT, billNo: "B9", vendorId: VENDOR, netMinor: 150000n, createdAt: "2026-09-01T00:00:00.000Z", status: "pending", poRef: null, grnRef: null });
+    m_getVendorById.mockResolvedValue({ id: VENDOR, name: "M/s Real Tenant Vendor Ltd." });
+    const d = await paymentQueries.getBillDetail("bill-9", TENANT);
+    expect(d?.vendorId).toBe(VENDOR);
+    expect(d?.vendor).toBe("M/s Real Tenant Vendor Ltd.");
+  });
+});

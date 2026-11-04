@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable, RecordHeader, DetailList, ApprovalTrail } from "../../../../_components/ds";
 import { getProcurementPOById } from "../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
@@ -9,18 +9,22 @@ import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import { RaiseEOfficeNote } from "../../../../_components/RaiseEOfficeNote";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { PO_STATUS_LABELS } from "@/lib/procurement-status";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
+import { resolveLinkedRecord } from "@/lib/records/linkedRecords";
+import { nameLabel, personLabel } from "@/lib/records/labels";
+import { canRaiseForApproval, isTerminalStatus, outcomeLine } from "@/lib/records/statusActions";
+import { PO_STATUS_RULE, PO_AMENDABLE } from "@/lib/records/status/po";
 
 // /procurement/orders/[id]/amend is backed by POST /v1/procurement/pos/:id/amendments.
-// Amendment is only meaningful once a PO is a real order (not still draft) and not final.
-const AMENDABLE_STATUSES = new Set(["approved", "dispatched", "partial_grn", "gem_placed"]);
+// Amendment is only meaningful once a PO is a real order (not still draft) and not final (lib/records/status/po).
+const AMENDABLE_STATUSES = new Set<string>(PO_AMENDABLE);
 
 // GAP-PROCUREMENT-ORDERS-DETAIL-01 (D4c #19, owner decision 2026-10-27): a PO has
 // exactly ONE release-approval path - the workflow inbox (maker-checker, role
 // check, audit). An eOffice file note is OPTIONAL: it records administrative
 // noting only (POST .../submit-approval) and never approves, cancels or gates the
 // PO. It is only offered while the PO is still awaiting approval (draft or
-// pending); the service state machine is the authority regardless.
-const APPROVAL_RAISABLE_STATUSES = new Set(["draft", "pending"]);
+// pending: PO_STATUS_RULE); the service state machine is the authority regardless.
 
 // Plain-language description of where a PO sits in its single release path.
 function approvalSummary(status: string): { label: string; detail: string } {
@@ -97,71 +101,77 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
     grnQty: String(item.grnQty),
   }));
 
+  // UX-R5: one batched lookup for the vendor and the maker, in parallel with the indent number.
+  const [refs, indent] = await Promise.all([
+    resolveRecordRefs({ people: [po.createdById], vendors: [po.vendorId] }),
+    resolveLinkedRecord("indent", po.indentRef),
+  ]);
+  const vendorLabel = nameLabel(refs.vendors, po.vendorId, po.vendor);
+  const raisedBy = po.createdById ? personLabel(refs.people, po.createdById) : null;
+  const finished = isTerminalStatus(PO_STATUS_RULE, po.status);
+  const statusLabel = PO_STATUS_LABELS[po.status] ?? po.status;
+
   return (
     <>
-      <PageHeader
-        title={po.poNo}
-        subtitle={po.vendor}
+      <RecordHeader
+        kind="Purchase order"
+        recordNo={po.poNo}
+        status={po.status}
+        statusLabel={statusLabel}
+        amountMinor={po.totalAmount}
+        amountLabel="Total"
+        parties={[
+          { label: "Vendor", value: vendorLabel },
+          raisedBy ? { label: "Raised by", value: raisedBy } : null,
+          indent ? { label: "Against", value: indent.href ? <Link href={indent.href}>{indent.label}</Link> : indent.label } : null,
+        ]}
+        outcome={finished ? outcomeLine({ status: po.status }) : null}
         back="/procurement/orders"
-        actions={
-          // GAP-PROCUREMENT-ORDERS-DETAIL-04: a single wrap-friendly action group;
-          // the status pill lives in the header only (not duplicated in the card).
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+        backLabel="Purchase orders"
+        // GAP-PROCUREMENT-ORDERS-DETAIL-04: one wrap-friendly action group in the header; the one primary is
+        // Dispatch (itself status-aware); print and amendment are secondary.
+        secondaryActions={
+          <>
             <PrintDocumentLink href={`/api/proxy/v1/procurement/pos/${po.id}/pdf`} label="Print PO" />
-            <StatusPill status={po.status} label={PO_STATUS_LABELS[po.status] ?? po.status} />
             {canWrite && AMENDABLE_STATUSES.has(po.status) ? (
               <Link href={`/procurement/orders/${po.id}/amend`} className="btn ghost">Request amendment</Link>
             ) : null}
-            <DispatchPOActions poId={po.id} status={po.status} canDispatchRole={canWrite} />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
-          </div>
+          </>
         }
+        primaryAction={finished ? undefined : <DispatchPOActions poId={po.id} status={po.status} canDispatchRole={canWrite} />}
       />
 
       {/* GAP-PROCUREMENT-ORDERS-DETAIL-01: one Approval card states which decision
           releases the PO and where it currently sits — no competing path. */}
       <Card title="Approval" padding>
-        <div className="fields">
-          <div className="field">
-            <span className="label">Release path</span>
-            <span>Workflow inbox approval (maker-checker)</span>
-          </div>
-          <div className="field">
-            <span className="label">Current state</span>
-            <StatusPill status={po.status} label={approval.label} />
-          </div>
-        </div>
+        <DetailList
+          ariaLabel="Approval"
+          items={[
+            { label: "Release path", value: "Workflow inbox approval (maker-checker)" },
+            { label: "Current state", value: <StatusPill status={po.status} label={approval.label} /> },
+          ]}
+        />
         {approval.detail ? <p style={{ margin: "8px 0 0", color: "var(--mut)", fontSize: "0.875rem" }}>{approval.detail}</p> : null}
       </Card>
 
       <Card title="PO details" padding>
-        <div className="fields">
-          <div className="field">
-            <span className="label">PO No</span>
-            <span className="mono">{po.poNo}</span>
-          </div>
-          <div className="field">
-            <span className="label">Vendor</span>
-            <span>{po.vendor}</span>
-          </div>
-          <div className="field">
-            <span className="label">Total Amount</span>
-            <span>{formatMoney(po.totalAmount)}</span>
-          </div>
-          <div className="field">
-            <span className="label">Order Date</span>
-            <span>{formatIndianDate(po.orderDate)}</span>
-          </div>
-          <div className="field">
-            <span className="label">Delivery Date</span>
-            <span>{po.deliveryDate ? formatIndianDate(po.deliveryDate) : "—"}</span>
-          </div>
-        </div>
+        <DetailList
+          ariaLabel="PO details"
+          items={[
+            { label: "PO no.", value: po.poNo, mono: true },
+            { label: "Vendor", value: vendorLabel },
+            { label: "Indent", value: indent ? (indent.href ? <Link href={indent.href}>{indent.label}</Link> : indent.label) : null },
+            { label: "Total amount", value: formatMoney(po.totalAmount) },
+            { label: "Order date", value: formatIndianDate(po.orderDate) },
+            { label: "Delivery date", value: po.deliveryDate ? formatIndianDate(po.deliveryDate) : null },
+          ]}
+        />
       </Card>
 
       {/* Optional eOffice file note: only while awaiting approval, only for a role
           that can act on it (the service also 403s others). It never decides the PO. */}
-      {canWrite && APPROVAL_RAISABLE_STATUSES.has(po.status) ? (
+      {canWrite && canRaiseForApproval(PO_STATUS_RULE, po.status) ? (
         <>
         <p style={{ margin: "0 0 8px", color: "var(--mut)", fontSize: "0.875rem" }} data-testid="eoffice-optional-note">
           Optional: an eOffice file note records administrative noting only. It does not approve or release this PO — approve it from the workflow inbox.
@@ -169,11 +179,12 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
         <RaiseEOfficeNote
           refType="procurement_po"
           refId={po.id}
-          subject={`PO ${po.poNo} — ${po.vendor}`}
+          subject={`PO ${po.poNo} — ${vendorLabel}`}
           dept="Procurement"
           amountMinor={po.totalAmount}
           defaultApprovalChain="file_noting"
           notifyPath={`/api/proxy/v1/procurement/pos/${po.id}/submit-approval`}
+          statusAllowsRaise
         />
         </>
       ) : null}
@@ -187,6 +198,11 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
           />
         </Card>
       )}
+
+      <ApprovalTrail
+        entries={raisedBy ? [{ key: "raised", actor: raisedBy, action: "Raised" }] : []}
+        emptyText="Release decisions are recorded in the workflow inbox."
+      />
     </>
   );
 }

@@ -52,6 +52,18 @@ function assertTransition409(contract: { status: string | null }, to: ContractSt
   }
 }
 
+/**
+ * UX-R5 / DS-3 (status-aware actions): a closed or terminated contract is finished -- its milestones can no
+ * longer be completed or marked late. Refused synchronously (409 CONTRACT_CLOSED) so the screen never queues a
+ * command the record can no longer take.
+ */
+export const FINISHED_CONTRACT_STATUSES: readonly string[] = ["closed", "terminated"];
+export function assertContractOpen(contract: { status: string | null }): void {
+  if (FINISHED_CONTRACT_STATUSES.includes(contract.status ?? "")) {
+    throw new HttpError(409, "CONTRACT_CLOSED", `a ${contract.status} contract takes no further milestone changes`);
+  }
+}
+
 export async function createContract(ctx: RequestContext, body: CreateContractBody): Promise<Accepted> {
   // GAP-CONTRACTS-NEW-06: the expiry must not precede the start date. The DB
   // columns are both NOT NULL dates with no CHECK on their ordering, and the
@@ -203,7 +215,7 @@ export async function submitContractForApproval(ctx: RequestContext, id: string)
 export async function completeMilestone(
   ctx: RequestContext, contractId: string, milestoneId: string, body: CompleteMilestoneBody,
 ): Promise<Accepted> {
-  await loadScoped(ctx, contractId);
+  assertContractOpen(await loadScoped(ctx, contractId));
   const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
   if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
   if (milestone.status === "completed" || milestone.status === "completed_late") {
@@ -222,7 +234,7 @@ export async function completeMilestone(
 export async function markMilestoneLate(
   ctx: RequestContext, contractId: string, milestoneId: string, body: MarkMilestoneLateBody,
 ): Promise<Accepted> {
-  await loadScoped(ctx, contractId);
+  assertContractOpen(await loadScoped(ctx, contractId));
   const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
   if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
   if (milestone.status === "completed" || milestone.status === "completed_late") {

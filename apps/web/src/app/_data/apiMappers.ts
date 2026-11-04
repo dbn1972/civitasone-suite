@@ -312,8 +312,10 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
     const action = toText(step.action);
     const timestamp = toText(step.timestamp);
     if (!actor || !action || !timestamp) continue;
+    const actorId = toText(step.actorId);
     approvalTrail.push({
       actor,
+      ...(actorId ? { actorId } : {}),
       action,
       timestamp,
       remarks: toText(step.remarks) ?? undefined,
@@ -323,6 +325,8 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
   return {
     ...base,
     purpose: toText(payload.purpose) ?? undefined,
+    // UX-R5: the maker id, for "Name, Designation" via the shared record resolver.
+    ...(toText(payload.createdBy) ? { requestedById: toText(payload.createdBy) as string } : {}),
     lineItems,
     approvalTrail,
     // GAP-PROCUREMENT-INDENTS-DETAIL-05: only an explicit `false` means the
@@ -397,6 +401,10 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
     poNo,
     vendor: toText(payload.vendor) ?? toText(payload.vendorName) ?? "—",
     vendorId: toText(payload.vendorId) ?? undefined,
+    // UX-R5: ids the record header resolves to names / business numbers.
+    ...(toText(payload.createdBy) ? { createdById: toText(payload.createdBy) as string } : {}),
+    ...(toText(payload.indentRef) ? { indentRef: toText(payload.indentRef) as string } : {}),
+    ...(toText(payload.sanctionRef) ? { sanctionRef: toText(payload.sanctionRef) as string } : {}),
     orderDate: toText(payload.orderDate) ?? toText(payload.createdAt)?.slice(0, 10) ?? "—",
     deliveryDate: toText(payload.deliveryDate) ?? undefined,
     totalAmount: (parseMinor(payload.totalAmount) ?? 0) || (parseMinor(payload.totalMinor) ?? 0),

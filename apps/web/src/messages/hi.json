@@ -10091,7 +10091,13 @@
     "notFoundEmptyTitle": "मामला नहीं मिला",
     "notFoundEmptyMessage": "यह अनुशासनात्मक मामला हटाया गया हो सकता है या ID अमान्य है।",
     "loadErrorArea": "अनुशासनात्मक मामला",
-    "eofficeSubject": "अनुशासनात्मक मामला {caseLabel}"
+    "eofficeSubject": "अनुशासनात्मक मामला {caseLabel}",
+    "recordKind": "अनुशासनात्मक मामला",
+    "trailEmpty": "अभी तक कोई स्थिति परिवर्तन दर्ज नहीं है।",
+    "raiseAwaiting": "यह मामला पहले से ही ई-ऑफिस निर्णय की प्रतीक्षा में है।",
+    "raiseBlocked": "{status} मामले के लिए अनुमोदन नहीं भेजा जा सकता।",
+    "outcomeBy": "{status} — {by} द्वारा, {date} को।",
+    "outcomeNoActor": "{status} — {date} को।"
   },
   "advances": {
     "title": "वेतन अग्रिम",

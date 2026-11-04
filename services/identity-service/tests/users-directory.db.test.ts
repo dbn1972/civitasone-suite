@@ -26,6 +26,9 @@ const ACTOR_A = "d154acc0-0000-4000-8000-0000000000a1";
 const EMP_A = "d1541000-0000-4000-8000-00000000000a"; // Asha Rao, active, tenant A
 const SUSP_A = "d1541000-0000-4000-8000-00000000000b"; // Bimal Das, suspended, tenant A
 const USER_B = "d1541000-0000-4000-8000-00000000000c"; // Chandra Nair, active, tenant B
+// UX-R5: the Keycloak subs (JWT sub) peer services store as created_by / actor ids.
+const KC_A = "d154cc00-0000-4000-8000-0000000000a1";
+const KC_B = "d154cc00-0000-4000-8000-0000000000b1";
 const uid = (n: number) => `d1543000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 // Any authenticated tenant member — a plain employee, NOT an admin.
@@ -49,7 +52,7 @@ async function seed() {
         id, tenantId: TA, name, email, empCode, status, createdBy: ACTOR_A, updatedBy: ACTOR_A,
       });
       await tx.insert(users).values([
-        mk(EMP_A, "Asha Rao", "asha@dept.gov.in", "EA-1"),
+        { ...mk(EMP_A, "Asha Rao", "asha@dept.gov.in", "EA-1"), keycloakUserId: KC_A },
         mk(SUSP_A, "Bimal Das", "bimal@dept.gov.in", "EA-2", "suspended"),
         ...Array.from({ length: 30 }, (_, i) =>
           mk(uid(i + 1), `Sharma ${String(i + 1).padStart(2, "0")}`, `sharma${i + 1}@dept.gov.in`, `S-${i + 1}`),
@@ -61,7 +64,7 @@ async function seed() {
     db.transaction((tx) =>
       tx.insert(users).values({
         id: USER_B, tenantId: TB, name: "Chandra Nair", email: "chandra@other.gov.in",
-        status: "active", createdBy: ACTOR_A, updatedBy: ACTOR_A,
+        status: "active", createdBy: ACTOR_A, updatedBy: ACTOR_A, keycloakUserId: KC_B,
       }),
     ),
   );
@@ -234,5 +237,26 @@ describe("GET /v1/identity/users/directory — the versioned path the gateway fo
     expect(res.json().data).toHaveLength(0);
     const own = await dirV1(`ids=${USER_B}`, bearer(TB));
     expect(own.json().data).toEqual([{ id: USER_B, displayName: "Chandra Nair" }]);
+  });
+});
+
+describe("GET /identity/users/directory: Keycloak sub (UX-R5, names not ids)", () => {
+  it("resolves a Keycloak sub to the user name, answered under the asked id", async () => {
+    const res = await dir(`ids=${KC_A}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([{ id: KC_A, displayName: "Asha Rao" }]);
+  });
+
+  it("resolves an identity id and a Keycloak sub of the same user in one batch, once each", async () => {
+    const res = await dir(`ids=${EMP_A},${KC_A}`);
+    const rows = res.json().data as Array<{ id: string; displayName: string }>;
+    expect(rows.map((r) => r.id).sort()).toEqual([EMP_A, KC_A].sort());
+    expect(rows.every((r) => r.displayName === "Asha Rao")).toBe(true);
+  });
+
+  it("never resolves another tenant user by their Keycloak sub", async () => {
+    const res = await dir(`ids=${KC_B}`, bearer(TA));
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(0);
   });
 });

@@ -98,8 +98,8 @@ describe("ServiceBookPage (HR caller)", () => {
     );
     await renderPage({});
     expect(screen.getByText("Showing 1 of 1500 entries.")).toBeInTheDocument();
-    expect(screen.getByText("Transfers / Postings").closest(".stat")).toHaveTextContent("900");
-    expect(screen.getByText("Promotions / Increments").closest(".stat")).toHaveTextContent("200");
+    expect(screen.getByText("Transfers / Postings").closest("li")).toHaveTextContent("900");
+    expect(screen.getByText("Promotions / Increments").closest("li")).toHaveTextContent("200");
   });
 
   // GAP-HR-SERVICE-BOOK-04: the Employees stat is the server's distinct-employee count over the whole
@@ -113,7 +113,7 @@ describe("ServiceBookPage (HR caller)", () => {
       ),
     );
     await renderPage({});
-    expect(screen.getByText("Employees").closest(".stat")).toHaveTextContent("240");
+    expect(screen.getByText("Employees").closest("li")).toHaveTextContent("240");
   });
 
   it("falls back to counting distinct employees in the response only when the API sends no employeesTotal", async () => {
@@ -129,7 +129,7 @@ describe("ServiceBookPage (HR caller)", () => {
       source: "api" as const,
     }));
     await renderPage({});
-    expect(screen.getByText("Employees").closest(".stat")).toHaveTextContent("2");
+    expect(screen.getByText("Employees").closest("li")).toHaveTextContent("2");
     fetchJsonMock.mockReset();
   });
 
@@ -263,9 +263,9 @@ describe("ServiceBookPage (self-service caller)", () => {
     expect(screen.getByText("Promoted").closest("tr")).toHaveTextContent("Attested");
     expect(screen.getByText("Joined as Section Officer").closest("tr")).toHaveTextContent("Recorded");
     // Own-record stats, derived from the same rows.
-    expect(screen.getByText("Total Entries").closest(".stat")).toHaveTextContent("3");
-    expect(screen.getByText("Transfers / Postings").closest(".stat")).toHaveTextContent("1");
-    expect(screen.getByText("Promotions / Increments").closest(".stat")).toHaveTextContent("1");
+    expect(screen.getByText("Total Entries").closest("li")).toHaveTextContent("3");
+    expect(screen.getByText("Transfers / Postings").closest("li")).toHaveTextContent("1");
+    expect(screen.getByText("Promotions / Increments").closest("li")).toHaveTextContent("1");
     // No tenant-wide controls for a self-service caller.
     expect(screen.queryByRole("combobox", { name: "Show one employee's service book" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Service book pages" })).not.toBeInTheDocument();
@@ -277,5 +277,37 @@ describe("ServiceBookPage (self-service caller)", () => {
     fetchJsonMock.mockResolvedValue(apiResult([]));
     await renderPage({ searchParams: Promise.resolve({ empId: "someone-elses-id" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/service-book/me", expect.anything(), expect.anything());
+  });
+});
+
+describe("ServiceBookPage names, not ids (UX-R5)", () => {
+  const EMP = "fdeb9984-0000-4000-8000-0000000000e1";
+  it("names an entry that came without an employee name via the shared resolver, never the UUID", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/employees/officers")) {
+        return Promise.resolve({ data: [[EMP, { name: "Kavita Iyer", designation: "Assistant Section Officer" }]], source: "api" });
+      }
+      if (url.includes("/service-book")) {
+        return Promise.resolve({
+          data: { items: [{ id: "e1", employeeId: EMP, eventType: "join", effectiveDate: "2020-01-01" }], total: 1, hasMore: false, employeesTotal: 1, transfersTotal: 0, promotionsTotal: 0 },
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    await renderPage();
+    expect(screen.getByText("Kavita Iyer, Assistant Section Officer")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(EMP);
+  });
+
+  it("shows the totals as a slim summary strip, not KPI cards", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockResolvedValue({ data: { items: [], total: 0, hasMore: false, employeesTotal: 0, transfersTotal: 0, promotionsTotal: 0 }, source: "api" });
+    const { container } = await renderPage();
+    expect(container.querySelector("[data-summary-strip]")).not.toBeNull();
+    expect(container.querySelector(".stat")).toBeNull();
   });
 });

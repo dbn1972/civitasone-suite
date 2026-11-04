@@ -2134,7 +2134,7 @@
     "monthRequiredError": "Month is required.",
     "incompleteFormError": "Please complete all fields before creating a run.",
     "runForLabel": "Run for",
-    "runForTenant": "Whole tenant (all employees)",
+    "runForTenant": "All employees of the department",
     "runForGroups": "Selected pay groups",
     "runForDdo": "All active pay groups of a DDO",
     "groupsLabel": "Pay groups",
@@ -8608,7 +8608,13 @@
     "notFoundEmptyTitle": "Case not found",
     "notFoundEmptyMessage": "This disciplinary case may have been removed or the ID is invalid.",
     "loadErrorArea": "disciplinary case",
-    "eofficeSubject": "Disciplinary case {caseLabel}"
+    "eofficeSubject": "Disciplinary case {caseLabel}",
+    "recordKind": "Disciplinary case",
+    "trailEmpty": "No status changes recorded yet.",
+    "raiseAwaiting": "This case is already awaiting an eOffice decision.",
+    "raiseBlocked": "No approval can be raised for a case that is {status}.",
+    "outcomeBy": "{status} by {by} on {date}.",
+    "outcomeNoActor": "{status} on {date}."
   },
   "goals": {
     "title": "Goals & Development",
