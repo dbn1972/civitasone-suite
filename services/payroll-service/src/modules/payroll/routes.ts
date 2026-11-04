@@ -7,6 +7,7 @@ import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody, approveRunBody, runApprovalReviewResponse } from "./validators.js";
 import * as commands from "./commands.js";
+import { TaxConfigMissingError } from "../tax/config-check.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
@@ -144,7 +145,16 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const body = createRunBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createRun(ctx, body));
+    try {
+      return sendAccepted(reply, acceptedResponseSchema, await commands.createRun(ctx, body));
+    } catch (err) {
+      // UAT b18 D2: TAX_CONFIG_MISSING carries the FY, the missing regime and
+      // the old-regime employees, which the shared error envelope drops.
+      if (err instanceof TaxConfigMissingError) {
+        return reply.code(422).send({ code: err.code, message: err.message, correlationId: ctx.correlationId, retryable: false, details: err.details });
+      }
+      throw err;
+    }
   });
 
   app.patch("/v1/payroll/runs/:id/approve", async (req, reply) => {

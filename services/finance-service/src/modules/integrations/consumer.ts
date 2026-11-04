@@ -14,6 +14,7 @@ import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
 import { grnBillHeadCode } from "../gl/system-heads.js";
+import { payrollAccrualLines, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
@@ -269,38 +270,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
 
   /** payroll.run.approved → post salary GL accrual journal */
   queue.subscribe(CONSUMED_EVENTS.payrollRunApproved, async (msg) => {
-    const p = msg.payload as {
-      runId: string; month: string; totalGrossMinor: string; totalNetMinor: string;
-      totalEmployerContribMinor?: string;
-      legalEntityId?: string;
-    };
-    const gross = BigInt(p.totalGrossMinor);
-    const net = BigInt(p.totalNetMinor);
-    // H2: the statutory leg is DERIVED as (gross - net) so the employee side is
-    // provably balanced: Dr gross == Cr net + Cr statutory == gross, regardless
-    // of how net was clamped (negative-net employees forced to 0). We never clamp
-    // the statutory amount; if it would be negative (net > gross, pathological)
-    // we book it on the opposite side so the journal still nets to zero.
-    const statutory = gross - net;
-    // H3: keep all paise as bigint (no Number() on aggregate paise) so amounts
-    // above 2^53 do not silently lose precision in the GL legs.
-    const employer = BigInt(p.totalEmployerContribMinor ?? "0");
+    const p = msg.payload as PayrollRunApprovedPayload;
     const journalId = randomUUID();
-    // Employee-side legs: Dr salary expense (gross); Cr net payable; Cr statutory.
-    const lines: Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }> = [
-      { accountCode: "5001", debitMinor: gross, creditMinor: 0n, narration: "Salary expense" },
-      { accountCode: "2101", debitMinor: 0n, creditMinor: net, narration: "Net salary payable" },
-      statutory >= 0n
-        ? { accountCode: "2102", debitMinor: 0n, creditMinor: statutory, narration: "Statutory deductions payable" }
-        : { accountCode: "2102", debitMinor: -statutory, creditMinor: 0n, narration: "Statutory deductions payable" },
-    ];
-    // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
-    // expense + liability, separate from the employee-side gross above. The two
-    // legs are equal and opposite, so they keep the voucher balanced.
-    if (employer > 0n) {
-      lines.push({ accountCode: "5002", debitMinor: employer, creditMinor: 0n, narration: "Employer contributions expense" });
-      lines.push({ accountCode: "2103", debitMinor: 0n, creditMinor: employer, narration: "Employer contributions payable" });
-    }
+    // Lines (employee side H2/H3, employer contributions, and -- UAT b18 -- the
+    // EDLI, EPF admin and UPS pool lines) are built by payroll-accrual.ts.
+    const lines = payrollAccrualLines(p);
     // Defensive: assert the voucher balances before we publish it.
     const totalDr = lines.reduce((s, l) => s + l.debitMinor, 0n);
     const totalCr = lines.reduce((s, l) => s + l.creditMinor, 0n);

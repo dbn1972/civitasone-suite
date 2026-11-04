@@ -23,12 +23,13 @@ export type ComputedScheme = "GPF" | "NPS" | "UPS" | "EPF" | "NONE";
 
 /**
  * Pure: which scheme a slip was computed under, from its own deduction columns.
- * UPS and NPS share the PRAN ledger; the Government share tells them apart
- * (UPS 18.5% vs NPS 14% of the same base as the 10% employee share).
+ * UPS and NPS share the PRAN ledger; the Government share on it tells them
+ * apart: NPS 14%, UPS 10% (individual corpus; the 8.5% pool share is booked
+ * separately), against the same 10% employee share.
  */
 export function computedSchemeOf(s: { gpfMinor: bigint; npsEmployeeMinor: bigint; npsEmployerMinor: bigint; pfEmployeeMinor: bigint }): ComputedScheme {
   if (s.gpfMinor > 0n) return "GPF";
-  if (s.npsEmployeeMinor > 0n) return s.npsEmployerMinor * 100n >= s.npsEmployeeMinor * 162n ? "UPS" : "NPS";
+  if (s.npsEmployeeMinor > 0n) return s.npsEmployerMinor * 100n >= s.npsEmployeeMinor * 120n ? "NPS" : "UPS";
   if (s.pfEmployeeMinor > 0n) return "EPF";
   return "NONE";
 }

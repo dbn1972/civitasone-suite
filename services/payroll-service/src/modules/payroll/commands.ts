@@ -20,7 +20,7 @@ import {
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
-import { assertTaxConfigForMonth } from "../tax/config-check.js";
+import { assertTaxConfigForRun } from "../tax/config-check.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -103,7 +103,14 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
   // UAT b18 D2: refuse a run for an FY with no tax slab config up front (422
   // TAX_CONFIG_MISSING) instead of letting every slip fail during compute.
   // Before the pay-group branch so every run type and scope is covered.
-  await assertTaxConfigForMonth(ctx.tenantId, body.month);
+  // ERP-head decision 2026-11-05: new-regime slabs always; old-regime slabs
+  // only when someone in the run opted for the old regime (config-check.ts).
+  await assertTaxConfigForRun(ctx.tenantId, {
+    month: body.month, runType: body.runType ?? "regular",
+    ...(body.departmentId ? { departmentId: body.departmentId } : {}),
+    ...(body.payGroupId ? { payGroupId: body.payGroupId } : {}),
+    ...(body.payGroupIds ? { payGroupIds: body.payGroupIds } : {}),
+  });
   // GAP-PAYROLL-PAY-GROUPS-03: pay-group runs (one run per group, members only).
   if (isPayGroupRun(body)) {
     const r = await createPayGroupRuns(ctx, body);

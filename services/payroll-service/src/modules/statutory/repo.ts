@@ -1,6 +1,6 @@
 import { eq, and, desc, sql, type AnyColumn } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps } from "./schema.js";
+import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -15,7 +15,7 @@ export function notExcludedSlip(slipIdColumn: AnyColumn) {
   return sql`NOT EXISTS (SELECT 1 FROM payroll.payroll_slips xs WHERE xs.id = ${slipIdColumn} AND xs.status = ${"excluded"})`;
 }
 
-type LedgerKey = "pf" | "esi" | "nps" | "gpf" | "tds";
+type LedgerKey = "pf" | "esi" | "nps" | "ups_pool" | "gpf" | "tds";
 /**
  * Business columns of each ledger, as returned by the DELETE (fixed lists:
  * no PII, nothing beyond the employee id) -- enough to rebuild every removed
@@ -25,6 +25,8 @@ const LEDGER_AUDIT_COLUMNS: Record<LedgerKey, { scheme: string; columns: string[
   pf:  { scheme: "EPF", columns: ["basic_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor", "eps_contrib_minor", "epf_er_contrib_minor"] },
   esi: { scheme: "ESI", columns: ["gross_minor", "emp_contrib_minor", "er_contrib_minor"] },
   nps: { scheme: "NPS", columns: ["basic_minor", "pension_base_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor"] },
+  // UAT b18: the Government 8.5% UPS pool share (its own row, migration 0162).
+  ups_pool: { scheme: "UPS_POOL", columns: ["pension_base_minor", "contrib_pct", "contrib_minor"] },
   gpf: { scheme: "GPF", columns: ["basic_minor", "contrib_pct", "emp_contrib_minor"] },
   tds: { scheme: "TDS", columns: ["annual_basic_minor", "taxable_minor", "tds_minor"] },
 };
@@ -40,7 +42,7 @@ export type RemovedLedgerRow = { table: string; scheme: string; slipId: string; 
  * Bounded: a slip has at most one row per ledger.
  */
 export async function deleteLedgerRowsForSlipTx(tx: Pick<typeof db, "execute">, slipId: string, tenantId: string): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
-  const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
+  const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, ups_pool: 0, gpf: 0, tds: 0 };
   const rows: RemovedLedgerRow[] = [];
   for (const k of Object.keys(counts) as LedgerKey[]) {
     const { scheme, columns } = LEDGER_AUDIT_COLUMNS[k];
@@ -79,6 +81,28 @@ export async function insertGpf(tx: Writer, row: typeof payrollGpf.$inferInsert)
 
 export async function insertNps(tx: Writer, row: typeof payrollNps.$inferInsert): Promise<void> {
   await tx.insert(payrollNps).values(row);
+}
+
+export async function insertUpsPool(tx: Writer, row: typeof payrollUpsPool.$inferInsert): Promise<void> {
+  await tx.insert(payrollUpsPool).values(row);
+}
+
+/**
+ * UAT b18 (ERP-head decision 2026-11-05): employer amounts payable that are
+ * NOT in sumEmployerContribByRunTx and are accrued as their own GL lines on
+ * payroll.run.approved -- EDLI (EPFO A/c 21) and EPF admin charges (A/c 2)
+ * from the PF ledger, and the Government 8.5% UPS pool share. Per run, per
+ * member; the A/c 2 Rs 500 establishment minimum is a challan-level figure
+ * (pf/challan), not accrued per run. Read through the caller's tx.
+ */
+export async function sumEmployerChargesByRunTx(tx: Writer, runId: string, tenantId: string): Promise<{ edliMinor: bigint; epfAdminMinor: bigint; upsPoolMinor: bigint }> {
+  const [pf] = await tx.select({
+    edli: sql<string>`coalesce(sum(${payrollPf.edliContribMinor}), 0)`,
+    admin: sql<string>`coalesce(sum(${payrollPf.epfAdminMinor}), 0)`,
+  }).from(payrollPf).where(and(eq(payrollPf.runId, runId), eq(payrollPf.tenantId, tenantId), notExcludedSlip(payrollPf.slipId)));
+  const [ups] = await tx.select({ pool: sql<string>`coalesce(sum(${payrollUpsPool.contribMinor}), 0)` })
+    .from(payrollUpsPool).where(and(eq(payrollUpsPool.runId, runId), eq(payrollUpsPool.tenantId, tenantId), notExcludedSlip(payrollUpsPool.slipId)));
+  return { edliMinor: BigInt(pf?.edli ?? 0), epfAdminMinor: BigInt(pf?.admin ?? 0), upsPoolMinor: BigInt(ups?.pool ?? 0) };
 }
 
 /**

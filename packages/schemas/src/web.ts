@@ -1263,6 +1263,9 @@ export const EmployeeDetailSchema = z.object({
   // response against this exact schema) would silently strip them back out
   // before EditEmployeeForm.tsx ever saw them.
   uanNumber: z.string().optional(),
+  // UAT b18: recorded pension scheme + missing statutory ids for it (e.g. ["UAN_MISSING"]).
+  pensionScheme: z.string().optional(),
+  statutoryIncomplete: z.array(z.string()).optional(),
   esicIpNumber: z.string().optional(),
   pran: z.string().optional(),
   // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): profile fields the Add Employee

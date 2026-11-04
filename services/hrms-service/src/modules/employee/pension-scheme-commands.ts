@@ -77,7 +77,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export function shape(r: PensionSchemeChangeRow) {
   return {
     id: r.id, employeeId: r.employeeId, fromScheme: r.fromScheme, toScheme: r.toScheme,
-    effectiveFrom: r.effectiveFrom, reason: r.reason, uanNumber: r.uanNumber ?? null, status: r.status,
+    effectiveFrom: r.effectiveFrom, reason: r.reason, uanNumber: r.uanNumber ?? null, status: r.status, kind: r.kind,
     requestedBy: r.requestedBy, decidedBy: r.decidedBy ?? null,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null, decisionNote: r.decisionNote ?? null,
     appliedAt: r.appliedAt ? r.appliedAt.toISOString() : null, createdAt: r.createdAt.toISOString(),

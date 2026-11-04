@@ -32,6 +32,29 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   version:           integer("version").notNull().default(1),
 });
 
+/**
+ * UAT b18 (migration 0162, ERP-head decision 2026-11-05): the Government 8.5%
+ * UPS pool corpus contribution, one row per UPS slip -- separate from the
+ * individual 10% on payroll_nps (it is not credited to the employee account).
+ */
+export const payrollUpsPool = statutorySchema.table("payroll_ups_pool", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  slipId:           uuid("slip_id").notNull(),
+  employeeId:       uuid("employee_id").notNull(),
+  runId:            uuid("run_id").notNull(),
+  pensionBaseMinor: bigint("pension_base_minor", { mode: "bigint" }).notNull(),
+  contribPct:       numeric("contrib_pct", { precision: 5, scale: 2 }).notNull().default("8.5"),
+  contribMinor:     bigint("contrib_minor", { mode: "bigint" }).notNull(),
+  currency:         char("currency", { length: 3 }).notNull().default("INR"),
+  period:           char("period", { length: 7 }).notNull(),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
+  version:          integer("version").notNull().default(1),
+});
+
 export const payrollEsi = statutorySchema.table("payroll_esi", {
   id:               uuid("id").primaryKey().defaultRandom(),
   tenantId:         uuid("tenant_id").notNull(),
@@ -245,4 +268,4 @@ export const bonusRuleConfig = statutorySchema.table("bonus_rule_config", {
 export type StatutoryConfigRow = typeof statutoryConfig.$inferSelect;
 export type StatutoryConfigInsert = typeof statutoryConfig.$inferInsert;
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };

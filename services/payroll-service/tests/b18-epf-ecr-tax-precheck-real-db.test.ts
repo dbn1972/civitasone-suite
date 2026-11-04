@@ -18,7 +18,8 @@ import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips, payrollStructures } from "../src/modules/payroll/schema.js";
-import { payrollPf, payrollTds, payrollNps } from "../src/modules/statutory/schema.js";
+import { payrollPf, payrollTds, payrollNps, payrollUpsPool } from "../src/modules/statutory/schema.js";
+import { sumEmployerChargesByRunTx } from "../src/modules/statutory/repo.js";
 import { computeAndInsertSlip } from "../src/modules/payroll/consumer.js";
 import { buildApp } from "../src/app.js";
 
@@ -35,27 +36,29 @@ const RUN = randomUUID();
 const STRUCT = randomUUID();
 const MONTH = "2027-02";
 const EMP = Array.from({ length: 3 }, (_, i) => ({ id: randomUUID(), no: `B18-EPF-${i + 1}` }));
+const UPS_EMP = { id: randomUUID(), no: "B18-UPS-1" };
 const auth = { authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["payroll_admin"], sid: "b18" }, SECRET)}` };
 const asTenant = <T>(fn: (tx: typeof db) => Promise<T>): Promise<T> => runWithTenant(TENANT, () => db.transaction((tx) => fn(tx as unknown as typeof db)));
 
-function feed(uans: Array<string | null>) {
+function feed(uans: Array<string | null>, regimes: Array<"old" | "new"> = []) {
   (fetchPayrollInput as ReturnType<typeof vi.fn>).mockResolvedValue({
     month: MONTH, lopDays: {},
     employees: EMP.map((e, i) => ({
       id: e.id, employeeNo: e.no, fullName: `Contract Staff ${i + 1}`, basicMinor: "1800000", dateOfJoining: "2026-10-28",
       payStructureId: null, bankAccountNo: null, bankIfsc: null, pan: null, uan: uans[i] ?? null,
-      cityClass: "X", taxRegime: "new", departmentId: randomUUID(), pensionScheme: "EPF",
+      cityClass: "X", taxRegime: regimes[i] ?? "new", departmentId: randomUUID(), pensionScheme: "EPF",
     })),
   });
 }
 
 async function wipe(): Promise<void> {
   await asTenant(async (tx) => {
-    for (const t of [payrollPf, payrollNps, payrollTds]) await tx.delete(t).where(eq(t.tenantId, TENANT));
+    for (const t of [payrollPf, payrollNps, payrollUpsPool, payrollTds]) await tx.delete(t).where(eq(t.tenantId, TENANT));
     await tx.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
     await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
     await tx.delete(payrollStructures).where(eq(payrollStructures.tenantId, TENANT));
     await tx.execute(sql`DELETE FROM payroll.tax_slab_config WHERE tenant_id = ${TENANT}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.payroll_tax_declarations WHERE tenant_id = ${TENANT}::uuid`);
   });
 }
 
@@ -74,6 +77,11 @@ beforeAll(async () => {
         pensionScheme: "EPF", daRateBps: 5800n, cityClass: "X", taxRegime: "new", fyStartYear: 2026,
       });
     }
+    // A UPS member: Basic Rs 50,000, DA 58% -> pension base Rs 79,000.
+    await computeAndInsertSlip(tx as never, { actorId: ACTOR }, {
+      runId: RUN, tenantId: TENANT, employeeId: UPS_EMP.id, employeeNo: UPS_EMP.no, basicMinor: 5_000_000n, month: MONTH,
+      pensionScheme: "UPS", daRateBps: 5800n, cityClass: "X", taxRegime: "new", fyStartYear: 2026,
+    });
   });
   app = await buildApp();
 });
@@ -110,6 +118,22 @@ describe("D6 / D5: wages used and employer charges are persisted with the slip",
   it("GET /statutory/pf/challan without a period is a 400", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/pf/challan", headers: auth });
     expect(r.statusCode).toBe(400);
+  });
+});
+
+describe("UPS: the Government 8.5% pool share is its own statutory row, apart from the individual 10%", () => {
+  it("payroll_nps carries employee 10% and Government individual 10%; payroll_ups_pool the 8.5% pool share", async () => {
+    const nps = await asTenant((tx) => tx.execute(sql`SELECT emp_contrib_minor::text AS ee, er_contrib_minor::text AS er, er_contrib_pct::text AS pct, pension_base_minor::text AS base
+      FROM statutory.payroll_nps WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${UPS_EMP.id}::uuid`)) as unknown as Array<Record<string, string>>;
+    expect(nps).toEqual([{ ee: "790000", er: "790000", pct: "10.00", base: "7900000" }]);
+    const pool = await asTenant((tx) => tx.execute(sql`SELECT contrib_minor::text AS pool, contrib_pct::text AS pct, pension_base_minor::text AS base
+      FROM statutory.payroll_ups_pool WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${UPS_EMP.id}::uuid`)) as unknown as Array<Record<string, string>>;
+    expect(pool).toEqual([{ pool: "671500", pct: "8.50", base: "7900000" }]); // 8.5% of Rs 79,000 = Rs 6,715
+  });
+
+  it("run totals for the GL accrual: EDLI, EPF admin and UPS pool, each on its own", async () => {
+    expect(await asTenant((tx) => sumEmployerChargesByRunTx(tx as never, RUN, TENANT)))
+      .toEqual({ edliMinor: 22_500n, epfAdminMinor: 22_500n, upsPoolMinor: 671_500n });
   });
 });
 
@@ -157,30 +181,61 @@ describe("D2: run creation is refused for an FY with no tax slab config", () => 
     payload: { runNo, month, structureId: STRUCT, runType: "regular" } });
   const runCount = async (month: string) => ((await asTenant((tx) => tx.execute(sql`SELECT count(*)::int AS n FROM payroll.payroll_runs WHERE tenant_id = ${TENANT}::uuid AND month = ${month}`))) as unknown as Array<{ n: number }>)[0]!.n;
 
-  it("FY 2027-28 (no rows at all) -> 422 TAX_CONFIG_MISSING naming the FY, no run written", async () => {
+  const slabs = JSON.stringify([{ from: 0, to: null, rate: 0 }]);
+  const addSlabs = (fy: number, regime: "new" | "old") => asTenant((tx) => tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands, created_by)
+    VALUES (${TENANT}::uuid, ${fy}, ${regime}, ${slabs}::jsonb, 75000, 1200000, 60000, ${"[]"}::jsonb, ${ACTOR}::uuid)`));
+
+  it("FY 2027-28 with no new-regime slabs -> 422 TAX_CONFIG_MISSING with details, no run written", async () => {
+    feed([null, null, null]);
     const r = await create("2027-08", "B18-TAX-1");
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("TAX_CONFIG_MISSING");
     expect(r.json().message).toContain("FY 2027-28");
+    expect(r.json().details).toEqual({ fy: "2027-28", missingRegimes: ["new"] });
     expect(await runCount("2027-08")).toBe(0);
   });
 
-  it("only the new regime configured for the tenant -> still 422, naming the old regime; both -> accepted", async () => {
-    const slabs = JSON.stringify([{ from: 0, to: null, rate: 0 }]);
-    await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands, created_by)
-      VALUES (${TENANT}::uuid, 2027, ${"new"}, ${slabs}::jsonb, 75000, 1200000, 60000, ${"[]"}::jsonb, ${ACTOR}::uuid)`));
-    const r1 = await create("2027-08", "B18-TAX-2");
-    expect(r1.statusCode).toBe(422);
-    expect(r1.json().message).toContain("old regime");
-    await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands, created_by)
-      VALUES (${TENANT}::uuid, 2027, ${"old"}, ${slabs}::jsonb, 50000, 500000, 12500, ${"[]"}::jsonb, ${ACTOR}::uuid)`));
-    const r2 = await create("2027-08", "B18-TAX-3");
-    expect(r2.statusCode).toBe(202);
+  it("new-regime slabs only, and nobody on the old regime -> accepted (old slabs are optional)", async () => {
+    await addSlabs(2027, "new");
+    feed([null, null, null], ["new", "new", "new"]);
+    const r = await create("2027-08", "B18-TAX-2");
+    expect(r.statusCode).toBe(202);
     expect(await runCount("2027-08")).toBe(1);
   });
 
+  it("new-regime slabs only, an employee opted for the old regime (HRMS) -> 422 naming them, with details", async () => {
+    feed([null, null, null], ["new", "old", "new"]);
+    const r = await create("2027-09", "B18-TAX-3");
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("TAX_CONFIG_MISSING");
+    expect(r.json().message).toContain("B18-EPF-2");
+    expect(r.json().details).toEqual({ fy: "2027-28", missingRegimes: ["old"], oldRegimeEmployees: [{ employeeId: EMP[1]!.id, employeeNo: "B18-EPF-2" }] });
+    expect(await runCount("2027-09")).toBe(0);
+  });
+
+  it("the FY tax declaration decides the regime: declared old -> refused; declared new overrides HRMS old -> accepted", async () => {
+    const declare = (empId: string, regime: string) => asTenant((tx) => tx.execute(sql`INSERT INTO payroll.payroll_tax_declarations (tenant_id, employee_id, fy, regime, created_by, updated_by)
+      VALUES (${TENANT}::uuid, ${empId}::uuid, ${"2027-28"}, ${regime}, ${ACTOR}::uuid, ${ACTOR}::uuid)`));
+    feed([null, null, null], ["new", "new", "old"]);
+    await declare(EMP[0]!.id, "old");
+    await declare(EMP[2]!.id, "new");
+    const r1 = await create("2027-10", "B18-TAX-4");
+    expect(r1.statusCode).toBe(422);
+    expect(r1.json().details.oldRegimeEmployees).toEqual([{ employeeId: EMP[0]!.id, employeeNo: "B18-EPF-1" }]);
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_tax_declarations SET regime = ${"new"} WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${EMP[0]!.id}::uuid`));
+    const r2 = await create("2027-10", "B18-TAX-5");
+    expect(r2.statusCode).toBe(202);
+  });
+
+  it("with the old-regime slabs configured too, an old-regime employee is no obstacle", async () => {
+    await addSlabs(2027, "old");
+    feed([null, null, null], ["old", "old", "old"]);
+    const r = await create("2027-11", "B18-TAX-6");
+    expect(r.statusCode).toBe(202);
+  });
+
   it("an FY with the platform default config (2026-27) passes the check", async () => {
-    const r = await create("2026-11", "B18-TAX-4");
+    const r = await create("2026-11", "B18-TAX-7");
     expect(r.statusCode).toBe(202);
   });
 });

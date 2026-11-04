@@ -215,6 +215,8 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
   reason:        text("reason").notNull(),
   uanNumber:     varchar("uan_number", { length: 12 }),
   status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  // change (maker-checker request) | initial | correction (history backfill rows)
+  kind:          varchar("kind", { length: 16 }).notNull().default("change"),
   requestedBy:   uuid("requested_by").notNull(),
   decidedBy:     uuid("decided_by"),
   decidedAt:     timestamp("decided_at", { withTimezone: true }),

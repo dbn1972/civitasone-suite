@@ -18,7 +18,8 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor } from "./domain.js";
+import { runApprovedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
@@ -1108,6 +1109,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const totalGross = paySlips.reduce((s, sl) => s + sl.grossMinor, 0n);
       const totalNet = paySlips.reduce((s, sl) => s + sl.netPayMinor, 0n);
       const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRunTx(tx, p.id, p.tenantId);
+      // UAT b18: EDLI, EPF admin and the UPS pool share are accrued as their own lines.
+      const employerCharges = await statutoryRepo.sumEmployerChargesByRunTx(tx, p.id, p.tenantId);
       await repo.updateRun(tx, p.id, {
         status: "approved",
         totalGrossMinor: totalGross,
@@ -1125,14 +1128,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.runApproved, eventType: EVENTS.runApproved,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: {
-            runId: p.id,
-            month: run.month,
-            totalGrossMinor: totalGross.toString(),
-            totalNetMinor: totalNet.toString(),
-            totalEmployerContribMinor: totalEmployerContrib.toString(),
-            ...(run.legalEntityId ? { legalEntityId: run.legalEntityId } : {}),
-          },
+          payload: runApprovedPayload({
+            runId: p.id, month: run.month, totalGrossMinor: totalGross, totalNetMinor: totalNet,
+            totalEmployerContribMinor: totalEmployerContrib, ...employerCharges,
+            legalEntityId: run.legalEntityId ?? null,
+          }),
         });
       }
       await enqueue(tx, {
@@ -2971,11 +2971,21 @@ export async function computeAndInsertSlip(
       // T-STAT M-NPS: including the Basic + DA part of arrears on the slip.
       pensionBaseMinor: result.npsPensionBaseMinor,
       // UAT b18 D1: UPS members are on the same PRAN / CRA ledger with the UPS Government share.
-      empContribPct: "10", erContribPct: params.pensionScheme === "UPS" ? "18.5" : "14",
+      empContribPct: "10", erContribPct: params.pensionScheme === "UPS" ? "10" : "14",
       empContribMinor: result.npsEmployeeMinor, erContribMinor: result.npsEmployerMinor,
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
+    // UAT b18 (ERP-head decision 2026-11-05): the Government 8.5% UPS POOL
+    // share is its own statutory row, not part of the individual 10% above.
+    const poolMinor = params.pensionScheme === "UPS" ? upsPoolShareMinor(result.npsPensionBaseMinor) : 0n;
+    if (poolMinor > 0n) {
+      await statutoryRepo.insertUpsPool(tx, {
+        id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId, runId: params.runId,
+        pensionBaseMinor: result.npsPensionBaseMinor, contribPct: "8.5", contribMinor: poolMinor,
+        currency: "INR", period: params.month, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+    }
   } else if ((params.pensionScheme ?? "NPS") === "EPF" || params.payProfile?.kind === "consolidated_contract") {
     // T-STAT M-ZERO (F06): only an EPF member gets an EPF row. A GPF / NPS
     // member with a zero contribution (no basic pay in HRMS, or an FR 53 full

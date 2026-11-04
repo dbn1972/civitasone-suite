@@ -14,6 +14,10 @@
 --                           written to hrms_employees.uan_number on approval
 --   status                  pending -> approved | rejected
 --   requested_by / decided_by  maker / checker; the checker must differ
+--   kind                    change (maker-checker request) | initial (backfill:
+--                           the scheme on record when history began, from =
+--                           to) | correction (backfill of a switch made outside
+--                           this API, e.g. the UAT 2026-11-05 SQL switch)
 --   applied_at              when hrms_employees.pension_scheme was switched (at
 --                           approval if already effective, else by the worker
 --                           tick on the effective date); NULL until then
@@ -48,6 +52,7 @@ CREATE TABLE IF NOT EXISTS employee.hrms_pension_scheme_changes (
   reason          text        NOT NULL,
   uan_number      varchar(12),
   status          varchar(16) NOT NULL DEFAULT 'pending',
+  kind            varchar(16) NOT NULL DEFAULT 'change',
   requested_by    uuid        NOT NULL,
   decided_by      uuid,
   decided_at      timestamptz,
@@ -63,7 +68,9 @@ CREATE TABLE IF NOT EXISTS employee.hrms_pension_scheme_changes (
   CONSTRAINT hrms_pension_scheme_changes_first_of_month CHECK (EXTRACT(DAY FROM effective_from) = 1),
   CONSTRAINT hrms_pension_scheme_changes_reason_check CHECK (length(btrim(reason)) >= 10),
   CONSTRAINT hrms_pension_scheme_changes_uan_check CHECK (uan_number IS NULL OR uan_number ~ '^[0-9]{12}$'),
-  CONSTRAINT hrms_pension_scheme_changes_changed_check CHECK (from_scheme <> to_scheme),
+  CONSTRAINT hrms_pension_scheme_changes_kind_check CHECK (kind IN ('change', 'initial', 'correction')),
+  CONSTRAINT hrms_pension_scheme_changes_changed_check CHECK (kind = 'initial' OR from_scheme <> to_scheme),
+  CONSTRAINT hrms_pension_scheme_changes_backfill_check CHECK (kind = 'change' OR status = 'approved'),
   CONSTRAINT hrms_pension_scheme_changes_decision_check CHECK (
     (status = 'pending' AND decided_by IS NULL) OR (status <> 'pending' AND decided_by IS NOT NULL AND decided_by <> requested_by))
 );

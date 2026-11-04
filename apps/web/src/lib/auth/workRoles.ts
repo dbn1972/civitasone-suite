@@ -76,6 +76,8 @@ export const EMPLOYEE_PII_REVEAL_ROLES = ["hr_admin", "super_admin"];
  * page is unchanged.
  */
 export const EMPLOYEE_LOGIN_LINK_ROLES = [...HR_ADMIN_TIER_ROLES];
+/** UAT b18: who approves / rejects a pension scheme change (hrms CHECKER_ROLES); the requester never can. */
+export const PENSION_SCHEME_CHECKER_ROLES = [...HR_ADMIN_TIER_ROLES];
 export const EMPLOYEE_PHONE_REVEAL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 /**

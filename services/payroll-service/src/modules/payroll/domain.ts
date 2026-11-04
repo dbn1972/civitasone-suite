@@ -404,12 +404,22 @@ const GPF_PCT     = 10n;
 const NPS_EMP_PCT = 10n;
 const NPS_ER_PCT  = 14n;
 /**
- * UAT b18 D1: UPS contributions on Basic + DA. Employee 10% (same as NPS);
- * Government 18.5% (10% to the individual corpus + 8.5% to the pool corpus),
- * per the UPS notification of 24 Jan 2025 (PFRDA UPS regulations, 2025).
+ * UAT b18 D1: UPS contributions on Basic + DA, per the UPS notification of
+ * 24 Jan 2025: employee 10%; Government 18.5% = 10% to the employee's
+ * INDIVIDUAL corpus (npsEmployerMinor, the PRAN ledger) + 8.5% to the POOL
+ * corpus. ERP-head decision 2026-11-05 (PR #2458): the 8.5% pool share is not
+ * credited to the individual account, so it is NOT part of npsEmployerMinor;
+ * upsPoolShareMinor() computes it and payroll books it as its own statutory
+ * row (statutory.payroll_ups_pool) and its own GL accrual line.
  */
 const UPS_EMP_PCT = 10n;
-const UPS_ER_BPS  = 1850n;
+const UPS_ER_INDIVIDUAL_PCT = 10n;
+export const UPS_POOL_BPS = 850n;
+
+/** The Government 8.5% UPS pool corpus share on the UPS pension base (Basic + DA), rounded to the rupee. */
+export function upsPoolShareMinor(pensionBaseMinor: bigint): bigint {
+  return pensionBaseMinor > 0n ? roundRupee((pensionBaseMinor * UPS_POOL_BPS) / 10000n) : 0n;
+}
 const GRATUITY_CAP = 200_000_000n; // 20 lakh INR
 
 /** Round a paise amount to the nearest whole rupee (round-half-up). */
@@ -569,7 +579,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     // UAT b18 D1: UPS is an option under NPS -- same base, same PRAN/CRA
     // ledger, the higher UPS Government share.
     npsEmployeeMinor = pct(npsPensionBaseMinor, UPS_EMP_PCT);
-    npsEmployerMinor = roundRupee((npsPensionBaseMinor * UPS_ER_BPS) / 10000n);
+    npsEmployerMinor = pct(npsPensionBaseMinor, UPS_ER_INDIVIDUAL_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;

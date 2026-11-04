@@ -14,7 +14,7 @@ import {
   buildEcrFile, formatEcrLine, isValidUan, uanProblems, ncpDaysFromComponents, ecrText, ECR_FIELD_SEPARATOR,
 } from "../src/modules/statutory/ecr-domain.js";
 import {
-  epfEmployerCharges, epfAdminChargeForPeriod, DEFAULT_STATUTORY_CONFIG, resolveStatutoryConfig, computeSlip,
+  epfEmployerCharges, epfAdminChargeForPeriod, DEFAULT_STATUTORY_CONFIG, resolveStatutoryConfig, computeSlip, upsPoolShareMinor,
 } from "../src/modules/payroll/domain.js";
 import { computedSchemeOf } from "../src/modules/payroll/pension-scheme-retro.js";
 import { missingRegimes, fyLabel } from "../src/modules/tax/config-check.js";
@@ -135,13 +135,22 @@ describe("D5 / D6: EPF wage used, EDLI and admin charges (employer only)", () =>
 });
 
 describe("D1: UPS contributions and the retro report scheme inference", () => {
-  it("UPS: employee 10%, Government 18.5% of Basic + DA; no EPF", () => {
-    // Basic Rs 50,000 + DA 0 -> employee Rs 5,000, Government Rs 9,250
+  it("UPS: employee 10%; Government 10% individual + 8.5% pool (separate) = 18.5% of Basic + DA; no EPF", () => {
+    // Basic Rs 50,000 + DA 0 -> employee Rs 5,000, individual Rs 5,000, pool Rs 4,250 (total Govt Rs 9,250)
     const s = computeSlip({ basicMinor: 5_000_000n, daRateBps: 0n, cityClass: "Z", pensionScheme: "UPS", fyStartYear: 2026 });
     expect(s.npsEmployeeMinor).toBe(500_000n);
-    expect(s.npsEmployerMinor).toBe(925_000n);
+    expect(s.npsEmployerMinor).toBe(500_000n);
+    expect(upsPoolShareMinor(s.npsPensionBaseMinor)).toBe(425_000n);
+    expect(s.npsEmployerMinor + upsPoolShareMinor(s.npsPensionBaseMinor)).toBe(925_000n);
     expect(s.pfEmployeeMinor).toBe(0n);
     expect(s.gpfMinor).toBe(0n);
+    // the pool share never touches the slip: net is unchanged by it
+    expect(s.netPayMinor).toBe(s.grossMinor - s.totalDeductionsMinor);
+  });
+
+  it("UPS pool share rounds to the rupee (8.5% of Rs 28,440 = Rs 2,417.40 -> Rs 2,417) and is 0 on no base", () => {
+    expect(upsPoolShareMinor(2_844_000n)).toBe(241_700n);
+    expect(upsPoolShareMinor(0n)).toBe(0n);
   });
 
   it("NPS is unchanged: employee 10%, employer 14%", () => {
@@ -154,7 +163,7 @@ describe("D1: UPS contributions and the retro report scheme inference", () => {
     const z = { gpfMinor: 0n, npsEmployeeMinor: 0n, npsEmployerMinor: 0n, pfEmployeeMinor: 0n };
     expect(computedSchemeOf({ ...z, gpfMinor: 100n })).toBe("GPF");
     expect(computedSchemeOf({ ...z, npsEmployeeMinor: 500_000n, npsEmployerMinor: 700_000n })).toBe("NPS");
-    expect(computedSchemeOf({ ...z, npsEmployeeMinor: 500_000n, npsEmployerMinor: 925_000n })).toBe("UPS");
+    expect(computedSchemeOf({ ...z, npsEmployeeMinor: 500_000n, npsEmployerMinor: 500_000n })).toBe("UPS");
     expect(computedSchemeOf({ ...z, pfEmployeeMinor: 180_000n })).toBe("EPF");
     expect(computedSchemeOf(z)).toBe("NONE");
   });

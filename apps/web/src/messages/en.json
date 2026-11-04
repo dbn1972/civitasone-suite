@@ -18402,6 +18402,44 @@
       "EMPLOYEE_EXITED": "The pension scheme of an employee who has left cannot be changed.",
       "REASON_REQUIRED": "Enter a reason of at least 10 characters.",
       "generic": "The pension scheme change could not be saved. Try again."
+    },
+    "title": "Pension scheme",
+    "currentLabel": "Current scheme",
+    "notRecorded": "Not recorded",
+    "uanMissingWarning": "EPF member without a valid 12-digit UAN: the EPFO ECR cannot be generated until it is recorded.",
+    "changeButton": "Change pension scheme",
+    "dialogTitle": "Change pension scheme",
+    "dialogHelp": "The new scheme applies from the 1st of the month you choose. Salary slips already computed are not changed; any difference is reported for review. A different HR administrator must approve the change.",
+    "schemeLabel": "New scheme",
+    "effectiveMonthLabel": "Effective from (month)",
+    "reasonLabel": "Reason",
+    "uanLabel": "UAN (12 digits)",
+    "submitButton": "Request change",
+    "cancelButton": "Cancel",
+    "submitted": "Change requested. A different HR administrator must approve it.",
+    "pendingTitle": "Change waiting for approval",
+    "changeLine": "{from} to {to} from {date}",
+    "reasonText": "Reason: {reason}",
+    "decisionNoteLabel": "Note (required to reject)",
+    "approveButton": "Approve",
+    "rejectButton": "Reject",
+    "approved": "Change approved.",
+    "rejected": "Change rejected.",
+    "historyTitle": "History",
+    "monthRequired": "Choose the month the new scheme starts.",
+    "uanInvalid": "The UAN must be exactly 12 digits.",
+    "rejectNoteRequired": "Enter a note of at least 3 characters to reject.",
+    "loadError": "The pension scheme history could not be loaded.",
+    "schemes": {
+      "GPF": "GPF (General Provident Fund)",
+      "NPS": "NPS (National Pension System)",
+      "EPF": "EPF (Employees' Provident Fund)",
+      "UPS": "UPS (Unified Pension Scheme)"
+    },
+    "status": {
+      "pending": "pending",
+      "approved": "approved",
+      "rejected": "rejected"
     }
   }
 }

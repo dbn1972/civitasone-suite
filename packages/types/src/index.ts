@@ -1151,6 +1151,10 @@ export type EmployeeDetail = {
   costCenterId?: string;
   /** State of employment (ISO 3166-2:IN code), the professional-tax state. */
   workStateCode?: string;
+  /** UAT b18: recorded pension scheme (GPF | NPS | EPF | UPS | CPF), see EmployeeDetailSchema. */
+  pensionScheme?: string;
+  /** UAT b18: statutory ids missing for that scheme, e.g. ["UAN_MISSING"]; absent when complete. */
+  statutoryIncomplete?: string[];
 };
 
 // Procurement types
