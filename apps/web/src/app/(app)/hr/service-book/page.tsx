@@ -135,9 +135,8 @@ export default async function ServiceBookPage(
           isHr && empId ? (
             <div style={{ display: "flex", gap: 8 }}>
               <Link href="/hr/service-book" className="btn ghost">{t("viewAllEmployeesLink")}</Link>
-              {/* GAP-HR-SERVICE-BOOK-01: this opens a printable HTML page in a
-                  new tab (browser Print → Save as PDF), not a literal PDF
-                  download -- worded honestly rather than "Download PDF". */}
+              {/* UAT ux-docs: GET .../service-book/pdf now returns a real PDF
+                  (names, attestations, IST dates), so the link says so. */}
               <a href={`/api/proxy/v1/hrms/employees/${encodeURIComponent(empId)}/service-book/pdf`}
                  target="_blank" rel="noreferrer" className="btn ghost">
                 {t("printServiceBookLink")}

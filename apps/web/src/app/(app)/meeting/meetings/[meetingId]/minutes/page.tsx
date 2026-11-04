@@ -61,6 +61,13 @@ export default async function MinutesPage(
         subtitle="Draft, review and approve the record of the meeting under a maker-checker workflow."
         back={`/meeting/meetings/${meetingId}`}
         backLabel="Console"
+        actions={
+          minutes.data ? (
+            <a href={`/api/proxy/v1/meetings/${meetingId}/minutes/pdf`} target="_blank" rel="noopener noreferrer" className="btn ghost no-print">
+              Download minutes (PDF)
+            </a>
+          ) : undefined
+        }
       />
 
       {meetingData && (

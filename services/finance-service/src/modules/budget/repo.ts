@@ -279,6 +279,21 @@ export async function findHeadLabels(
   return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name }]));
 }
 
+/**
+ * UAT ux-docs: account code -> head name for a printed voucher (journal lines carry
+ * codes only). Tenant-scoped; a code that is not in the chart is absent from the map.
+ */
+export async function findHeadNamesByCodes(tenantId: string, codes: readonly string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(codes)].filter((c) => c.length > 0);
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx.select({ code: financeHeads.code, name: financeHeads.name })
+      .from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, unique)))
+  );
+  return new Map(rows.map((r) => [r.code, r.name]));
+}
+
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {
   const rows = await (tx as typeof db).select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
   return rows[0] ?? null;

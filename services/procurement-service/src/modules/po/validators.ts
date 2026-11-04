@@ -7,6 +7,9 @@ const poItemSchema = z.object({
   unit:           z.string().min(1).max(32).default("nos"),
   unitPriceMinor: z.number().int().nonnegative(),
   itemType:       z.enum(["consumable", "fixed_asset", "service"]).default("consumable"),
+  // UAT ux-docs: GST rate of the line in basis points (1800 = 18%) and its HSN/SAC code, printed on the PO.
+  gstRateBp:      z.number().int().min(0).max(2800).optional(),
+  hsnSac:         z.string().trim().regex(/^\d{4,8}$/, "HSN/SAC is 4 to 8 digits").optional(),
 });
 
 export const createPoBody = z.object({

@@ -1,11 +1,14 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import {
+  OfficialPdf, amountInWordsEn, formatDateIst, formatMinorIndian, placeOfSupplyLabel, toMinor, type DocIdentity,
+} from "@civitasone/render/official";
 
 /**
  * Owner decision #27 (GAP-TENANT-ADMIN-SUBSCRIPTION-04): billing-service renders the
  * invoice PDF. Pure text layout (no HTML/browser dependency) so it is deterministic and
  * testable. Money is bigint minor units end to end; formatMinor never goes through a float.
- * pdf-lib's standard fonts are WinAnsi only, so the rupee sign is written as "INR" and any
- * other unencodable character is replaced rather than letting drawText throw.
+ * UAT ux-docs: the PDF is laid out by the shared OfficialPdf builder with the embedded
+ * Noto Sans Devanagari font (so the rupee sign and Hindi print), supplier and recipient
+ * GSTIN, HSN/SAC, the CGST/SGST/IGST split and the amount in words.
  */
 export interface InvoicePdfItem {
   description: string;
@@ -85,25 +88,62 @@ export function invoiceDocumentLines(m: InvoicePdfModel): string[] {
   return lines;
 }
 
-const winAnsiSafe = (s: string): string => s.replace(/[^\x20-\x7E\xA0-\xFF]/g, "?");
+/** Who issues the invoice (the platform operator) - deploy configuration, not tenant data. */
+export function invoiceSupplierFromEnv(): { name: string | null; address: string | null } {
+  const v = (k: string) => (process.env[k] ?? "").trim() || null;
+  return { name: v("BILLING_SUPPLIER_NAME"), address: v("BILLING_SUPPLIER_ADDRESS") };
+}
 
-export async function renderInvoicePdf(m: InvoicePdfModel): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const font: PDFFont = await doc.embedFont(StandardFonts.Helvetica);
-  const bold: PDFFont = await doc.embedFont(StandardFonts.HelveticaBold);
-  const MARGIN = 48;
-  const SIZE = 10;
-  const LEAD = 15;
-  let page = doc.addPage([595.28, 841.89]);
-  let y = page.getHeight() - MARGIN;
-  for (const [i, line] of invoiceDocumentLines(m).entries()) {
-    if (y < MARGIN) {
-      page = doc.addPage([595.28, 841.89]);
-      y = page.getHeight() - MARGIN;
-    }
-    const heading = i === 0;
-    page.drawText(winAnsiSafe(line), { x: MARGIN, y, size: heading ? 16 : SIZE, font: heading ? bold : font, color: rgb(0, 0, 0) });
-    y -= heading ? LEAD + 8 : LEAD;
-  }
-  return doc.save();
+export async function renderInvoicePdf(
+  m: InvoicePdfModel,
+  parties: { supplier?: { name: string | null; address: string | null }; recipient?: DocIdentity } = {},
+  generatedAt?: Date,
+): Promise<Uint8Array> {
+  const supplier = parties.supplier ?? invoiceSupplierFromEnv();
+  const registered = !!(m.supplierGstin && m.supplierGstin.length > 0);
+  const pdf = await OfficialPdf.create({
+    title: `${registered ? "Tax Invoice" : "Bill of Supply"} ${m.invoiceNumber ?? ""}`.trim(),
+    lang: "bilingual",
+    footerNote: `${registered ? "Tax invoice" : "Bill of supply"} ${m.invoiceNumber ?? ""}`.trim(),
+    ...(generatedAt ? { generatedAt } : {}),
+  });
+  pdf.letterhead({ orgName: supplier.name, address: supplier.address });
+  pdf.title(registered ? "TAX INVOICE" : "BILL OF SUPPLY", registered ? "कर बीजक" : "आपूर्ति का बिल");
+  pdf.refLine(`Invoice No. ${m.invoiceNumber ?? "-"}`, `Dated: ${formatDateIst(m.issuedAt instanceof Date ? m.issuedAt : m.issuedAt ?? null)}`);
+  const r = parties.recipient;
+  pdf.fields([
+    { label: "Supplier GSTIN", value: m.supplierGstin ?? "Not registered under GST" },
+    { label: "Recipient GSTIN", value: m.recipientGstin ?? "Unregistered recipient" },
+    { label: "Bill to", value: [r?.orgName, r?.address].filter(Boolean).join(", ") },
+    { label: "Place of supply", value: placeOfSupplyLabel(m.placeOfSupply) },
+    { label: "Billing period", value: m.periodMonth },
+    { label: "Status", value: m.status },
+  ]);
+  const lines = m.items.filter((it) => it.kind !== "tax");
+  const taxable = lines.reduce((a, it) => a + toMinor(it.amountMinor), 0n);
+  pdf.table({
+    columns: [
+      { header: "S. No.", width: 0.6, align: "center" },
+      { header: "Description", width: 4 },
+      { header: "HSN/SAC", width: 1.1 },
+      { header: "Qty", width: 0.7, align: "right" },
+      { header: "Taxable value (₹)", width: 1.6, align: "right" },
+    ],
+    rows: lines.map((it, i) => [String(i + 1), it.kind === "line" ? it.description : `${it.description} (${it.kind})`, it.hsnSac ?? "—", it.quantity, formatMinorIndian(toMinor(it.amountMinor))]),
+    emptyText: "No line items.",
+  });
+  const cgst = toMinor(m.cgstMinor), sgst = toMinor(m.sgstMinor), igst = toMinor(m.igstMinor), tax = toMinor(m.taxMinor), total = toMinor(m.totalMinor);
+  const rows: string[][] = [["Taxable value", formatMinorIndian(taxable)]];
+  if (cgst > 0n || sgst > 0n) rows.push(["CGST", formatMinorIndian(cgst)], ["SGST / UTGST", formatMinorIndian(sgst)]);
+  if (igst > 0n) rows.push(["IGST", formatMinorIndian(igst)]);
+  if (cgst === 0n && sgst === 0n && igst === 0n && tax > 0n) rows.push(["GST", formatMinorIndian(tax)]);
+  pdf.table({
+    columns: [{ header: "Summary", width: 4 }, { header: "₹", width: 1.6, align: "right" }],
+    rows,
+    footRows: [["Invoice total", formatMinorIndian(total)], ["Paid", formatMinorIndian(toMinor(m.paidMinor))], ["Outstanding", formatMinorIndian(toMinor(m.outstandingMinor))]],
+  });
+  pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
+  if (!registered) pdf.note("The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
+  pdf.note("This is a computer-generated invoice.");
+  return pdf.save();
 }

@@ -12,6 +12,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { renderInvoicePdf } from "./pdf.js";
+import { resolveDocIdentity } from "@civitasone/render/official";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
@@ -111,7 +112,8 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     if (!PDF_STATUSES.has(detail.status)) {
       throw new DomainError("INVOICE_NOT_ISSUED", `a tax invoice PDF is available once the bill is issued (status: ${detail.status})`);
     }
-    const bytes = await renderInvoicePdf(detail);
+    // UAT ux-docs: the recipient (this tenant) name and address from its document identity.
+    const bytes = await renderInvoicePdf(detail, { recipient: await resolveDocIdentity(ctx.tenantId) });
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="${detail.invoiceNumber ?? "invoice"}.pdf"`)

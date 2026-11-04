@@ -5,6 +5,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SanctionLineItemsTable } from "./SanctionLineItemsTable";
 import { SanctionApprovalPanel } from "./SanctionApprovalPanel";
 import { SANCTION_APPROVER_ROLES, normalizeSanctionStatus } from "./sanctionApproval";
+import { PrintButton } from "../../../../../_components/PrintButton";
 
 /** GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-06: an unparseable timestamp reads "—", never raw text. */
 function formatTrailTimestamp(ts: string | null | undefined): string {
@@ -59,7 +60,21 @@ export default async function SanctionDetailPage(props: { params: Promise<{ id: 
         subtitle={sanction.subject}
         back="/finance/budget/sanctions"
         actions={
-          <StatusPill status={sanction.status} />
+          <>
+            <StatusPill status={sanction.status} />
+            <PrintButton label="Print" title={`Sanction ${sanction.sanctionNo}`} />
+            {/* UAT ux-docs: the issuable sanction order (government order format), approved sanctions only. */}
+            {normalizeSanctionStatus(sanction.status) === "approved" && (
+              <a
+                href={`/api/proxy/v1/finance/sanctions/${params.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn primary no-print"
+              >
+                Sanction order (PDF)
+              </a>
+            )}
+          </>
         }
       />
       <StatGrid>

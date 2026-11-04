@@ -5883,6 +5883,7 @@
     "submitBtn": "View Period"
   },
   "perquisite": {
+    "downloadForm12baPdf": "Download Form 12BA (PDF)",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "Perquisites & Form 12BA",
     "loadingAriaLabel": "Loading…",
@@ -7586,7 +7587,7 @@
     "subtitleForEmployee": "This employee's postings, transfers, promotions, and administrative orders in chronological order.",
     "subtitleMine": "Your postings, transfers, promotions, and administrative orders in chronological order.",
     "viewAllEmployeesLink": "View all employees",
-    "printServiceBookLink": "Print service book",
+    "printServiceBookLink": "Download service book (PDF)",
     "statTotalEntriesLabel": "Total Entries",
     "statEmployeesLabel": "Employees",
     "statTransfersLabel": "Transfers / Postings",
