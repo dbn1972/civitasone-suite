@@ -5,7 +5,7 @@
  *
  *   draft  → processing
  *   processing → computed | failed   (UAT L2-N3: computation finished / threw)
- *   computed   → approved
+ *   computed   → approved | failed  (failed = sent back by a payroll admin)
  *   approved   → disbursed
  *   failed     → draft           (revert/retry)
  *   disbursed  → (terminal — no outgoing transitions)
@@ -128,7 +128,7 @@ describe("valid transitions map — completeness assertion", () => {
   const EXPECTED_ALLOWED: Record<string, string[]> = {
     draft:      ["processing"],
     processing: ["computed", "failed"],
-    computed:   ["approved"],
+    computed:   ["approved", "failed"],
     approved:   ["disbursed"],
     disbursed:  [],
     failed:     ["draft"],

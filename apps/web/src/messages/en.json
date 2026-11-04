@@ -5689,6 +5689,32 @@
       "reviewNoteLabel": "Review note (recorded with each exclusion and acknowledgement)",
       "reviewIncomplete": "Exclude every slip with no basic pay, acknowledge every arrears line listed, and enter a review note of at least 10 characters.",
       "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again."
+    },
+    "runErrors": {
+      "RUN_NOT_READY_FOR_APPROVAL": "This run cannot be approved yet. Its pay slips are still being calculated, or the calculation did not finish. Approve it once its status is Ready for approval.",
+      "RUN_ALREADY_APPROVED": "This run has already been approved. Refresh the page to see its current status.",
+      "RUN_NOT_READY_FOR_DISBURSEMENT": "This run cannot be disbursed yet. A run must be approved before salaries can be released.",
+      "RUN_ALREADY_DISBURSED": "Salaries for this run have already been released. Nothing more was sent.",
+      "RUN_NOT_REVERTIBLE": "Only a failed run can be reverted to draft.",
+      "RUN_NOT_REJECTABLE": "Only a run that is ready for approval can be sent back for recalculation.",
+      "RUN_NOT_PROCESSING": "Only a run that is stuck in processing can be marked as failed.",
+      "RUN_NOT_STUCK": "This run may still be calculating. It can be marked as failed only after it has had no progress for several hours. Try again later."
+    },
+    "runRecovery": {
+      "sendBackBtn": "Send back for recalculation",
+      "sendBackTitle": "Send this run back for recalculation?",
+      "sendBackDescription": "The calculated pay slips for <strong>{period}</strong> will not be paid. Loan repayments, bonuses, reimbursements and statutory entries taken by this run are released, the run is marked failed, and a new run can be created for the period. No money has been released.",
+      "sendBackReasonLabel": "Why is this run being sent back?",
+      "sendBackConfirmLabel": "Send back",
+      "sentBackMessage": "The payroll run for {period} was sent back. Create a new run for the period when the cause is fixed.",
+      "sentBackToast": "✓ Run sent back for recalculation",
+      "failStuckBtn": "Mark stuck run as failed",
+      "failStuckTitle": "Mark this run as failed?",
+      "failStuckDescription": "Use this only when the calculation for <strong>{period}</strong> has stopped. The run is marked failed so that the period can be calculated again. A run that is still calculating is refused.",
+      "failStuckReasonLabel": "Why is this run being marked as failed?",
+      "failStuckConfirmLabel": "Mark as failed",
+      "failedStuckMessage": "The payroll run for {period} was marked as failed.",
+      "failedStuckToast": "✓ Stuck run marked as failed"
     }
   },
   "payrollRunsTable": {

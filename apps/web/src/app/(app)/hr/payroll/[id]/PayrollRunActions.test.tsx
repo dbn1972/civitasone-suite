@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@/app/_components/ds/Toast", () => ({ useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }) }));
 
-import { PayrollRunActions } from "./PayrollRunActions";
+import { PayrollRunActions, RUN_STATE_ERROR_CODES } from "./PayrollRunActions";
 
 // GAP-PAYROLL-HOME-01: integer-paise strings (Rs 5,00,000.00 gross / Rs 4,50,000.00 net).
 const PROPS = {
@@ -317,5 +318,80 @@ describe("PayrollRunActions — confirmation amounts come from exact paise", () 
     fireEvent.click(screen.getByRole("button", { name: /disburse/i }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).not.toHaveTextContent("₹0.00");
+  });
+});
+
+/** UAT L2-N3 review: send back a computed run, recover a stuck one, and plain en/hi wording for the run-state 409 codes. */
+describe("PayrollRunActions — send back, stuck-run recovery, run-state errors", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal("fetch", fetchMock); });
+  afterEach(() => vi.unstubAllGlobals());
+  const renderAs = (props: Partial<React.ComponentProps<typeof PayrollRunActions>> = {}, messages: Record<string, unknown> = enMessages) => render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <PayrollRunActions {...PROPS} {...props} />
+    </NextIntlClientProvider>,
+  );
+
+  it("a computed run offers Send back; the reason (>= 10 chars) goes to PATCH .../reject", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
+    renderAs({ status: "computed" });
+    fireEvent.click(screen.getByRole("button", { name: /send back for recalculation/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: /^send back$/i });
+    fireEvent.change(within(dialog).getByLabelText(/why is this run being sent back/i), { target: { value: "short" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/why is this run being sent back/i), { target: { value: "No DA rate for the month" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/payroll/runs/r1/reject");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "No DA rate for the month" });
+  });
+
+  it("a processing run offers Mark stuck run as failed (PATCH .../fail-stuck) but no Approve or Send back", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
+    renderAs({ status: "processing" });
+    expect(screen.queryByRole("button", { name: /approve run/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send back/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /mark stuck run as failed/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/why is this run being marked as failed/i), { target: { value: "Worker crashed mid-run" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^mark as failed$/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe("/api/proxy/v1/payroll/runs/r1/fail-stuck");
+  });
+
+  it("a 409 RUN_NOT_STUCK reads as plain words, not the raw server message", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "RUN_NOT_STUCK", message: "raw server text" }), { status: 409 }));
+    renderAs({ status: "processing" });
+    fireEvent.click(screen.getByRole("button", { name: /mark stuck run as failed/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/why is this run being marked as failed/i), { target: { value: "Worker crashed mid-run" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^mark as failed$/i }));
+    await waitFor(() => expect(dialog).toHaveTextContent(enMessages.payroll.runErrors.RUN_NOT_STUCK));
+    expect(dialog.textContent).not.toMatch(/raw server text/);
+  });
+
+  it("a 409 RUN_NOT_READY_FOR_APPROVAL on approve reads as plain words", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "RUN_NOT_READY_FOR_APPROVAL", message: "raw server text" }), { status: 409 }));
+    renderAs({ status: "computed", currentUserId: OTHER, createdBy: ME });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Reviewed and correct" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    await waitFor(() => expect(dialog).toHaveTextContent(enMessages.payroll.runErrors.RUN_NOT_READY_FOR_APPROVAL));
+    expect(dialog.textContent).not.toMatch(/raw server text/);
+  });
+
+  it("every run-state code has en and hi wording, and the hi wording differs from en", () => {
+    for (const code of RUN_STATE_ERROR_CODES) {
+      const en = (enMessages.payroll.runErrors as Record<string, string>)[code];
+      const hi = (hiMessages.payroll.runErrors as Record<string, string>)[code];
+      expect(en, code).toBeTruthy();
+      expect(hi, code).toBeTruthy();
+      expect(hi).not.toBe(en);
+    }
+    expect(Object.keys(enMessages.payroll.runRecovery).sort()).toEqual(Object.keys(hiMessages.payroll.runRecovery).sort());
   });
 });

@@ -18,7 +18,7 @@ import {
   unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion,
   invalidZeroBasicExclusions, INVALID_ZERO_BASIC_EXCLUSION, arrearsReviewOf, unacknowledgedArrears, arrearsReviewMessage,
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
-  runActionDenial, type RunLifecycleAction,
+  runActionDenial, stuckRunHours, type RunLifecycleAction,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import type {
@@ -257,7 +257,7 @@ async function assertRunMakerChecker(
 async function assertRunActionAllowed(ctx: RequestContext, action: RunLifecycleAction, id: string): Promise<void> {
   const run = await repo.findRunById(id, ctx.tenantId);
   if (!run) return;
-  const denial = runActionDenial(action, run.status);
+  const denial = runActionDenial(action, run.status, { updatedAt: run.updatedAt, now: new Date(), hours: stuckRunHours() });
   if (denial) throw new HttpError(409, denial.code, denial.message);
 }
 
@@ -269,7 +269,7 @@ async function assertRunActionAllowed(ctx: RequestContext, action: RunLifecycleA
  * the consumers (row lock + status guard); a client that wants wire-level dedupe can send
  * X-Idempotency-Key, which maps to a stable id scoped to tenant + action + run + key.
  */
-function runCommandMessageId(ctx: RequestContext, action: "approve" | "disburse" | "revert", runId: string): string {
+function runCommandMessageId(ctx: RequestContext, action: RunLifecycleAction, runId: string): string {
   if (!ctx.idempotencyKey) return randomUUID();
   return deterministicUuid(`payroll-${action}:${ctx.tenantId}:${runId}:${ctx.idempotencyKey}`);
 }
@@ -336,6 +336,38 @@ export async function revertRun(ctx: RequestContext, id: string, reason?: string
     type: COMMANDS.runRevert,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId, ...(reason ? { reason } : {}) },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * UAT L2-N3 review: send a computed run back (computed -> failed, the pass is
+ * unwound). Payroll admin (route), mandatory reason, maker-checker neutral.
+ */
+export async function rejectRun(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  await assertRunActionAllowed(ctx, "reject", id);
+  await queue.publish(COMMANDS.runReject, {
+    messageId: runCommandMessageId(ctx, "reject", id),
+    type: COMMANDS.runReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, rejectedBy: ctx.actorId, reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * UAT L2-N3 review: mark a run stuck in processing (not updated for
+ * PAYROLL_STUCK_RUN_HOURS) as failed. Payroll admin (route), mandatory reason.
+ */
+export async function failStuckRun(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  await assertRunActionAllowed(ctx, "failStuck", id);
+  await queue.publish(COMMANDS.runFailStuck, {
+    messageId: runCommandMessageId(ctx, "failStuck", id),
+    type: COMMANDS.runFailStuck,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

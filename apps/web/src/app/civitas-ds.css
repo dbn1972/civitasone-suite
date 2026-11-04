@@ -493,8 +493,14 @@ form.fields.jv-form>*{min-width:0}
 .app-foot-links a:focus-visible{outline:2px solid var(--footer-focus);outline-offset:2px;border-radius:2px}
 /* The marketing surface is light-only by design (data-color-scheme="light",
    see (marketing)/layout.tsx): keep its footer on the light footer tokens
-   even when the app theme on <html> is dark. */
-[data-color-scheme="light"]{--footer-bg:#f9fafb; --footer-ink:#475467; --footer-heading:#101828; --footer-link:#00439c; --footer-link-hover:#101828; --footer-line:#eaecf0; --footer-focus:#4f46e5}
+   even when the app theme on <html> is dark.
+   PR #2454 review: it also pins the base surface/text tokens and its own text
+   colour, so inherited text (the /screen-reader-access table headers were
+   #e7e9ed on #fff = 1.21:1 under html.dark) and token-styled parts stay light.
+   Values equal the :root light tokens (theme-token-contrast.test.ts). */
+[data-color-scheme="light"]{--footer-bg:#f9fafb; --footer-ink:#475467; --footer-heading:#101828; --footer-link:#00439c; --footer-link-hover:#101828; --footer-line:#eaecf0; --footer-focus:#4f46e5;
+  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#5d6679; --muted:#5d6679; --line:#eaecf0; --line2:#f2f4f7;
+  color:var(--ink)}
 .tb-lang{min-height:36px;padding:6px 10px;font-size:13px}
 @media(max-width:768px){.app-foot{padding:14px 16px 96px}}
 

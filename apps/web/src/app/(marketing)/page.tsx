@@ -120,11 +120,11 @@ export default function LandingPage() {
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
                     <div className="text-2xl font-bold sm:text-3xl" data-testid="stat-modules">{MODULE_COUNT}</div>
-                    <div className="mt-1 text-xs text-gray-400">modules</div>
+                    <div className="mt-1 text-xs text-[color:var(--mut)]">modules</div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold sm:text-3xl" data-testid="stat-languages">{LANGUAGE_COUNT}</div>
-                    <div className="mt-1 text-xs text-gray-400">languages</div>
+                    <div className="mt-1 text-xs text-[color:var(--mut)]">languages</div>
                   </div>
                 </div>
               </div>
@@ -138,7 +138,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-8 md:grid-cols-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Built for</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--mut)]">Built for</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {["Government of India", "PSU", "Small Office"].map((b) => (
                   <span key={b} className="rounded-full bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-700">
@@ -148,7 +148,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Compliant with</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--mut)]">Compliant with</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {["DPDP Act", "GFR 2017", "GST", "CERT-In"].map((b) => (
                   <span key={b} className="rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
@@ -257,7 +257,7 @@ export default function LandingPage() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-4 text-xs text-gray-400">
+            <p className="mt-4 text-xs text-[color:var(--mut)]">
               Comparison reflects CivitasOne&apos;s own capabilities. Competitor capabilities shown are indicative; verify against the vendor&apos;s current documentation.
             </p>
           </div>
@@ -280,7 +280,7 @@ export default function LandingPage() {
             Open Sandbox →
           </Link>
           <div className="mt-10">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Choose a role</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--mut)]">Choose a role</p>
             {/*
               GAP-DASHBOARD-HOME-05: the role "chips" used to be plain <span>s
               styled like interactive pills that led nowhere. They are now

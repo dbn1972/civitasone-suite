@@ -12,7 +12,7 @@ const STEPS = [
 
 /**
  * GAP-PAYROLL-DETAIL-08: the wire status enum (payroll-service queries.ts
- * mapRunStatus) is only ever draft/processing/completed/paid/failed --
+ * mapRunStatus) is draft/processing/computed/completed/paid/failed --
  * "approved" and "disbursed" are internal-only values the backend remaps to
  * "completed"/"paid" before the API responds, so a branch keyed on the
  * literal string "approved" can never match a real run; it used to point

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   RUN_TRANSITIONS, runActionDenial, runAcceptsComputation, assertRunStatusTransition, DomainError,
   RUN_NOT_READY_FOR_APPROVAL, RUN_ALREADY_APPROVED, RUN_NOT_READY_FOR_DISBURSEMENT, RUN_ALREADY_DISBURSED, RUN_NOT_REVERTIBLE,
+  RUN_NOT_REJECTABLE, RUN_NOT_PROCESSING, RUN_NOT_STUCK, stuckRunHours, DEFAULT_STUCK_RUN_HOURS,
 } from "./domain.js";
 
 /**
@@ -65,6 +66,38 @@ describe("runActionDenial (UAT L2-N3)", () => {
         else if (!(RUN_TRANSITIONS[s] ?? []).includes(target[a])) expect(() => assertRunStatusTransition(s, target[a])).toThrow(DomainError);
       }
     }
+  });
+});
+
+describe("send back and stuck-run recovery (UAT L2-N3 review)", () => {
+  const now = new Date("2026-11-04T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+
+  it("reject is allowed only from computed, and computed -> failed is a transition", () => {
+    for (const s of ALL) {
+      const d = runActionDenial("reject", s);
+      if (s === "computed") expect(d).toBeNull();
+      else expect(d?.code, s).toBe(RUN_NOT_REJECTABLE);
+    }
+    expect(() => assertRunStatusTransition("computed", "failed")).not.toThrow();
+  });
+
+  it("fail-stuck needs a processing run idle for at least the threshold", () => {
+    expect(runActionDenial("failStuck", "processing", { updatedAt: hoursAgo(7), now, hours: 6 })).toBeNull();
+    expect(runActionDenial("failStuck", "processing", { updatedAt: hoursAgo(6), now, hours: 6 })).toBeNull();
+    expect(runActionDenial("failStuck", "processing", { updatedAt: hoursAgo(5.9), now, hours: 6 })?.code).toBe(RUN_NOT_STUCK);
+    expect(runActionDenial("failStuck", "processing")?.code).toBe(RUN_NOT_STUCK);
+    for (const s of ALL.filter((x) => x !== "processing")) {
+      expect(runActionDenial("failStuck", s, { updatedAt: hoursAgo(100), now, hours: 6 })?.code, s).toBe(RUN_NOT_PROCESSING);
+    }
+  });
+
+  it("the threshold comes from PAYROLL_STUCK_RUN_HOURS, default 6", () => {
+    expect(stuckRunHours({})).toBe(DEFAULT_STUCK_RUN_HOURS);
+    expect(DEFAULT_STUCK_RUN_HOURS).toBe(6);
+    expect(stuckRunHours({ PAYROLL_STUCK_RUN_HOURS: "2" })).toBe(2);
+    expect(stuckRunHours({ PAYROLL_STUCK_RUN_HOURS: "-1" })).toBe(DEFAULT_STUCK_RUN_HOURS);
+    expect(stuckRunHours({ PAYROLL_STUCK_RUN_HOURS: "x" })).toBe(DEFAULT_STUCK_RUN_HOURS);
   });
 });
 

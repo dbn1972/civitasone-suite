@@ -44,8 +44,9 @@ export function payrollRunStatusLabel(status: string, t: TFn): string {
  * so a run that is computed but not yet paid looked identical to one whose
  * money has moved. Payroll-local override, passed as StatusPill's `variant`
  * (the global map is deliberately left alone):
- *   draft -> neutral, processing -> warn, completed -> info (computed, awaiting
- *   disbursement: NOT green), paid/disbursed -> good, failed -> bad.
+ *   draft -> neutral, processing -> warn (computation running), computed -> info
+ *   (awaiting approval), completed -> info (approved, awaiting disbursement:
+ *   NOT green), paid/disbursed -> good, failed -> bad.
  * The translated label already differs in text ("Completed" vs "Paid"), so the
  * distinction is not colour-only. An unknown status gets no override (undefined)
  * and falls back to StatusPill's own default.

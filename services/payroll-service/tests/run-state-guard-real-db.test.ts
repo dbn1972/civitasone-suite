@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { buildApp } from "../src/app.js";
@@ -85,12 +86,17 @@ describe("payroll run state guards (UAT L2-N3)", () => {
   }
 
   /** PATCH /v1/payroll/runs/:id/<action> as `actorId` (super_admin), like the web does. */
-  function patch(id: string, action: "approve" | "disburse" | "revert", actorId: string) {
-    const token = signToken({ sub: actorId, tid: tenantId, roles: ["super_admin"], sid: randomUUID() }, SECRET);
+  function patch(
+    id: string,
+    action: "approve" | "disburse" | "revert" | "reject" | "fail-stuck",
+    actorId: string,
+    opts: { roles?: string[]; payload?: Record<string, unknown> } = {},
+  ) {
+    const token = signToken({ sub: actorId, tid: tenantId, roles: opts.roles ?? ["super_admin"], sid: randomUUID() }, SECRET);
     return app.inject({
       method: "PATCH", url: `/v1/payroll/runs/${id}/${action}`,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      payload: { reason: `UAT L2-N3 state guard test (${action})` },
+      payload: opts.payload ?? { reason: `UAT L2-N3 state guard test (${action})` },
     });
   }
 
@@ -161,6 +167,96 @@ describe("payroll run state guards (UAT L2-N3)", () => {
       await publishDirect(COMMANDS.runApprove, approverId, { id, approvedBy: approverId });
       expect((await runRow(id))?.status).toBe("processing");
       expect(dlqErrorFor(COMMANDS.runApprove, id)).toContain("RUN_NOT_READY_FOR_APPROVAL");
+    });
+  });
+
+  describe("send back a computed run (reject: computed -> failed)", () => {
+    async function rejectAudits(id: string) {
+      return runWithTenant(tenantId, () => db.transaction(async (tx) => Array.from((await tx.execute(sql`
+        SELECT payload FROM _outbox.messages
+         WHERE topic = ${"audit.event.record"} AND payload->>${"resourceId"} = ${id} AND payload->>${"action"} = ${"reject"}
+      `)) as unknown as Iterable<{ payload: Record<string, unknown> }>)));
+    }
+
+    it("a payroll admin sends a computed run back with a reason: failed, reason recorded and audited, no longer approvable", async () => {
+      const id = await seedRun("computed");
+      await expectAccepted(patch(id, "reject", approverId, { roles: ["payroll_admin"], payload: { reason: "No DA rate for the month; recompute" } }));
+      const row = await runRow(id);
+      expect(row?.status).toBe("failed");
+      expect(row?.lastError).toContain("No DA rate for the month; recompute");
+      const audits = await rejectAudits(id);
+      expect(audits).toHaveLength(1);
+      expect(audits[0]?.payload).toMatchObject({ reason: "No DA rate for the month; recompute", fromStatus: "computed" });
+      await expectConflict(patch(id, "approve", approverId), "RUN_NOT_READY_FOR_APPROVAL");
+    });
+
+    it("is maker-checker neutral: the run creator may send it back", async () => {
+      const id = await seedRun("computed");
+      await expectAccepted(patch(id, "reject", creatorId, { roles: ["payroll_admin"] }));
+      expect((await runRow(id))?.status).toBe("failed");
+    });
+
+    it("needs a reason of at least 10 characters (400) and the payroll admin role (403 for payroll_officer)", async () => {
+      const id = await seedRun("computed");
+      expect((await patch(id, "reject", approverId, { payload: {} })).statusCode).toBe(400);
+      expect((await patch(id, "reject", approverId, { payload: { reason: "too short" } })).statusCode).toBe(400);
+      expect((await patch(id, "reject", approverId, { roles: ["payroll_officer"] })).statusCode).toBe(403);
+      expect((await runRow(id))?.status).toBe("computed");
+    });
+
+    it("refuses any run that is not computed with 409 RUN_NOT_REJECTABLE", async () => {
+      for (const status of ["processing", "approved", "disbursed", "draft"]) {
+        const id = await seedRun(status);
+        await expectConflict(patch(id, "reject", approverId), "RUN_NOT_REJECTABLE");
+        expect((await runRow(id))?.status).toBe(status);
+      }
+    });
+
+    it("re-checks under the run lock: a reject command for an approved run that skipped the route is rejected", async () => {
+      const id = await seedRun("approved");
+      await publishDirect(COMMANDS.runReject, approverId, { id, rejectedBy: approverId, reason: "replayed reject command" });
+      expect((await runRow(id))?.status).toBe("approved");
+      expect(dlqErrorFor(COMMANDS.runReject, id)).toContain("RUN_NOT_REJECTABLE");
+    });
+  });
+
+  describe("stuck-run recovery (fail-stuck: processing -> failed)", () => {
+    async function ageRun(id: string, hours: number): Promise<void> {
+      await runWithTenant(tenantId, () => db.transaction((tx) => tx.execute(sql`
+        UPDATE payroll.payroll_runs SET updated_at = NOW() - make_interval(hours => ${hours}) WHERE id = ${id}::uuid`)));
+    }
+
+    it("marks a processing run idle for longer than the threshold as failed, with the reason", async () => {
+      const id = await seedRun("processing");
+      await ageRun(id, 7);
+      await expectAccepted(patch(id, "fail-stuck", approverId, { roles: ["payroll_admin"], payload: { reason: "worker crashed during computation" } }));
+      const row = await runRow(id);
+      expect(row?.status).toBe("failed");
+      expect(row?.lastError).toContain("worker crashed during computation");
+    });
+
+    it("refuses a processing run updated recently with 409 RUN_NOT_STUCK (it may still be computing)", async () => {
+      const id = await seedRun("processing");
+      await expectConflict(patch(id, "fail-stuck", approverId), "RUN_NOT_STUCK");
+      expect((await runRow(id))?.status).toBe("processing");
+    });
+
+    it("refuses a run that is not processing with 409 RUN_NOT_PROCESSING, and needs the admin role and a reason", async () => {
+      const id = await seedRun("computed");
+      await ageRun(id, 7);
+      await expectConflict(patch(id, "fail-stuck", approverId), "RUN_NOT_PROCESSING");
+      const stuck = await seedRun("processing");
+      await ageRun(stuck, 7);
+      expect((await patch(stuck, "fail-stuck", approverId, { roles: ["payroll_officer"] })).statusCode).toBe(403);
+      expect((await patch(stuck, "fail-stuck", approverId, { payload: { reason: "short" } })).statusCode).toBe(400);
+      expect((await runRow(stuck))?.status).toBe("processing");
+    });
+
+    it("re-checks under the run lock: a fail-stuck command for a recent processing run that skipped the route is rejected", async () => {
+      const id = await seedRun("processing");
+      await publishDirect(COMMANDS.runFailStuck, approverId, { id, reason: "replayed fail-stuck command" });
+      expect((await runRow(id))?.status).toBe("processing");
+      expect(dlqErrorFor(COMMANDS.runFailStuck, id)).toContain("RUN_NOT_STUCK");
     });
   });
 

@@ -940,11 +940,20 @@ export function computePension(input: PensionInput): PensionResult {
  *
  *   draft -> processing -> computed -> approved (L1) -> disbursed (L2)
  *                       -> failed -> draft (revert)
+ *
+ * Ways out for an operator (payroll admin, reason >= 10 chars, audited,
+ * maker-checker neutral):
+ *  - reject / send back: computed -> failed (the computation is wrong, e.g.
+ *    no DA rate, Rs 0 basics); the pass is unwound (run-unwind.ts) and a new
+ *    run for the period can be created;
+ *  - stuck-run recovery: processing -> failed once the run has not been
+ *    updated for PAYROLL_STUCK_RUN_HOURS (default 6) -- a computation pass
+ *    commits in one transaction, so nothing of a stuck pass was written.
  */
 export const RUN_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   draft:      ["processing"],
   processing: ["computed", "failed"],
-  computed:   ["approved"],
+  computed:   ["approved", "failed"],
   approved:   ["disbursed"],
   disbursed:  [],
   failed:     ["draft"],
@@ -955,8 +964,22 @@ export const RUN_ALREADY_APPROVED = "RUN_ALREADY_APPROVED";
 export const RUN_NOT_READY_FOR_DISBURSEMENT = "RUN_NOT_READY_FOR_DISBURSEMENT";
 export const RUN_ALREADY_DISBURSED = "RUN_ALREADY_DISBURSED";
 export const RUN_NOT_REVERTIBLE = "RUN_NOT_REVERTIBLE";
+export const RUN_NOT_REJECTABLE = "RUN_NOT_REJECTABLE";
+export const RUN_NOT_PROCESSING = "RUN_NOT_PROCESSING";
+export const RUN_NOT_STUCK = "RUN_NOT_STUCK";
 
-export type RunLifecycleAction = "approve" | "disburse" | "revert";
+/** Hours a "processing" run must sit without an update before it may be marked failed. */
+export const DEFAULT_STUCK_RUN_HOURS = 6;
+
+export function stuckRunHours(env: NodeJS.ProcessEnv = process.env): number {
+  const v = Number(env.PAYROLL_STUCK_RUN_HOURS);
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_STUCK_RUN_HOURS;
+}
+
+export type RunLifecycleAction = "approve" | "disburse" | "revert" | "reject" | "failStuck";
+
+/** For "failStuck": when the run was last written, the clock, and the threshold. */
+export interface StuckRunCheck { updatedAt: Date; now: Date; hours: number }
 
 /**
  * Why `action` may not be taken on a run in `status`, or null when it may.
@@ -964,7 +987,22 @@ export type RunLifecycleAction = "approve" | "disburse" | "revert";
  * checked under the run row lock) apply: approve only from computed, disburse
  * only from approved, revert only from failed.
  */
-export function runActionDenial(action: RunLifecycleAction, status: string): { code: string; message: string } | null {
+export function runActionDenial(action: RunLifecycleAction, status: string, stuck?: StuckRunCheck): { code: string; message: string } | null {
+  if (action === "reject") {
+    if (status === "computed") return null;
+    return { code: RUN_NOT_REJECTABLE, message: `only a computed payroll run can be sent back (current status: ${status})` };
+  }
+  if (action === "failStuck") {
+    if (status !== "processing") {
+      return { code: RUN_NOT_PROCESSING, message: `only a payroll run stuck in processing can be marked failed (current status: ${status})` };
+    }
+    if (!stuck) return { code: RUN_NOT_STUCK, message: "the run has no last-update time to judge whether it is stuck" };
+    const idleMs = stuck.now.getTime() - stuck.updatedAt.getTime();
+    if (idleMs < stuck.hours * 3_600_000) {
+      return { code: RUN_NOT_STUCK, message: `this payroll run may still be computing: it was last updated less than ${stuck.hours} hour(s) ago` };
+    }
+    return null;
+  }
   if (action === "approve") {
     if (status === "computed") return null;
     if (status === "approved" || status === "disbursed") {

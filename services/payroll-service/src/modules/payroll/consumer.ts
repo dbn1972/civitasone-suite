@@ -17,13 +17,14 @@ import * as lopRepo from "../integration/lop-repo.js";
 import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, runActionDenial, runAcceptsComputation, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, runActionDenial, runAcceptsComputation, stuckRunHours, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
+import { unwindRunComputationTx } from "./run-unwind.js";
 import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
@@ -250,9 +251,9 @@ export async function resolveDeclarationsTx(tx: typeof db, tenantId: string, emp
  * processing/failed (or out-of-order/abandoned) run must not corrupt the
  * YTD true-up. This joins to OTHER runs' TDS rows filtered to `status IN
  * ('approved','disbursed')` -- the CURRENT run being processed is always
- * 'processing' for the entirety of its own transaction (it is only ever set
- * to 'processing' inside this same transaction, by repo.updateRun at the
- * very end, and even that never sets 'approved'/'disbursed'), so this
+ * 'processing' (or 'computed' on a resumed pass) for the entirety of its own
+ * transaction (repo.updateRun at the very end sets 'computed', never
+ * 'approved'/'disbursed'), so this
  * batched read is safe regardless of whether it runs before or after any
  * employee's own computeAndInsertSlip has inserted this run's own
  * (not-yet-approved) payroll_tds row. Reads through the caller's tx
@@ -1208,6 +1209,54 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
 
+  // UAT L2-N3 review: send a computed run back (computed -> failed). Payroll
+  // admin, mandatory reason, maker-checker neutral (any payroll admin, the maker
+  // included, may stop a wrong computation). The pass is unwound in the same
+  // transaction (run-unwind.ts) so the period can be computed again from scratch.
+  queue.subscribe(COMMANDS.runReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; rejectedBy: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const run = await repo.findRunByIdForUpdateTx(tx, p.id);
+      if (!run) throw new Error(`payroll run ${p.id} not found`);
+      if (run.status === "failed") return; // duplicate send-back
+      const denial = runActionDenial("reject", run.status);
+      if (denial) throw new NonRetryableError(`${denial.code}: ${denial.message}`);
+      assertRunStatusTransition(run.status, "failed");
+      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, p.tenantId, p.id);
+      await repo.updateRun(tx, p.id, {
+        status: "failed", lastError: `sent back by a payroll admin: ${p.reason}`.slice(0, 2000), updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "reject", "payroll_run", p.id, { reason: p.reason, fromStatus: run.status, unwound });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
+  });
+
+  // UAT L2-N3 review: stuck-run recovery (processing -> failed) once the run has
+  // not been written for PAYROLL_STUCK_RUN_HOURS. A pass in flight holds this
+  // row lock until it commits, so this waits for it and then refuses (the run is
+  // computed by then); a pass that wakes up later sees "failed" and skips.
+  queue.subscribe(COMMANDS.runFailStuck, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const run = await repo.findRunByIdForUpdateTx(tx, p.id);
+      if (!run) throw new Error(`payroll run ${p.id} not found`);
+      if (run.status === "failed") return; // duplicate
+      const denial = runActionDenial("failStuck", run.status, { updatedAt: run.updatedAt, now: new Date(), hours: stuckRunHours() });
+      if (denial) throw new NonRetryableError(`${denial.code}: ${denial.message}`);
+      assertRunStatusTransition(run.status, "failed");
+      // A pass commits in one transaction, so a stuck run has nothing to undo;
+      // unwound anyway (no-op) so the counts are on the audit record.
+      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, p.tenantId, p.id);
+      await repo.updateRun(tx, p.id, {
+        status: "failed", lastError: `marked failed after being stuck in processing: ${p.reason}`.slice(0, 2000), updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "fail_stuck", "payroll_run", p.id, { reason: p.reason, lastUpdatedAt: run.updatedAt.toISOString(), unwound });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
+  });
+
   // ─── CQRS lift (quality-payroll-95) ───────────────────────────────────────
   // routes.ts (ddos/pensioners) and world-class-routes.ts (arrears/bonus/
   // reimbursements) used to write synchronously in the request path. These
@@ -2039,8 +2088,6 @@ async function processPayrollRun(
   // never duplicate slips/statutory rows and we resume a partially-computed run.
   // The DB also enforces UNIQUE(tenant_id, run_id, employee_id) on slips as a
   // belt-and-suspenders guard.
-  const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
-  const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
   // GAP-PAYROLL-REGISTER-WRITER: slips carry no department, so map every
   // employee in this run's HRMS feed (including ones a prior pass already
   // computed) to its department before the write transaction opens.
@@ -2057,6 +2104,11 @@ async function processPayrollRun(
       log.warn({ runId: p.id, status: lockedRun.status }, "payroll run computation skipped: run is no longer processing/computed");
       return;
     }
+    // UAT L2-N3 review: the already-computed set is read AFTER the run lock, so
+    // a pass that overlapped another one (visibility timeout exceeded) sees the
+    // slips the first pass committed and skips those employees cleanly instead
+    // of colliding with UNIQUE (tenant_id, run_id, employee_id).
+    const alreadyComputed = new Set((await repo.listSlipsByRunTx(tx, p.id, p.tenantId)).map((s) => s.employeeId));
     // PERF-021 (Site A): compute the run's actual employee set ONCE (the
     // same filters the loop applied per-iteration before this change --
     // department/DDO scope, M1 already-computed, DIC payroll-eligibility)
@@ -2718,8 +2770,6 @@ async function processPensionRun(
   const pensioners = await scopedRead((tx) => resolvePensioners(tx, p.tenantId, p.ddoCode));
 
   // M1: resume — skip pensioners already having a slip for this run.
-  const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
-  const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
 
   await db.transaction(async (tx) => {
     // UAT L2-N3: lock the run row for the whole computation pass and write only
@@ -2732,6 +2782,11 @@ async function processPensionRun(
       log.warn({ runId: p.id, status: lockedRun.status }, "payroll run computation skipped: run is no longer processing/computed");
       return;
     }
+    // UAT L2-N3 review: the already-computed set is read AFTER the run lock, so
+    // a pass that overlapped another one (visibility timeout exceeded) sees the
+    // slips the first pass committed and skips those employees cleanly instead
+    // of colliding with UNIQUE (tenant_id, run_id, employee_id).
+    const alreadyComputed = new Set((await repo.listSlipsByRunTx(tx, p.id, p.tenantId)).map((s) => s.employeeId));
     // MEDIUM: batched YTD-TDS pre-fetch, reusing resolveTdsYtdMinorsTx as-is —
     // pensioner TDS rows live in the SAME statutory.payroll_tds table as the
     // salary path, keyed by employee_id = pensioner id and joined to

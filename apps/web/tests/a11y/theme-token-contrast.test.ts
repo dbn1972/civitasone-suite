@@ -148,6 +148,22 @@ describe("components use the theme tokens, not literals that break in dark mode"
     }
   });
 
+  it("PR #2454 review: the light-only marketing surface also pins the base text/surface tokens and its text colour", () => {
+    const pinned = blockTokens("[data-color-scheme=\"light\"]");
+    for (const k of ["bg", "panel", "ink", "ink2", "mut", "muted", "line", "line2"]) {
+      expect(pinned[k], "--" + k).toBe(LIGHT[k]);
+    }
+    expect(rule("[data-color-scheme=\"light\"]")).toMatch(/color:var\(--ink\)/);
+    // the pinned text on the pinned surface (what html.dark used to break: 1.21:1)
+    expect(contrast(pinned.ink!, pinned.panel!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(pinned.mut!, pinned.panel!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("PR #2454 review: the landing page has no text-gray-400 (2.53:1 on white)", () => {
+    const src = readFileSync(join(ROOT, "src/app/(marketing)/page.tsx"), "utf8");
+    expect(src).not.toMatch(/text-gray-400/);
+  });
+
   it("the what-is-new banner uses tokens only", () => {
     const src = readFileSync(join(ROOT, "src/app/_components/WhatsNewBanner.tsx"), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
