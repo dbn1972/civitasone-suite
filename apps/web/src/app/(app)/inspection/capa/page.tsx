@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PageHeader, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { getInspectionCapas, CapaListItemSchema, type CapaListItem } from "../_data/loaders";
 import { CapaRowAction } from "./CapaActions";
@@ -43,11 +42,6 @@ export default async function Page() {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
-        <Link href="/inspection" className="lnk">Inspection</Link>
-        <span aria-hidden style={{ margin: "0 7px" }}>/</span>
-        <span aria-current="page">CAPA</span>
-      </nav>
       <PageHeader title="CAPA" back="/inspection" />
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "CAPA records" })} backHref="/inspection" />

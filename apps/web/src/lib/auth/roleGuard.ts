@@ -3,7 +3,6 @@
 import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE } from "./config";
-import { BILLING_INVOICE_READER_ROLES } from "./adminRoles";
 
 interface JwtPayload {
   sub?: string;
@@ -657,8 +656,9 @@ export function hasRoleFamily(sessionRoles: string[], family: string): boolean {
  * used by the billing hub layout so it never locks out a user a sub-route would
  * admit. The GSTN layout additionally narrows to BILLING_GSTN_ROLES.
  */
-export const BILLING_GSTN_ROLES = ["finance_officer", "finance_admin", "billing_admin", "tenant_admin", "super_admin"];
-export const BILLING_MODULE_ROLES = Array.from(new Set([...BILLING_INVOICE_READER_ROLES, ...BILLING_GSTN_ROLES]));
+// UAT-P3 (UX shell): defined in ./adminRoles (no next/headers import) so the
+// client Sidebar can gate the Billing section on the same lists.
+export { BILLING_GSTN_ROLES, BILLING_MODULE_ROLES } from "./adminRoles";
 
 /**
  * GAP-BILLING-PLANS-05: roles permitted to CREATE a billing plan. The
@@ -703,7 +703,8 @@ export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin
  * whether the UI offers the Admin Configuration tile / page controls so a plain
  * member is not shown a page that is guaranteed to 403 on save.
  */
-export const MEETING_CONFIG_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
+// UAT-P3 (UX shell): defined in ./meetingRoles so the client Sidebar can use it.
+export { MEETING_CONFIG_ADMIN_ROLES, MEETING_CREATE_ROLES } from "./meetingRoles";
 
 /**
  * GAP-MEETING-MEETINGS-03: roles permitted to CREATE / schedule a meeting.
@@ -712,13 +713,7 @@ export const MEETING_CONFIG_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "sup
  * which guards POST /v1/meetings. The server is the authority; hiding the
  * "+ New meeting" control for everyone else only avoids a guaranteed 403.
  */
-export const MEETING_CREATE_ROLES = [
-  "meeting_admin",
-  "committee_secretary",
-  "tenant_admin",
-  "super_admin",
-  "admin",
-];
+// (MEETING_CREATE_ROLES: re-exported above from ./meetingRoles.)
 
 /**
  * GAP-MEETING-MEETINGS-MEETINGID-03: console control roles.

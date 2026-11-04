@@ -14,9 +14,11 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { useLocale } from "next-intl";
 import { LOCALE_COOKIE, LOCALE_LABELS, SUPPORTED_LOCALES, type SupportedLocale } from "@/i18n/config";
+import { useShellT } from "./useShellT";
 
 export function LanguageSwitcher() {
   const locale = useLocale() as SupportedLocale;
+  const t = useShellT("appNav");
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -71,8 +73,8 @@ export function LanguageSwitcher() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`Language: ${LOCALE_LABELS[locale]}`}
-        title="Switch language"
+        aria-label={t("topbar.languageCurrent", "Language: {language}", { language: LOCALE_LABELS[locale] })}
+        title={t("topbar.languageSwitch", "Switch language")}
       >
         <span aria-hidden="true">{currentFlag}</span>
       </button>
@@ -80,7 +82,7 @@ export function LanguageSwitcher() {
       {open && (
         <ul
           role="listbox"
-          aria-label="Select language"
+          aria-label={t("topbar.languageSelect", "Select language")}
           style={{
             position: "absolute",
             top: "100%",
