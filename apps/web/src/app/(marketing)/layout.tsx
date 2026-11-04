@@ -12,7 +12,9 @@ export const metadata: Metadata = {
 
 function NavBar() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
+    // PR #2457 review (WCAG 3.1.2): the public header text is English; mark it
+    // so on Hindi pages (html lang="hi").
+    <header lang="en" className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold text-gray-900">
           <span className="text-2xl" aria-hidden="true">◈</span> CivitasOne
@@ -71,7 +73,8 @@ function Footer() {
     <footer className="site-foot">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
-          <div className="col-span-2">
+          {/* PR #2457 review (WCAG 3.1.2): the English footer columns are marked lang="en". */}
+          <div className="col-span-2" lang="en">
             <Link href="/" className="site-foot-heading flex items-center gap-2 text-lg font-bold">
               <span className="text-2xl" aria-hidden="true">◈</span> CivitasOne
             </Link>
@@ -79,7 +82,7 @@ function Footer() {
               Made in India 🇮🇳 for India
             </p>
           </div>
-          <div>
+          <div lang="en">
             <h3 className="site-foot-heading text-sm font-semibold">Product</h3>
             <ul className="mt-3 space-y-2">
               <li><Link href="/#features" className="text-sm">Features</Link></li>
@@ -87,7 +90,7 @@ function Footer() {
               <li><Link href="/pricing" className="text-sm">Pricing</Link></li>
             </ul>
           </div>
-          <div>
+          <div lang="en">
             <h3 className="site-foot-heading text-sm font-semibold">Resources</h3>
             <ul className="mt-3 space-y-2">
               <li><Link href="/docs" className="text-sm">Documentation</Link></li>
@@ -95,7 +98,7 @@ function Footer() {
               <li><Link href="https://github.com/civitasone" className="text-sm">GitHub</Link></li>
             </ul>
           </div>
-          <div>
+          <div lang="en">
             <h3 className="site-foot-heading text-sm font-semibold">Company</h3>
             <ul className="mt-3 space-y-2">
               <li><Link href="/contact" className="text-sm">Contact</Link></li>
@@ -105,7 +108,7 @@ function Footer() {
           <SiteFooterGigwLinks />
         </div>
         <div className="site-foot-rule mt-12 pt-8 text-center text-sm">
-          © 2026 CivitasOne. All rights reserved.
+          <span lang="en">© 2026 CivitasOne. All rights reserved.</span>
           <SiteFooterIdentity />
         </div>
       </div>

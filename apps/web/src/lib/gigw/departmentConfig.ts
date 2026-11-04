@@ -7,7 +7,7 @@
  *   - names (department, Web Information Manager designation) fall back to
  *     clearly labelled demonstration values (gigw.defaultDepartment,
  *     gigw.defaultWim in the message catalogues);
- *   - contact details (e-mail, telephone, address, hours, PIO) have NO
+ *   - contact details (e-mail, telephone, address, hours, PIO, FAA) have NO
  *     fallback value: the page shows "To be configured before go-live"
  *     (gigw.toBeConfigured) and never an invented address or number.
  *
@@ -24,6 +24,7 @@ export type GigwConfigField =
   | "helpdeskPhone"
   | "helpdeskHours"
   | "pioContact"
+  | "faaContact"
   | "reviewedAt";
 
 /** The config key behind each field (documented in .env.example and the PR). */
@@ -37,6 +38,7 @@ export const GIGW_CONFIG_KEYS: Record<GigwConfigField, string> = {
   helpdeskPhone: "NEXT_PUBLIC_GIGW_HELPDESK_PHONE",
   helpdeskHours: "NEXT_PUBLIC_GIGW_HELPDESK_HOURS",
   pioContact: "NEXT_PUBLIC_GIGW_PIO_CONTACT",
+  faaContact: "NEXT_PUBLIC_GIGW_FAA_CONTACT",
   reviewedAt: "NEXT_PUBLIC_GIGW_REVIEWED_AT",
 };
 
@@ -64,6 +66,7 @@ export function readGigwConfig(): GigwConfig {
     helpdeskPhone: clean(process.env.NEXT_PUBLIC_GIGW_HELPDESK_PHONE),
     helpdeskHours: clean(process.env.NEXT_PUBLIC_GIGW_HELPDESK_HOURS),
     pioContact: clean(process.env.NEXT_PUBLIC_GIGW_PIO_CONTACT),
+    faaContact: clean(process.env.NEXT_PUBLIC_GIGW_FAA_CONTACT),
     reviewedAt: clean(process.env.NEXT_PUBLIC_GIGW_REVIEWED_AT),
   };
 }

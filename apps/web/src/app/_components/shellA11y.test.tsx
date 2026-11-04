@@ -221,7 +221,7 @@ describe("GIGW footer / contentinfo (A11Y-20, DEFERRED-content)", () => {
     process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT = "2026-11-03";
     withIntl(<AppFooter />, "hi");
     expect(screen.getByText(/Department of Example/)).toBeInTheDocument();
-    expect(screen.getByText(/अंतिम अद्यतन: 03 Nov 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/अंतिम अद्यतन: 3 नवंबर 2026/)).toBeInTheDocument();
   });
 
   it("every new shell / gigw string has a Hindi translation", () => {

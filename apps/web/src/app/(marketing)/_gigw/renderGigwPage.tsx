@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { getTranslations } from "next-intl/server";
-import { formatIndianDate } from "@/lib/formatters";
-import { contentLastUpdated } from "@/lib/gigw/siteIdentity";
+import { getLocale, getTranslations } from "next-intl/server";
+import { contentLastUpdated, formatGigwDate } from "@/lib/gigw/siteIdentity";
 import {
   GIGW_CONFIG_KEYS,
   GIGW_NAME_DEFAULTS,
@@ -30,6 +29,7 @@ const FIELD_LABEL: Record<GigwConfigField, string> = {
   helpdeskPhone: "fieldPhone",
   helpdeskHours: "fieldHours",
   pioContact: "fieldPio",
+  faaContact: "fieldFaa",
   reviewedAt: "lastReviewed",
 };
 
@@ -119,15 +119,16 @@ function renderBlocks(blocks: GigwBlock[], ctx: Ctx, prefix: string): ReactNode[
   });
 }
 
-/** "Last reviewed": the department-set review date, else the build date. */
-function reviewedLabel(t: T, cfg: GigwConfig): string {
+/** "Last reviewed": the department-set review date, else the build date, in the page language. */
+function reviewedLabel(t: T, cfg: GigwConfig, locale: string): string {
   const date = contentLastUpdated(cfg.reviewedAt, process.env.NEXT_PUBLIC_BUILD_TIME);
-  const shown = date ? formatIndianDate(date) : "—";
-  return shown !== "—" ? t("lastReviewed", { date: shown }) : t("lastReviewedPending");
+  const shown = date ? formatGigwDate(date, locale) : null;
+  return shown ? t("lastReviewed", { date: shown }) : t("lastReviewedPending");
 }
 
 export async function renderGigwPage(slug: GigwSlug) {
   const t = await gigwT();
+  const locale = await getLocale();
   const cfg = readGigwConfig();
   const ctx: Ctx = { t, cfg, vars: { department: cfg.department ?? t("defaultDepartment") } };
   const spec = GIGW_PAGE_SPECS[slug];
@@ -141,7 +142,7 @@ export async function renderGigwPage(slug: GigwSlug) {
       title={t(spec.title)}
       intro={spec.intro ? t(spec.intro, ctx.vars) : undefined}
       sections={sections}
-      reviewed={reviewedLabel(t, cfg)}
+      reviewed={reviewedLabel(t, cfg, locale)}
     />
   );
 }

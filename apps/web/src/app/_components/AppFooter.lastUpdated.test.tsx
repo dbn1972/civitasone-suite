@@ -115,4 +115,25 @@ describe("public site footer (A-N1 / A-N2)", () => {
     const menuLinks = [...header.querySelectorAll("a[href=\"/sandbox\"]")].filter((a) => a !== inBar);
     expect(menuLinks.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("PR #2457 review (WCAG 3.1.2): on Hindi pages the English header and footer text is marked lang=\"en\"", () => {
+    process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
+    const { container } = withIntl(<MarketingLayout><div /></MarketingLayout>, "hi");
+    const langOf = (el: Element) => el.closest("[lang]")?.getAttribute("lang") ?? null;
+    const header = container.querySelector("header")!;
+    expect(header).toHaveAttribute("lang", "en");
+    for (const name of ["Products", "Pricing", "Docs", "Sign In"]) expect(langOf(screen.getAllByText(name)[0]!), name).toBe("en");
+    const footer = container.querySelector("footer")!;
+    for (const text of ["Features", "Modules", "Documentation", "Careers", "Made in India"]) {
+      const el = [...footer.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent?.includes(text))!;
+      expect(langOf(el), text).toBe("en");
+    }
+    expect(langOf([...footer.querySelectorAll("span")].find((e) => e.textContent?.startsWith("© 2026"))!)).toBe("en");
+    // translated parts stay in the page language
+    const about = [...footer.querySelectorAll("a")].find((a) => a.getAttribute("href") === "/about")!;
+    expect(about).toHaveTextContent("हमारे बारे में");
+    expect(langOf(about)).toBeNull();
+    expect(footer).toHaveTextContent("अंतिम अद्यतन: 4 नवंबर 2026");
+  });
 });
+

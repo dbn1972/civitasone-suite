@@ -14,9 +14,8 @@
  * NEXT_PUBLIC_CONTENT_UPDATED_AT still takes precedence.
  */
 import Link from "next/link";
-import { useTranslations } from "next-intl";
-import { formatIndianDate } from "@/lib/formatters";
-import { contentLastUpdated, GIGW_OWNER_CONFIG } from "@/lib/gigw/siteIdentity";
+import { useLocale, useTranslations } from "next-intl";
+import { contentLastUpdated, formatGigwDate, GIGW_OWNER_CONFIG } from "@/lib/gigw/siteIdentity";
 import { readGigwConfig } from "@/lib/gigw/departmentConfig";
 
 export const GIGW_FOOTER_LINKS = [
@@ -35,7 +34,8 @@ export function SiteIdentityLine({ className }: { className?: string }) {
   const g = useTranslations("gigw");
   const owner = readGigwConfig().department;
   const updated = contentLastUpdated(process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT, process.env.NEXT_PUBLIC_BUILD_TIME);
-  const updatedLabel = updated ? formatIndianDate(updated) : null;
+  const locale = useLocale();
+  const updatedLabel = updated ? formatGigwDate(updated, locale) : null;
 
   return (
     <p className={className}>
@@ -45,7 +45,7 @@ export function SiteIdentityLine({ className }: { className?: string }) {
         <span data-gigw-default={GIGW_OWNER_CONFIG}>{t("footerOwner", { owner: g("defaultDepartment") })}</span>
       )}
       {" · "}
-      {updatedLabel && updatedLabel !== "—" ? (
+      {updatedLabel ? (
         t("footerLastUpdated", { date: updatedLabel })
       ) : (
         <span data-gigw-unset="NEXT_PUBLIC_BUILD_TIME">{t("footerLastUpdatedPending")}</span>

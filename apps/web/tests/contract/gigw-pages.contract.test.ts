@@ -22,6 +22,7 @@ import enMessages from "@/messages/en.json";
 import { middleware } from "@/middleware";
 
 vi.mock("next-intl/server", () => ({
+  getLocale: async () => "en",
   getTranslations: async (namespace: string) => {
     const { createTranslator } = await import("next-intl");
     return createTranslator({ locale: "en", messages: enMessages as never, namespace: namespace as never });
