@@ -65,7 +65,7 @@ describe("unlinked items report (admin)", () => {
   it("with the stock register down, only the item master side is listed and the page says so", async () => {
     data.getUnmatchedReport.mockResolvedValue({ source: "api", data: { ...REPORT, stockOnly: null, stockAvailable: false, counts: { ...REPORT.counts, stockTotal: null, stockLinked: null, stockUnlinked: null } } });
     await show();
-    expect(screen.getByText(/The stock register could not be read/)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t read the stock register/)).toBeInTheDocument();
     expect(screen.queryByText("Stock register items with no item master link")).not.toBeInTheDocument();
     expect(screen.getByText("Ink Bottle")).toBeInTheDocument();
   });

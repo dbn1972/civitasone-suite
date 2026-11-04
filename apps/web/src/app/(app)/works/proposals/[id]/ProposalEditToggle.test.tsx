@@ -170,7 +170,7 @@ describe("ProposalEditToggle — UX-016 clerk-safe errors", () => {
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/This proposal was changed by someone else\. Refresh to see the latest version, then try again\./);
+    expect(alert.textContent).toMatch(/This action can.t be done on this proposal right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
     expect(alert.textContent).not.toMatch(/409/);
   });
 

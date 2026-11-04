@@ -193,7 +193,8 @@ describe("useConfirmAction onSuccess isolation (CLOS3-S3-23)", () => {
       useConfirmAction({ onConfirm: async () => { throw new Error("denied"); }, onSuccess }),
     );
     await act(async () => { await result.current.confirm(); });
-    expect(result.current.error).toBe("denied");
+    // A bare one-word message is not shown raw; the mapped "cause unknown" copy is.
+    expect(result.current.error).toBe("We couldn't save the information. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.");
     expect(onSuccess).not.toHaveBeenCalled();
   });
 });

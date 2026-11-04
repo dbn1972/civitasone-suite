@@ -71,7 +71,7 @@ export default async function ConfirmationPage() {
           failure, and there is nothing to retry). Every other error keeps
           the badge unchanged. */}
       {!(errored && status === 403) && (
-        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+        <DataSourceBadge source={source} />
       )}
 
       <StatGrid>

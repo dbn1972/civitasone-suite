@@ -418,7 +418,7 @@ describe("RaiseEOfficeNote forward-to directory follows the signed-in role", () 
     render(<RaiseEOfficeNote {...props} />);
     await openForm(spy);
     fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load employees");
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't search the employees.");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Ben Iyer (E-002)")).toBeInTheDocument();
     expect(urlsOf(spy).filter((u) => u.includes("/hrms/employees?q=Ben"))).toHaveLength(2);

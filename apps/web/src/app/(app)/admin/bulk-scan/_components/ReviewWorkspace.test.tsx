@@ -331,7 +331,7 @@ describe("ReviewWorkspace", () => {
     fireEvent.error(screen.getByRole("img", { name: "Scanned page 1" }));
     const state = screen.getByTestId("no-image");
     expect(within(state).getByText("Page image not available")).toBeInTheDocument();
-    expect(within(state).getByText(/could not be loaded/)).toBeInTheDocument();
+    expect(within(state).getByText(/We couldn.t load the page image\./)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Service \(High/ })).toBeInTheDocument();
     f.mockResolvedValueOnce(jsonResponse(200, { ...reviewDetail(), pages: reviewDetail().pages.map((p) => ({ ...p, imageUrl: "https://files.example/fresh.png" })) }));
     fireEvent.click(within(state).getByRole("button", { name: "Try loading the image again" }));

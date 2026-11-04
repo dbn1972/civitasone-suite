@@ -115,7 +115,7 @@ describe("useFormError", () => {
     it.each([
       [401, "Your session has ended. Sign in again to continue."],
       [404, "We couldn't find this leave request. It may have been removed or the link may be wrong."],
-      [409, "This leave request was changed by someone else. Refresh to see the latest version, then try again."],
+      [409, "This action can't be done on this leave request right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status."],
       [429, "Too many attempts. Wait a minute, then try again."],
       [500, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     ])("status %s", async (status, expected) => {
@@ -183,7 +183,7 @@ describe("useFormError", () => {
         result.current.fromException("save", new Error("pg: connection refused 10.0.0.4"));
       });
       expect(result.current.message).toBe(
-        "We couldn't save the leave request. Your changes haven't been saved. Check your internet connection and try again in a few minutes.",
+        "We couldn't save the leave request. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
       );
       expect(result.current.message).not.toContain("pg:");
     });
@@ -193,7 +193,7 @@ describe("useFormError", () => {
       act(() => {
         result.current.fromException("load");
       });
-      expect(result.current.message).toBe("We couldn't load the payslips. Check your internet connection and try again in a few minutes.");
+      expect(result.current.message).toBe("We couldn't load the payslips. Try again in a few minutes. If it keeps happening, contact your support team.");
     });
   });
 

@@ -102,7 +102,7 @@ describe("ReturnsPage", () => {
     const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load the quarterly TDS returns, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
     expect(screen.getByText("Could not load Form-24Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("File anyway — bypass reconciliation (force)")).not.toBeInTheDocument();
     expect(screen.queryByText("Form-24Q blocked for FY 2025-26 Q1")).not.toBeInTheDocument();

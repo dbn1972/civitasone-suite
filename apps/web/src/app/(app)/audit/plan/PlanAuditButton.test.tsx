@@ -49,7 +49,7 @@ describe("PlanAuditButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm & plan" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/This audit plan was changed by someone else\. Refresh to see the latest version, then try again\./);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This action can.t be done on this audit plan right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
     expect(screen.queryByText(/already exists for this fiscal year/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

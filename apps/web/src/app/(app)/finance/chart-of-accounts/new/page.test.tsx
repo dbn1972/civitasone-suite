@@ -79,7 +79,7 @@ describe("MapHeadOfAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create head/i }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This head of account was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This action can.t be done on this head of account right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(alert.textContent).not.toMatch(/duplicate_code/i);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });
@@ -363,7 +363,7 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
     fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "boom" } });
 
-    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    const alert = await screen.findByText("We couldn't search the account heads. Try again in a few minutes.");
     expect(alert).toHaveAttribute("role", "alert");
     expect(screen.queryByText("No head at the right level matches that search.")).not.toBeInTheDocument();
     expect(screen.queryByText(/\b503\b|TypeError|Failed to fetch/)).not.toBeInTheDocument();
@@ -378,7 +378,7 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
     render(<MapHeadOfAccountPage />);
     await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
     fireEvent.change(screen.getByLabelText("Find a head by code or name"), { target: { value: "boom" } });
-    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    const alert = await screen.findByText("We couldn't search the account heads. Try again in a few minutes.");
     expect(alert).toHaveAttribute("role", "alert");
     expect(screen.queryByText("No head matches that search.")).not.toBeInTheDocument();
 

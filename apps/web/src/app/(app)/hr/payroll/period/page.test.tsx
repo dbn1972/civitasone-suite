@@ -99,7 +99,7 @@ describe("PayrollPeriodPage", () => {
     const ui = await PayrollPeriodPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load payroll periods — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the payroll periods, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 });
 

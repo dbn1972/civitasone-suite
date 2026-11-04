@@ -108,7 +108,7 @@ describe("CreateSchemeForm", () => {
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: "Create Scheme" }));
 
-    expect(await screen.findByText(/This grant scheme was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
+    expect(await screen.findByText(/This action can.t be done on this grant scheme right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./)).toBeInTheDocument();
     expect(screen.queryByText(/scheme code already exists/)).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });

@@ -91,10 +91,10 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     render(ui);
 
     // A badge still appears (something -- the stats -- really did fail)...
-    expect(screen.getByText("Some figures on this page couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load some figures on this page. Refresh the page to try again.")).toBeInTheDocument();
     // ...but it must not claim "showing nothing": the openings table below
     // rendered this row from real, successfully-fetched data.
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     expect(screen.getByText("Junior Engineer")).toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     const ui = await RecruitmentPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("shows no data-source badge when both fetches succeed", async () => {
@@ -117,7 +117,7 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     const ui = await RecruitmentPage();
     render(ui);
 
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   // HRMS peripheral medium findings, item 5: create-button role gating.
@@ -170,7 +170,7 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
       });
     render(await RecruitmentPage());
     expect(screen.queryByText("Some figures on this page couldn't be loaded.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     const totalCard = screen.getByText("Total Vacancies").closest(".stat") as HTMLElement;
     expect(totalCard.textContent).toContain("2");
     const appsCard = screen.getByText("Applications Received").closest(".stat") as HTMLElement;
@@ -183,7 +183,7 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
       .mockResolvedValueOnce({ data: EMPTY_STATS, source: "error", status: 500 })
       .mockResolvedValueOnce({ data: [OPENING], source: "api" });
     render(await RecruitmentPage());
-    expect(screen.getByText("Some figures on this page couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load some figures on this page. Refresh the page to try again.")).toBeInTheDocument();
     const totalCard = screen.getByText("Total Vacancies").closest(".stat") as HTMLElement;
     expect(totalCard.textContent).toContain("—");
     expect(screen.queryByRole("note")).not.toBeInTheDocument();

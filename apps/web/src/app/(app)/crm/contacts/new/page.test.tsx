@@ -178,7 +178,7 @@ describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/weren.t accepted/i);
+    expect(alert.textContent).toMatch(/Some required information is missing\. Fill in the missing details, then try again\./);
     expect(alert.textContent).not.toMatch(/secret_internal|mandatory/i);
   });
 

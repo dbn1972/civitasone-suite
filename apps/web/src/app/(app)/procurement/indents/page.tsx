@@ -145,7 +145,7 @@ export default async function IndentsPage(
         actions={
           <>
             <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
-            {errored ? <DataSourceBadge source={source === "error" ? source : statsSource} message="Couldn't load — showing nothing" /> : null}
+            {errored ? <DataSourceBadge source={source === "error" ? source : statsSource} /> : null}
           </>
         }
       />

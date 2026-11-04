@@ -159,7 +159,7 @@ describe("EmployeeDirectoryPage", () => {
     getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
     getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 0, employeeTypeBreakdown: [] }, source: "error" });
     await renderPage();
-    expect(screen.getByRole("status")).toHaveTextContent("Summary figures couldn't be loaded");
+    expect(screen.getByRole("status")).toHaveTextContent("We couldn't load the summary figures, so the cards show a dash.");
     expect(screen.getByText("Priya Sharma")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

@@ -208,7 +208,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     fireEvent.click(within(row).getByRole("menuitem", { name: "Shortlist" }));
 
     await waitFor(() => {
-      expect(within(row).getByText(/action failed/i)).toBeInTheDocument();
+      expect(within(row).getByText(/We couldn.t complete this action\./)).toBeInTheDocument();
     });
   });
 

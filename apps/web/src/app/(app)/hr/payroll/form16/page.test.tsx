@@ -96,7 +96,7 @@ describe("Form16Page", () => {
     const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the Form-16 runs, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.getByText("Could not load the Form-16 filing run for FY 2025-26")).toBeInTheDocument();
     expect(screen.queryByText("No Form-16 filing run for FY 2025-26")).not.toBeInTheDocument();
   });
@@ -127,10 +127,10 @@ describe("Form16Page", () => {
     const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     fireEventClickSummary();
-    expect(screen.getByText("EMP-0109: Salary or tax data could not be read for this employee.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0109: Salary or tax data could not be read for this employee. Check that their payroll for the year is finalised, then generate again.")).toBeInTheDocument();
     expect(screen.getByText("EMP-0110: The PDF renderer was unavailable.")).toBeInTheDocument();
-    expect(screen.getByText("EMP-0111: The PDF could not be digitally signed.")).toBeInTheDocument();
-    expect(screen.getByText("EMP-0112: The PDF could not be saved to storage.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0111: The PDF could not be digitally signed. Check that the DSC is connected and valid, then generate again.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0112: The PDF could not be saved. Generate again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText(/"employeeNo"/)).not.toBeInTheDocument();
     expect(screen.queryByText(/more failure/)).not.toBeInTheDocument();
   });

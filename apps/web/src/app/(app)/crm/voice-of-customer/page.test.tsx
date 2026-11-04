@@ -28,7 +28,7 @@ vi.mock("@/lib/auth/roleGuard", async (orig) => {
 });
 vi.mock("../../../_components/DataSourceBadge", () => ({
   DataSourceBadge: ({ source }: { source: string }) =>
-    source === "error" ? <div>Couldn't load — showing nothing</div> : null,
+    source === "error" ? <div>We couldn't load this information, so nothing is shown here. Refresh the page to try again.</div> : null,
 }));
 // PeriodFilter and RefreshErrorState use next/navigation client hooks.
 vi.mock("next/navigation", () => ({
@@ -158,7 +158,7 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
       source: "error" as const,
     });
     render(withIntl(await VoiceOfCitizenPage({})));
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   // GAP-CRM-VOICE-OF-CUSTOMER-01: the page forwards the chosen window to the loader so the

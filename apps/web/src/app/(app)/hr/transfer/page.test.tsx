@@ -58,7 +58,7 @@ describe("TransferPage", () => {
     const ui = await TransferPage({});
     render(ui);
 
-    expect(screen.getByText("Couldn't load transfer orders — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the transfer orders, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("falls back to raw ids instead of blank cells when the backend row has no joined names yet", async () => {

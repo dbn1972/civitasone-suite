@@ -187,7 +187,7 @@ describe("TenderLifecycleActions", () => {
     // The dialog shows the mapped human message; the raw JSON body is never shown.
     await waitFor(() => {
       expect(within(dialog).queryByText(/tender cannot transition/)).not.toBeInTheDocument();
-      expect(within(dialog).getByText(/couldn't|could not|try again|conflict|already/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/This record is not at a stage that allows this action\./)).toBeInTheDocument();
     });
   });
 

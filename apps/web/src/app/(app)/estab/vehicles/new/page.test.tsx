@@ -102,7 +102,7 @@ describe("NewVehiclePage — vehicle create", () => {
     fireEvent.change(screen.getByLabelText(/Make & model/), { target: { value: "Toyota Innova" } });
     fireEvent.click(screen.getByRole("button", { name: "Add Vehicle" }));
 
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/changed by someone else|try again/i));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/can.t be done on this [\w -]+ right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(screen.getByRole("alert").textContent).not.toMatch(/already registered/i);
     expect(screen.getByRole("alert").textContent).not.toMatch(/\b409\b/);
   });

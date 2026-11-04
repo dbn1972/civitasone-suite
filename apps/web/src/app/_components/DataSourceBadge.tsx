@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import type { DataProvenance } from "@/lib/sync/resource";
 import { formatDateTimeIST } from "@/lib/formatters";
 
@@ -51,6 +52,25 @@ function Badge({ children }: { children: ReactNode }) {
   );
 }
 
+/** English fallback when no intl provider is mounted (isolated unit tests, a root boundary). */
+export const DATA_SOURCE_LOAD_FAILED_EN = "We couldn't load this information, so nothing is shown here. Refresh the page to try again.";
+
+/**
+ * GAP-UAT-P3-ERRCOPY: the default badge text was the English-only "Couldn't load -- showing
+ * nothing" (no object, no next step, never translated) on about 340 screens. It now says what
+ * to do and is localised (uxMessages.dataSourceLoadFailed, en + hi). Outside an intl provider
+ * useTranslations throws before touching any other hook, so the hook order is the same on
+ * every render either way and the English fallback is used.
+ */
+function useDefaultLoadFailedMessage(): string {
+  try {
+    const t = useTranslations("uxMessages");
+    return t("dataSourceLoadFailed");
+  } catch {
+    return DATA_SOURCE_LOAD_FAILED_EN;
+  }
+}
+
 /**
  * Tells the clerk, in plain words, when live data couldn't be reached — and,
  * when a cached copy is being shown instead, says exactly that (never both
@@ -60,6 +80,7 @@ function Badge({ children }: { children: ReactNode }) {
  * unavailable" / "Live API" wording).
  */
 export function DataSourceBadge(props: DataSourceBadgeProps) {
+  const loadFailed = useDefaultLoadFailedMessage();
   if (props.provenance !== undefined) {
     const { provenance, cachedAt, offline, message } = props;
     if (provenance === "live") return null;
@@ -69,9 +90,9 @@ export function DataSourceBadge(props: DataSourceBadgeProps) {
       return <Badge>{message ?? `Showing saved data${when} — could not refresh${offlineNote}.`}</Badge>;
     }
     // "error-no-data": nothing loaded and nothing cached — say so plainly.
-    return <Badge>{message ?? "Couldn't load — showing nothing"}</Badge>;
+    return <Badge>{message ?? loadFailed}</Badge>;
   }
 
   if (props.source !== "error") return null;
-  return <Badge>{props.message ?? "Couldn't load — showing nothing"}</Badge>;
+  return <Badge>{props.message ?? loadFailed}</Badge>;
 }

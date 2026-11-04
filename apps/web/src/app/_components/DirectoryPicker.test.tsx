@@ -36,7 +36,7 @@ describe("DirectoryPicker", () => {
 
     fireEvent.change(screen.getByLabelText("Pick"), { target: { value: "abc" } });
     const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
-    expect(alert).toHaveTextContent(/could not load/i);
+    expect(alert).toHaveTextContent(/We couldn.t search the list\./);
     await waitFor(() => expect(screen.queryByText(/no matching/i)).not.toBeInTheDocument());
   });
 

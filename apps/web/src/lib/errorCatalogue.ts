@@ -11,6 +11,8 @@
  * Group error-message guidelines, and WCAG 2.2 SC 3.3.1 / 3.3.3 / 4.1.3.
  */
 
+import { isStatusAuthoritative, resolveServiceCode } from "./serviceErrorCodes";
+
 export type ErrorLocale = "en" | "hi";
 
 /** The situations the standard distinguishes. */
@@ -19,13 +21,18 @@ export type ErrorStatusKind =
   | "unauthenticated"
   | "forbidden"
   | "notFound"
+  /** 409 / a state rule: neutral, never claims a concurrent edit (most 409s are state or in-use rules). */
   | "conflict"
+  /** A genuine concurrent edit: 412, or a version / ETag / STALE / CONCURRENT code. */
+  | "concurrentEdit"
   | "tooLarge"
   | "unsupportedType"
   | "rateLimited"
   | "server"
   | "network"
-  /** A failure whose cause is not known (a thrown error with no response): honest about both possibilities. */
+  /** The server took too long to answer (408, 504, or our own request timeout). Not the user's connection. */
+  | "timeout"
+  /** A failure whose cause is not known (a thrown error with no response). Never blames the connection. */
   | "unknown";
 
 /** Safe recovery actions the UI may offer for a message. */
@@ -87,6 +94,10 @@ const EN: Catalogue = {
       next: "It may have been removed or the link may be wrong.",
     },
     conflict: {
+      what: "This action can't be done on this {object} right now.",
+      next: "It may have changed, or be in a state that doesn't allow it. Refresh to see its current status.",
+    },
+    concurrentEdit: {
       what: "This {object} was changed by someone else.",
       next: "Refresh to see the latest version, then try again.",
     },
@@ -101,14 +112,21 @@ const EN: Catalogue = {
       next: "Your changes haven't been saved. Try again in a few minutes.",
       nextRead: "Try again in a few minutes.",
     },
+    // Only for a genuine browser-side failure (the request never left the browser, or the browser is offline).
     network: {
       what: "We couldn't connect.",
       next: "Check your internet connection and try again.",
     },
+    timeout: {
+      what: "We couldn't {verb} the {object} in time.",
+      next: "The system is taking longer than usual. Check whether your changes were saved before you try again.",
+      nextRead: "The system is taking longer than usual. Try again in a few minutes.",
+    },
+    // Cause not known: say so honestly, without naming the user's connection as the cause.
     unknown: {
       what: "We couldn't {verb} the {object}.",
-      next: "Your changes haven't been saved. Check your internet connection and try again in a few minutes.",
-      nextRead: "Check your internet connection and try again in a few minutes.",
+      next: "Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
+      nextRead: "Try again in a few minutes. If it keeps happening, contact your support team.",
     },
   },
   defaultObject: "information",
@@ -150,6 +168,10 @@ const HI: Catalogue = {
       next: "हो सकता है इसे हटा दिया गया हो या लिंक गलत हो।",
     },
     conflict: {
+      what: "यह कार्रवाई अभी इस {object} पर नहीं की जा सकती।",
+      next: "हो सकता है इसमें बदलाव हुआ हो, या यह ऐसी स्थिति में हो जिसमें यह कार्रवाई संभव नहीं है। इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।",
+    },
+    concurrentEdit: {
       what: "यह {object} किसी और ने बदल दिया है।",
       next: "नवीनतम संस्करण देखने के लिए पेज रीफ़्रेश करें, फिर दोबारा प्रयास करें।",
     },
@@ -174,10 +196,15 @@ const HI: Catalogue = {
       what: "हम कनेक्ट नहीं हो सके।",
       next: "अपना इंटरनेट कनेक्शन जाँचें और फिर प्रयास करें।",
     },
+    timeout: {
+      what: "हम {object} को समय पर {verb} सके।",
+      next: "सिस्टम सामान्य से अधिक समय ले रहा है। दोबारा प्रयास करने से पहले जाँच लें कि आपके बदलाव सहेजे गए या नहीं।",
+      nextRead: "सिस्टम सामान्य से अधिक समय ले रहा है। कुछ मिनट बाद फिर प्रयास करें।",
+    },
     unknown: {
       what: "हम {object} को {verb} सके।",
-      next: "आपके बदलाव सहेजे नहीं गए हैं। अपना इंटरनेट कनेक्शन जाँचें और कुछ मिनट बाद फिर प्रयास करें।",
-      nextRead: "अपना इंटरनेट कनेक्शन जाँचें और कुछ मिनट बाद फिर प्रयास करें।",
+      next: "हो सकता है आपके बदलाव सहेजे न गए हों। दोबारा प्रयास करने से पहले जाँच लें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।",
+      nextRead: "कुछ मिनट बाद फिर प्रयास करें। समस्या बनी रहे तो अपनी सहायता टीम से संपर्क करें।",
     },
   },
   defaultObject: "जानकारी",
@@ -205,7 +232,8 @@ export const ERROR_CATALOGUE: Record<ErrorLocale, Catalogue> = { en: EN, hi: HI 
  * own request") instead of a generic conflict. The code itself is never shown.
  * Extend this table as codes are catalogued.
  */
-export type DomainMessage = { en: Entry; hi: Entry; actions?: StandardAction[] };
+/** serverSide: the message stays true for a 5xx / 429 / 408 / 401 answer too. */
+export type DomainMessage = { en: Entry; hi: Entry; actions?: StandardAction[]; serverSide?: boolean };
 
 const SELF_APPROVAL_MESSAGE: DomainMessage = {
     en: {
@@ -485,6 +513,7 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
       next: "उनसे अपना ईमेल देखने को कहें, या दूसरा भेजने से पहले कुछ मिनट प्रतीक्षा करें।",
     },
     actions: ["back", "help"],
+    serverSide: true,
   },
   // GAP-TENANT-ADMIN-SETTINGS-07: admin-service tenant module toggle answers
   // 404 MODULE_NOT_PROVISIONED for a module the tenant does not hold.
@@ -551,6 +580,8 @@ export const DUPLICATE_RECORD_MESSAGE = DUPLICATE_RECORD;
 
 export type ResolvedHumanError = {
   kind: ErrorStatusKind | "domain";
+  /** Where the copy came from: a domain code, a service code (its own entry or its family), or the status. */
+  source?: "domain" | "serviceCode" | "codeFamily" | "status";
   what: string;
   next: string;
   actions: StandardAction[];
@@ -563,11 +594,13 @@ export function statusToKind(status: number | undefined): ErrorStatusKind {
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
   if (status === 404) return "notFound";
-  if (status === 409 || status === 412) return "conflict";
+  if (status === 412) return "concurrentEdit";
+  if (status === 409) return "conflict";
   if (status === 413) return "tooLarge";
   if (status === 415) return "unsupportedType";
   if (status === 429) return "rateLimited";
-  if (status === 408 || status === 504) return "network";
+  // A gateway / request timeout is the server being slow, not the user's connection.
+  if (status === 408 || status === 504) return "timeout";
   // Any other status (5xx, an unexpected 4xx) is told to the user as "a problem on our side".
   return "server";
 }
@@ -585,6 +618,7 @@ function actionsFor(kind: ErrorStatusKind): StandardAction[] {
     case "notFound":
       return ["back", "help"];
     case "conflict":
+    case "concurrentEdit":
       return ["retry", "help"];
     default:
       return ["retry", "help"];
@@ -625,33 +659,60 @@ export function resolveHumanError(input: {
   const cat = ERROR_CATALOGUE[locale];
   const intent: ErrorIntent = ctx.intent ?? "save";
 
-  const domain = input.code && Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, input.code)
+  // 5xx / 408 / 429 / 401: the status copy wins; a code never turns a server failure into a user-fault message.
+  const authoritative = isStatusAuthoritative(input.status);
+  const domainEntry = input.code && Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, input.code)
     ? DOMAIN_CODE_MESSAGES[input.code]
     : undefined;
+  const domain = domainEntry && (!authoritative || domainEntry.serverSide) ? domainEntry : undefined;
   if (domain) {
     const e = domain[locale];
-    return { kind: "domain", what: e.what, next: e.next, actions: domain.actions ?? ["retry", "help"] };
+    return { kind: "domain", source: "domain", what: e.what, next: e.next, actions: domain.actions ?? ["retry", "help"] };
   }
 
-  const kind = input.forceKind ?? statusToKind(input.status);
+  // Service error codes (serviceErrorCodes.ts): an explicit entry always wins; a naming
+  // family wins over the bare status unless the caller pinned the situation (forceKind).
+  const svc = resolveServiceCode(input.code, { hasFieldErrors: ctx.hasFieldErrors, status: input.status });
+  const svcVars = (object?: { en: string; hi: string }) => ({
+    object: ctx.area?.trim() || object?.[locale] || cat.defaultObject,
+    verb: cat.verbs[intent],
+    limit: ctx.limit?.trim() || cat.defaultLimit,
+    types: ctx.types?.trim() || cat.defaultTypes,
+  });
+  if (svc && svc.source === "explicit") {
+    const e = svc.message[locale];
+    return { kind: "domain", source: "serviceCode", what: fill(e.what, svcVars()), next: fill(e.next, svcVars()), actions: svc.message.actions ?? ["retry", "help"] };
+  }
+  if (svc && !input.forceKind && "message" in svc) {
+    const e = svc.message[locale];
+    const v = svcVars(svc.object);
+    return { kind: "domain", source: "codeFamily", what: fill(e.what, v), next: fill(e.next, v), actions: svc.message.actions ?? ["retry", "help"] };
+  }
+  const familyKind = svc && !input.forceKind && "kind" in svc ? svc.kind : undefined;
+  const familyObject = svc && "object" in svc ? svc.object : undefined;
+
+  const kind = input.forceKind ?? familyKind ?? statusToKind(input.status);
   const entry = cat.kinds[kind];
   const vars = {
-    object: ctx.area?.trim() || cat.defaultObject,
+    object: ctx.area?.trim() || familyObject?.[locale] || ((kind === "conflict" || kind === "concurrentEdit") ? (locale === "hi" ? "रिकॉर्ड" : "record") : cat.defaultObject),
     verb: cat.verbs[intent],
     limit: ctx.limit?.trim() || cat.defaultLimit,
     types: ctx.types?.trim() || cat.defaultTypes,
   };
-  if (input.code && (input.code.startsWith("DUPLICATE_") || DUPLICATE_LIKE_CODES.has(input.code))) {
+  if (!authoritative && input.code && (input.code.startsWith("DUPLICATE_") || DUPLICATE_LIKE_CODES.has(input.code) || (svc && "duplicate" in svc))) {
     const d = DUPLICATE_RECORD[locale];
-    return { kind: "domain", what: fill(d.what, vars), next: fill(d.next, vars), actions: ["back", "help"] };
+    // "A record with these details already exists" -- never "A information ...".
+    const dv = { ...vars, object: ctx.area?.trim() || (locale === "hi" ? "रिकॉर्ड" : "record") };
+    return { kind: "domain", source: "codeFamily", what: fill(d.what, dv), next: fill(d.next, dv), actions: ["back", "help"] };
   }
   const neutral = kind === "validation" && !ctx.hasFieldErrors && entry.neutral;
   if (neutral) {
-    return { kind, what: fill(neutral.what, vars), next: fill(neutral.next, vars), actions: actionsFor(kind) };
+    return { kind, source: familyKind ? "codeFamily" : "status", what: fill(neutral.what, vars), next: fill(neutral.next, vars), actions: actionsFor(kind) };
   }
-  const useRead = (kind === "server" || kind === "unknown") && intent === "load" && entry.nextRead;
+  const useRead = (kind === "server" || kind === "unknown" || kind === "timeout") && intent === "load" && entry.nextRead;
   return {
     kind,
+    source: familyKind ? "codeFamily" : "status",
     what: fill(entry.what, vars),
     next: fill(useRead ? (entry.nextRead as string) : entry.next, vars),
     actions: actionsFor(kind),

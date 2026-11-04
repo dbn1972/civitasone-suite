@@ -61,7 +61,7 @@ describe("ModuleListTable", () => {
   // ModuleListPage used to render `<DataSourceBadge source={source} />`
   // straight off the raw server `source`, while this table separately
   // derived `fromCache` from its own useSeededResource call. A failed fetch
-  // with a usable cache showed BOTH "Couldn't load — showing nothing" (page)
+  // with a usable cache showed BOTH "We couldn't load this information, so nothing is shown here. Refresh the page to try again." (page)
   // AND "Showing saved data" (table) at once. Now both read the same
   // `provenance` value from one hook call, so only one message can render.
   it("shows ONE consistent message when the fetch failed but a cached copy exists", () => {
@@ -78,12 +78,12 @@ describe("ModuleListTable", () => {
     expect(statusNodes).toHaveLength(1);
     expect(statusNodes[0]).toHaveTextContent(/Showing saved data/i);
     expect(statusNodes[0]).toHaveTextContent(/could not refresh/i);
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
   });
 
   // GAP-IDENTITY-{API-KEYS,BREAKGLASS,SESSIONS,USERS,WEBAUTHN}-05: a failed
   // fetch with no cache now renders a real error state WITH a working Retry,
-  // not the amber "Couldn't load — showing nothing" badge stacked on the
+  // not the amber "We couldn't load this information, so nothing is shown here. Refresh the page to try again." badge stacked on the
   // "No records" EmptyState (which made a hard failure and a genuine empty
   // result look alike and offered no way to recover). This asserts the NEW
   // behaviour and fails on the old code.
@@ -100,7 +100,7 @@ describe("ModuleListTable", () => {
     // A real retry affordance exists now.
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
     // The old ambiguous copy is gone.
-    expect(screen.queryByText(/Couldn't load — showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/We couldn't load this information, so nothing is shown here\./i)).not.toBeInTheDocument();
     expect(screen.queryByText("No records")).not.toBeInTheDocument();
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
   });

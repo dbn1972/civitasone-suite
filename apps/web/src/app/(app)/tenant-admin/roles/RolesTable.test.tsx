@@ -30,7 +30,7 @@ describe("RolesTable (NewRoleDialog) — UX-016 clerk-safe errors", () => {
     const dialog = openDialogAndFill("Finance Reviewer", "Needed for voucher review");
     fireEvent.click(within(dialog).getByRole("button", { name: "Create role" }));
 
-    await waitFor(() => expect(dialog.textContent).toMatch(/This role was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(dialog.textContent).toMatch(/This action can.t be done on this role right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(dialog.textContent).not.toMatch(/already exists/i);
     expect(dialog.textContent).not.toMatch(/\b409\b/);
   });

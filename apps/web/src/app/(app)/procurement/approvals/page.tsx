@@ -32,7 +32,7 @@ export default async function ApprovalsPage() {
         actions={
           <>
             <Link href="/procurement/approvals/escalation" className="btn ghost">Escalation Rules</Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

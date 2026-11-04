@@ -160,8 +160,8 @@ describe("OnboardingDetail (P1-9)", () => {
   it("shows the saved-info badge when the case fails to load", async () => {
     vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: null, source: "error" });
     render(<OnboardingDetail id="c1" />);
-    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
-    expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/We couldn.t load this information, so nothing is shown here\./)).toBeInTheDocument());
+    expect(screen.getByText(/We couldn.t load this onboarding case\./)).toBeInTheDocument();
   });
 
   // GAP-CRM-ONBOARDING-DETAIL-01: the case is named by its customer/deal, and
@@ -370,7 +370,7 @@ describe("OnboardingDetail naming + reveal (W2 crm cluster 07)", () => {
 
     vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: null, source: "error" });
     render(<OnboardingDetail id="c1" header={header} />);
-    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn.t load this onboarding case\./)).toBeInTheDocument());
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Onboarding case");
   });
 

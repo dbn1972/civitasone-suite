@@ -73,7 +73,7 @@ describe("GstConsolePage", () => {
 
     const ui = await GstConsolePage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     render(ui);
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 });
 

@@ -70,7 +70,7 @@ describe("LibraryPage", () => {
     render(ui);
 
     expect(screen.queryByText("No books in the catalogue")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("GAP-ESTAB-LIBRARY-01: shows a retry error state in the Catalogue card and hides the add form on error", async () => {

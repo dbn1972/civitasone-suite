@@ -169,7 +169,7 @@ describe("OnboardingPage", () => {
     const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   // Manager-role finding: GET /v1/hrms/onboarding is HR-only (HR_ROLES in
@@ -187,7 +187,7 @@ describe("OnboardingPage", () => {
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     // Must NOT suggest retrying — retrying a real 403 never succeeds.
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
     // None of the (meaningless-with-zero-access) stat tiles render.
     expect(screen.queryByText("No onboarding in progress")).not.toBeInTheDocument();

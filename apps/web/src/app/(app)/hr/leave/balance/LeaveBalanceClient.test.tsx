@@ -275,7 +275,7 @@ describe("LeaveBalanceClient — employee list failure is distinct and retryable
 
     fireEvent.change(screen.getByRole("combobox", { name: /employee/i }), { target: { value: "Asha" } });
     const alert = await screen.findByRole("alert", {}, { timeout: 3000 });
-    expect(alert).toHaveTextContent(/couldn't load the employee list/i);
+    expect(alert).toHaveTextContent(/We couldn.t search the employee list\./);
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
     expect(employeeCalls).toBe(1);
 

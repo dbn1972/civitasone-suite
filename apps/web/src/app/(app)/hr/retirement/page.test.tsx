@@ -114,7 +114,7 @@ describe("RetirementPage data state", () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("Couldn't load retirement records — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the retirement records, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 });
 

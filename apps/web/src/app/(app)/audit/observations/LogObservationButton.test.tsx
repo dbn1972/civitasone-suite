@@ -107,7 +107,7 @@ describe("LogObservationButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log observation" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm & log" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/This observation was changed by someone else\. Refresh to see the latest version, then try again\./);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This action can.t be done on this observation right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
     expect(screen.queryByText(/unique constraint/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

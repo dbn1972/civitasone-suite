@@ -57,7 +57,7 @@ describe("ForceFileButton — UX-016 clerk-safe errors", () => {
     fireEvent.change(within(dialog).getByLabelText(/reason for overriding/i), { target: { value: "Challans pending reconciliation in TRACES" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /file with confirmed override/i }));
 
-    await waitFor(() => expect(dialog).toHaveTextContent(/This Form-24Q return was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(dialog).toHaveTextContent(/This action can.t be done on this Form-24Q return right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(dialog.textContent).not.toMatch(/TDS_RECONCILIATION_FAILED/);
   });
 
