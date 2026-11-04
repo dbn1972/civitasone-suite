@@ -318,6 +318,13 @@ export function PayrollRunActions({
                     ))}
                   </fieldset>
                 )}
+                {review.epsUnrecorded && review.epsUnrecorded.employees.length > 0 && (
+                  <div role="note" className={`pill ${review.epsUnrecorded.policy === "block" ? "bad" : "warn"}`} style={{ margin: "0 0 10px", display: "block" }}>
+                    <strong>{tr("epsUnrecordedHeading")}</strong>
+                    <p style={{ margin: "4px 0" }}>{tr(review.epsUnrecorded.policy === "block" ? "epsUnrecordedBlock" : "epsUnrecordedAdvisory")}</p>
+                    <p style={{ margin: 0 }}>{review.epsUnrecorded.employees.map((e) => e.employeeNo).join(", ")}</p>
+                  </div>
+                )}
                 {arrearsToAck.length > 0 && (
                   <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
                     <legend><strong>{tr("arrearsHeading")}</strong></legend>

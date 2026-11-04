@@ -6,14 +6,15 @@ import { useTranslations } from "next-intl";
 import { Card, Modal } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
-const SCHEMES = ["GPF", "NPS", "EPF", "UPS"] as const;
+// NONE: apprentices / consultants (delta review SF3); the server checks the eligibility matrix.
+const SCHEMES = ["GPF", "NPS", "EPF", "UPS", "NONE"] as const;
 type Scheme = (typeof SCHEMES)[number];
 const KNOWN_ERRORS = [
   "PENSION_SCHEME_UNCHANGED", "PENSION_SCHEME_CHANGE_PENDING", "PENSION_SCHEME_CHANGE_NOT_PENDING",
   "PENSION_SCHEME_EFFECTIVE_BEFORE_JOINING", "PENSION_SCHEME_EFFECTIVE_NOT_AFTER_LAST", "UAN_REQUIRED",
   "MAKER_CHECKER_VIOLATION", "EMPLOYEE_EXITED",
   // Review SF5: outside the eligibility matrix / override by a non-super_admin.
-  "PENSION_SCHEME_NOT_ALLOWED", "PENSION_SCHEME_OVERRIDE_FORBIDDEN",
+  "PENSION_SCHEME_NOT_ALLOWED", "PENSION_SCHEME_OVERRIDE_FORBIDDEN", "EPF_JOINING_WAGE_RECORDED",
 ] as const;
 type KnownError = (typeof KNOWN_ERRORS)[number];
 
@@ -33,15 +34,25 @@ export function EmployeePensionSchemeCard(props: {
   employeeId: string; currentScheme?: string; incomplete?: string[]; canRequest: boolean; canDecide: boolean;
   /** History loaded by the page (server side, no-store); null when it could not be loaded. */
   initialChanges: SchemeChange[] | null;
+  /** Delta review: super_admin only -- may record a change outside the eligibility rules with a reason. */
+  canOverride?: boolean;
 }) {
-  const { employeeId, currentScheme, incomplete, canRequest, canDecide, initialChanges } = props;
+  const { employeeId, currentScheme, incomplete, canRequest, canDecide, initialChanges, canOverride = false } = props;
   const t = useTranslations("pensionSchemeChange");
   const router = useRouter();
-  const ids = { scheme: useId(), month: useId(), reason: useId(), uan: useId(), note: useId(), help: useId() };
+  const ids = { scheme: useId(), month: useId(), reason: useId(), uan: useId(), note: useId(), help: useId(),
+    first: useId(), wage: useId(), vjo: useId(), eps: useId(), override: useId() };
+  // Delta review: EPF membership details (EPS eligibility facts) and the override reason.
+  const [firstJoined, setFirstJoined] = useState("");
+  const [joiningWage, setJoiningWage] = useState("");
+  const [jointOption, setJointOption] = useState(false);
+  const [epsMember, setEpsMember] = useState<"" | "yes" | "no">("");
+  const [override, setOverride] = useState("");
   const [changes, setChanges] = useState<SchemeChange[]>(Array.isArray(initialChanges) ? initialChanges : []);
   const [open, setOpen] = useState(false);
   // Review nit: open on a scheme other than the current one.
   const [scheme, setScheme] = useState<Scheme>(SCHEMES.find((s) => s !== currentScheme) ?? "EPF");
+  // (EPF -> EPF with only the membership details is a membership request.)
   const [month, setMonth] = useState("");
   const [reason, setReason] = useState("");
   const [uan, setUan] = useState("");
@@ -80,6 +91,14 @@ export function EmployeePensionSchemeCard(props: {
     if (!/^\d{4}-\d{2}$/.test(month)) { setFormError(t("monthRequired")); return; }
     if (reason.trim().length < 10) { setFormError(t("error.REASON_REQUIRED")); return; }
     if (scheme === "EPF" && uan.trim() !== "" && !/^\d{12}$/.test(uan.trim())) { setFormError(t("uanInvalid")); return; }
+    if (scheme === "EPF" && joiningWage.trim() !== "" && !/^\d+(\.\d{1,2})?$/.test(joiningWage.trim())) { setFormError(t("joiningWageInvalid")); return; }
+    if (override.trim() !== "" && override.trim().length < 20) { setFormError(t("overrideTooShort")); return; }
+    const epf = scheme === "EPF" ? {
+      ...(firstJoined ? { epfFirstJoinedOn: firstJoined } : {}),
+      ...(joiningWage.trim() !== "" ? { epfJoiningWageMinor: Math.round(Number(joiningWage.trim()) * 100) } : {}),
+      ...(jointOption ? { epfVoluntaryJointOption: true } : {}),
+      ...(epsMember !== "" ? { epsMember: epsMember === "yes" } : {}),
+    } : {};
     setBusy(true);
     try {
       const res = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/pension-scheme-changes`, {
@@ -88,6 +107,8 @@ export function EmployeePensionSchemeCard(props: {
         body: JSON.stringify({
           toScheme: scheme, effectiveFrom: `${month}-01`, reason: reason.trim(),
           ...(scheme === "EPF" && uan.trim() !== "" ? { uanNumber: uan.trim() } : {}),
+          ...epf,
+          ...(canOverride && override.trim() !== "" ? { overrideReason: override.trim() } : {}),
         }),
       });
       if (!res.ok) { setFormError(await errorText(res)); return; }
@@ -191,6 +212,30 @@ export function EmployeePensionSchemeCard(props: {
             <>
               <label htmlFor={ids.uan} className="l">{t("uanLabel")}</label>
               <input id={ids.uan} className="inp" inputMode="numeric" value={uan} onChange={(e) => setUan(e.target.value)} maxLength={12} autoComplete="off" style={{ minHeight: 44 }} />
+              <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 10, display: "grid", gap: 8 }}>
+                <legend style={{ fontSize: 13, fontWeight: 600 }}>{t("membershipTitle")}</legend>
+                <p style={{ margin: 0, color: "var(--mut)", fontSize: 12 }}>{t("membershipHelp")}</p>
+                <label htmlFor={ids.first} className="l">{t("firstJoinedLabel")}</label>
+                <input id={ids.first} type="date" className="inp" value={firstJoined} onChange={(e) => setFirstJoined(e.target.value)} style={{ minHeight: 44 }} />
+                <label htmlFor={ids.wage} className="l">{t("joiningWageLabel")}</label>
+                <input id={ids.wage} className="inp" inputMode="decimal" value={joiningWage} onChange={(e) => setJoiningWage(e.target.value)} autoComplete="off" style={{ minHeight: 44 }} />
+                <label htmlFor={ids.vjo} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                  <input id={ids.vjo} type="checkbox" checked={jointOption} onChange={(e) => setJointOption(e.target.checked)} />
+                  {t("jointOptionLabel")}
+                </label>
+                <label htmlFor={ids.eps} className="l">{t("epsMemberLabel")}</label>
+                <select id={ids.eps} className="inp" value={epsMember} onChange={(e) => setEpsMember(e.target.value as "" | "yes" | "no")} style={{ minHeight: 44 }}>
+                  <option value="">{t("epsMemberUnknown")}</option>
+                  <option value="yes">{t("epsMemberYes")}</option>
+                  <option value="no">{t("epsMemberNo")}</option>
+                </select>
+              </fieldset>
+            </>
+          )}
+          {canOverride && (
+            <>
+              <label htmlFor={ids.override} className="l">{t("overrideLabel")}</label>
+              <textarea id={ids.override} className="inp" value={override} onChange={(e) => setOverride(e.target.value)} maxLength={500} rows={2} />
             </>
           )}
           {formError && <p role="alert" className="pill bad" style={{ width: "fit-content", margin: 0 }}>{formError}</p>}

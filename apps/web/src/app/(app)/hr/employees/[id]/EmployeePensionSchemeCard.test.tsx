@@ -105,6 +105,42 @@ describe("EmployeePensionSchemeCard (UAT b18)", () => {
     expect(alert.textContent).not.toContain("PENSION_SCHEME_NOT_ALLOWED");
   });
 
+  it("EPF membership details are sent with an EPF request (EPF -> EPF is a membership request); rupees become paise", async () => {
+    const calls = mockApi([]);
+    renderCard({ currentScheme: "EPF" });
+    fireEvent.click(await screen.findByRole("button", { name: m.changeButton }));
+    fireEvent.change(screen.getByLabelText(m.schemeLabel), { target: { value: "EPF" } });
+    fireEvent.change(screen.getByLabelText(m.effectiveMonthLabel), { target: { value: "2027-03" } });
+    fireEvent.change(screen.getByLabelText(m.reasonLabel), { target: { value: "Para 26(6) joint option on joining" } });
+    fireEvent.change(screen.getByLabelText(m.firstJoinedLabel), { target: { value: "2026-10-28" } });
+    fireEvent.change(screen.getByLabelText(m.joiningWageLabel), { target: { value: "28440" } });
+    fireEvent.click(screen.getByLabelText(m.jointOptionLabel));
+    fireEvent.change(screen.getByLabelText(m.epsMemberLabel), { target: { value: "no" } });
+    expect(screen.queryByLabelText(m.overrideLabel)).toBeNull(); // not a super_admin
+    fireEvent.click(screen.getByRole("button", { name: m.submitButton }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(m.submitted));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({
+      toScheme: "EPF", effectiveFrom: "2027-03-01", reason: "Para 26(6) joint option on joining",
+      epfFirstJoinedOn: "2026-10-28", epfJoiningWageMinor: 2844000, epfVoluntaryJointOption: true, epsMember: false,
+    });
+  });
+
+  it("a super_admin sees the override reason field; a short one is caught, a real one is sent", async () => {
+    const calls = mockApi([]);
+    renderCard({ currentScheme: "NPS", canOverride: true });
+    fireEvent.click(await screen.findByRole("button", { name: m.changeButton }));
+    fireEvent.change(screen.getByLabelText(m.schemeLabel), { target: { value: "GPF" } });
+    fireEvent.change(screen.getByLabelText(m.effectiveMonthLabel), { target: { value: "2027-03" } });
+    fireEvent.change(screen.getByLabelText(m.reasonLabel), { target: { value: "Old pension option order" } });
+    fireEvent.change(screen.getByLabelText(m.overrideLabel), { target: { value: "too short" } });
+    fireEvent.click(screen.getByRole("button", { name: m.submitButton }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(m.overrideTooShort);
+    fireEvent.change(screen.getByLabelText(m.overrideLabel), { target: { value: "DoPPW OM dated 03-03-2023, option exercised" } });
+    fireEvent.click(screen.getByRole("button", { name: m.submitButton }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(m.submitted));
+    expect(calls.find((c) => c.method === "POST")!.body).toMatchObject({ toScheme: "GPF", overrideReason: "DoPPW OM dated 03-03-2023, option exercised" });
+  });
+
   it("an employee on no pension scheme is shown as such", () => {
     mockApi([]);
     renderCard({ currentScheme: "NONE" });

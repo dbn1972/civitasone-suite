@@ -22,14 +22,25 @@ export interface AdminTopUpJournal {
   lines: Array<{ accountCode: string; debitMinor: string; creditMinor: string; narration: string }>;
 }
 
-/** Pure: the finance journal for a top-up (one Dr expense / Cr payable pair, same heads as the other employer contributions). */
+/**
+ * Pure: the finance journal for a top-up delta -- one Dr expense / Cr payable
+ * pair on the employer contribution heads; a NEGATIVE delta (a later run
+ * reduced the shortfall, delta review SF2) is the reversing pair.
+ */
 export function adminTopUpJournal(i: { journalId: string; tenantId: string; period: string; topUpMinor: bigint; postingDate: string }): AdminTopUpJournal {
-  const amt = i.topUpMinor.toString();
+  const reversal = i.topUpMinor < 0n;
+  const amt = (reversal ? -i.topUpMinor : i.topUpMinor).toString();
+  const what = reversal ? "reversal" : "top-up";
   return {
     id: i.journalId, tenantId: i.tenantId, voucherNo: `PAY/EPF-A2/${i.period}`, type: "payroll_accrual", postingDate: i.postingDate,
-    lines: [
-      { accountCode: EMPLOYER_EXPENSE_HEAD, debitMinor: amt, creditMinor: "0", narration: `EPF administrative charges minimum top-up (EPFO A/c 2) ${i.period}` },
-      { accountCode: EMPLOYER_PAYABLE_HEAD, debitMinor: "0", creditMinor: amt, narration: `EPF administrative charges payable to EPFO (A/c 2 minimum) ${i.period}` },
-    ],
+    lines: reversal
+      ? [
+          { accountCode: EMPLOYER_PAYABLE_HEAD, debitMinor: amt, creditMinor: "0", narration: `EPF administrative charges payable to EPFO (A/c 2 minimum ${what}) ${i.period}` },
+          { accountCode: EMPLOYER_EXPENSE_HEAD, debitMinor: "0", creditMinor: amt, narration: `EPF administrative charges minimum ${what} (EPFO A/c 2) ${i.period}` },
+        ]
+      : [
+          { accountCode: EMPLOYER_EXPENSE_HEAD, debitMinor: amt, creditMinor: "0", narration: `EPF administrative charges minimum top-up (EPFO A/c 2) ${i.period}` },
+          { accountCode: EMPLOYER_PAYABLE_HEAD, debitMinor: "0", creditMinor: amt, narration: `EPF administrative charges payable to EPFO (A/c 2 minimum) ${i.period}` },
+        ],
   };
 }

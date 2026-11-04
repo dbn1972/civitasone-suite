@@ -59,6 +59,7 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
         epfFirstJoinedOn:        body.epfFirstJoinedOn ?? null,
         epfVoluntaryJointOption: body.epfVoluntaryJointOption ?? false,
         epsMember:               body.epsMember ?? null,
+        epfJoiningWageMinor:     body.epfJoiningWageMinor != null ? BigInt(body.epfJoiningWageMinor) : null,
         basicMinor:     BigInt(body.basicMinor ?? 0),
         currency:       body.currency ?? "INR",
         payStructureId: body.payStructureId ?? null,

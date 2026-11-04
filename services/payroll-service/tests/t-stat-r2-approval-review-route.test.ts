@@ -53,6 +53,8 @@ describe("GET /v1/payroll/runs/:id/approval-review", () => {
         totalMinor: "6000000", thresholdBps: 10000,
         employees: [{ employeeId: arrEmp, employeeNo: "A-9", arrearsMinor: "6000000", regularGrossMinor: "5000000", requiresReview: true }],
       },
+      // PR #2458 delta review: no EPF member with unrecorded EPS eligibility in this run; tenant default policy.
+      epsUnrecorded: { policy: "advisory", employees: [] },
     });
   });
 

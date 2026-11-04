@@ -12,7 +12,7 @@ import { loadPayProfileFeedInputs } from "../pay-profile/repo.js";
 import { buildEmployeePayFeed } from "../pay-profile/feed.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { completedYearsOfService, totalLeaveBalanceDays } from "../employee/fnf-service-snapshot.js";
-import { schemeForMonth, attains58On } from "../employee/pension-scheme.js";
+import { schemeForMonth, epsAgeCutoffReached } from "../employee/pension-scheme.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -272,12 +272,14 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           stateCode: e.workStateCode ?? null,
           pensionScheme: schemeForMonth(e.pensionScheme ?? "NPS", schemeChanges.get(e.id) ?? [], q.month) as "GPF" | "NPS" | "EPF" | "UPS" | "NONE",
           // Review SF1 (additive): EPF membership facts payroll needs for EPS
-          // eligibility (EPS 1995 para 6A). The 58th-birthday date, not the DOB.
+          // eligibility (EPS 1995 para 6A). Delta review SF1 (PII): only a
+          // per-month age boolean, never the DOB or a date derived from it.
           epf: {
             firstJoinedOn: e.epfFirstJoinedOn ?? null,
             voluntaryJointOption: e.epfVoluntaryJointOption ?? false,
             epsMember: e.epsMember ?? null,
-            attains58On: attains58On(e.dateOfBirth),
+            joiningWageMinor: e.epfJoiningWageMinor != null ? e.epfJoiningWageMinor.toString() : null,
+            ageCutoffReached: epsAgeCutoffReached(e.dateOfBirth, q.month),
           },
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),

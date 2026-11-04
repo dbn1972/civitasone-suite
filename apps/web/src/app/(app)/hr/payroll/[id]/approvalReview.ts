@@ -11,10 +11,12 @@ export type ApprovalReview = {
     thresholdBps: number;
     employees: Array<{ employeeId: string; employeeNo: string; arrearsMinor: string; regularGrossMinor: string; requiresReview: boolean }>;
   };
+  /** PR #2458 delta review: EPF members with no recorded EPS eligibility (treated as EPS members). */
+  epsUnrecorded?: { policy: "advisory" | "block"; employees: Array<{ employeeId: string; employeeNo: string }> };
 };
 
 /** Server codes that mean "this run needs the review fields before approval". */
-export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED"]);
+export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED", "EPS_ELIGIBILITY_UNRECORDED"]);
 
 export function approvalReviewUrl(runId: string): string {
   return `/api/proxy/v1/payroll/runs/${runId}/approval-review`;

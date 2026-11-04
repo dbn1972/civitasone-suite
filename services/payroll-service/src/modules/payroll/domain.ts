@@ -398,31 +398,51 @@ export interface EpsMembershipFacts {
   voluntaryJointOption?: boolean | null;
   /** Explicit EPS membership recorded by HR; null = derived. */
   epsMember?: boolean | null;
-  /** The day the member attains 58; null = unknown (no DOB). */
-  attains58On?: string | null;
+  /** EPF wages (Basic + DA, paise) at first joining EPF, stamped once at enrolment / hire; null = not recorded. */
+  joiningWageMinor?: string | number | bigint | null;
+  /**
+   * Delta review SF1: the member was 58 or older before the wage month began
+   * (HRMS computes it per month from the DOB; the DOB itself is never sent).
+   */
+  ageCutoffReached?: boolean | null;
+}
+
+export interface EpsDecision {
+  eligible: boolean;
+  /** false = no recorded fact decides it; the member is treated as an EPS member and the run raises EPS_ELIGIBILITY_UNRECORDED. */
+  recorded: boolean;
 }
 
 /**
- * Review SF1 (ERP-head decision 2026-11-05): is this EPF member an EPS member
- * for wage month `month` (YYYY-MM)? Pure.
- *   - aged 58 or more before the month starts -> no (EPS stops at 58; the
- *     month of the 58th birthday still counts)
- *   - explicit epsMember -> as recorded
- *   - para 26(6) joint-option member -> no (wages above the ceiling at joining)
- *   - first EPF membership before 01.09.2014 -> yes (EPS capped at Rs 1,250)
- *   - first membership on/after 01.09.2014 -> only with wages <= Rs 15,000 at
- *     joining; the joining wage is not held here, so this month's EPF wage base
- *     (Basic + DA) stands in for it -- record epsMember explicitly when they
- *     differ.
+ * Review SF1 + delta-review blocker (ERP-head decision 2026-11-05): is this EPF
+ * member an EPS member for the wage month? Decided ONLY from recorded facts --
+ * para 6A tests the wages at FIRST joining EPF, once, and an EPS member stays
+ * one when pay later crosses the ceiling, so the current month's wage is never
+ * looked at. Pure. In order:
+ *   - aged 58 before the month began            -> not eligible (EPS stops at 58;
+ *     the birthday month counts in full -- EPFO pro-rates it, not modelled)
+ *   - explicit epsMember                         -> as recorded
+ *   - para 26(6) joint-option member             -> not eligible
+ *   - first in EPF (recorded date, else this joining date) before 01.09.2014 -> eligible
+ *   - joining wage recorded                       -> eligible iff <= Rs 15,000
+ *   - nothing recorded                            -> ELIGIBLE (the pre-PR behaviour),
+ *     recorded: false -- the run flags it (EPS_ELIGIBILITY_UNRECORDED). EPS paid
+ *     in error can be moved to A/c 1 on the employer's request; EPS withheld in
+ *     error costs the member pension service.
  */
-export function epsEligibility(facts: EpsMembershipFacts, dateOfJoining: string, month: string, pensionBaseMinor: bigint): boolean {
-  if (facts.attains58On && facts.attains58On < `${month}-01`) return false;
-  if (facts.epsMember != null) return facts.epsMember;
-  if (facts.voluntaryJointOption) return false;
+export function epsEligibility(facts: EpsMembershipFacts, dateOfJoining: string): EpsDecision {
+  if (facts.ageCutoffReached) return { eligible: false, recorded: true };
+  if (facts.epsMember != null) return { eligible: facts.epsMember, recorded: true };
+  if (facts.voluntaryJointOption) return { eligible: false, recorded: true };
   const first = facts.firstJoinedOn ?? dateOfJoining;
-  if (first < EPS_CUTOFF_DATE) return true;
-  return pensionBaseMinor <= EPS_WAGE_CEILING_MINOR;
+  if (first < EPS_CUTOFF_DATE) return { eligible: true, recorded: true };
+  if (facts.joiningWageMinor != null) return { eligible: BigInt(facts.joiningWageMinor) <= EPS_WAGE_CEILING_MINOR, recorded: true };
+  return { eligible: true, recorded: false };
 }
+
+/** Delta review: what the tenant does with EPF members whose EPS eligibility is unrecorded. */
+export type EpsUnrecordedPolicy = "advisory" | "block";
+export const EPS_ELIGIBILITY_UNRECORDED = "EPS_ELIGIBILITY_UNRECORDED";
 
 export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig): EpfEmployerCharges {
   const base = pensionBaseMinor > 0n ? pensionBaseMinor : 0n;

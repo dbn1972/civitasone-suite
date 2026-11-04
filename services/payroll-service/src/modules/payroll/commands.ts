@@ -12,7 +12,9 @@ import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from ".
 import { headObject } from "@civitasone/storage";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
-import { audit, resolveArrearsReviewThresholdBps } from "./consumer.js";
+import { audit, resolveArrearsReviewThresholdBps, resolveEpsUnrecordedPolicy } from "./consumer.js";
+import { epsUnrecordedEmployeeIdsByRun } from "../statutory/repo.js";
+import { EPS_ELIGIBILITY_UNRECORDED } from "./domain.js";
 import { MAKER_CHECKER_VIOLATION, runMakerCheckerDenial, type RunMakerCheckerAction } from "./run-maker-checker.js";
 import {
   unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion,
@@ -284,6 +286,15 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
   }
   const blocking = unexcludedZeroBasicSlips(zero, exclusions);
   if (blocking.length > 0) throw new HttpError(409, ZERO_BASIC_SLIPS, zeroBasicSlipsMessage(blocking));
+  // Delta review (ERP-head decision 2026-11-05): with the tenant policy
+  // "block", unrecorded EPS eligibility stops approval (advisory: only listed).
+  if ((await scopedRead((tx) => resolveEpsUnrecordedPolicy(tx as unknown as typeof db, ctx.tenantId))) === "block") {
+    const ids = await epsUnrecordedEmployeeIdsByRun(id, ctx.tenantId);
+    if (ids.length > 0) {
+      const noOf = new Map(slips.map((sl) => [sl.employeeId, sl.employeeNo]));
+      throw new HttpError(409, EPS_ELIGIBILITY_UNRECORDED, `EPS eligibility is not recorded for ${ids.length} EPF member(s): ${ids.slice(0, 20).map((e) => noOf.get(e) ?? e).join(", ")}. Record the first EPF joining date, joining wage, joint option or EPS membership in HRMS, then recompute.`);
+    }
+  }
   // Review SF4: large back-dated arrears need an explicit acknowledgement.
   if (!slipsCarryArrears(slips)) return;
   const threshold = await scopedRead((tx) => resolveArrearsReviewThresholdBps(tx as unknown as typeof db, ctx.tenantId));

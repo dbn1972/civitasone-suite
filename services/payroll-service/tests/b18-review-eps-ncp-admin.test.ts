@@ -19,33 +19,34 @@ const GOLDEN = readFileSync(new URL("./fixtures/ecr-2.0-eps-golden.txt", import.
 // The UAT contract staff: Basic Rs 18,000, DA 58% -> Basic + DA Rs 28,440.
 const slip = (epsEligible?: boolean) => computeSlip({ basicMinor: 1_800_000n, daRateBps: 5800n, cityClass: "X", pensionScheme: "EPF", fyStartYear: 2026, ...(epsEligible === undefined ? {} : { epsEligible }) });
 
-describe("SF1: EPS eligibility", () => {
-  const base = 2_844_000n; // Rs 28,440
-  it("first EPF membership on/after 01.09.2014 with wages above Rs 15,000 -> not EPS-eligible", () => {
+describe("SF1 + delta blocker: EPS eligibility from recorded facts only", () => {
+  const yes = { eligible: true, recorded: true };
+  const no = { eligible: false, recorded: true };
+  it("nothing recorded (post-2014 joiner) -> treated as an EPS member, flagged unrecorded -- the current wage is never used", () => {
     expect(EPS_CUTOFF_DATE).toBe("2014-09-01");
-    expect(epsEligibility({}, "2026-10-28", "2027-02", base)).toBe(false);
-    expect(epsEligibility({}, "2014-09-01", "2027-02", base)).toBe(false);
+    expect(epsEligibility({}, "2026-10-28")).toEqual({ eligible: true, recorded: false });
   });
-  it("post-2014 joiner within the ceiling -> eligible", () => {
-    expect(epsEligibility({}, "2026-10-28", "2027-02", 1_500_000n)).toBe(true);
+  it("joining wage recorded: eligible iff <= Rs 15,000 at joining, and stays so whatever the pay later becomes", () => {
+    expect(epsEligibility({ joiningWageMinor: "1500000" }, "2018-04-01")).toEqual(yes);
+    expect(epsEligibility({ joiningWageMinor: "1200000" }, "2018-04-01")).toEqual(yes); // pay crossed Rs 15,000 since: still a member
+    expect(epsEligibility({ joiningWageMinor: "2844000" }, "2018-04-01")).toEqual(no);
   });
-  it("membership carried via the UAN from before 01.09.2014 -> eligible even above the ceiling", () => {
-    expect(epsEligibility({ firstJoinedOn: "2014-08-31" }, "2026-10-28", "2027-02", base)).toBe(true);
-    expect(epsEligibility({}, "2010-06-01", "2027-02", base)).toBe(true);
+  it("first EPF membership before 01.09.2014 (recorded via the UAN, or this joining date) -> eligible", () => {
+    expect(epsEligibility({ firstJoinedOn: "2014-08-31", joiningWageMinor: 9_000_000 }, "2026-10-28")).toEqual(yes);
+    expect(epsEligibility({}, "2010-06-01")).toEqual(yes);
   });
   it("para 26(6) joint-option member (the 6 UAT contract staff) -> not eligible, whatever the dates", () => {
-    expect(epsEligibility({ voluntaryJointOption: true }, "2026-10-28", "2027-02", 1_000_000n)).toBe(false);
-    expect(epsEligibility({ voluntaryJointOption: true, firstJoinedOn: "2010-01-01" }, "2026-10-28", "2027-02", base)).toBe(false);
+    expect(epsEligibility({ voluntaryJointOption: true }, "2026-10-28")).toEqual(no);
+    expect(epsEligibility({ voluntaryJointOption: true, firstJoinedOn: "2010-01-01" }, "2026-10-28")).toEqual(no);
   });
-  it("EPS stops at 58: from the month after the 58th birthday", () => {
-    const f = { firstJoinedOn: "2000-01-01", attains58On: "2027-02-15" };
-    expect(epsEligibility(f, "2000-01-01", "2027-02", base)).toBe(true);   // birthday month still counts
-    expect(epsEligibility(f, "2000-01-01", "2027-03", base)).toBe(false);
-    expect(epsEligibility({ ...f, epsMember: true }, "2000-01-01", "2027-03", base)).toBe(false); // 58 wins over an explicit flag
+  it("EPS stops at 58: HRMS sends the per-month cutoff boolean, which wins over everything", () => {
+    expect(epsEligibility({ firstJoinedOn: "2000-01-01", ageCutoffReached: false }, "2000-01-01")).toEqual(yes);
+    expect(epsEligibility({ firstJoinedOn: "2000-01-01", ageCutoffReached: true }, "2000-01-01")).toEqual(no);
+    expect(epsEligibility({ epsMember: true, ageCutoffReached: true }, "2000-01-01")).toEqual(no);
   });
   it("an explicit EPS membership recorded by HR wins over the derivation", () => {
-    expect(epsEligibility({ epsMember: true }, "2026-10-28", "2027-02", base)).toBe(true);
-    expect(epsEligibility({ epsMember: false }, "2000-01-01", "2027-02", base)).toBe(false);
+    expect(epsEligibility({ epsMember: true, joiningWageMinor: "2844000" }, "2026-10-28")).toEqual(yes);
+    expect(epsEligibility({ epsMember: false }, "2000-01-01")).toEqual(no);
   });
 
   it("not eligible: EPS 0, the whole employer 12% (Rs 1,800) goes to EPF (A/c 1); employee share unchanged", () => {
@@ -70,9 +71,9 @@ describe("SF1: EPS eligibility", () => {
         epfContributionEe: Number(s.pfEmployeeMinor / 100n), epsContributionEr: Number(s.epsMinor / 100n), epfEpsDiffEr: Number(s.epfEmployerMinor / 100n), ncpDays: 0, refundOfAdvances: 0 };
     };
     expect(buildEcrFile([
-      line("100200300410", "Post 2014 Above Ceiling", epsEligibility({}, "2026-10-28", "2027-02", 2_844_000n)),
-      line("100200300411", "Aged Fifty Eight", epsEligibility({ firstJoinedOn: "2000-01-01", attains58On: "2026-12-10" }, "2000-01-01", "2027-02", 2_844_000n)),
-      line("100200300412", "Pre 2014 Member", epsEligibility({ firstJoinedOn: "2013-04-01" }, "2026-10-28", "2027-02", 2_844_000n)),
+      line("100200300410", "Post 2014 Above Ceiling", epsEligibility({ joiningWageMinor: "2844000" }, "2026-10-28").eligible),
+      line("100200300411", "Aged Fifty Eight", epsEligibility({ firstJoinedOn: "2000-01-01", ageCutoffReached: true }, "2000-01-01").eligible),
+      line("100200300412", "Pre 2014 Member", epsEligibility({ firstJoinedOn: "2013-04-01" }, "2026-10-28").eligible),
     ])).toBe(GOLDEN);
   });
 });
@@ -93,6 +94,10 @@ describe("SF3: A/c 2 minimum top-up", () => {
     expect(adminTopUpMinor(45_000n, 6, 50_000n)).toBe(5_000n);   // 6 x Rs 75 = Rs 450 -> Rs 50
     expect(adminTopUpMinor(150_000n, 20, 50_000n)).toBe(0n);
     expect(adminTopUpMinor(0n, 0, 50_000n)).toBe(0n);
+  });
+  it("a negative delta (a later run reduced the shortfall) is the reversing pair", () => {
+    const j = adminTopUpJournal({ journalId: "j2", tenantId: "t1", period: "2027-02", topUpMinor: -7_500n, postingDate: "2027-03-20" });
+    expect(j.lines.map((l) => [l.accountCode, l.debitMinor, l.creditMinor])).toEqual([["2103", "7500", "0"], ["5002", "0", "7500"]]);
   });
   it("the journal is one balanced Dr 5002 / Cr 2103 pair for the month", () => {
     const j = adminTopUpJournal({ journalId: "j1", tenantId: "t1", period: "2027-02", topUpMinor: 5_000n, postingDate: "2027-03-15" });

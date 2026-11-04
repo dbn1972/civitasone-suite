@@ -69,6 +69,8 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   epfFirstJoinedOn:        date("epf_first_joined_on"),
   epfVoluntaryJointOption: boolean("epf_voluntary_joint_option").notNull().default(false),
   epsMember:               boolean("eps_member"),
+  // Delta review (migration 0263): EPF wages at first joining EPF, stamped once.
+  epfJoiningWageMinor:     bigint("epf_joining_wage_minor", { mode: "bigint" }),
   // Statutory identifiers (DIC): EPFO UAN is above; ESIC Insured-Person no. + NPS PRAN.
   esicIpNumber:     varchar("esic_ip_number", { length: 17 }),
   pran:             varchar("pran", { length: 12 }),
@@ -231,6 +233,7 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
   epfFirstJoinedOn:        date("epf_first_joined_on"),
   epfVoluntaryJointOption: boolean("epf_voluntary_joint_option"),
   epsMember:               boolean("eps_member"),
+  epfJoiningWageMinor:     bigint("epf_joining_wage_minor", { mode: "bigint" }),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

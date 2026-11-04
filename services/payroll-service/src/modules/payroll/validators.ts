@@ -92,6 +92,12 @@ export const runApprovalReviewResponse = z.object({
       requiresReview: z.boolean(),
     })),
   }),
+  // Delta review: EPF members whose EPS eligibility is not recorded (treated
+  // as EPS members); with policy "block" approval is refused until recorded.
+  epsUnrecorded: z.object({
+    policy: z.enum(["advisory", "block"]),
+    employees: z.array(z.object({ employeeId: z.string(), employeeNo: z.string() })),
+  }),
 });
 export type RunApprovalReview = z.infer<typeof runApprovalReviewResponse>;
 export type ApproveRunBody = z.infer<typeof approveRunBody>;
@@ -312,6 +318,10 @@ export const updateSettingsBody = z.object({
   // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant maker != checker switch for
   // salary revisions (default ON when never set).
   salaryRevisionSecondApprover: z.boolean().optional(),
+  // Delta review (ERP-head decision 2026-11-05): "advisory" (default) lists EPF
+  // members with no recorded EPS eligibility on the approval review; "block"
+  // refuses run approval until it is recorded. Optional: omitted keeps it.
+  epsUnrecordedPolicy: z.enum(["advisory", "block"]).optional(),
 }).refine(
   (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
     || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,

@@ -60,7 +60,17 @@ export function statutoryIncomplete(emp: { pensionScheme: string | null; uanNumb
   return emp.pensionScheme === "EPF" && !isValidUan(emp.uanNumber) ? ["UAN_MISSING"] : [];
 }
 
-/** The day a member born on `dateOfBirth` attains 58 (EPS contributions stop, para 6A). null without a DOB. */
+/**
+ * Delta review SF1 (PII): EPS stops at 58. payroll-input sends only this
+ * per-month boolean -- whether the member was 58 or older before `month`
+ * (YYYY-MM) began -- never the DOB or a date derived from it. null without a DOB.
+ */
+export function epsAgeCutoffReached(dateOfBirth: string | null | undefined, month: string): boolean | null {
+  const at58 = attains58On(dateOfBirth);
+  return at58 == null ? null : at58 < `${month}-01`;
+}
+
+/** The day a member born on `dateOfBirth` attains 58 (EPS contributions stop, para 6A). null without a DOB. Internal: never sent. */
 export function attains58On(dateOfBirth: string | null | undefined): string | null {
   if (!dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
   return `${Number(dateOfBirth.slice(0, 4)) + 58}${dateOfBirth.slice(4)}`;
@@ -72,7 +82,7 @@ export type SchemeChangeVerdict = { ok: true } | { ok: false; code: "PENSION_SCH
  * Review SF5 (ERP-head decision 2026-11-05): the scheme changes allowed
  * without an override.
  *   - contract / contractual / PSU  -> EPF only
- *   - apprentice / consultant       -> none (they stay on NONE)
+ *   - apprentice / consultant       -> NONE only (existing staff can be moved there)
  *   - regular, joined before 2004   -> GPF only
  *   - regular, joined 2004 or later -> NPS <-> UPS: UPS only from NPS and only
  *     once; the one-time switch back UPS -> NPS also only once (UPS rules,
@@ -86,7 +96,9 @@ export function schemeChangeVerdict(input: {
 }): SchemeChangeVerdict {
   const type = (input.employeeType ?? "").trim().toLowerCase();
   const no = (reason: string): SchemeChangeVerdict => ({ ok: false, code: "PENSION_SCHEME_NOT_ALLOWED", reason });
-  if (NO_SCHEME_ENGAGEMENT_TYPES.has(type)) return no(`a ${type} is on no pension scheme`);
+  // Delta review SF3: apprentices / consultants move to NONE (no override).
+  if (NO_SCHEME_ENGAGEMENT_TYPES.has(type)) return input.toScheme === NO_SCHEME ? { ok: true } : no(`a ${type} is on no pension scheme`);
+  if (input.toScheme === NO_SCHEME) return no("only apprentices and consultants are on no pension scheme");
   if (EPF_ENGAGEMENT_TYPES.has(type)) return input.toScheme === "EPF" ? { ok: true } : no("contract and PSU staff are EPF members only");
   if (input.dateOfJoining < NPS_START_DATE) return input.toScheme === "GPF" ? { ok: true } : no("a regular employee who joined before 2004-01-01 is on GPF");
   if (input.toScheme === "UPS") {
