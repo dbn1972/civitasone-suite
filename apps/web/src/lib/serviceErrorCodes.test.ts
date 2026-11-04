@@ -327,3 +327,25 @@ describe("service error codes: exact en and hi text for the codes named in the U
     expect(h.what + " " + h.next).toBe(hi);
   });
 });
+
+describe("service error codes: family patterns are fully anchored (CodeQL js/regex/missing-regexp-anchor)", () => {
+  const regexes = CODE_FAMILIES.flatMap((f) => [["pattern " + f.id, f.pattern] as const, ...(f.except ? [["except " + f.id, f.except] as const] : [])]);
+  it.each(regexes)("%s is anchored at both ends around the whole alternation", (_name, re) => {
+    expect(re.source.startsWith("^(?:")).toBe(true);
+    expect(re.source.endsWith(")$")).toBe(true);
+  });
+  it.each([
+    ["NOT_PENDING", "alreadyDecided"], ["REQUEST_ALREADY_PENDING", "alreadyPending"], ["STALE_REVISION", "versionConflict"],
+    ["ROOM_CONFLICT", "alreadyBooked"], ["VENDOR_NOT_FOUND", "notFound"], ["ALREADY_FILED", "alreadyDone"],
+  ])("%s matches only as a whole code, never inside other text", (code, id) => {
+    expect(codeFamily(code, 409)?.id).toBe(id);
+    for (const embedded of ["x " + code, code + " x", "prefix-" + code, code.toLowerCase()]) {
+      expect(codeFamily(embedded, 409), embedded).toBeNull();
+    }
+  });
+  it("an except list only excludes whole codes: a pending code is not already-done, an already-done code stays", () => {
+    expect(codeFamily("ALREADY_PENDING_APPROVAL", 409)?.id).toBe("alreadyPending");
+    expect(codeFamily("ALREADY_REOPENED", 409)?.id).toBe("alreadyDone");
+    expect(codeFamily("VERSION_ALREADY_OPEN", 422)).toBeNull();
+  });
+});

@@ -475,26 +475,26 @@ export const CODE_FAMILIES: Family[] = [
   // Real edit conflicts only: a version or ETag check failed because someone else saved first.
   {
     id: "versionConflict",
-    pattern: /^STALE_|VERSION_CONFLICT$|VERSION_MISMATCH$|^CONCURRENT_|_CONCURRENT_(EDIT|UPDATE|MODIFICATION)$|ETAG|^EDIT_CONFLICT$|^PRECONDITION_FAILED$/,
+    pattern: /^(?:STALE_[A-Z0-9_]*|[A-Z0-9_]*VERSION_CONFLICT|[A-Z0-9_]*VERSION_MISMATCH|CONCURRENT_[A-Z0-9_]*|[A-Z0-9_]*_CONCURRENT_(EDIT|UPDATE|MODIFICATION)|[A-Z0-9_]*ETAG[A-Z0-9_]*|EDIT_CONFLICT|PRECONDITION_FAILED)$/,
     kind: "concurrentEdit",
     object: RECORD,
   },
   {
     id: "alreadyBooked",
-    pattern: /^(BOOKING|ROOM|VEHICLE|SLOT|VENUE|HALL|DRIVER|RESOURCE)_CONFLICT$|_SLOT_CONFLICT$|DOUBLE_BOOKED|_ALREADY_(BOOKED|OCCUPIED|ALLOTTED|RESERVED)$/,
+    pattern: /^(?:(BOOKING|ROOM|VEHICLE|SLOT|VENUE|HALL|DRIVER|RESOURCE)_CONFLICT|[A-Z0-9_]*_SLOT_CONFLICT|[A-Z0-9_]*DOUBLE_BOOKED[A-Z0-9_]*|[A-Z0-9_]*_ALREADY_(BOOKED|OCCUPIED|ALLOTTED|RESERVED))$/,
     message: msg(
       { what: "This is already booked or allotted to someone else.", next: "Choose a different one, or a different time, then try again." },
       { what: "यह पहले से किसी और के लिए बुक या आवंटित है।", next: "कोई दूसरा विकल्प या दूसरा समय चुनें, फिर प्रयास करें।" },
       ["retry", "help"],
     ),
   },
-  { id: "fileTooLarge", pattern: /^(FILE|DOCUMENT|ARTEFACT|ARTIFACT|PROOF|PAYLOAD|UPLOAD|ATTACHMENT|IMAGE|PHOTO|SCAN)_TOO_(LARGE|BIG)$/, kind: "tooLarge" },
-  { id: "notFound", pattern: /_NOT_FOUND$|^NOT_FOUND$|^NO_SUCH_/, kind: "notFound", object: RECORD },
-  { id: "duplicate", pattern: /^DUPLICATE_|_DUPLICATE$|_ALREADY_EXISTS$|_EXISTS$|_TAKEN$/, except: /_NOT_EXISTS$|^NOT_EXISTS$/ },
+  { id: "fileTooLarge", pattern: /^(?:(FILE|DOCUMENT|ARTEFACT|ARTIFACT|PROOF|PAYLOAD|UPLOAD|ATTACHMENT|IMAGE|PHOTO|SCAN)_TOO_(LARGE|BIG))$/, kind: "tooLarge" },
+  { id: "notFound", pattern: /^(?:[A-Z0-9_]*_NOT_FOUND|NOT_FOUND|NO_SUCH_[A-Z0-9_]*)$/, kind: "notFound", object: RECORD },
+  { id: "duplicate", pattern: /^(?:DUPLICATE_[A-Z0-9_]*|[A-Z0-9_]*_DUPLICATE|[A-Z0-9_]*_ALREADY_EXISTS|[A-Z0-9_]*_EXISTS|[A-Z0-9_]*_TAKEN)$/, except: /^(?:[A-Z0-9_]*_NOT_EXISTS|NOT_EXISTS)$/ },
   {
     id: "separationOfDuties",
-    pattern: /^SELF_(APPROVAL|DECISION|REVIEW|DISBURSE|VERIFY|VERIFICATION|SIGN|ASSIGN)|_SELF_APPROVAL|^SOD_|SEGREGATION_OF_DUTIES|MAKER_CHECKER|MAKER_CANNOT_CHECK|INITIATOR_EQUALS_APPROVER|SAME_ACTOR|REPEAT_ACTOR|PAYER_IS_PASSER/,
-    except: /^OVERRIDE_VIA_MAKER_CHECKER$/,
+    pattern: /^(?:SELF_(APPROVAL|DECISION|REVIEW|DISBURSE|VERIFY|VERIFICATION|SIGN|ASSIGN)[A-Z0-9_]*|[A-Z0-9_]*_SELF_APPROVAL[A-Z0-9_]*|SOD_[A-Z0-9_]*|[A-Z0-9_]*SEGREGATION_OF_DUTIES[A-Z0-9_]*|[A-Z0-9_]*MAKER_CHECKER[A-Z0-9_]*|[A-Z0-9_]*MAKER_CANNOT_CHECK[A-Z0-9_]*|[A-Z0-9_]*INITIATOR_EQUALS_APPROVER[A-Z0-9_]*|[A-Z0-9_]*SAME_ACTOR[A-Z0-9_]*|[A-Z0-9_]*REPEAT_ACTOR[A-Z0-9_]*|[A-Z0-9_]*PAYER_IS_PASSER[A-Z0-9_]*)$/,
+    except: /^(?:OVERRIDE_VIA_MAKER_CHECKER)$/,
     message: msg(
       { what: "You can't act on something you created or requested yourself.", next: "Another officer needs to do this." },
       { what: "आप अपने द्वारा बनाए या माँगे गए कार्य पर स्वयं कार्रवाई नहीं कर सकते।", next: "यह कार्य किसी दूसरे अधिकारी को करना होगा।" },
@@ -502,8 +502,8 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "permission",
-    except: /^CONSENT_DENIED$/,
-    pattern: /_FORBIDDEN$|^FORBIDDEN_|_DENIED$|NOT_AUTHORI[SZ]ED|UNAUTHORI[SZ]ED_|^NOT_(ASSIGNEE|REQUESTER|CASE_OWNER|STAGE_OWNER|DELEGATOR|OWNER)$|^NOT_YOUR_|_ROLE_REQUIRED$|ROLE_NOT_HELD|INSUFFICIENT_CLEARANCE/,
+    except: /^(?:CONSENT_DENIED)$/,
+    pattern: /^(?:[A-Z0-9_]*_FORBIDDEN|FORBIDDEN_[A-Z0-9_]*|[A-Z0-9_]*_DENIED|[A-Z0-9_]*NOT_AUTHORI[SZ]ED[A-Z0-9_]*|[A-Z0-9_]*UNAUTHORI[SZ]ED_[A-Z0-9_]*|NOT_(ASSIGNEE|REQUESTER|CASE_OWNER|STAGE_OWNER|DELEGATOR|OWNER)|NOT_YOUR_[A-Z0-9_]*|[A-Z0-9_]*_ROLE_REQUIRED|[A-Z0-9_]*ROLE_NOT_HELD[A-Z0-9_]*|[A-Z0-9_]*INSUFFICIENT_CLEARANCE[A-Z0-9_]*)$/,
     message: msg(
       {
         what: "This action isn't available to you.",
@@ -515,11 +515,11 @@ export const CODE_FAMILIES: Family[] = [
       },
     ),
   },
-  { id: "rateLimited", pattern: /RATE_LIMIT|TOO_MANY_REQUESTS|THROTTLED/, kind: "rateLimited" },
+  { id: "rateLimited", pattern: /^(?:[A-Z0-9_]*RATE_LIMIT[A-Z0-9_]*|[A-Z0-9_]*TOO_MANY_REQUESTS[A-Z0-9_]*|[A-Z0-9_]*THROTTLED[A-Z0-9_]*)$/, kind: "rateLimited" },
   // The item is no longer waiting for this decision (approved, rejected, closed, or not yet at this step).
   {
     id: "alreadyDecided",
-    pattern: /_NOT_PENDING$|^NOT_PENDING$|_NOT_PENDING_|NOT_IN_PROGRESS|^NO_PENDING_|^ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED|INACTIVE|ARCHIVED|RETIRED|REVOKED|FROZEN)$|_ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED)$/,
+    pattern: /^(?:[A-Z0-9_]*_NOT_PENDING|NOT_PENDING|[A-Z0-9_]*_NOT_PENDING_[A-Z0-9_]*|[A-Z0-9_]*NOT_IN_PROGRESS[A-Z0-9_]*|NO_PENDING_[A-Z0-9_]*|ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED|INACTIVE|ARCHIVED|RETIRED|REVOKED|FROZEN)|[A-Z0-9_]*_ALREADY_(DECIDED|APPROVED|REJECTED|PROCESSED|CLOSED|SUBMITTED|CANCELLED|CANCELED|PAID|POSTED|SIGNED|ISSUED|COMPLETED|FINALI[SZ]ED|REVERSED|WITHDRAWN|RESOLVED|VERIFIED))$/,
     object: { en: "item", hi: "मद" },
     message: msg(
       { what: "This item has already been decided or is not at this step.", next: "Refresh to see its current status." },
@@ -529,7 +529,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "windowClosed",
-    pattern: /_WINDOW_(EXPIRED|CLOSED|PASSED)$|^DEADLINE_PASSED$|_DEADLINE_PASSED$|^CLOSING_DATE_PAST$|^DEADLINE_IN_PAST$/,
+    pattern: /^(?:[A-Z0-9_]*_WINDOW_(EXPIRED|CLOSED|PASSED)|DEADLINE_PASSED|[A-Z0-9_]*_DEADLINE_PASSED|CLOSING_DATE_PAST|DEADLINE_IN_PAST)$/,
     message: msg(
       { what: "The time allowed for this has passed.", next: "Ask the officer in charge whether the time limit can be extended." },
       { what: "इसके लिए निर्धारित समय सीमा बीत चुकी है।", next: "प्रभारी अधिकारी से पूछें कि क्या समय सीमा बढ़ाई जा सकती है।" },
@@ -537,7 +537,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "inUse",
-    pattern: /_IN_USE$|^IN_USE$|^HAS_ACTIVE_|_HAS_ACTIVE_|_HAS_(MEMBERS|ANSWERS|CHILDREN|DEPENDENTS|LINKS|ITEMS|ENTRIES|EMPLOYEES|RECORDS|TRANSACTIONS)$/,
+    pattern: /^(?:[A-Z0-9_]*_IN_USE|IN_USE|HAS_ACTIVE_[A-Z0-9_]*|[A-Z0-9_]*_HAS_ACTIVE_[A-Z0-9_]*|[A-Z0-9_]*_HAS_(MEMBERS|ANSWERS|CHILDREN|DEPENDENTS|LINKS|ITEMS|ENTRIES|EMPLOYEES|RECORDS|TRANSACTIONS))$/,
     object: RECORD,
     message: msg(
       { what: "This {object} is still in use.", next: "Remove or reassign the linked items first, then try again." },
@@ -546,7 +546,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "alreadyPending",
-    pattern: /(^|_)ALREADY_PENDING(_|$)|^REQUEST_ALREADY_OPEN$/,
+    pattern: /^(?:[A-Z0-9_]*(?:[A-Z0-9_]*_)?ALREADY_PENDING(?:_[A-Z0-9_]*)?[A-Z0-9_]*|REQUEST_ALREADY_OPEN)$/,
     message: msg(
       { what: "A request for this is already pending.", next: "Wait for it to be decided, then try again if you still need to." },
       { what: "इसके लिए एक अनुरोध पहले से लंबित है।", next: "उस पर निर्णय होने तक प्रतीक्षा करें, फिर ज़रूरत हो तो दोबारा प्रयास करें।" },
@@ -554,8 +554,8 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "alreadyDone",
-    pattern: /^ALREADY_[A-Z_]+$|_ALREADY_[A-Z_]+$/,
-    except: /PENDING|_OPEN$/,
+    pattern: /^(?:ALREADY_[A-Z_]+|[A-Z0-9_]*_ALREADY_[A-Z_]+)$/,
+    except: /^(?:[A-Z0-9_]*PENDING[A-Z0-9_]*|[A-Z0-9_]*_OPEN)$/,
     message: msg(
       { what: "This has already been done.", next: "Refresh to see its current status." },
       { what: "यह कार्य पहले ही हो चुका है।", next: "इसकी वर्तमान स्थिति देखने के लिए पेज रीफ़्रेश करें।" },
@@ -565,9 +565,8 @@ export const CODE_FAMILIES: Family[] = [
   // Real state codes: an explicit state or transition rule, or a "not <state>" / "not <...>able" statement.
   {
     id: "stateTransition",
-    pattern:
-      /^INVALID_STATE$|_INVALID_STATE$|^INVALID_[A-Z_]*TRANSITION$|_INVALID_TRANSITION$|^ILLEGAL_[A-Z_]*TRANSITION$|^NOT_ALLOWED_IN_|_NOT_ALLOWED_IN_|^WRONG_STAGE$|^WRONG_STATE$|_WRONG_STATE$|_BLOCKED$|_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACTIVE|FINAL|PASSED|ACCEPTED_BY_[A-Z_]+)$|^NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY|ACTIVE|FINAL|PASSED)$|_NOT_[A-Z]+ABLE$|^NOT_[A-Z]+ABLE$|_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED)$/,
-    except: /AVAILABLE$|REVEALABLE$|INVOCABLE$|UNVERIFIABLE$|APPLICABLE$|^MFA_LOCKED$|_IN_PRODUCTION$|^SSRF_BLOCKED$|INJECTION_BLOCKED$|^DEVICE_BLOCKED$|^GUARDRAIL_BLOCKED$/,
+    pattern: /^(?:INVALID_STATE|[A-Z0-9_]*_INVALID_STATE|INVALID_[A-Z_]*TRANSITION|[A-Z0-9_]*_INVALID_TRANSITION|ILLEGAL_[A-Z_]*TRANSITION|NOT_ALLOWED_IN_[A-Z0-9_]*|[A-Z0-9_]*_NOT_ALLOWED_IN_[A-Z0-9_]*|WRONG_STAGE|WRONG_STATE|[A-Z0-9_]*_WRONG_STATE|[A-Z0-9_]*_BLOCKED|[A-Z0-9_]*_(NOT|NOT_YET)_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|ISSUED|COMPLETED|STARTED|VERIFIED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|ACTIVE|FINAL|PASSED|ACCEPTED_BY_[A-Z_]+)|NOT_(OPEN|APPROVED|SUBMITTED|DRAFT|PUBLISHED|FINALI[SZ]ED|FROZEN|SIGNED|COMPLETED|STARTED|PREPARED|CONSOLIDATED|SHORTLISTED|EXTRACTED|PAUSED|RESOLVED|BUILT|READY|ACTIVE|FINAL|PASSED)|[A-Z0-9_]*_NOT_[A-Z]+ABLE|NOT_[A-Z]+ABLE|[A-Z0-9_]*_(CLOSED|LOCKED|FROZEN|CANCELLED|WITHDRAWN|ARCHIVED|RETIRED|FINALI[SZ]ED|TERMINAL|IMMUTABLE|SUPERSEDED))$/,
+    except: /^(?:[A-Z0-9_]*AVAILABLE|[A-Z0-9_]*REVEALABLE|[A-Z0-9_]*INVOCABLE|[A-Z0-9_]*UNVERIFIABLE|[A-Z0-9_]*APPLICABLE|MFA_LOCKED|[A-Z0-9_]*_IN_PRODUCTION|SSRF_BLOCKED|[A-Z0-9_]*INJECTION_BLOCKED|DEVICE_BLOCKED|GUARDRAIL_BLOCKED)$/,
     object: RECORD,
     message: msg(
       { what: "This {object} is not at a stage that allows this action.", next: "Refresh the page to see its current status, then choose an action that is available." },
@@ -578,7 +577,7 @@ export const CODE_FAMILIES: Family[] = [
   // CANNOT_<verb>: a state rule at 409/422, a permission refusal at 403; at any other status the status copy.
   {
     id: "cannotPermission",
-    pattern: /^CANNOT_[A-Z_]+$/,
+    pattern: /^(?:CANNOT_[A-Z_]+)$/,
     onlyForStatus: [403],
     message: msg(
       {
@@ -593,7 +592,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "cannotState",
-    pattern: /^CANNOT_[A-Z_]+$/,
+    pattern: /^(?:CANNOT_[A-Z_]+)$/,
     onlyForStatus: [409, 422],
     object: RECORD,
     message: msg(
@@ -603,10 +602,10 @@ export const CODE_FAMILIES: Family[] = [
     ),
   },
   // Only links, tokens, codes and sessions "expire and can be requested again".
-  { id: "session", pattern: /^UNAUTHENTICATED$|^SESSION_(EXPIRED|ENDED)$|^TOKEN_EXPIRED$|^INVALID_TOKEN$|^UPSTREAM_UNAUTHENTICATED$/, kind: "unauthenticated" },
+  { id: "session", pattern: /^(?:UNAUTHENTICATED|SESSION_(EXPIRED|ENDED)|TOKEN_EXPIRED|INVALID_TOKEN|UPSTREAM_UNAUTHENTICATED)$/, kind: "unauthenticated" },
   {
     id: "linkExpired",
-    pattern: /^(OTP|TOKEN|LINK|INVITE|INVITATION|RESET|RESET_TOKEN|MAGIC_LINK|CHALLENGE|NONCE|CALLBACK|VERIFICATION|VERIFICATION_CODE|CODE|DOWNLOAD_LINK|SIGNED_URL|URL)_EXPIRED$|^(TOKEN|LINK|CODE|BILL_TOKEN|INVITE)_(USED|REPLAYED|REUSED)$|_TOKEN_(EXPIRED|USED)$|_LINK_EXPIRED$/,
+    pattern: /^(?:(OTP|TOKEN|LINK|INVITE|INVITATION|RESET|RESET_TOKEN|MAGIC_LINK|CHALLENGE|NONCE|CALLBACK|VERIFICATION|VERIFICATION_CODE|CODE|DOWNLOAD_LINK|SIGNED_URL|URL)_EXPIRED|(TOKEN|LINK|CODE|BILL_TOKEN|INVITE)_(USED|REPLAYED|REUSED)|[A-Z0-9_]*_TOKEN_(EXPIRED|USED)|[A-Z0-9_]*_LINK_EXPIRED)$/,
     message: msg(
       { what: "This link or code has expired or has already been used.", next: "Start this step again to get a new one." },
       { what: "यह लिंक या कोड समाप्त हो चुका है या पहले ही इस्तेमाल हो चुका है।", next: "नया पाने के लिए यह चरण फिर से शुरू करें।" },
@@ -614,7 +613,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "documentExpired",
-    pattern: /^(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|BG|BANK_GUARANTEE|INSURANCE|DSC|PERMIT|AGREEMENT|LEASE|MANDATE|NOC|ACCREDITATION|VALIDITY)_EXPIRED$|_(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|PERMIT|AGREEMENT|LEASE|MANDATE|DSC)_EXPIRED$/,
+    pattern: /^(?:(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|BG|BANK_GUARANTEE|INSURANCE|DSC|PERMIT|AGREEMENT|LEASE|MANDATE|NOC|ACCREDITATION|VALIDITY)_EXPIRED|[A-Z0-9_]*_(CONTRACT|EMPANELMENT|LICENCE|LICENSE|REGISTRATION|CERTIFICATE|POLICY|PERMIT|AGREEMENT|LEASE|MANDATE|DSC)_EXPIRED)$/,
     message: msg(
       { what: "This has expired.", next: "Renew it first (its record shows the expiry date), then try again." },
       { what: "इसकी वैधता समाप्त हो चुकी है।", next: "पहले इसका नवीनीकरण करें (इसके रिकॉर्ड में समाप्ति तिथि दी है), फिर प्रयास करें।" },
@@ -622,7 +621,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "tooLow",
-    pattern: /_BELOW_|_BELOW$|^BELOW_|_MIN_|^MIN_|_TOO_(LOW|FEW|SMALL|SHORT)(_|$)|^NON_POSITIVE_|_NON_POSITIVE$|_ZERO_AMOUNT$|^ZERO_AMOUNT$|_NOT_POSITIVE$/,
+    pattern: /^(?:[A-Z0-9_]*_BELOW_[A-Z0-9_]*|[A-Z0-9_]*_BELOW|BELOW_[A-Z0-9_]*|[A-Z0-9_]*_MIN_[A-Z0-9_]*|MIN_[A-Z0-9_]*|[A-Z0-9_]*_TOO_(LOW|FEW|SMALL|SHORT)(?:_[A-Z0-9_]*)?[A-Z0-9_]*|NON_POSITIVE_[A-Z0-9_]*|[A-Z0-9_]*_NON_POSITIVE|[A-Z0-9_]*_ZERO_AMOUNT|ZERO_AMOUNT|[A-Z0-9_]*_NOT_POSITIVE)$/,
     message: msg(
       { what: "This is too low, or there are too few.", next: "Check the minimum shown on the form, enter a higher amount or add more, then try again." },
       { what: "यह बहुत कम है, या संख्या पर्याप्त नहीं है।", next: "फ़ॉर्म पर दी गई न्यूनतम सीमा देखें, अधिक राशि दर्ज करें या संख्या बढ़ाएँ, फिर प्रयास करें।" },
@@ -631,8 +630,8 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "tooHigh",
-    pattern: /_EXCEEDS?_|_EXCEEDED$|^EXCEEDS_|_EXCEEDS$|^OVER_|_ABOVE_|_ABOVE$|_TOO_(HIGH|LARGE|MANY|LONG|BIG)(_|$)|_MAX_|_LIMIT_(REACHED|EXCEEDED)$|_CAP_REACHED$|OVERCLAIM|OVERPAYMENT|_AT_CAPACITY$/,
-    except: /^MAX_ATTEMPTS$/,
+    pattern: /^(?:[A-Z0-9_]*_EXCEEDS?_[A-Z0-9_]*|[A-Z0-9_]*_EXCEEDED|EXCEEDS_[A-Z0-9_]*|[A-Z0-9_]*_EXCEEDS|OVER_[A-Z0-9_]*|[A-Z0-9_]*_ABOVE_[A-Z0-9_]*|[A-Z0-9_]*_ABOVE|[A-Z0-9_]*_TOO_(HIGH|LARGE|MANY|LONG|BIG)(?:_[A-Z0-9_]*)?[A-Z0-9_]*|[A-Z0-9_]*_MAX_[A-Z0-9_]*|[A-Z0-9_]*_LIMIT_(REACHED|EXCEEDED)|[A-Z0-9_]*_CAP_REACHED|[A-Z0-9_]*OVERCLAIM[A-Z0-9_]*|[A-Z0-9_]*OVERPAYMENT[A-Z0-9_]*|[A-Z0-9_]*_AT_CAPACITY)$/,
+    except: /^(?:MAX_ATTEMPTS)$/,
     message: msg(
       { what: "This is more than the allowed limit.", next: "Enter a lower amount or number, then try again. Ask your administrator if the limit needs to change." },
       { what: "यह अनुमत सीमा से अधिक है।", next: "कम राशि या संख्या दर्ज करें, फिर प्रयास करें। सीमा बदलनी हो तो अपने प्रशासक से पूछें।" },
@@ -641,7 +640,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "overlap",
-    pattern: /_OVERLAP$|^OVERLAPPING_|_OVERLAPS$/,
+    pattern: /^(?:[A-Z0-9_]*_OVERLAP|OVERLAPPING_[A-Z0-9_]*|[A-Z0-9_]*_OVERLAPS)$/,
     message: msg(
       { what: "This clashes with an existing entry.", next: "Change the dates or the range so they don't clash with it, then try again." },
       { what: "यह किसी मौजूदा प्रविष्टि से टकराता है।", next: "तिथियाँ या सीमा इस तरह बदलें कि वे आपस में न टकराएँ, फिर प्रयास करें।" },
@@ -650,8 +649,8 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "date",
-    pattern: /_IN_PAST$|_IN_FUTURE$|^DATE_IN_|_DATE_(BEFORE|AFTER)_|BACKDATE/,
-    except: /_REQUIRED$/,
+    pattern: /^(?:[A-Z0-9_]*_IN_PAST|[A-Z0-9_]*_IN_FUTURE|DATE_IN_[A-Z0-9_]*|[A-Z0-9_]*_DATE_(BEFORE|AFTER)_[A-Z0-9_]*|[A-Z0-9_]*BACKDATE[A-Z0-9_]*)$/,
+    except: /^(?:[A-Z0-9_]*_REQUIRED)$/,
     message: msg(
       { what: "This date isn't allowed for this action.", next: "Check the date against the rules shown on the form, then try again." },
       { what: "इस कार्रवाई के लिए यह तिथि मान्य नहीं है।", next: "फ़ॉर्म पर दिए नियमों के अनुसार तिथि जाँचें, फिर प्रयास करें।" },
@@ -660,7 +659,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "notConfigured",
-    pattern: /_NOT_CONFIGURED$|^NOT_CONFIGURED$|_UNCONFIGURED$|_NOT_SET$|_NOT_SET_UP$|^CONFIG_INCOMPLETE$/,
+    pattern: /^(?:[A-Z0-9_]*_NOT_CONFIGURED|NOT_CONFIGURED|[A-Z0-9_]*_UNCONFIGURED|[A-Z0-9_]*_NOT_SET|[A-Z0-9_]*_NOT_SET_UP|CONFIG_INCOMPLETE)$/,
     message: msg(
       { what: "This hasn't been set up yet.", next: "Ask your administrator to complete the setup, then try again." },
       { what: "इसकी व्यवस्था अभी नहीं की गई है।", next: "अपने प्रशासक से व्यवस्था पूरी करवाएँ, फिर प्रयास करें।" },
@@ -668,7 +667,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "disabled",
-    pattern: /_DISABLED$|^DISABLED$|_NOT_ENABLED$|_NOT_ENTITLED$|_NOT_PROVISIONED$/,
+    pattern: /^(?:[A-Z0-9_]*_DISABLED|DISABLED|[A-Z0-9_]*_NOT_ENABLED|[A-Z0-9_]*_NOT_ENTITLED|[A-Z0-9_]*_NOT_PROVISIONED)$/,
     message: msg(
       { what: "This is switched off for your office.", next: "Ask your administrator to switch it on, then try again." },
       { what: "यह आपके कार्यालय के लिए बंद है।", next: "अपने प्रशासक से इसे चालू करवाएँ, फिर प्रयास करें।" },
@@ -676,7 +675,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "inactive",
-    pattern: /_INACTIVE$|^INACTIVE$|_DEACTIVATED$/,
+    pattern: /^(?:[A-Z0-9_]*_INACTIVE|INACTIVE|[A-Z0-9_]*_DEACTIVATED)$/,
     object: RECORD,
     message: msg(
       { what: "This {object} is inactive.", next: "Choose an active one, or ask your administrator to reactivate it." },
@@ -685,7 +684,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "blacklisted",
-    pattern: /_BLACKLISTED$|_DEBARRED$/,
+    pattern: /^(?:[A-Z0-9_]*_BLACKLISTED|[A-Z0-9_]*_DEBARRED)$/,
     message: msg(
       { what: "This party is blacklisted and can't be used.", next: "Choose another one. Ask the officer in charge if you think this is wrong." },
       { what: "यह पक्ष काली सूची में है और इसका उपयोग नहीं किया जा सकता।", next: "कोई दूसरा चुनें। यदि आपको लगता है कि यह ग़लत है तो प्रभारी अधिकारी से पूछें।" },
@@ -693,7 +692,7 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "virusScan",
-    pattern: /INFECTED|MALWARE/,
+    pattern: /^(?:[A-Z0-9_]*INFECTED[A-Z0-9_]*|[A-Z0-9_]*MALWARE[A-Z0-9_]*)$/,
     message: msg(
       { what: "The file didn't pass the virus check, so it wasn't accepted.", next: "Upload a clean copy of the file." },
       { what: "फ़ाइल वायरस जाँच में सफल नहीं हुई, इसलिए स्वीकार नहीं की गई।", next: "फ़ाइल की कोई सुरक्षित प्रति अपलोड करें।" },
@@ -702,9 +701,9 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "required",
-    pattern: /_REQUIRED$|^MISSING_|_MISSING$|^MANDATORY_[A-Z_]*MISSING$|_NOT_UPLOADED$|^EMPTY_|_EMPTY$/,
+    pattern: /^(?:[A-Z0-9_]*_REQUIRED|MISSING_[A-Z0-9_]*|[A-Z0-9_]*_MISSING|MANDATORY_[A-Z_]*MISSING|[A-Z0-9_]*_NOT_UPLOADED|EMPTY_[A-Z0-9_]*|[A-Z0-9_]*_EMPTY)$/,
     // A missing approval, role, consent or technical header is not "information the user left out".
-    except: /(APPROVAL|ADMIN|WORKFLOW|CONSENT|IDENTITY|REQUISITION|NIT|REDIRECT|IDEMPOTENCY_KEY|ACK|APPEAL|OPERATOR|CHECKER|AGENT|ROLE|OTP|SANCTION|BASELINE|TS)_REQUIRED$|^MISSING_(TENANT|SESSION_ID|AUTHORITY|OTP|SIGNATURE|URL)$|_(KEY|CONFIG)_MISSING$|^CONFIG_MISSING$|^EMPTY_PATCH$|^REGISTRY_EMPTY$/,
+    except: /^(?:[A-Z0-9_]*(APPROVAL|ADMIN|WORKFLOW|CONSENT|IDENTITY|REQUISITION|NIT|REDIRECT|IDEMPOTENCY_KEY|ACK|APPEAL|OPERATOR|CHECKER|AGENT|ROLE|OTP|SANCTION|BASELINE|TS)_REQUIRED|MISSING_(TENANT|SESSION_ID|AUTHORITY|OTP|SIGNATURE|URL)|[A-Z0-9_]*_(KEY|CONFIG)_MISSING|CONFIG_MISSING|EMPTY_PATCH|REGISTRY_EMPTY)$/,
     deferToFieldErrors: true,
     message: msg(
       { what: "Some required information is missing.", next: "Fill in the missing details, then try again." },
@@ -714,10 +713,10 @@ export const CODE_FAMILIES: Family[] = [
   },
   {
     id: "mismatch",
-    pattern: /_MISMATCH$|^MISMATCH_|_UNBALANCED$|^UNBALANCED_/,
+    pattern: /^(?:[A-Z0-9_]*_MISMATCH|MISMATCH_[A-Z0-9_]*|[A-Z0-9_]*_UNBALANCED|UNBALANCED_[A-Z0-9_]*)$/,
     // A 403 "mismatch" is a scope check (wrong department, gate, location), not a typing error.
     notForStatus: [401, 403],
-    except: /^(TENANT|SIGNEDINFO|RESOURCE|SUBJECT|DOMAIN|INITIATOR|DEPT|LOCATION|GATE_BINDING|SERVICE)_MISMATCH$/,
+    except: /^(?:(TENANT|SIGNEDINFO|RESOURCE|SUBJECT|DOMAIN|INITIATOR|DEPT|LOCATION|GATE_BINDING|SERVICE)_MISMATCH)$/,
     message: msg(
       { what: "Some details don't match.", next: "Check the values against the source document, then try again." },
       { what: "कुछ विवरण आपस में मेल नहीं खाते।", next: "मूल दस्तावेज़ से मान जाँचें, फिर प्रयास करें।" },
@@ -728,10 +727,10 @@ export const CODE_FAMILIES: Family[] = [
   // Only names that clearly name a service of ours (ADMIT_CARD_UNAVAILABLE, VARIANT_UNAVAILABLE are not outages).
   {
     id: "upstream",
-    pattern: /CIRCUIT_OPEN|^SERVICE_UNAVAILABLE$|_SERVICE_UNAVAILABLE$|^UPSTREAM_|^GATEWAY_(TIMEOUT|UNREACHABLE|ERROR)$|^DOWNSTREAM_|^(HRMS|FINANCE|PAYROLL|IDENTITY|DIRECTORY|OFFICER_DIRECTORY|STORAGE|AUDIT|ENCRYPTION|POLICY|ML|AI|SEARCH|SCAN|PDF_RENDERER|ROLE_LOOKUP|ORG_SERVICE|MODULE_GUARD|PO_VALIDATION|RECIPIENTS|STOCK|CLEARANCE|DOCUMENT_CHECK|FNF_HR_VERIFICATION|TEMPLATE_SERVICE|KNOWLEDGE_SERVICE|LOCATION_SERVICE)_UNAVAILABLE$/,
+    pattern: /^(?:[A-Z0-9_]*CIRCUIT_OPEN[A-Z0-9_]*|SERVICE_UNAVAILABLE|[A-Z0-9_]*_SERVICE_UNAVAILABLE|UPSTREAM_[A-Z0-9_]*|GATEWAY_(TIMEOUT|UNREACHABLE|ERROR)|DOWNSTREAM_[A-Z0-9_]*|(HRMS|FINANCE|PAYROLL|IDENTITY|DIRECTORY|OFFICER_DIRECTORY|STORAGE|AUDIT|ENCRYPTION|POLICY|ML|AI|SEARCH|SCAN|PDF_RENDERER|ROLE_LOOKUP|ORG_SERVICE|MODULE_GUARD|PO_VALIDATION|RECIPIENTS|STOCK|CLEARANCE|DOCUMENT_CHECK|FNF_HR_VERIFICATION|TEMPLATE_SERVICE|KNOWLEDGE_SERVICE|LOCATION_SERVICE)_UNAVAILABLE)$/,
     kind: "server",
   },
-  { id: "validation", pattern: /^INVALID_|_INVALID$|_INVALID_|^MALFORMED_|_MALFORMED$|^BAD_REQUEST$|^UNSUPPORTED_|_NOT_SUPPORTED$|^UNPROCESSABLE$|^PAYLOAD_|_SCHEMA_VIOLATION$/, kind: "validation" },
+  { id: "validation", pattern: /^(?:INVALID_[A-Z0-9_]*|[A-Z0-9_]*_INVALID|[A-Z0-9_]*_INVALID_[A-Z0-9_]*|MALFORMED_[A-Z0-9_]*|[A-Z0-9_]*_MALFORMED|BAD_REQUEST|UNSUPPORTED_[A-Z0-9_]*|[A-Z0-9_]*_NOT_SUPPORTED|UNPROCESSABLE|PAYLOAD_[A-Z0-9_]*|[A-Z0-9_]*_SCHEMA_VIOLATION)$/, kind: "validation" },
 ];
 
 export type ServiceCodeResolution =

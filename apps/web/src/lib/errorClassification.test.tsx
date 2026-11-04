@@ -163,3 +163,11 @@ describe("review of #2451: cancels, loader timeouts and HTTP reason phrases", ()
     expect(h.next).toMatch(/हो सकता है/);
   });
 });
+
+describe("network failure text is matched as intended (anchored no-response)", () => {
+  it("exactly \"no response\" is a network failure; a sentence that merely contains it is not", () => {
+    expect(isNetworkFailure(new TypeError("no response"))).toBe(true);
+    expect(isNetworkFailure(new TypeError("x is no response handler"))).toBe(false);
+    expect(isNetworkFailure(new TypeError("Failed to fetch"))).toBe(true);
+  });
+});

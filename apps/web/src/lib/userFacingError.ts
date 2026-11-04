@@ -26,7 +26,9 @@ export class UserFacingError extends Error {
  * Safari: "Load failed"; undici: "fetch failed"; React Native/polyfills: "Network request failed".
  * "no response" is what our own offline-queue callers throw when fetchOrQueue got no Response.
  */
-const FETCH_FAILURE_MESSAGE = /failed to fetch|networkerror|load failed|fetch failed|network request failed|network error|^no response$/i; // status-leak-ok: matches browser fetch() rejection text; never rendered
+const FETCH_FAILURE_MESSAGE = /failed to fetch|networkerror|load failed|fetch failed|network request failed|network error/i; // status-leak-ok: matches browser fetch() rejection text; never rendered
+/** Exactly "no response" (anchored on its own so the alternation above cannot change its meaning). */
+const NO_RESPONSE_MESSAGE = /^no response$/i;
 
 /**
  * True only for a genuine browser-side network failure: fetch() rejected before any
@@ -40,7 +42,7 @@ export function isNetworkFailure(err: unknown): boolean {
   if (name === "NetworkError") return true;
   if (err instanceof TypeError) {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
-    return FETCH_FAILURE_MESSAGE.test(err.message);
+    return FETCH_FAILURE_MESSAGE.test(err.message) || NO_RESPONSE_MESSAGE.test(err.message);
   }
   return false;
 }
