@@ -80,7 +80,7 @@ describe("ServiceBookPage (HR caller)", () => {
     expect(screen.getByRole("heading", { name: /service book — priya nair/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view all employees/i })).toHaveAttribute("href", "/hr/service-book");
     // GAP-HR-SERVICE-BOOK-01: print link only makes sense once scoped to one employee.
-    expect(screen.getByRole("link", { name: "Print service book" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Download service book (PDF)" })).toHaveAttribute(
       "href",
       "/api/proxy/v1/hrms/employees/emp-42/service-book/pdf",
     );
