@@ -49,9 +49,9 @@ describe("payroll run approve/disburse lifecycle (REGRESSION: silent no-op)", ()
     registerPayrollConsumers(queue);
     await queue.start();
 
-    // Seed a run directly in "processing" - the valid pre-approval state per
+    // Seed a run directly in "computed" - the valid pre-approval state per
     // domain.ts's assertRunStatusTransition state machine
-    // (draft -> processing -> {approved, failed} -> disbursed) - bypassing
+    // (draft -> processing -> computed -> approved -> disbursed; UAT L2-N3) - bypassing
     // full HRMS-dependent employee processing, which is irrelevant to this
     // bug (createRun/processPayrollRun are not in question here). A real
     // slip is seeded alongside it so approve/disburse exercise their
@@ -70,7 +70,7 @@ describe("payroll run approve/disburse lifecycle (REGRESSION: silent no-op)", ()
           totalGrossMinor: 0n,
           totalNetMinor: 0n,
           currency: "INR",
-          status: "processing",
+          status: "computed",
           createdBy: creatorId,
           updatedBy: creatorId,
         });

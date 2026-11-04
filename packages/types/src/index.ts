@@ -1021,13 +1021,15 @@ export type PayrollRunDetail = {
    * list of runs must only count the regular ones.
    */
   runType?: "regular" | "supplementary" | "arrears" | "pensioner";
-  status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
+  status: "draft" | "processing" | "computed" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {
   /** GAP-PAYROLL-DETAIL-02: user ids of the run's maker and checker (approvedBy is null until approved). */
   createdBy?: string | null;
   approvedBy?: string | null;
+  /** PR #2454 delta review: processing and idle past the stuck threshold (payroll-service decides). */
+  stuck?: boolean;
   salarySlips: Array<{
     id: string;
     employeeId: string;

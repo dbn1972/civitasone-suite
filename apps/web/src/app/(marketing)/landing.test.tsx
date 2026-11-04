@@ -4,6 +4,13 @@ import LandingPage from "./page";
 import PricingPage from "./pricing/page";
 import SandboxPage from "./sandbox/page";
 import MarketingLayout from "./layout";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The layout footer now renders the translated GIGW links / identity line (A-N2).
+function IntlForLayout({ children }: { children: React.ReactNode }) {
+  return <NextIntlClientProvider locale="en" messages={enMessages}>{children}</NextIntlClientProvider>;
+}
 import { MODULE_COUNT } from "@/app/_data/moduleRegistry";
 import { chapters } from "./docs/_content/chapters";
 
@@ -284,9 +291,9 @@ describe("Sandbox Page", () => {
 describe("Marketing Layout", () => {
   it("renders nav with logo", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>Content</div>
-      </MarketingLayout>
+      </MarketingLayout></IntlForLayout>
     );
     // Logo appears in both header and footer
     expect(screen.getAllByText("◈").length).toBeGreaterThanOrEqual(1);
@@ -295,9 +302,9 @@ describe("Marketing Layout", () => {
 
   it("renders nav links", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>Content</div>
-      </MarketingLayout>
+      </MarketingLayout></IntlForLayout>
     );
     // Pricing appears in both nav and footer, so use getAllByRole
     const pricingLinks = screen.getAllByRole("link", { name: /Pricing/i });
@@ -308,27 +315,27 @@ describe("Marketing Layout", () => {
 
   it("renders footer with copyright", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>Content</div>
-      </MarketingLayout>
+      </MarketingLayout></IntlForLayout>
     );
     expect(screen.getByText(/© 2026 CivitasOne/i)).toBeInTheDocument();
   });
 
   it("renders Made in India text", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>Content</div>
-      </MarketingLayout>
+      </MarketingLayout></IntlForLayout>
     );
     expect(screen.getByText(/Made in India 🇮🇳 for India/i)).toBeInTheDocument();
   });
 
   it("wraps children in a main element", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div data-testid="child">Hello</div>
-      </MarketingLayout>
+      </MarketingLayout></IntlForLayout>
     );
     const main = document.querySelector("main#main");
     expect(main).toBeInTheDocument();

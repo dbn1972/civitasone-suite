@@ -116,7 +116,8 @@ describe("payroll/domain — computeSlip() with rawComponents", () => {
 
 describe("payroll/domain — assertRunStatusTransition()", () => {
   it("allows draft → processing", () => { expect(() => assertRunStatusTransition("draft", "processing")).not.toThrow(); });
-  it("allows processing → approved", () => { expect(() => assertRunStatusTransition("processing", "approved")).not.toThrow(); });
+  it("allows processing → computed and computed → approved", () => { expect(() => assertRunStatusTransition("processing", "computed")).not.toThrow(); expect(() => assertRunStatusTransition("computed", "approved")).not.toThrow(); });
+  it("refuses processing → approved (UAT L2-N3)", () => { expect(() => assertRunStatusTransition("processing", "approved")).toThrow(); });
   it("allows processing → failed", () => { expect(() => assertRunStatusTransition("processing", "failed")).not.toThrow(); });
   it("allows approved → disbursed", () => { expect(() => assertRunStatusTransition("approved", "disbursed")).not.toThrow(); });
   it("allows failed → draft", () => { expect(() => assertRunStatusTransition("failed", "draft")).not.toThrow(); });

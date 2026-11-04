@@ -70,7 +70,7 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
           (SELECT COUNT(*) FROM payroll.payroll_pensioners
             WHERE tenant_id = ${ctx.tenantId}::uuid AND ddo_code = ${ddoCode} AND status = 'active')::int AS pensioners,
           (SELECT COUNT(*) FROM payroll.payroll_runs
-            WHERE tenant_id = ${ctx.tenantId}::uuid AND ddo_code = ${ddoCode} AND status IN ('draft', 'processing'))::int AS runs
+            WHERE tenant_id = ${ctx.tenantId}::uuid AND ddo_code = ${ddoCode} AND status IN ('draft', 'processing', 'computed'))::int AS runs
       `))) as unknown as Array<{ pensioners: number; runs: number }>;
       const u = use[0];
       if (u && (u.pensioners > 0 || u.runs > 0)) {
@@ -148,7 +148,7 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
         throw new HttpError(409, "PAY_GROUP_HAS_MEMBERS", `the pay group still has ${blockers.members} current or scheduled member(s); end or move them first`);
       }
       if (blockers.activeRuns > 0) {
-        throw new HttpError(409, "PAY_GROUP_HAS_ACTIVE_RUN", `the pay group has ${blockers.activeRuns} draft or processing run(s); finish or fail them first`);
+        throw new HttpError(409, "PAY_GROUP_HAS_ACTIVE_RUN", `the pay group has ${blockers.activeRuns} draft, processing or computed run(s); finish or fail them first`);
       }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.setPayGroupActive(ctx, id, body.active, body.reason));

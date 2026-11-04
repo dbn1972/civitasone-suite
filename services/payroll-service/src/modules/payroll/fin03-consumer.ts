@@ -55,7 +55,7 @@ export function registerFin03Consumers(queue: Pick<Queue, "subscribe">): void {
                                 WHERE x.tenant_id = d.tenant_id AND x.ddo_code = d.ddo_code AND x.status = 'active')
                AND NOT EXISTS (SELECT 1 FROM payroll.payroll_runs r
                                 WHERE r.tenant_id = d.tenant_id AND r.ddo_code = d.ddo_code
-                                  AND r.status IN ('draft', 'processing'))
+                                  AND r.status IN ('draft', 'processing', 'computed'))
          RETURNING ddo_code`)) as unknown as Array<{ ddo_code: string }>;
       if (rows.length === 0) {
         log.warn({ ddoCode: p.ddoCode, active: p.active }, "ddo set_active was a no-op (already in that state, or still in use)");

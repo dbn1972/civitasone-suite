@@ -48,7 +48,7 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
   };
 }
 
-async function seedRun(status: "processing" | "approved", opts: { grossMinor: bigint; netMinor: bigint }): Promise<string> {
+async function seedRun(status: "computed" | "approved", opts: { grossMinor: bigint; netMinor: bigint }): Promise<string> {
   const runId = randomUUID();
   const slipId = randomUUID();
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
@@ -82,7 +82,7 @@ describe("payroll run approve/disburse -- nested-transaction regression", () => 
   it("runApprove completes end-to-end, reading slips/statutory sums via the outer tx", async () => {
     const queue = new MemoryQueue();
     registerPayrollConsumers(queue);
-    const runId = await seedRun("processing", { grossMinor: 100000n, netMinor: 80000n });
+    const runId = await seedRun("computed", { grossMinor: 100000n, netMinor: 80000n });
 
     await queue.publish(COMMANDS.runApprove, makeMsg(COMMANDS.runApprove, { id: runId, tenantId: TENANT, approvedBy: APPROVER }));
     await queue.drain();
@@ -111,7 +111,7 @@ describe("payroll run approve/disburse -- nested-transaction regression", () => 
     const queue = new MemoryQueue();
     registerPayrollConsumers(queue);
     const runIds = await Promise.all(
-      Array.from({ length: 15 }, () => seedRun("processing", { grossMinor: 50000n, netMinor: 40000n })),
+      Array.from({ length: 15 }, () => seedRun("computed", { grossMinor: 50000n, netMinor: 40000n })),
     );
 
     await Promise.all(runIds.map((id) =>

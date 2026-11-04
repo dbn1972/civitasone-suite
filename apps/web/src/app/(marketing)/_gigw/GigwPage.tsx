@@ -24,7 +24,8 @@ export function GigwPage({
 }: {
   title: string;
   intro?: string;
-  pendingNotice: string;
+  /** Page-level notice (pending content or standard wording); omitted for fully factual pages. */
+  pendingNotice?: string;
   pendingSection: string;
   sections: GigwSection[];
   children?: ReactNode;
@@ -33,9 +34,11 @@ export function GigwPage({
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
       {intro ? <p className="mt-4 text-gray-700">{intro}</p> : null}
-      <p role="note" data-deferred-content="page" className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-        {pendingNotice}
-      </p>
+      {pendingNotice ? (
+        <p role="note" data-deferred-content="page" className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          {pendingNotice}
+        </p>
+      ) : null}
       {children}
       {sections.map((s) => (
         <section key={s.id} aria-labelledby={`gigw-${s.id}`} className="mt-8">
