@@ -112,6 +112,24 @@ describe("send back a computed run: the computation is unwound (UAT L2-N3 review
     expect(await consumed()).toEqual({ bonus: { status: "approved", paid_in_run_id: null }, reimb: { status: "approved", paid_in_run_id: null } });
     expect(await runCounts(r1)).toEqual({ repayments: 0, nps: 0, tds: 0, register: 0, claims: 0, slips: 1 });
 
+    // PR #2454 delta review: the audit carries every row the unwind touched.
+    const audits = await q<{ action: string; resource_type: string; payload: Record<string, unknown> }>(sql`
+      SELECT payload->>${"action"} AS action, payload->>${"resourceType"} AS resource_type, payload
+        FROM _outbox.messages WHERE topic = ${"audit.event.record"}
+         AND (payload->>${"resourceId"} = ${r1} OR payload->${"details"}->>${"runId"} = ${r1} OR payload->>${"runId"} = ${r1})`);
+    const reject = audits.find((a) => a.action === "reject")?.payload as Record<string, any> | undefined;
+    expect(reject, JSON.stringify(audits.map((a) => a.action))).toBeTruthy();
+    expect(reject!.reason).toBe("recompute after the DA rate fix");
+    expect(reject!.loanRepayments).toEqual([expect.objectContaining({ loanId: loan, principalMinor: "50000", installmentNo: 1 })]);
+    expect(reject!.loans).toEqual([{ loanId: loan, outstandingBeforeMinor: "0", outstandingAfterMinor: "50000", statusBefore: "closed", statusAfter: "disbursed" }]);
+    expect(reject!.bonusesReleased).toEqual([{ id: bonus, employeeId: employee.id, amountMinor: "250000" }]);
+    expect(reject!.reimbursementsReleased).toEqual([{ id: reimb, employeeId: employee.id, amountMinor: "120000" }]);
+    expect(reject!.counts).toMatchObject({ loanRepayments: 1, loansRestored: 1, bonusesReleased: 1, reimbursementsReleased: 1 });
+    expect(reject!.counts.statutoryRows).toBeGreaterThanOrEqual(before.nps + before.tds);
+    const statutoryAudits = audits.filter((a) => a.action === "statutory_rows_removed");
+    expect(statutoryAudits).toHaveLength(1);
+    expect((statutoryAudits[0]!.payload as Record<string, any>).removedRows).toHaveLength(reject!.counts.statutoryRows);
+
     // R2, a new REGULAR run for the same month (the failed R1 no longer blocks the
     // period), pays the same things exactly once.
     const r2 = randomUUID();

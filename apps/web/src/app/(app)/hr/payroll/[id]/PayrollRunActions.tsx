@@ -35,6 +35,8 @@ type Props = {
   approvedBy?: string | null;
   /** GAP-PAYROLL-DETAIL-05: employees with unresolved pre-disbursement issues; shown as a warning in the Approve / Disburse confirmations. */
   exceptionCount?: number;
+  /** PR #2454 delta review: the API says this processing run is idle past the stuck threshold. */
+  stuck?: boolean;
 };
 
 type RunAction = "approve" | "disburse" | "revert" | "reject" | "failStuck";
@@ -85,6 +87,7 @@ export function PayrollRunActions({
   currentUserId = null,
   createdBy = null,
   approvedBy = null,
+  stuck = false,
 }: Props) {
   const t = useTranslations("payrollRunActions");
   const tr = useTranslations("payroll.runApproval");
@@ -243,7 +246,9 @@ export function PayrollRunActions({
   // UAT L2-N3 review: the ways out of computed / a stuck processing run. The
   // server requires the payroll-admin role and a reason; maker-checker neutral.
   const canReject    = canAdminister && status === "computed"   && settledAction !== "reject";
-  const canFailStuck = canAdminister && status === "processing" && settledAction !== "failStuck";
+  // Offered only once the API reports the run stuck (no update for the
+  // threshold); a run that is still computing shows nothing. The server re-checks.
+  const canFailStuck = canAdminister && status === "processing" && stuck && settledAction !== "failStuck";
 
   if (!canApprove && !canDisburse && !canRevert && !canReject && !canFailStuck) return null;
 

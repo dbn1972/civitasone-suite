@@ -190,6 +190,7 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
         currentUserId={currentUserId}
         createdBy={run.createdBy ?? null}
         approvedBy={run.approvedBy ?? null}
+        stuck={run.stuck === true}
       />
 
       <Card title={t("runDetailsTitle")}>

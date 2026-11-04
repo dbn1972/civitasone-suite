@@ -260,6 +260,23 @@ describe("payroll run state guards (UAT L2-N3)", () => {
     });
   });
 
+  describe("run read model: stuck flag", () => {
+    it("GET /v1/payroll/runs/:id reports stuck only for a processing run idle past the threshold", async () => {
+      const token = signToken({ sub: approverId, tid: tenantId, roles: ["super_admin"], sid: randomUUID() }, SECRET);
+      const get = async (id: string) => (await app.inject({ method: "GET", url: `/v1/payroll/runs/${id}`, headers: { authorization: `Bearer ${token}` } })).json();
+      const fresh = await seedRun("processing");
+      const idle = await seedRun("processing");
+      const idleComputed = await seedRun("computed");
+      for (const id of [idle, idleComputed]) {
+        await runWithTenant(tenantId, () => db.transaction((tx) => tx.execute(sql`
+          UPDATE payroll.payroll_runs SET updated_at = NOW() - make_interval(hours => 7) WHERE id = ${id}::uuid`)));
+      }
+      expect((await get(fresh)).stuck).toBe(false);
+      expect((await get(idle)).stuck).toBe(true);
+      expect((await get(idleComputed)).stuck).toBe(false);
+    });
+  });
+
   describe("run read model", () => {
     it("GET /v1/payroll/runs/:id reports a computed run as computed (the state the web offers Approve in) and a processing run as processing", async () => {
       const token = signToken({ sub: approverId, tid: tenantId, roles: ["super_admin"], sid: randomUUID() }, SECRET);

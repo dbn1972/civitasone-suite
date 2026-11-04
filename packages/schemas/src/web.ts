@@ -1042,6 +1042,9 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
   // null until the run is approved.
   createdBy: z.string().nullable().optional(),
   approvedBy: z.string().nullable().optional(),
+  // PR #2454 delta review: processing with no update for the stuck threshold
+  // (the web offers "Mark stuck run as failed" only then). Optional for older services.
+  stuck: z.boolean().optional(),
   salarySlips: z.array(z.object({
     id: z.string(),
     employeeId: z.string(),

@@ -24,7 +24,7 @@ import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } 
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
-import { unwindRunComputationTx } from "./run-unwind.js";
+import { unwindRunComputationTx, type RunUnwind } from "./run-unwind.js";
 import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
@@ -853,6 +853,29 @@ export async function collectAdHocEarnings(
 
 const AUDIT = "audit.event.record";
 const log = pino({ name: "payroll-consumer" });
+
+/**
+ * PR #2454 delta review: the audit of a send-back / stuck-run failure carries
+ * every row the unwind touched (ids and paise amounts, no names), so the
+ * reversal can be rebuilt from the trail: one run event (counts, loan
+ * repayments deleted, loans restored before/after, arrears deleted / released,
+ * bonus and reimbursement usage released) plus one statutory_rows_removed event
+ * per slip with its removed ledger rows (the #2449 exclusion pattern).
+ */
+async function auditUnwind(
+  tx: Parameters<typeof audit>[0], msg: Parameters<typeof audit>[1], action: string, runId: string,
+  details: Record<string, unknown>, unwound: RunUnwind,
+): Promise<void> {
+  const { statutoryRows, ...rest } = unwound;
+  await audit(tx, msg, action, "payroll_run", runId, { ...details, ...rest });
+  const bySlip = new Map<string, typeof statutoryRows>();
+  for (const r of statutoryRows) bySlip.set(r.slipId, [...(bySlip.get(r.slipId) ?? []), r]);
+  for (const [slipId, rows] of bySlip) {
+    await audit(tx, msg, "statutory_rows_removed", "payroll_slip", slipId, {
+      runId, employeeId: rows[0]?.employeeId, reason: details.reason, cause: action, removedRows: rows,
+    });
+  }
+}
 const EFT_INITIATE = "finance.payment.eft.initiate";
 // Sentinel structure id for runs that have no salary structure (pensioner runs).
 const NIL_STRUCTURE_ID = "00000000-0000-0000-0000-000000000000";
@@ -1223,11 +1246,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const denial = runActionDenial("reject", run.status);
       if (denial) throw new NonRetryableError(`${denial.code}: ${denial.message}`);
       assertRunStatusTransition(run.status, "failed");
-      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, p.tenantId, p.id);
+      // Delta review: the locked row is the authority for tenant and month, never the payload.
+      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, { id: run.id, tenantId: run.tenantId, month: run.month });
       await repo.updateRun(tx, p.id, {
         status: "failed", lastError: `sent back by a payroll admin: ${p.reason}`.slice(0, 2000), updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "reject", "payroll_run", p.id, { reason: p.reason, fromStatus: run.status, unwound });
+      await auditUnwind(tx, msg, "reject", run.id, { reason: p.reason, fromStatus: run.status }, unwound);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
@@ -1248,11 +1272,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       assertRunStatusTransition(run.status, "failed");
       // A pass commits in one transaction, so a stuck run has nothing to undo;
       // unwound anyway (no-op) so the counts are on the audit record.
-      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, p.tenantId, p.id);
+      const unwound = await unwindRunComputationTx(tx as unknown as typeof db, { id: run.id, tenantId: run.tenantId, month: run.month });
       await repo.updateRun(tx, p.id, {
         status: "failed", lastError: `marked failed after being stuck in processing: ${p.reason}`.slice(0, 2000), updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "fail_stuck", "payroll_run", p.id, { reason: p.reason, lastUpdatedAt: run.updatedAt.toISOString(), unwound });
+      await auditUnwind(tx, msg, "fail_stuck", run.id, { reason: p.reason, lastUpdatedAt: run.updatedAt.toISOString() }, unwound);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });

@@ -5,7 +5,7 @@ import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
 import { db, scopedRead } from "../../shared/db.js";
-import { arrearsReviewOf, zeroBasicSlipsOf } from "./domain.js";
+import { arrearsReviewOf, zeroBasicSlipsOf, runActionDenial, stuckRunHours } from "./domain.js";
 import { resolveArrearsReviewThresholdBps } from "./consumer.js";
 import type { RunApprovalReview } from "./validators.js";
 import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsUnavailableError } from "../../shared/hrms-client.js";
@@ -193,6 +193,14 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
   });
 }
 
+/** A processing run idle past the stuck threshold; an unknown last-update time is never stuck. */
+export function isStuckRun(status: string, updatedAt: Date | string | null | undefined, now: Date = new Date()): boolean {
+  if (status !== "processing" || updatedAt == null) return false;
+  const at = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
+  if (Number.isNaN(at.getTime())) return false;
+  return runActionDenial("failStuck", status, { updatedAt: at, now, hours: stuckRunHours() }) === null;
+}
+
 export async function getRunDetail(id: string, tenantId: string) {
   const run = await getRun(id, tenantId);
   if (!run) return null;
@@ -231,6 +239,10 @@ export async function getRunDetail(id: string, tenantId: string) {
     // click into a guaranteed 403. approvedBy is null until the run is approved.
     createdBy: run.createdBy,
     approvedBy: run.approvedBy ?? null,
+    // PR #2454 delta review: true when a payroll admin may mark this run failed
+    // as stuck (processing, no update for PAYROLL_STUCK_RUN_HOURS), so the web
+    // offers that action only then. The fail-stuck route re-checks it.
+    stuck: isStuckRun(run.status, run.updatedAt),
     // The rupee fields on each slip below (gross/deductions/net) are the legacy
     // wire shape: RUPEES (/100 of the minor-unit column), consistent with the
     // sibling run-level grossAmount/netAmount/deductions above (BUG-2 fixed an

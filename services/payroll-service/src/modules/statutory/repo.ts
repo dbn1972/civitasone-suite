@@ -40,13 +40,26 @@ export type RemovedLedgerRow = { table: string; scheme: string; slipId: string; 
  * Bounded: a slip has at most one row per ledger.
  */
 export async function deleteLedgerRowsForSlipTx(tx: Pick<typeof db, "execute">, slipId: string, tenantId: string): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
+  return deleteLedgerRowsWhere(tx, sql`slip_id = ${slipId}::uuid AND tenant_id = ${tenantId}::uuid`);
+}
+
+/**
+ * UAT L2-N3 review (send back a computed run): every statutory ledger row of
+ * a run, removed with DELETE ... RETURNING the same audited business columns
+ * as deleteLedgerRowsForSlipTx.
+ */
+export async function deleteLedgerRowsForRunTx(tx: Pick<typeof db, "execute">, runId: string, tenantId: string): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
+  return deleteLedgerRowsWhere(tx, sql`run_id = ${runId}::uuid AND tenant_id = ${tenantId}::uuid`);
+}
+
+async function deleteLedgerRowsWhere(tx: Pick<typeof db, "execute">, where: ReturnType<typeof sql>): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
   const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
   const rows: RemovedLedgerRow[] = [];
   for (const k of Object.keys(counts) as LedgerKey[]) {
     const { scheme, columns } = LEDGER_AUDIT_COLUMNS[k];
     const returning = ["slip_id", "employee_id", "run_id", "period", "currency", ...columns].map((c) => `${c}::text AS ${c}`).join(", ");
     const removed = (await tx.execute(sql`DELETE FROM ${sql.raw(`statutory.payroll_${k}`)}
-      WHERE slip_id = ${slipId}::uuid AND tenant_id = ${tenantId}::uuid RETURNING ${sql.raw(returning)}`)) as unknown as Array<Record<string, string | null>>;
+      WHERE ${where} RETURNING ${sql.raw(returning)}`)) as unknown as Array<Record<string, string | null>>;
     counts[k] = removed.length;
     for (const r of removed) {
       const row: Record<string, string | null> = { table: `payroll_${k}`, scheme };

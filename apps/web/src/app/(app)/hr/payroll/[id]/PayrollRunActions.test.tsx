@@ -349,9 +349,22 @@ describe("PayrollRunActions — send back, stuck-run recovery, run-state errors"
     expect(JSON.parse(init.body as string)).toEqual({ reason: "No DA rate for the month" });
   });
 
-  it("a processing run offers Mark stuck run as failed (PATCH .../fail-stuck) but no Approve or Send back", async () => {
+  it("a processing run that is still computing (not stuck) offers no action at all", () => {
+    const { container } = renderAs({ status: "processing" });
+    expect(screen.queryByRole("button", { name: /mark stuck run as failed/i })).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("the send-back dialog says arrears, loan repayments, bonus and reimbursements are released and recalculated", async () => {
+    renderAs({ status: "computed" });
+    fireEvent.click(screen.getByRole("button", { name: /send back for recalculation/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    for (const w of [/arrears/i, /loan repayments/i, /bonuses/i, /reimbursements/i, /recalculated/i]) expect(dialog).toHaveTextContent(w);
+  });
+
+  it("a STUCK processing run offers Mark stuck run as failed (PATCH .../fail-stuck) but no Approve or Send back", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
-    renderAs({ status: "processing" });
+    renderAs({ status: "processing", stuck: true });
     expect(screen.queryByRole("button", { name: /approve run/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /send back/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /mark stuck run as failed/i }));
@@ -364,7 +377,7 @@ describe("PayrollRunActions — send back, stuck-run recovery, run-state errors"
 
   it("a 409 RUN_NOT_STUCK reads as plain words, not the raw server message", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "RUN_NOT_STUCK", message: "raw server text" }), { status: 409 }));
-    renderAs({ status: "processing" });
+    renderAs({ status: "processing", stuck: true });
     fireEvent.click(screen.getByRole("button", { name: /mark stuck run as failed/i }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/why is this run being marked as failed/i), { target: { value: "Worker crashed mid-run" } });

@@ -5703,7 +5703,7 @@
     "runRecovery": {
       "sendBackBtn": "Send back for recalculation",
       "sendBackTitle": "Send this run back for recalculation?",
-      "sendBackDescription": "The calculated pay slips for <strong>{period}</strong> will not be paid. Loan repayments, bonuses, reimbursements and statutory entries taken by this run are released, the run is marked failed, and a new run can be created for the period. No money has been released.",
+      "sendBackDescription": "The calculated pay slips for <strong>{period}</strong> will not be paid. The arrears, loan repayments, bonuses, reimbursements and statutory entries taken by this run are released, and arrears this run raised from salary or DA revisions are withdrawn. All of them are recalculated by the new run for the period. The run is marked failed. No money has been released.",
       "sendBackReasonLabel": "Why is this run being sent back?",
       "sendBackConfirmLabel": "Send back",
       "sentBackMessage": "The payroll run for {period} was sent back. Create a new run for the period when the cause is fixed.",
