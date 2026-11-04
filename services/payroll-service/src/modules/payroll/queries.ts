@@ -4,6 +4,10 @@ import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
+import { db, scopedRead } from "../../shared/db.js";
+import { arrearsReviewOf, zeroBasicSlipsOf } from "./domain.js";
+import { resolveArrearsReviewThresholdBps } from "./consumer.js";
+import type { RunApprovalReview } from "./validators.js";
 import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 /**
@@ -324,4 +328,28 @@ export async function listComponents(tenantId: string, limit: number) {
     pctOfBasic: c.pctOfBasic ?? null,
     fixedMinor: c.fixedMinor != null ? c.fixedMinor.toString() : null,
   }));
+}
+
+/**
+ * T-STAT review SF4 / SF5: what approving a run needs reviewed -- the Rs 0-basic
+ * slips (fix HRMS basic, or exclude each explicitly) and the arrears the run
+ * pays (total, per employee, and those above the review threshold, which need
+ * an acknowledgement). Read through scopedRead (FORCE RLS).
+ */
+export async function getRunApprovalReview(runId: string, tenantId: string): Promise<RunApprovalReview> {
+  const slips = await repo.listSlipsByRun(runId, tenantId);
+  const thresholdBps = await scopedRead((tx) => resolveArrearsReviewThresholdBps(tx as unknown as typeof db, tenantId));
+  const review = arrearsReviewOf(slips, thresholdBps);
+  return {
+    runId,
+    zeroBasic: zeroBasicSlipsOf(slips).filter((sl) => sl.status !== "excluded").map((sl) => ({ employeeId: sl.employeeId, employeeNo: sl.employeeNo })),
+    arrears: {
+      totalMinor: review.totalArrearsMinor.toString(),
+      thresholdBps,
+      employees: review.employees.map((e) => ({
+        employeeId: e.employeeId, employeeNo: e.employeeNo, arrearsMinor: e.arrearsMinor.toString(),
+        regularGrossMinor: e.regularGrossMinor.toString(), requiresReview: e.requiresReview,
+      })),
+    },
+  };
 }

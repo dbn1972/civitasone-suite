@@ -7,6 +7,7 @@ import { formatIndianDate, formatMonthYear } from "@/lib/formatters";
 import { formatRunMoney, runMinor } from "@/lib/payroll/runMoney";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
+import { RunApprovalReviewPanel } from "./RunApprovalReviewPanel";
 import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel } from "./ExceptionPanel";
@@ -172,6 +173,9 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
 
       {/* Exception panel (amber warning) */}
       <ExceptionPanel exceptions={exceptions} />
+
+      {/* T-STAT review SF4: arrears and Rs 0-basic slips to review before approval */}
+      {canAdminister && run.status === "processing" && <RunApprovalReviewPanel runId={run.id} />}
 
       {/* Payroll lifecycle actions */}
       <PayrollRunActions

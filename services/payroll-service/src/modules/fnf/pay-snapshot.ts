@@ -94,6 +94,9 @@ export async function loadPaySnapshot(tx: Executor, tenantId: string, employeeId
       JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
      WHERE s.tenant_id = ${tenantId}::uuid AND s.employee_id = ${employeeId}::uuid
        AND r.status IN ('approved', 'disbursed') AND r.run_type = 'regular'
+       -- T-STAT D-B1: a slip excluded on approval was never paid; a Rs 0 excluded
+       -- month must not enter the last-10-month average (gratuity, leave encashment).
+       AND s.status <> 'excluded'
        AND r.month <= ${sepMonth}
      GROUP BY r.month
   `)) as unknown as Array<{ month: string; basic_minor: string; gross_minor: string; tds_minor: string; da_minor: string }>;

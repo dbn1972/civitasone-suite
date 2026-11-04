@@ -22,13 +22,18 @@ const NO_REMOVE: ProofItem | null = null;
  * declaration line. Files go straight to private storage; a payroll officer
  * then accepts or rejects each one. A pending file can be removed.
  */
-export function TaxProofsPanel({ fy }: { fy: string }) {
+/**
+ * `selfService` (UAT b15 item 3): false when the session has no `employee` role (or files as staff); then there are no
+ * own proofs to list and GET /v1/payroll/tax-proofs/mine (employee only) is not called just to collect a 403.
+ */
+export function TaxProofsPanel({ fy, selfService = true }: { fy: string; selfService?: boolean }) {
   const t = useTranslations("taxProofs");
   const formError = useFormError("investment proof");
   const [data, setData] = useState<MineResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [employeeOnly, setEmployeeOnly] = useState(false);
+  const [employeeOnly, setEmployeeOnly] = useState(!selfService);
+  const [noRecord, setNoRecord] = useState(false);
   const [busyLine, setBusyLine] = useState<ProofLine | null>(null);
   const [message, setMessage] = useState(NO_MESSAGE);
   const [removeTarget, setRemoveTarget] = useState(NO_REMOVE);
@@ -42,7 +47,9 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
     try {
       const res = await browserFetch(`v1/payroll/tax-proofs/mine?fy=${encodeURIComponent(fy)}`, { signal });
       if (res.status === 403) {
-        setEmployeeOnly(true);
+        // Bundle 14 NO_EMPLOYEE_RECORD: an employee whose sign-in is not linked to an employee record.
+        if ((await errorCodeFromResponse(res)) === "NO_EMPLOYEE_RECORD") setNoRecord(true);
+        else setEmployeeOnly(true);
         return;
       }
       if (!res.ok) {
@@ -65,10 +72,14 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
   }, [fy]);
 
   useEffect(() => {
+    if (!selfService) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load]);
+  }, [load, selfService]);
 
   function errorText(code: string | null): string {
     const key = errorKeyForCode(code);
@@ -143,6 +154,9 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
 
   if (loading) {
     return <div className="card"><div className="pad" style={{ textAlign: "center", padding: 24 }}>{t("loading")}</div></div>;
+  }
+  if (noRecord) {
+    return <div role="status" className="card"><div className="pad" style={{ fontSize: 13, color: "var(--ink2)" }}>{t("noEmployeeRecord")}</div></div>;
   }
   if (employeeOnly) {
     return <div className="card"><div className="pad" style={{ fontSize: 13, color: "var(--ink2)" }}>{t("employeeOnly")}</div></div>;

@@ -50,6 +50,17 @@ export interface FyTaxConfig {
   rebateIncomeCap: number;     // 87A: taxable <= cap -> rebate
   rebateMax: number;           // 87A: max rebate (rupees)
   surchargeBands: SurchargeBand[];
+  /**
+   * T-STAT F01: s.87A marginal relief above `rebateIncomeCap` -- the tax
+   * before cess may not exceed (total income - rebateIncomeCap). The proviso
+   * applies to the new regime u/s 115BAC(1A) (Finance Act 2023, extended to
+   * the Rs 12 lakh limit by the Finance Act 2025) and never to the old
+   * regime. Optional: omitted == the statutory default (new regime from FY
+   * 2023-24, when the proviso was introduced: on; old regime and earlier
+   * new-regime years: off). The relief threshold is always the rebateIncomeCap of the
+   * same FY row, so a re-configured FY moves it together with the rebate limit.
+   */
+  rebateMarginalRelief?: boolean;
 }
 
 /** Thrown when a (regime, FY) has no configured slabs - caller must reject, not guess. */
@@ -172,10 +183,22 @@ function slabTax(taxableIncomeMinor: bigint, slabs: TaxSlab[]): { taxMinor: bigi
   return { taxMinor: totalMinor, breakdown };
 }
 
-function rebate87A(taxableIncomeMinor: bigint, baseTaxMinor: bigint, cfg: FyTaxConfig): bigint {
-  return taxableIncomeMinor <= BigInt(cfg.rebateIncomeCap) * 100n
-    ? minBig(baseTaxMinor, BigInt(cfg.rebateMax) * 100n)
-    : 0n;
+/**
+ * s.87A rebate, including (T-STAT F01) the marginal relief of its proviso:
+ * at or below the configured income cap the rebate is min(tax, rebateMax);
+ * just above it, where marginal relief applies to the regime, the rebate is
+ * whatever brings the tax before cess down to (income - cap) -- so a Rs 10,000
+ * excess over Rs 12,00,000 can never cost more than Rs 10,000 of tax. Past the
+ * crossover (about Rs 12,70,588 on the FY 2025-26 / 2026-27 slabs) the slab
+ * tax is already below the excess and no rebate applies.
+ */
+function rebate87A(taxableIncomeMinor: bigint, baseTaxMinor: bigint, cfg: FyTaxConfig, regime: Regime, startYear: number): bigint {
+  const capMinor = BigInt(cfg.rebateIncomeCap) * 100n;
+  if (taxableIncomeMinor <= capMinor) return minBig(baseTaxMinor, BigInt(cfg.rebateMax) * 100n);
+  const marginalRelief = cfg.rebateMarginalRelief ?? (regime === "new" && startYear >= 2023);
+  if (!marginalRelief || capMinor <= 0n) return 0n;
+  const excessMinor = taxableIncomeMinor - capMinor;
+  return baseTaxMinor > excessMinor ? baseTaxMinor - excessMinor : 0n;
 }
 
 /** Highest applicable surcharge rate (as bigint basis points) for total income. */
@@ -194,7 +217,7 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
 
   const { taxMinor: rawSlabMinor, breakdown } = slabTax(taxableIncomeMinor, slabs);
   const baseTaxMinor = roundRupeeMinor(rawSlabMinor);
-  const rebateMinor = rebate87A(taxableIncomeMinor, baseTaxMinor, cfg);
+  const rebateMinor = rebate87A(taxableIncomeMinor, baseTaxMinor, cfg, regime, startYear);
   const afterRebateMinor = maxBig(0n, baseTaxMinor - rebateMinor);
   let surchargeMinor = roundRupeeMinor(divRoundBig(afterRebateMinor * surchargeRateBps(taxableIncomeMinor, cfg.surchargeBands), 10000n));
 
