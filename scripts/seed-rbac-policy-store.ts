@@ -46,6 +46,7 @@
  */
 
 import { createHmac } from "node:crypto";
+import { STANDARD_ROLE_GRANTS } from "../services/policy-service/src/modules/roles/standard-grants.js";
 
 const POLICY = process.env.POLICY_SERVICE_URL ?? "http://127.0.0.1:3003";
 const SECRET = process.env.JWT_SECRET ?? "civitasone-dev-secret";
@@ -56,28 +57,19 @@ const ACTOR_ID = "00000000-0000-0000-0000-000000000099"; // convention shared wi
 // section, PLUS a second tenant found in active use by the existing
 // /tmp/*.sh audit scripts (dev-superadmin, dev-officer). Both had real
 // leave-application and payroll-run rows — see the PR description.
-const TENANTS = [
-  "11111111-1111-1111-1111-111111111111",
-  "1ebadb1c-f10d-40d8-9bd8-1a14a436705b",
-];
+// SEED_TENANTS (comma-separated uuids) overrides the two dev tenants. Production tenants are provisioned by the
+// policy-service tenant.tenant.created consumer / backfill script, not by this dev seed.
+const TENANTS = process.env.SEED_TENANTS
+  ? process.env.SEED_TENANTS.split(",").map((t) => t.trim()).filter(Boolean)
+  : [
+    "11111111-1111-1111-1111-111111111111",
+    "1ebadb1c-f10d-40d8-9bd8-1a14a436705b",
+  ];
 
-const GRANTS: Record<string, Array<{ resource: string; action: string }>> = {
-  hr_admin:            [{ resource: "hrms.leave", action: "approve" }],
-  hr_officer:          [{ resource: "hrms.leave", action: "approve" }],
-  manager:             [{ resource: "hrms.leave", action: "approve" }],
-  payroll_admin:       [{ resource: "payroll.run", action: "approve" }],
-  payroll_officer:     [{ resource: "payroll.run", action: "approve" }],
-  procurement_officer: [{ resource: "procurement.indent", action: "approve" }],
-  procurement_admin:   [
-    { resource: "procurement.indent", action: "approve" },
-    { resource: "procurement.po", action: "approve" },
-    // B9-wf1: workflow task completion for plan / PO amendment approvals
-    // (workflow-service tasks/routes.ts REF_PERMISSION); same APPROVE_ROLES
-    // convention as planning/routes.ts and amendment-routes.ts.
-    { resource: "procurement.plan", action: "approve" },
-    { resource: "procurement.po_amendment", action: "approve" },
-  ],
-};
+// POLICY-SEED-1: the grant set is the shared STANDARD definition (policy-service roles/standard-grants.ts), the
+// same one the tenant.tenant.created consumer applies to every new tenant and scripts/backfill-standard-grants.ts
+// (policy-service) applies to existing ones -- this seed no longer keeps its own copy.
+const GRANTS = STANDARD_ROLE_GRANTS;
 
 // ── Minimal HS256 JWT (no external deps) — same technique as
 // scripts/seed-sprint3.ts and tests/e2e-personas/helpers/auth.ts. iss/aud

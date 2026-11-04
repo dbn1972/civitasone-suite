@@ -13,18 +13,13 @@ import { minorString } from "@civitasone/schemas/money";
 import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
+import { grnBillHeadCode } from "../gl/system-heads.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
 
-/**
- * Expense head CODE for the AP bill drafted from an accepted GRN. Resolved per tenant (finance.bill.create looks it
- * up in the bill tenant's own chart of accounts). Default 2202 is the head the old literal id pointed at.
- */
-export function grnBillHeadCode(): string {
-  const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
-  return configured ? configured : "2202";
-}
+// UAT L2-N6: one definition, shared with the stock-receipt journal (it is also the GRN clearing head).
+export { grnBillHeadCode };
 
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */

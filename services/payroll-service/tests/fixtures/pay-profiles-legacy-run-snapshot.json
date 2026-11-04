@@ -6,7 +6,7 @@
         "run_type": "regular",
         "status": "processing",
         "total_gross_minor": "81324400",
-        "total_net_minor": "65541800"
+        "total_net_minor": "65077100"
       }
     ]
   },
@@ -304,8 +304,8 @@
         "employee_no": "SNAP-06",
         "basic_minor": "6770000",
         "gross_minor": "11699800",
-        "total_deductions_minor": "4105900",
-        "net_pay_minor": "7593900",
+        "total_deductions_minor": "4456100",
+        "net_pay_minor": "7243700",
         "components": [
           {
             "code": "BASIC",
@@ -347,7 +347,9 @@
             "code": "LOP",
             "name": "Loss of Pay",
             "type": "deduction",
-            "amountMinor": 3046500
+            "lopDays": 9,
+            "amountMinor": 3396700,
+            "daysInMonth": 31
           }
         ],
         "pf_employee_minor": "0",
@@ -365,8 +367,8 @@
         "employee_no": "SNAP-07",
         "basic_minor": "3500000",
         "gross_minor": "6922500",
-        "total_deductions_minor": "1077500",
-        "net_pay_minor": "5845000",
+        "total_deductions_minor": "1179100",
+        "net_pay_minor": "5743400",
         "components": [
           {
             "code": "BASIC",
@@ -408,7 +410,9 @@
             "code": "LOP",
             "name": "Loss of Pay",
             "type": "deduction",
-            "amountMinor": 525000
+            "lopDays": 3,
+            "amountMinor": 626600,
+            "daysInMonth": 31
           }
         ],
         "pf_employee_minor": "0",
@@ -536,8 +540,8 @@
         "employee_no": "SNAP-11",
         "basic_minor": "4000000",
         "gross_minor": "7060000",
-        "total_deductions_minor": "830000",
-        "net_pay_minor": "6230000",
+        "total_deductions_minor": "842900",
+        "net_pay_minor": "6217100",
         "components": [
           {
             "code": "BASIC",
@@ -579,7 +583,9 @@
             "code": "LOP",
             "name": "Loss of Pay",
             "type": "deduction",
-            "amountMinor": 200000
+            "lopDays": 1,
+            "amountMinor": 212900,
+            "daysInMonth": 31
           }
         ],
         "pf_employee_minor": "0",
@@ -743,14 +749,14 @@
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000006",
         "annual_basic_minor": "81240000",
-        "taxable_minor": "83051900",
+        "taxable_minor": "82701700",
         "tds_minor": "0",
         "period": "2026-08"
       },
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000007",
         "annual_basic_minor": "42000000",
-        "taxable_minor": "75045000",
+        "taxable_minor": "74943400",
         "tds_minor": "0",
         "period": "2026-08"
       },
@@ -771,7 +777,7 @@
       {
         "employee_id": "7a7a7a7a-0000-4000-8000-000000000011",
         "annual_basic_minor": "48000000",
-        "taxable_minor": "77020000",
+        "taxable_minor": "77007100",
         "tds_minor": "0",
         "period": "2026-08"
       }
@@ -809,8 +815,8 @@
         "department_id": "7a7a7a7a-0000-4000-8000-00000000d001",
         "employee_count": 7,
         "total_gross_minor": "66091900",
-        "total_deductions_minor": "14343200",
-        "total_net_minor": "51748700",
+        "total_deductions_minor": "14795000",
+        "total_net_minor": "51296900",
         "total_pf_minor": "328800",
         "total_esi_minor": "13400",
         "total_tds_minor": "5342000",
@@ -821,8 +827,8 @@
         "department_id": "7a7a7a7a-0000-4000-8000-00000000d002",
         "employee_count": 3,
         "total_gross_minor": "15232500",
-        "total_deductions_minor": "1439400",
-        "total_net_minor": "13793100",
+        "total_deductions_minor": "1452300",
+        "total_net_minor": "13780200",
         "total_pf_minor": "360000",
         "total_esi_minor": "0",
         "total_tds_minor": "229400",

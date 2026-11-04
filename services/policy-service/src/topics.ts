@@ -31,6 +31,12 @@ export const EVENTS = {
   roleFeatureRevoked: "policy.role_feature.revoked",
 } as const;
 
+/** Events policy-service consumes from other services. */
+export const CONSUMED_EVENTS = {
+  // POLICY-SEED-1: standard roles + approve grants for every new tenant (tenant-provision/consumer.ts).
+  tenantCreated: "tenant.tenant.created",
+} as const;
+
 export const SERVICE = "policy";
 export const RESOURCE = {
   role:       "role",

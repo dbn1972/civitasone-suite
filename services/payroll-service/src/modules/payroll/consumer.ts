@@ -15,6 +15,7 @@ import * as repo from "./repo.js";
 import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js";
+import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
@@ -461,7 +462,7 @@ export interface RetroArrearsOutcome {
 export const ARREARS_DMD_SOURCE = "revision_dmd";
 const REVISION_SOURCES = new Set(["revision", ARREARS_DMD_SOURCE]);
 
-type RetroSlip = { period: string; components: Array<{ code: string; type: string; amountMinor: number | string }> | null; pay_profile: string | null; suspended: boolean };
+type RetroSlip = { period: string; components: Array<{ code: string; type: string; amountMinor: number | string; lopDays?: number; daysInMonth?: number }> | null; pay_profile: string | null; suspended: boolean };
 type RetroPrior = { from_period: string; to_period: string; component_code: string; source: string; difference_minor: string | number; pension_base_minor: string | number | null; old_amount_minor: string | number; new_amount_minor: string | number };
 type RetroRevision = { new_basic_minor: string | number; eff_month: string };
 type RetroDaRow = { effective_from: string; rate_bps: number | string };
@@ -544,8 +545,19 @@ export async function prefetchRetroArrearsTx(tx: typeof db, tenantId: string, em
   return pre;
 }
 
-/** Share of a month the drawn slip actually paid: (Basic + DA + allowance - LOP) / (Basic + DA + allowance), as num/den. */
-function payableShare(lopBase: bigint, lop: bigint): { num: bigint; den: bigint } {
+/**
+ * Share of a month the drawn slip actually paid, as num/den. UAT L2-N5: a LOP
+ * line that records its days (every slip from this fix on, where LOP also falls
+ * on HRA and, for days out of service, on structure allowances) gives the share
+ * exactly: (days in month - LOP days) / days in month. Older slips: their LOP
+ * fell on Basic + DA + allowance only, so (Basic + DA + allowance - LOP) /
+ * (Basic + DA + allowance).
+ */
+function payableShare(lopBase: bigint, lop: bigint, lopDays?: { days: bigint; daysInMonth: bigint }): { num: bigint; den: bigint } {
+  if (lopDays && lopDays.daysInMonth > 0n) {
+    const paid = lopDays.daysInMonth - lopDays.days;
+    return { num: paid > 0n ? paid : 0n, den: lopDays.daysInMonth };
+  }
   if (lopBase <= 0n) return lop > 0n ? { num: 0n, den: 1n } : { num: 1n, den: 1n };
   const paid = lopBase - lop;
   return { num: paid > 0n ? paid : 0n, den: lopBase };
@@ -672,10 +684,21 @@ export async function generateRetroArrears(
     }
 
     let drawnBasic = 0n, drawnDa = 0n, drawnDep = 0n, drawnPay = 0n, lop = 0n;
+    // UAT L2-N5: LOP days recorded on the LOP lines (hundredths of a day); null when any LOP line predates them.
+    let lopHundredths: bigint | null = 0n, lopDim: bigint | null = null;
     for (const sl of drawnSlips) {
       for (const c of sl.components ?? []) {
         const amt = BigInt(c.amountMinor);
-        if (c.type === "deduction") { if (c.code === "LOP") lop += amt; continue; }
+        if (c.type === "deduction") {
+          if (c.code === "LOP") {
+            lop += amt;
+            if (lopHundredths != null && typeof c.lopDays === "number" && typeof c.daysInMonth === "number" && c.daysInMonth > 0) {
+              lopHundredths += BigInt(Math.round(c.lopDays * 100));
+              lopDim = BigInt(c.daysInMonth);
+            } else lopHundredths = null;
+          }
+          continue;
+        }
         if (c.type !== "earning") continue;
         if (c.code === "BASIC") drawnBasic += amt;
         if (c.code === "DA") drawnDa += amt;
@@ -692,7 +715,8 @@ export async function generateRetroArrears(
     const due = dueBasic + dueDa + dueHra + dueDep;
 
     // B1: only the payable share of the month is owed (LOP / EOL / joining / leaving days).
-    const share = payableShare(drawnBasic + drawnDa + drawnDep, lop);
+    const share = payableShare(drawnBasic + drawnDa + drawnDep, lop,
+      lop > 0n && lopHundredths != null && lopDim != null ? { days: lopHundredths, daysInMonth: lopDim * 100n } : undefined);
     const scale = (x: bigint): bigint => roundRupee((x * share.num) / share.den);
 
     // Arrears already raised for this month count as drawn.
@@ -2042,6 +2066,8 @@ async function processPayrollRun(
     // as a Map miss quietly falling back to an empty/default value for a
     // real, processed employee -- exactly the kind of bug this run cannot
     // afford. See PR description for the full per-site batching analysis.
+    // UAT L2-N5: only employees in service on at least one day of the period.
+    const notInService: Array<{ employee: string; reason: string }> = [];
     const runEmployees = input.employees.filter((emp) => {
       if (p.departmentId && emp.departmentId !== p.departmentId) return false;
       // Multi-DDO: only pay employees whose department belongs to this run's DDO.
@@ -2052,9 +2078,25 @@ async function processPayrollRun(
       // and apprentices (stipend) are NOT paid through the salary run — their pay
       // is handled by their own flows. Skip like the department/DDO filters above.
       if (!isPayrollEligible(emp as { paymentRoute?: string; eligibleForPayroll?: boolean })) return false;
+      // UAT L2-N5: joined after the period end, or left before its start: not
+      // in this run at all (no slip, no claim). Was paid a slip whose whole
+      // month was recovered as LOP on Basic + DA only, HRA still paid.
+      const service = servicePeriodInMonth(p.month, emp.dateOfJoining, emp.dateOfLeaving);
+      if (!service.inService) {
+        notInService.push({ employee: emp.employeeNo ?? emp.id, reason: service.reason ?? "not_in_service" });
+        return false;
+      }
       return true;
     });
     const runEmployeeIds = runEmployees.map((emp) => emp.id);
+    if (notInService.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "EMPLOYEES_NOT_IN_SERVICE",
+        message: `${notInService.length} employee(s) in the HRMS feed are not in service on any day of ${p.month} (joined after it or left before it) and are not in this run`,
+        count: notInService.length,
+        employees: notInService.slice(0, 200),
+      });
+    }
 
     // GAP-PAYROLL-PAY-GROUPS-03 hard invariant: an employee is never in two
     // non-cancelled REGULAR runs for one period. Claim every employee this run
@@ -2233,32 +2275,26 @@ async function processPayrollRun(
       // the month, matching getLopForMonthTx's own { hasLedger:false, days:0 }.
       const ledgerLop = lopByEmployee.get(emp.id) ?? { hasLedger: false, days: 0 };
       const attendanceLopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
-      // BUG-1 fix: mid-month joining pro-ration. Days in the run month BEFORE
-      // dateOfJoining are unpaid, on top of (added to, not instead of) the
+      // BUG-1 fix + UAT L2-N5: days of the run month the employee is NOT in
+      // service -- before dateOfJoining, after dateOfLeaving (the last day in
+      // service) -- are unpaid, on top of (added to, not instead of) the
       // leave/attendance LOP above. The two sources cannot legitimately overlap
-      // — no attendance/leave row can exist for a date before the employee's
-      // HRMS record was even created — but Math.min(daysInMonth, ...) below is
-      // a belt-and-suspenders cap so we never withhold pay for more days than
-      // the month actually has, however the two sources combine.
-      // Leaving mid-month is NOT handled here by design: a separated employee
-      // is dropped from the HRMS active-employee feed entirely (see
-      // hrms-client.ts / hrms routes.ts comments), so they never reach this
-      // loop — their last partial month + terminal dues are the Full & Final
-      // Settlement flow's job, priced off its own separationDate.
-      const doj = emp.dateOfJoining;
-      const joinedThisMonth = doj != null && doj.slice(0, 7) === p.month;
-      const joinedAfterThisMonth = doj != null && doj.slice(0, 7) > p.month;
-      const joiningUnpaidDays = joinedAfterThisMonth
-        ? Number(daysInMonth)
-        : joinedThisMonth
-        ? Math.max(0, Number(doj!.slice(8, 10)) - 1)
-        : 0;
+      // -- no attendance/leave row can exist for a day out of service -- but
+      // Math.min(daysInMonth, ...) below is a belt-and-suspenders cap so we
+      // never withhold pay for more days than the month actually has.
+      // Employees in service on NO day of the month never reach this loop
+      // (runEmployees above). HRMS drops a separated employee from the feed
+      // altogether (their last month is the Full & Final Settlement flow's job);
+      // dateOfLeaving is honoured when the feed carries it.
+      const service = servicePeriodInMonth(p.month, emp.dateOfJoining, emp.dateOfLeaving);
+      const joiningUnpaidDays = service.daysNotInService;
       // FR 53: LOP can only fall on days the employee was otherwise paid as
       // normal; the suspended days already earn only the subsistence allowance.
       const lopDays = Math.min(
         suspension.kind === "subsistence" ? suspension.plan.regularDays : Number(daysInMonth),
         attendanceLopDays + joiningUnpaidDays,
       );
+      const notInServiceLopDays = Math.min(lopDays, joiningUnpaidDays);
       // GAP-HR-LEAVE-APPLY-05: lopDays may now carry a half-day fraction, so the
       // bigint maths runs in hundredths of a day. For a whole-day count this is
       // algebraically identical to the old BigInt(lopDays) formula (the factor
@@ -2278,7 +2314,21 @@ async function processPayrollRun(
       const depAllowForLop = plan.slipProfile.kind === "deputation_parent_scale"
         ? deputationAllowanceMinor(basicMinor, plan.slipProfile.allowance).amountMinor
         : 0n;
-      const lopDeduction = prorate ? 0n : lopDeductionMinor(basicMinor + daMinor + depAllowForLop, lopDays, daysInMonth);
+      // UAT L2-N5: HRA accrues by the day exactly like Basic + DA, so LOP falls on
+      // it too (it used to be paid in full for LOP days, and for a whole month
+      // before joining). The same HRA computeSlip pays: none on consolidated pay;
+      // FR 53 subsistence prices its own HRA. Structure earnings (e.g.
+      // transport) carry no LOP-applicable flag, so leave LOP does not reach
+      // them, but they do not accrue before joining / after leaving either.
+      const lopExcluded = prorate || suspension.kind === "subsistence";
+      const hraForLop = lopExcluded || plan.slipProfile.kind === "consolidated_contract"
+        ? 0n
+        : govtHraMinor(basicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
+      const structureForLop = lopExcluded || !plan.applyRunStructure ? 0n : structureEarningsMinor(basicMinor, rawComponents);
+      const lopDeduction = prorate
+        ? 0n
+        : lopDeductionMinor(basicMinor + daMinor + depAllowForLop + hraForLop, lopDays, daysInMonth)
+          + lopDeductionMinor(structureForLop, notInServiceLopDays, daysInMonth);
 
       // Iter2: real loan recovery — split interest/principal, cap at outstanding.
       // P3: the actual EMI withheld may be capped by the protected-net floor, so
@@ -2304,8 +2354,10 @@ async function processPayrollRun(
         loanPlans.push({ loanId: l.id, principal, interest, outstanding: l.outstandingMinor });
       }
 
-      const adHoc: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }> = [];
-      if (lopDeduction > 0n) adHoc.push({ code: "LOP", name: "Loss of Pay", type: "deduction" as const, amountMinor: lopDeduction });
+      const adHoc: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number }> = [];
+      // UAT L2-N5: the LOP line records its days, so the arrears payable share
+      // of the month (payableShare) no longer has to infer them from amounts.
+      if (lopDeduction > 0n) adHoc.push({ code: "LOP", name: "Loss of Pay", type: "deduction" as const, amountMinor: lopDeduction, lopDays, daysInMonth: Number(daysInMonth) });
       if (emiTotal > 0n) adHoc.push({ code: "LOAN_EMI", name: "Loan EMI", type: "deduction" as const, amountMinor: emiTotal });
 
       // P1: disburse recorded-but-dead earnings — pending/approved arrears,
@@ -2383,7 +2435,9 @@ async function processPayrollRun(
             const days = ledger?.get(m) ?? 0;
             if (days > 0) {
               const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
-              unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor, Math.min(days, dim), BigInt(dim));
+              // UAT L2-N5: LOP falls on HRA as on Basic + DA (consolidated pay: no HRA).
+              const hraM = plan.slipProfile.kind === "consolidated_contract" ? 0n : govtHraMinor(scaleBasicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
+              unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
             }
           }
           if (unrecorded.length > 0 && !((decl?.prevEmployerSalaryMinor ?? 0n) > 0n)) unrecordedEstimated.push({ employee: emp.employeeNo ?? emp.id, months: unrecorded });
@@ -2817,7 +2871,7 @@ export async function computeAndInsertSlip(
     ptForSalaryMinor?: (monthlySalaryMinor: bigint) => bigint;
     declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint; prevEmployerSalaryMinor?: bigint; otherSourcesIncomeMinor?: bigint; perquisitesMinor?: bigint };
     rawComponents?: RawComponent[];
-    components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
+    components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number }>;
     /** FR 53 suspension pay lines (subsistence.ts); omitted for everyone else. */
     earningsOverride?: EarningsOverride;
     /** FR 53: this slip is a suspended employee's (skips an all-zero PF row for a GPF/NPS member). */
@@ -2878,7 +2932,11 @@ export async function computeAndInsertSlip(
     employeeId: params.employeeId, employeeNo: params.employeeNo,
     basicMinor: params.basicMinor, grossMinor: result.grossMinor,
     totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
-    components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor) })),
+    components: allComps.map((c) => ({
+      code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor),
+      // UAT L2-N5: the LOP line keeps its days (read back by the arrears payable share).
+      ...(c.lopDays != null && c.daysInMonth != null ? { lopDays: c.lopDays, daysInMonth: c.daysInMonth } : {}),
+    })),
     pfEmployeeMinor: result.pfEmployeeMinor, pfEmployerMinor: result.pfEmployerMinor,
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
     esiMinor: result.esiMinor, tdsMinor: result.tdsMinor,

@@ -31,6 +31,12 @@ export type PayrollInputEmployee = {
    * regular run has no live case; separation pay is the FnF flow's job.
    */
   dateOfJoining: string;
+  /**
+   * UAT L2-N5 (optional, YYYY-MM-DD): the last day in service. The run leaves
+   * out an employee who left before the period and pro-rates one who leaves
+   * inside it. HRMS today drops a separated employee from the feed altogether.
+   */
+  dateOfLeaving?: string | null;
   payStructureId: string | null;
   bankAccountNo: string | null;
   bankIfsc: string | null;
@@ -167,6 +173,7 @@ const PayrollInputEmployeeSchema = z.object({
   payProfile: payProfileFeedSchema.optional(),
   engagement: engagementFeedSchema.optional(),
   advisories: z.array(z.string()).optional(),
+  dateOfLeaving: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).passthrough().refine((e) => e.suspension == null || e.paySuspended === true, {
   message: "suspension details sent for an employee that is not paySuspended", path: ["suspension"],
 });

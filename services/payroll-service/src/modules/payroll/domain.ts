@@ -26,6 +26,9 @@ export interface PayComponent {
   name: string;
   type: "earning" | "deduction";
   amountMinor: bigint;
+  /** UAT L2-N5: on the LOP line only -- the loss-of-pay days it recovers and the days of the month. */
+  lopDays?: number;
+  daysInMonth?: number;
 }
 
 /** Raw structure component as configured (fixed amount OR percentage of basic). */

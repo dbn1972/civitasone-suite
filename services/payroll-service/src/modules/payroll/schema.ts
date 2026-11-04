@@ -79,7 +79,7 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   totalDeductionsMinor:  bigint("total_deductions_minor", { mode: "bigint" }).notNull().default(0n),
   netPayMinor:           bigint("net_pay_minor", { mode: "bigint" }).notNull().default(0n),
   currency:              char("currency", { length: 3 }).notNull().default("INR"),
-  components:            jsonb("components").$type<Array<{ code: string; name: string; type: string; amountMinor: number }>>().notNull().default([]),
+  components:            jsonb("components").$type<Array<{ code: string; name: string; type: string; amountMinor: number; lopDays?: number; daysInMonth?: number }>>().notNull().default([]),
   pfEmployeeMinor:       bigint("pf_employee_minor", { mode: "bigint" }).notNull().default(0n),
   pfEmployerMinor:       bigint("pf_employer_minor", { mode: "bigint" }).notNull().default(0n),
   gpfMinor:              bigint("gpf_minor", { mode: "bigint" }).notNull().default(0n),

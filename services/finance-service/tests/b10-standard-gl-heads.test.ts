@@ -38,6 +38,8 @@ const ENV_USE: Record<string, Nature> = {
   FINANCE_GAIN_LOSS_CODE: "expense", FINANCE_DEP_EXPENSE_CODE: "expense", FINANCE_STAT_DEP_EXPENSE_CODE: "expense",
   FINANCE_IMPAIRMENT_CODE: "expense", FINANCE_TDS_EXPENSE_CODE: "expense",
   FINANCE_GRN_BILL_HEAD_CODE: "expense", WORKS_FINANCE_BILL_HEAD_CODE: "expense",
+  // UAT L2-N6: stock receipts / issues (gl/inventory-movement.ts)
+  FINANCE_STORES_INVENTORY_CODE: "asset", FINANCE_STORES_CONSUMPTION_CODE: "expense",
 };
 /** Literal `accountCode: "1234"` legs (payroll accrual, integrations/consumer.ts). */
 const LITERAL_USE: Record<string, Nature> = { "5001": "expense", "5002": "expense", "2101": "liability", "2102": "liability", "2103": "liability" };

@@ -32,6 +32,7 @@ import { recomputeWavg } from "../costing/wavg-engine.js";
 import { consumeFifo } from "../costing/fifo-engine.js";
 import { DomainError } from "../../shared/domain.js";
 import { fetchGrnReference } from "../srn/grn-client.js";
+import { inventoryGlPostPayload } from "./gl-payload.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 const log = pino({ name: "inventory-movements-consumer" });
@@ -65,7 +66,7 @@ export function registerMovementConsumers(queue: Queue): void {
         totalMinor += valuationMinor(line.qty, BigInt(line.rateMinor));
       }
       await emitDomain(tx, msg, EVENTS.receiptPosted, { movementId: p.id, toStoreId: p.toStoreId, lines: p.lines.length });
-      await emitGl(tx, msg, p.id, "receipt", totalMinor);
+      await emitGl(tx, msg, p.id, "receipt", totalMinor, { postingDate: p.postingDate, storeId: p.toStoreId, refDoc: p.refDoc, refNo: p.refNo });
       await audit(tx, msg, "create", "receipt", p.id);
     });
     await invalidate(msg.tenantId);
@@ -90,7 +91,7 @@ export function registerMovementConsumers(queue: Queue): void {
         await collectLowStock(tx, p.tenantId, line.itemId, p.fromStoreId, newQty, low);
       }
       await emitDomain(tx, msg, EVENTS.issuePosted, { movementId: p.id, fromStoreId: p.fromStoreId, lines: p.lines.length });
-      await emitGl(tx, msg, p.id, "issue", totalMinor);
+      await emitGl(tx, msg, p.id, "issue", totalMinor, { postingDate: p.postingDate, storeId: p.fromStoreId, refDoc: p.refDoc, refNo: p.refNo });
       await audit(tx, msg, "create", "issue", p.id);
       await emitLowStock(tx, msg, low);
     });
@@ -225,7 +226,7 @@ export function registerMovementConsumers(queue: Queue): void {
         totalMinor += valuationMinor(item.acceptedQty, BigInt(item.rateMinor));
       }
       await emitDomain(tx, msg, EVENTS.receiptPosted, { movementId, toStoreId: storeId, source: "grn", grnId: p.grnId });
-      await emitGl(tx, msg, movementId, "receipt", totalMinor);
+      await emitGl(tx, msg, movementId, "receipt", totalMinor, { postingDate, storeId, refDoc: "GRN", refNo: p.grnId });
       await audit(tx, msg, "create", "receipt", movementId);
     });
     await invalidate(msg.tenantId);
@@ -428,11 +429,15 @@ async function emitDomain(tx: Tx, msg: CommandEnvelope, eventType: string, paylo
   });
 }
 
-async function emitGl(tx: Tx, msg: CommandEnvelope, movementId: string, kind: string, totalMinor: bigint): Promise<void> {
+/** UAT L2-N6: the stock value of the movement to the GL (finance posts Dr stock / Cr GRN clearing, or the issue). */
+async function emitGl(
+  tx: Tx, msg: CommandEnvelope, movementId: string, kind: "receipt" | "issue", totalMinor: bigint,
+  ref: { postingDate: string; storeId?: string | null | undefined; refDoc?: string | null | undefined; refNo?: string | null | undefined },
+): Promise<void> {
   await enqueue(tx as EnqueueTx, {
     topic: INTEGRATION.glPost, eventType: INTEGRATION.glPost,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { movementId, kind, totalMinor: totalMinor.toString(), type: "inventory_movement" },
+    payload: inventoryGlPostPayload({ movementId, kind, totalMinor, ...ref }),
   });
 }
 

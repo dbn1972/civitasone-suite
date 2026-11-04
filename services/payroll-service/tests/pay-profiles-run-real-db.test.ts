@@ -150,8 +150,9 @@ describe("mixed-profile salary run", () => {
     expect(by["PP-A"]).toMatchObject({ pay_profile: "deputation_parent_scale", basic_minor: "4490000", gpf_minor: "696000", nps_employee_minor: "0" });
     expect(comp("PP-A", "DEP_ALLOW")).toBe(449000);
     expect(comp("PP-A", "HRA")).toBe(898000);
-    // 3 LOP days of 30 reduce Basic + DA + DEP_ALLOW pro rata: (44,900 + 24,695 + 4,490) x 3/30 = 7,408.50 -> 7,409
-    expect(comp("PP-A", "LOP")).toBe(740900);
+    // 3 LOP days of 30 reduce Basic + DA + DEP_ALLOW + HRA pro rata (UAT L2-N5: HRA too):
+    // (44,900 + 24,695 + 4,490 + 8,980) x 3/30 = 8,306.50 -> 8,307
+    expect(comp("PP-A", "LOP")).toBe(830700);
     expect(by["PP-A"]!.profile_snapshot).toMatchObject({ deputationId: DEP_ID, direction: "in", allowanceBasis: "computed", allowanceRule: { rateBps: "1000", capMinor: "900000" } });
 
     // Option B: post basic, no allowance, employee's own NPS

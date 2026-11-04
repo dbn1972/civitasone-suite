@@ -15,7 +15,7 @@
  * 2xxx liability, 4xxx income (4200 gain/loss on disposal is an expense head), 5xxx/6xxx expense.
  */
 import { financeHeads } from "../budget/schema.js";
-import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET } from "./system-heads.js";
+import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION } from "./system-heads.js";
 
 export type StandardGlHead = {
   code: string; name: string; classification: string;
@@ -49,6 +49,8 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: env("PAYROLL_GL_BANK_HEAD", "1101"), name: "Bank - Salary Disbursement", classification: "asset" },
     { code: FIXED_ASSET, name: "Fixed Assets (Gross)", classification: "capital" },
     { code: ACCUM_DEP, name: "Accumulated Depreciation", classification: "capital" },
+    // UAT L2-N6: inventory-service stock receipts / issues (gl/inventory-movement.ts)
+    { code: STORES_INVENTORY, name: "Stores / Inventory", classification: "asset" },
     { code: env("FINANCE_BILLING_RECEIVABLE_CODE", "1300"), name: "Accounts Receivable", classification: "asset" },
     { code: env("FINANCE_AR_CONTROL_CODE", "1300"), name: "Accounts Receivable", classification: "asset" },
     // liabilities
@@ -74,6 +76,7 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: DEP_EXPENSE, name: "Depreciation Expense", classification: "expense" },
     { code: DEP_EXPENSE_STAT, name: "Statutory Depreciation Expense", classification: "expense" },
     { code: env("FINANCE_IMPAIRMENT_CODE", "5200"), name: "Impairment Loss", classification: "expense" },
+    { code: STORES_CONSUMPTION, name: "Stores Consumed", classification: "expense" },
     { code: env("FINANCE_TDS_EXPENSE_CODE", "6100"), name: "TDS Expense", classification: "expense" },
   ];
   // Several roles share one code by default (1100 is the cash head for every path): keep the first definition.

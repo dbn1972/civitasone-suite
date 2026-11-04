@@ -30,6 +30,15 @@
  *    above), tagged source revision_dmd (migration 0160); the differences
  *    are unchanged;
  *  - the run, slip and register totals that follow from those.
+ *
+ * UAT L2-N5 (bundle 17) re-generated it once more; every changed value is one of:
+ *  - LOP now also falls on HRA: SNAP-07 (3 days) 5,250 -> 6,266 = (35,000 + 19,250
+ *    + 10,500) x 3/31; SNAP-11 (1 day) 2,000 -> 2,129 = (40,000 + 22,000 + 4,000) / 31;
+ *  - SNAP-06 (joined 10-8-2026): the 9 days before joining fall on every pay line,
+ *    HRA and the structure earnings TA / SPL included: 30,465 -> 33,967 =
+ *    (67,700 + 37,235 + 6,770) x 9/31 + (3,600 + 1,693) x 9/31;
+ *  - the LOP line records its days (lopDays, daysInMonth) for the arrears payable share;
+ *  - the taxable, net, run and register totals that follow from those.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

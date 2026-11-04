@@ -18,6 +18,7 @@ import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
 import { validateOrgAssignmentTx } from "../org-structure/domain.js";
 import { refusalCode } from "./refusal.js";
+import { inventoryMovementJournal, INVENTORY_MOVEMENT_TYPE } from "./inventory-movement.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -491,6 +492,41 @@ export function registerGlConsumers(queue: Queue): void {
       // BUG FIX (Medium finding): see the matching comment above
       // (depreciation branch) -- dashboard/accounts need invalidating at
       // every point gl_trial_balance already is.
+      await cache.invalidateResource(msg.tenantId, "dashboard");
+      await cache.invalidateResource(msg.tenantId, "accounts");
+      return;
+    }
+
+    if (raw.type === INVENTORY_MOVEMENT_TYPE) {
+      // UAT L2-N6: inventory-service stock receipt / issue (see gl/inventory-movement.ts). Idempotent by the
+      // deterministic journal id, NOT by the inbox: postJournal skips a journal that is already posted, and the
+      // inbox mark is recorded but does not gate posting, so a dead letter re-driven after the generic path had
+      // refused (and inbox-marked) it -- outbox e6932aac -- still posts, exactly once.
+      let j: ReturnType<typeof inventoryMovementJournal> | undefined;
+      try {
+        j = inventoryMovementJournal(raw, new Date().toISOString().slice(0, 10));
+        const journal = j;
+        await db.transaction(async (tx) => {
+          await markProcessed(tx, msg.messageId);
+          await postJournal(tx, msg, {
+            id: journal.id, tenantId: msg.tenantId, voucherNo: journal.voucherNo,
+            type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
+          });
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "InventoryMovementPayloadError") {
+          captureError(err, { service: "finance-service", alert: "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost, type: INVENTORY_MOVEMENT_TYPE, tenantId: msg.tenantId });
+          throw new NonRetryableError(err.message);
+        }
+        // Unknown stores / clearing head, closed period, ... : finance.gl.rejected + dead-letter. Not inbox-marked:
+        // no producer re-sends a movement, the dead letter is the recovery path once the chart / period is fixed.
+        await rejectRefusal(msg, err, {
+          journalId: j?.id, voucherNo: j?.voucherNo, type: INVENTORY_MOVEMENT_TYPE,
+          ...(j ? { sourceRef: j.sourceRef, source: j.source } : {}),
+        }, false);
+      }
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
       await cache.invalidateResource(msg.tenantId, "dashboard");
       await cache.invalidateResource(msg.tenantId, "accounts");
       return;

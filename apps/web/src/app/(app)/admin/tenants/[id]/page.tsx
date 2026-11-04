@@ -36,7 +36,11 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
 
   const tenant = detailResult.data;
   const modules = modulesResult.data;
-  const source = detailResult.source === "error" || modulesResult.source === "error" ? "error" : "api";
+  // UAT L1-N1: admin-service answers GET .../config with 404 when the tenant has no edition / module
+  // config yet -- that is "no modules configured", an empty state, not a load failure. Any other
+  // failure of that read is still an error.
+  const modulesNotConfigured = modulesResult.source === "error" && modulesResult.status === 404;
+  const source = detailResult.source === "error" || (modulesResult.source === "error" && !modulesNotConfigured) ? "error" : "api";
 
   // GAP-ADMIN-TENANTS-DETAIL-01: fetchJson returns data=null for EVERY failure
   // (401/403/404/5xx/network), so branching on `!tenant` alone used to report
@@ -125,6 +129,13 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
             disagree with the table's own cache state (UX-002's pattern). */}
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "tenant modules" })} />
+        ) : modulesNotConfigured ? (
+          <EmptyState
+            icon="📦"
+            title="No modules configured yet"
+            message="This tenant has no edition or module configuration. Configure its module entitlements to enable modules."
+            action={<Link href="/admin/entitlements" className="btn sm">Configure modules</Link>}
+          />
         ) : hasNoModules(modules) ? (
           <EmptyState icon="📦" title="No modules" message="No modules configured for this tenant." />
         ) : (
