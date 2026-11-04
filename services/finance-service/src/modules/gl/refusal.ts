@@ -4,7 +4,8 @@
  * must keep their retry behaviour. A refusal is reported to the producer as `finance.gl.rejected` carrying its code, so a
  * record that depends on the journal (asset-service) can show "not posted, and why" instead of waiting forever.
  */
-const REFUSAL_CODE = /^(UNKNOWN_ACCOUNT_CODE|PERIOD_[A-Z_]+|NOT_LEAF_ACCOUNT|CONTROL_ACCOUNT|JOURNAL_[A-Z_]+|ORG_[A-Z_]+)$/;
+// UAT T-PERIOD: NO_BUDGET_PROVISION (D-03), FY_NOT_ACTIVE (D-07) and ASSET_NOT_CAPITALISED (D-12) are refusals too.
+const REFUSAL_CODE = /^(UNKNOWN_ACCOUNT_CODE|PERIOD_[A-Z_]+|NOT_LEAF_ACCOUNT|CONTROL_ACCOUNT|JOURNAL_[A-Z_]+|ORG_[A-Z_]+|NO_BUDGET_PROVISION|FY_NOT_ACTIVE|ASSET_NOT_CAPITALISED)$/;
 
 export function refusalCode(err: unknown): string | null {
   if (err === null || typeof err !== "object") return null;

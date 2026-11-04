@@ -1,10 +1,13 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { lapsedBudgetIds } from "../year-end/repo.js";
+import { scopedRead } from "../../shared/db.js";
 import * as glRepo from "../gl/repo.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { pino } from "pino";
 import { sanctionAvailable, effectiveHeadType, isKnownSanctionStatus, mapSanctionStatus as domainMapSanctionStatus, type SanctionWebStatus } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 /**
  * GAP2-FINANCE-SANCTIONS-OFFICER-01: shown as "Sanctioned By" when the
@@ -146,12 +149,14 @@ export async function getBudget(tenantId: string, headId: string, fy: string): P
   );
 }
 
-export async function listBudgetSummaries(tenantId: string, limit: number, offset = 0) {
+export async function listBudgetSummaries(tenantId: string, limit: number, offset = 0, fy?: string) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "budgets", `list:${limit}:${offset}`),
-    () => repo.listBudgetsByTenant(tenantId, limit, offset),
+    cache.makeKey(tenantId, "budgets", `list:${limit}:${offset}:${fy ?? "all"}`),
+    () => repo.listBudgetsByTenant(tenantId, limit, offset, fy),
     60,
   );
+  // UAT T-PERIOD D-13: a budget whose year has been closed (lapse recorded by the year-end close) shows as lapsed.
+  const lapsed = await scopedRead((tx) => lapsedBudgetIds(tx, tenantId));
   const headIds_b = [...new Set((rows ?? []).map((r) => r.headId))];
   const headList_b = await repo.findHeadsByIds(headIds_b);
   const headMap_b = new Map(headList_b.map((h) => [h.id, h]));
@@ -201,7 +206,7 @@ export async function listBudgetSummaries(tenantId: string, limit: number, offse
       // it — have it (reMinor here now equals "allocated" above).
       beMinor: (row.beMinor ?? 0n).toString(),
       reMinor: allocated.toString(),
-      status: utilised >= allocated ? "exhausted" : "active",
+      status: lapsed.has(row.id) ? "lapsed" : utilised >= allocated ? "exhausted" : "active",
       financialYear: row.fy,
     });
   }
@@ -245,7 +250,7 @@ export async function listSanctionSummaries(tenantId: string, limit: number, off
       // H3: string to avoid 2^53 precision loss on large government sanction amounts.
       amount: row.amountMinor.toString(),
       sanctionedBy: officerNames.get(row.createdBy) ?? UNKNOWN_OFFICER,
-      date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+      date: todayIST(new Date(row.createdAt as unknown as string)),
       status: mapSanctionStatus(row.status),
       majorHead: head?.code ?? row.headId,
     });
@@ -316,7 +321,7 @@ export async function getSanctionDetail(id: string, tenantId: string) {  const r
     // H3: string to avoid 2^53 precision loss on large government sanction amounts.
     amount: row.amountMinor.toString(),
     sanctionedBy: makerName,
-    date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+    date: todayIST(new Date(row.createdAt as unknown as string)),
     status: mapSanctionStatus(row.status),
     majorHead: head?.code ?? row.headId,
     lineItems: [],

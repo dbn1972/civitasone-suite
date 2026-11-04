@@ -4,6 +4,7 @@ import type { Queue } from "@civitasone/queue";
 import { COMMANDS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
+import { currentPeriodIST } from "../../shared/ist-date.js";
 
 const log = pino({ name: "asset-dep-scheduler" });
 
@@ -12,9 +13,9 @@ const log = pino({ name: "asset-dep-scheduler" });
 const SYSTEM_ACTOR = "000000de-0000-4000-8000-0000000000de";
 const TICK_MS = Number(process.env.DEP_SCHEDULER_INTERVAL_MS ?? 6 * 60 * 60 * 1000); // default 6h
 
-/** Current accounting period in YYYY-MM (UTC). */
+/** Current accounting period in YYYY-MM, by the IST calendar (UAT T-PERIOD D-06: never the UTC month). */
 export function currentPeriod(now: Date = new Date()): string {
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  return currentPeriodIST(now);
 }
 
 /**

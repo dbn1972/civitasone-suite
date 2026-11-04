@@ -96,6 +96,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   sumEmployerContribByRun: (...args: any[]) => sumEmployerContribByRunMock(...args),
   // Same nested-transaction deadlock fix as listSlipsByRunTx above.
   sumEmployerContribByRunTx: (...args: any[]) => sumEmployerContribByRunMock(...args),
+  // UAT P3 b19 D-10: employee shares for the employeeDeductionsMinor split (none in this suite).
+  sumEmployeeStatutoryByRunTx: vi.fn(async () => ({ tdsMinor: 0n, gpfMinor: 0n, npsMinor: 0n, pfMinor: 0n, esiMinor: 0n })),
   insertPf: vi.fn(async () => undefined),
   insertEsi: vi.fn(async () => undefined),
   insertTds: vi.fn(async () => undefined),

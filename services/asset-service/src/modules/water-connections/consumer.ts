@@ -32,6 +32,7 @@ import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor } from "./domain.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const log = pino({ name: "water-connections-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -140,7 +141,7 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
           id: p.id, tenantId: p.tenantId, connectionNumber,
           applicationId: p.applicationId, meterId: p.meterId ?? null,
           connectionType: application.connectionType, pipeSize: p.pipeSize ?? application.pipeSize ?? null,
-          installationDate: new Date().toISOString().slice(0, 10),
+          installationDate: todayIST(),
           address: application.address,
           createdBy: msg.actorId, updatedBy: msg.actorId,
         });
@@ -160,7 +161,7 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.updateConnectionStatus(tx, p.id, p.tenantId, "active", {
-          activationDate: new Date().toISOString().slice(0, 10), updatedBy: msg.actorId,
+          activationDate: todayIST(), updatedBy: msg.actorId,
         });
         await audit(tx, msg, "activate", "water_connection", p.id);
       });

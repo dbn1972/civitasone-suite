@@ -434,6 +434,103 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // fx-p3 (finance-service GFR controls): 422 when an expenditure posting / bill pass hits a head with no budget
+  // provision for the financial year (GFR: no expenditure without a provision). Nothing was posted or passed.
+  NO_BUDGET_PROVISION: {
+    en: {
+      what: "There is no budget provision for this head in this financial year, so nothing was posted or passed (GFR: no expenditure without a budget provision).",
+      next: "Ask the budget section to make a provision for this head and year (budget estimate, supplementary grant or re-appropriation), then try again. Receipts are not affected.",
+    },
+    hi: {
+      what: "इस वित्तीय वर्ष में इस मद के लिए कोई बजट प्रावधान नहीं है, इसलिए कुछ भी पोस्ट या पारित नहीं हुआ (GFR: बजट प्रावधान के बिना कोई व्यय नहीं)।",
+      next: "बजट अनुभाग से इस मद और वर्ष के लिए प्रावधान (बजट अनुमान, अनुपूरक अनुदान या पुनर्विनियोजन) करवाएँ, फिर प्रयास करें। प्राप्तियों पर इसका कोई असर नहीं है।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3: 422 when the posting date falls in a financial year that has not been activated yet. Nothing was posted.
+  FY_NOT_ACTIVE: {
+    en: {
+      what: "The posting date is in a financial year that is not active yet, so nothing was posted.",
+      next: "Choose a date in the active year, or ask the finance administrator to activate that year.",
+    },
+    hi: {
+      what: "पोस्टिंग तिथि ऐसे वित्तीय वर्ष में है जो अभी सक्रिय नहीं है, इसलिए कुछ भी पोस्ट नहीं हुआ।",
+      next: "सक्रिय वर्ष की कोई तिथि चुनें, या वित्त प्रशासक से उस वर्ष को सक्रिय करने के लिए कहें।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3: 422 from the depreciation run for a month that has not ended (or not started) yet.
+  DEP_FUTURE_PERIOD: {
+    en: {
+      what: "Depreciation cannot be charged for a month that has not ended yet, so nothing was posted.",
+      next: "Choose a month that has already ended and run depreciation again.",
+    },
+    hi: {
+      what: "जो महीना अभी समाप्त नहीं हुआ है उसके लिए मूल्यह्रास नहीं लगाया जा सकता, इसलिए कुछ भी पोस्ट नहीं हुआ।",
+      next: "कोई ऐसा महीना चुनें जो समाप्त हो चुका हो और मूल्यह्रास फिर से चलाएँ।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3: 409 when a reopen request for a hard-closed period is already waiting for a second officer.
+  PERIOD_REOPEN_PENDING: {
+    en: {
+      what: "A request to reopen this period is already waiting for a second officer.",
+      next: "Wait for another finance administrator to approve or reject it in the pending approvals list.",
+    },
+    hi: {
+      what: "इस अवधि को फिर से खोलने का एक अनुरोध पहले से दूसरे अधिकारी की स्वीकृति की प्रतीक्षा में है।",
+      next: "लंबित स्वीकृतियों की सूची में किसी दूसरे वित्त प्रशासक के स्वीकार या अस्वीकार करने की प्रतीक्षा करें।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3: 409 from fiscal-year activation / year-end close while a month of the year is not hard-closed.
+  FY_OPEN_PERIODS: {
+    en: {
+      what: "Every month of this financial year must be hard-closed first, so nothing was changed.",
+      next: "Hard-close the remaining months in Period Close, then try again.",
+    },
+    hi: {
+      what: "पहले इस वित्तीय वर्ष के हर महीने को पूरी तरह बंद (हार्ड-क्लोज़) करना होगा, इसलिए कुछ भी नहीं बदला।",
+      next: "अवधि समापन में बचे हुए महीनों को हार्ड-क्लोज़ करें, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3: 409 from year-end close when next year opening balances were already entered by hand.
+  OPENING_BALANCES_MANUAL: {
+    en: {
+      what: "Opening balances for the next year were entered by hand, so the year-end step cannot generate them and nothing was changed.",
+      next: "Review those opening balances with the finance administrator before running the year-end close again.",
+    },
+    hi: {
+      what: "अगले वर्ष के प्रारंभिक शेष हाथ से दर्ज किए गए हैं, इसलिए वर्ष-समापन चरण उन्हें नहीं बना सकता और कुछ भी नहीं बदला।",
+      next: "वर्ष-समापन दोबारा चलाने से पहले वित्त प्रशासक के साथ उन प्रारंभिक शेषों की समीक्षा करें।",
+    },
+    actions: ["back", "help"],
+  },
+  // fx-p3 (payroll-service): 409 when a hand-typed payroll run number is already used in the office.
+  DUPLICATE_RUN_NO: {
+    en: {
+      what: "This payroll run number is already used.",
+      next: "Choose another run number and try again.",
+    },
+    hi: {
+      what: "यह पेरोल रन नंबर पहले से इस्तेमाल में है।",
+      next: "कोई दूसरा रन नंबर चुनें और फिर प्रयास करें।",
+    },
+    actions: ["retry", "help"],
+  },
+  // fx-p3 (payroll-service): 422 when Form 16 / 24Q needs the deductor (employer) name, TAN or PAN and it is missing.
+  DEDUCTOR_NOT_CONFIGURED: {
+    en: {
+      what: "The deductor (employer) name, TAN or PAN is missing or not in the right format in payroll settings, so the form was not generated.",
+      next: "Ask the payroll admin to set the deductor details in payroll settings, then try again.",
+    },
+    hi: {
+      what: "पेरोल सेटिंग में कटौतीकर्ता (नियोक्ता) का नाम, TAN या PAN नहीं है या सही प्रारूप में नहीं है, इसलिए फ़ॉर्म नहीं बना।",
+      next: "पेरोल प्रशासक से पेरोल सेटिंग में कटौतीकर्ता का विवरण भरवाएँ, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
   // GAP-FINANCE-JOURNAL-ENTRY-06: finance-service POST /v1/finance/journals answers
   // 409 DUPLICATE_VOUCHER when a hand-typed voucher number is already used in the tenant.
   DUPLICATE_VOUCHER: {

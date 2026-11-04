@@ -7,6 +7,7 @@ import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedD
 import { mapScannedDocuments, scannedDocumentsEndpoint, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
 import type { AuditParaEvent, GlLinesPagination, GlLinesTotals, PaymentContext } from "@/lib/finance/workflowTypes";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
+import type { FinanceChangeRequestKind, WebFinanceChangeRequest } from "@/app/(app)/finance/_components/changeRequests";
 import type {
   AccountSummary,
   AppraisalSummary,
@@ -95,7 +96,6 @@ import type {
   FinanceGuaranteeSummary,
   FinanceDebtSummary,
   FinanceDebtDetail,
-  FinanceChangeRequest,
   FinanceSettings,
   FinanceSchemeSummary,
   FinanceDemandSummary,
@@ -2506,8 +2506,10 @@ export async function getFinanceBudgetsForReappropriation(): Promise<LoaderResul
   });
 }
 
-export async function getFinanceBudgets(): Promise<LoaderResult<BudgetSummary[]>> {
-  return fetchJson<unknown, BudgetSummary[]>("/api/v1/finance/budgets", [], {
+/** fx-p3: finance-service scopes the list to ?fy= (a row of a closed year can read `lapsed`). */
+export async function getFinanceBudgets(fy?: string): Promise<LoaderResult<BudgetSummary[]>> {
+  const qs = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+  return fetchJson<unknown, BudgetSummary[]>(`/api/v1/finance/budgets${qs}`, [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.budgets",
     responseSchema: BudgetSummaryListSchema,
@@ -3028,14 +3030,14 @@ export async function getFinanceDebtById(id: string): Promise<LoaderResult<Finan
  * (fiscal-year activation, opening balances, HoA-code change). `kind` narrows to one.
  */
 export async function getFinancePendingChangeRequests(
-  kind?: FinanceChangeRequest["kind"],
-): Promise<LoaderResult<FinanceChangeRequest[]>> {
+  kind?: FinanceChangeRequestKind,
+): Promise<LoaderResult<WebFinanceChangeRequest[]>> {
   const qs = `status=pending&limit=100${kind ? `&kind=${kind}` : ""}`;
-  return fetchJson<unknown, FinanceChangeRequest[]>(`/api/v1/finance/change-requests?${qs}`, [], {
+  return fetchJson<unknown, WebFinanceChangeRequest[]>(`/api/v1/finance/change-requests?${qs}`, [], {
     revalidateSeconds: 0,
     telemetryKey: "finance.change-requests",
     responseSchema: FinanceChangeRequestListSchema,
-    mapResponse: (p) => getArrayPayload(p) as FinanceChangeRequest[] | null,
+    mapResponse: (p) => getArrayPayload(p) as WebFinanceChangeRequest[] | null,
   });
 }
 

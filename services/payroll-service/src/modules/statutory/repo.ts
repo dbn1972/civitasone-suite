@@ -201,3 +201,21 @@ export async function sumEmployerContribByRunTx(tx: Writer, runId: string, tenan
   };
   return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));
 }
+
+/**
+ * UAT P3 b19 D-10: run totals of the EMPLOYEE statutory deductions, in paise,
+ * over non-excluded slips (same filter as the employer sum above), read through
+ * the caller transaction. pf is the EPF employee share (emp_contrib_minor, the
+ * employee 12%); the employer columns are never read here.
+ */
+export async function sumEmployeeStatutoryByRunTx(tx: Writer, runId: string, tenantId: string): Promise<{
+  tdsMinor: bigint; gpfMinor: bigint; npsMinor: bigint; pfMinor: bigint; esiMinor: bigint;
+}> {
+  const total = (rows: Array<{ v: bigint | null }>): bigint => rows.reduce((s, r) => s + (r.v ?? 0n), 0n);
+  const emp = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps | typeof payrollGpf): Promise<bigint> =>
+    total(await tx.select({ v: tbl.empContribMinor }).from(tbl)
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId), notExcludedSlip(tbl.slipId))));
+  const tdsMinor = total(await tx.select({ v: payrollTds.tdsMinor }).from(payrollTds)
+    .where(and(eq(payrollTds.runId, runId), eq(payrollTds.tenantId, tenantId), notExcludedSlip(payrollTds.slipId))));
+  return { tdsMinor, gpfMinor: await emp(payrollGpf), npsMinor: await emp(payrollNps), pfMinor: await emp(payrollPf), esiMinor: await emp(payrollEsi) };
+}

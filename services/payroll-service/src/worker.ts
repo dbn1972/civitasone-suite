@@ -25,6 +25,7 @@ import { registerChallanConsumers } from "./modules/statutory-returns/challan-co
 import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
 import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
+import { registerDeductorConfigConsumers } from "./modules/deductor-config/consumer.js";
 import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
 import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
 import { registerReturnFilingConsumers } from "./modules/return-filings/consumer.js";
@@ -89,6 +90,7 @@ registerChallanConsumers(queue);
 registerDscConfigConsumers(queue);
 registerSponsorConfigConsumers(queue);
 registerBankFileSigningConsumers(queue);
+registerDeductorConfigConsumers(queue);
 registerCostingRuleConsumers(queue);
 registerLetterheadConsumers(queue);
 registerReturnFilingConsumers(queue);

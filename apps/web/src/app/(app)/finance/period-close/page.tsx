@@ -2,7 +2,9 @@ import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_com
 import { ClosePeriodForm } from "./ClosePeriodForm";
 import { PeriodsTable } from "./PeriodsTable";
 import { getPeriods } from "./periodsLoader";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { getFinancePendingChangeRequests } from "@/app/_data/loaders";
+import { ChangeRequestsPanel } from "../_components/ChangeRequestsPanel";
 
 export default async function PeriodCloseCockpitPage() {
   const result = await getPeriods();
@@ -16,6 +18,9 @@ export default async function PeriodCloseCockpitPage() {
   const canHardClose = roles.some((r) => r === "finance_admin" || r === "super_admin");
   const canReopen = canHardClose;
   const canClose = canHardClose || roles.includes("finance_officer");
+  // fx-p3: reopening a HARD-closed month is a change request a different finance administrator approves. Admins
+  // see the pending ones here (the same panel as the other second-officer changes); nobody else is offered it.
+  const reopenRequests = canReopen ? await getFinancePendingChangeRequests("period_reopen") : null;
 
   const openCount = periods.filter((p) => p.status === "open").length;
   const softClosedCount = periods.filter((p) => p.status === "soft_close").length;
@@ -62,6 +67,19 @@ export default async function PeriodCloseCockpitPage() {
       <Card title="Accounting Periods">
         <PeriodsTable periods={periods} canClose={canClose} canHardClose={canHardClose} canReopen={canReopen} />
       </Card>
+
+      {reopenRequests ? (
+        reopenRequests.source === "error" ? (
+          <LoadErrorState result={reopenRequests} area="pending reopen requests" />
+        ) : (
+          <ChangeRequestsPanel
+            requests={reopenRequests.data}
+            viewerId={getSessionUserId()}
+            canDecide={canReopen}
+            title="Reopen requests awaiting a second officer"
+          />
+        )
+      ) : null}
     </div>
   );
 }

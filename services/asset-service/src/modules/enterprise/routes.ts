@@ -412,7 +412,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const after = before - BigInt(body.amountMinor);
     if (after < 0n) throw new HttpError(400, "INVALID", "impairment exceeds book value");
     const evId = randomUUID();
-    const eventDate = body.eventDate ?? new Date().toISOString().slice(0, 10);
+    const eventDate = body.eventDate ?? todayIST();
     await publishF3Write(ctx, "impairment", evId, {
       assetId: id,
       amountMinor: body.amountMinor,
@@ -439,7 +439,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const isUpward = after > before;
     const delta = isUpward ? after - before : before - after;
     const evId = randomUUID();
-    const eventDate = new Date().toISOString().slice(0, 10);
+    const eventDate = todayIST();
     await publishF3Write(ctx, "revaluation", evId, {
       assetId: id,
       bookValueBefore: before.toString(),
@@ -609,7 +609,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
       status: "active" as const, acquisitionCost: minorString(a.acquisitionCostMinor), salvageValue: "0",
       usefulLifeYears: 5, depRate: "20", depMethod: "SLM" as const, currency: "INR" as const,
       bookValue: minorString(a.acquisitionCostMinor), accumulatedDep: "0",
-      acquisitionDate: new Date().toISOString().slice(0, 10),
+      acquisitionDate: todayIST(),
       poRef: null, grnRef: null, location: null, notes: `bulk:${batchId}`,
       orgUnit: a.orgUnit ?? null,
       createdBy: ctx.actorId, updatedBy: ctx.actorId,

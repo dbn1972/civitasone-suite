@@ -87,6 +87,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
             gainLoss:        gainLoss.toString(),
             currency:        p.currency,
             type:            "asset_disposal",
+            // UAT T-PERIOD D-12: the disposal is dated on the disposal date (not the day finance happens to process it),
+            // and finance needs to know whether the acquisition was ever capitalised in the GL: on the accrual basis a
+            // disposal of an asset whose cost never reached the fixed-asset head would drive that head negative.
+            disposalDate:    p.disposalDate,
+            capitalised:     asset.glPostStatus === "posted",
           },
         });
         await enqueue(tx, {

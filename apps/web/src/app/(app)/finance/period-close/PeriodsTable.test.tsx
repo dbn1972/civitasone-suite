@@ -185,4 +185,77 @@ describe("PeriodsTable", () => {
     fireEvent.change(screen.getByLabelText("Reason for hard-closing"), { target: { value: "Month-end close after review" } });
     expect(screen.getByRole("button", { name: "Hard-close" })).toBeDisabled();
   });
+
+  // fx-p3: reopening a HARD-closed period is a change request a second finance administrator approves.
+  describe("reopen of a hard-closed period needs a second officer (fx-p3)", () => {
+    it("the dialog for a hard-closed month says a second officer must approve", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+      render(<PeriodsTable periods={[HARD]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-03" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-03?")).toBeInTheDocument());
+      expect(screen.getByRole("alertdialog").textContent).toMatch(/second officer/i);
+      expect(screen.getByRole("alertdialog").textContent).toMatch(/stays hard-closed until/i);
+    });
+
+    it("the dialog for a soft-closed month does not ask for a second officer", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+      render(<PeriodsTable periods={[SOFT]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-04" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-04?")).toBeInTheDocument());
+      expect(screen.getByRole("alertdialog").textContent).not.toMatch(/second officer/i);
+    });
+
+    it("202 pending_approval shows Reopen requested - waiting for approval, not applied", async () => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ id: "cr-1", status: "pending_approval", correlationId: "c-1" }), { status: 202 }),
+      );
+      render(<PeriodsTable periods={[HARD]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-03" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-03?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason for reopening"), { target: { value: "Correcting a posting error" } });
+      fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
+      const status = (await screen.findByText(/Reopen requested - waiting for approval/)).closest("p")!;
+      expect(status).toHaveTextContent(/2026-03/);
+      expect(status.textContent).not.toMatch(/applied/);
+      const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/2026-03/reopen"))!;
+      expect(JSON.parse(String((call[1] as RequestInit).body))).toEqual({ reason: "Correcting a posting error" });
+      expect(refreshMock).toHaveBeenCalled();
+    });
+
+    it("also reads a pending_approval answer wrapped in data", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ data: { id: "cr-1", status: "pending_approval" } }), { status: 202 }),
+      );
+      render(<PeriodsTable periods={[HARD]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-03" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-03?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason for reopening"), { target: { value: "Correcting a posting error" } });
+      fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
+      expect(await screen.findByText(/Reopen requested - waiting for approval/)).toBeInTheDocument();
+    });
+
+    it("a soft-closed reopen that is accepted reads as applied", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "x", status: "accepted" }), { status: 202 }));
+      render(<PeriodsTable periods={[SOFT]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-04" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-04?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason for reopening"), { target: { value: "Correcting a posting error" } });
+      fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
+      expect(await screen.findByText("Period 2026-04: reopen applied.")).toBeInTheDocument();
+    });
+
+    it("409 PERIOD_REOPEN_PENDING explains a request is already waiting, in plain words", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ code: "PERIOD_REOPEN_PENDING", message: "reopen already pending for 2026-03" }), { status: 409 }),
+      );
+      render(<PeriodsTable periods={[HARD]} canReopen />);
+      fireEvent.click(screen.getByRole("button", { name: "Reopen period 2026-03" }));
+      await waitFor(() => expect(screen.getByText("Reopen period 2026-03?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason for reopening"), { target: { value: "Correcting a posting error" } });
+      fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
+      const alert = await screen.findByRole("alert");
+      await waitFor(() => expect(alert).toHaveTextContent(/already waiting for a second officer/));
+      expect(alert.textContent).not.toMatch(/PERIOD_REOPEN_PENDING|already pending for/);
+    });
+  });
 });

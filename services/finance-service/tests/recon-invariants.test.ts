@@ -415,10 +415,9 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   findHeadByCodeTx: (...a: any[]) => mockFindHeadByCodeTx(...a),
   findHeadByIdTx:   (...a: any[]) => mockFindHeadByIdTx(...a),
   findBudget:       vi.fn(async () => null),
-  // DOM-007: postJournal() calls the tx-scoped findBudgetTx, not findBudget —
-  // see budget/repo.ts. None of this file's journals target a budget-
-  // controlled head, so this is a no-op.
-  findBudgetTx:     vi.fn(async () => null),
+  // GFR (UAT T-PERIOD D-03): an expenditure head needs a budget provision for the year; these tests are about other
+  // rules, so the head has an ample one.
+  findBudgetTx:     vi.fn(async (_tx: unknown, headId: string) => ({ id: `budget-${headId}`, headId, fy: "2026-27", beMinor: 10n ** 15n, reMinor: 10n ** 15n, allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR" })),
   findSanctionByIdTx: vi.fn(async () => null),
   incrementSanctionUtilisedGuarded: vi.fn(async () => true),
   // DOM-010: leaf-account guard — none of these heads have children.

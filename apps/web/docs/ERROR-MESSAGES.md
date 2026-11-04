@@ -80,6 +80,14 @@ specific reason helps the user act:
 | DUPLICATE_CODE | This code is already in use. Choose a different code and try again. |
 | GAZETTED_NOT_ELIGIBLE | Work from home isn't available at this employee's pay level. It is limited to the pay levels your office has made eligible. Ask HR if you think this is wrong. |
 | WEEKLY_WFH_CAP_REACHED | These dates would go over the weekly work-from-home limit. Choose fewer days, or dates in a different week, and try again. |
+| NO_BUDGET_PROVISION | There is no budget provision for this head in this financial year, so nothing was posted or passed (GFR: no expenditure without a budget provision). Ask the budget section to make a provision for this head and year (budget estimate, supplementary grant or re-appropriation), then try again. Receipts are not affected. |
+| FY_NOT_ACTIVE | The posting date is in a financial year that is not active yet, so nothing was posted. Choose a date in the active year, or ask the finance administrator to activate that year. |
+| DEP_FUTURE_PERIOD | Depreciation cannot be charged for a month that has not ended yet, so nothing was posted. Choose a month that has already ended and run depreciation again. |
+| PERIOD_REOPEN_PENDING | A request to reopen this period is already waiting for a second officer. Wait for another finance administrator to approve or reject it in the pending approvals list. |
+| FY_OPEN_PERIODS | Every month of this financial year must be hard-closed first, so nothing was changed. Hard-close the remaining months in Period Close, then try again. |
+| OPENING_BALANCES_MANUAL | Opening balances for the next year were entered by hand, so the year-end step cannot generate them and nothing was changed. Review those opening balances with the finance administrator before running the year-end close again. |
+| DUPLICATE_RUN_NO | This payroll run number is already used. Choose another run number and try again. |
+| DEDUCTOR_NOT_CONFIGURED | The deductor (employer) name, TAN or PAN is missing or not in the right format in payroll settings, so the form was not generated. Ask the payroll admin to set the deductor details in payroll settings, then try again. |
 
 A call site that has its own translated sentence for a code (for example
 `postWithErrorCode`'s `codeMessages`) keeps using it; the central map is the fallback.

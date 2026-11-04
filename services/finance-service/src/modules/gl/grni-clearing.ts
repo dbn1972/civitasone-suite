@@ -18,6 +18,7 @@ import { enqueueSpineJournal } from "./spine.js";
 import { GRNI } from "./system-heads.js";
 import { grnReceiptTotalTx } from "./stores-memo.js";
 import { financeBills } from "../payments/schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -36,7 +37,7 @@ export async function clearGrniTx(
   const bill = bills[0];
   if (!bill) return "waiting_for_bill";
   const dates = [bill.billDate, receipt.postingDate].filter((d): d is string => !!d).sort();
-  const postingDate = dates.at(-1) ?? new Date().toISOString().slice(0, 10);
+  const postingDate = dates.at(-1) ?? todayIST();
   await enqueueSpineJournal(tx, {
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
     sourceKey: `grni_clear:${grnId}`, type: "inventory_movement", postingDate,

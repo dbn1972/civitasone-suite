@@ -16,7 +16,7 @@ import { standardGlHeads, missingStandardHeads, BILL_HEAD_HOA, accrualStoresHead
 import { natureOf } from "../src/modules/financial-statements/routes.js";
 import { parseHoA } from "../src/shared/hoa.js";
 
-type Nature = "asset" | "liability" | "income" | "expense";
+type Nature = "asset" | "liability" | "income" | "expense" | "equity";
 
 // finance-service modules that build journals / bills from account CODES (resolved per tenant in budget.finance_heads
 // by budgetRepo.findHeadByCodeTx). simplified/ is excluded: it posts to its own MSME chart (a separate table).
@@ -41,6 +41,8 @@ const ENV_USE: Record<string, Nature> = {
   // UAT L2-N6: stock receipts / issues (gl/inventory-movement.ts)
   FINANCE_STORES_INVENTORY_CODE: "asset", FINANCE_STORES_CONSUMPTION_CODE: "expense",
   FINANCE_GRNI_CODE: "liability", FINANCE_STORES_SUSPENSE_CODE: "liability",
+  // UAT T-PERIOD (b19): cash-basis disposal proceeds receipt; the year-end accumulated fund
+  FINANCE_ASSET_SALE_RECEIPT_CODE: "income", FINANCE_ACCUMULATED_FUND_CODE: "equity",
 };
 /** Literal `accountCode: "1234"` legs (payroll accrual, integrations/consumer.ts). */
 const LITERAL_USE: Record<string, Nature> = { "5001": "expense", "5002": "expense", "2101": "liability", "2102": "liability", "2103": "liability" };
@@ -75,7 +77,7 @@ function defaultUses(): Use[] {
 }
 
 /** The nature the seeded head has: by its classification, and as the financial statements read it. */
-const CLASS_NATURE: Record<string, Nature> = { asset: "asset", capital: "asset", liability: "liability", income: "income", expense: "expense" };
+const CLASS_NATURE: Record<string, Nature> = { asset: "asset", capital: "asset", liability: "liability", equity: "equity", income: "income", expense: "expense" };
 
 describe("standard GL heads", () => {
   it("cover the codes UAT tenant A was missing (T6-01 / T6-03) and the bill head", () => {

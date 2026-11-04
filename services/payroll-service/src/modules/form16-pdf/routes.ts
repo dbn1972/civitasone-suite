@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
+import { requireDeductor } from "../deductor-config/repo.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { renderPdf } from "@civitasone/render";
 import { signPdfWithDsc, DscValidationError } from "@civitasone/render";
@@ -262,6 +263,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     // Validate FY format
     try { parseFy(body.fy); }
     catch { throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26"); }
+    // UAT P3 b19 D-15: refuse the whole batch up front (422) instead of failing every certificate.
+    await requireDeductor(ctx.tenantId, "Form 16");
 
     // Check for duplicate running job for same tenant + FY. A re-run leaves the
     // earlier (completed/failed) rows in place, so look specifically for a row

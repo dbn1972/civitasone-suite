@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { payrollDeductionHeads } from "../gl/system-heads.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
@@ -14,12 +15,43 @@ import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
 import { grnBillHeadCode } from "../gl/system-heads.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
 
 // UAT L2-N6: one definition, shared with the stock-receipt journal (it is also the GRN clearing head).
 export { grnBillHeadCode };
+
+type DeductionKind = "tds" | "gpf" | "nps" | "pf" | "esi" | "pt" | "other";
+const DEDUCTION_ORDER: DeductionKind[] = ["tds", "gpf", "nps", "pf", "esi", "pt", "other"];
+const DEDUCTION_NARRATION: Record<DeductionKind, string> = {
+  tds: "Income tax deducted at source (salary) payable", gpf: "GPF subscriptions payable", nps: "NPS employee contributions payable",
+  pf: "EPF employee contributions payable", esi: "ESI employee contributions payable", pt: "Professional tax payable",
+  other: "Other salary deductions payable (LIC / others)",
+};
+
+/**
+ * UAT T-PERIOD D-10: the employee-side deduction legs of the salary accrual. With a breakdown whose parts sum exactly
+ * to `statutory` (gross - net), one credit per non-zero part on its configured head (gl/system-heads.ts
+ * payrollDeductionHeads; a negative part is booked on the debit side so the voucher still balances). Without a
+ * breakdown, or when the parts do not add up, the whole amount stays one 2102 leg (the pre-b19 behaviour).
+ */
+export function deductionLines(
+  statutory: bigint, breakdown: Partial<Record<DeductionKind, string>> | undefined,
+): Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }> {
+  const heads = payrollDeductionHeads();
+  const leg = (code: string, v: bigint, narration: string) =>
+    v >= 0n ? { accountCode: code, debitMinor: 0n, creditMinor: v, narration } : { accountCode: code, debitMinor: -v, creditMinor: 0n, narration };
+  if (breakdown) {
+    const parts = DEDUCTION_ORDER.map((k) => [k, BigInt(breakdown[k] ?? "0")] as const);
+    if (parts.reduce((acc, [, v]) => acc + v, 0n) === statutory) {
+      const lines = parts.filter(([, v]) => v !== 0n).map(([k, v]) => leg(heads[k], v, DEDUCTION_NARRATION[k]));
+      return lines.length > 0 ? lines : [leg(heads.other, 0n, DEDUCTION_NARRATION.other)];
+    }
+  }
+  return [leg("2102", statutory, "Statutory deductions payable")];
+}
 
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */
@@ -120,7 +152,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
       accountName: prepared.agencyCode,
       amountMinor: BigInt(p.amountMinor),
       narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: todayIST(),
     };
     // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set. No DB
     // transaction is open while this network call runs (TX-007): a slow or
@@ -273,6 +305,8 @@ export function registerIntegrationConsumers(queue: Queue): void {
       runId: string; month: string; totalGrossMinor: string; totalNetMinor: string;
       totalEmployerContribMinor?: string;
       legalEntityId?: string;
+      /** UAT T-PERIOD D-10 (payroll-service b19): employee deductions by type; they sum to gross - net. */
+      employeeDeductionsMinor?: Partial<Record<DeductionKind, string>>;
     };
     const gross = BigInt(p.totalGrossMinor);
     const net = BigInt(p.totalNetMinor);
@@ -290,9 +324,10 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const lines: Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }> = [
       { accountCode: "5001", debitMinor: gross, creditMinor: 0n, narration: "Salary expense" },
       { accountCode: "2101", debitMinor: 0n, creditMinor: net, narration: "Net salary payable" },
-      statutory >= 0n
-        ? { accountCode: "2102", debitMinor: 0n, creditMinor: statutory, narration: "Statutory deductions payable" }
-        : { accountCode: "2102", debitMinor: -statutory, creditMinor: 0n, narration: "Statutory deductions payable" },
+      // UAT T-PERIOD D-10: each employee deduction on its own liability head (TDS, GPF, NPS, EPF, ESI, PT; LIC and other
+      // recoveries on 2102) so it can be cleared challan by challan -- see deductionLines(). An older payroll event with
+      // no breakdown (or one that does not add up to gross - net) keeps the single 2102 leg.
+      ...deductionLines(statutory, p.employeeDeductionsMinor),
     ];
     // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
     // expense + liability, separate from the employee-side gross above. The two
@@ -317,7 +352,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           voucherNo: `PAY/${p.month}/${p.runId.slice(0, 8)}`,
           type: "payroll_accrual",
-          postingDate: new Date().toISOString().slice(0, 10),
+          postingDate: todayIST(),
           ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
           // H3: paise passed as bigint strings so > 2^53 paise stays exact.
           lines: lines.map((l) => ({

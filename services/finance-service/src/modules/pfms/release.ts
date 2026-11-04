@@ -13,6 +13,7 @@ import * as repo from "./repo.js";
 import { verifyStoredSignature } from "./dsc-batch.js";
 import { isProductionDeployment } from "./dsc-client.js";
 import { MAX_BATCH_BENEFICIARIES, currentBatchDigest, digestFor, storedSignatureOf } from "./consumer.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const log = pino({ name: "finance.pfms.release" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -133,7 +134,7 @@ export function registerPfmsReleaseConsumers(queue: Queue): void {
       } else if (digestFor(claimed, beneficiaries).digest !== claimed.batchDigest) {
         failure = { code: "BATCH_CHANGED_AFTER_SIGNING", message: "the batch contents changed after the signature was verified; nothing was sent" };
       } else {
-        const date = new Date().toISOString().slice(0, 10);
+        const date = todayIST();
         const rows: BankFileRow[] = beneficiaries.map((b) => ({
           ifsc: b.ifsc, accountNo: b.account, accountName: b.beneficiary || "Unknown beneficiary", amountMinor: b.amountMinor,
           narration: `${claimed.type}/${claimed.pfmsId}`.slice(0, 25), paymentDate: date,

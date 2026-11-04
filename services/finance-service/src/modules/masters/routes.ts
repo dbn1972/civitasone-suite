@@ -11,6 +11,7 @@ import * as workflow from "./vendor-workflow.js";
 import { getPolicy } from "./policy.js";
 import { recordAudit } from "../../shared/audit-event.js";
 import { maskPan, maskAccountNo, maskPhone, maskEmail } from "./vendor-mask.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 // Vendor master is financial system-of-record data (bank account/IFSC feed
@@ -153,7 +154,7 @@ function toVendorBillHistory(bills: BillRow[], tdsByBillId: Map<string, bigint>)
     return {
       id: b.id,
       billNo: b.billNo,
-      date: b.billDate ? String(b.billDate) : new Date(b.createdAt as unknown as string).toISOString().slice(0, 10),
+      date: b.billDate ? String(b.billDate) : todayIST(new Date(b.createdAt as unknown as string)),
       amount: b.netMinor.toString(),
       tds: tdsMinor.toString(),
       status: b.status,

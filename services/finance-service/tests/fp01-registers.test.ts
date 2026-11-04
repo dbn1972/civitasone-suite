@@ -20,8 +20,9 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { scoped } from "./_tenant.js";
+import { currentFyIST } from "../src/shared/ist-date.js";
 import { setFinanceSettings, clearFinanceSettings, setDebtHeads } from "./_finance-settings.js";
-import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
 import { registerTreasuryRegisterConsumers } from "../src/modules/treasury/register-consumer.js";
 import { registerUCLifecycleConsumers } from "../src/modules/payments/uc-consumer.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
@@ -103,7 +104,7 @@ async function cleanup() {
   await clearFinanceSettings(TENANT);
   for (const t of ["treasury.finance_debt_emi", "treasury.finance_debt", "treasury.finance_guarantees", "payments.finance_uc",
     "payments.finance_advances", "budget.finance_sanctions", "budget.finance_offices", "budget.finance_allocation_distributions",
-    "payments.finance_bank_accounts", "budget.finance_heads"]) {
+    "payments.finance_bank_accounts", "budget.finance_budgets", "budget.finance_heads"]) {
     await scoped(TENANT, (tx) => tx.execute(sql.raw(`DELETE FROM ${t} WHERE tenant_id = '${TENANT}'::uuid`)));
   }
 }
@@ -114,7 +115,15 @@ beforeAll(async () => {
     { id: H_LOAN, tenantId: TENANT, code: "FP1-LOAN", name: "Loans payable", level: 1, classification: "liability", createdBy: MAKER, updatedBy: MAKER },
     { id: H_INT, tenantId: TENANT, code: "FP1-INT", name: "Interest expense", level: 1, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
     { id: H_EXP2, tenantId: TENANT, code: "FP1-EXP2", name: "Other expense", level: 1, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
+    { id: HEAD_ID, tenantId: TENANT, code: "FP1-SAN", name: "Sanctioned works", level: 1, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
   ]));
+  // GFR (UAT T-PERIOD D-03): budget provisions for the expenditure heads these tests post to (interest on the EMI) and
+  // sanction against (TE-02: a sanction must fit the head allocation for the year).
+  for (const fy of [...new Set(["2025-26", "2026-27", currentFyIST()])]) {
+    for (const headId of [H_INT, H_EXP2, HEAD_ID]) {
+      await scoped(TENANT, (tx) => tx.insert(financeBudgets).values({ tenantId: TENANT, headId, fy, beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: MAKER, updatedBy: MAKER }).onConflictDoNothing());
+    }
+  }
   await scoped(TENANT, (tx) => tx.execute(sql`
     INSERT INTO budget.finance_sanctions (id, tenant_id, sanction_no, purpose, head_id, amount_minor, status, created_by, updated_by)
     VALUES (${SANCTION_ID}::uuid, ${TENANT}::uuid, 'SN-FP1-001', 'Roads grant', ${HEAD_ID}::uuid, 100000000, 'approved', ${MAKER}::uuid, ${MAKER}::uuid),

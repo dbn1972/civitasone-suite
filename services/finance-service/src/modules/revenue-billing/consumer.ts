@@ -16,6 +16,7 @@ import { invoicePaidAmountMinor } from "./payload.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import { pino } from "pino";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:revenue-billing-consumer" });
@@ -62,7 +63,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           voucherNo: `RCV/${p.receiptId.slice(0, 8).toUpperCase()}`,
           type: "revenue_receipt",
-          postingDate: p.receiptDate ?? new Date().toISOString().slice(0, 10),
+          postingDate: p.receiptDate ?? todayIST(),
           lines: [
             { accountCode: REVENUE_CASH, debitMinor: amount.toString(), creditMinor: "0", narration: `Revenue receipt ${p.receiptId}` },
             { accountCode: p.headId ?? REVENUE_INCOME, debitMinor: "0", creditMinor: amount.toString(), narration: `Revenue income ${p.receiptId}` },
@@ -103,7 +104,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           voucherNo: `RFD/${p.refundId.slice(0, 8).toUpperCase()}`,
           type: "revenue_refund",
-          postingDate: p.processedDate ?? new Date().toISOString().slice(0, 10),
+          postingDate: p.processedDate ?? todayIST(),
           lines: [
             { accountCode: REVENUE_REFUND_EXPENSE, debitMinor: amount.toString(), creditMinor: "0", narration: `Revenue refund ${p.refundId}` },
             { accountCode: REVENUE_CASH, debitMinor: "0", creditMinor: amount.toString(), narration: `Cash refunded ${p.refundId}` },
@@ -144,7 +145,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           voucherNo: `INV/${p.invoiceId.slice(0, 8).toUpperCase()}`,
           type: "billing_revenue_recognition",
-          postingDate: p.issuedDate ?? new Date().toISOString().slice(0, 10),
+          postingDate: p.issuedDate ?? todayIST(),
           lines: [
             { accountCode: BILLING_RECEIVABLE, debitMinor: amount.toString(), creditMinor: "0", narration: `Invoice receivable ${p.invoiceId}` },
             { accountCode: BILLING_REVENUE, debitMinor: "0", creditMinor: amount.toString(), narration: `SaaS revenue ${p.invoiceId}` },
@@ -189,7 +190,7 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           voucherNo: `RCPT/${p.invoiceId.slice(0, 8).toUpperCase()}`,
           type: "billing_cash_receipt",
-          postingDate: p.paidDate ?? new Date().toISOString().slice(0, 10),
+          postingDate: p.paidDate ?? todayIST(),
           lines: [
             { accountCode: BILLING_CASH, debitMinor: amount.toString(), creditMinor: "0", narration: `Payment received ${p.invoiceId}` },
             { accountCode: BILLING_RECEIVABLE, debitMinor: "0", creditMinor: amount.toString(), narration: `Receivable cleared ${p.invoiceId}` },

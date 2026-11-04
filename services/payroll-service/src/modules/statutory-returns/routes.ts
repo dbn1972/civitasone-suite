@@ -15,6 +15,7 @@ import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
 import { buildForm16WithMinor, parseFy, type Form16PartBMinor } from "../tax/form16.js";
+import { optionalDeductor, requireDeductor } from "../deductor-config/repo.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -75,11 +76,9 @@ function quarterMonths(startYear: number, q: Quarter): string[] {
   return map[q].map(([off, m]) => `${startYear + off}-${String(m).padStart(2, "0")}`);
 }
 
-const employerIdentity = () => ({
-  name: process.env.EMPLOYER_NAME ?? "<EMPLOYER NAME — configure EMPLOYER_NAME>",
-  tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
-  pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
-});
+// UAT P3 b19 D-15: the deductor identity (name / TAN / PAN) comes from the
+// tenant deductor configuration (deductor-config/repo.ts), validated; a TDS
+// return refuses with 422 DEDUCTOR_NOT_CONFIGURED instead of placeholder text.
 
 /**
  * H4: pipe-delimited flat-file safety. Strip the field separator and CR/LF from
@@ -192,6 +191,8 @@ async function buildForm24Q(
 
   const { startYear, endYear } = parseFyOr400(fyRaw);
   const months = quarterMonths(startYear, q);
+  // D-15: before the reconciliation gate, so a refused export never records a forced filing.
+  const deductor = await requireDeductor(ctx.tenantId, "Form 24Q");
 
   // P1: TRACES reconciliation gate. Sum TDS deducted (payroll_tds, finalised
   // runs) vs deposited (challans) per month. Block 24Q when they do not
@@ -330,7 +331,7 @@ async function buildForm24Q(
     challanRef: challanCins.length > 0 ? challanCins.join(", ") : null,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
     quarter: q,
-    deductor: employerIdentity(),
+    deductor,
     deducteeCount: deductees.length,
     deductees,
     challanSummary: challans,
@@ -377,8 +378,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (format !== "file") return reply.send(structured);
 
     // NSDL/EPFO-style pipe-delimited flat file (RPU-like line records).
-    const { deductees, challanSummary: challans, annexureII, fy: resolvedFy, quarter: q } = structured;
-    const emp = employerIdentity();
+    const { deductees, challanSummary: challans, annexureII, fy: resolvedFy, quarter: q, deductor: emp } = structured;
     const lines: string[] = [];
     // File Header (FH)
     lines.push(["FH", "24Q", resolvedFy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
@@ -461,6 +461,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
     const { startYear, endYear } = parseFyOr400(fy);
+    const employer = await requireDeductor(ctx.tenantId, "Form 12BA");
 
     const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
@@ -546,7 +547,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       formType: "12BA",
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
-      employer: employerIdentity(),
+      employer,
       // GAP-PAYROLL-STATUTORY-PERQUISITE-04: the PAN is DPDP-sensitive -- masked
       // server-side (ABCDE****F), never sent in the clear to the browser. A staff
       // member who needs the full value uses the audited reveal on the HRMS
@@ -622,7 +623,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const structured = {
       fileType: "NPS-SCF",
       month,
-      employer: employerIdentity(),
+      // D-15: not a TDS return, so not refused -- but never placeholder text.
+      employer: await optionalDeductor(ctx.tenantId),
       subscriberCount: subscribers.length,
       subscribers,
       totalEmployeeContribution: totalEmployee,
@@ -706,6 +708,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
     const { startYear, endYear } = parseFyOr400(fy);
     const months = quarterMonths(startYear, q);
+    const deductor = await requireDeductor(ctx.tenantId, "Form 26Q");
 
     const rows = await scopedRead((tx) => tx.select().from(payrollTdsNonSalary)
       .where(and(eq(payrollTdsNonSalary.tenantId, ctx.tenantId), inArray(payrollTdsNonSalary.period, months))));
@@ -742,7 +745,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       quarter: q,
-      deductor: employerIdentity(),
+      deductor,
       deducteeCount: deductees.length,
       deductees,
       totalTdsDeductedMinor: minorToNumber(totalTdsMinor),
@@ -755,7 +758,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
 
     if (format !== "file") return reply.send(structured);
 
-    const emp = employerIdentity();
+    const emp = deductor;
     const lines: string[] = [];
     lines.push(["FH", "26Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     deductees.forEach((d, i) => {

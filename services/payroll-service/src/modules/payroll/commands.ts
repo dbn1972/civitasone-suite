@@ -20,6 +20,7 @@ import {
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
+import { duplicateRunNoError, isRunNoUniqueViolation, runNoTaken } from "./run-no.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -148,6 +149,13 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
   // whole race) only applies to that type. Off-cycle run creation
   // (supplementary/arrears/pensioner) has no such uniqueness constraint and
   // is untouched — still a plain publish, exactly as before.
+  // UAT P3 b19 D-16: an off-cycle run row is written by the consumer, so its
+  // run-number check is this synchronous pre-check (the consumer acks a racing
+  // duplicate as a terminal, audited failure). A regular run checks it inside
+  // the transaction below, which also maps a racing unique violation to 409.
+  if (runType !== "regular" && await scopedRead((tx) => runNoTaken(tx, ctx.tenantId, body.runNo))) {
+    throw duplicateRunNoError(body.runNo);
+  }
   if (runType === "regular") {
     await db.transaction(async (tx) => {
       const lockKey = `payroll_run:${ctx.tenantId}:${body.month}:${ddoCode ?? "__ALL__"}:regular`;
@@ -182,6 +190,7 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
         throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD",
           `a regular payroll run already exists for ${body.month}${ddoCode ? ` (DDO ${ddoCode})` : ""}: ${existing[0].id}`);
       }
+      if (await runNoTaken(tx, ctx.tenantId, body.runNo)) throw duplicateRunNoError(body.runNo);
 
       // structureId is guaranteed present here by createRunBody's own
       // .refine (required for every runType except "pensioner", and this
@@ -195,6 +204,12 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
         createdBy: ctx.actorId, updatedBy: ctx.actorId,
       });
       await audit(tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId }, "create", "payroll_run", id);
+    }).catch((err: unknown) => {
+      // D-16: the run number was taken by a concurrent, not yet committed run
+      // (another month, so another advisory lock): the INSERT waited on the
+      // unique index and failed. Same 409 as the sequential case, not a 500.
+      if (isRunNoUniqueViolation(err)) throw duplicateRunNoError(body.runNo);
+      throw err;
     });
   }
   await queue.publish(COMMANDS.runCreate, {

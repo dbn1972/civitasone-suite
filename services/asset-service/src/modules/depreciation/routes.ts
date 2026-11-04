@@ -7,6 +7,7 @@ import { createDepScheduleBody, runDepBody, assetIdParam } from "./validators.js
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { currentPeriodIST } from "../../shared/ist-date.js";
 import { z } from "zod";
 
 const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin", "finance_officer"];
@@ -30,6 +31,11 @@ export async function depRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = runDepBody.parse(req.body);
+    // UAT T-PERIOD D-07: depreciation is charged for a month that has begun, never in advance (a run for March 2027 on
+    // 4 Nov 2026 used to post). The month is judged by the IST calendar; finance refuses a future month too.
+    if (body.period > currentPeriodIST()) {
+      throw new HttpError(422, "DEP_FUTURE_PERIOD", `depreciation cannot be charged for ${body.period}: that month has not started yet (today is ${currentPeriodIST()} IST)`);
+    }
     // GAP-ASSETS-DEPRECIATION-02: a period whose entries are all posted answers 409 instead of a
     // success-looking 202 (the consumer would find nothing due). Safe to re-run while any entry is pending.
     const books = await repo.summarizePeriod(ctx.tenantId, body.period, body.depBook === "all" ? undefined : body.depBook);

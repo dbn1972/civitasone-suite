@@ -17,6 +17,8 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeVendors } from "../src/modules/masters/schema.js";
+import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
+import { currentFyIST } from "../src/shared/ist-date.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -38,6 +40,10 @@ beforeAll(async () => {
   app = await buildApp();
   tokenA = tokenForTenant(TENANT_A, ACTOR_A);
   tokenB = tokenForTenant(TENANT_B, ACTOR_B);
+  // A sanction needs its head and a budget for the year (UAT T-PERIOD D-03 / T-EDGE TE-02)
+  const head = "eeeeeeee-0001-0000-0000-000000000001";
+  await scoped(TENANT_A, (tx) => tx.insert(financeHeads).values({ id: head, tenantId: TENANT_A, code: "RLS-SAN", name: "RLS sanction head", level: 1, classification: "expense", createdBy: ACTOR_A, updatedBy: ACTOR_A }).onConflictDoNothing());
+  await scoped(TENANT_A, (tx) => tx.insert(financeBudgets).values({ tenantId: TENANT_A, headId: head, fy: currentFyIST(), beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: ACTOR_A, updatedBy: ACTOR_A }).onConflictDoNothing());
 });
 
 afterAll(async () => {

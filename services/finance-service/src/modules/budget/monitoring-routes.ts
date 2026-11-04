@@ -1,3 +1,4 @@
+import { todayIST } from "../../shared/ist-date.js";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as allocRepo from "./allocation-repo.js";
@@ -68,7 +69,7 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
     const totals = summarisePortfolio(rows.map((r) => bookOf(r, books)), elapsedBps);
     return reply.send({
       fy: q.fy,
-      asOf: (q.asOf ?? new Date().toISOString().slice(0, 10)),
+      asOf: (q.asOf ?? todayIST()),
       fractionElapsedBps: elapsedBps.toString(),
       totals: serializeTotals(totals),
       lines: rows.map((r) => serializeLine(r, elapsedBps, labels, books)),

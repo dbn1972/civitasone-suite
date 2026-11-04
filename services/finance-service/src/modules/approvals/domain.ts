@@ -3,7 +3,8 @@ import { DomainError } from "../masters/domain.js";
 
 export { DomainError };
 
-export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax"] as const;
+// UAT T-PERIOD D-01: period_reopen -- reopening a HARD-closed month (second finance_admin; migration 0161).
+export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen"] as const;
 export type ChangeRequestKind = (typeof CHANGE_REQUEST_KINDS)[number];
 
 export type FinanceSettings = {

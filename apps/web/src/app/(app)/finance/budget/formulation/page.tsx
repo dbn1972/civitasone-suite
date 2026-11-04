@@ -7,7 +7,7 @@ import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYea
 import { FyFilter } from "../../_components/FyFilter";
 import { FormulationTable } from "./FormulationTable";
 import { formatMoney } from "@/lib/formatters";
-import { BUDGET_TAB_ALL, budgetTabOf, parseBudgetTab, priorYearBeByHead } from "../_lib/budgetColumns";
+import { BUDGET_TAB_ALL, budgetTabOf, parseBudgetTab, previousFinancialYear, priorYearBeByHead } from "../_lib/budgetColumns";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,6 +18,7 @@ export default async function BudgetFormulationPage(
 ) {
   const searchParams = await props.searchParams;
   const t = await getTranslations("financeBudgetFormulation");
+  const tl = await getTranslations("financeLapseStatement");
   // GAP-FINANCE-BUDGET-FORMULATION-02: the headline is THIS fiscal year's
   // proposed Budget Estimate. It used to sum sanctionedAmount (the live RE)
   // across EVERY fiscal year and label that "Proposed Outlay". The FY comes
@@ -27,10 +28,23 @@ export default async function BudgetFormulationPage(
       ? searchParams.fy
       : currentFinancialYear();
 
-  const result = await getFinanceBudgets();
+  // fx-p3: the list endpoint honours ?fy=, so ask for the selected year and (for the "Last Year (BE)" column) the
+  // previous one. The rows are still filtered by financialYear here, so a server that ignores ?fy= cannot leak
+  // another year into the table, and a row returned by both calls is counted once.
+  const prevFy = previousFinancialYear(fy);
+  const [result, prevResult] = await Promise.all([
+    getFinanceBudgets(fy),
+    prevFy ? getFinanceBudgets(prevFy) : Promise.resolve(null),
+  ]);
   // GAP-FINANCE-BUDGET-FORMULATION-03: a failed fetch shows "—" cards and a
   // Retry state, never ₹0.00 / 0 above "No records found".
   const errored = toResourceState(result).status === "error";
+  const seen = new Set<string>();
+  const allRows = [...result.data, ...(prevResult && prevResult.source !== "error" ? prevResult.data : [])].filter((b) => {
+    if (seen.has(b.id)) return false;
+    seen.add(b.id);
+    return true;
+  });
   const budgets = result.data.filter((b) => b.financialYear === fy);
 
   // beMinor is a minor-unit (paise) decimal string — sum as BigInt so
@@ -40,7 +54,7 @@ export default async function BudgetFormulationPage(
   const approved = budgets.filter((b) => b.status === "approved").length;
   // GAP-FINANCE-BUDGET-FORMULATION-01: last year's BE for the same head, from
   // the previous FY's rows (absent -> the table shows "—", never a guess).
-  const priorBe = priorYearBeByHead(result.data, fy);
+  const priorBe = priorYearBeByHead(allRows, fy);
   const uniqueHeads = new Set(budgets.map((b) => b.majorHead)).size;
 
   // GAP-FINANCE-BUDGET-FORMULATION-05: after creating an estimate the form links here with ?highlight=<id>; open the
@@ -58,6 +72,8 @@ export default async function BudgetFormulationPage(
         actions={
           <>
             <FyFilter />
+            {/* fx-p3: the 31 March lapse statement for the same year. */}
+            <a href={`/finance/budget/lapse-statement?fy=${encodeURIComponent(fy)}`} className="btn ghost">{tl("navLink")}</a>
             {/* "Circular" used to point at the same href as "+ New Estimate" —
                 there is no separate circular/notice feature to link to, so the
                 duplicate (misleading) action is removed rather than left as a

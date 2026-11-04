@@ -8,6 +8,7 @@ import { COMMANDS, CONSUMED, EVENTS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 import { postAcquisitionOrDefer } from "../enterprise/postings.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -124,7 +125,7 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
           currency: item.currency ?? "INR",
           bookValue: totalCost,
           accumulatedDep: 0n,
-          acquisitionDate: new Date().toISOString().slice(0, 10),
+          acquisitionDate: todayIST(),
           poRef: p.poRef,
           grnRef: `procurement_grn:${p.grnId}`,
           location: null, notes: `Auto-capitalized from GRN ${p.grnId}`,
@@ -138,10 +139,10 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
         // Acquisition journal on capitalization: a balanced StandardJournal Dr fixed asset / Cr GRN clearing with a
         // deterministic uuidV5 id keyed off the asset (a redelivered GRN hits the journal PK in finance and no-ops).
         // The accounts are the tenant's settings; if they are not configured the asset is kept and the journal deferred.
-        const acqDate = new Date().toISOString().slice(0, 10);
+        const acqDate = todayIST();
         await postAcquisitionOrDefer(tx, msg, { id: assetId, tenantId: msg.tenantId, costMinor: totalCost, date: acqDate }, "grn");
         await audit(tx, msg, "create_from_grn", "asset", assetId);
-        await enqueueDualDepSchedules(tx, msg, assetId, msg.tenantId, new Date().toISOString().slice(0, 10));
+        await enqueueDualDepSchedules(tx, msg, assetId, msg.tenantId, todayIST());
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, "asset", assetId));
     }

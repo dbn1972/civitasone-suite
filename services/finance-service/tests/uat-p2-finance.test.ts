@@ -21,7 +21,7 @@ import { bearer } from "./_fp02.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { deterministicId } from "../src/modules/gl/spine.js";
-import { financeHeads, financeSanctions } from "../src/modules/budget/schema.js";
+import { financeHeads, financeSanctions, financeBudgets } from "../src/modules/budget/schema.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { bookedLine } from "../src/modules/budget/monitoring-books.js";
 import { financeBills, financePayments } from "../src/modules/payments/schema.js";
@@ -81,6 +81,8 @@ beforeAll(async () => {
     { id: H.accum, tenantId: T, code: "1250", name: "Accumulated Depreciation", level: 0, classification: "capital", createdBy: MAKER, updatedBy: MAKER },
     { id: H.noBe, tenantId: T, code: "2210", name: "Medical", level: 0, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
   ]));
+  // GFR (UAT T-PERIOD D-03): the voucher debits 5100, so the head needs a budget provision for FY 2026-27
+  await scoped(T, (tx) => tx.insert(financeBudgets).values({ tenantId: T, headId: H.dep, fy: "2026-27", beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: MAKER, updatedBy: MAKER }));
 });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 

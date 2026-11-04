@@ -15,7 +15,7 @@
  * 2xxx liability, 4xxx income (4200 gain/loss on disposal is an expense head), 5xxx/6xxx expense.
  */
 import { financeHeads } from "../budget/schema.js";
-import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE } from "./system-heads.js";
+import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
 
 export type StandardGlHead = {
   code: string; name: string; classification: string;
@@ -56,6 +56,16 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: env("FINANCE_DEPOSIT_LIABILITY_CODE", "2060"), name: "Deposits / Retention (Control)", classification: "liability" },
     { code: env("PAYROLL_GL_NET_PAYABLE_HEAD", "2101"), name: "Net Salary Payable", classification: "liability" },
     { code: "2102", name: "Statutory Deductions Payable", classification: "liability" },
+    // UAT T-PERIOD D-10: the employee deductions, each on its own liability head (2102 keeps LIC / other recoveries)
+    { code: payrollDeductionHeads().gpf, name: "GPF Subscriptions Payable", classification: "liability" },
+    { code: payrollDeductionHeads().nps, name: "NPS Employee Contributions Payable", classification: "liability" },
+    { code: payrollDeductionHeads().pf, name: "EPF Employee Contributions Payable", classification: "liability" },
+    { code: payrollDeductionHeads().esi, name: "ESI Employee Contributions Payable", classification: "liability" },
+    { code: payrollDeductionHeads().pt, name: "Professional Tax Payable", classification: "liability" },
+    { code: payrollDeductionHeads().tds, name: "TDS Payable", classification: "liability" },
+    { code: payrollDeductionHeads().other, name: "Other Salary Deductions Payable (LIC / others)", classification: "liability" },
+    // UAT T-PERIOD D-05: the fund the income / expenditure net is carried into at year end
+    { code: ACCUMULATED_FUND, name: "Accumulated Fund (surplus brought forward)", classification: "equity" },
     { code: "2103", name: "Employer Contributions Payable", classification: "liability" },
     { code: env("FINANCE_TDS_PAYABLE_CODE", "2200"), name: "TDS Payable", classification: "liability" },
     // income (4090 is contra-revenue: an income-side head that carries a debit balance)
@@ -65,6 +75,8 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: env("FINANCE_BILLING_REVENUE_CODE", "4010"), name: "Billing Revenue", classification: "income" },
     { code: env("FINANCE_GAIN_LOSS_CODE", "4200"), name: "Gain/Loss on Asset Disposal", classification: "expense" },
     { code: env("FINANCE_FORFEIT_INCOME_CODE", "4300"), name: "Forfeited Deposits Income", classification: "income" },
+    // UAT T-PERIOD D-12: sale proceeds of a disposed asset (the only GL effect of a disposal on the cash basis)
+    { code: ASSET_SALE_RECEIPT, name: "Sale Proceeds of Assets", classification: "income" },
     // expenses
     // the default head GRN and works bills are raised against (finance integrations / works billing consumers)
     { code: envTrim("FINANCE_GRN_BILL_HEAD_CODE", "2202"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },

@@ -2,18 +2,17 @@
 
 /**
  * fp-finance-01: changes held for a second officer (maker != checker).
- * Fiscal-year activation, opening balances and HoA-code changes each wait here
+ * Fiscal-year activation, opening balances, HoA-code changes and (fx-p3) reopening a hard-closed period each wait here
  * until a DIFFERENT finance_admin approves or rejects them; the server enforces
  * the rule, this panel only avoids offering the maker a button that would fail.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { FinanceChangeRequest } from "@civitasone/types";
 import { ActionButton, Card } from "@/app/_components/ds";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDateTime, formatMoney } from "@/lib/formatters";
-import { toChangeRequestView } from "./changeRequests";
+import { toChangeRequestView, type WebFinanceChangeRequest } from "./changeRequests";
 
 type Decision = "approve" | "reject" | "cancel";
 
@@ -23,7 +22,7 @@ export function ChangeRequestsPanel({
   canDecide,
   title,
 }: {
-  requests: FinanceChangeRequest[];
+  requests: WebFinanceChangeRequest[];
   viewerId: string | null;
   canDecide: boolean;
   title?: string;

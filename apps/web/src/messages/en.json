@@ -11728,7 +11728,8 @@
       "fiscal_year_activate": "Activate fiscal year",
       "opening_balances_enter": "Opening balances for",
       "hoa_change": "HoA code change for head",
-      "settings_relax": "Switch off a control"
+      "settings_relax": "Switch off a control",
+      "period_reopen": "Reopen accounting period"
     },
     "hoaChange": "PFMS HoA code: {change}",
     "balancesSummary": "{count, plural, one {# entry} other {# entries}}, total debit {total}",
@@ -11741,7 +11742,8 @@
       "fiscal_year_activate": "The year becomes the active posting year and the current year is closed.",
       "opening_balances_enter": "The balances are posted to the ledger.",
       "hoa_change": "The new HoA code is used for PFMS payment and budget mapping.",
-      "settings_relax": "The control is switched off for this office. Ledger-shaping changes it protects will no longer need a second officer."
+      "settings_relax": "The control is switched off for this office. Ledger-shaping changes it protects will no longer need a second officer.",
+      "period_reopen": "The hard-closed period is reopened for posting. The reopening is recorded in the period reopen log."
     },
     "reject": "Reject",
     "rejectTitle": "Reject this change?",
@@ -17742,6 +17744,7 @@
     "status": {
       "active": "Active",
       "exhausted": "Exhausted",
+      "lapsed": "Lapsed",
       "draft": "Draft",
       "pending": "Pending",
       "submitted": "Submitted",
@@ -18385,5 +18388,69 @@
         "summary": "The look of the application for your office: colours, logo and branding."
       }
     }
+  },
+  "financeYearEnd": {
+    "area": "year-end close",
+    "title": "Year-end close",
+    "intro": "The year-end close records the 31 March lapse statement (unspent provision lapses and is not carried forward) and generates the next year opening balances. Only balance-sheet, deposit, advance, suspense and Public Account heads carry a balance forward; revenue and expenditure heads start the new year at zero.",
+    "rerun": "You can run it again safely: a second run does not post anything twice. A reason is needed every time.",
+    "fyLabel": "Financial year to close",
+    "loading": "Checking the year-end status…",
+    "loadError": "We could not check the year-end status. Try again in a few minutes.",
+    "retry": "Try again",
+    "statusNotRun": "Not run yet for FY {fy}.",
+    "statusDone": "Done for FY {fy} on {at} by {by}.",
+    "byUnknown": "an officer",
+    "openingBalances": "Opening balances generated for FY {next}",
+    "lapseTotal": "Provision lapsed on 31 March",
+    "fundCarried": "Fund balances carried forward",
+    "run": "Run year-end close",
+    "runAgain": "Run again",
+    "confirmTitle": "Run the year-end close for FY {fy}?",
+    "confirmDescription": "This records the 31 March lapse statement for FY {fy} and generates opening balances for FY {next} for the heads that carry forward. Your reason is recorded.",
+    "reasonLabel": "Reason for the year-end close",
+    "accepted": "Year-end close for FY {fy} accepted. The status updates in a moment.",
+    "adminOnly": "Only a finance administrator can run the year-end close."
+  },
+  "financeLapseStatement": {
+    "area": "lapse statement",
+    "title": "Lapse statement (31 March)",
+    "subtitle": "Head-wise final grant, expenditure and the unspent provision that lapses at the end of the financial year.",
+    "note": "Unspent provision lapses on 31 March and is not carried forward (GFR).",
+    "print": "Print / Save as PDF",
+    "recorded": "Recorded at year-end for FY {fy} on {at} by {by}.",
+    "provisional": "Provisional: the year-end close has not recorded the statement for FY {fy} yet, so these figures can still change.",
+    "cardTitle": "Lapse statement — FY {fy}",
+    "caption": "Lapse statement for FY {fy}: budget estimate, re-appropriation, final grant, expenditure, unspent provision and excess by head",
+    "colHead": "Head",
+    "colBe": "Budget estimate",
+    "colReapp": "Re-appropriation / supplementary (net)",
+    "colFinal": "Final grant",
+    "colExpenditure": "Expenditure",
+    "colLapse": "Unspent (lapses)",
+    "colExcess": "Excess",
+    "total": "Total",
+    "emptyTitle": "No budget provision for this year",
+    "emptyMessage": "No head has a budget provision in FY {fy}, so nothing lapses.",
+    "navLink": "Lapse statement"
+  },
+  "financeLedgerBalances": {
+    "area": "head balances",
+    "title": "Balances for {head} — FY {fy}",
+    "summary": "Opening balance {opening} · Closing balance {closing}",
+    "carryForwardNote": "This head carries its balance forward: its closing balance becomes the next year opening balance.",
+    "zeroStartNote": "This is a revenue / expenditure head: it starts the year at zero and its balance is not carried forward.",
+    "caption": "Month-by-month opening, debit, credit and closing balance of {head} for FY {fy}",
+    "colMonth": "Month",
+    "colOpening": "Opening",
+    "colDebit": "Debit",
+    "colCredit": "Credit",
+    "colClosing": "Closing",
+    "emptyTitle": "No postings this year",
+    "emptyMessage": "Nothing has been posted to this head in FY {fy}.",
+    "unknownHead": "Selected head",
+    "pickerLabel": "Opening and closing balances for one head",
+    "pickerNone": "Choose a head",
+    "pickerSubmit": "Show balances"
   }
 }

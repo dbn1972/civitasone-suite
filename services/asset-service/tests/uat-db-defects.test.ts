@@ -391,6 +391,31 @@ describe("6. route preflights answer 4xx for commands the consumer always reject
     expect((await getAsset(assetId))!.status).toBe("disposed");
   });
 
+  // UAT T-PERIOD D-12 (bundle 19): finance needs the disposal date (the journal is dated on it, not the processing day)
+  // and whether the acquisition was ever capitalised (on accrual a never-capitalised asset must not credit 1200).
+  it("the disposal sent to finance carries the disposal date and whether the asset was capitalised", async () => {
+    const notCapitalised = await seedAsset();
+    const capitalised = await seedAsset({ glPostStatus: "posted" });
+    for (const id of [notCapitalised, capitalised]) {
+      await approveWriteoff(id);
+      expect((await app.inject({ method: "PATCH", url: `/v1/assets/assets/${id}/dispose`, headers: bearer(), payload: dispose })).statusCode).toBe(202);
+    }
+    const gl = async (assetId: string) => until(async () => (await asTenant((tx) => tx.select().from(outbox).where(and(eq(outbox.tenantId, TENANT), eq(outbox.topic, "finance.gl.post")))))
+      .map((r) => r.payload as Record<string, unknown>).find((pl) => pl.type === "asset_disposal" && pl.assetId === assetId));
+    expect(await gl(notCapitalised)).toMatchObject({ disposalDate: "2026-10-28", capitalised: false });
+    expect(await gl(capitalised)).toMatchObject({ disposalDate: "2026-10-28", capitalised: true });
+  });
+
+  // UAT T-PERIOD D-07 (bundle 19): no depreciation charged in advance.
+  it("a depreciation run for a month that has not started is refused: 422 DEP_FUTURE_PERIOD, nothing queued", async () => {
+    const spy = vi.spyOn(appQueue, "publish");
+    const res = await app.inject({ method: "POST", url: "/v1/assets/depreciation/run", headers: bearer(), payload: { period: "2099-03" } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("DEP_FUTURE_PERIOD");
+    expect(spy.mock.calls.filter((c) => c[0] === COMMANDS.depRun)).toHaveLength(0);
+    spy.mockRestore();
+  });
+
   it("submit-approval is accepted once, then 409 DISPOSAL_ALREADY_PENDING while it awaits the eOffice decision", async () => {
     const assetId = await seedAsset();
     await approveWriteoff(assetId);

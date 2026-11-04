@@ -22,12 +22,13 @@ import { deterministicId } from "../gl/spine.js";
 import { fyFromDate } from "../hoa/voucher.js";
 import * as paymentsRepo from "../payments/repo.js";
 import type { BudgetAllocationRow } from "./allocation-schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 export type BookedLine = { allocatedMinor: bigint; committedMinor: bigint; actualMinor: bigint };
 
 export type BookableBill = { id: string; headId: string; netMinor: bigint; billDate: string | null; createdAt: Date | string };
 
-const billFy = (b: BookableBill): string => fyFromDate(b.billDate ?? new Date(b.createdAt).toISOString().slice(0, 10));
+const billFy = (b: BookableBill): string => fyFromDate(b.billDate ?? todayIST(new Date(b.createdAt)));
 
 /**
  * Pure core: the books-based line for one allocation, given the ledger net for its head/FY and the unpaid passed

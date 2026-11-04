@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { tenantTransaction } from "@civitasone/db";
+import { assertSanctionWithinAllocationTx, sanctionPreRead, sanctionPreReadFor } from "./sanction-control.js";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
@@ -9,6 +10,7 @@ import * as repo from "./repo.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { todayIST, currentFyIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -61,7 +63,7 @@ export async function handleAllocationDistributionCreate(
       id: p.id, tenantId: p.tenantId, allocationId: p.allocationId, fy: alloc.fy, headId: alloc.headId,
       fromOfficeId: p.fromOfficeId, toOfficeId: p.toOfficeId, amountMinor: BigInt(p.amountMinor),
       currency: p.currency, conditions: p.conditions ?? null, status: "draft",
-      effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+      effectiveFrom: p.effectiveFrom ?? todayIST(),
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
     await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "allocation_distribution", p.id);
@@ -116,6 +118,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
 
   sub(COMMANDS.sanctionCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; sanctionNo: string; purpose: string; headId: string; amountMinor: number; currency?: string };
+    const createFy = currentFyIST();
+    const createPre = await sanctionPreRead(p.tenantId, p.headId, createFy);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // R11 (maker-checker): a sanction is created as `pending_approval`. It does
@@ -123,6 +127,13 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       // checker (finance.sanction.approve, SoD-guarded) or the eOffice decision
       // loop moves it to `approved` and emits the event. A single officer can no
       // longer raise an already-sanctioned amount.
+      // UAT T-EDGE TE-02: never raise a sanction beyond what the head allocation still has available.
+      try {
+        await assertSanctionWithinAllocationTx(tx, p.tenantId, { id: p.id, headId: p.headId, amountMinor: BigInt(p.amountMinor) }, createFy, createPre);
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`[finance/budget] ${err.message}`, err);
+        throw err;
+      }
       await repo.insertSanction(tx, {
         id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
         headId: p.headId, amountMinor: BigInt(p.amountMinor),
@@ -136,6 +147,9 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
 
   sub(COMMANDS.sanctionApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    // UAT T-EDGE TE-02: books-based committed / expended for the head, read before the locking transaction.
+    const approveFy = currentFyIST();
+    const approvePre = await sanctionPreReadFor(p.tenantId, p.id, approveFy);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
@@ -152,6 +166,14 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: a sanction whose eOffice file is
       // in flight is approved only by the eOffice decision, never directly.
       // Conditional update: still pending AND no file in flight, atomically.
+      // UAT T-EDGE TE-02: the sanction must fit what the head allocation still has available, checked under the
+      // allocation row lock (sanction-control.ts; the synchronous route applies the same rule).
+      try {
+        await assertSanctionWithinAllocationTx(tx, p.tenantId, { id: p.id, headId: sanction.headId, amountMinor: sanction.amountMinor }, approveFy, approvePre ?? { committedMinor: 0n, expendedMinor: 0n });
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`[finance/budget] ${err.message}`, err);
+        throw err;
+      }
       if (!(await repo.approveSanctionIfNoEfile(tx, p.id, p.tenantId, msg.actorId))) {
         throw new NonRetryableError(`[finance/budget] EFILE_IN_FLIGHT_OR_STATE_CHANGED: id=${p.id} cannot be approved directly`);
       }
@@ -320,7 +342,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, fy: p.fy, deptCode: p.deptCode, headId: p.headId,
         ceilingMinor: BigInt(p.ceilingMinor), proposedMinor: BigInt(p.proposedMinor),
         currency: p.currency, justification: p.justification, status: "draft",
-        effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        effectiveFrom: p.effectiveFrom ?? todayIST(),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget_proposal", p.id);

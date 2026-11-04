@@ -219,7 +219,9 @@ beforeEach(() => {
   }));
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
   incrementBudgetUtilisedGuardedMock.mockResolvedValue(true);
-  findBudgetTxMock.mockResolvedValue(null); // head not budget-controlled — irrelevant to these tests
+  // GFR (UAT T-PERIOD D-03): an expenditure head needs a budget provision for the year; these tests are about other
+  // rules, so the head has an ample one.
+  findBudgetTxMock.mockImplementation(async (_tx: unknown, headId: string) => ({ id: `budget-${headId}`, tenantId: TENANT, headId, fy: "2025-26", beMinor: 10n ** 15n, reMinor: 10n ** 15n, allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR" }));
   hasChildHeadsTxMock.mockResolvedValue(false); // default: every head is a leaf
   getPeriodStatusTxMock.mockResolvedValue("open"); // default: period is genuinely open
   nextVoucherNoMock.mockImplementation(async () => ({ voucherNo: "JV/2025-26/000001", seq: 1 }));

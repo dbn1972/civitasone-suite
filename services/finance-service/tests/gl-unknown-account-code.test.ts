@@ -118,6 +118,10 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   hasChildHeadsTx: (...args: any[]) => hasChildHeadsTxMock(...args),
 }));
 
+// UAT T-PERIOD (b19): these are the ACCRUAL-basis journals (company-book depreciation, disposal write-off); on the
+// cash basis (the default) they are memoranda -- covered by uat-tperiod-gl-posting-rules.test.ts.
+vi.mock("../src/modules/approvals/repo.js", () => ({ loadSettingsTx: vi.fn(async () => ({ accountingBasis: "accrual", makerCheckerEnabled: true })) }));
+
 vi.mock("../src/modules/period-close/repo.js", () => ({
   getPeriodStatusTx: (...args: any[]) => getPeriodStatusTxMock(...args),
 }));

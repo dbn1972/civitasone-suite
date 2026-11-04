@@ -217,9 +217,9 @@ export async function getSanctionStatusAggregates(tenantId: string): Promise<Arr
     .groupBy(financeSanctions.status));
 }
 
-export async function listBudgetsByTenant(tenantId: string, limit: number, offset = 0): Promise<BudgetRow[]> {
+export async function listBudgetsByTenant(tenantId: string, limit: number, offset = 0, fy?: string): Promise<BudgetRow[]> {
   return scopedRead((tx) => tx.select().from(financeBudgets)
-    .where(eq(financeBudgets.tenantId, tenantId))
+    .where(fy ? and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.fy, fy)) : eq(financeBudgets.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
 }

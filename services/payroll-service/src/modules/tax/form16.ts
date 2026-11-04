@@ -10,6 +10,7 @@ import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
 import { computeHraClaimedMinor } from "./consumer.js";
 import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
+import { requireDeductor } from "../deductor-config/repo.js";
 
 /**
  * Parse "2025-26" → start/end year. Throws on malformed input.
@@ -184,6 +185,9 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
 export async function buildForm16WithMinor(tenantId: string, employeeId: string, fy: string): Promise<Form16WithMinor> {
   const { startYear, endYear } = parseFy(fy);
   const months = fyMonths(startYear);
+  // UAT P3 b19 D-15: Part A carries the configured, validated deductor -- or
+  // the certificate is refused (422 DEDUCTOR_NOT_CONFIGURED), never placeholder text.
+  const deductor = await requireDeductor(tenantId, "Form 16");
 
   // M3: only count figures from runs that have actually been finalised
   // (approved/disbursed). A draft/processing/failed run must not contribute to
@@ -297,11 +301,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     fy,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
     form16PartA: {
-      deductor: {
-        name: process.env.EMPLOYER_NAME ?? "<EMPLOYER NAME — configure EMPLOYER_NAME>",
-        tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
-        pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
-      },
+      deductor,
       deductee: { name: deducteeName, pan: deducteePan, panFlag: deducteePan ? "" : "PANNOTAVBL" },
       quarterlyTds: quarters,
       totalTdsDeposited: toSafeInt(totalTdsDeductedMinor / 100n),

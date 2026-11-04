@@ -11,7 +11,7 @@ const withIntl = ({ children }: { children: ReactNode }) => (
 const render = (ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) => rtlRender(ui, { wrapper: withIntl, ...options });
 
 const getBudgets = vi.fn();
-vi.mock("../../../../_data/loaders", () => ({ getFinanceBudgets: () => getBudgets() }));
+vi.mock("../../../../_data/loaders", () => ({ getFinanceBudgets: (...a: unknown[]) => getBudgets(...a) }));
 vi.mock("../../_components/FyFilter", () => ({ FyFilter: () => null }));
 vi.mock("@/lib/sync/resource", () => ({
   useSeededResource: (_k: string, initial: unknown) => ({ data: initial, fromCache: false, offline: false, cachedAt: null }),
@@ -172,5 +172,54 @@ describe("BudgetFormulationPage -- ?highlight= / ?tab=", () => {
     render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27", highlight: "<script>", tab: "nope" }) }));
     expect(selectedTab()).toBe("All");
     expect(screen.queryByText(/Estimate added|still being processed/)).not.toBeInTheDocument();
+  });
+});
+
+// fx-p3: GET /v1/finance/budgets honours ?fy= and a closed year row can read "lapsed".
+describe("BudgetFormulationPage -- ?fy= and lapsed rows (fx-p3)", () => {
+  beforeEach(() => getBudgets.mockReset());
+  const row = (o: Record<string, unknown>) => ({
+    id: "l1", majorHead: "2202", subHead: "Edu", sanctionedAmount: "0", releasedAmount: "0",
+    expenditure: "0", balance: "0", beMinor: "1000000", reMinor: "1000000", status: "active", financialYear: "2025-26", ...o,
+  });
+
+  it("asks the server for the selected FY (and the previous FY for the Last Year column)", async () => {
+    getBudgets.mockResolvedValue({ data: [], source: "api" });
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
+    const asked = getBudgets.mock.calls.map((c) => c[0]);
+    expect(asked).toContain("2025-26");
+    expect(asked).toContain("2024-25");
+  });
+
+  it("renders a lapsed row with the Lapsed label and offers a Lapsed tab", async () => {
+    getBudgets.mockImplementation(async (fy?: string) => ({
+      data: fy === "2025-26" ? [row({ status: "lapsed" }), row({ id: "l2", majorHead: "2203", status: "active" })] : [],
+      source: "api",
+    }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
+    expect(screen.getByRole("tab", { name: "Lapsed" })).toBeInTheDocument();
+    const lapsedRow = screen.getByText("2202").closest("tr")!;
+    expect(lapsedRow.textContent).toContain("Lapsed");
+  });
+
+  it("the same row returned by both calls is counted once", async () => {
+    getBudgets.mockResolvedValue({ data: [row({ financialYear: "2026-27", beMinor: "500" })], source: "api" });
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
+    expect(screen.getAllByText("2202")).toHaveLength(1);
+  });
+
+  it("a failed previous-year fetch only blanks the Last Year column, not the page", async () => {
+    getBudgets.mockImplementation(async (fy?: string) => (fy === "2026-27"
+      ? { data: [row({ financialYear: "2026-27" })], source: "api" }
+      : { data: [], source: "error", status: 503 }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
+    expect(screen.queryByText(/We couldn.t load/)).not.toBeInTheDocument();
+    expect(screen.getByText("2202")).toBeInTheDocument();
+  });
+
+  it("links to the lapse statement for the selected year", async () => {
+    getBudgets.mockResolvedValue({ data: [], source: "api" });
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
+    expect(screen.getByRole("link", { name: "Lapse statement" })).toHaveAttribute("href", "/finance/budget/lapse-statement?fy=2025-26");
   });
 });

@@ -4,6 +4,9 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import * as periodRepo from "./repo.js";
+import { applyPeriodReopen } from "./apply.js";
+import { NonRetryableError } from "@civitasone/queue";
+import { loadSettingsTx } from "../approvals/repo.js";
 import { deriveFY } from "../reports/routes.js";
 
 const log = pino({ name: "finance.period-close.consumer" });
@@ -64,35 +67,16 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
       // the period's advisory lock before reading/writing its status, so a
       // reopen can't interleave with a concurrent post or close either.
       await periodRepo.lockPeriodTx(tx, p.tenantId, p.period);
+      // UAT T-PERIOD D-01: the reopen itself (state change first, then log + event + audit; see period-close/apply.ts).
+      // Nothing closed to reopen (already open, or no row) = an idempotent no-op that records nothing.
+      // A HARD-closed month needs a second finance_admin when the tenant has the second-approver setting on (default):
+      // the route turns that reopen into a period_reopen change request, so a direct command for one is refused here.
       const existing = await periodRepo.findPeriodCloseTx(tx, p.tenantId, p.period);
-      if (!existing || existing.status === "open") return; // already open
-      const fromStatus = existing.status;
-
-      await periodRepo.upsertPeriodClose(tx, {
-        id: existing.id,
-        tenantId: p.tenantId,
-        fiscalYear: deriveFY(p.period),
-        period: p.period,
-        status: "open",
-        closedBy: null,
-        closedAt: null,
-        createdBy: existing.createdBy,
-      });
-      await periodRepo.logReopen(tx, {
-        id: crypto.randomUUID(),
-        tenantId: p.tenantId,
-        period: p.period,
-        fromStatus,
-        toStatus: "open",
-        ...(p.reason ? { reason: p.reason } : {}),
-        createdBy: msg.actorId,
-      });
-      await enqueue(tx, {
-        topic: "finance.period.reopened", eventType: "finance.period.reopened",
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { period: p.period, fromStatus, reason: p.reason },
-      });
-      await audit(tx, msg, "reopen", "period", p.period, { fromStatus, reason: p.reason ?? null });
+      if (existing?.status === "hard_close" && (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], p.tenantId)).makerCheckerEnabled) {
+        throw new NonRetryableError(`PERIOD_REOPEN_NEEDS_APPROVAL: period ${p.period} is hard-closed; reopening it needs a second finance_admin (period_reopen change request)`);
+      }
+      const moved = await applyPeriodReopen(tx, msg, { period: p.period, reason: p.reason ?? null });
+      if (!moved) log.info({ id: msg.messageId, period: p.period }, "period.reopen: period is not closed; nothing changed");
     });
     await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: msg.messageId, period: p.period }, "Processed period.reopen");

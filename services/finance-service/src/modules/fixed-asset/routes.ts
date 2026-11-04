@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { currentFyIST } from "../../shared/ist-date.js";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 
@@ -144,10 +145,9 @@ function bi(v: string | number | null | undefined): bigint {
   return BigInt(v);
 }
 
+// UAT T-PERIOD D-06: today in IST, not the UTC / server-local date.
 function deriveFY(d = new Date()): string {
-  const y = d.getFullYear();
-  const start = d.getMonth() + 1 >= 4 ? y : y - 1;
-  return `${start}-${String(start + 1).slice(2)}`;
+  return currentFyIST(d);
 }
 
 function fyBounds(fy: string): { start: string; end: string } {
