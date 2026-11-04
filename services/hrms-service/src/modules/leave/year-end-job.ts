@@ -6,13 +6,14 @@
  *    GET /v1/hrms/leave/year-end/preview and scripts/leave-year-end.ts.
  *  - planLeaveYearEnd(dryRun: false) -> applies it, one transaction per
  *    employee under the employee leave lock. Idempotent: every change writes a
- *    leave.hrms_leave_year_end_entries row (migration 0262, UNIQUE per tenant /
+ *    leave.hrms_leave_year_end_entries row (migration 0263, UNIQUE per tenant /
  *    credit date / employee / leave type / action); an employee + leave type
  *    with entries for the credit date is never processed again.
  *  - runLeaveYearEndTickOnce: the scheduled run (worker tick). OFF unless
- *    HRMS_LEAVE_YEAR_END_ENABLED=true, and it only acts within
- *    LEAVE_YEAR_END_CATCH_UP_DAYS of a credit date, so enabling it never
- *    back-credits an old half-year.
+ *    HRMS_LEAVE_YEAR_END_ENABLED=true. Within LEAVE_YEAR_END_CATCH_UP_DAYS of
+ *    a credit date it processes everyone; later in the half-year only the
+ *    employees appointed in it (appointment credit), so enabling it never
+ *    back-credits staff already in service.
  * Every change is audited (audit.event.record, action leave_year_end).
  */
 import { randomUUID } from "node:crypto";
@@ -26,8 +27,10 @@ import { enqueue } from "../../shared/outbox.js";
 import { todayIST, addDaysToDateOnly } from "../../shared/ist.js";
 import * as employeeRepo from "../employee/repo.js";
 import * as repo from "./repo.js";
+import { and, eq } from "drizzle-orm";
+import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import {
-  halfYearOf, isCreditDate, normaliseStartMonth, planEmployeeYearEnd, eolDaysWithin,
+  halfYearOf, isCreditDate, normaliseStartMonth, planEmployeeYearEnd, eolDaysWithin, diesNonDaysWithin,
   type HalfYear, type LeaveYearStartMonth, type YearEndAlloc, type YearEndLeaveType, type YearEndOp,
 } from "./year-end.js";
 
@@ -89,7 +92,7 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
     if ((code === "EL" || code === "HPL" || code === "CL") && !types[code]) types[code] = lt;
     if (code === "EOL") eolTypeIds.push(lt.id);
   }
-  const emps = await rows(tx, sql`SELECT id::text AS id, employee_no, date_of_joining::text AS doj, employee_type, status FROM employee.hrms_employees WHERE tenant_id = ${tenantId}::uuid ORDER BY employee_no ASC, id ASC`);
+  const emps = await rows(tx, sql`SELECT id::text AS id, employee_no, date_of_joining::text AS doj, date_of_birth::text AS dob, employee_type, status FROM employee.hrms_employees WHERE tenant_id = ${tenantId}::uuid ORDER BY employee_no ASC, id ASC`);
   const typeIds = [types.EL?.id, types.HPL?.id, types.CL?.id].filter((x): x is string => !!x);
   const allocsByEmployee = new Map<string, YearEndAlloc[]>();
   if (typeIds.length > 0) {
@@ -117,6 +120,15 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
     }
     for (const [emp, list] of byEmp) eolByEmployee.set(emp, eolDaysWithin(list, half.prevStart, half.prevEnd));
   }
+  // Rule 27(3): dies non of the previous half-year (service book) reduces the credit like EOL.
+  const diesNon = await tx.select({ employeeId: hrmsServiceBookEntries.employeeId, entryType: hrmsServiceBookEntries.entryType, effectiveDate: hrmsServiceBookEntries.effectiveDate, description: hrmsServiceBookEntries.description })
+    .from(hrmsServiceBookEntries).where(and(eq(hrmsServiceBookEntries.tenantId, tenantId), eq(hrmsServiceBookEntries.entryType, "dies_non")));
+  const dnByEmp = new Map<string, typeof diesNon>();
+  for (const d of diesNon) dnByEmp.set(d.employeeId, [...(dnByEmp.get(d.employeeId) ?? []), d]);
+  for (const [emp, list] of dnByEmp) {
+    const dn = diesNonDaysWithin(list.map((d) => ({ entryType: d.entryType, effectiveDate: String(d.effectiveDate), description: d.description })), half.prevStart, half.prevEnd);
+    if (dn > 0) eolByEmployee.set(emp, (eolByEmployee.get(emp) ?? 0) + dn);
+  }
   const doneRows = await rows(tx, sql`SELECT DISTINCT employee_id::text AS employee_id, leave_type_id::text AS leave_type_id FROM leave.hrms_leave_year_end_entries
     WHERE tenant_id = ${tenantId}::uuid AND run_key = ${runDate}::date`);
   const done = new Map<string, Set<string>>();
@@ -127,14 +139,17 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
   }
   return {
     half, startMonth, types, allocsByEmployee, eolByEmployee, done,
-    employees: emps.map((e) => ({ id: String(e.id), employeeNo: String(e.employee_no ?? e.id), dateOfJoining: e.doj ? String(e.doj) : null, employeeType: String(e.employee_type), status: String(e.status) })),
+    employees: emps.map((e) => ({ id: String(e.id), employeeNo: String(e.employee_no ?? e.id), dateOfJoining: e.doj ? String(e.doj) : null, dateOfBirth: e.dob ? String(e.dob) : null, employeeType: String(e.employee_type), status: String(e.status) })),
   };
 }
 
-function planAll(s: Snapshot): { ops: YearEndOp[]; alreadyProcessed: number } {
+function planAll(s: Snapshot, joinersOnly = false): { ops: YearEndOp[]; alreadyProcessed: number } {
   const ops: YearEndOp[] = [];
   let alreadyProcessed = 0;
   for (const e of s.employees) {
+    // Review SF5(c): after the catch-up window only employees appointed in the
+    // half-year are processed (their Rule 27(1) appointment credit).
+    if (joinersOnly && !(e.dateOfJoining && e.dateOfJoining.slice(0, 10) > s.half.start)) continue;
     const done = s.done.get(e.id);
     if (done) alreadyProcessed += 1;
     ops.push(...planEmployeeYearEnd({
@@ -198,9 +213,9 @@ async function applyEmployeeOps(tx: ScopedTx, tenantId: string, runDate: string,
 }
 
 /** Plan (dryRun) or apply the leave credit / year-end of `runDate` for one tenant. */
-export async function planLeaveYearEnd(db: Db, p: { tenantId: string; runDate: string; dryRun: boolean; actorId?: string }): Promise<LeaveYearEndResult> {
+export async function planLeaveYearEnd(db: Db, p: { tenantId: string; runDate: string; dryRun: boolean; actorId?: string; joinersOnly?: boolean }): Promise<LeaveYearEndResult> {
   const snap = await runWithTenant(p.tenantId, () => db.transaction((tx) => loadSnapshot(tx as unknown as ScopedTx, p.tenantId, p.runDate)));
-  const { ops, alreadyProcessed } = planAll(snap);
+  const { ops, alreadyProcessed } = planAll(snap, p.joinersOnly === true);
   const warnings: string[] = [];
   if (!snap.types.EL) warnings.push("the tenant has no EL leave type; no earned leave credited");
   if (!snap.types.CL && snap.half.opensLeaveYear) warnings.push("the tenant has no CL leave type; no casual leave lapsed / credited");
@@ -247,9 +262,13 @@ export async function runLeaveYearEndTickOnce(db: Db, opts: { asOf?: string; ena
       const startMonth = await runWithTenant(tenantId, () => db.transaction((tx) => resolveLeaveYearStartMonth(tx as unknown as ScopedTx, tenantId)));
       const half = halfYearOf(runDate, startMonth);
       const windowEnd = addDaysToDateOnly(half.start, LEAVE_YEAR_END_CATCH_UP_DAYS);
-      if (!windowEnd || runDate > windowEnd) continue;
+      if (!windowEnd) continue;
+      // Within the window: everyone. After it: only employees appointed in the
+      // half-year (review SF5(c)) -- an old half-year is never back-credited
+      // for staff already in service. Idempotent per credit date either way.
+      const joinersOnly = runDate > windowEnd;
       tenants += 1;
-      const r = await planLeaveYearEnd(db, { tenantId, runDate: half.start, dryRun: false });
+      const r = await planLeaveYearEnd(db, { tenantId, runDate: half.start, dryRun: false, joinersOnly });
       applied += r.applied;
     } catch (err) {
       failed += 1;

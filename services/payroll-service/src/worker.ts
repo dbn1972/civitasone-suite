@@ -24,6 +24,7 @@ import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.
 import { registerChallanConsumers } from "./modules/statutory-returns/challan-consumer.js";
 import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
+import { registerOpeningYtdConsumers } from "./modules/opening-ytd/consumer.js";
 import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
 import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
 import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
@@ -88,6 +89,7 @@ registerForm16BulkConsumers(queue);
 registerChallanConsumers(queue);
 registerDscConfigConsumers(queue);
 registerSponsorConfigConsumers(queue);
+registerOpeningYtdConsumers(queue);
 registerBankFileSigningConsumers(queue);
 registerCostingRuleConsumers(queue);
 registerLetterheadConsumers(queue);

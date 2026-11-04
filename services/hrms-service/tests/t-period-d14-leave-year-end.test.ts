@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import {
   halfYearOf, isCreditDate, completedCalendarMonths, halfYearCredit, planEmployeeYearEnd, eolDaysWithin,
-  leaveYearLabel, leaveYearStartOfLabel, normaliseStartMonth, type YearEndAlloc,
+  leaveYearLabel, leaveYearStartOfLabel, normaliseStartMonth, superannuationDate, diesNonDaysWithin, type YearEndAlloc,
 } from "../src/modules/leave/year-end.js";
 
 const EL = { id: "t-el", code: "EL", maxDays: 30 };
@@ -69,6 +69,38 @@ describe("half-year credit (CCS (Leave) Rules 27 and 29)", () => {
     expect(halfYearCredit("EL", h1, "2020-04-01", 200)).toMatchObject({ days: 0, eolReductionDays: 15 });
     expect(halfYearCredit("HPL", h1, "2020-04-01", 36)).toMatchObject({ days: 8, eolReductionDays: 2 });
     expect(eolDaysWithin([{ fromDate: "2026-12-20", toDate: "2027-01-10" }, { fromDate: "2026-08-01", toDate: "2026-08-05" }], "2026-07-01", "2026-12-31")).toBe(17);
+  });
+});
+
+describe("PR #2459 review SF5: retirement half-year, dies non, later allocations", () => {
+  const h1 = { start: "2027-01-01", end: "2027-06-30" };
+  it("FR 56(a): superannuation at 60 on the last day of the birth month (born on the 1st: the previous month)", () => {
+    expect(superannuationDate("1967-04-15")).toBe("2027-04-30");
+    expect(superannuationDate("1967-04-01")).toBe("2027-03-31");
+    expect(superannuationDate("1967-01-01")).toBe("2026-12-31");
+    expect(superannuationDate(null)).toBeNull();
+  });
+  it("Rule 27(2)(a): the retirement half-year gets 2.5 days per completed month up to retirement, not 15 in advance", () => {
+    expect(halfYearCredit("EL", h1, "2000-01-01", 0, "2027-04-30")).toMatchObject({ days: 10, basis: "pro_rata", completedMonths: 4 });
+    expect(halfYearCredit("EL", h1, "2000-01-01", 0, "2026-12-31")).toMatchObject({ days: 0, basis: "none" });
+    const ops = planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1967-04-15" }, types: { EL }, allocs: [alloc("el", "t-el", "2026-27", 100, 100)], eolDaysPrevHalf: 0 });
+    expect(ops[0]!.entries.find((e) => e.action === "credit")!.days).toBe(10);
+    expect(ops[0]!.warnings.join(" ")).toMatch(/retires on 2027-04-30/);
+    expect(planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: { ...emp(), dateOfBirth: "1966-11-20" }, types: { EL, CL }, allocs: [], eolDaysPrevHalf: 0 })).toEqual([]);
+  });
+  it("Rule 27(3): dies non (service book) counts with EOL in the reduction", () => {
+    const entries = [
+      { entryType: "dies_non", effectiveDate: "2026-08-10", description: "unauthorised absence; days=12" },
+      { entryType: "dies_non", effectiveDate: "2026-12-28", description: "strike from=2026-12-28;to=2027-01-05" },
+      { entryType: "dies_non", effectiveDate: "2026-03-01", description: "days=30" },
+      { entryType: "eol_without_qs", effectiveDate: "2026-09-01", description: "days=10" },
+    ];
+    expect(diesNonDaysWithin(entries, "2026-07-01", "2026-12-31")).toBe(16);
+    expect(halfYearCredit("EL", h1, "2000-01-01", 16 + 9).eolReductionDays).toBe(3);
+  });
+  it("dry run warns about a later FY-labelled allocation that would double-allocate (T-PERIOD EL 2027-28)", () => {
+    const ops = planEmployeeYearEnd({ half: halfYearOf("2027-01-01", 1), employee: emp(), types: { EL }, allocs: [alloc("el-fy", "t-el", "2026-27", 300, 290), alloc("el-next", "t-el", "2027-28", 300, 300)], eolDaysPrevHalf: 0 });
+    expect(ops[0]!.warnings.join(" ")).toMatch(/later allocation 2027-28 \(300 day\(s\)\) exists beside 2027-CY; it would double-allocate/);
   });
 });
 

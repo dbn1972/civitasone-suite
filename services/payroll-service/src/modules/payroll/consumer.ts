@@ -18,7 +18,7 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
 import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
@@ -386,16 +386,64 @@ export async function resolveArrearsReviewThresholdBps(tx: typeof db, tenantId: 
  * scopedRead, so the wrapper sets the GUC before this reads.
  */
 /**
- * UAT T-PERIOD D-02b: share of the month gross (basis points) that the
- * deductions of a slip, TDS included, may take; DEFAULT_MAX_DEDUCTION_SHARE_BPS
- * (75%) when the tenant has no settings row (migration 0163 default).
+ * UAT T-PERIOD D-02b / PR #2459 review (migration 0164): the tenant deduction
+ * ceiling (bps of wages earned; default 50%, Code on Wages 2019 s.18(2)),
+ * whether it applies at all (deduction_cap_applies, default true), and the
+ * payroll go-live date (TDS presumption boundary; NULL = first slip only).
  */
-export async function resolveMaxDeductionShareBps(tx: typeof db, tenantId: string): Promise<number> {
+export async function resolvePayrollTdsSettings(tx: typeof db, tenantId: string): Promise<{ maxDeductionShareBps: number; deductionCapApplies: boolean; goLiveDate: string | null }> {
   const rows = (await tx.execute(sql`
-    SELECT max_deduction_share_bps FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1
-  `)) as unknown as Array<{ max_deduction_share_bps: number | string | null }>;
-  const v = rows[0]?.max_deduction_share_bps;
-  return v != null ? Number(v) : DEFAULT_MAX_DEDUCTION_SHARE_BPS;
+    SELECT max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live
+      FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1
+  `)) as unknown as Array<{ max_deduction_share_bps: number | string | null; deduction_cap_applies: boolean | null; go_live: string | null }>;
+  const r = rows[0];
+  return {
+    maxDeductionShareBps: r?.max_deduction_share_bps != null ? Number(r.max_deduction_share_bps) : DEFAULT_MAX_DEDUCTION_SHARE_BPS,
+    deductionCapApplies: r?.deduction_cap_applies !== false,
+    goLiveDate: r?.go_live ?? null,
+  };
+}
+
+/** The ceiling the run applies (10000 = none, when the tenant disapplies the wage-law cap). */
+export async function resolveMaxDeductionShareBps(tx: typeof db, tenantId: string): Promise<number> {
+  return effectiveDeductionShareBps(await resolvePayrollTdsSettings(tx, tenantId));
+}
+
+/** PR #2459 review B1: the month of each employee first approved / disbursed regular slip in this system (any FY). */
+export async function resolveFirstSlipMonthsTx(tx: typeof db, tenantId: string, employeeIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (employeeIds.length === 0) return result;
+  const rows = (await tx.execute(sql`
+    SELECT s.employee_id::text AS employee_id, MIN(r.month)::text AS first_month
+    FROM payroll.payroll_slips s
+    JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
+    WHERE s.tenant_id = ${tenantId}::uuid AND s.employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+      AND r.status IN (${"approved"}, ${"disbursed"}) AND r.run_type IN (${"regular"}, ${"pensioner"}) AND s.status <> ${"excluded"}
+    GROUP BY s.employee_id
+  `)) as unknown as Array<{ employee_id: string; first_month: string }>;
+  for (const r of rows) result.set(r.employee_id, r.first_month);
+  return result;
+}
+
+export interface OpeningYtdPart { salaryMinor: bigint; tdsMinor: bigint; months: number }
+
+/** PR #2459 review B1: the APPROVED opening YTD of the FY per employee (authoritative). */
+export async function resolveOpeningYtdTx(tx: typeof db, tenantId: string, employeeIds: string[], fy: string): Promise<Map<string, { preGoLive?: OpeningYtdPart; priorEmployer?: OpeningYtdPart }>> {
+  const result = new Map<string, { preGoLive?: OpeningYtdPart; priorEmployer?: OpeningYtdPart }>();
+  if (employeeIds.length === 0) return result;
+  const rows = (await tx.execute(sql`
+    SELECT employee_id::text AS employee_id, source, months, salary_minor::text AS salary, tds_minor::text AS tds
+    FROM payroll.payroll_opening_ytd
+    WHERE tenant_id = ${tenantId}::uuid AND fy = ${fy} AND status = ${"approved"}
+      AND employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+  `)) as unknown as Array<{ employee_id: string; source: string; months: number; salary: string; tds: string }>;
+  for (const r of rows) {
+    const entry = result.get(r.employee_id) ?? {};
+    const part = { salaryMinor: BigInt(r.salary), tdsMinor: BigInt(r.tds), months: Number(r.months) };
+    if (r.source === "pre_go_live") entry.preGoLive = part; else entry.priorEmployer = part;
+    result.set(r.employee_id, entry);
+  }
+  return result;
 }
 
 export async function resolveProtectedNetFloorMinor(tx: typeof db, tenantId: string): Promise<bigint> {
@@ -1067,7 +1115,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   }, { visibilityTimeout: 300 });
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[]; netPayAcknowledgements?: NetPayAcknowledgement[] };
+    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[]; netPayAcknowledgements?: NetPayAcknowledgement[]; tdsAcknowledgements?: TdsAcknowledgement[] };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);
@@ -1101,6 +1149,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // UAT T-PERIOD D-02b: a slip that pays nothing is not approved unacknowledged.
       const unackedNet = unacknowledgedNonPositiveNet(nonPositiveNetSlipsOf(slips), p.netPayAcknowledgements ?? []);
       if (unackedNet.length > 0) throw new NonRetryableError(`${NET_PAY_NON_POSITIVE}: ${nonPositiveNetMessage(unackedNet)}`);
+      // PR #2459 review B2: presumed months / an unrecoverable TDS shortfall need an acknowledgement.
+      const tdsItems = tdsReviewOf(slips);
+      const unackedTds = unacknowledgedTds(tdsItems, p.tdsAcknowledgements ?? []);
+      if (unackedTds.length > 0) throw new NonRetryableError(`${unacknowledgedTdsCode(unackedTds)}: ${unacknowledgedTdsMessage(unackedTds)}`);
       // Review SF5: an excluded Rs 0-basic slip leaves the run -- status
       // "excluded" (not in any bank file: PAYABLE_SLIP_STATUSES is an
       // allow-list; never marked paid), one audit event per slip.
@@ -1164,7 +1216,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         ...(p.reason ? { reason: p.reason } : {}),
         ...(p.zeroBasicExclusions && p.zeroBasicExclusions.length > 0 ? { zeroBasicExclusions: p.zeroBasicExclusions } : {}),
         ...(p.arrearsAcknowledgements && p.arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements: p.arrearsAcknowledgements } : {}),
-        ...(p.netPayAcknowledgements && p.netPayAcknowledgements.length > 0 ? { netPayAcknowledgements: p.netPayAcknowledgements } : {}),
+        // review nit: the acknowledged slip figures are recorded with the reason.
+        ...(p.netPayAcknowledgements && p.netPayAcknowledgements.length > 0 ? { netPayAcknowledgements: p.netPayAcknowledgements.map((a) => {
+          const sl = slips.find((s) => s.employeeId === a.employeeId);
+          return { ...a, ...(sl ? { grossMinor: sl.grossMinor.toString(), totalDeductionsMinor: sl.totalDeductionsMinor.toString(), netPayMinor: sl.netPayMinor.toString() } : {}) };
+        }) } : {}),
+        ...(p.tdsAcknowledgements && p.tdsAcknowledgements.length > 0 ? { tdsAcknowledgements: p.tdsAcknowledgements.map((a) => ({
+          ...a, items: tdsItems.filter((i) => i.employeeId === a.employeeId && i.requiresAck).map((i) => ({ kind: i.kind, amountMinor: i.amountMinor.toString(), presumedMonths: i.presumedMonths, finalMonth: i.finalMonth })),
+        })) } : {}),
       };
       await audit(tx, msg, "approve", "payroll_run", p.id, Object.keys(approveDetails).length > 0 ? approveDetails : undefined);
     });
@@ -1917,6 +1976,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       flexElectionMakerChecker?: boolean;
       salaryRevisionSecondApprover?: boolean;
       maxDeductionShareBps?: number;
+      deductionCapApplies?: boolean;
+      payrollGoLiveDate?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1930,11 +1991,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
                subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
                flex_election_maker_checker,
                salary_revision_second_approver,
-               max_deduction_share_bps
+               max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live
           FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid
          FOR UPDATE
       `)) as unknown as Array<{
-        max_deduction_share_bps: number;
+        max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null;
         salary_revision_second_approver: boolean;
         floor: string; subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
         subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
@@ -1988,6 +2049,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
            WHERE tenant_id = ${p.tenantId}::uuid
         `);
       }
+      if (p.deductionCapApplies !== undefined) {
+        await tx.execute(sql`UPDATE payroll.payroll_settings SET deduction_cap_applies = ${p.deductionCapApplies} WHERE tenant_id = ${p.tenantId}::uuid`);
+      }
+      if (p.payrollGoLiveDate !== undefined) {
+        await tx.execute(sql`UPDATE payroll.payroll_settings SET payroll_go_live_date = ${p.payrollGoLiveDate}::date WHERE tenant_id = ${p.tenantId}::uuid`);
+      }
       await enqueue(tx, {
         topic: EVENTS.settingsUpdated, eventType: EVENTS.settingsUpdated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -2007,11 +2074,13 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         subsistenceRevisedMaxPctBps: Number(c.revisedMaxPctBps),
       });
       await audit(tx, msg, "update", "payroll_settings", p.tenantId, {
-        before: prev ? { ...snapshot(prev.floor, stored, priorSecondApprover), flexElectionMakerChecker: prev.flex_election_maker_checker, maxDeductionShareBps: Number(prev.max_deduction_share_bps) } : null,
+        before: prev ? { ...snapshot(prev.floor, stored, priorSecondApprover), flexElectionMakerChecker: prev.flex_election_maker_checker, maxDeductionShareBps: Number(prev.max_deduction_share_bps), deductionCapApplies: prev.deduction_cap_applies, payrollGoLiveDate: prev.go_live } : null,
         after: {
           ...snapshot(String(p.protectedNetFloorMinor), next, p.salaryRevisionSecondApprover ?? priorSecondApprover),
           flexElectionMakerChecker: p.flexElectionMakerChecker ?? prev?.flex_election_maker_checker ?? true,
           maxDeductionShareBps: p.maxDeductionShareBps ?? (prev ? Number(prev.max_deduction_share_bps) : DEFAULT_MAX_DEDUCTION_SHARE_BPS),
+          deductionCapApplies: p.deductionCapApplies ?? (prev ? prev.deduction_cap_applies : true),
+          payrollGoLiveDate: p.payrollGoLiveDate !== undefined ? p.payrollGoLiveDate : (prev?.go_live ?? null),
         },
       });
     });
@@ -2054,8 +2123,10 @@ async function processPayrollRun(
   // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
   // resolveProtectedNetFloorMinor's own doc comment); now routed through scopedRead.
   const protectedNetFloorMinor = await scopedRead((tx) => resolveProtectedNetFloorMinor(tx, p.tenantId));
-  // UAT T-PERIOD D-02b: share of gross the deductions (TDS included) may take.
-  const maxDeductionShareBps = await scopedRead((tx) => resolveMaxDeductionShareBps(tx, p.tenantId));
+  // UAT T-PERIOD D-02b / PR #2459 review: deduction ceiling (Code on Wages
+  // s.18(2), unless the tenant disapplies it) and the payroll go-live date.
+  const tdsSettings = await scopedRead((tx) => resolvePayrollTdsSettings(tx, p.tenantId));
+  const maxDeductionShareBps = effectiveDeductionShareBps(tdsSettings);
   // DOM-008: effective-dated PF/ESI/80C/80D config, resolved once per run
   // (tenantId + month are constant across every employee in this run).
   // FORCE-RLS fix: resolveRunStatutoryConfig already took `tx: typeof db`
@@ -2187,9 +2258,14 @@ async function processPayrollRun(
     // Review SF1: LOP recorded for months with no slip (kept out of the estimate).
     const unrecordedLopByEmployee = await resolveUnrecordedLopDaysTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
     const unrecordedEstimated: Array<{ employee: string; months: string[] }> = [];
+    // PR #2459 review B1: the first slip of each employee here, and the approved opening YTD.
+    const firstSlipMonthByEmployee = await resolveFirstSlipMonthsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds);
+    const openingYtdByEmployee = await resolveOpeningYtdTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStr);
+    const fyGaps: Array<{ employee: string; months: string[] }> = [];
+    const recoveryDeferred: Array<{ employee: string; employeeId: string; deferredMinor: string }> = [];
     // UAT T-PERIOD D-02b: TDS deducted above the FY liability / TDS held back by the net-pay cap.
     const tdsExcess: Array<{ employee: string; employeeId: string; liabilityMinor: string; deductedMinor: string; excessMinor: string }> = [];
-    const tdsCapped: Array<{ employee: string; employeeId: string; dueMinor: string; deductedMinor: string; shortfallMinor: string }> = [];
+    const tdsCapped: Array<{ employee: string; employeeId: string; dueMinor: string; deductedMinor: string; shortfallMinor: string; finalMonth: boolean }> = [];
     const npsBaseDaMissing: Array<{ employee: string; periods: string[] }> = [];
     // T-STAT F03 / review SF3: every arrears input read once for the whole run.
     const retroContext: RetroArrearsRunContext = (p.runType ?? "regular") === "regular"
@@ -2425,9 +2501,47 @@ async function processPayrollRun(
       // query. A miss on either matches that function's own "no rows" value
       // (null for declaration, 0n for TDS-YTD).
       const decl = declarationByEmployee.get(emp.id) ?? null;
+      // PR #2459 review B1: an approved opening YTD is authoritative -- the
+      // previous-employer figures (Form 12B) replace the declaration, and the
+      // salary / TDS paid here before go-live are actuals, not estimates.
+      const opening = openingYtdByEmployee.get(emp.id);
+      const preGoLive = opening?.preGoLive;
+      const priorEmployer = opening?.priorEmployer;
+      const prevSalaryMinor = priorEmployer ? priorEmployer.salaryMinor : (decl?.prevEmployerSalaryMinor ?? 0n);
       // Sec 192 true-up: prev-employer TDS counts toward tax already deducted this FY.
       const tdsYtdMinor = (tdsYtdByEmployee.get(emp.id) ?? 0n)
-        + (decl?.prevEmployerTdsMinor ?? 0n);
+        + (priorEmployer ? priorEmployer.tdsMinor : (decl?.prevEmployerTdsMinor ?? 0n))
+        + (preGoLive?.tdsMinor ?? 0n);
+      // F02 + review SF1 + PR #2459 review B1: in-service months with no regular
+      // slip. Only those BEFORE the later of go-live and the first slip here,
+      // with no opening YTD, are estimated (TDS presumed; acknowledgement
+      // required). A gap after that boundary is neither estimated nor presumed.
+      const paid = fyPaidByEmployee.get(emp.id) ?? { grossMinor: 0n, months: 0, recordedMonths: [] };
+      const unrecordedAll = unrecordedFyMonthList(fyStart, p.month, emp.dateOfJoining, paid.recordedMonths);
+      const boundary = presumptionBoundaryMonth(tdsSettings.goLiveDate, firstSlipMonthByEmployee.get(emp.id) ?? null, p.month);
+      const split = splitUnrecordedMonths(unrecordedAll, boundary, opening != null || prevSalaryMinor > 0n);
+      let unrecordedLopMinor = 0n;
+      {
+        const ledger = unrecordedLopByEmployee.get(emp.id);
+        for (const m of split.presumed) {
+          const days = ledger?.get(m) ?? 0;
+          if (days > 0) {
+            const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
+            // UAT L2-N5: LOP falls on HRA as on Basic + DA (consolidated pay: no HRA).
+            const hraM = plan.slipProfile.kind === "consolidated_contract" ? 0n : govtHraMinor(scaleBasicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
+            unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
+          }
+        }
+      }
+      if (split.presumed.length > 0) unrecordedEstimated.push({ employee: emp.employeeNo ?? emp.id, months: split.presumed });
+      if (split.gaps.length > 0 && opening == null) fyGaps.push({ employee: emp.employeeNo ?? emp.id, months: split.gaps });
+      const fyPaidForTds = {
+        grossMinor: paid.grossMinor + (preGoLive?.salaryMinor ?? 0n), months: paid.months + (preGoLive?.months ?? 0),
+        unrecordedMonths: split.presumed.length, unrecordedLopMinor,
+      };
+      // The last FY month, or the month of separation: no later true-up exists.
+      const separating = !!emp.dateOfLeaving && emp.dateOfLeaving.slice(0, 7) === p.month;
+      const finalTdsMonth = 12 - monthIdxInFy === 1 || separating;
 
       // Engagement statutory gates carried on the run input (default: on).
       const eng = emp as { statutoryPf?: boolean; statutoryEsi?: boolean; statutoryNps?: boolean };
@@ -2476,30 +2590,14 @@ async function processPayrollRun(
         fyStartYear: fyStart,
         tdsYtdMinor,
         monthsRemaining: 12 - monthIdxInFy,
-        fyPaidToDate: (() => {
-          const paid = fyPaidByEmployee.get(emp.id) ?? { grossMinor: 0n, months: 0, recordedMonths: [] };
-          // F02 + review SF1: in-service months with no regular slip are estimated
-          // at the regular pay, net of LOP recorded for them; a declared
-          // previous-employer salary replaces the estimate (computeSlip).
-          const unrecorded = unrecordedFyMonthList(fyStart, p.month, emp.dateOfJoining, paid.recordedMonths);
-          const ledger = unrecordedLopByEmployee.get(emp.id);
-          let unrecordedLopMinor = 0n;
-          for (const m of unrecorded) {
-            const days = ledger?.get(m) ?? 0;
-            if (days > 0) {
-              const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
-              // UAT L2-N5: LOP falls on HRA as on Basic + DA (consolidated pay: no HRA).
-              const hraM = plan.slipProfile.kind === "consolidated_contract" ? 0n : govtHraMinor(scaleBasicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
-              unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
-            }
-          }
-          if (unrecorded.length > 0 && !((decl?.prevEmployerSalaryMinor ?? 0n) > 0n)) unrecordedEstimated.push({ employee: emp.employeeNo ?? emp.id, months: unrecorded });
-          return { grossMinor: paid.grossMinor, months: paid.months, unrecordedMonths: unrecorded.length, unrecordedLopMinor };
-        })(),
+        fyPaidToDate: fyPaidForTds,
+        tdsFlags: { presumedMonths: split.presumed.length, finalMonth: finalTdsMonth },
         arrearPensionBaseMinor: earned.arrearPensionBaseMinor,
         protectedNetFloorMinor,
         maxDeductionShareBps,
-        ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor, prevEmployerSalaryMinor: decl.prevEmployerSalaryMinor, otherSourcesIncomeMinor: decl.otherSourcesIncomeMinor, perquisitesMinor: decl.perquisitesMinor } } : {}),
+        ...(decl
+          ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor, prevEmployerSalaryMinor: prevSalaryMinor, otherSourcesIncomeMinor: decl.otherSourcesIncomeMinor, perquisitesMinor: decl.perquisitesMinor } }
+          : prevSalaryMinor > 0n ? { declaration: { prevEmployerSalaryMinor: prevSalaryMinor } } : {}),
         rawComponents: plan.applyRunStructure ? rawComponents : [],
         components: adHoc,
       });
@@ -2512,7 +2610,10 @@ async function processPayrollRun(
         tdsExcess.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, liabilityMinor: result.tdsLiabilityMinor.toString(), deductedMinor: tdsYtdMinor.toString(), excessMinor: result.tdsExcessMinor.toString() });
       }
       if (result.tdsShortfallMinor > 0n) {
-        tdsCapped.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, dueMinor: (result.tdsMinor + result.tdsShortfallMinor).toString(), deductedMinor: result.tdsMinor.toString(), shortfallMinor: result.tdsShortfallMinor.toString() });
+        tdsCapped.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, dueMinor: (result.tdsMinor + result.tdsShortfallMinor).toString(), deductedMinor: result.tdsMinor.toString(), shortfallMinor: result.tdsShortfallMinor.toString(), finalMonth: finalTdsMonth });
+      }
+      if (result.recoveryCarryForwardMinor > 0n) {
+        recoveryDeferred.push({ employee: emp.employeeNo ?? emp.id, employeeId: emp.id, deferredMinor: result.recoveryCarryForwardMinor.toString() });
       }
       const appliedEmi = result.deductions.find((d) => d.code === "LOAN_EMI")?.amountMinor ?? 0n;
       let emiToAllocate = appliedEmi;
@@ -2671,17 +2772,34 @@ async function processPayrollRun(
     if (tdsCapped.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "TDS_CAPPED_BY_NET_PAY",
-        message: `${tdsCapped.length} employee(s) owe more TDS this month than the salary left after the other deductions and the configured deduction ceiling (${maxDeductionShareBps / 100}% of gross, protected net floor); the balance is deducted by the true-up of the following months of the FY`,
+        message: `${tdsCapped.length} employee(s) owe more TDS this month than the deduction limit allows (${maxDeductionShareBps / 100}% of wages earned${tdsSettings.deductionCapApplies ? ", Code on Wages 2019 s.18(2)" : ", wage-law cap not applied: protected net pay only"}). In the last FY month or the separation month the shortfall cannot be recovered through payroll this FY -- collect separately or adjust before Form 16; in any other month the next s.192 true-up recomputes it within the same limit. Each case is listed in the approval review`,
         count: tdsCapped.length,
         maxDeductionShareBps,
+        unrecoverableCount: tdsCapped.filter((e) => e.finalMonth).length,
         employees: tdsCapped.slice(0, 200),
+      });
+    }
+    if (recoveryDeferred.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "RECOVERY_DEFERRED_BY_DEDUCTION_CAP",
+        message: `${recoveryDeferred.length} employee(s) have loan / arrear recovery deferred: statutory deductions come first and the total stays within the deduction limit and the protected net pay`,
+        count: recoveryDeferred.length,
+        employees: recoveryDeferred.slice(0, 200),
+      });
+    }
+    if (fyGaps.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "FY_MONTHS_WITHOUT_SLIP",
+        message: `${fyGaps.length} employee(s) have FY months after their first slip here with no slip (e.g. a skipped month). No salary is estimated and no TDS presumed for them; arrears paid later are taxed when paid`,
+        count: fyGaps.length,
+        employees: fyGaps.slice(0, 50),
       });
     }
     // Review SF1: months estimated at the regular pay because no slip exists here.
     if (unrecordedEstimated.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "UNRECORDED_FY_MONTHS_ESTIMATED",
-        message: `${unrecordedEstimated.length} employee(s) have earlier FY months in service with no slip in this system; TDS estimates them at the current regular pay (net of LOP in the ledger) and presumes the TDS for those months deducted at the same average rate. Declare previous-employer / previous-office salary and TDS for transfer-ins and pre-go-live months`,
+        message: `${unrecordedEstimated.length} employee(s) have FY months in service BEFORE go-live / their first slip here with no opening YTD; TDS estimates their salary at the current regular pay (net of LOP in the ledger) and PRESUMES the TDS for those months deducted at the average rate. Approval needs an acknowledgement for each; enter the opening YTD (pre-go-live salary and TDS, previous employer Form 12B) to replace the estimate`,
         count: unrecordedEstimated.length,
         employees: unrecordedEstimated.slice(0, 50),
       });
@@ -2954,6 +3072,8 @@ export async function computeAndInsertSlip(
     tdsYtdMinor?: bigint; monthsRemaining?: number; protectedNetFloorMinor?: bigint;
     /** UAT T-PERIOD D-02b: share of gross the deductions (TDS included) may take, bps. */
     maxDeductionShareBps?: number;
+    /** PR #2459 review B2: presumed months used, and whether this is the last FY / separation month. */
+    tdsFlags?: { presumedMonths: number; finalMonth: boolean };
     /** T-STAT F02: salary actually paid earlier in the FY (s.192 estimate). */
     fyPaidToDate?: { grossMinor: bigint; months: number };
     /** T-STAT M-NPS: Basic + DA part of the arrears on this slip. */
@@ -3048,6 +3168,12 @@ export async function computeAndInsertSlip(
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
     esiMinor: result.esiMinor, tdsMinor: result.tdsMinor,
     status: result.negativeNet ? "exception" : "computed",
+    // PR #2459 review B2: what the approver must see (approval-review).
+    tdsPresumedMonths: params.tdsFlags?.presumedMonths ?? 0,
+    tdsExcessMinor: result.tdsExcessMinor,
+    tdsShortfallMinor: result.tdsShortfallMinor,
+    tdsShortfallFinal: result.tdsShortfallMinor > 0n && params.tdsFlags?.finalMonth === true,
+    recoveryDeferredMinor: result.recoveryCarryForwardMinor,
     payProfile: params.payProfile?.kind ?? "govt_scale",
     profileSnapshot: params.profileSnapshot ?? null,
     pfWageMinor,

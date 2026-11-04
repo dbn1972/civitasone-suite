@@ -1,6 +1,6 @@
 /**
  * UAT T-PERIOD D-14 -- the leave year-end job against Postgres
- * (modules/leave/year-end-job.ts, migration 0262):
+ * (modules/leave/year-end-job.ts, migration 0263):
  *  - dry run (GET /v1/hrms/leave/year-end/preview, the script default) writes nothing;
  *  - apply on 1 Jan 2027 (calendar leave year): EL carried + 15 credited into a
  *    2027-CY allocation, the 2026-27 row emptied; CL lapsed and re-credited;
@@ -167,10 +167,19 @@ describe("T-PERIOD D-14: leave year-end job", () => {
     expect((await allocs(FY_TENANT, fy.e1)).find((a) => a.fy === "2027-28")).toMatchObject({ balance_days: 135 });
   });
 
-  it("the scheduled tick is off by default and only acts within the catch-up window of a credit date", async () => {
+  it("the scheduled tick is off by default; after the catch-up window it credits only joiners of the half-year (review SF5(c))", async () => {
     expect(await runLeaveYearEndTickOnce(db, { asOf: "2027-01-02" })).toMatchObject({ enabled: false, applied: 0 });
+    // a joiner of 2 Aug 2027, seen by the tick on 20 Sep (past the 14-day window of 1 Jul)
+    const joiner = randomUUID();
+    await asTenant(TENANT, async (tx) => {
+      const [d] = (await tx.execute(sql`SELECT department_id::text AS dept, designation_id::text AS desig FROM employee.hrms_employees WHERE id = ${ids.e1}::uuid`)) as unknown as Array<{ dept: string; desig: string }>;
+      await seedEmployee(tx, TENANT, joiner, "TP-JOIN-AUG", "2027-08-02", "permanent", "probation", d!.dept, d!.desig);
+    });
     const late = await runLeaveYearEndTickOnce(db, { asOf: "2027-09-20", enabled: true });
     expect(late.enabled).toBe(true);
+    // staff already in service are not back-credited
     expect((await allocs(TENANT, ids.e1)).find((a) => a.fy === "2027-CY" && a.type === ids.el)).toMatchObject({ balance_days: 315 });
+    // the joiner: Sep..Dec = 4 completed months x 2.5 = 10 days (Rule 27(1)(b))
+    expect((await allocs(TENANT, joiner)).find((a) => a.fy === "2027-CY" && a.type === ids.el)).toMatchObject({ balance_days: 10 });
   });
 });

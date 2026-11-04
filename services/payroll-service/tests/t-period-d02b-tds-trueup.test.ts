@@ -21,7 +21,10 @@
  * deduction share.
  */
 import { describe, it, expect } from "vitest";
-import { computeSlip, s192MonthlyTds, tdsCapForMonthMinor, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type SlipInput } from "../src/modules/payroll/domain.js";
+import {
+  computeSlip, s192MonthlyTds, tdsCapForMonthMinor, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type SlipInput,
+  presumptionBoundaryMonth, splitUnrecordedMonths, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, tdsReviewText, effectiveDeductionShareBps,
+} from "../src/modules/payroll/domain.js";
 import { annualTaxFromTaxableMinor } from "../src/modules/tax/engine.js";
 
 const R = (rupees: number): bigint => BigInt(rupees) * 100n;
@@ -53,7 +56,8 @@ describe("T-PERIOD D-02b: the exact T-PERIOD case (TP-EMP-01, FY 2026-27)", () =
     const jan = computeSlip({ ...tpEmp01, monthsRemaining: 3, tdsYtdMinor: 0n, fyPaidToDate: { grossMinor: 0n, months: 0, unrecordedMonths: 9 } });
     expect(jan.grossMinor).toBe(GROSS);
     // liability for the 3 months here = annual tax x 3 / 12, spread over 3 months.
-    expect(jan.tdsLiabilityMinor).toBe(ANNUAL_TAX - (ANNUAL_TAX * 9n + 6n) / 12n);
+    // (the presumed share rounded to the rupee, s.288B -- PR #2459 review SF2)
+    expect(jan.tdsLiabilityMinor).toBe(ANNUAL_TAX - (((ANNUAL_TAX * 9n + 6n) / 12n + 50n) / 100n) * 100n);
     expect(jan.tdsMinor / 100n).toBeGreaterThanOrEqual(33850n);
     expect(jan.tdsMinor / 100n).toBeLessThanOrEqual(33860n);
     expect(jan.tdsExcessMinor).toBe(0n);
@@ -115,9 +119,11 @@ describe("T-PERIOD D-02b: s.192 rules", () => {
       ...tpEmp01, monthsRemaining: 1, tdsYtdMinor: 0n, fyPaidToDate: { grossMinor: R(600000 * 11), months: 11 },
       maxDeductionShareBps: DEFAULT_MAX_DEDUCTION_SHARE_BPS,
     });
-    expect(mar.tdsMinor).toBe(tdsCapForMonthMinor({ grossMinor: GROSS, otherDeductionsMinor: NPS, maxDeductionShareBps: 7500 }));
-    expect(mar.totalDeductionsMinor).toBeLessThanOrEqual((GROSS * 7500n) / 10000n);
-    expect(mar.netPayMinor).toBeGreaterThanOrEqual(GROSS / 4n);
+    // PR #2459 review B3: default 50%, Code on Wages 2019 s.18(2).
+    expect(DEFAULT_MAX_DEDUCTION_SHARE_BPS).toBe(5000);
+    expect(mar.tdsMinor).toBe(tdsCapForMonthMinor({ grossMinor: GROSS, otherDeductionsMinor: NPS, maxDeductionShareBps: 5000 }));
+    expect(mar.totalDeductionsMinor).toBeLessThanOrEqual(GROSS / 2n);
+    expect(mar.netPayMinor).toBeGreaterThanOrEqual(GROSS / 2n);
     expect(mar.tdsShortfallMinor).toBeGreaterThan(0n);
     expect(mar.negativeNet).toBe(false);
   });
@@ -134,10 +140,102 @@ describe("T-PERIOD D-02b: s.192 rules", () => {
     expect(s.tdsMinor).toBe(R(10000));
   });
 
+  it("PR #2459 review: TDS is rounded to the nearest rupee (s.288B), the March balance included", () => {
+    // a balance of Rs 33,855.67 left for the last month
+    expect(s192MonthlyTds({ annualTaxMinor: 3_385_567n, tdsDeductedMinor: 0n, monthsRemaining: 1 }).tdsMinor).toBe(3_385_600n);
+    expect(s192MonthlyTds({ annualTaxMinor: 3_385_549n, tdsDeductedMinor: 0n, monthsRemaining: 1 }).tdsMinor).toBe(3_385_500n);
+    for (const [ytd, left, unrec] of [[0n, 1, 10], [R(135423), 1, 10], [R(1), 1, 0], [R(7), 3, 9], [R(333), 7, 2]] as const) {
+      const recorded = 12 - left - unrec;
+      const s = computeSlip({ ...tpEmp01, monthsRemaining: left, tdsYtdMinor: ytd + 37n, fyPaidToDate: { grossMinor: GROSS * BigInt(recorded), months: recorded, unrecordedMonths: unrec } });
+      expect(s.tdsMinor % 100n).toBe(0n);
+    }
+  });
+
+  it("PR #2459 review: the deduction share binds loan EMI / arrear recovery too (was 96.6% of gross); LOP is never trimmed by it", () => {
+    const base: SlipInput = {
+      ...tpEmp01, monthsRemaining: 6, tdsYtdMinor: R(200000), fyPaidToDate: { grossMinor: GROSS * 6n, months: 6 },
+      components: [
+        { code: "LOAN_EMI", name: "HBA instalment", type: "deduction", amountMinor: R(150000) },
+        { code: "ARREAR_RECOVERY", name: "Recovery", type: "deduction", amountMinor: R(30000) },
+      ],
+    };
+    const legacy = computeSlip(base); // share 100%: recoveries limited by the floor only
+    expect(legacy.totalDeductionsMinor * 1000n / legacy.grossMinor).toBeGreaterThan(900n);
+    const s = computeSlip({ ...base, maxDeductionShareBps: 7500 });
+    expect(s.totalDeductionsMinor).toBeLessThanOrEqual((GROSS * 7500n) / 10000n);
+    expect(s.netPayMinor).toBeGreaterThanOrEqual(GROSS / 4n);
+    expect(s.tdsMinor).toBe(legacy.tdsMinor); // statutory deductions first
+    const recovered = s.deductions.filter((d) => d.code === "LOAN_EMI" || d.code === "ARREAR_RECOVERY").reduce((a, d) => a + d.amountMinor, 0n);
+    expect(recovered + s.recoveryCarryForwardMinor).toBe(R(180000));
+    expect(s.totalDeductionsMinor).toBe((GROSS * 7500n) / 10000n); // the recoveries fill the ceiling exactly
+    // LOP stays whole (pay not earned), the share is of the salary earned
+    const withLop = computeSlip({ ...base, maxDeductionShareBps: 7500, components: [...base.components!, { code: "LOP", name: "Loss of Pay", type: "deduction", amountMinor: R(50000) }] });
+    expect(withLop.deductions.find((d) => d.code === "LOP")!.amountMinor).toBe(R(50000));
+    expect(withLop.totalDeductionsMinor - R(50000)).toBeLessThanOrEqual(((GROSS - R(50000)) * 7500n) / 10000n);
+  });
+
   it("tdsCapForMonthMinor: whole rupees, never negative", () => {
     expect(tdsCapForMonthMinor({ grossMinor: 100_050n, otherDeductionsMinor: 0n })).toBe(100_000n);
     expect(tdsCapForMonthMinor({ grossMinor: R(1000), otherDeductionsMinor: R(2000) })).toBe(0n);
     expect(tdsCapForMonthMinor({ grossMinor: R(1000), otherDeductionsMinor: R(100), maxDeductionShareBps: 5000 })).toBe(R(400));
+  });
+});
+
+describe("PR #2459 review B1: presumption only before go-live / the first slip here, never for gaps", () => {
+  it("boundary = the later of the go-live month and the first slip month (this run when there is none)", () => {
+    expect(presumptionBoundaryMonth(null, "2027-01", "2027-03")).toBe("2027-01");
+    expect(presumptionBoundaryMonth(null, null, "2027-03")).toBe("2027-03");
+    expect(presumptionBoundaryMonth("2026-11-01", "2026-06", "2027-03")).toBe("2026-11");
+    expect(presumptionBoundaryMonth("2026-04-01", "2027-01", "2027-03")).toBe("2027-01");
+  });
+
+  it("T-PERIOD, February skipped: Apr-Dec presumed, February a gap; an opening YTD presumes nothing", () => {
+    const unrecorded = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-02"];
+    expect(splitUnrecordedMonths(unrecorded, "2027-01", false)).toEqual({ presumed: unrecorded.slice(0, 9), gaps: ["2027-02"] });
+    expect(splitUnrecordedMonths(unrecorded, "2027-01", true)).toEqual({ presumed: [], gaps: unrecorded });
+  });
+
+  it("the March true-up spreads the liability over the 11 months paid (Feb not presumed), whole rupees", () => {
+    const mar = computeSlip({ ...tpEmp01, monthsRemaining: 1, tdsYtdMinor: R(33856), fyPaidToDate: { grossMinor: GROSS, months: 1, unrecordedMonths: 9 } });
+    const annual11 = annualTaxFromTaxableMinor(R(231428 * 11 - 75000), "new", 2026);
+    const presumed = ((annual11 * 9n + 5n) / 11n + 50n) / 100n * 100n;
+    expect(mar.tdsLiabilityMinor).toBe(annual11 - presumed);
+    expect(mar.tdsMinor).toBe(((annual11 - presumed - R(33856)) + 50n) / 100n * 100n);
+    expect(mar.tdsMinor % 100n).toBe(0n);
+  });
+});
+
+describe("PR #2459 review B2: TDS signals for the approver", () => {
+  const slip = (employeeId: string, employeeNo: string, over: Record<string, unknown>) => ({ employeeId, employeeNo, status: "computed", ...over });
+  const items = tdsReviewOf([
+    slip("a", "A-PRESUMED", { tdsPresumedMonths: 9 }),
+    slip("b", "B-EXCESS", { tdsExcessMinor: R(67711) }),
+    slip("c", "C-MARCH", { tdsShortfallMinor: R(1684209), tdsShortfallFinal: true }),
+    slip("d", "D-OCT", { tdsShortfallMinor: R(5000), tdsShortfallFinal: false, recoveryDeferredMinor: R(20000) }),
+    slip("x", "X-EXCLUDED", { status: "excluded", tdsPresumedMonths: 3 }),
+  ]);
+
+  it("presumed months and an unrecoverable (last month / separation) shortfall need an acknowledgement; excess and deferral are shown", () => {
+    expect(items.map((i) => [i.employeeNo, i.kind, i.requiresAck])).toEqual([
+      ["A-PRESUMED", "presumed_months", true], ["B-EXCESS", "excess", false], ["C-MARCH", "shortfall", true],
+      ["D-OCT", "recovery_deferred", false], ["D-OCT", "shortfall", false],
+    ]);
+    expect(unacknowledgedTds(items).map((i) => i.employeeNo)).toEqual(["A-PRESUMED", "C-MARCH"]);
+    expect(unacknowledgedTds(items, [{ employeeId: "a", reason: "Opening YTD to be entered" }]).map((i) => i.employeeNo)).toEqual(["C-MARCH"]);
+    expect(unacknowledgedTdsCode(unacknowledgedTds(items))).toBe("UNRECORDED_FY_MONTHS_ESTIMATED");
+    expect(unacknowledgedTdsCode(unacknowledgedTds(items, [{ employeeId: "a", reason: "Opening YTD to be entered" }]))).toBe("TDS_SHORTFALL_UNRECOVERABLE");
+  });
+
+  it("the last-month shortfall text states the truth; no promise of later collection", () => {
+    const final = tdsReviewText(items.find((i) => i.employeeNo === "C-MARCH")!);
+    expect(final).toContain("cannot be recovered through payroll this FY -- collect separately or adjust before Form 16");
+    expect(final).not.toMatch(/following months|later months/);
+    expect(tdsReviewText(items.find((i) => i.employeeNo === "B-EXCESS")!)).toMatch(/refundable/);
+  });
+
+  it("the wage-law cap can be disapplied per tenant (net-pay floor + acknowledgements then)", () => {
+    expect(effectiveDeductionShareBps({ maxDeductionShareBps: 5000, deductionCapApplies: true })).toBe(5000);
+    expect(effectiveDeductionShareBps({ maxDeductionShareBps: 5000, deductionCapApplies: false })).toBe(10000);
   });
 });
 

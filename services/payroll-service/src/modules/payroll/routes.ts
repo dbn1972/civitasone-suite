@@ -164,7 +164,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = approveRunBody.parse(req.body ?? {});
     await requireRun(id, ctx.tenantId);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason, body.zeroBasicExclusions ?? [], body.arrearsAcknowledgements ?? [], body.netPayAcknowledgements ?? []));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason, body.zeroBasicExclusions ?? [], body.arrearsAcknowledgements ?? [], body.netPayAcknowledgements ?? [], body.tdsAcknowledgements ?? []));
   });
 
   // T-STAT review SF4 / SF5: what approving this run needs reviewed -- the

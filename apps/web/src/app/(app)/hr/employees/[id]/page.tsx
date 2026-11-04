@@ -4,13 +4,14 @@ import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../.
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
-import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES, PENSION_SCHEME_CHECKER_ROLES, MEDICAL_INSURANCE_EDIT_ROLES, MEDICAL_INSURANCE_READ_ROLES, MEDICAL_INSURANCE_REVEAL_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES, PENSION_SCHEME_CHECKER_ROLES, MEDICAL_INSURANCE_EDIT_ROLES, MEDICAL_INSURANCE_READ_ROLES, MEDICAL_INSURANCE_REVEAL_ROLES, PAYROLL_STAFF_ROLES, OPENING_YTD_CHECKER_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
 import { EmployeeLoginLinkCard } from "./EmployeeLoginLinkCard";
 import { EmployeePensionSchemeCard, type SchemeChange } from "./EmployeePensionSchemeCard";
+import { EmployeeOpeningYtdCard } from "./EmployeeOpeningYtdCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
@@ -588,6 +589,15 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
           canRequest={!exited}
           canDecide={roles.some((r) => PENSION_SCHEME_CHECKER_ROLES.includes(r))}
           initialChanges={schemeChanges && schemeChanges.source !== "error" ? (schemeChanges.data ?? []) : null}
+        />
+      )}
+
+      {/* PR #2459 review B1: opening YTD (pre-go-live / previous employer) for s.192 TDS. Maker: payroll staff; checker: payroll admin. */}
+      {roles.some((r) => PAYROLL_STAFF_ROLES.includes(r)) && (
+        <EmployeeOpeningYtdCard
+          employeeId={params.id}
+          canEnter={roles.some((r) => PAYROLL_STAFF_ROLES.includes(r))}
+          canDecide={roles.some((r) => OPENING_YTD_CHECKER_ROLES.includes(r))}
         />
       )}
 

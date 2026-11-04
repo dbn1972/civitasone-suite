@@ -104,6 +104,11 @@ export async function listSlipsByTenant(
       payProfile: payrollSlips.payProfile,
       profileSnapshot: payrollSlips.profileSnapshot,
       pfWageMinor: payrollSlips.pfWageMinor,
+      tdsPresumedMonths: payrollSlips.tdsPresumedMonths,
+      tdsExcessMinor: payrollSlips.tdsExcessMinor,
+      tdsShortfallMinor: payrollSlips.tdsShortfallMinor,
+      tdsShortfallFinal: payrollSlips.tdsShortfallFinal,
+      recoveryDeferredMinor: payrollSlips.recoveryDeferredMinor,
       month: payrollRuns.month,
       runDeptId: payrollRuns.departmentId,
     })

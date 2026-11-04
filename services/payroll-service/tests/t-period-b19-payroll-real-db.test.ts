@@ -4,7 +4,7 @@
  *         net; a slip that pays nothing blocks approval (409
  *         NET_PAY_NON_POSITIVE) until acknowledged with a reason, which is
  *         audited; GET approval-review lists it; the deduction ceiling
- *         defaults to 75% (migration 0163).
+ *         defaults to 75% (migration 0164).
  *  D-11   a FAILED run no longer keeps its month pending_finalisation, so TDS
  *         reconciliation (and the 24Q gate) can match; a draft run still does.
  */
@@ -98,10 +98,13 @@ describe("T-PERIOD D-11: failed runs do not block TDS reconciliation / 24Q", () 
 });
 
 describe("T-PERIOD D-02b: March true-up and the net-pay approval guard", () => {
-  it("the deduction ceiling defaults to 75% (no settings row; and the column default)", async () => {
-    expect(await asTenant((tx) => resolveMaxDeductionShareBps(tx, tenantId))).toBe(7500);
+  it("the deduction ceiling defaults to 50% (Code on Wages s.18(2); no settings row, and the column default); disapplied -> none", async () => {
+    expect(await asTenant((tx) => resolveMaxDeductionShareBps(tx, tenantId))).toBe(5000);
     await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.payroll_settings (tenant_id, protected_net_floor_minor) VALUES (${tenantId}::uuid, 0) ON CONFLICT (tenant_id) DO NOTHING`));
-    expect(await asTenant((tx) => resolveMaxDeductionShareBps(tx, tenantId))).toBe(7500);
+    expect(await asTenant((tx) => resolveMaxDeductionShareBps(tx, tenantId))).toBe(5000);
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET deduction_cap_applies = false WHERE tenant_id = ${tenantId}::uuid`));
+    expect(await asTenant((tx) => resolveMaxDeductionShareBps(tx, tenantId))).toBe(10000);
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET deduction_cap_applies = true WHERE tenant_id = ${tenantId}::uuid`));
   });
 
   it("TP-EMP-01 March 2027 (Jan deducted Rs 1,35,423, 10 months presumed): slip TDS 0, net = gross - NPS, status computed", async () => {
@@ -163,6 +166,7 @@ describe("T-PERIOD D-02b: March true-up and the net-pay approval guard", () => {
         AND payload->>${"action"} = ${"approve"} AND payload->>${"resourceId"} = ${runId}
     `)) as unknown as Array<{ payload: { netPayAcknowledgements?: Array<{ employeeId: string; reason: string }> } }>);
     expect(audit).toHaveLength(1);
-    expect(audit[0]!.payload.netPayAcknowledgements).toEqual([{ employeeId: zeroNetEmp, reason }]);
+    // review nit: the acknowledged slip figures are recorded with the reason
+    expect(audit[0]!.payload.netPayAcknowledgements).toEqual([{ employeeId: zeroNetEmp, reason, grossMinor: "23142800", totalDeductionsMinor: "29029700", netPayMinor: "0" }]);
   });
 });

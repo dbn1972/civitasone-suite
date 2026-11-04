@@ -10,9 +10,12 @@
  *  - 15 days credited IN ADVANCE on the first day of each half-year;
  *  - in the half-year of appointment: 2.5 days per completed calendar month of
  *    service in that half-year (Rule 27(1)(b));
- *  - reduced by 1/10th of the extraordinary leave (EOL) availed in the
- *    PREVIOUS half-year, at most 15 days (Rule 27(2));
- *  - fractions rounded to the nearest day (Rule 27(3));
+ *  - in the half-year of retirement (superannuation, FR 56) or resignation:
+ *    2.5 days per completed calendar month up to that date, not 15 in
+ *    advance (Rule 27(2)(a));
+ *  - reduced by 1/10th of the extraordinary leave (EOL) AND dies non of the
+ *    PREVIOUS half-year, at most 15 days (Rule 27(3));
+ *  - fractions rounded to the nearest day;
  *  - the balance carried forward plus the credit may exceed 300 only inside
  *    the half-year: the advance credit is set off against leave taken in that
  *    half-year, and what still exceeds 300 at the next credit is LAPSED
@@ -138,16 +141,34 @@ export function roundToNearestDay(x: number): number {
 
 export interface HalfYearCredit { days: number; basis: "full" | "pro_rata" | "none"; eolReductionDays: number; completedMonths?: number }
 
-/** The advance credit of one half-year for EL or HPL. */
-export function halfYearCredit(kind: "EL" | "HPL", half: Pick<HalfYear, "start" | "end">, dateOfJoining: string | null, eolDaysPrevHalf: number): HalfYearCredit {
+/**
+ * FR 56(a): a government servant retires on the afternoon of the last day of
+ * the month in which he attains the age of superannuation (60); one born on
+ * the 1st attains it on the last day of the previous month. Pure.
+ */
+export function superannuationDate(dateOfBirth: string | null | undefined, age = 60): string | null {
+  if (!dateOfBirth || !ISO.test(dateOfBirth.slice(0, 10))) return null;
+  const [y, m, d] = ymd(dateOfBirth);
+  const ry = y + age;
+  if (d === 1) return m === 1 ? iso(ry - 1, 12, 31) : iso(ry, m - 1, lastDayOf(ry, m - 1));
+  return iso(ry, m, lastDayOf(ry, m));
+}
+
+/** The advance credit of one half-year for EL or HPL (`exitDate`: retirement / resignation, if known). */
+export function halfYearCredit(kind: "EL" | "HPL", half: Pick<HalfYear, "start" | "end">, dateOfJoining: string | null, eolDaysPrevHalf: number, exitDate: string | null = null): HalfYearCredit {
   const full = kind === "EL" ? EL_HALF_YEAR_CREDIT : HPL_HALF_YEAR_CREDIT;
+  const perMonth = kind === "EL" ? EL_PER_COMPLETED_MONTH : HPL_PER_COMPLETED_MONTH;
   if (dateOfJoining && dateOfJoining.slice(0, 10) > half.end) return { days: 0, basis: "none", eolReductionDays: 0 };
+  if (exitDate && exitDate.slice(0, 10) < half.start) return { days: 0, basis: "none", eolReductionDays: 0 };
   let base = full;
   let basis: HalfYearCredit["basis"] = "full";
   let completedMonths: number | undefined;
-  if (dateOfJoining && dateOfJoining.slice(0, 10) > half.start) {
-    completedMonths = completedCalendarMonths(dateOfJoining.slice(0, 10), half.end);
-    base = Math.min(full, roundToNearestDay(completedMonths * (kind === "EL" ? EL_PER_COMPLETED_MONTH : HPL_PER_COMPLETED_MONTH)));
+  const from = dateOfJoining && dateOfJoining.slice(0, 10) > half.start ? dateOfJoining.slice(0, 10) : null;
+  const to = exitDate && exitDate.slice(0, 10) < half.end ? exitDate.slice(0, 10) : null;
+  if (from || to) {
+    // Rule 27(1)(b) appointment half-year / Rule 27(2)(a) retirement half-year.
+    completedMonths = completedCalendarMonths(from ?? half.start, to ?? half.end);
+    base = Math.min(full, roundToNearestDay(completedMonths * perMonth));
     basis = "pro_rata";
   }
   const eol = Math.max(0, eolDaysPrevHalf);
@@ -157,7 +178,7 @@ export function halfYearCredit(kind: "EL" | "HPL", half: Pick<HalfYear, "start" 
 
 export interface YearEndAlloc { id: string; leaveTypeId: string; label: string; totalDays: number; balanceDays: number }
 export interface YearEndLeaveType { id: string; code: string; maxDays: number }
-export interface YearEndEmployee { id: string; employeeNo: string; dateOfJoining: string | null; employeeType: string; status: string }
+export interface YearEndEmployee { id: string; employeeNo: string; dateOfJoining: string | null; employeeType: string; status: string; dateOfBirth?: string | null }
 
 export type YearEndAction = "carry_forward" | "cap_lapse" | "credit" | "lapse";
 export interface YearEndEntry { action: YearEndAction; days: number; allocId: string | null; note?: string }
@@ -202,15 +223,27 @@ export function planEmployeeYearEnd(input: {
   const ops: YearEndOp[] = [];
   if (!IN_SERVICE_STATUSES.has(employee.status)) return ops;
   if (employee.dateOfJoining && employee.dateOfJoining.slice(0, 10) > half.end) return ops;
+  const exitDate = superannuationDate(employee.dateOfBirth ?? null);
+  if (exitDate && exitDate < half.start) return ops; // superannuated before the half-year
   const ccs = CCS_LEAVE_TYPES.has(employee.employeeType);
   const label = half.leaveYearLabel;
+  // Review SF5(d): an allocation for a LATER leave year (e.g. an FY-labelled EL
+  // 2027-28 row typed in by HR) would double-allocate beside this one.
+  const futureRows = (typeId: string): YearEndAlloc[] => allocs.filter((a) => {
+    if (a.leaveTypeId !== typeId || a.label.trim() === label) return false;
+    const s = leaveYearStartOfLabel(a.label);
+    return s != null && s > half.leaveYearStart;
+  });
+  const futureWarnings = (typeId: string): string[] => futureRows(typeId).map((a) =>
+    `a later allocation ${a.label.trim()} (${a.balanceDays} day(s)) exists beside ${label}; it would double-allocate -- remove it or fold it into ${label} before applying`);
 
   const credited = (code: "EL" | "HPL", t: YearEndLeaveType, cap: number | null): void => {
     if (done.has(t.id)) return;
-    const credit = halfYearCredit(code, half, employee.dateOfJoining, input.eolDaysPrevHalf);
+    const credit = halfYearCredit(code, half, employee.dateOfJoining, input.eolDaysPrevHalf, exitDate);
     const target = allocs.find((a) => a.leaveTypeId === t.id && a.label.trim() === label) ?? null;
     const entries: YearEndEntry[] = [];
-    const warnings: string[] = [];
+    const warnings: string[] = [...futureWarnings(t.id)];
+    if (credit.basis === "pro_rata" && exitDate && exitDate <= half.end) warnings.push(`retires on ${exitDate} (FR 56): credit ${credit.days} day(s) for ${credit.completedMonths ?? 0} completed month(s), Rule 27(2)(a)`);
     let opening: number;
     let baseTotal: number;
     let source: YearEndAlloc | null = null;
@@ -257,7 +290,7 @@ export function planEmployeeYearEnd(input: {
     const target = allocs.find((a) => a.leaveTypeId === t.id && a.label.trim() === label) ?? null;
     const source = latestPriorRow(allocs, t.id, half.leaveYearStart);
     const entries: YearEndEntry[] = [];
-    const warnings: string[] = [];
+    const warnings: string[] = [...futureWarnings(t.id)];
     if (source && source.balanceDays > 0) entries.push({ action: "lapse", days: source.balanceDays, allocId: source.id, note: "casual leave lapses at the end of the leave year (no carry-forward)" });
     const entitlement = t.maxDays > 0 ? t.maxDays : DEFAULT_CL_PER_YEAR;
     if (!target) entries.push({ action: "credit", days: entitlement, allocId: null });
@@ -273,6 +306,24 @@ export function planEmployeeYearEnd(input: {
     }
   }
   return ops;
+}
+
+/**
+ * Rule 27(3): dies non days of the service book (entry_type dies_non) inside
+ * [from, to] -- "from=YYYY-MM-DD;to=YYYY-MM-DD" spans are clipped to the
+ * window; a "days=<n>" entry counts when its effective date is inside it. Pure.
+ */
+export function diesNonDaysWithin(entries: Array<{ entryType: string; effectiveDate: string; description: string }>, from: string, to: string): number {
+  let days = 0;
+  for (const e of entries) {
+    if (e.entryType !== "dies_non") continue;
+    const span = /from=(\d{4}-\d{2}-\d{2})\s*;\s*to=(\d{4}-\d{2}-\d{2})/i.exec(e.description);
+    if (span) { days += eolDaysWithin([{ fromDate: span[1]!, toDate: span[2]! }], from, to); continue; }
+    const n = /days=(\d+)/i.exec(e.description);
+    const eff = e.effectiveDate.slice(0, 10);
+    if (n && eff >= from && eff <= to) days += Number(n[1]);
+  }
+  return days;
 }
 
 /** EOL days (calendar) of approved EOL applications falling inside [from, to]. */

@@ -48,6 +48,22 @@ describe("RunApprovalReviewPanel", () => {
     expect(region).toHaveTextContent(/1 slip pays nothing/);
   });
 
+  it("PR #2459 review B2: lists the TDS items (presumed months, unrecoverable shortfall) for the approver", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] }, nonPositiveNet: [],
+      tds: [
+        { employeeId: "a", employeeNo: "TP-EMP-01", kind: "presumed_months", amountMinor: "0", presumedMonths: 9, finalMonth: false, requiresAck: true, message: "" },
+        { employeeId: "b", employeeNo: "TP-EMP-02", kind: "shortfall", amountMinor: "500000", presumedMonths: 0, finalMonth: true, requiresAck: true, message: "" },
+        { employeeId: "c", employeeNo: "TP-EMP-03", kind: "excess", amountMinor: "6771100", presumedMonths: 0, finalMonth: false, requiresAck: false, message: "" },
+      ],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><RunApprovalReviewPanel runId="r1" /></NextIntlClientProvider>);
+    const region = await screen.findByRole("region", { name: /review before approval/i });
+    expect(region).toHaveTextContent(/TP-EMP-01: 9 earlier month\(s\) with no slip and no opening YTD/);
+    expect(region).toHaveTextContent(/TP-EMP-02: ₹5,000\.00 of TDS not deducted this month \(deduction limit\)\. This cannot be recovered through payroll this FY -- collect separately or adjust before Form 16\./);
+    expect(region).toHaveTextContent(/TP-EMP-03: TDS deducted this year exceeds the estimated tax by ₹67,711\.00/);
+  });
+
   it("renders nothing when there are no arrears and no Rs 0-basic slips, or the read fails", async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] } }), { status: 200 }));
     const { container, unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}><RunApprovalReviewPanel runId="r1" /></NextIntlClientProvider>);

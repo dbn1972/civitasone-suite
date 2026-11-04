@@ -132,14 +132,18 @@ export interface SlipInput {
    */
   protectedNetFloorMinor?: bigint;
   /**
-   * UAT T-PERIOD D-02b: the share of the month gross (basis points, 1..10000)
-   * that the deductions of a slip -- pension / PF / ESI, PT and other fixed
-   * deductions, loss of pay AND TDS -- may take. TDS is capped so that
-   * deductions stay within it (and within gross less the protected-net
-   * floor); the part not deducted is reported as `tdsShortfallMinor` and is
-   * picked up by the s.192 true-up of the next months. Omitted: 10000 (TDS
-   * never exceeds the salary left after the other deductions). The tenant
-   * value is payroll.payroll_settings.max_deduction_share_bps (migration 0163).
+   * UAT T-PERIOD D-02b: the ceiling on the TOTAL deductions of a slip, as a
+   * share (basis points, 1..10000) of the wages earned in the month (gross
+   * less loss of pay): Code on Wages 2019 s.18(2), 50% -- income-tax is an
+   * authorised deduction within the limit. Order: statutory deductions
+   * (pension / PF / ESI, PT, fixed deductions, then TDS up to what is left)
+   * first, then recoveries (loan EMI, arrear recovery), which are deferred
+   * (`recoveryCarryForwardMinor`). TDS not deducted is `tdsShortfallMinor`:
+   * re-spread by the next true-up inside the FY, NOT recoverable in the last
+   * FY month or the separation month. Omitted: 10000 (no ceiling beyond the
+   * protected-net floor -- also the tenant value when
+   * payroll_settings.deduction_cap_applies is false). Tenant value:
+   * payroll.payroll_settings.max_deduction_share_bps (migration 0164).
    */
   maxDeductionShareBps?: number;
   /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
@@ -777,8 +781,8 @@ export function computeSlip(input: SlipInput): SlipResult {
   const nonRecovery   = statutoryDeductions + fixedAdHoc;
   const headroom      = grossMinor - nonRecovery - protectedNetFloorMinor;
   const recoveryCap   = headroom < 0n ? 0n : headroom;
-  const recoveryApplied = recoveryRequested > recoveryCap ? recoveryCap : recoveryRequested;
-  const recoveryCarryForwardMinor = recoveryRequested - recoveryApplied;
+  let recoveryApplied = recoveryRequested > recoveryCap ? recoveryCap : recoveryRequested;
+  let recoveryCarryForwardMinor = recoveryRequested - recoveryApplied;
 
   // If recovery was capped, scale down the recovery deduction line items so the
   // persisted slip reflects what was actually withheld (carry the remainder).
@@ -798,6 +802,41 @@ export function computeSlip(input: SlipInput): SlipResult {
     for (let i = deductions.length - 1; i >= 0; i--) {
       const d = deductions[i]!;
       if (RECOVERY_CODES.has(d.code) && d.amountMinor === 0n) deductions.splice(i, 1);
+    }
+  }
+
+  // UAT T-PERIOD D-02b review (PR #2459): the deduction share ceiling binds the
+  // recoveries too -- loan EMI / arrear recovery used to be limited only by the
+  // protected-net floor, so deductions could reach 96.6% of gross. Statutory
+  // deductions (TDS within its own cap), PT and fixed deductions come first;
+  // EMI / arrear recovery take only what is left inside maxDeductionShareBps of
+  // the salary earned (gross less the loss of pay applied), largest line
+  // trimmed first, the rest carried forward. LOP is pay not earned, not a
+  // deduction, so it is never trimmed here. With the default 10000 bps this is
+  // a no-op (the floor headroom above is already within it).
+  {
+    const lopApplied = deductions.filter((d) => d.code === "LOP").reduce((s, d) => s + d.amountMinor, 0n);
+    const shareBps = BigInt(Math.min(10000, Math.max(0, Math.trunc(maxDeductionShareBps))));
+    const shareCeiling = ((grossMinor - lopApplied) * shareBps) / 10000n;
+    const allowedRaw = shareCeiling - nonRecovery;
+    const allowedOther = allowedRaw > 0n ? allowedRaw : 0n;
+    const otherLines = deductions.filter((d) => RECOVERY_CODES.has(d.code) && d.code !== "LOP")
+      .sort((a, b) => (a.amountMinor < b.amountMinor ? 1 : -1));
+    const otherApplied = otherLines.reduce((s, d) => s + d.amountMinor, 0n);
+    if (otherApplied > allowedOther) {
+      let excess = otherApplied - allowedOther;
+      recoveryApplied -= excess;
+      recoveryCarryForwardMinor += excess;
+      for (const line of otherLines) {
+        if (excess <= 0n) break;
+        const trim = line.amountMinor < excess ? line.amountMinor : excess;
+        line.amountMinor -= trim;
+        excess -= trim;
+      }
+      for (let i = deductions.length - 1; i >= 0; i--) {
+        const d = deductions[i]!;
+        if (RECOVERY_CODES.has(d.code) && d.code !== "LOP" && d.amountMinor === 0n) deductions.splice(i, 1);
+      }
     }
   }
 
@@ -844,10 +883,13 @@ export function s192MonthlyTds(i: {
   const presumedRaw = i.presumedMonths != null && i.presumedMonths > 0n ? i.presumedMonths : 0n;
   const presumed = presumedRaw > fyMonths ? fyMonths : presumedRaw;
   const annual = i.annualTaxMinor > 0n ? i.annualTaxMinor : 0n;
-  const presumedTds = presumed > 0n ? divRoundBig(annual * presumed, fyMonths) : 0n;
+  // s.288B: the presumed amount is a whole rupee too.
+  const presumedTds = presumed > 0n ? roundRupee(divRoundBig(annual * presumed, fyMonths)) : 0n;
   const liabilityMinor = annual - presumedTds;
   const excessMinor = i.tdsDeductedMinor > liabilityMinor ? i.tdsDeductedMinor - liabilityMinor : 0n;
-  return { tdsMinor: trueUpTdsMinor(liabilityMinor, i.tdsDeductedMinor, i.monthsRemaining), liabilityMinor, excessMinor };
+  // PR #2459 review: TDS is rounded to the nearest rupee (s.288B) -- the
+  // last-month balance (trueUpTdsMinor m = 1) used to carry paise (33,855.67).
+  return { tdsMinor: roundRupee(trueUpTdsMinor(liabilityMinor, i.tdsDeductedMinor, i.monthsRemaining)), liabilityMinor, excessMinor };
 }
 
 /**
@@ -976,11 +1018,106 @@ export function arrearsReviewMessage(employees: ArrearsReviewEmployee[]): string
 }
 
 /**
- * UAT T-PERIOD D-02b: default share of the month gross that a slip deductions
- * may take (basis points): 75%, the Payment of Wages Act s.7(3) ceiling on
- * total deductions. Tenant setting payroll.payroll_settings.max_deduction_share_bps.
+ * UAT T-PERIOD D-02b (PR #2459 review, ERP-head decision 2026-11-05): default
+ * ceiling on a slip total deductions, as a share of the wages earned: 50%,
+ * Code on Wages 2019 s.18(2) (which repealed the Payment of Wages Act; under
+ * both, income-tax is an authorised deduction inside the limit). Tenant
+ * settings payroll.payroll_settings.max_deduction_share_bps and
+ * deduction_cap_applies (false: 10000, net-pay floor + acknowledgements only --
+ * applicability to regular government servants under FR/SR / CCS awaits legal).
  */
-export const DEFAULT_MAX_DEDUCTION_SHARE_BPS = 7500;
+export const DEFAULT_MAX_DEDUCTION_SHARE_BPS = 5000;
+
+/** The ceiling to apply for a tenant: none (10000) when the wage-law cap does not apply. */
+export function effectiveDeductionShareBps(settings: { maxDeductionShareBps: number; deductionCapApplies: boolean }): number {
+  return settings.deductionCapApplies ? settings.maxDeductionShareBps : 10000;
+}
+
+/**
+ * PR #2459 review B1 (ERP-head decision 2026-11-05): TDS for in-service FY
+ * months with no slip here may only be PRESUMED for months before the later
+ * of the tenant payroll go-live date and the employee first slip in this
+ * system, and only when no approved opening YTD exists for the FY (the
+ * opening YTD is authoritative). A gap AFTER that boundary (a skipped or
+ * withheld month) is neither estimated nor presumed: no income, 0 TDS.
+ * Months are YYYY-MM. Pure.
+ */
+export function presumptionBoundaryMonth(goLiveDate: string | null | undefined, firstSlipMonth: string | null | undefined, runMonth: string): string {
+  const first = firstSlipMonth && firstSlipMonth < runMonth ? firstSlipMonth : runMonth;
+  const live = goLiveDate ? goLiveDate.slice(0, 7) : null;
+  return live && live > first ? live : first;
+}
+
+export function splitUnrecordedMonths(unrecorded: readonly string[], boundaryMonth: string, hasOpeningYtd: boolean): { presumed: string[]; gaps: string[] } {
+  if (hasOpeningYtd) return { presumed: [], gaps: [...unrecorded] };
+  return { presumed: unrecorded.filter((m) => m < boundaryMonth), gaps: unrecorded.filter((m) => m >= boundaryMonth) };
+}
+
+/** PR #2459 review B2: the TDS signals a run must show its approver. */
+export const UNRECORDED_FY_MONTHS_ESTIMATED = "UNRECORDED_FY_MONTHS_ESTIMATED";
+export const TDS_SHORTFALL_UNRECOVERABLE = "TDS_SHORTFALL_UNRECOVERABLE";
+
+export type TdsReviewKind = "presumed_months" | "excess" | "shortfall" | "recovery_deferred";
+export interface TdsReviewItem {
+  employeeId: string; employeeNo: string; kind: TdsReviewKind;
+  amountMinor: bigint; presumedMonths: number; finalMonth: boolean; requiresAck: boolean;
+}
+
+/**
+ * The per-employee TDS / deduction signals of a run, from the slip columns
+ * (migration 0164). Acknowledgement is required for presumed months and for a
+ * TDS shortfall in the last FY month or the separation month (no later
+ * true-up exists); an excess and a recovery deferral are shown only. Pure.
+ */
+export function tdsReviewOf(slips: Array<{ employeeId: string; employeeNo: string; status?: string | null; tdsPresumedMonths?: number | null; tdsExcessMinor?: bigint | null; tdsShortfallMinor?: bigint | null; tdsShortfallFinal?: boolean | null; recoveryDeferredMinor?: bigint | null }>): TdsReviewItem[] {
+  const out: TdsReviewItem[] = [];
+  for (const sl of slips) {
+    if (sl.status === "excluded") continue;
+    const base = { employeeId: sl.employeeId, employeeNo: sl.employeeNo };
+    if ((sl.tdsPresumedMonths ?? 0) > 0) out.push({ ...base, kind: "presumed_months", amountMinor: 0n, presumedMonths: sl.tdsPresumedMonths ?? 0, finalMonth: false, requiresAck: true });
+    if ((sl.tdsExcessMinor ?? 0n) > 0n) out.push({ ...base, kind: "excess", amountMinor: sl.tdsExcessMinor ?? 0n, presumedMonths: 0, finalMonth: false, requiresAck: false });
+    if ((sl.tdsShortfallMinor ?? 0n) > 0n) out.push({ ...base, kind: "shortfall", amountMinor: sl.tdsShortfallMinor ?? 0n, presumedMonths: 0, finalMonth: sl.tdsShortfallFinal === true, requiresAck: sl.tdsShortfallFinal === true });
+    if ((sl.recoveryDeferredMinor ?? 0n) > 0n) out.push({ ...base, kind: "recovery_deferred", amountMinor: sl.recoveryDeferredMinor ?? 0n, presumedMonths: 0, finalMonth: false, requiresAck: false });
+  }
+  out.sort((a, b) => a.employeeNo.localeCompare(b.employeeNo) || a.kind.localeCompare(b.kind));
+  return out;
+}
+
+/** An explicit, reasoned acknowledgement of one employee TDS review items. */
+export interface TdsAcknowledgement { employeeId: string; reason: string }
+
+/** The items needing acknowledgement that are not acknowledged (non-blank reason). Pure. */
+export function unacknowledgedTds(items: TdsReviewItem[], acks: TdsAcknowledgement[] = []): TdsReviewItem[] {
+  const acked = new Set(acks.filter((a) => a.reason.trim().length > 0).map((a) => a.employeeId));
+  return items.filter((i) => i.requiresAck && !acked.has(i.employeeId));
+}
+
+/** The plain-language text of one TDS review item (also the run warning text). */
+export function tdsReviewText(i: TdsReviewItem): string {
+  const rs = `Rs ${(i.amountMinor / 100n).toString()}`;
+  switch (i.kind) {
+    case "presumed_months":
+      return `${i.employeeNo}: ${i.presumedMonths} earlier FY month(s) have no slip and no opening YTD; their salary is estimated and their TDS PRESUMED deducted at the average rate. Enter the opening YTD (salary and TDS before go-live / previous employer) to replace the estimate`;
+    case "excess":
+      return `${i.employeeNo}: TDS deducted this FY exceeds the estimated liability by ${rs}; no TDS is deducted this month. The excess is refundable to the employee through the income-tax return`;
+    case "shortfall":
+      return i.finalMonth
+        ? `${i.employeeNo}: ${rs} of TDS cannot be deducted within the deduction limit and cannot be recovered through payroll this FY -- collect separately or adjust before Form 16`
+        : `${i.employeeNo}: ${rs} of TDS is not deducted this month (deduction limit); the next month s.192 true-up recomputes it over the months left in the FY, within the same limit`;
+    case "recovery_deferred":
+      return `${i.employeeNo}: ${rs} of loan / arrear recovery is deferred to keep total deductions within the limit`;
+  }
+}
+
+export function unacknowledgedTdsCode(items: TdsReviewItem[]): string {
+  return items.some((i) => i.kind === "presumed_months") ? UNRECORDED_FY_MONTHS_ESTIMATED : TDS_SHORTFALL_UNRECOVERABLE;
+}
+
+export function unacknowledgedTdsMessage(items: TdsReviewItem[]): string {
+  const sample = items.slice(0, 10).map(tdsReviewText).join("; ");
+  const more = items.length > 10 ? "; ..." : "";
+  return `${items.length} TDS item(s) need an acknowledgement before approval: ${sample}${more}. Approve with tdsAcknowledgements [{ employeeId, reason }] for each employee`;
+}
 
 /** UAT T-PERIOD D-02b: approval refused while a slip pays nothing (or less than nothing). */
 export const NET_PAY_NON_POSITIVE = "NET_PAY_NON_POSITIVE";

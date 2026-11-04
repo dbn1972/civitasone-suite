@@ -72,7 +72,11 @@ describe("payroll.run.disbursed / approved posting-date contract", () => {
     expect(accrualDateOnApproval("accrual", { month: "2028-02" }, APPROVED_AT)).toBe("2028-02-29");
     expect(payMonthEndDate("2027-01")).toBe("2027-01-31");
     const disbursed = JSON.parse(JSON.stringify(runDisbursedPayload({ ...amounts, disbursedAt: PAID_AT })));
-    expect(postingDatesOnDisbursal("accrual", disbursed, PAID_AT)).toEqual({ accrualDate: null, settlementDate: "2027-04-01" });
+    // PR #2459 review SF4: the accrual is re-offered on disbursal, dated the pay-month end;
+    // finance posts it only if no accrual journal exists for the run (approved under cash, switched since).
+    expect(postingDatesOnDisbursal("accrual", disbursed, PAID_AT)).toEqual({ accrualDate: "2027-03-31", settlementDate: "2027-04-01" });
+    const gl = read("services/finance-service/src/modules/gl/consumer.ts");
+    expect(gl).toMatch(/findJournalByIdTx\(tx, accrualId\)\)[\s\S]{0,120}findJournalByVoucherNoTx\(tx, msg\.tenantId, payrollAccrualVoucherNo\(p\)\)/);
   });
 
   it("backward compatible: an older payroll payload posts on approval (cash: IST approval day) and settles on the IST consumption day", () => {

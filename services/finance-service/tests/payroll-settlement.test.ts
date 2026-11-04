@@ -215,10 +215,20 @@ describe("BL-03: payroll.run.disbursed → settlement journal", () => {
       expect(insertJournalMock).toHaveBeenCalledTimes(1);
     });
 
-    it("accrual basis: only the settlement, dated the payment date (the accrual posted on approval at the pay month end)", async () => {
+    it("accrual basis: only the settlement, dated the payment date, when the accrual was posted on approval", async () => {
       loadSettingsTxMock.mockResolvedValueOnce({ accountingBasis: "accrual" });
+      findJournalByVoucherNoTxMock.mockResolvedValueOnce({ id: "acc", status: "posted" });
       await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(randomUUID()) });
       expect(accrualPosts()).toHaveLength(0);
+      expect(insertJournalMock.mock.calls[0][1].postingDate).toBe("2027-04-01");
+    });
+
+    it("review SF4: basis switched cash -> accrual between approval and disbursal: the never-posted accrual is posted on disbursal, dated the pay-month end", async () => {
+      loadSettingsTxMock.mockResolvedValueOnce({ accountingBasis: "accrual" });
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(randomUUID()) });
+      const posts = accrualPosts();
+      expect(posts).toHaveLength(1);
+      expect(posts[0][1].payload.postingDate).toBe("2027-03-31");
       expect(insertJournalMock.mock.calls[0][1].postingDate).toBe("2027-04-01");
     });
 

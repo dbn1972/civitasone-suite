@@ -25,6 +25,7 @@ import { challanRoutes } from "./modules/statutory-returns/challan-routes.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
 import { sponsorConfigRoutes } from "./modules/sponsor-config/routes.js";
+import { openingYtdRoutes } from "./modules/opening-ytd/routes.js";
 import { nachReturnRoutes } from "./modules/nach-return/routes.js";
 import { disbursementTransferRoutes } from "./modules/disbursement-transfers/routes.js";
 import { nachRoutes } from "./modules/nach/routes.js";
@@ -107,6 +108,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(challanRoutes);
   await app.register(bankTransferRoutes);
   await app.register(sponsorConfigRoutes);
+  await app.register(openingYtdRoutes);
   await app.register(nachReturnRoutes);
   await app.register(disbursementTransferRoutes);
   await app.register(nachRoutes);

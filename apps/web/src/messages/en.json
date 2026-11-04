@@ -5623,7 +5623,17 @@
       "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again.",
       "netPaySummary": "{count, plural, one {# slip pays} other {# slips pay}} nothing (net pay Rs 0 or less, or deductions above gross) and must be acknowledged before approval.",
       "netPayHeading": "Slips that pay nothing",
-      "netPayAcknowledge": "I have checked {employee}: gross {gross}, deductions {deductions}, net {net}"
+      "netPayAcknowledge": "I have checked {employee}: gross {gross}, deductions {deductions}, net {net}",
+      "tdsHeading": "Income-tax (TDS) items",
+      "tdsInfoHeading": "TDS items for information",
+      "tdsAcknowledge": "I have checked the TDS of {employee}",
+      "tdsUnrecoverable": "This cannot be recovered through payroll this FY -- collect separately or adjust before Form 16.",
+      "tdsKind": {
+        "presumed_months": "{employee}: {months} earlier month(s) with no slip and no opening YTD -- salary estimated and TDS presumed deducted. Enter the opening YTD to replace the estimate.",
+        "excess": "{employee}: TDS deducted this year exceeds the estimated tax by {amount}; no TDS this month (refundable through the income-tax return).",
+        "shortfall": "{employee}: {amount} of TDS not deducted this month (deduction limit).",
+        "recovery_deferred": "{employee}: {amount} of loan / arrear recovery deferred to keep deductions within the limit."
+      }
     }
   },
   "payrollRunsTable": {
@@ -18447,6 +18457,57 @@
       "pending": "pending",
       "approved": "approved",
       "rejected": "rejected"
+    }
+  },
+  "openingYtd": {
+    "title": "Opening year-to-date (TDS)",
+    "intro": "Salary paid and TDS deducted before payroll went live here, or by a previous employer (Form 12B). Approved records are used as actual figures for income-tax (s.192); without one, TDS for earlier months is presumed and each pay run needs an acknowledgement.",
+    "empty": "No opening year-to-date recorded.",
+    "loadError": "Could not load the opening year-to-date.",
+    "colFy": "Financial year",
+    "colSource": "Source",
+    "colSalary": "Salary",
+    "colTds": "TDS",
+    "colStatus": "Status",
+    "sourcePreGoLive": "Before go-live (this employer)",
+    "sourcePriorEmployer": "Previous employer (Form 12B)",
+    "sourcePreGoLiveMonths": "Before go-live ({months} months)",
+    "sourcePriorEmployerName": "Previous employer: {name}",
+    "status": {
+      "pending": "Pending approval",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "addButton": "Add opening year-to-date",
+    "dialogTitle": "Opening year-to-date",
+    "dialogHelp": "Enter the figures from the legacy payroll / Form 12B. A payroll administrator other than you must approve them.",
+    "fyLabel": "Financial year (YYYY-YY)",
+    "sourceLabel": "Source",
+    "monthsLabel": "Months covered (1 to 11)",
+    "nameLabel": "Previous employer name",
+    "tanLabel": "Previous employer TAN (optional)",
+    "salaryLabel": "Salary paid (Rs)",
+    "tdsLabel": "TDS deducted (Rs)",
+    "noteLabel": "Note (source of the figures)",
+    "submitButton": "Submit for approval",
+    "cancelButton": "Cancel",
+    "approveButton": "Approve {fy}",
+    "rejectButton": "Reject {fy}",
+    "decisionNoteLabel": "Decision note (at least 10 characters)",
+    "fyInvalid": "Enter the financial year as YYYY-YY, e.g. 2026-27.",
+    "amountInvalid": "Enter the salary and TDS in rupees, up to 2 decimals.",
+    "monthsInvalid": "Enter the number of months covered, 1 to 11.",
+    "nameRequired": "Enter the previous employer name.",
+    "noteRequired": "Enter a note of at least 10 characters.",
+    "decisionNoteRequired": "Enter a decision note of at least 10 characters.",
+    "submitted": "Submitted for approval.",
+    "approved": "Approved.",
+    "rejected": "Rejected.",
+    "error": {
+      "OPENING_YTD_EXISTS": "An opening year-to-date for this year and source already exists. Reject it first to replace it.",
+      "OPENING_YTD_DECIDED": "This record has already been decided.",
+      "MAKER_CHECKER_VIOLATION": "Someone other than the officer who entered it must approve or reject it.",
+      "generic": "Could not save. Try again."
     }
   }
 }

@@ -55,6 +55,8 @@ describe("GET /v1/payroll/runs/:id/approval-review", () => {
       },
       // UAT T-PERIOD D-02b: slips paying nothing (none here: the Rs 0-basic slip has its own guard).
       nonPositiveNet: [],
+      // PR #2459 review B2: TDS signals (none on these hand-seeded slips).
+      tds: [],
     });
   });
 

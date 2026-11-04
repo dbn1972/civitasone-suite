@@ -103,6 +103,40 @@ describe("PayrollRunActions — approval review (Rs 0-basic exclusions, arrears 
     });
   });
 
+  it("PR #2459 review B2: after 409 UNRECORDED_FY_MONTHS_ESTIMATED the presumed months and an unrecoverable March shortfall are acknowledged per employee; info items are listed", async () => {
+    const e1 = "55555555-5555-4555-8555-555555555555";
+    const e2 = "66666666-6666-4666-8666-666666666666";
+    fetchMock
+      .mockResolvedValueOnce(json({ code: "UNRECORDED_FY_MONTHS_ESTIMATED", message: "1 TDS item(s) need an acknowledgement" }, 409))
+      .mockResolvedValueOnce(json({
+        runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] }, nonPositiveNet: [],
+        tds: [
+          { employeeId: e1, employeeNo: "TP-EMP-01", kind: "presumed_months", amountMinor: "0", presumedMonths: 9, finalMonth: false, requiresAck: true, message: "x" },
+          { employeeId: e2, employeeNo: "TP-EMP-02", kind: "shortfall", amountMinor: "168420900", presumedMonths: 0, finalMonth: true, requiresAck: true, message: "y" },
+          { employeeId: e2, employeeNo: "TP-EMP-02", kind: "recovery_deferred", amountMinor: "2000000", presumedMonths: 0, finalMonth: false, requiresAck: false, message: "z" },
+        ],
+      }))
+      .mockResolvedValueOnce(json({ id: "r1", status: "accepted", correlationId: "c" }, 202));
+    open();
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Reviewed and correct" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    const a1 = await within(dialog).findByRole("checkbox", { name: /checked the TDS of TP-EMP-01.*9 earlier month\(s\)/i });
+    const a2 = within(dialog).getByRole("checkbox", { name: /checked the TDS of TP-EMP-02.*cannot be recovered through payroll this FY/i });
+    expect(within(dialog).getByRole("list", { name: /TDS items for information/i })).toHaveTextContent(/₹20,000\.00 of loan \/ arrear recovery deferred/);
+    fireEvent.change(within(dialog).getByLabelText(/review note/i), { target: { value: "Opening YTD pending; collect TDS separately" } });
+    fireEvent.click(a1);
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    expect(fetchMock).toHaveBeenCalledTimes(2); // TP-EMP-02 not acknowledged yet
+    fireEvent.click(a2);
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse((fetchMock.mock.calls[2]![1] as RequestInit).body as string)).toEqual({
+      reason: "Reviewed and correct",
+      tdsAcknowledgements: [{ employeeId: e1, reason: "Opening YTD pending; collect TDS separately" }, { employeeId: e2, reason: "Opening YTD pending; collect TDS separately" }],
+    });
+  });
+
   it("a plain approval sends only the remarks (no review fields)", async () => {
     fetchMock.mockResolvedValueOnce(json({ id: "r1", status: "accepted", correlationId: "c" }, 202));
     open();

@@ -835,8 +835,10 @@ export function registerGlConsumers(queue: Queue): void {
           // dated the payment date (IST; was the UTC date of consumption). On a
           // cash basis the salary accrual, deferred from approval, posts here on
           // the same payment date -- March pay disbursed on 1 April is new-FY
-          // expenditure. Same deterministic journal id as the approval path and
-          // a voucher check (runs accrued before this build), so never twice.
+          // expenditure. On an accrual basis it is posted here (pay-month end)
+          // only if it never was (basis switched after approval, review SF4).
+          // Same deterministic journal id as the approval path and a voucher
+          // check (runs accrued before this build), so never twice.
           const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
           const dates = postingDatesOnDisbursal(basis, p, new Date());
           const today = dates.settlementDate;

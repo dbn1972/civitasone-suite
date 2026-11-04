@@ -100,10 +100,23 @@ function legacyView(r: ReturnType<typeof computeSlip>): Omit<ReturnType<typeof c
   const { tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
   return rest;
 }
+/** s.288B (PR #2459 review): TDS is now rounded to the rupee; the legacy last-month balance could carry paise. */
+const rupee = (x: bigint): bigint => ((x + 50n) / 100n) * 100n;
 function capBinds(actual: ReturnType<typeof computeSlip>, expected: ReturnType<typeof legacyComputeSlip>): boolean {
-  if (actual.tdsShortfallMinor === 0n) return false;
-  expect(expected.tdsMinor).toBe(actual.tdsMinor + actual.tdsShortfallMinor);
+  if (actual.tdsShortfallMinor === 0n && expected.tdsMinor % 100n === 0n) return false;
+  if (actual.tdsShortfallMinor === 0n) {
+    // legacy TDS with paise (final-month balance): the same TDS, rounded to the rupee
+    expect(actual.tdsMinor).toBe(rupee(expected.tdsMinor));
+    return true;
+  }
+  expect(rupee(expected.tdsMinor)).toBe(actual.tdsMinor + actual.tdsShortfallMinor);
   expect(actual.negativeNet).toBe(false);
+  // review nit: every field the cap cannot move is still identical
+  const untouched = (r: Record<string, unknown>) => {
+    const { tdsMinor: _t, totalDeductionsMinor: _d, netPayMinor: _n, deductions: _x, recoveryCarryForwardMinor: _r, negativeNet: _g, tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
+    return rest;
+  };
+  expect(untouched(actual as unknown as Record<string, unknown>)).toEqual(untouched(expected as unknown as Record<string, unknown>));
   return true;
 }
 

@@ -151,6 +151,9 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
   const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  // PR #2459 review SF3: a failed / draft / processing run never counts, even
+  // when the quarter has no approved run (same rule as challan-routes.ts).
+  const nonFinalRunIds = new Set(runs.filter((r) => !validRunIds.has(r.id)).map((r) => r.id));
 
   const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
@@ -160,6 +163,7 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   // figure the UI shows could drift from the stored deductions.
   const byEmp = new Map<string, { tdsMinor: bigint; periods: Set<string> }>();
   for (const t of tdsRows) {
+    if (nonFinalRunIds.has(t.runId)) continue;
     if (validRunIds.size > 0 && !validRunIds.has(t.runId)) continue;
     const e = byEmp.get(t.employeeId) ?? { tdsMinor: 0n, periods: new Set<string>() };
     e.tdsMinor += BigInt(t.tdsMinor);
@@ -277,12 +281,13 @@ async function buildForm24Q(
   const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
   const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const challanNonFinalRunIds = new Set(challanRuns.filter((r) => !challanValidRunIds.has(r.id)).map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
   const challanBigs = months.map((month) => ({
     month,
     minor: challanTdsRows
-      .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
+      .filter((t) => t.period === month && !challanNonFinalRunIds.has(t.runId) && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
       .reduce((s, t) => s + BigInt(t.tdsMinor), 0n),
   }));
   const challans = challanBigs.map(({ month, minor }) => {

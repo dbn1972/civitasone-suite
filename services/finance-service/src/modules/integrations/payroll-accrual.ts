@@ -86,13 +86,19 @@ export function accrualDateOnApproval(basis: PayrollAccountingBasis, p: Pick<Pay
 /**
  * UAT T-PERIOD D-04: posting dates when finance consumes payroll.run.disbursed.
  * The settlement (Dr net payable / Cr bank) is dated the payment date on both
- * bases. On a cash basis, the accrual deferred from approval is posted too, on
- * the payment date, when the payload carries its amounts (accrualDate null
- * otherwise). paymentDate: the payload one, else the IST date now. Pure.
+ * bases. The accrual, when the payload carries its amounts and it was never
+ * posted: cash -> the payment date; accrual -> the last day of the pay month.
+ * paymentDate: the payload one, else the IST date now. Pure.
  */
-export function postingDatesOnDisbursal(basis: PayrollAccountingBasis, p: Pick<PayrollRunDisbursedPayload, "paymentDate" | "totalGrossMinor">, now: Date): { accrualDate: string | null; settlementDate: string } {
+export function postingDatesOnDisbursal(basis: PayrollAccountingBasis, p: Pick<PayrollRunDisbursedPayload, "paymentDate" | "totalGrossMinor" | "month">, now: Date): { accrualDate: string | null; settlementDate: string } {
   const paymentDate = p.paymentDate && ISO_DATE.test(p.paymentDate) ? p.paymentDate : istDateOf(now);
-  return { accrualDate: basis === "cash" && p.totalGrossMinor != null ? paymentDate : null, settlementDate: paymentDate };
+  // PR #2459 review SF4: whenever the payload carries the amounts, the accrual
+  // is (re)offered on disbursal -- the handler posts it only if no accrual
+  // journal exists for the run (deterministic id + voucher check), so a basis
+  // switched between approval (cash: deferred) and disbursal (accrual) never
+  // loses it. Dated by the basis in force now.
+  const accrualDate = p.totalGrossMinor == null ? null : basis === "cash" ? paymentDate : payMonthEndDate(p.month);
+  return { accrualDate, settlementDate: paymentDate };
 }
 
 /** Voucher number of a payroll run accrual journal (unchanged format). */
