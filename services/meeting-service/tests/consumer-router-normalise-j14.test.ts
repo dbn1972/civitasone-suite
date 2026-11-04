@@ -10,6 +10,7 @@
  * NonRetryableError so the original message is parked in the topic DLQ instead of being acked.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -26,11 +27,12 @@ afterAll(async () => { await sqlClient.end(); });
 
 const TOPIC = "meeting.meeting.transition";
 const MSG = {
-  messageId: "390d380f-d80f-457a-88a1-16f9eb89c601",
+  // Fresh per run (test-ledger-poison-guard): a fixed id would be a ledger key on a real consumer.
+  messageId: randomUUID(),
   type: TOPIC,
   tenantId: "11111111-0000-0000-0000-000000000001",
   actorId: "82310d88-a7e7-440d-95b5-b40fd1898232",
-  correlationId: "68c7b925-1005-48c8-8630-42e164c75188",
+  correlationId: randomUUID(),
   schemaVersion: "1.0",
   payload: { meetingId: "4d88f4de-caa5-75e9-b0bc-0094d9ece39e", version: 1, to: "scheduled" },
 } as unknown as CommandEnvelope;
