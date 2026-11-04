@@ -19,7 +19,7 @@ import { presignedGetUrl } from "@civitasone/storage";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { DocumentNotIssuableError } from "@civitasone/render/official";
-import { renderForm16Html, resolveForm16Deductor } from "./form16-document.js";
+import { loadForm16Extras, renderForm16Html, resolveForm16Deductor } from "./form16-document.js";
 import { form12baPdfRoutes } from "./form12ba-pdf-route.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
@@ -92,7 +92,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       // UAT ux-docs: the deductor comes from tenant configuration; a Form 16
       // with "<configure EMPLOYER_NAME>" placeholders is never issued.
       const deductor = await resolveForm16Deductor(ctx.tenantId, f.form16PartA.deductor);
-      const html = renderForm16Html(f, deductor);
+      const extras = await loadForm16Extras(ctx.tenantId, q.fy, deductor.tan, await resolveEmployeeNo(ctx.tenantId, employeeId));
+      const html = renderForm16Html(f, deductor, extras);
 
       // ─── HTML output (backward compatible) ───────────────────────────
       if (q.output === "html") {

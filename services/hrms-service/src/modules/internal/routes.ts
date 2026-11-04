@@ -393,7 +393,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
     const { scopedRead } = await import("../../shared/db.js");
-    const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
+    const { hrmsEmployees, hrmsDepartments, hrmsDesignations } = await import("../employee/schema.js");
     const { eq, and } = await import("drizzle-orm");
     // GAP-PAYROLL-LOANS-01: optional server-side filters so payroll's name
     // lookup is not limited to the first 2000 rows of a large tenant. Both are
@@ -417,7 +417,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       conds.push(inArray(hrmsEmployees.userRef, actorList.length > 0 ? actorList : ["00000000-0000-0000-0000-000000000000"]));
     }
     const employees = await scopedRead((tx) =>
-      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId, userRef: hrmsEmployees.userRef, designationId: hrmsEmployees.designationId })
+      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId, designationId: hrmsEmployees.designationId, userRef: hrmsEmployees.userRef })
         .from(hrmsEmployees)
         .where(and(...conds))
         .orderBy(hrmsEmployees.fullName, hrmsEmployees.id)
@@ -428,20 +428,18 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, ctx.tenantId))))
       : [];
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
-    // UAT ux-docs (additive): the designation printed under an officer name in
-    // the signature block of an issued document (sanction order, voucher, minutes).
-    const { hrmsDesignations } = await import("../employee/schema.js");
-    const desigIds = [...new Set(employees.map((e) => e.designationId).filter((x): x is string => !!x))];
+    // UX R1 (approvals inbox): the designation, so an approver reads "A. Verma, Section Officer"
+    // instead of a bare name. Only the designations of the returned employees are read (one query).
+    const desigIds = [...new Set(employees.map((e) => e.designationId).filter((d): d is string => !!d))];
     const desigs = desigIds.length > 0
-      ? await scopedRead((tx) => tx.select({ id: hrmsDesignations.id, name: hrmsDesignations.name }).from(hrmsDesignations)
-          .where(and(eq(hrmsDesignations.tenantId, ctx.tenantId), inArray(hrmsDesignations.id, desigIds))))
+      ? await scopedRead((tx) => tx.select({ id: hrmsDesignations.id, name: hrmsDesignations.name }).from(hrmsDesignations).where(and(eq(hrmsDesignations.tenantId, ctx.tenantId), inArray(hrmsDesignations.id, desigIds))))
       : [];
     const desigMap = new Map(desigs.map((d) => [d.id, d.name]));
     // GAP-PAYROLL-GPF-02/NPS-02/FNF-05: employeeNo (the HR-assigned employee
     // code, not PII) is added so payroll's statutory ledgers and F&F cards
     // can show a real code instead of a fabricated UUID prefix. Additive --
     // every existing caller ignores unknown fields.
-    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "", ...(e.userRef ? { userRef: e.userRef } : {}), ...(desigMap.get(e.designationId) ? { designation: desigMap.get(e.designationId) } : {}) })));
+    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "", ...(desigMap.get(e.designationId) ? { designationName: desigMap.get(e.designationId) } : {}), ...(e.userRef ? { userRef: e.userRef } : {}) })));
   });
 
   // GAP-PAYROLL-FNF-03: HR-record-derived F&F inputs (completed years of

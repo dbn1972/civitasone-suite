@@ -14,8 +14,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
-  DocumentNotIssuableError, OfficialPdf, formatDateIst, formatMinorIndian, maskPanForPrint,
-} from "@civitasone/render/official";
+  DocumentNotIssuableError, OfficialPdf, formatDateIst, formatMinorIndian, maskPanForPrint, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf, isRouteStaff } from "../../shared/employee-scope.js";
 import { scopedRead } from "../../shared/db.js";
@@ -27,33 +26,67 @@ import { fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-clien
 import { loadLetterhead } from "../letterhead/routes.js";
 import { resolveForm16Deductor, type Form16Deductor } from "./form16-document.js";
 
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
+
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 const AUDIT_TOPIC = "audit.event.record";
 
-/** The perquisite rows of Form 12BA, in rule order; a recorded component lands on the row its nature names. */
-export const FORM12BA_NATURES: Array<{ label: string; match: RegExp }> = [
-  { label: "Accommodation", match: /accommodation|house|quarter|rent/i },
-  { label: "Cars / Other automotive", match: /car|vehicle|automotive|motor/i },
-  { label: "Sweeper, gardener, watchman or personal attendant", match: /sweeper|gardener|watchman|attendant|servant/i },
-  { label: "Gas, electricity, water", match: /gas|electric|water/i },
-  { label: "Interest free or concessional loans", match: /loan/i },
-  { label: "Holiday expenses", match: /holiday/i },
-  { label: "Free or concessional travel", match: /travel|ltc|ticket/i },
-  { label: "Free meals", match: /meal|food|canteen/i },
-  { label: "Free education", match: /education|school/i },
-  { label: "Gifts, vouchers, etc.", match: /gift|voucher/i },
-  { label: "Credit card expenses", match: /credit card/i },
-  { label: "Club expenses", match: /club/i },
-  { label: "Use of movable assets by employees", match: /use of (movable )?asset|laptop|furniture/i },
-  { label: "Transfer of assets to employees", match: /transfer of asset/i },
-  { label: "Value of any other benefit / amenity / service / privilege", match: /amenity|privilege|service/i },
-  { label: "Stock options allotted or transferred by employer being an eligible start-up referred to in section 80-IAC", match: /80-?iac|start-?up/i },
-  { label: "Stock options (non-qualified options) other than ESOP in col. 16 above", match: /esop|stock option|esos/i },
-  { label: "Contribution by employer to fund and scheme taxable under section 17(2)(vii)", match: /17\(2\)\(vii\)(?!a)|employer contribution|superannuation|nps|provident/i },
-  { label: "Annual accretion by way of interest, dividend etc. to the balance at the credit of fund and scheme referred to in section 17(2)(vii) and taxable under section 17(2)(viia)", match: /viia|accretion/i },
-  { label: "Other benefits or amenities", match: /$^/ },
+/** The 20 perquisite rows of Form No. 12BA, in rule order (Rule 26A(2)(b), item 8). */
+export const FORM12BA_ROWS: readonly string[] = [
+  "Accommodation",
+  "Cars / Other automotive",
+  "Sweeper, gardener, watchman or personal attendant",
+  "Gas, electricity, water",
+  "Interest free or concessional loans",
+  "Holiday expenses",
+  "Free or concessional travel",
+  "Free meals",
+  "Free education",
+  "Gifts, vouchers, etc.",
+  "Credit card expenses",
+  "Club expenses",
+  "Use of movable assets by employees",
+  "Transfer of assets to employees",
+  "Value of any other benefit / amenity / service / privilege",
+  "Stock options allotted or transferred by employer being an eligible start-up referred to in section 80-IAC",
+  "Stock options (non-qualified options) other than ESOP in col. 16 above",
+  "Contribution by employer to fund and scheme taxable under section 17(2)(vii)",
+  "Annual accretion by way of interest, dividend etc. to the balance at the credit of fund and scheme referred to in section 17(2)(vii) and taxable under section 17(2)(viia)",
+  "Other benefits or amenities",
 ];
+const OTHER_ROW = 20;
+
+/**
+ * Perquisite master: the perquisite type codes (the `nature` the web form saves, see
+ * PerquisiteComponentForm NATURES, plus the remaining rule rows) and their 12BA row (1-based).
+ * Matching is exact on the normalised code or on the rule row label - never a substring, so
+ * "credit card" can no longer land on Cars and "loan for parent surgery" on Accommodation.
+ */
+export const PERQUISITE_TYPE_ROWS: Readonly<Record<string, number>> = {
+  accommodation: 1, car: 2, automotive: 2, domestic_servant: 3, gas_electricity_water: 4, loan: 5, concessional_loan: 5,
+  holiday: 6, travel: 7, meals: 8, free_meals: 8, education: 9, gift: 10, gift_voucher: 10, credit_card: 11,
+  club_membership: 12, club: 12, movable_asset_use: 13, asset_transfer: 14, other_benefit: 15, esop_startup: 16,
+  esop: 17, employer_fund_contribution: 18, fund_accretion: 19, medical: OTHER_ROW, other: OTHER_ROW,
+};
+
+const norm = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+const LABEL_ROWS = new Map(FORM12BA_ROWS.map((l, i) => [norm(l), i + 1]));
+
+/** The 12BA row (1-20) of a perquisite type, or null when the type is not in the master. */
+export function form12baRowOf(nature: string): number | null {
+  const k = norm(nature);
+  return PERQUISITE_TYPE_ROWS[k] ?? LABEL_ROWS.get(k) ?? null;
+}
 
 export interface Form12baComponent { nature: string; description: string; valueMinor: bigint; recoveredMinor: bigint; taxableMinor: bigint }
 
@@ -72,20 +105,22 @@ export interface Form12baModel {
   generatedAt?: Date;
 }
 
-/** Rows 1-20 with (value, recovered, taxable) and the row-21 total. */
-export function form12baRows(m: Form12baModel): { rows: Array<{ label: string; v: bigint; r: bigint; t: bigint }>; total: { v: bigint; r: bigint; t: bigint } } {
-  const rows = FORM12BA_NATURES.map((n) => ({ label: n.label, v: 0n, r: 0n, t: 0n }));
-  const other = rows[rows.length - 1]!;
+/** Rows 1-20 with (value, recovered, taxable), the row-21 total, and the natures not in the master. */
+export function form12baRows(m: Form12baModel): { rows: Array<{ label: string; v: bigint; r: bigint; t: bigint }>; total: { v: bigint; r: bigint; t: bigint }; unmapped: string[] } {
+  const rows = FORM12BA_ROWS.map((label) => ({ label, v: 0n, r: 0n, t: 0n }));
+  const other = rows[OTHER_ROW - 1]!;
+  const unmapped: string[] = [];
   if (m.components.length === 0 && m.aggregatePerquisiteMinor > 0n) {
     other.v = m.aggregatePerquisiteMinor; other.t = m.aggregatePerquisiteMinor;
   }
   for (const c of m.components) {
-    const idx = FORM12BA_NATURES.findIndex((n) => n.match.test(`${c.nature} ${c.description}`));
-    const row = idx >= 0 ? rows[idx]! : other;
+    const n = form12baRowOf(c.nature);
+    if (n === null && !unmapped.includes(c.nature)) unmapped.push(c.nature);
+    const row = rows[(n ?? OTHER_ROW) - 1]!;
     row.v += c.valueMinor; row.r += c.recoveredMinor; row.t += c.taxableMinor;
   }
   const total = rows.reduce((a, r) => ({ v: a.v + r.v, r: a.r + r.r, t: a.t + r.t }), { v: 0n, r: 0n, t: 0n });
-  return { rows, total };
+  return { rows, total, unmapped };
 }
 
 export async function renderForm12baPdf(m: Form12baModel): Promise<Uint8Array> {
@@ -126,6 +161,10 @@ export async function renderForm12baPdf(m: Form12baModel): Promise<Uint8Array> {
       ["22", "Total value of profits in lieu of salary as per section 17(3)", "0.00", "0.00", "0.00"],
     ],
   });
+  const { unmapped } = form12baRows(m);
+  if (unmapped.length > 0) {
+    pdf.note(`Reported under row 20 (Other benefits or amenities): perquisite type${unmapped.length === 1 ? "" : "s"} not in the perquisite master: ${unmapped.join(", ")}.`);
+  }
   pdf.heading("9. Details of tax");
   pdf.table({
     columns: [{ header: "", width: 4 }, { header: "Amount (₹)", width: 1, align: "right" }],
@@ -213,7 +252,11 @@ export async function form12baPdfRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const pdf = await renderForm12baPdf({
+    const unknownTypes = [...new Set(comps.map((x) => x.nature).filter((n) => form12baRowOf(n) === null))];
+    if (unknownTypes.length > 0) {
+      req.log.warn({ employeeId, fy: q.fy, unknownTypes }, "form12ba: perquisite types not in the perquisite master reported under Other benefits");
+    }
+    const pdf = await pdfOr503(() => renderForm12baPdf({
       fy: q.fy, assessmentYear, employer,
       employee: { name, designation, pan },
       salaryIncomeMinor: salaryMinor,
@@ -224,7 +267,7 @@ export async function form12baPdfRoutes(app: FastifyInstance): Promise<void> {
       aggregatePerquisiteMinor: dec ? minorFromDb(dec.perquisitesMinor) : 0n,
       taxDeductedMinor: tdsMinor,
       responsible,
-    });
+    }));
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="Form12BA_${q.fy}.pdf"`)

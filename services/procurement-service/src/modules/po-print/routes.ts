@@ -10,12 +10,23 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveDocIdentity, resolveSignatories } from "@civitasone/render/official";
+import { resolveDocIdentity, resolveSignatories, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "../po/queries.js";
 import * as grnQueries from "../grn/queries.js";
 import { getVendor } from "../vendor/queries.js";
 import { poDocModel, renderPoPdf, renderGrnPdf, type GrnDocModel } from "./po-document.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 const READER_ROLES = ["procurement_officer", "procurement_admin", "super_admin", "finance_officer", "audit_officer"];
 // Same readers as GET /v1/procurement/grns/:id.
@@ -42,7 +53,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const { pdf, poNo } = await poPdf(ctx.tenantId, id);
+    const { pdf, poNo } = await pdfOr503(() => poPdf(ctx.tenantId, id));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="PO-${fileSafe(poNo)}.pdf"`).send(pdf);
   });
@@ -51,7 +62,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const { pdf, poNo } = await poPdf(ctx.tenantId, id);
+    const { pdf, poNo } = await pdfOr503(() => poPdf(ctx.tenantId, id));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="PO-${fileSafe(poNo)}.pdf"`).send(pdf);
   });
@@ -84,7 +95,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     const receivedById = typeof grn.createdBy === "string" ? grn.createdBy : null;
     const inspectorId = insp?.inspectorId ?? null;
     const [buyer, people] = await Promise.all([resolveDocIdentity(ctx.tenantId), resolveSignatories(ctx.tenantId, [receivedById, inspectorId])]);
-    const pdf = await renderGrnPdf(model, buyer, receivedById ? people.get(receivedById) ?? null : null, inspectorId ? people.get(inspectorId) ?? null : null);
+    const pdf = await pdfOr503(() => renderGrnPdf(model, buyer, receivedById ? people.get(receivedById) ?? null : null, inspectorId ? people.get(inspectorId) ?? null : null));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="GRN-${fileSafe(model.grnNo || id.slice(0, 8))}.pdf"`).send(Buffer.from(pdf));
   });

@@ -95,7 +95,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { HrmsUnavailableError } from "../src/shared/hrms-client.js";
 
-afterAll(async () => { await sqlClient.end(); });
+afterAll(async () => { await sqlClient.end(); const { closePdfRenderer } = await import("@civitasone/render"); await closePdfRenderer(); });
 
 function makeSlip(overrides: Record<string, unknown> = {}) {
   return {
@@ -807,6 +807,55 @@ describe("GET /v1/payroll/slips/:id/pdf — issuable PDF (UAT ux-docs)", () => {
   it("400 for an unknown format", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: `/v1/payroll/slips/${SLIP_ID}/pdf?format=docx`, headers: { authorization: `Bearer ${adminToken()}` } });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// PR #2463 review: the default (PDF) output keeps its own auth test, and the 12BA PDF route its refusals.
+describe("default PDF path + Form 12BA PDF route (review)", () => {
+  it("403 — an employee cannot download another employee's slip as a PDF (default output)", async () => {
+    H.scopedReadMock.mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) return [makeSlip({ employeeId: OTHER_EMPLOYEE_ID })];
+      return [];
+    });
+    const app = await buildApp();
+    for (const route of ["pdf", "download"]) {
+      callCount = 0;
+      const res = await app.inject({ method: "GET", url: `/v1/payroll/slips/${SLIP_ID}/${route}`, headers: { authorization: `Bearer ${employeeToken()}` } });
+      expect(res.statusCode).toBe(403);
+    }
+    await app.close();
+  });
+
+  it("403 — an employee cannot print another employee's Form 12BA", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba/pdf?employeeId=${OTHER_EMPLOYEE_ID}&fy=2025-26`, headers: { authorization: `Bearer ${employeeToken()}` } });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("422 FORM12BA_EMPLOYER_NOT_CONFIGURED when no employer name / TAN / PAN is configured (no placeholders)", async () => {
+    const saved = { n: process.env.EMPLOYER_NAME, t: process.env.EMPLOYER_TAN, p: process.env.EMPLOYER_PAN };
+    delete process.env.EMPLOYER_NAME; delete process.env.EMPLOYER_TAN; delete process.env.EMPLOYER_PAN;
+    try {
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba/pdf?employeeId=${EMPLOYEE_ID}&fy=2025-26`, headers: { authorization: `Bearer ${adminToken()}` } });
+      await app.close();
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe("FORM12BA_EMPLOYER_NOT_CONFIGURED");
+      expect(res.body).not.toMatch(/configure EMPLOYER/);
+    } finally {
+      if (saved.n !== undefined) process.env.EMPLOYER_NAME = saved.n;
+      if (saved.t !== undefined) process.env.EMPLOYER_TAN = saved.t;
+      if (saved.p !== undefined) process.env.EMPLOYER_PAN = saved.p;
+    }
+  });
+
+  it("400 for a malformed FY", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba/pdf?employeeId=${EMPLOYEE_ID}&fy=2025`, headers: { authorization: `Bearer ${adminToken()}` } });
     await app.close();
     expect(res.statusCode).toBe(400);
   });

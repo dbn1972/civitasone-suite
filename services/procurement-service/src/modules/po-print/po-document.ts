@@ -71,8 +71,8 @@ export interface PoTotals {
   igstMinor: bigint;
   taxMinor: bigint;
   grandMinor: bigint;
-  /** "intra" (CGST + SGST), "inter" (IGST), "unknown" (a GSTIN is missing), "none" (no rated line). */
-  kind: "intra" | "inter" | "unknown" | "none";
+  /** "intra" (CGST + SGST), "inter" (IGST), "unknown" (buyer GSTIN missing), "none" (no rated line), "unregistered" (supplier has no GSTIN: no GST). */
+  kind: "intra" | "inter" | "unknown" | "none" | "unregistered";
   /** 1-based line numbers with no GST rate recorded. */
   unratedLines: number[];
   lineTax: bigint[];
@@ -81,6 +81,13 @@ export interface PoTotals {
 export function poTotals(m: PoDocModel, buyer: Pick<DocIdentity, "gstin" | "stateCode">): PoTotals {
   const t: PoTotals = { taxableMinor: 0n, cgstMinor: 0n, sgstMinor: 0n, igstMinor: 0n, taxMinor: 0n, grandMinor: 0n, kind: "none", unratedLines: [], lineTax: [] };
   const recipient = buyer.gstin ?? buyer.stateCode;
+  // A supplier not registered under GST cannot charge GST: the order carries no tax at all.
+  if (!m.vendor.gstin) {
+    m.lines.forEach((l) => { t.taxableMinor += l.unitPriceMinor * BigInt(l.quantity); t.lineTax.push(0n); });
+    t.grandMinor = t.taxableMinor;
+    t.kind = "unregistered";
+    return t;
+  }
   m.lines.forEach((l, i) => {
     const taxable = l.unitPriceMinor * BigInt(l.quantity);
     t.taxableMinor += taxable;
@@ -126,7 +133,8 @@ export async function renderPoPdf(m: PoDocModel, buyer: DocIdentity, signatory: 
     ...(m.gemRef ? [{ label: "GeM order", value: m.gemRef }] : []),
     { label: "Delivery by", value: formatDateIst(m.deliveryDate) },
   ]);
-  const rateCell = (l: PoLine) => (l.gstRateBp === null ? "Not recorded" : pct(l.gstRateBp));
+  const unregistered = totals.kind === "unregistered";
+  const rateCell = (l: PoLine) => (unregistered ? "Nil" : l.gstRateBp === null ? "N.R." : pct(l.gstRateBp));
   pdf.table({
     size: 8.5,
     columns: [
@@ -142,7 +150,7 @@ export async function renderPoPdf(m: PoDocModel, buyer: DocIdentity, signatory: 
     rows: m.lines.map((l, i) => [
       String(i + 1), [l.description, l.itemCode ? `(${l.itemCode})` : ""].filter(Boolean).join(" "), l.hsnSac ?? "—",
       `${l.quantity} ${l.unit}`, formatMinorIndian(l.unitPriceMinor), formatMinorIndian(l.unitPriceMinor * BigInt(l.quantity)),
-      rateCell(l), l.gstRateBp === null ? "—" : formatMinorIndian(totals.lineTax[i] ?? 0n),
+      rateCell(l), unregistered || l.gstRateBp === null ? "—" : formatMinorIndian(totals.lineTax[i] ?? 0n),
     ]),
     emptyText: "This order has no line items.",
   });
@@ -156,7 +164,9 @@ export async function renderPoPdf(m: PoDocModel, buyer: DocIdentity, signatory: 
     footRows: [[totals.taxMinor > 0n ? "Total order value including GST" : "Total order value", formatMinorIndian(totals.grandMinor)]],
   });
   pdf.paragraph(`Amount in words: ${amountInWordsEn(totals.grandMinor)}`, { bold: true });
-  if (totals.unratedLines.length > 0) {
+  if (unregistered) {
+    pdf.note("The supplier is not registered under GST: no GST is charged on this order.");
+  } else if (totals.unratedLines.length > 0) {
     pdf.note(`GST rate not recorded for line ${totals.unratedLines.join(", ")}: no tax is shown for ${totals.unratedLines.length === 1 ? "it" : "them"}; GST, where leviable, is payable against the supplier tax invoice.`);
   }
   if (m.recordedTotalMinor !== totals.taxableMinor) {
@@ -166,8 +176,8 @@ export async function renderPoPdf(m: PoDocModel, buyer: DocIdentity, signatory: 
   PO_TERMS.forEach((t, i) => pdf.paragraph(t, { prefix: `${i + 1}.`, size: 9, gapAfter: 2 }));
   pdf.signatures([{
     caption: buyer.orgName ? `For and on behalf of ${buyer.orgName}` : "Purchasing authority",
-    name: signatory?.name ?? "Purchase Officer",
-    designation: signatory?.designation ?? (signatory ? null : "Signature and seal"),
+    name: signatory?.name ?? null,
+    designation: signatory?.designation ?? (signatory ? null : "Purchase Officer (signature and seal)"),
   }]);
   return pdf.save();
 }
@@ -213,8 +223,8 @@ export async function renderGrnPdf(m: GrnDocModel, buyer: DocIdentity, receivedB
   if (m.notes) pdf.paragraph(`Notes: ${m.notes}`);
   pdf.paragraph("Certified that the goods listed above have been received in good condition, except as noted, and taken on stock.", { size: 9 });
   pdf.signatures([
-    { caption: "Received by", name: receivedBy?.name ?? "Store officer", designation: receivedBy?.designation ?? null },
-    { caption: "Inspected by", name: inspectedBy?.name ?? (m.inspection ? "Inspecting officer" : "Inspection pending"), designation: inspectedBy?.designation ?? null },
+    { caption: "Received by", name: receivedBy?.name ?? null, designation: receivedBy?.designation ?? null },
+    { caption: m.inspection ? "Inspected by" : "Inspected by (inspection pending)", name: inspectedBy?.name ?? null, designation: inspectedBy?.designation ?? null },
   ]);
   return pdf.save();
 }

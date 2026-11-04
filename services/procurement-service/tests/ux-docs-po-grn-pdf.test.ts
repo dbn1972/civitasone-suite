@@ -6,12 +6,15 @@
  * unitPriceMinor), so every PO printed "No line items". poDocModel() is fed exactly the
  * shape getPo() returns and must carry every line through to the PDF.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
+import { closePdfRenderer } from "@civitasone/render";
+import { createPoBody, gstAllowedRatesBp, DEFAULT_GST_ALLOWED_RATES_BP } from "../src/modules/po/validators.js";
 import { pdfText, pdfFlatText, pdfFonts, isPdf } from "@civitasone/render/testing";
 import { EMPTY_DOC_IDENTITY, type DocIdentity } from "@civitasone/render/official";
 import { poDocModel, poTotals, renderPoPdf, renderGrnPdf } from "../src/modules/po-print/po-document.js";
 
 const AT = new Date("2026-11-04T07:00:00.000Z");
+afterAll(async () => { await closePdfRenderer(); });
 const BUYER: DocIdentity = { ...EMPTY_DOC_IDENTITY, orgName: "Digital India Corporation", ministry: "Ministry of Electronics and Information Technology", address: "Electronics Niketan, New Delhi", gstin: "07AAACD1234F1Z5", stateCode: "07" };
 
 /** Exactly what getPo() (po/queries.ts) returns for PO/2026/0035 (one line, 4 x 1,500.50). */
@@ -39,7 +42,7 @@ describe("PO line items (golden)", () => {
   });
 
   it("prints the line (never \"No line items\") with Indian grouping and the amount in words", async () => {
-    const bytes = await renderPoPdf(poDocModel(getPoShape(), null), BUYER, { name: "Asha Rao", designation: "Under Secretary" }, AT);
+    const bytes = await renderPoPdf(poDocModel(getPoShape(), { gstin: "07BBBBB1111B1Z5" }), BUYER, { name: "Asha Rao", designation: "Under Secretary" }, AT);
     expect(isPdf(bytes)).toBe(true);
     const text = await pdfText(bytes);
     const flat = await pdfFlatText(bytes);
@@ -71,6 +74,32 @@ describe("PO line items (golden)", () => {
   it("inter-State supply: IGST", () => {
     const m = poDocModel(getPoShape({}, { gstRateBp: 1800 }), { gstin: "29BBBBB1111B1Z5" });
     expect(poTotals(m, BUYER)).toMatchObject({ kind: "inter", igstMinor: 108036n, cgstMinor: 0n });
+  });
+
+  it("unregistered supplier: no GST is added, even on a rated line (review)", async () => {
+    const m = poDocModel(getPoShape({}, { gstRateBp: 1800 }), { gstin: null });
+    expect(poTotals(m, BUYER)).toMatchObject({ kind: "unregistered", taxMinor: 0n, cgstMinor: 0n, sgstMinor: 0n, igstMinor: 0n, grandMinor: 600200n });
+    const flat = await pdfFlatText(await renderPoPdf(m, BUYER, null, AT));
+    expect(flat).toContain("Supplier GSTIN Not registered under GST");
+    expect(flat).toContain("The supplier is not registered under GST: no GST is charged on this order.");
+    expect(flat).toContain("Total order value 6,002.00");
+    // no tax rows (the general terms still explain CGST/SGST/IGST in words)
+    expect(flat).not.toMatch(/CGST [0-9]/);
+    expect(flat).not.toMatch(/SGST \/ UTGST [0-9]/);
+    expect(flat).not.toMatch(/IGST [0-9]/);
+    expect(flat).not.toContain("including GST");
+    expect(flat).toContain("Rupees Six Thousand Two Only");
+  });
+
+  it("GST slabs: 0.1 / 0.25 / 1.5 / 3 / 5 / 12 / 18 / 28 / 40 % accepted, others refused; the list is configurable", () => {
+    const line = { itemCode: "V-1", description: "Large vehicle", quantity: 1, unitPriceMinor: 100, gstRateBp: 4000 };
+    const body = (gstRateBp: number) => ({ vendorId: "9c900000-3333-4000-8000-0000000d0c99", indentRef: "IND/1", items: [{ ...line, gstRateBp }] });
+    for (const bp of [0, 10, 25, 150, 300, 500, 1200, 1800, 2800, 4000]) expect(createPoBody.safeParse(body(bp)).success).toBe(true);
+    for (const bp of [700, 2900, 4100, -100]) expect(createPoBody.safeParse(body(bp)).success).toBe(false);
+    expect(gstAllowedRatesBp(undefined)).toEqual(DEFAULT_GST_ALLOWED_RATES_BP);
+    expect(gstAllowedRatesBp("5, 18, 40")).toEqual([500, 1800, 4000]);
+    const flat40 = poTotals(poDocModel(getPoShape({}, { gstRateBp: 4000 }), { gstin: "29BBBBB1111B1Z5" }), BUYER);
+    expect(flat40).toMatchObject({ kind: "inter", igstMinor: 240080n });
   });
 
   it("a PO with several lines prints every one of them", async () => {

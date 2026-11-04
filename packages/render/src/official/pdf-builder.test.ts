@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
+import { closePdfRenderer } from "../pdf.js";
 import { OfficialPdf } from "./pdf-builder.js";
 import { docFontFaceCss, DOC_FONT } from "./fonts.js";
 import { pdfText, pdfFlatText, pdfFonts, pdfPages, isPdf } from "../testing.js";
@@ -18,13 +19,16 @@ async function sample(): Promise<Uint8Array> {
   return pdf.save();
 }
 
+afterAll(async () => { await closePdfRenderer(); });
+
 describe("OfficialPdf", () => {
   it("produces a real A4 PDF with the text a viewer extracts", async () => {
     const bytes = await sample();
     expect(isPdf(bytes)).toBe(true);
     const pages = await pdfPages(bytes);
-    expect(pages[0]?.width).toBeCloseTo(595.28, 1);
-    expect(pages[0]?.height).toBeCloseTo(841.89, 1);
+    // A4 (Chromium prints 8.27 x 11.69 in = 594.96 x 841.92 pt)
+    expect(Math.abs((pages[0]?.width ?? 0) - 595.28)).toBeLessThan(0.5);
+    expect(Math.abs((pages[0]?.height ?? 0) - 841.89)).toBeLessThan(0.5);
     const text = await pdfText(bytes);
     expect(text).toContain("Government of India");
     expect(text).toContain("No. SO/1");
@@ -62,11 +66,11 @@ describe("OfficialPdf", () => {
     expect(text).toMatch(/Page 2 of \d/);
   });
 
-  it("never prints a blank letterhead line or an unencodable glyph error", async () => {
+  it("never prints a blank letterhead line, and markup in data is printed as text", async () => {
     const pdf = await OfficialPdf.create({ title: "x", generatedAt: AT });
-    pdf.letterhead({ orgName: null, ministry: "  " }).paragraph("Tick ✓ and emoji 🙂 degrade to ?");
-    const text = await pdfText(await pdf.save());
-    expect(text).toContain("Tick ? and emoji ? degrade to ?");
+    pdf.letterhead({ orgName: null, ministry: "  " }).paragraph("Vendor <b>Acme</b> & Sons <script>alert(1)</script>");
+    const text = await pdfFlatText(await pdf.save());
+    expect(text).toContain("Vendor <b>Acme</b> & Sons <script>alert(1)</script>");
   });
 
   it("font CSS for Chromium-rendered documents inlines both subsets", () => {

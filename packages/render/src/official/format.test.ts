@@ -97,13 +97,15 @@ describe("document identity", () => {
   it("signatories: HRMS name + designation, identity name as fallback", async () => {
     const a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const c = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     const calls: string[] = [];
     const fake = async (url: string) => {
       calls.push(url);
-      if (url.includes("employee-summaries")) return { ok: true, json: async () => [{ fullName: "Asha Rao", designation: "Under Secretary", userRef: a }] };
+      if (url.includes("employee-summaries")) return { ok: true, json: async () => [{ fullName: "Asha Rao", designationName: "Under Secretary", userRef: a }, { fullName: "Old Key", designation: "Section Officer", userRef: c }] };
       return { ok: true, json: async () => [{ id: b, name: "Bharat Lal" }, { id: "x", name: "ignored" }] };
     };
-    const m = await resolveSignatories("t", [a, b, null, "not-a-uuid"], fake);
+    const m = await resolveSignatories("t", [a, b, c, null, "not-a-uuid"], fake);
+    expect(m.get(c)).toEqual({ name: "Old Key", designation: "Section Officer" });
     expect(m.get(a)).toEqual({ name: "Asha Rao", designation: "Under Secretary" });
     expect(m.get(b)).toEqual({ name: "Bharat Lal", designation: null });
     expect(calls).toHaveLength(2);

@@ -9,8 +9,9 @@
  */
 import { escapeHtml as esc } from "../../shared/html.js";
 import {
-  DOC_FONT_STACK, DocumentNotIssuableError, docFontFaceCss, formatMinorIndian, resolveDocIdentity,
+  DOC_FONT_STACK, DocumentNotIssuableError, amountInWordsEn, docFontFaceCss, formatDateIst, formatMinorIndian, resolveDocIdentity,
 } from "@civitasone/render/official";
+import { loadLatestFilings } from "../return-filings/routes.js";
 import type { buildForm16 } from "../tax/form16.js";
 import { loadLetterhead } from "../letterhead/routes.js";
 
@@ -59,8 +60,34 @@ export async function resolveForm16Deductor(tenantId: string, built?: { name: st
 
 const rupees = (n: number) => `₹ ${formatMinorIndian(BigInt(Math.round(n * 100)))}`;
 
+export interface Form16Extras {
+  /** Form 24Q quarterly statement receipt numbers (PRN) from the filing records, by quarter. */
+  receipts: Map<string, { receiptNo: string; filedOn: string | null }>;
+  /** Person responsible for deduction of tax (payroll letterhead DDO / signatory). */
+  responsible: { name: string | null; designation: string | null };
+  /** Employer serial certificate number (TAN/FY/employee no). */
+  certificateNo: string;
+}
+
+/** Filing receipts and the responsible person; any read failure leaves the field blank (never invented). */
+export async function loadForm16Extras(tenantId: string, fy: string, tan: string, employeeNo: string): Promise<Form16Extras> {
+  const receipts = new Map<string, { receiptNo: string; filedOn: string | null }>();
+  try {
+    for (const [q, f] of await loadLatestFilings(tenantId, "24Q", fy)) {
+      const r = f as unknown as { receiptNo?: string; filedOn?: string | null };
+      if (r.receiptNo) receipts.set(q, { receiptNo: r.receiptNo, filedOn: r.filedOn ?? null });
+    }
+  } catch { /* no filing records readable: receipts print blank */ }
+  let responsible: { name: string | null; designation: string | null } = { name: null, designation: null };
+  try {
+    const lh = await loadLetterhead(tenantId);
+    responsible = { name: lh?.ddoName ?? null, designation: lh?.signatoryTitle ?? null };
+  } catch { /* hand-completed */ }
+  return { receipts, responsible, certificateNo: `${tan}/${fy}/${employeeNo}` };
+}
+
 /** Form 16 (Part A + Part B) as HTML for the PDF renderer. */
-export function renderForm16Html(f: Form16Data, deductor?: Form16Deductor): string {
+export function renderForm16Html(f: Form16Data, deductor?: Form16Deductor, extras?: Form16Extras): string {
   const a = f.form16PartA, b = f.form16PartB;
   const d = deductor ?? { ...a.deductor, address: null };
   const [startYear] = f.fy.split("-");
@@ -82,6 +109,7 @@ th,td{border:1px solid #333;padding:6px 8px} .amount{text-align:right}
 <p class="sub"><strong>Form 16 — Certificate under Section 203 of the Income-tax Act, 1961 for tax deducted at source on salary</strong></p>
 <table class="meta">
 <tr><td><strong>Financial Year:</strong> ${esc(f.fy)}</td><td><strong>Assessment Year:</strong> ${esc(f.assessmentYear)}</td></tr>
+${extras ? `<tr><td colspan="2"><strong>Certificate No.:</strong> ${esc(extras.certificateNo)}</td></tr>` : ""}
 <tr><td colspan="2"><strong>Period with the employer:</strong> 01 Apr ${esc(startYear ?? "")} to 31 Mar ${esc(String(Number(startYear ?? 0) + 1))}</td></tr>
 </table>
 <h2>भाग क / Part A — Deductor &amp; Deductee, TDS Deposited</h2>
@@ -93,12 +121,9 @@ th,td{border:1px solid #333;padding:6px 8px} .amount{text-align:right}
 <tr><td>PAN of the employee</td><td>${esc(a.deductee.pan || "PANNOTAVBL")}</td></tr>
 </table>
 <table>
-<tr><th>Quarter</th><th class="amount">TDS Deposited</th></tr>
-<tr><td>Q1 (Apr–Jun)</td><td class="amount">${rupees(a.quarterlyTds.Q1)}</td></tr>
-<tr><td>Q2 (Jul–Sep)</td><td class="amount">${rupees(a.quarterlyTds.Q2)}</td></tr>
-<tr><td>Q3 (Oct–Dec)</td><td class="amount">${rupees(a.quarterlyTds.Q3)}</td></tr>
-<tr><td>Q4 (Jan–Mar)</td><td class="amount">${rupees(a.quarterlyTds.Q4)}</td></tr>
-<tr><td><strong>Total</strong></td><td class="amount"><strong>${rupees(a.totalTdsDeposited)}</strong></td></tr>
+<tr><th>Quarter</th><th>Receipt No. of quarterly statement (Form 24Q)</th><th class="amount">TDS Deposited</th></tr>
+${(["Q1", "Q2", "Q3", "Q4"] as const).map((q, i) => `<tr><td>${q} (${["Apr–Jun", "Jul–Sep", "Oct–Dec", "Jan–Mar"][i]})</td><td>${esc(extras?.receipts.get(q)?.receiptNo ?? "")}</td><td class="amount">${rupees(a.quarterlyTds[q])}</td></tr>`).join("\n")}
+<tr><td colspan="2"><strong>Total</strong></td><td class="amount"><strong>${rupees(a.totalTdsDeposited)}</strong></td></tr>
 </table>
 <h2>भाग ख / Part B — Details of Salary Paid and Tax Deducted (${esc(b.regime)} regime)</h2>
 <table>
@@ -117,6 +142,15 @@ ${row("Total Tax Liability", b.totalTaxLiability, true)}
 ${row("Total TDS Deducted", b.totalTdsDeducted, true)}
 ${b.balanceTaxPayable > 0 ? row("Balance Tax Payable", b.balanceTaxPayable, true) : row("Refund Due", b.refundDue, true)}
 </table>
+<h2>सत्यापन / Verification</h2>
+${(() => {
+  const ded = BigInt(Math.round(b.totalTdsDeducted * 100)), dep = BigInt(Math.round(a.totalTdsDeposited * 100));
+  const who = extras?.responsible.name ? esc(extras.responsible.name) : "______________________";
+  const cap = extras?.responsible.designation ? esc(extras.responsible.designation) : "______________________";
+  return `<p>I, ${who}, working in the capacity of ${cap}, do hereby certify that a sum of ${rupees(b.totalTdsDeducted)} [${esc(amountInWordsEn(ded))}] has been deducted and a sum of ${rupees(a.totalTdsDeposited)} [${esc(amountInWordsEn(dep))}] has been deposited to the credit of the Central Government. I further certify that the information given above is true, complete and correct and is based on the books of account, documents, TDS statements, TDS deposited and other available records.</p>
+<table class="meta"><tr><td><strong>Place:</strong> ______________</td><td style="text-align:right">______________________________<br/>(Signature of the person responsible for deduction of tax)</td></tr>
+<tr><td><strong>Date:</strong> ${esc(formatDateIst(new Date()))}</td><td style="text-align:right"><strong>Full Name:</strong> ${who}<br/><strong>Designation:</strong> ${cap}</td></tr></table>`;
+})()}
 <p style="font-size:11px;color:#666;margin-top:24px">${esc(a.note)} Verify against TRACES before filing.</p>
 </body></html>`;
 }

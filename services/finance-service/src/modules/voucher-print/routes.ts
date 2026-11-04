@@ -11,11 +11,22 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveDocIdentity, resolveSignatories, toMinor } from "@civitasone/render/official";
+import { resolveDocIdentity, resolveSignatories, toMinor, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "../gl/repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { renderSanctionOrderPdf, renderVoucherPdf, type VoucherDocModel } from "./documents.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 /** Same readers as GET /v1/finance/sanctions/:id. */
@@ -58,7 +69,7 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const { pdf, voucherNo } = await voucherPdf(ctx.tenantId, id);
+    const { pdf, voucherNo } = await pdfOr503(() => voucherPdf(ctx.tenantId, id));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="voucher-${fileSafe(voucherNo)}.pdf"`).send(pdf);
   });
@@ -67,7 +78,7 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const { pdf, voucherNo } = await voucherPdf(ctx.tenantId, id);
+    const { pdf, voucherNo } = await pdfOr503(() => voucherPdf(ctx.tenantId, id));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="voucher-${fileSafe(voucherNo)}.pdf"`).send(pdf);
   });
@@ -81,24 +92,31 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
     if (row.status !== "approved") {
       throw new HttpError(409, "SANCTION_NOT_APPROVED", `a sanction order is issued only for an approved sanction; this sanction is ${row.status}`);
     }
-    // The sanctioning authority is the officer who approved (the checker), not the maker.
-    const people = await resolveSignatories(ctx.tenantId, [row.updatedBy]);
-    const signatory = people.get(row.updatedBy);
+    // The sanctioning authority is the officer who APPROVED it, and the order is dated on the
+    // approval: both from approved_by / approved_at (migration 0162, written once at approval).
+    // updated_by / updated_at change on every bill booked against the sanction, so they are
+    // never used here.
+    if (!row.approvedBy || !row.approvedAt) {
+      throw new HttpError(422, "SANCTION_APPROVAL_NOT_RECORDED",
+        "the sanction order cannot be issued: the approving officer and approval date are not recorded for this sanction (run the approval backfill, or record them from the sanction file)");
+    }
+    const people = await resolveSignatories(ctx.tenantId, [row.approvedBy]);
+    const signatory = people.get(row.approvedBy);
     if (!signatory) {
       throw new HttpError(422, "SANCTIONING_OFFICER_UNRESOLVED",
         "the sanction order cannot be issued: the approving officer has no name on record. Link the officer login to an HRMS employee record (or an identity profile) and try again.");
     }
     const head = await budgetRepo.findHeadById(row.headId);
     const issuer = await resolveDocIdentity(ctx.tenantId);
-    const pdf = await renderSanctionOrderPdf({
+    const pdf = await pdfOr503(() => renderSanctionOrderPdf({
       sanctionNo: row.sanctionNo,
       purpose: row.purpose,
       amountMinor: toMinor(row.amountMinor),
-      approvedAt: iso(row.updatedAt) ?? new Date().toISOString(),
-      head: head && head.tenantId === ctx.tenantId ? { code: head.code, hoaCode: head.hoaCode ?? null, name: head.name } : null,
+      approvedAt: iso(row.approvedAt) ?? new Date().toISOString(),
+      head: head && head.tenantId === ctx.tenantId ? { code: head.code, hoaCode: head.hoaCode?.trim() || null, name: head.name } : null,
       efileFileNo: row.efileFileNo ?? null,
       signatory,
-    }, issuer);
+    }, issuer));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="sanction-order-${fileSafe(row.sanctionNo)}.pdf"`).send(Buffer.from(pdf));
   });

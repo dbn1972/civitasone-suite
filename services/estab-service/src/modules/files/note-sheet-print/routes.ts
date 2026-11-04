@@ -1,10 +1,21 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { OfficialPdf, formatDateIst } from "@civitasone/render/official";
+import { OfficialPdf, formatDateIst, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../../shared/context.js";
 import { sqlClient } from "../../../shared/db.js";
 import * as queries from "../queries.js";
 import type { FileDetailDto } from "../queries.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 const READER_ROLES = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin", "audit_officer"];
 
@@ -65,7 +76,7 @@ export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> 
     }
     const headerOrg = orgName || file.dept || "Office Note Sheet";
 
-    const pdf = await buildNoteSheetPdf(file, headerOrg);
+    const pdf = await pdfOr503(() => buildNoteSheetPdf(file, headerOrg));
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="note-sheet-${file.fileNo.replace(/[^\w.-]+/g, "_")}.pdf"`)

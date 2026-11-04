@@ -96,7 +96,7 @@ export async function updateSanction(tx: Writer, id: string, patch: Partial<Sanc
  */
 export async function approveSanctionIfNoEfile(tx: Writer, id: string, tenantId: string, actorId: string): Promise<boolean> {
   const rows = await tx.update(financeSanctions)
-    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date() })
+    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date(), approvedBy: actorId, approvedAt: new Date() })
     .where(and(
       eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
       inArray(financeSanctions.status, ["pending_approval", "draft"]),

@@ -17,6 +17,18 @@ import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 import { loadSlipDocument, slipDocQuerySchema, slipPdfBytes } from "./routes.js";
+import { PdfRendererUnavailableError } from "@civitasone/render/official";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 // UAT Phase 2 follow-up (security): a payslip download is per-employee pay data
 // -- payroll + HR staff see any slip; everyone else (an employee, including a
@@ -55,7 +67,7 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     const q = slipDocQuerySchema.parse(req.query ?? {});
     if (q.format === "pdf") {
       const { slip: s, run: r, docInput } = await loadSlipDocument(ctx, id, req.log);
-      const pdf = await slipPdfBytes(ctx.tenantId, docInput, q.lang);
+      const pdf = await pdfOr503(() => slipPdfBytes(ctx.tenantId, docInput, q.lang));
       await publishSlipDownloadAudit(ctx, s.id, "download");
       const pdfName = `salary-slip-${safeFilenamePart(s.employeeNo)}-${safeFilenamePart(r?.month ?? "period")}.pdf`;
       return reply

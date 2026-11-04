@@ -11,9 +11,20 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { maskLast4, maskPan } from "../../shared/pii-mask.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
-import { resolveDocIdentity } from "@civitasone/render/official";
+import { resolveDocIdentity, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { renderPayslipPdf, type PayslipDocInput } from "./payslip-document.js";
 import type { FastifyBaseLogger } from "fastify";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 // UAT Phase 2 follow-up (security): a payslip PDF is per-employee pay data --
 // payroll + HR staff see any slip; everyone else (an employee, including a
@@ -327,7 +338,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
         .header("content-type", "text/html; charset=utf-8")
         .send(html);
     }
-    const pdf = await slipPdfBytes(ctx.tenantId, docInput, q.lang);
+    const pdf = await pdfOr503(() => slipPdfBytes(ctx.tenantId, docInput, q.lang));
     await publishSlipDownloadAudit(ctx, slip.id, "pdf");
     const fname = `salary-slip-${slip.employeeNo}-${run?.month ?? "period"}.pdf`.replace(/[^\w.-]+/g, "_");
     return reply

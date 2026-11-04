@@ -10,7 +10,7 @@
  * On completion: emit payroll.form16.bulk_completed + audit.
  * On per-employee error: record in error_details jsonb, continue with next.
  */
-import { renderForm16Html, resolveForm16Deductor } from "./form16-document.js";
+import { loadForm16Extras, renderForm16Html, resolveForm16Deductor } from "./form16-document.js";
 import type { Queue } from "@civitasone/queue";
 import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
@@ -149,7 +149,7 @@ export function registerForm16BulkConsumers(queue: Queue): void {
           // UAT ux-docs: no Form 16 is issued without a configured deductor (a data gap, not a render error).
           const deductor = await resolveForm16Deductor(tenantId, form16Data.form16PartA.deductor);
           reasonCode = "UNKNOWN";
-          const html = renderForm16Html(form16Data, deductor);
+          const html = renderForm16Html(form16Data, deductor, await loadForm16Extras(tenantId, fy, deductor.tan, emp.employeeNo));
 
           // b. Render HTML → PDF
           reasonCode = "RENDERER_UNAVAILABLE";

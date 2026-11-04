@@ -89,17 +89,35 @@ export function invoiceDocumentLines(m: InvoicePdfModel): string[] {
 }
 
 /** Who issues the invoice (the platform operator) - deploy configuration, not tenant data. */
-export function invoiceSupplierFromEnv(): { name: string | null; address: string | null } {
+export function invoiceSupplierFromEnv(): { name: string | null; address: string | null; signatory: string | null } {
   const v = (k: string) => (process.env[k] ?? "").trim() || null;
-  return { name: v("BILLING_SUPPLIER_NAME"), address: v("BILLING_SUPPLIER_ADDRESS") };
+  return { name: v("BILLING_SUPPLIER_NAME"), address: v("BILLING_SUPPLIER_ADDRESS"), signatory: v("BILLING_SUPPLIER_SIGNATORY") };
+}
+
+/** Rule 46(a): an invoice must name its supplier. Thrown when the supplier name is not configured (route: 422). */
+export class InvoiceSupplierNotConfiguredError extends Error {
+  readonly code = "INVOICE_SUPPLIER_NOT_CONFIGURED";
+  constructor() {
+    super("the invoice cannot be issued: the supplier name is not configured (BILLING_SUPPLIER_NAME, with BILLING_SUPPLIER_ADDRESS)");
+  }
+}
+
+/** The rate of one tax head, from its amount and the taxable value ("9%", "0.125%"). */
+export function taxRateLabel(taxMinor: bigint, taxableMinor: bigint): string {
+  if (taxableMinor <= 0n || taxMinor <= 0n) return "";
+  // basis points, rounded half up, then shown without trailing zeros
+  const bp = (taxMinor * 20000n + taxableMinor) / (taxableMinor * 2n);
+  const pct = Number(bp) / 100;
+  return `${Number.isInteger(pct) ? pct.toFixed(0) : pct.toString()}%`;
 }
 
 export async function renderInvoicePdf(
   m: InvoicePdfModel,
-  parties: { supplier?: { name: string | null; address: string | null }; recipient?: DocIdentity } = {},
+  parties: { supplier?: { name: string | null; address: string | null; signatory?: string | null }; recipient?: DocIdentity } = {},
   generatedAt?: Date,
 ): Promise<Uint8Array> {
   const supplier = parties.supplier ?? invoiceSupplierFromEnv();
+  if (!supplier.name) throw new InvoiceSupplierNotConfiguredError();
   const registered = !!(m.supplierGstin && m.supplierGstin.length > 0);
   const pdf = await OfficialPdf.create({
     title: `${registered ? "Tax Invoice" : "Bill of Supply"} ${m.invoiceNumber ?? ""}`.trim(),
@@ -117,8 +135,9 @@ export async function renderInvoicePdf(
     { label: "Bill to", value: [r?.orgName, r?.address].filter(Boolean).join(", ") },
     { label: "Place of supply", value: placeOfSupplyLabel(m.placeOfSupply) },
     { label: "Billing period", value: m.periodMonth },
-    { label: "Status", value: m.status },
   ]);
+  // Rule 46(p): the supplies billed here are not notified for reverse charge.
+  if (registered) pdf.paragraph("Whether tax is payable on reverse charge: No", { size: 9.5 });
   const lines = m.items.filter((it) => it.kind !== "tax");
   const taxable = lines.reduce((a, it) => a + toMinor(it.amountMinor), 0n);
   pdf.table({
@@ -132,18 +151,33 @@ export async function renderInvoicePdf(
     rows: lines.map((it, i) => [String(i + 1), it.kind === "line" ? it.description : `${it.description} (${it.kind})`, it.hsnSac ?? "—", it.quantity, formatMinorIndian(toMinor(it.amountMinor))]),
     emptyText: "No line items.",
   });
-  const cgst = toMinor(m.cgstMinor), sgst = toMinor(m.sgstMinor), igst = toMinor(m.igstMinor), tax = toMinor(m.taxMinor), total = toMinor(m.totalMinor);
-  const rows: string[][] = [["Taxable value", formatMinorIndian(taxable)]];
-  if (cgst > 0n || sgst > 0n) rows.push(["CGST", formatMinorIndian(cgst)], ["SGST / UTGST", formatMinorIndian(sgst)]);
-  if (igst > 0n) rows.push(["IGST", formatMinorIndian(igst)]);
-  if (cgst === 0n && sgst === 0n && igst === 0n && tax > 0n) rows.push(["GST", formatMinorIndian(tax)]);
-  pdf.table({
-    columns: [{ header: "Summary", width: 4 }, { header: "₹", width: 1.6, align: "right" }],
-    rows,
-    footRows: [["Invoice total", formatMinorIndian(total)], ["Paid", formatMinorIndian(toMinor(m.paidMinor))], ["Outstanding", formatMinorIndian(toMinor(m.outstandingMinor))]],
-  });
-  pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
-  if (!registered) pdf.note("The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
-  pdf.note("This is a computer-generated invoice.");
+  const cgst = toMinor(m.cgstMinor), sgst = toMinor(m.sgstMinor), igst = toMinor(m.igstMinor), tax = toMinor(m.taxMinor);
+  if (registered) {
+    const total = toMinor(m.totalMinor);
+    const rows: string[][] = [["Taxable value", "", formatMinorIndian(taxable)]];
+    // Rule 46(k)-(l): rate and amount for each tax head.
+    if (cgst > 0n || sgst > 0n) rows.push(["CGST", taxRateLabel(cgst, taxable), formatMinorIndian(cgst)], ["SGST / UTGST", taxRateLabel(sgst, taxable), formatMinorIndian(sgst)]);
+    if (igst > 0n) rows.push(["IGST", taxRateLabel(igst, taxable), formatMinorIndian(igst)]);
+    if (cgst === 0n && sgst === 0n && igst === 0n && tax > 0n) rows.push(["GST", taxRateLabel(tax, taxable), formatMinorIndian(tax)]);
+    pdf.table({
+      columns: [{ header: "Summary", width: 3.4 }, { header: "Rate", width: 0.8, align: "right" }, { header: "₹", width: 1.6, align: "right" }],
+      rows,
+      footRows: [["Invoice total", "", formatMinorIndian(total)], ["Paid", "", formatMinorIndian(toMinor(m.paidMinor))], ["Outstanding", "", formatMinorIndian(toMinor(m.outstandingMinor))]],
+    });
+    pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
+  } else {
+    // Bill of supply: no tax is charged, so no tax heads and the total is the value of supply.
+    const paid = toMinor(m.paidMinor);
+    const outstanding = taxable > paid ? taxable - paid : 0n;
+    pdf.table({
+      columns: [{ header: "Summary", width: 4 }, { header: "₹", width: 1.6, align: "right" }],
+      rows: [["Value of supply", formatMinorIndian(taxable)]],
+      footRows: [["Total", formatMinorIndian(taxable)], ["Paid", formatMinorIndian(paid)], ["Outstanding", formatMinorIndian(outstanding)]],
+    });
+    pdf.paragraph(`Amount in words: ${amountInWordsEn(taxable)}`, { bold: true });
+    pdf.note("The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
+  }
+  // Rule 46(q): signature of the supplier or its authorised representative.
+  pdf.signatures([{ caption: `For ${supplier.name}`, name: supplier.signatory ?? null, designation: "Authorised Signatory" }]);
   return pdf.save();
 }

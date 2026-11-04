@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+/**
+ * UAT ux-docs (PR #2463 review): GST slabs a PO line may carry, in basis points. Default
+ * 0, 0.1, 0.25, 1.5, 3, 5, 12, 18, 28 and 40 % (GST 2.0 added the 40 % slab; 12 and 28 stay
+ * for legacy lines). Configurable with PO_GST_ALLOWED_RATES (comma-separated percent values).
+ */
+export const DEFAULT_GST_ALLOWED_RATES_BP: readonly number[] = [0, 10, 25, 150, 300, 500, 1200, 1800, 2800, 4000];
+
+export function gstAllowedRatesBp(env: string | undefined = process.env.PO_GST_ALLOWED_RATES): readonly number[] {
+  if (!env || !env.trim()) return DEFAULT_GST_ALLOWED_RATES_BP;
+  const list = env.split(",").map((v) => Math.round(Number(v.trim()) * 100)).filter((v) => Number.isInteger(v) && v >= 0 && v <= 4000);
+  return list.length > 0 ? [...new Set(list)].sort((a, b) => a - b) : DEFAULT_GST_ALLOWED_RATES_BP;
+}
+
+const gstRateBp = z.number().int().refine((v) => gstAllowedRatesBp().includes(v), {
+  message: "GST rate must be one of the allowed slabs (0, 0.1, 0.25, 1.5, 3, 5, 12, 18, 28, 40 %)",
+});
+
 const poItemSchema = z.object({
   itemCode:       z.string().min(1).max(64),
   description:    z.string().min(1).max(500),
@@ -8,7 +25,7 @@ const poItemSchema = z.object({
   unitPriceMinor: z.number().int().nonnegative(),
   itemType:       z.enum(["consumable", "fixed_asset", "service"]).default("consumable"),
   // UAT ux-docs: GST rate of the line in basis points (1800 = 18%) and its HSN/SAC code, printed on the PO.
-  gstRateBp:      z.number().int().min(0).max(2800).optional(),
+  gstRateBp:      gstRateBp.optional(),
   hsnSac:         z.string().trim().regex(/^\d{4,8}$/, "HSN/SAC is 4 to 8 digits").optional(),
 });
 

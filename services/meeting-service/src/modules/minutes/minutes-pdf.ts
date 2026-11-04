@@ -11,10 +11,20 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  OfficialPdf, formatDateTimeIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory,
-} from "@civitasone/render/official";
+  OfficialPdf, formatDateTimeIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 const ISSUED = new Set(["approved", "signed", "circulated", "published", "final"]);
 
@@ -61,10 +71,10 @@ export async function renderMinutesPdf(m: MinutesDocModel, issuer: DocIdentity, 
   pdf.markdown(m.content);
   if (m.dscSignerName) pdf.note(`Digitally signed by ${m.dscSignerName}${m.dscSignedAt ? ` on ${formatDateTimeIst(m.dscSignedAt)}` : ""}.`);
   pdf.signatures([
-    { caption: "Drafted by", name: m.draftedBy?.name ?? "Member secretary", designation: m.draftedBy?.designation ?? null },
+    { caption: "Drafted by", name: m.draftedBy?.name ?? null, designation: m.draftedBy?.designation ?? null },
     {
       caption: issued ? "Approved by" : "For approval by",
-      name: (m.approvedBy ?? m.chair)?.name ?? "Chairperson",
+      name: (m.approvedBy ?? m.chair)?.name ?? null,
       designation: (m.approvedBy ?? m.chair)?.designation ?? null,
       extra: [m.approvedAt ? formatDateTimeIst(m.approvedAt) : null],
     },
@@ -86,12 +96,12 @@ export async function minutesPdfRoutes(app: FastifyInstance, readRoles: readonly
     const people = await resolveSignatories(ctx.tenantId, [meeting.chairpersonId, meeting.secretaryId, row.createdBy, row.approvedBy]);
     const get = (id: string | null | undefined) => (id ? people.get(id) ?? null : null);
     const issuer = await resolveDocIdentity(ctx.tenantId);
-    const pdf = await renderMinutesPdf({
+    const pdf = await pdfOr503(() => renderMinutesPdf({
       meetingNumber: meeting.meetingNumber, title: meeting.title, scheduledAt: iso(meeting.scheduledAt), venue: meeting.venue,
       fileReference: meeting.fileReference, status: row.status, content: row.content,
       chair: get(meeting.chairpersonId), secretary: get(meeting.secretaryId), draftedBy: get(row.createdBy), approvedBy: get(row.approvedBy),
       approvedAt: iso(row.approvedAt), dscSignerName: row.dscSignerName ?? null, dscSignedAt: iso(row.dscSignedAt),
-    }, issuer);
+    }, issuer));
     const name = `minutes-${(meeting.meetingNumber ?? meetingId.slice(0, 8)).replace(/[^\w.-]+/g, "_")}.pdf`;
     return reply.header("content-type", "application/pdf").header("content-disposition", `inline; filename="${name}"`).send(Buffer.from(pdf));
   });

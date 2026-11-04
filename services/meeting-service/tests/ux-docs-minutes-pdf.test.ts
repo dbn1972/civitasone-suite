@@ -1,6 +1,12 @@
 /** UAT ux-docs: minutes print names and designations, rendered Markdown and IST times. */
-import { describe, it, expect } from "vitest";
-import { pdfText, pdfFlatText, pdfFonts, isPdf } from "@civitasone/render/testing";
+import { describe, it, expect, afterAll } from "vitest";
+import { closePdfRenderer } from "@civitasone/render";
+
+// Issued minutes are real Chromium output (the suite default is html-only for storage tests).
+const savedMode = process.env.RENDER_PDF_MODE;
+process.env.RENDER_PDF_MODE = "playwright";
+afterAll(async () => { await closePdfRenderer(); if (savedMode === undefined) delete process.env.RENDER_PDF_MODE; else process.env.RENDER_PDF_MODE = savedMode; });
+import { pdfText, pdfFlatText, pdfFonts, isPdf, pdfjsPageLines } from "@civitasone/render/testing";
 import { EMPTY_DOC_IDENTITY } from "@civitasone/render/official";
 import { renderMinutesPdf, type MinutesDocModel } from "../src/modules/minutes/minutes-pdf.js";
 
@@ -32,12 +38,14 @@ describe("minutes PDF", () => {
     expect(text).not.toMatch(/^#|\*\*|`|_No attendance/m);
     expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/);
     expect(text).not.toContain("2026-11-19T16:48");
-    expect(text).not.toContain("DRAFT");
+    expect((await pdfjsPageLines(bytes)).flat().join("")).not.toContain("DRAFT");
   });
 
   it("unapproved minutes carry a DRAFT watermark", async () => {
-    const text = await pdfText(await renderMinutesPdf({ ...model, status: "draft", approvedBy: null, approvedAt: null }, EMPTY_DOC_IDENTITY, AT));
-    expect(text).toContain("DRAFT - NOT APPROVED");
+    const bytes = await renderMinutesPdf({ ...model, status: "draft", approvedBy: null, approvedAt: null }, EMPTY_DOC_IDENTITY, AT);
+    const text = await pdfText(bytes);
+    // the watermark is rotated text: read it with pdf.js, which follows the text direction
+    expect((await pdfjsPageLines(bytes)).flat().join("")).toContain("DRAFT - NOT APPROVED");
     expect(text).toContain("For approval by");
   });
 

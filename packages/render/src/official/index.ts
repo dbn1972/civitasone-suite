@@ -10,7 +10,7 @@ export {
 export { DOC_FONT, DOC_FONT_STACK, docFontBytes, docFontFaceCss, docFontUnicodeRange, type DocFontSubset, type DocFontWeight } from "./fonts.js";
 export { parseMarkdown, stripInlineMarkdown, type MdBlock } from "./markdown.js";
 export {
-  OfficialPdf, type OfficialPdfOptions, type DocIssuer, type TableColumn, type TableSpec, type SignatureBlock, type FieldRow, type Align,
+  OfficialPdf, PdfRendererUnavailableError, esc as escapeHtml, type OfficialPdfOptions, type DocIssuer, type TableColumn, type TableSpec, type SignatureBlock, type FieldRow, type Align,
 } from "./pdf-builder.js";
 export {
   resolveDocIdentity, resolveSignatories, docIdentityFromTenant, resetDocIdentityCache, DocumentNotIssuableError,

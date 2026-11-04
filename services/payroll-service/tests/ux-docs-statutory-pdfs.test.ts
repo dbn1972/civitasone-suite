@@ -2,16 +2,18 @@
  * UAT ux-docs: payslip, Form 16 and Form 12BA are issuable documents. Each is generated from
  * fixture data and parsed back with the repo PDF libraries (pdfjs-dist text, pdf-lib fonts).
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
+import { closePdfRenderer } from "@civitasone/render";
 import { pdfText, pdfFlatText, pdfFonts, isPdf } from "@civitasone/render/testing";
 import { amountInWordsEn, resetDocIdentityCache } from "@civitasone/render/official";
 import { renderPayslipPdf, payslipSections, type PayslipDocInput } from "../src/modules/payslip-pdf/payslip-document.js";
-import { renderForm12baPdf, form12baRows, type Form12baModel } from "../src/modules/form16-pdf/form12ba-pdf-route.js";
+import { renderForm12baPdf, form12baRows, form12baRowOf, type Form12baModel } from "../src/modules/form16-pdf/form12ba-pdf-route.js";
 
 vi.mock("../src/modules/letterhead/routes.js", () => ({ loadLetterhead: vi.fn(async () => null) }));
 const { renderForm16Html, resolveForm16Deductor } = await import("../src/modules/form16-pdf/form16-document.js");
 
 const AT = new Date("2026-11-04T07:00:00.000Z");
+afterAll(async () => { await closePdfRenderer(); });
 
 function slipInput(over: Partial<PayslipDocInput> = {}): PayslipDocInput {
   return {
@@ -122,6 +124,19 @@ describe("Form 16", () => {
     expect(html).toContain("DELD12345E");
     expect(html).toContain("₹ 7,98,624.00");
     expect(html).not.toMatch(/configure EMPLOYER/);
+    // review: Verification block, certificate number, 24Q receipt numbers
+    const withExtras = renderForm16Html(f, { name: "Office of the Director, DIC", tan: "DELD12345E", pan: "AAAGD1234K", address: "New Delhi" }, {
+      receipts: new Map([["Q1", { receiptNo: "123456789012345", filedOn: "2025-07-28" }], ["Q3", { receiptNo: "543210987654321", filedOn: "2026-01-20" }]]),
+      responsible: { name: "R. K. Sharma", designation: "Drawing and Disbursing Officer" },
+      certificateNo: "DELD12345E/2025-26/EMP-001",
+    });
+    expect(withExtras).toContain("Certificate No.:</strong> DELD12345E/2025-26/EMP-001");
+    expect(withExtras).toContain("Receipt No. of quarterly statement (Form 24Q)");
+    expect(withExtras).toContain("<td>123456789012345</td>");
+    expect(withExtras).toContain("<td>543210987654321</td>");
+    expect(withExtras).toContain("सत्यापन / Verification");
+    expect(withExtras).toContain("I, R. K. Sharma, working in the capacity of Drawing and Disbursing Officer, do hereby certify");
+    expect(withExtras).toContain("(Signature of the person responsible for deduction of tax)");
   });
 });
 
@@ -133,7 +148,7 @@ describe("Form 12BA PDF", () => {
     salaryIncomeMinor: 79_862_400n,
     components: [
       { nature: "Accommodation", description: "Government quarter", valueMinor: 1_200_000n, recoveredMinor: 200_000n, taxableMinor: 1_000_000n },
-      { nature: "Vehicle", description: "Staff car", valueMinor: 300_000n, recoveredMinor: 0n, taxableMinor: 300_000n },
+      { nature: "car", description: "Staff car", valueMinor: 300_000n, recoveredMinor: 0n, taxableMinor: 300_000n },
       { nature: "Misc", description: "Something else", valueMinor: 50_000n, recoveredMinor: 0n, taxableMinor: 50_000n },
     ],
     aggregatePerquisiteMinor: 0n,
@@ -149,6 +164,35 @@ describe("Form 12BA PDF", () => {
     expect(rows[1]).toMatchObject({ label: "Cars / Other automotive", t: 300_000n });
     expect(rows[19]).toMatchObject({ label: "Other benefits or amenities", t: 50_000n });
     expect(total).toEqual({ v: 1_550_000n, r: 200_000n, t: 1_350_000n });
+  });
+
+  it("maps by perquisite type code or rule label, never by substring (review blocker 3)", () => {
+    expect(form12baRowOf("credit_card")).toBe(11);
+    expect(form12baRowOf("Credit card expenses")).toBe(11);
+    expect(form12baRowOf("loan")).toBe(5);
+    expect(form12baRowOf("club_membership")).toBe(12);
+    expect(form12baRowOf("domestic_servant")).toBe(3);
+    expect(form12baRowOf("gas_electricity_water")).toBe(4);
+    // free text is not in the master: no row (the old substring match put these on Cars / Accommodation)
+    expect(form12baRowOf("Interest free loan for parent's surgery")).toBeNull();
+    expect(form12baRowOf("current account charges")).toBeNull();
+  });
+
+  it("a credit-card perquisite lands on row 11, a parent-surgery loan on row 5 (code) or row 20 with a warning (free text)", async () => {
+    const m: Form12baModel = { ...model, components: [
+      { nature: "Credit card expenses", description: "Corporate card used privately", valueMinor: 40_000n, recoveredMinor: 0n, taxableMinor: 40_000n },
+      { nature: "loan", description: "Interest free loan for parent's surgery", valueMinor: 1_000_000n, recoveredMinor: 0n, taxableMinor: 1_000_000n },
+      { nature: "loan for parent's surgery", description: "", valueMinor: 10_000n, recoveredMinor: 0n, taxableMinor: 10_000n },
+    ] };
+    const { rows, unmapped } = form12baRows(m);
+    expect(rows[1]!.t).toBe(0n);            // Cars: nothing
+    expect(rows[0]!.t).toBe(0n);            // Accommodation: nothing
+    expect(rows[10]!.t).toBe(40_000n);      // row 11 Credit card expenses
+    expect(rows[4]!.t).toBe(1_000_000n);    // row 5 loans
+    expect(rows[19]!.t).toBe(10_000n);      // row 20 Other benefits
+    expect(unmapped).toEqual(["loan for parent's surgery"]);
+    const flat = await pdfFlatText(await renderForm12baPdf(m));
+    expect(flat).toContain("Reported under row 20 (Other benefits or amenities): perquisite type not in the perquisite master: loan for parent's surgery.");
   });
 
   it("prints the Rule 26A(2)(b) form with employer TAN, masked PAN and the declaration", async () => {

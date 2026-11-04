@@ -121,10 +121,13 @@ function splitMinor(minor: bigint): { negative: boolean; rupees: bigint; paise: 
 export function amountInWordsEn(minor: bigint): string {
   const { negative, rupees, paise } = splitMinor(minor);
   let body: string;
+  // "One Paisa", "Rupee One": singular only for exactly one.
+  const p = (n: bigint) => `${indianWords(EN, n)} ${n === 1n ? "Paisa" : "Paise"}`;
+  const r = (n: bigint) => `${n === 1n ? "Rupee" : "Rupees"} ${indianWords(EN, n)}`;
   if (rupees === 0n && paise === 0n) body = "Rupees Zero Only";
-  else if (paise === 0n) body = `Rupees ${indianWords(EN, rupees)} Only`;
-  else if (rupees === 0n) body = `${indianWords(EN, paise)} Paise Only`;
-  else body = `Rupees ${indianWords(EN, rupees)} and ${indianWords(EN, paise)} Paise Only`;
+  else if (paise === 0n) body = `${r(rupees)} Only`;
+  else if (rupees === 0n) body = `${p(paise)} Only`;
+  else body = `${r(rupees)} and ${p(paise)} Only`;
   return negative ? `Minus ${body}` : body;
 }
 
@@ -132,9 +135,12 @@ export function amountInWordsEn(minor: bigint): string {
 export function amountInWordsHi(minor: bigint): string {
   const { negative, rupees, paise } = splitMinor(minor);
   let body: string;
+  // "एक रुपया", "एक पैसा": singular only for exactly one.
+  const r = (n: bigint) => `${indianWords(HI, n)} ${n === 1n ? "रुपया" : "रुपये"}`;
+  const p = (n: bigint) => `${indianWords(HI, n)} ${n === 1n ? "पैसा" : "पैसे"}`;
   if (rupees === 0n && paise === 0n) body = "शून्य रुपये मात्र";
-  else if (paise === 0n) body = `${indianWords(HI, rupees)} रुपये मात्र`;
-  else if (rupees === 0n) body = `${indianWords(HI, paise)} पैसे मात्र`;
-  else body = `${indianWords(HI, rupees)} रुपये और ${indianWords(HI, paise)} पैसे मात्र`;
+  else if (paise === 0n) body = `${r(rupees)} मात्र`;
+  else if (rupees === 0n) body = `${p(paise)} मात्र`;
+  else body = `${r(rupees)} और ${p(paise)} मात्र`;
   return negative ? `ऋण ${body}` : body;
 }

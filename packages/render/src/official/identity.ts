@@ -113,11 +113,12 @@ export async function resolveSignatories(
     try {
       const res = await fetchImpl(`${hrms}/v1/hrms/internal/employee-summaries?actorIds=${chunk.map(encodeURIComponent).join(",")}`, { headers: internalHeaders(tenantId), signal: AbortSignal.timeout(4000) });
       if (!res.ok) continue;
-      const rows = (await res.json()) as Array<{ fullName?: unknown; designation?: unknown; userRef?: unknown }>;
+      const rows = (await res.json()) as Array<{ fullName?: unknown; designation?: unknown; designationName?: unknown; userRef?: unknown }>;
       for (const r of Array.isArray(rows) ? rows : []) {
         const ref = typeof r.userRef === "string" ? r.userRef : null;
         const name = str(r.fullName, 200);
-        if (ref && name) out.set(ref, { name, designation: str(r.designation, 200) });
+        // r1-approvals names it designationName; older builds of this PR sent designation.
+        if (ref && name) out.set(ref, { name, designation: str(r.designationName, 200) ?? str(r.designation, 200) });
       }
     } catch { /* fail open: identity fallback below */ }
   }

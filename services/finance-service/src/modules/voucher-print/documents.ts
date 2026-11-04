@@ -68,7 +68,7 @@ export async function renderVoucherPdf(m: VoucherDocModel, issuer: DocIdentity, 
   const narration = voucherNarration(m.lines);
   pdf.paragraph(`Narration: ${narration || "None recorded"}`);
   if (m.system) pdf.note("System-generated voucher: posted automatically on approval of the source transaction.");
-  const who = (s: Signatory | null) => s?.name ?? "Name not on record";
+  const who = (s: Signatory | null) => s?.name ?? null;
   pdf.signatures([
     { caption: "Prepared by", name: who(m.preparedBy), designation: m.preparedBy?.designation ?? null, extra: [m.preparedAt ? formatDateIst(m.preparedAt) : null] },
     { caption: "Approved by", name: who(m.approvedBy), designation: m.approvedBy?.designation ?? null, extra: [m.approvedAt ? formatDateIst(m.approvedAt) : null] },
@@ -91,7 +91,7 @@ export interface SanctionOrderModel {
 export const SANCTION_CONDITIONS: string[] = [
   "The expenditure shall be incurred in accordance with the General Financial Rules, 2017 and the delegation of financial powers in force, after following the prescribed procurement procedure.",
   "The expenditure shall not exceed the amount sanctioned. Any saving shall be surrendered and shall not be diverted to any other purpose without fresh sanction.",
-  "The sanction is valid for the financial year stated below; any unutilised balance lapses at the close of that financial year.",
+  "The sanction is valid for the financial year stated in paragraph 2; any unutilised balance lapses at the close of that financial year.",
   "A utilisation certificate and accounts of the expenditure shall be rendered to the sanctioning authority on completion.",
 ];
 

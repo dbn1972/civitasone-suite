@@ -54,7 +54,15 @@ describe("amountInWordsEn", () => {
   it("paise only, zero and negative", () => {
     expect(amountInWordsEn(50n)).toBe("Fifty Paise Only");
     expect(amountInWordsEn(0n)).toBe("Rupees Zero Only");
-    expect(amountInWordsEn(-100n)).toBe("Minus Rupees One Only");
+    expect(amountInWordsEn(-100n)).toBe("Minus Rupee One Only");
+  });
+  it("singular for exactly one rupee / one paisa", () => {
+    expect(amountInWordsEn(1n)).toBe("One Paisa Only");
+    expect(amountInWordsEn(101n)).toBe("Rupee One and One Paisa Only");
+    expect(amountInWordsEn(10_000_001n)).toBe("Rupees One Lakh and One Paisa Only");
+    expect(amountInWordsHi(100n)).toBe("एक रुपया मात्र");
+    expect(amountInWordsHi(1n)).toBe("एक पैसा मात्र");
+    expect(amountInWordsHi(10_000_000n)).toBe("एक लाख रुपये मात्र");
   });
   it("exact beyond 2^53 paise (no float)", () => {
     expect(amountInWordsEn(9_007_199_254_740_993n)).toBe(

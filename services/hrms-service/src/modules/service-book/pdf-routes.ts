@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  OfficialPdf, formatDateIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory,
-} from "@civitasone/render/official";
-import { resolveContext, requireRole } from "../../shared/context.js";
+  OfficialPdf, formatDateIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertCanReadEmployee, READER_ROLES } from "./routes.js";
 import { getEmployeeDetail } from "../employee/queries.js";
@@ -11,6 +10,17 @@ import { getEmployeeDetail } from "../employee/queries.js";
 // tested) instead of duplicating one -- see application-pdf.ts's own header
 // comment for why every interpolated value must be escaped here too.
 import { escapeHtml } from "../recruitment/application-pdf.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -114,14 +124,14 @@ export async function serviceBookPdfRoutes(app: FastifyInstance): Promise<void> 
     const people = await resolveSignatories(ctx.tenantId, rows.flatMap((r) => [r.recordedBy, r.attestedBy]));
     const get = (a: string | null) => (a ? people.get(a) ?? null : null);
     const issuer = await resolveDocIdentity(ctx.tenantId);
-    const pdf = await renderServiceBookPdf({
+    const pdf = await pdfOr503(() => renderServiceBookPdf({
       employee: { name, employeeNo, designation, department, joiningDate: emp?.joiningDate ?? null, status: emp?.status ?? null },
       entries: rows.map((r) => ({
         effectiveDate: String(r.effectiveDate), entryType: r.entryType, description: r.description, documentRef: r.documentRef ?? null,
         recordedBy: get(r.recordedBy), attested: r.attested, attestedBy: get(r.attestedBy ?? null),
         attestedAt: r.attestedAt instanceof Date ? r.attestedAt.toISOString() : (r.attestedAt as string | null) ?? null,
       })),
-    }, issuer);
+    }, issuer));
     const fname = `service-book-${(employeeNo || id.slice(0, 8)).replace(/[^\w.-]+/g, "_")}.pdf`;
     return reply.header("content-type", "application/pdf").header("content-disposition", `inline; filename="${fname}"`).send(Buffer.from(pdf));
   });
