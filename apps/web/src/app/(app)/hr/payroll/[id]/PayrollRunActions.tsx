@@ -80,6 +80,8 @@ export function PayrollRunActions({
   const [review, setReview] = useState<ApprovalReview | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  // UAT T-PERIOD D-02b: slips that pay nothing, acknowledged one by one (409 NET_PAY_NON_POSITIVE).
+  const [netAcknowledged, setNetAcknowledged] = useState<Set<string>>(new Set());
   const [reviewNote, setReviewNote] = useState("");
   const reviewNoteId = useId();
   const router = useRouter();
@@ -106,20 +108,24 @@ export function PayrollRunActions({
   }, [status]);
 
   const arrearsToAck = review ? review.arrears.employees.filter((e) => e.requiresReview) : [];
+  const netToAck = review?.nonPositiveNet ?? [];
 
   function approveBody(reason?: string): Record<string, unknown> | null {
     if (!review) return { reason };
     const note = reviewNote.trim();
     const complete = note.length >= 10
       && review.zeroBasic.every((z) => excluded.has(z.employeeId))
-      && arrearsToAck.every((e) => acknowledged.has(e.employeeId));
+      && arrearsToAck.every((e) => acknowledged.has(e.employeeId))
+      && netToAck.every((n) => netAcknowledged.has(n.employeeId));
     if (!complete) return null;
     const zeroBasicExclusions = review.zeroBasic.map((z) => ({ employeeId: z.employeeId, reason: note }));
     const arrearsAcknowledgements = arrearsToAck.map((e) => ({ employeeId: e.employeeId, reason: note }));
+    const netPayAcknowledgements = netToAck.map((n) => ({ employeeId: n.employeeId, reason: note }));
     return {
       reason,
       ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
       ...(arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements } : {}),
+      ...(netPayAcknowledgements.length > 0 ? { netPayAcknowledgements } : {}),
     };
   }
 
@@ -329,6 +335,21 @@ export function PayrollRunActions({
                           onChange={(ev) => setAcknowledged((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(e.employeeId); else next.delete(e.employeeId); return next; })}
                         />
                         {tr("arrearsAcknowledge", { amount: formatMinorString(e.arrearsMinor), employee: e.employeeNo })}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {netToAck.length > 0 && (
+                  <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
+                    <legend><strong>{tr("netPayHeading")}</strong></legend>
+                    {netToAck.map((n) => (
+                      <label key={n.employeeId} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={netAcknowledged.has(n.employeeId)}
+                          onChange={(ev) => setNetAcknowledged((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(n.employeeId); else next.delete(n.employeeId); return next; })}
+                        />
+                        {tr("netPayAcknowledge", { employee: n.employeeNo, gross: formatMinorString(n.grossMinor), deductions: formatMinorString(n.totalDeductionsMinor), net: formatMinorString(n.netPayMinor) })}
                       </label>
                     ))}
                   </fieldset>

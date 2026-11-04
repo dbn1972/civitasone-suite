@@ -18,6 +18,7 @@ import {
   unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion,
   invalidZeroBasicExclusions, INVALID_ZERO_BASIC_EXCLUSION, arrearsReviewOf, unacknowledgedArrears, arrearsReviewMessage,
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
+  nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import { assertTaxConfigForRun } from "../tax/config-check.js";
@@ -273,7 +274,7 @@ function runCommandMessageId(ctx: RequestContext, action: "approve" | "disburse"
  * reason. 409 ZERO_BASIC_SLIPS names them. The consumer re-asserts the rule
  * inside the approval transaction.
  */
-async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusions: ZeroBasicExclusion[], acks: ArrearsAcknowledgement[]): Promise<void> {
+async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusions: ZeroBasicExclusion[], acks: ArrearsAcknowledgement[], netAcks: NetPayAcknowledgement[] = []): Promise<void> {
   const slips = await scopedRead((tx) => repo.listSlipsByRunTx(tx, id, ctx.tenantId));
   const zero = zeroBasicSlipsOf(slips);
   // Review SF5: an exclusion may only name a Rs 0-basic slip of this run.
@@ -284,6 +285,11 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
   }
   const blocking = unexcludedZeroBasicSlips(zero, exclusions);
   if (blocking.length > 0) throw new HttpError(409, ZERO_BASIC_SLIPS, zeroBasicSlipsMessage(blocking));
+  // UAT T-PERIOD D-02b: a slip that pays nothing (net <= 0, or deductions above
+  // gross) needs an explicit, reasoned acknowledgement -- the March run that
+  // paid TP-EMP-01 Rs 0 was approved and disbursed with no warning.
+  const unackedNet = unacknowledgedNonPositiveNet(nonPositiveNetSlipsOf(slips), netAcks);
+  if (unackedNet.length > 0) throw new HttpError(409, NET_PAY_NON_POSITIVE, nonPositiveNetMessage(unackedNet));
   // Review SF4: large back-dated arrears need an explicit acknowledgement.
   if (!slipsCarryArrears(slips)) return;
   const threshold = await scopedRead((tx) => resolveArrearsReviewThresholdBps(tx as unknown as typeof db, ctx.tenantId));
@@ -291,9 +297,9 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
   if (unacked.length > 0) throw new HttpError(409, ARREARS_REVIEW_REQUIRED, arrearsReviewMessage(unacked));
 }
 
-export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = [], arrearsAcknowledgements: ArrearsAcknowledgement[] = []): Promise<Accepted> {
+export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = [], arrearsAcknowledgements: ArrearsAcknowledgement[] = [], netPayAcknowledgements: NetPayAcknowledgement[] = []): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "approve", id, reason);
-  await assertApprovalReviewed(ctx, id, zeroBasicExclusions, arrearsAcknowledgements);
+  await assertApprovalReviewed(ctx, id, zeroBasicExclusions, arrearsAcknowledgements, netPayAcknowledgements);
   await queue.publish(COMMANDS.runApprove, {
     messageId: runCommandMessageId(ctx, "approve", id),
     type: COMMANDS.runApprove,
@@ -302,6 +308,7 @@ export async function approveRun(ctx: RequestContext, id: string, reason?: strin
       id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}),
       ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
       ...(arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements } : {}),
+      ...(netPayAcknowledgements.length > 0 ? { netPayAcknowledgements } : {}),
     },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));

@@ -86,15 +86,41 @@ function genInput(seed: number, opts: { minBasic?: bigint; minDaBps?: bigint } =
 
 const N = 5000;
 
+/**
+ * UAT T-PERIOD D-02b (bundle 19): computeSlip also returns the s.192
+ * diagnostics tdsLiabilityMinor / tdsExcessMinor / tdsShortfallMinor (not in
+ * the legacy result, dropped before comparing), and TDS is now capped at the
+ * salary left after the other deductions and the protected-net floor. Where
+ * the cap binds (tdsShortfallMinor > 0) the legacy TDS was MORE than that
+ * salary: the legacy TDS must equal capped TDS + shortfall exactly, and the
+ * slip is checked against the cap instead. Every other seed: every legacy
+ * field identical.
+ */
+function legacyView(r: ReturnType<typeof computeSlip>): Omit<ReturnType<typeof computeSlip>, "tdsLiabilityMinor" | "tdsExcessMinor" | "tdsShortfallMinor"> {
+  const { tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
+  return rest;
+}
+function capBinds(actual: ReturnType<typeof computeSlip>, expected: ReturnType<typeof legacyComputeSlip>): boolean {
+  if (actual.tdsShortfallMinor === 0n) return false;
+  expect(expected.tdsMinor).toBe(actual.tdsMinor + actual.tdsShortfallMinor);
+  expect(actual.negativeNet).toBe(false);
+  return true;
+}
+
 describe("computeSlip == pre-PAY-PROFILES computeSlip", () => {
   it(`${N} random legacy inputs (no profile, no floor): identical output`, () => {
+    let capped = 0;
     for (let seed = 1; seed <= N; seed++) {
       const expected = legacyComputeSlip(genInput(seed));
-      const actual = computeSlip(genInput(seed));
+      const full = computeSlip(genInput(seed));
+      if (capBinds(full, expected)) { capped += 1; continue; }
+      const actual = legacyView(full);
       if (JSON.stringify(actual, (_k, v) => (typeof v === "bigint" ? `${v}n` : v)) !== JSON.stringify(expected, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))) {
         expect({ seed, actual }).toEqual({ seed, actual: expected });
       }
     }
+    // the comparison stays the rule: the cap binds on a small share of the random inputs only
+    expect(capped).toBeLessThan(N / 10);
   });
 
   it(`${N} inputs with explicit govt_scale + default floors where the slab meets the floor: identical output`, () => {
@@ -103,7 +129,8 @@ describe("computeSlip == pre-PAY-PROFILES computeSlip", () => {
       const expected = legacyComputeSlip(base);
       const input = { ...genInput(seed + 100_000, { minBasic: 1_800_000n, minDaBps: 5000n }) };
       const actual = computeSlip({ ...input, payProfile: { kind: "govt_scale" }, hraFloorMinor: FLOORS[input.cityClass ?? "X"] });
-      expect(actual).toEqual(expected);
+      if (capBinds(actual, expected)) continue;
+      expect(legacyView(actual)).toEqual(expected);
     }
   });
 

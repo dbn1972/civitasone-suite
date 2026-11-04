@@ -131,6 +131,17 @@ export interface SlipInput {
    * remainder is reported as `recoveryCarryForwardMinor` to be recovered later.
    */
   protectedNetFloorMinor?: bigint;
+  /**
+   * UAT T-PERIOD D-02b: the share of the month gross (basis points, 1..10000)
+   * that the deductions of a slip -- pension / PF / ESI, PT and other fixed
+   * deductions, loss of pay AND TDS -- may take. TDS is capped so that
+   * deductions stay within it (and within gross less the protected-net
+   * floor); the part not deducted is reported as `tdsShortfallMinor` and is
+   * picked up by the s.192 true-up of the next months. Omitted: 10000 (TDS
+   * never exceeds the salary left after the other deductions). The tenant
+   * value is payroll.payroll_settings.max_deduction_share_bps (migration 0163).
+   */
+  maxDeductionShareBps?: number;
   /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
   ltcExemptTotalMinor?: bigint;
   /**
@@ -279,6 +290,17 @@ export interface SlipResult {
   negativeNet: boolean;
   /** P3: recovery (LOP/EMI/arrears) deferred because it would breach the net floor. */
   recoveryCarryForwardMinor: bigint;
+  /**
+   * UAT T-PERIOD D-02b (s.192): the FY tax liability this system has to
+   * deduct (the annual tax less the part presumed deducted for in-service
+   * months with no slip here), the TDS already deducted above it (excess:
+   * nothing more is deducted; the employee claims the refund in the return),
+   * and the TDS not deducted this month because of the net-pay cap. 0n when
+   * there is no run context (preview callers).
+   */
+  tdsLiabilityMinor: bigint;
+  tdsExcessMinor: bigint;
+  tdsShortfallMinor: bigint;
 }
 
 /**
@@ -523,6 +545,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     fyPaidToDate,
     arrearPensionBaseMinor = 0n,
     protectedNetFloorMinor = 0n,
+    maxDeductionShareBps = 10000,
     ltcExemptTotalMinor = 0n,
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
     taxTenantId = PLATFORM_DEFAULT_TENANT_ID,
@@ -710,12 +733,18 @@ export function computeSlip(input: SlipInput): SlipResult {
   // (e.g. a preview/estimate with no run context), so it is fixed for
   // consistency: round-half-up via tax/engine.ts's own divRoundBig, not a
   // flat truncate.
-  const tdsMinor = monthsRemaining != null
-    ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
-    : roundRupee(divRoundBig(annualTaxMinor, 12n));                              // flat /12 fallback
-
-  // Statutory pension/insurance/tax deductions are never floored.
-  const statutoryDeductions = pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;
+  //
+  // UAT T-PERIOD D-02b: in-service months with no slip here are in the
+  // estimate at the regular pay (T-STAT F02 / SF1), so the TDS deducted for
+  // them -- outside this system -- is presumed at the same monthly rate
+  // (s192MonthlyTds). The run previously took the WHOLE year tax from the few
+  // months recorded here: March TDS Rs 2,70,847 on gross Rs 2,31,428.
+  const s192 = monthsRemaining != null
+    ? s192MonthlyTds({                                                             // Sec 192 true-up
+      annualTaxMinor, tdsDeductedMinor: tdsYtdMinor ?? 0n, monthsRemaining,
+      presumedMonths: unrecorded, fyMonths,
+    })
+    : { tdsMinor: roundRupee(divRoundBig(annualTaxMinor, 12n)), liabilityMinor: 0n, excessMinor: 0n }; // flat /12 fallback
 
   // Split ad-hoc deductions into recovery (floor-capped) and fixed (e.g. PT, and
   // any structure-defined deduction). Fixed deductions are not subject to the floor.
@@ -725,6 +754,23 @@ export function computeSlip(input: SlipInput): SlipResult {
   const fixedAdHoc = deductions
     .filter((d) => !RECOVERY_CODES.has(d.code))
     .reduce((s, d) => s + d.amountMinor, 0n);
+
+  // UAT T-PERIOD D-02b: TDS never exceeds the salary of the month left after
+  // the pension / PF / ESI contributions, PT and other fixed deductions and
+  // loss of pay, less the protected-net floor, nor takes the deductions above
+  // the configured share of gross. Whole rupees, rounded down.
+  const otherStatutoryMinor = pfEmployeeMinor + esiMinor + gpfMinor + npsEmployeeMinor;
+  // Loss of pay is pay not earned, not a deduction from it: the share is of
+  // the salary earned this month (gross less LOP).
+  const tdsCapMinor = tdsCapForMonthMinor({
+    grossMinor: grossMinor - lopMinor, otherDeductionsMinor: otherStatutoryMinor + fixedAdHoc,
+    protectedNetFloorMinor, maxDeductionShareBps,
+  });
+  const tdsMinor = s192.tdsMinor > tdsCapMinor ? tdsCapMinor : s192.tdsMinor;
+  const tdsShortfallMinor = s192.tdsMinor - tdsMinor;
+
+  // Statutory pension/insurance/tax deductions are never floored.
+  const statutoryDeductions = otherStatutoryMinor + tdsMinor;
 
   // Headroom available for recovery after gross less all non-recovery deductions,
   // keeping net at or above the protected floor.
@@ -771,7 +817,52 @@ export function computeSlip(input: SlipInput): SlipResult {
     pfEmployeeMinor, pfEmployerMinor, epsMinor, epfEmployerMinor,
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
     gpfMinor, npsEmployeeMinor, npsEmployerMinor, npsPensionBaseMinor, annualTaxableMinor, negativeNet,
+    tdsLiabilityMinor: s192.liabilityMinor, tdsExcessMinor: s192.excessMinor, tdsShortfallMinor,
   };
+}
+
+/**
+ * UAT T-PERIOD D-02b -- the s.192 monthly TDS (Income-tax Act s.192(1), (3)):
+ *   liability   = annual tax on the FY estimate, less the TDS presumed
+ *                 deducted for `presumedMonths` (in-service months with no
+ *                 slip here, estimated at the regular pay) at the average
+ *                 monthly rate: annual tax x presumed / fyMonths;
+ *   monthly TDS = max(0, (liability - TDS deducted so far) / months remaining),
+ *                 the whole balance in the last month (March);
+ *   excess      = TDS deducted so far above the liability (no further TDS;
+ *                 s.192(3) only allows adjusting it within the FY -- the
+ *                 employee claims any refund in the return).
+ * TDS deducted so far includes previous-employer TDS declared (Form 12B);
+ * a declared previous salary replaces the presumed months (presumedMonths 0).
+ * Pure.
+ */
+export function s192MonthlyTds(i: {
+  annualTaxMinor: bigint; tdsDeductedMinor: bigint; monthsRemaining: number;
+  presumedMonths?: bigint; fyMonths?: bigint;
+}): { tdsMinor: bigint; liabilityMinor: bigint; excessMinor: bigint } {
+  const fyMonths = i.fyMonths != null && i.fyMonths > 0n ? i.fyMonths : 12n;
+  const presumedRaw = i.presumedMonths != null && i.presumedMonths > 0n ? i.presumedMonths : 0n;
+  const presumed = presumedRaw > fyMonths ? fyMonths : presumedRaw;
+  const annual = i.annualTaxMinor > 0n ? i.annualTaxMinor : 0n;
+  const presumedTds = presumed > 0n ? divRoundBig(annual * presumed, fyMonths) : 0n;
+  const liabilityMinor = annual - presumedTds;
+  const excessMinor = i.tdsDeductedMinor > liabilityMinor ? i.tdsDeductedMinor - liabilityMinor : 0n;
+  return { tdsMinor: trueUpTdsMinor(liabilityMinor, i.tdsDeductedMinor, i.monthsRemaining), liabilityMinor, excessMinor };
+}
+
+/**
+ * UAT T-PERIOD D-02b: the most TDS a slip can carry -- the salary earned in
+ * the month (`grossMinor`: gross less loss of pay) less the other deductions
+ * (pension / PF / ESI, PT, fixed deductions) and the protected-net floor, and
+ * no more than leaves all deductions within `maxDeductionShareBps` of it.
+ * Never negative; whole rupees, rounded down. Pure.
+ */
+export function tdsCapForMonthMinor(i: { grossMinor: bigint; otherDeductionsMinor: bigint; protectedNetFloorMinor?: bigint; maxDeductionShareBps?: number }): bigint {
+  const bps = BigInt(Math.min(10000, Math.max(0, Math.trunc(i.maxDeductionShareBps ?? 10000))));
+  const byFloor = i.grossMinor - i.otherDeductionsMinor - (i.protectedNetFloorMinor ?? 0n);
+  const byShare = (i.grossMinor * bps) / 10000n - i.otherDeductionsMinor;
+  const cap = byFloor < byShare ? byFloor : byShare;
+  return cap > 0n ? (cap / 100n) * 100n : 0n;
 }
 
 /**
@@ -882,6 +973,45 @@ export function arrearsReviewMessage(employees: ArrearsReviewEmployee[]): string
   const more = employees.length > 20 ? ", ..." : "";
   return `${employees.length} employee(s) have arrears above the review threshold: ${sample}${more}. `
     + "Check them and approve with arrearsAcknowledgements [{ employeeId, reason }] for each of them";
+}
+
+/**
+ * UAT T-PERIOD D-02b: default share of the month gross that a slip deductions
+ * may take (basis points): 75%, the Payment of Wages Act s.7(3) ceiling on
+ * total deductions. Tenant setting payroll.payroll_settings.max_deduction_share_bps.
+ */
+export const DEFAULT_MAX_DEDUCTION_SHARE_BPS = 7500;
+
+/** UAT T-PERIOD D-02b: approval refused while a slip pays nothing (or less than nothing). */
+export const NET_PAY_NON_POSITIVE = "NET_PAY_NON_POSITIVE";
+
+/** An explicit, reasoned acknowledgement of one slip with net pay <= 0 on approval. */
+export interface NetPayAcknowledgement { employeeId: string; reason: string }
+
+/**
+ * UAT T-PERIOD D-02b: the slips of a run whose net pay is <= 0 or whose
+ * deductions exceed the gross -- an employee who would be paid nothing. The
+ * T-PERIOD March run was approved and disbursed with one (TDS Rs 2,70,847 on
+ * gross Rs 2,31,428, net Rs 0). Rs 0-basic slips (their own ZERO_BASIC guard)
+ * and excluded slips are not listed. Pure.
+ */
+export function nonPositiveNetSlipsOf<T extends { employeeId: string; basicMinor: bigint; grossMinor: bigint; totalDeductionsMinor: bigint; netPayMinor: bigint; status?: string | null; components?: Array<{ code: string }> | null }>(slips: T[]): T[] {
+  const zeroBasic = new Set(zeroBasicSlipsOf(slips).map((sl) => sl.employeeId));
+  return slips.filter((sl) => sl.status !== "excluded" && !zeroBasic.has(sl.employeeId)
+    && (sl.netPayMinor <= 0n || sl.totalDeductionsMinor > sl.grossMinor));
+}
+
+/** Non-positive-net slips not acknowledged (with a non-blank reason). Pure. */
+export function unacknowledgedNonPositiveNet<T extends { employeeId: string }>(slips: T[], acks: NetPayAcknowledgement[] = []): T[] {
+  const acked = new Set(acks.filter((a) => a.reason.trim().length > 0).map((a) => a.employeeId));
+  return slips.filter((sl) => !acked.has(sl.employeeId));
+}
+
+export function nonPositiveNetMessage(slips: Array<{ employeeNo: string; grossMinor: bigint; totalDeductionsMinor: bigint; netPayMinor: bigint }>): string {
+  const sample = slips.slice(0, 20).map((sl) => `${sl.employeeNo} (gross Rs ${(sl.grossMinor / 100n).toString()}, deductions Rs ${(sl.totalDeductionsMinor / 100n).toString()}, net Rs ${(sl.netPayMinor / 100n).toString()})`).join(", ");
+  const more = slips.length > 20 ? ", ..." : "";
+  return `${slips.length} slip(s) in this run pay nothing (net pay <= 0 or deductions above gross): ${sample}${more}. `
+    + "Correct the deductions and re-run, or approve with netPayAcknowledgements [{ employeeId, reason }] for each of them";
 }
 
 /** Exclusions that do not name a Rs 0-basic slip of the run. Pure. */

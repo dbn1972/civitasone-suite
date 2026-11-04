@@ -299,12 +299,12 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       SELECT protected_net_floor_minor, updated_at, salary_revision_second_approver,
              subsistence_initial_pct_bps, subsistence_review_after_days,
              subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
-             flex_election_maker_checker
+             flex_election_maker_checker, max_deduction_share_bps
       FROM payroll.payroll_settings
       WHERE tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
     `))) as unknown as Array<{
-      flex_election_maker_checker: boolean;
+      flex_election_maker_checker: boolean; max_deduction_share_bps: number;
       protected_net_floor_minor: string; updated_at: string; salary_revision_second_approver: boolean;
       subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
       subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
@@ -322,6 +322,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       subsistenceRevisedMaxPctBps: s ? Number(s.subsistence_revised_max_pct_bps) : 7500,
       // GAP-PAYROLL-FLEX-BENEFITS-05: default ON when the tenant has no row.
       flexElectionMakerChecker: s ? s.flex_election_maker_checker : true,
+      // UAT T-PERIOD D-02b: deduction ceiling (bps of gross; default 75%).
+      maxDeductionShareBps: s ? Number(s.max_deduction_share_bps) : 7500,
     });
   });
 

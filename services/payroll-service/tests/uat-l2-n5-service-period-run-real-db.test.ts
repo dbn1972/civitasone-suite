@@ -188,9 +188,14 @@ describe("UAT L2-N5: who is in the run for the period", () => {
     const taxable = annual - BigInt(stdDeduction("new", 2026)) * 100n;
     const expected = trueUpTdsMinor(annualTaxFromTaxableMinor(taxable, "new", 2026), 0n, 8);
     expect(BigInt(Math.round(s.tds * 100))).toBe(expected);
-    // and a full-month employee (in service all FY: Apr-Jul estimated at the regular pay) is not affected
+    // and a full-month employee (in service all FY: Apr-Jul estimated at the regular pay)
+    // is not affected by the joiner rule. UAT T-PERIOD D-02b (bundle 19): the TDS of
+    // those 4 months with no slip here is presumed at the average rate (annual tax x
+    // 4/12), so the 8 months left carry the other 8/12 -- not the whole year tax.
     const full = slips.get(ids.reg)!;
     const fullTaxable = regular * 12n - BigInt(stdDeduction("new", 2026)) * 100n;
-    expect(BigInt(Math.round(full.tds * 100))).toBe(trueUpTdsMinor(annualTaxFromTaxableMinor(fullTaxable, "new", 2026), 0n, 8));
+    const fullTax = annualTaxFromTaxableMinor(fullTaxable, "new", 2026);
+    const presumedAprJul = (fullTax * 4n * 2n + 12n) / 24n; // round half up of fullTax x 4 / 12
+    expect(BigInt(Math.round(full.tds * 100))).toBe(trueUpTdsMinor(fullTax - presumedAprJul, 0n, 8));
   });
 });

@@ -11,10 +11,16 @@ export type ApprovalReview = {
     thresholdBps: number;
     employees: Array<{ employeeId: string; employeeNo: string; arrearsMinor: string; regularGrossMinor: string; requiresReview: boolean }>;
   };
+  /**
+   * UAT T-PERIOD D-02b: slips that pay nothing (net <= 0 or deductions above
+   * gross); each needs an acknowledgement. Optional: an older payroll build
+   * does not send it.
+   */
+  nonPositiveNet?: Array<{ employeeId: string; employeeNo: string; grossMinor: string; totalDeductionsMinor: string; netPayMinor: string; tdsMinor: string }>;
 };
 
 /** Server codes that mean "this run needs the review fields before approval". */
-export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED"]);
+export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED", "NET_PAY_NON_POSITIVE"]);
 
 export function approvalReviewUrl(runId: string): string {
   return `/api/proxy/v1/payroll/runs/${runId}/approval-review`;

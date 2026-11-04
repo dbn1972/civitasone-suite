@@ -28,6 +28,96 @@ export interface PayrollRunApprovedPayload {
   totalEpfAdminMinor?: string;
   totalUpsPoolMinor?: string;
   legalEntityId?: string;
+  /**
+   * UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): set by a payroll build
+   * that also carries the accrual amounts on payroll.run.disbursed, so a
+   * cash-basis tenant can defer the accrual to the payment date. Absent (older
+   * payroll build): the accrual posts on approval, as before.
+   */
+  accrualCarriedOnDisbursal?: boolean;
+}
+
+/**
+ * payroll.run.disbursed (producer: payroll-service run-approved-payload.ts
+ * runDisbursedPayload). `paymentDate` (IST calendar date of the disbursal) and
+ * the accrual amounts are additive (UAT T-PERIOD D-04); an older payroll build
+ * sends runId / month / totalNetMinor only.
+ */
+export interface PayrollRunDisbursedPayload extends Partial<Omit<PayrollRunApprovedPayload, "runId" | "month" | "totalNetMinor">> {
+  runId: string;
+  month: string;
+  totalNetMinor: string;
+  paymentDate?: string;
+}
+
+export type PayrollAccountingBasis = "cash" | "accrual";
+
+/** Last calendar day of a YYYY-MM pay month, as YYYY-MM-DD. Pure. */
+export function payMonthEndDate(month: string): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  const day = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${String(day).padStart(2, "0")}`;
+}
+
+/** The Indian Standard Time (UTC+05:30) calendar date of an instant, YYYY-MM-DD. Pure. */
+export function istDateOf(at: Date): string {
+  return new Date(at.getTime() + 330 * 60_000).toISOString().slice(0, 10);
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): the date of the salary
+ * accrual journal when finance consumes payroll.run.approved, by the tenant
+ * accounting basis (gl.finance_settings.accounting_basis, #2455):
+ *   accrual -> the last day of the pay month (March pay is March expense);
+ *   cash    -> null: not posted on approval -- it posts on the payment date
+ *              from payroll.run.disbursed (March pay paid on 1 April falls in
+ *              the new FY). A payload from an older payroll build (no
+ *              accrualCarriedOnDisbursal) still posts on approval, dated the
+ *              IST approval day, so nothing is ever left unposted.
+ * Was: always the UTC date of the approval (T-PERIOD: Jan/Mar 2027 salary in Nov 2026). Pure.
+ */
+export function accrualDateOnApproval(basis: PayrollAccountingBasis, p: Pick<PayrollRunApprovedPayload, "month" | "accrualCarriedOnDisbursal">, now: Date): string | null {
+  if (basis === "accrual") return payMonthEndDate(p.month);
+  return p.accrualCarriedOnDisbursal === true ? null : istDateOf(now);
+}
+
+/**
+ * UAT T-PERIOD D-04: posting dates when finance consumes payroll.run.disbursed.
+ * The settlement (Dr net payable / Cr bank) is dated the payment date on both
+ * bases. On a cash basis, the accrual deferred from approval is posted too, on
+ * the payment date, when the payload carries its amounts (accrualDate null
+ * otherwise). paymentDate: the payload one, else the IST date now. Pure.
+ */
+export function postingDatesOnDisbursal(basis: PayrollAccountingBasis, p: Pick<PayrollRunDisbursedPayload, "paymentDate" | "totalGrossMinor">, now: Date): { accrualDate: string | null; settlementDate: string } {
+  const paymentDate = p.paymentDate && ISO_DATE.test(p.paymentDate) ? p.paymentDate : istDateOf(now);
+  return { accrualDate: basis === "cash" && p.totalGrossMinor != null ? paymentDate : null, settlementDate: paymentDate };
+}
+
+/** Voucher number of a payroll run accrual journal (unchanged format). */
+export function payrollAccrualVoucherNo(p: { runId: string; month: string }): string {
+  return `PAY/${p.month}/${p.runId.slice(0, 8)}`;
+}
+
+/** The finance.gl.post command payload of a payroll accrual journal, dated `postingDate`. Pure. */
+export function payrollAccrualJournalCommand(p: PayrollRunApprovedPayload, journalId: string, tenantId: string, postingDate: string): Record<string, unknown> {
+  const lines = payrollAccrualLines(p);
+  return {
+    id: journalId,
+    tenantId,
+    voucherNo: payrollAccrualVoucherNo(p),
+    type: "payroll_accrual",
+    postingDate,
+    ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
+    // H3: paise passed as bigint strings so > 2^53 paise stays exact.
+    lines: lines.map((l) => ({
+      accountCode: l.accountCode,
+      debitMinor: l.debitMinor.toString(),
+      creditMinor: l.creditMinor.toString(),
+      narration: l.narration,
+    })),
+  };
 }
 
 export interface AccrualLine { accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }

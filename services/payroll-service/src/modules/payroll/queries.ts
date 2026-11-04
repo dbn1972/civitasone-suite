@@ -5,7 +5,7 @@ import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
 import { db, scopedRead } from "../../shared/db.js";
-import { arrearsReviewOf, zeroBasicSlipsOf } from "./domain.js";
+import { arrearsReviewOf, zeroBasicSlipsOf, nonPositiveNetSlipsOf } from "./domain.js";
 import { resolveArrearsReviewThresholdBps } from "./consumer.js";
 import type { RunApprovalReview } from "./validators.js";
 import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsUnavailableError } from "../../shared/hrms-client.js";
@@ -351,5 +351,9 @@ export async function getRunApprovalReview(runId: string, tenantId: string): Pro
         regularGrossMinor: e.regularGrossMinor.toString(), requiresReview: e.requiresReview,
       })),
     },
+    nonPositiveNet: nonPositiveNetSlipsOf(slips).map((sl) => ({
+      employeeId: sl.employeeId, employeeNo: sl.employeeNo, grossMinor: sl.grossMinor.toString(),
+      totalDeductionsMinor: sl.totalDeductionsMinor.toString(), netPayMinor: sl.netPayMinor.toString(), tdsMinor: sl.tdsMinor.toString(),
+    })),
   };
 }

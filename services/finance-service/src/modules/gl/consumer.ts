@@ -22,6 +22,7 @@ import { parseInventoryMovement, accrualJournal, grnIdOf, INVENTORY_MOVEMENT_TYP
 import { recordStoresMovementTx } from "./stores-memo.js";
 import { clearGrniTx } from "./grni-clearing.js";
 import { loadSettingsTx } from "../approvals/repo.js";
+import { payrollAccrualJournalCommand, payrollAccrualVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
 import { pino } from "pino";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -808,12 +809,7 @@ export function registerGlConsumers(queue: Queue): void {
    * per-tenant Chart of Accounts (unknown codes emit finance.gl.rejected).
    */
   queue.subscribe(CONSUMED_EVENTS.payrollRunDisbursed, async (msg) => {
-    const p = msg.payload as {
-      runId: string;
-      month: string;
-      totalNetMinor: string;
-      messageId?: string;
-    };
+    const p = msg.payload as PayrollRunDisbursedPayload & { messageId?: string };
 
     const PAYABLE_HEAD = process.env["PAYROLL_GL_NET_PAYABLE_HEAD"] ?? "2101";
     const BANK_HEAD = process.env["PAYROLL_GL_BANK_HEAD"] ?? "1101";
@@ -821,7 +817,6 @@ export function registerGlConsumers(queue: Queue): void {
     // Deterministic id keyed off the run so an outbox redelivery hits the
     // journal PK and no-ops (mirrors the GL spine).
     const journalId = deterministicId(`payroll_settlement:${p.runId}`);
-    const today = new Date().toISOString().slice(0, 10);
     // H3: paise as bigint — no Number() on aggregate paise.
     const net = BigInt(p.totalNetMinor);
 
@@ -836,6 +831,28 @@ export function registerGlConsumers(queue: Queue): void {
       try {
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
+          // UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): the settlement is
+          // dated the payment date (IST; was the UTC date of consumption). On a
+          // cash basis the salary accrual, deferred from approval, posts here on
+          // the same payment date -- March pay disbursed on 1 April is new-FY
+          // expenditure. Same deterministic journal id as the approval path and
+          // a voucher check (runs accrued before this build), so never twice.
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          const dates = postingDatesOnDisbursal(basis, p, new Date());
+          const today = dates.settlementDate;
+          if (dates.accrualDate !== null && p.totalGrossMinor != null) {
+            const accrual = { ...p, totalGrossMinor: p.totalGrossMinor } as PayrollRunApprovedPayload;
+            const accrualId = deterministicId(`payroll_accrual:${p.runId}`);
+            const already = (await repo.findJournalByIdTx(tx, accrualId))
+              ?? (await repo.findJournalByVoucherNoTx(tx, msg.tenantId, payrollAccrualVoucherNo(p)));
+            if (!already) {
+              await enqueue(tx, {
+                topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: payrollAccrualJournalCommand(accrual, accrualId, msg.tenantId, dates.accrualDate),
+              });
+            }
+          }
 
           // Validate both head codes exist in COA for this tenant
           const resolvedLines: JournalLine[] = [];

@@ -14,7 +14,9 @@ import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
 import { grnBillHeadCode } from "../gl/system-heads.js";
-import { payrollAccrualLines, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
+import { payrollAccrualLines, payrollAccrualJournalCommand, accrualDateOnApproval, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
+import { loadSettingsTx } from "../approvals/repo.js";
+import { deterministicId } from "../gl/spine.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
@@ -271,7 +273,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
   /** payroll.run.approved → post salary GL accrual journal */
   queue.subscribe(CONSUMED_EVENTS.payrollRunApproved, async (msg) => {
     const p = msg.payload as PayrollRunApprovedPayload;
-    const journalId = randomUUID();
+    // UAT T-PERIOD D-04: deterministic per run, shared with the cash-basis
+    // accrual posted on disbursal (gl/consumer.ts), so it can never post twice.
+    const journalId = deterministicId(`payroll_accrual:${p.runId}`);
     // Lines (employee side H2/H3, employer contributions, and -- UAT b18 -- the
     // EDLI, EPF admin and UPS pool lines) are built by payroll-accrual.ts.
     const lines = payrollAccrualLines(p);
@@ -283,24 +287,19 @@ export function registerIntegrationConsumers(queue: Queue): void {
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): the accrual date
+      // follows the accounting basis -- accrual: last day of the pay month;
+      // cash: deferred to the payment date (payroll.run.disbursed).
+      const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+      const postingDate = accrualDateOnApproval(basis, p, new Date());
+      if (postingDate === null) {
+        await audit(tx, msg, "payroll_gl_accrual_deferred", "payroll_run", p.runId);
+        return;
+      }
       await enqueue(tx, {
         topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          id: journalId,
-          tenantId: msg.tenantId,
-          voucherNo: `PAY/${p.month}/${p.runId.slice(0, 8)}`,
-          type: "payroll_accrual",
-          postingDate: new Date().toISOString().slice(0, 10),
-          ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
-          // H3: paise passed as bigint strings so > 2^53 paise stays exact.
-          lines: lines.map((l) => ({
-            accountCode: l.accountCode,
-            debitMinor: l.debitMinor.toString(),
-            creditMinor: l.creditMinor.toString(),
-            narration: l.narration,
-          })),
-        },
+        payload: payrollAccrualJournalCommand(p, journalId, msg.tenantId, postingDate),
       });
       await audit(tx, msg, "payroll_gl_accrual", "payroll_run", p.runId);
     });

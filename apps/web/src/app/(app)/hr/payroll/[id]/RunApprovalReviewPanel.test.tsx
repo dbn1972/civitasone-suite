@@ -38,6 +38,16 @@ describe("RunApprovalReviewPanel", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/payroll/runs/r1/approval-review");
   });
 
+  it("UAT T-PERIOD D-02b: flags the slips that pay nothing (net Rs 0 or deductions above gross)", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] },
+      nonPositiveNet: [{ employeeId: "n", employeeNo: "TP-EMP-01", grossMinor: "23142800", totalDeductionsMinor: "29029700", netPayMinor: "0", tdsMinor: "27084700" }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><RunApprovalReviewPanel runId="r1" /></NextIntlClientProvider>);
+    const region = await screen.findByRole("region", { name: /review before approval/i });
+    expect(region).toHaveTextContent(/1 slip pays nothing/);
+  });
+
   it("renders nothing when there are no arrears and no Rs 0-basic slips, or the read fails", async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] } }), { status: 200 }));
     const { container, unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}><RunApprovalReviewPanel runId="r1" /></NextIntlClientProvider>);

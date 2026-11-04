@@ -77,6 +77,8 @@ export const approveRunBody = runActionBody.extend({
   zeroBasicExclusions: z.array(employeeReason).max(5000).optional(),
   /** Review SF4: acknowledgement of each employee whose arrears exceed the review threshold. */
   arrearsAcknowledgements: z.array(employeeReason).max(5000).optional(),
+  /** UAT T-PERIOD D-02b: acknowledgement of each slip with net pay <= 0 / deductions above gross. */
+  netPayAcknowledgements: z.array(employeeReason).max(5000).optional(),
 });
 
 /** Review SF4 / SF5: GET /v1/payroll/runs/:id/approval-review (money as paise digit strings). */
@@ -92,6 +94,12 @@ export const runApprovalReviewResponse = z.object({
       requiresReview: z.boolean(),
     })),
   }),
+  /** UAT T-PERIOD D-02b: slips that pay nothing (net <= 0 or deductions above gross); each needs an acknowledgement. */
+  nonPositiveNet: z.array(z.object({
+    employeeId: z.string(), employeeNo: z.string(),
+    grossMinor: z.string().regex(/^-?\d+$/), totalDeductionsMinor: z.string().regex(/^-?\d+$/),
+    netPayMinor: z.string().regex(/^-?\d+$/), tdsMinor: z.string().regex(/^-?\d+$/),
+  })),
 });
 export type RunApprovalReview = z.infer<typeof runApprovalReviewResponse>;
 export type ApproveRunBody = z.infer<typeof approveRunBody>;
@@ -312,6 +320,10 @@ export const updateSettingsBody = z.object({
   // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant maker != checker switch for
   // salary revisions (default ON when never set).
   salaryRevisionSecondApprover: z.boolean().optional(),
+  // UAT T-PERIOD D-02b (migration 0163): share of the month gross the deductions
+  // of a slip, TDS included, may take (bps). Optional: omitted keeps the stored
+  // value (default 7500 = 75%, Payment of Wages Act s.7(3)).
+  maxDeductionShareBps: z.number().int().min(1000).max(10000).optional(),
 }).refine(
   (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
     || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,

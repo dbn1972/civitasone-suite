@@ -50,6 +50,13 @@
  *    so no net / gross / total moves);
  *  - SF2: SNAP-06's LOP line now also records notInServiceDays 9 (the 9 days
  *    before joining), so NCP days exclude them; its amount is unchanged.
+ *
+ * UAT T-PERIOD D-02b (bundle 19) re-generated it once more; every changed value is one of:
+ *  - s.192: the TDS of the in-service months with no slip here (April..July, estimated at
+ *    the regular pay) is presumed deducted at the average rate, so August carries 8/12 of
+ *    the annual tax over the 8 months left, not the whole year: SNAP-01 TDS 3,960 -> 2,640,
+ *    SNAP-08 2,294 -> 1,529, SNAP-10 49,460 -> 32,973 (each exactly 2/3, rupee-rounded);
+ *  - the TDS rows, slip deductions / net, run and register totals that follow from those.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

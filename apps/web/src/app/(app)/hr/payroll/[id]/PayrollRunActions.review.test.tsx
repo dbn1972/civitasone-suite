@@ -74,6 +74,35 @@ describe("PayrollRunActions — approval review (Rs 0-basic exclusions, arrears 
     });
   });
 
+  it("UAT T-PERIOD D-02b: after 409 NET_PAY_NON_POSITIVE each slip that pays nothing must be acknowledged; re-sent with netPayAcknowledgements", async () => {
+    const empId = "44444444-4444-4444-8444-444444444444";
+    fetchMock
+      .mockResolvedValueOnce(json({ code: "NET_PAY_NON_POSITIVE", message: "1 slip(s) in this run pay nothing" }, 409))
+      .mockResolvedValueOnce(json({
+        runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] },
+        nonPositiveNet: [{ employeeId: empId, employeeNo: "TP-EMP-01", grossMinor: "23142800", totalDeductionsMinor: "29029700", netPayMinor: "0", tdsMinor: "27084700" }],
+      }))
+      .mockResolvedValueOnce(json({ id: "r1", status: "accepted", correlationId: "c" }, 202));
+    open();
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Reviewed and correct" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    const ack = await within(dialog).findByRole("checkbox", { name: /checked TP-EMP-01: gross ₹2,31,428\.00, deductions ₹2,90,297\.00, net ₹0\.00/i });
+
+    fireEvent.change(within(dialog).getByLabelText(/review note/i), { target: { value: "TDS refund case, DDO informed" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    await waitFor(() => expect(dialog).toHaveTextContent(/every slip that pays nothing/i));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(ack);
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse((fetchMock.mock.calls[2]![1] as RequestInit).body as string)).toEqual({
+      reason: "Reviewed and correct",
+      netPayAcknowledgements: [{ employeeId: empId, reason: "TDS refund case, DDO informed" }],
+    });
+  });
+
   it("a plain approval sends only the remarks (no review fields)", async () => {
     fetchMock.mockResolvedValueOnce(json({ id: "r1", status: "accepted", correlationId: "c" }, 202));
     open();
