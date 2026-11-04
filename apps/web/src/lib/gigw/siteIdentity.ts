@@ -4,7 +4,8 @@
  * "Last updated" is derived, never invented: an owner-set content date
  * (NEXT_PUBLIC_CONTENT_UPDATED_AT) wins, otherwise the build time that
  * next.config.mjs bakes in (NEXT_PUBLIC_BUILD_TIME). The owning department is
- * owner-supplied config (NEXT_PUBLIC_GIGW_OWNER) and has no fallback value.
+ * department config (NEXT_PUBLIC_GIGW_OWNER, see departmentConfig.ts) with a
+ * labelled demonstration default.
  *
  * Callers pass the values in: Next only inlines `process.env.NEXT_PUBLIC_*`
  * where it is written literally, so the component reads them, not this file.

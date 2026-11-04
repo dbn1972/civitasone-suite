@@ -9,10 +9,11 @@
  *   - a (marketing) route file exists for it (so Next serves 200, not 404),
  *   - the middleware lets an anonymous request through (no login redirect),
  *   - the page renders one h1 and its metadata title, and
- *   - owner-specific sections are clearly marked placeholders, never invented.
+ *   - (UAT gigw-content) the pages carry real content: no placeholder text is
+ *     left anywhere in the web app, and every page shows a "Last reviewed" date.
  */
 import { describe, it, expect, vi } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, cleanup } from "@testing-library/react";
 import { NextRequest } from "next/server";
@@ -21,8 +22,10 @@ import enMessages from "@/messages/en.json";
 import { middleware } from "@/middleware";
 
 vi.mock("next-intl/server", () => ({
-  getTranslations: async (ns: string) => (key: string) =>
-    (enMessages as unknown as Record<string, Record<string, string>>)[ns]?.[key] ?? key,
+  getTranslations: async (namespace: string) => {
+    const { createTranslator } = await import("next-intl");
+    return createTranslator({ locale: "en", messages: enMessages as never, namespace: namespace as never });
+  },
 }));
 
 type PageModule = {
@@ -49,6 +52,10 @@ const PAGES: Record<string, () => Promise<PageModule>> = {
   "/disclaimer": () => import("@/app/(marketing)/disclaimer/page"),
   "/about": () => import("@/app/(marketing)/about/page"),
   "/help-desk": () => import("@/app/(marketing)/help-desk/page"),
+  // UAT gigw-content: the content policies listed on /website-policies.
+  "/content-contribution-policy": () => import("@/app/(marketing)/content-contribution-policy/page"),
+  "/content-archival-policy": () => import("@/app/(marketing)/content-archival-policy/page"),
+  "/content-review-policy": () => import("@/app/(marketing)/content-review-policy/page"),
 };
 
 /** The 15 paths that were 404 in the post-b14 retest. */
@@ -60,7 +67,20 @@ const WERE_404 = [
 
 const PUBLIC_PATHS = [...Object.keys(PAGES), "/contact"];
 const APP_DIR = join(__dirname, "../../src/app");
-const gigw = enMessages.gigw as Record<string, string>;
+const WEB_DIR = join(__dirname, "../..");
+
+// Built by concatenation so this file does not match its own scan.
+const PLACEHOLDERS = ["[Content to be " + "supplied", "Content to be " + "supplied", "[सामग्री " + "लंबित", "सामग्री विभाग द्वारा उपलब्ध " + "कराई जानी है"];
+
+function textFiles(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === ".next" || name.startsWith(".turbo")) continue;
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) textFiles(p, out);
+    else if (/\.(tsx?|mjs|cjs|js|json|css|md)$/.test(name)) out.push(p);
+  }
+  return out;
+}
 
 async function anonymous(path: string) {
   return middleware(new NextRequest(new URL(path, "http://localhost:3000")));
@@ -107,28 +127,27 @@ describe("GIGW pages contract (UAT post-b14)", () => {
     }
   });
 
-  it("owner-specific sections are marked department placeholders, and only those", async () => {
-    const ownerOnly = ["/about", "/contact-us"];
-    for (const path of ownerOnly) {
-      const { container } = render(await (await PAGES[path]!()).default());
-      expect(container.querySelector("[data-deferred-content=\"page\"]"), path).toHaveTextContent(gigw.pendingNotice);
-      const marked = container.querySelectorAll("[data-deferred-content]:not([data-deferred-content=\"page\"])");
-      expect(marked.length, path).toBeGreaterThan(0);
-      for (const m of marked) expect(m).toHaveTextContent(gigw.pendingDepartment);
-      cleanup();
+  it("no placeholder text is left anywhere in the web app (UAT gigw-content)", () => {
+    const files = [...textFiles(join(WEB_DIR, "src")), ...textFiles(join(WEB_DIR, "tests")), join(WEB_DIR, ".env.example")];
+    expect(files.length).toBeGreaterThan(100);
+    const hits: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const p of PLACEHOLDERS) if (text.includes(p)) hits.push(`${file.slice(WEB_DIR.length)}: ${p}`);
     }
-    expect(gigw.pendingDepartment).toBe("[Content to be supplied by the department]");
+    expect(hits).toEqual([]);
   });
 
-  it("standard-wording pages say so, and mark every department-specific section", async () => {
-    for (const path of ["/privacy-policy", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/feedback", "/help-desk"]) {
-      const { container } = render(await (await PAGES[path]!()).default());
-      expect(container.querySelector("[data-deferred-content=\"page\"]"), path).toHaveTextContent(gigw.standardNotice);
-      for (const m of container.querySelectorAll("[data-deferred-content]:not([data-deferred-content=\"page\"])")) {
-        expect(m, path).toHaveTextContent(gigw.pendingDepartment);
-      }
-      cleanup();
-    }
+  it.each(Object.keys(PAGES))("%s has real content and a \"Last reviewed\" date, no placeholder", async (path) => {
+    process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
+    const { container } = render(await (await PAGES[path]!()).default());
+    const text = container.textContent ?? "";
+    for (const p of PLACEHOLDERS) expect(text, path).not.toContain(p);
+    expect(container.querySelector("[data-deferred-content]"), path).toBeNull();
+    expect(container.querySelectorAll("h2").length, path).toBeGreaterThanOrEqual(3);
+    expect(container.querySelector("[data-gigw-reviewed]"), path).toHaveTextContent("Last reviewed: 04 Nov 2026");
+    delete process.env.NEXT_PUBLIC_BUILD_TIME;
+    cleanup();
   });
 
   it("the sitemap links to every public GIGW page and to sign in", async () => {
@@ -136,7 +155,7 @@ describe("GIGW pages contract (UAT post-b14)", () => {
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     for (const p of ["/", "/accessibility-statement", "/screen-reader-access", "/website-policies", "/privacy-policy",
       "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer", "/about", "/contact-us",
-      "/help-desk", "/feedback", "/auth/login"]) {
+      "/help-desk", "/feedback", "/auth/login", "/content-contribution-policy", "/content-archival-policy", "/content-review-policy"]) {
       expect(hrefs, p).toContain(p);
     }
     cleanup();

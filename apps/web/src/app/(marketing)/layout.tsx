@@ -40,9 +40,12 @@ function NavBar() {
           >
             Contact sales
           </Link>
+          {/* WCAG 1.4.10 (UAT gigw-content): at 320 px the header was 352 px wide
+              (horizontal scroll on every public page); below sm the sandbox
+              link moves into the mobile menu. */}
           <Link
             href="/sandbox"
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="hidden rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors sm:inline-block"
           >
             Try Sandbox
           </Link>
