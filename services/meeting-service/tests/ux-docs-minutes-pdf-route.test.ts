@@ -16,7 +16,7 @@ process.env.RENDER_PDF_MODE = "playwright";
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const T = "aaaaaaaa-cccc-4000-8000-0000000d0c71";
 const OTHER_T = "aaaaaaaa-cccc-4000-8000-0000000d0c72";
 const CHAIR = "00000000-cccc-4000-8000-0000000d0c71";
