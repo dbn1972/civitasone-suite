@@ -15,7 +15,17 @@ export type FinanceSettings = {
   debtLoanLiabilityHeadId: string | null;
   debtInterestExpenseHeadId: string | null;
   debtBankHeadId: string | null;
+  /**
+   * UAT L2-N6 review: how stock movements reach the GL. "cash" (DEFAULT -- Indian government accounts): expenditure
+   * is booked against the budget head when the bill is passed and stores are a memorandum only, so an inventory
+   * movement posts NO journal. "accrual": stock is an asset (Dr Stores / Cr GRNI or stores suspense; issue Dr the
+   * consuming head / Cr Stores) and the GRN bill clears GRNI (gl/inventory-movement.ts, gl/grni-clearing.ts).
+   */
+  accountingBasis: AccountingBasis;
 };
+
+export type AccountingBasis = "cash" | "accrual";
+export const ACCOUNTING_BASES = ["cash", "accrual"] as const;
 
 /** Conservative defaults used when a tenant has no gl.finance_settings row. */
 export const SETTINGS_DEFAULTS: FinanceSettings = {
@@ -26,6 +36,7 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   debtLoanLiabilityHeadId: null,
   debtInterestExpenseHeadId: null,
   debtBankHeadId: null,
+  accountingBasis: "cash",
 };
 
 /** The controls whose switching OFF needs a second admin (turning one ON stays direct). */
@@ -33,6 +44,8 @@ export const RELAXABLE_SETTINGS = ["makerCheckerEnabled", "blockFyActivationOpen
 
 /** True when `changes` turns any control in RELAXABLE_SETTINGS from true to false. */
 export function isRelaxingControl(current: FinanceSettings, changes: Partial<FinanceSettings>): boolean {
+  // UAT L2-N6 review: switching the accounting basis changes what every later stock movement books -- a second admin.
+  if (changes.accountingBasis !== undefined && changes.accountingBasis !== current.accountingBasis) return true;
   return RELAXABLE_SETTINGS.some((k) => current[k] === true && changes[k] === false);
 }
 

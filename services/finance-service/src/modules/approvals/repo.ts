@@ -19,6 +19,7 @@ function toSettings(row: typeof financeSettings.$inferSelect | undefined): Finan
     debtLoanLiabilityHeadId: row.debtLoanLiabilityHeadId ?? null,
     debtInterestExpenseHeadId: row.debtInterestExpenseHeadId ?? null,
     debtBankHeadId: row.debtBankHeadId ?? null,
+    accountingBasis: row.accountingBasis === "accrual" ? "accrual" : "cash",
   };
 }
 

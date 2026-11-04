@@ -4,6 +4,7 @@
  * Before this policy-service had no tenant.created consumer: the standard grants were applied by a dev seed script
  * to two hard-coded tenants only, so every newer tenant had no hrms.leave / payroll.run / procurement.* approve
  * grant and its non-super_admin approvers got 403 completing workflow tasks.
+ *  - The envelope tenantId must be the new tenant (what tenant-service sends); otherwise NonRetryable.
  *  - Contract: tenant.tenant.created v1.1 (@civitasone/events/contracts tenantTenantCreated). Only the tenant id is
  *    read (a v1.0 { tenantId, plan } event works too). A contract violation is NonRetryable (straight to the DLQ).
  *  - Dedupe BEFORE side effects: an already-processed delivery is acked at once; the inbox mark and every write share
@@ -50,6 +51,11 @@ export function registerTenantProvisionConsumers(queue: Queue): void {
   queue.subscribe<TenantCreatedEvent>(CONSUMED_EVENTS.tenantCreated, async (msg: CommandEnvelope<TenantCreatedEvent>) => {
     if (await alreadyProcessed(msg.messageId)) return;
     const tenantId = newTenantIdOf(msg.payload);
+    // Review (defence in depth): tenant-service sends the event in the new tenant's own envelope (tenantId ==
+    // payload tenantId). Anything else -- a forged or replayed event naming another tenant -- is dead-lettered.
+    if (msg.tenantId !== tenantId) {
+      throw new NonRetryableError(`tenant.tenant.created: envelope tenant ${msg.tenantId} is not the new tenant ${tenantId}`);
+    }
     const result = await runWithTenant(tenantId, () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return null;
       const r = await provisionStandardGrantsForTenant(tx, tenantId, msg.actorId);

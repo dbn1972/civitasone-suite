@@ -12,6 +12,8 @@ export const financeSettings = glSchema.table("finance_settings", {
   debtLoanLiabilityHeadId:             uuid("debt_loan_liability_head_id"),
   debtInterestExpenseHeadId:           uuid("debt_interest_expense_head_id"),
   debtBankHeadId:                      uuid("debt_bank_head_id"),
+  // UAT L2-N6 review: cash (default, government) | accrual. Migration 0160.
+  accountingBasis:                     varchar("accounting_basis", { length: 8 }).notNull().default("cash"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

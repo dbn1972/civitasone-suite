@@ -18,9 +18,14 @@ import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
 import { validateOrgAssignmentTx } from "../org-structure/domain.js";
 import { refusalCode } from "./refusal.js";
-import { inventoryMovementJournal, INVENTORY_MOVEMENT_TYPE } from "./inventory-movement.js";
+import { parseInventoryMovement, accrualJournal, grnIdOf, INVENTORY_MOVEMENT_TYPE, type InventoryMovementJournal } from "./inventory-movement.js";
+import { recordStoresMovementTx } from "./stores-memo.js";
+import { clearGrniTx } from "./grni-clearing.js";
+import { loadSettingsTx } from "../approvals/repo.js";
+import { pino } from "pino";
 
 const AUDIT_TOPIC = "audit.event.record";
+const log = pino({ name: "finance:gl-consumer" });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -497,32 +502,53 @@ export function registerGlConsumers(queue: Queue): void {
       return;
     }
 
-    if (raw.type === INVENTORY_MOVEMENT_TYPE) {
-      // UAT L2-N6: inventory-service stock receipt / issue (see gl/inventory-movement.ts). Idempotent by the
-      // deterministic journal id, NOT by the inbox: postJournal skips a journal that is already posted, and the
-      // inbox mark is recorded but does not gate posting, so a dead letter re-driven after the generic path had
-      // refused (and inbox-marked) it -- outbox e6932aac -- still posts, exactly once.
-      let j: ReturnType<typeof inventoryMovementJournal> | undefined;
+    // The inventory-service movement shape carries no `lines`; a balanced journal of the same type built in finance
+    // (the GRNI clearing, gl/grni-clearing.ts) takes the generic path below.
+    if (raw.type === INVENTORY_MOVEMENT_TYPE && !Array.isArray(raw.lines)) {
+      // UAT L2-N6 (+ review): inventory-service stock receipt / issue -- see gl/inventory-movement.ts. Per the tenant
+      // accounting basis (gl.finance_settings, default cash): cash records the stores memorandum and posts NO journal;
+      // accrual posts the stores journal (and clears GRNI once the GRN bill is passed). Idempotent by movement id /
+      // deterministic journal id, NOT by the inbox: the inbox mark is recorded but does not gate the work, so the
+      // dead letters the old generic path refused (and inbox-marked) -- outbox e6932aac -- can be re-driven.
+      let j: InventoryMovementJournal | undefined;
       try {
-        j = inventoryMovementJournal(raw, new Date().toISOString().slice(0, 10));
-        const journal = j;
+        const m = parseInventoryMovement(raw, new Date().toISOString().slice(0, 10));
         await db.transaction(async (tx) => {
           await markProcessed(tx, msg.messageId);
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          if (basis === "cash") {
+            const recorded = await recordStoresMovementTx(tx, msg.tenantId, m, "cash", null, msg.actorId);
+            log.info({ tenantId: msg.tenantId, movementId: m.movementId, kind: m.kind, amountMinor: m.totalMinor, recorded }, "inventory movement recorded in the stores memorandum (cash basis: no GL journal)");
+            return;
+          }
+          j = accrualJournal(m);
+          const journal = j;
           await postJournal(tx, msg, {
             id: journal.id, tenantId: msg.tenantId, voucherNo: journal.voucherNo,
             type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
           });
+          await recordStoresMovementTx(tx, msg.tenantId, m, "accrual", journal.id, msg.actorId);
+          for (const code of journal.warnings) {
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "finance", action: "warning", resourceType: "journal", resourceId: journal.id, outcome: "success", code, movementId: m.movementId },
+            });
+          }
+          const grnId = grnIdOf(m);
+          if (grnId) await clearGrniTx(tx, msg, grnId);
         });
       } catch (err) {
         if (err instanceof Error && err.name === "InventoryMovementPayloadError") {
           captureError(err, { service: "finance-service", alert: "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost, type: INVENTORY_MOVEMENT_TYPE, tenantId: msg.tenantId });
           throw new NonRetryableError(err.message);
         }
-        // Unknown stores / clearing head, closed period, ... : finance.gl.rejected + dead-letter. Not inbox-marked:
-        // no producer re-sends a movement, the dead letter is the recovery path once the chart / period is fixed.
+        // Unknown stores head, closed period, ... : finance.gl.rejected + dead-letter. Not inbox-marked: no producer
+        // re-sends a movement, the dead letter is the recovery path once the chart / period is fixed.
+        const rejected = j as InventoryMovementJournal | undefined;
         await rejectRefusal(msg, err, {
-          journalId: j?.id, voucherNo: j?.voucherNo, type: INVENTORY_MOVEMENT_TYPE,
-          ...(j ? { sourceRef: j.sourceRef, source: j.source } : {}),
+          journalId: rejected?.id, voucherNo: rejected?.voucherNo, type: INVENTORY_MOVEMENT_TYPE,
+          ...(rejected ? { sourceRef: rejected.sourceRef, source: rejected.source } : {}),
         }, false);
       }
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));

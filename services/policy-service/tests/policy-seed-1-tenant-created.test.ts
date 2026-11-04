@@ -16,7 +16,7 @@ import { standardId } from "../src/modules/roles/standard-provision.js";
 import { backfillStandardGrants, parseArgs, makeTenantIdLister } from "../scripts/backfill-standard-grants.js";
 import { CONSUMED_EVENTS } from "../src/topics.js";
 
-const PLATFORM = randomUUID(); // the envelope tenant of a tenant-service event is NOT the new tenant
+const PLATFORM = randomUUID(); // a tenant that is NOT the new one (a forged / mis-addressed envelope)
 const ACTOR = randomUUID();
 const msgIds: string[] = [];
 let q: MemoryQueue;
@@ -30,10 +30,11 @@ async function grantsOf(tenantId: string): Promise<string[]> {
 }
 const rolesOf = async (tenantId: string) => (await readScoped(tenantId, (tx) => tx.select({ name: roles.name }).from(roles).where(eq(roles.tenantId, tenantId)))).map((r) => r.name).sort();
 
-async function created(tenantId: string, messageId = randomUUID(), payload: Record<string, unknown> = {}): Promise<void> {
+// tenant-service sends the event in the NEW tenant's envelope (tenant/consumer.ts emit: envelope tenantId = payload tenantId).
+async function created(tenantId: string, messageId = randomUUID(), payload: Record<string, unknown> = {}, envelopeTenant = tenantId): Promise<void> {
   msgIds.push(messageId);
   await q.publish(CONSUMED_EVENTS.tenantCreated, {
-    messageId, type: CONSUMED_EVENTS.tenantCreated, tenantId: PLATFORM, actorId: ACTOR, correlationId: `ps1-${messageId.slice(0, 8)}`, schemaVersion: "1.1",
+    messageId, type: CONSUMED_EVENTS.tenantCreated, tenantId: envelopeTenant, actorId: ACTOR, correlationId: `ps1-${messageId.slice(0, 8)}`, schemaVersion: "1.1",
     payload: { tenantId, id: tenantId, plan: "govt", edition: "govt", name: "PS1 Office", domain: `ps1-${tenantId.slice(0, 8)}.example.in`, status: "draft", region: "ap-south-1", residency: "IN", ...payload },
   });
   await q.drain();
@@ -64,7 +65,6 @@ describe("POLICY-SEED-1: tenant.tenant.created -> standard approve grants", () =
     expect(await grantsOf(t)).toEqual(EXPECTED);
     // POLICY-SEED-2: the plan / PO-amendment approvals are part of the set
     expect(EXPECTED).toEqual(expect.arrayContaining(["procurement_admin:procurement.plan.approve", "procurement_admin:procurement.po_amendment.approve"]));
-    // written under the new tenant, not the envelope (platform) tenant
     expect(await rolesOf(PLATFORM)).toEqual([]);
   });
 
@@ -102,6 +102,15 @@ describe("POLICY-SEED-1: tenant.tenant.created -> standard approve grants", () =
     expect(g).toHaveLength(EXPECTED.length);
     const [m] = await readScoped(t, (tx) => tx.select().from(roles).where(and(eq(roles.tenantId, t), eq(roles.name, "manager"))));
     expect(m).toMatchObject({ id: roleId, description: "tenant-made" });
+  });
+
+  it("an envelope tenant that is not the new tenant is dead-lettered and writes nothing (forged / mis-addressed event)", async () => {
+    const t = randomUUID();
+    const before = q.dlq.length;
+    await created(t, randomUUID(), {}, PLATFORM);
+    expect(q.dlq.length).toBe(before + 1);
+    expect(await rolesOf(t)).toEqual([]);
+    expect(await rolesOf(PLATFORM)).toEqual([]);
   });
 
   it("a contract violation is dead-lettered at once and writes nothing", async () => {
