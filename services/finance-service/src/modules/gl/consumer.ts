@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { fyClosedReasonTx, fyClosedMessage } from "./fy-guard.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
@@ -63,7 +64,7 @@ export class UnknownAccountCodeError extends NonRetryableError {
   }
 }
 
-import { DEP_EXPENSE, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT } from "./system-heads.js";
+import { DEP_EXPENSE, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS } from "./system-heads.js";
 import { todayIST, currentPeriodIST } from "../../shared/ist-date.js";
 const GAIN_LOSS = process.env.FINANCE_GAIN_LOSS_CODE ?? "4200";
 const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
@@ -205,6 +206,10 @@ async function postJournal(
   if (fyRows[0]?.status === "draft") {
     throw new Error(`FY_NOT_ACTIVE: financial year ${fyCode} has not been activated; postings dated ${journal.postingDate} cannot be accepted until it is`);
   }
+  // UAT T-PERIOD review (blocker 1): nor into ANY month of a closed financial year (closed, or its year-end close has
+  // run) -- even one whose period row was reopened: the next year opening balances were generated from it.
+  const closedReason = await fyClosedReasonTx(tx, journal.tenantId, fyCode);
+  if (closedReason) throw new Error(`FY_CLOSED: ${fyClosedMessage(closedReason, journal.postingDate)}`);
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
   // the source doc). If it already exists and is already posted/reversed, this
   // is a redelivery — skip silently so bills/payments/receipts never double-post.
@@ -516,11 +521,25 @@ export function registerGlConsumers(queue: Queue): void {
             // expenditure when the bill was passed and never a GL asset -- so the disposal reverses no cost or
             // accumulated depreciation. The only GL effect is the sale proceeds RECEIPT: Dr cash / Cr sale proceeds.
             if (proceeds > 0n) {
+              // UAT T-PERIOD review (blocker 2): a tenant whose chart has no sale-proceeds head yet (the standard-heads
+              // backfill is a deploy prerequisite) falls back to the miscellaneous receipts head, with a warning, rather
+              // than refusing the receipt; with neither head the receipt is refused (UNKNOWN_ACCOUNT_CODE) as before.
+              let receiptCode = ASSET_SALE_RECEIPT;
+              const headTx = tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0];
+              if (!(await budgetRepo.findHeadByCodeTx(headTx, msg.tenantId, ASSET_SALE_RECEIPT)) && (await budgetRepo.findHeadByCodeTx(headTx, msg.tenantId, MISC_RECEIPTS))) {
+                receiptCode = MISC_RECEIPTS;
+                log.warn({ tenantId: msg.tenantId, assetId: d.assetId, missing: ASSET_SALE_RECEIPT, fallback: MISC_RECEIPTS }, "sale proceeds head missing: receipt posted to the miscellaneous receipts head");
+                await enqueue(tx, {
+                  topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+                  tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                  payload: { service: "finance", action: "warning", resourceType: "journal", resourceId: journalId, outcome: "success", code: "ASSET_SALE_RECEIPT_HEAD_MISSING", missingHead: ASSET_SALE_RECEIPT, fallbackHead: MISC_RECEIPTS, assetId: d.assetId },
+                });
+              }
               await postJournal(tx, msg, {
                 id: journalId, tenantId: msg.tenantId, voucherNo, type: "asset_disposal", postingDate,
                 lines: [
                   { accountCode: CASH, debitMinor: proceeds.toString(), creditMinor: "0", narration: "Sale proceeds of disposed asset" },
-                  { accountCode: ASSET_SALE_RECEIPT, debitMinor: "0", creditMinor: proceeds.toString(), narration: "Sale proceeds of disposed asset" },
+                  { accountCode: receiptCode, debitMinor: "0", creditMinor: proceeds.toString(), narration: "Sale proceeds of disposed asset" },
                 ],
               });
             }
@@ -831,7 +850,7 @@ export function registerGlConsumers(queue: Queue): void {
         // back, so nothing posts and the draft stays pending_approval; gl/routes.ts refuses the next approval attempt
         // with 422 PERIOD_CLOSED until the period is reopened.
         const code = refusalCode(err);
-        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE") && !(err instanceof NonRetryableError)) {
+        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED") && !(err instanceof NonRetryableError)) {
           throw new NonRetryableError(String((err as Error).message));
         }
         throw err;

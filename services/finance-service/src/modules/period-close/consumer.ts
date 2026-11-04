@@ -7,6 +7,7 @@ import * as periodRepo from "./repo.js";
 import { applyPeriodReopen } from "./apply.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { loadSettingsTx } from "../approvals/repo.js";
+import { DomainError } from "../masters/domain.js";
 import { deriveFY } from "../reports/routes.js";
 
 const log = pino({ name: "finance.period-close.consumer" });
@@ -75,7 +76,13 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
       if (existing?.status === "hard_close" && (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], p.tenantId)).makerCheckerEnabled) {
         throw new NonRetryableError(`PERIOD_REOPEN_NEEDS_APPROVAL: period ${p.period} is hard-closed; reopening it needs a second finance_admin (period_reopen change request)`);
       }
-      const moved = await applyPeriodReopen(tx, msg, { period: p.period, reason: p.reason ?? null });
+      let moved: { fromStatus: string } | null;
+      try {
+        moved = await applyPeriodReopen(tx, msg, { period: p.period, reason: p.reason ?? null });
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`${err.code}: ${err.message}`);
+        throw err;
+      }
       if (!moved) log.info({ id: msg.messageId, period: p.period }, "period.reopen: period is not closed; nothing changed");
     });
     await cache.invalidateResource(msg.tenantId, "periods");

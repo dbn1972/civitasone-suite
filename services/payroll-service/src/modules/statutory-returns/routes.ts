@@ -77,8 +77,8 @@ function quarterMonths(startYear: number, q: Quarter): string[] {
 }
 
 // UAT P3 b19 D-15: the deductor identity (name / TAN / PAN) comes from the
-// tenant deductor configuration (deductor-config/repo.ts), validated; a TDS
-// return refuses with 422 DEDUCTOR_NOT_CONFIGURED instead of placeholder text.
+// tenant documentIdentity (deductor-config/repo.ts), validated; a TDS return
+// refuses with 422 FORM16_EMPLOYER_NOT_CONFIGURED instead of placeholder text.
 
 /**
  * H4: pipe-delimited flat-file safety. Strip the field separator and CR/LF from

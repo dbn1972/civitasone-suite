@@ -14,7 +14,8 @@ const CASES: Array<{ code: string; status: number; en: RegExp[]; hi: RegExp }> =
   { code: "FY_OPEN_PERIODS", status: 409, en: [/every month/i, /hard-closed/i], hi: /महीने/ },
   { code: "OPENING_BALANCES_MANUAL", status: 409, en: [/entered by hand/i, /year-end/i, /finance administrator/i], hi: /प्रारंभिक शेष/ },
   { code: "DUPLICATE_RUN_NO", status: 409, en: [/payroll run number is already used/i, /choose another/i], hi: /रन नंबर/ },
-  { code: "DEDUCTOR_NOT_CONFIGURED", status: 422, en: [/deductor/i, /TAN/, /PAN/, /not generated/i, /payroll admin/i], hi: /कटौतीकर्ता/ },
+  { code: "FY_CLOSED", status: 409, en: [/financial year of this month has been closed/i, /final/i, /cannot be reopened/i, /nothing can be posted/i, /prior-period adjustment/i, /current open year/i, /finance admin/i], hi: /पूर्व-अवधि समायोजन/ },
+  { code: "FORM16_EMPLOYER_NOT_CONFIGURED", status: 422, en: [/employer \(deductor\)/i, /TAN/, /PAN/, /office settings/i, /document identity/i, /not generated/i, /office administrator/i], hi: /कटौतीकर्ता/ },
 ];
 
 describe("finance year-end and budget-control codes (fx-p3)", () => {
@@ -42,9 +43,25 @@ describe("finance year-end and budget-control codes (fx-p3)", () => {
   });
 
   it("refusals that change nothing say so (nothing was posted / saved / generated)", () => {
-    for (const code of ["NO_BUDGET_PROVISION", "FY_NOT_ACTIVE", "DEP_FUTURE_PERIOD", "DEDUCTOR_NOT_CONFIGURED"]) {
+    for (const code of ["NO_BUDGET_PROVISION", "FY_NOT_ACTIVE", "DEP_FUTURE_PERIOD", "FORM16_EMPLOYER_NOT_CONFIGURED"]) {
       const r = resolveHumanError({ status: 422, code, ctx: { locale: "en" } });
       expect(r.what, code).toMatch(/nothing was|not generated|was not/i);
     }
+  });
+
+  it("FY_CLOSED is its own reason, not the generic period-closed or open-periods copy", () => {
+    const r = resolveHumanError({ status: 409, code: "FY_CLOSED", ctx: { locale: "en", area: "period close" } });
+    expect(r.kind).toBe("domain");
+    expect(r.what).not.toBe(DOMAIN_CODE_MESSAGES.FY_OPEN_PERIODS!.en.what);
+    expect(r.what).not.toBe(DOMAIN_CODE_MESSAGES.PERIOD_CLOSED!.en.what);
+    expect(r.what).not.toMatch(/changed by someone else/i);
+  });
+
+  it("the deductor identity code is FORM16_EMPLOYER_NOT_CONFIGURED and points to tenant settings, not payroll settings", () => {
+    expect(DOMAIN_CODE_MESSAGES.DEDUCTOR_NOT_CONFIGURED).toBeUndefined();
+    const en = DOMAIN_CODE_MESSAGES.FORM16_EMPLOYER_NOT_CONFIGURED!.en;
+    expect(`${en.what} ${en.next}`).not.toMatch(/payroll settings|payroll admin/i);
+    const hi = DOMAIN_CODE_MESSAGES.FORM16_EMPLOYER_NOT_CONFIGURED!.hi;
+    expect(`${hi.what} ${hi.next}`).not.toMatch(/पेरोल सेटिंग/);
   });
 });

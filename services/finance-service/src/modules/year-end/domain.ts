@@ -59,9 +59,11 @@ export function toDrCr(signed: bigint): { debitMinor: bigint; creditMinor: bigin
   return signed >= 0n ? { debitMinor: signed, creditMinor: 0n } : { debitMinor: 0n, creditMinor: -signed };
 }
 
-export type BudgetForLapse = { budgetId: string; headId: string; headCode: string; headName: string; beMinor: bigint; reMinor: bigint; utilisedMinor: bigint };
+/** expenditureMinor: the ledger net debits of the head in the FY (reversals and recoveries reduce it). */
+export type BudgetForLapse = { budgetId: string; headId: string; headCode: string; headName: string; beMinor: bigint; reMinor: bigint; expenditureMinor: bigint };
 export type LapseRow = {
   budgetId: string; headId: string; headCode: string; headName: string;
+  /** RE - BE: supplementary grants and re-appropriation together (net). */
   beMinor: bigint; reMinor: bigint; reappropriationNetMinor: bigint; expenditureMinor: bigint; lapseMinor: bigint; excessMinor: bigint;
 };
 
@@ -71,11 +73,11 @@ export type LapseRow = {
  * grant - expenditure lapses; an overrun is reported as excess (for regularisation), never as a negative lapse.
  */
 export function lapseRow(b: BudgetForLapse): LapseRow {
-  const diff = b.reMinor - b.utilisedMinor;
+  const diff = b.reMinor - b.expenditureMinor;
   return {
     budgetId: b.budgetId, headId: b.headId, headCode: b.headCode, headName: b.headName,
     beMinor: b.beMinor, reMinor: b.reMinor, reappropriationNetMinor: b.reMinor - b.beMinor,
-    expenditureMinor: b.utilisedMinor, lapseMinor: diff > 0n ? diff : 0n, excessMinor: diff < 0n ? -diff : 0n,
+    expenditureMinor: b.expenditureMinor, lapseMinor: diff > 0n ? diff : 0n, excessMinor: diff < 0n ? -diff : 0n,
   };
 }
 

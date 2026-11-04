@@ -55,7 +55,7 @@ describe("LapseStatementPage (fx-p3)", () => {
     expect(table.querySelector("caption")?.textContent).toMatch(/Lapse statement for FY 2025-26/);
     const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent?.trim());
     expect(headers).toEqual([
-      "Head", "Budget estimate", "Re-appropriation / supplementary (net)", "Final grant", "Expenditure", "Unspent (lapses)", "Excess",
+      "Head", "Budget estimate", "RE / supplementary / re-appropriation (net)", "Final grant", "Expenditure", "Unspent (lapses)", "Excess",
     ]);
     const row = screen.getByText("2202 · General Education").closest("tr")!;
     expect(Array.from(row.querySelectorAll("td")).map((c) => c.textContent)).toEqual([
@@ -68,6 +68,23 @@ describe("LapseStatementPage (fx-p3)", () => {
     // the totals row is last
     const rows = within(table).getAllByRole("row");
     expect(rows.at(-1)).toBe(total);
+  });
+
+  it("says expenditure is from the ledger, net of reversals and recoveries (same as Budget Monitoring)", async () => {
+    respond(BODY);
+    render(await LapseStatementPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
+    expect(screen.getByText(/Expenditure is from the ledger \(net of reversals and recoveries\), the same as Budget Monitoring/)).toBeInTheDocument();
+  });
+
+  it("Hindi copy: the net column is RE / supplementary / re-appropriation and the expenditure note says ledger, net of reversals and recoveries", () => {
+    const hi = hiMessages.financeLapseStatement;
+    expect(hi.colReapp).toMatch(/संशोधित अनुमान/);
+    expect(hi.colReapp).toMatch(/अनुपूरक/);
+    expect(hi.colReapp).toMatch(/पुनर्विनियोजन/);
+    expect(hi.colReapp).toMatch(/शुद्ध/);
+    expect(hi.expenditureNote).toMatch(/लेजर/);
+    expect(hi.expenditureNote).toMatch(/वसूली/);
+    expect(hi.expenditureNote).toMatch(/बजट निगरानी/);
   });
 
   it("a recorded statement says who recorded it and when", async () => {

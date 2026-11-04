@@ -21,8 +21,9 @@ type Row = {
 };
 
 /**
- * fx-p3: Lapse statement (31 March). Head-wise final grant (BE +/- re-appropriation / supplementary) against
- * expenditure; whatever is unspent lapses on 31 March and is not carried forward (GFR). The statement is
+ * fx-p3: Lapse statement (31 March). Head-wise final grant (BE +/- RE / supplementary / re-appropriation; the net
+ * column is RE - BE) against ledger expenditure (net of reversals and recoveries, as Budget Monitoring);
+ * whatever is unspent lapses on 31 March and is not carried forward (GFR). The statement is
  * provisional until the year-end close records it. Print-friendly: every row on one page plus a totals row.
  */
 export default async function LapseStatementPage(props: { searchParams?: Promise<{ fy?: string }> }) {
@@ -71,6 +72,7 @@ export default async function LapseStatementPage(props: { searchParams?: Promise
       <PrintHeader title={t("title")} scope={`FY ${fy}`} />
 
       <p style={{ margin: "0 0 12px", fontSize: 13.5 }}>{t("note")}</p>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink2)" }}>{t("expenditureNote")}</p>
 
       {result.source === "error" ? (
         <LoadErrorState result={result} area={t("area")} backHref="/finance" />

@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { tenantTransaction } from "@civitasone/db";
+import { outstandingSanctionsTx } from "./sanction-outstanding.js";
 import { assertSanctionWithinAllocationTx, sanctionPreRead, sanctionPreReadFor } from "./sanction-control.js";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
@@ -244,6 +245,16 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // #2464 review (TE-02): an allocation may not be reduced below what is already committed, spent and sanctioned.
+      const { findAllocationTx } = await import("./allocation-repo.js");
+      const existing = await findAllocationTx(tx, p.tenantId, p.headId, p.fy);
+      if (existing && BigInt(p.allocatedMinor) < existing.allocatedMinor) {
+        const sanctioned = await outstandingSanctionsTx(tx, p.tenantId, p.headId, p.fy);
+        const floor = existing.committedMinor + existing.actualMinor + sanctioned;
+        if (BigInt(p.allocatedMinor) < floor) {
+          throw new NonRetryableError(`[finance/budget] ALLOCATION_BELOW_COMMITMENTS: allocation for head ${p.headId} ${p.fy} cannot go below ${floor} paise (committed ${existing.committedMinor} + expended ${existing.actualMinor} + approved sanctions ${sanctioned})`);
+        }
+      }
       await upsertAllocation(tx, {
         id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
         allocatedMinor: BigInt(p.allocatedMinor),

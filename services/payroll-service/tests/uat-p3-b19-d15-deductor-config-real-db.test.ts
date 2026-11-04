@@ -1,16 +1,20 @@
 /**
  * UAT P3 b19 D-15: the Form 16 / 24Q / 26Q / 12BA deductor (employer) name, TAN
  * and PAN used to fall back to placeholder text ("<TAN — configure EMPLOYER_TAN>").
- * They now come from the tenant deductor configuration (payroll_settings, set
- * through PUT /v1/payroll/settings/deductor), falling back to the deployment
- * EMPLOYER_* env only when the tenant has none, and are validated (TAN
- * AAAA99999A, PAN AAAAA9999A, no placeholder). A missing / malformed /
- * placeholder value refuses the return with 422 DEDUCTOR_NOT_CONFIGURED naming
- * the field, instead of shipping placeholder text. Real Postgres.
+ *
+ * Review decision: ONE source of deductor identity, shared with the official
+ * documents of PR #2463 -- tenant-service `settings.documentIdentity`
+ * { orgName, tan, pan, address, deductorCategory } -- falling back to the
+ * deployment EMPLOYER_* env only when documentIdentity has none of
+ * name / TAN / PAN. Validated (TAN AAAA99999A mandatory; PAN AAAAA9999A, or
+ * PANNOTREQD for a deductorCategory "government" deductor only; no
+ * placeholder). A missing / malformed / placeholder value refuses with 422
+ * FORM16_EMPLOYER_NOT_CONFIGURED (the #2463 code) naming the field. Tenant-
+ * service is stubbed at fetch; a tenant-service outage fails OPEN (env /
+ * refusal), never a 500. Real Postgres.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
-import type { MemoryQueue } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
@@ -20,28 +24,27 @@ vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
 });
 import { fetchPayrollInput, fetchEmployeeSummaries } from "../src/shared/hrms-client.js";
 import { buildApp } from "../src/app.js";
-import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import * as statutoryRepo from "../src/modules/statutory/repo.js";
-import { registerDeductorConfigConsumers } from "../src/modules/deductor-config/consumer.js";
-import { deductorProblems, DEDUCTOR_NOT_CONFIGURED } from "../src/modules/deductor-config/domain.js";
+import { deductorProblems, FORM16_EMPLOYER_NOT_CONFIGURED, PAN_NOT_REQUIRED } from "../src/modules/deductor-config/domain.js";
+import { resetTenantDocIdentityCache } from "../src/modules/deductor-config/tenant-identity.js";
 
-const memQueue = queue as unknown as MemoryQueue;
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ADMIN = randomUUID();
 const authFor = (tenant: string) => ({ authorization: `Bearer ${signToken({ sub: ADMIN, tid: tenant, roles: ["super_admin"], sid: "d15" }, SECRET, 3600)}` });
 const EMP = randomUUID();
+const realFetch = globalThis.fetch;
 
 let app: FastifyInstance;
 beforeAll(async () => {
-  registerPayrollConsumers(queue); registerDeductorConfigConsumers(queue); await queue.start(); app = await buildApp();
+  registerPayrollConsumers(queue); await queue.start(); app = await buildApp();
   vi.mocked(fetchPayrollInput).mockResolvedValue({ month: "2027-03", employees: [{ id: EMP, employeeNo: "D15-1", fullName: "Deductee One", pan: "BCDPK4321Q", basicMinor: "0" }], lopDays: {}, overtimeHours: {} } as never);
   vi.mocked(fetchEmployeeSummaries).mockResolvedValue(new Map() as never);
 });
-afterEach(() => { vi.unstubAllEnvs(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetTenantDocIdentityCache(); });
 afterAll(async () => { await queue.stop(); await app.close(); await sqlClient.end(); });
 
 /** One NPS ledger row for 2026-08 (the NPS-SCF needs at least one). */
@@ -50,8 +53,33 @@ const seedNps = (tenant: string) => runWithTenant(tenant, () => db.transaction((
   basicMinor: 5000000n, empContribPct: "10", erContribPct: "14", empContribMinor: 500000n, erContribMinor: 700000n, createdBy: ADMIN, updatedBy: ADMIN,
 })));
 
-/** No deployment-wide fallback either: the tenant has nothing configured anywhere. */
+/** No deployment-wide fallback either. */
 const clearEnv = () => { vi.stubEnv("EMPLOYER_NAME", ""); vi.stubEnv("EMPLOYER_TAN", ""); vi.stubEnv("EMPLOYER_PAN", ""); };
+const deploymentEnv = () => {
+  vi.stubEnv("EMPLOYER_NAME", "Deployment Default Office"); vi.stubEnv("EMPLOYER_TAN", "MUMD54321E"); vi.stubEnv("EMPLOYER_PAN", "AAACD5432L");
+};
+
+type TenantReply = { status: number; body: unknown } | "throw";
+interface TenantCall { url: string; headers: Record<string, string> }
+/**
+ * Stub tenant-service GET /v1/tenants/:id at fetch (every other URL goes to the
+ * real fetch). `tenants` maps a tenant id to the reply.
+ */
+function stubTenantService(tenants: Record<string, TenantReply>): TenantCall[] {
+  const calls: TenantCall[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: { headers?: Record<string, string> }) => {
+    const url = String(input);
+    const m = /\/v1\/tenants\/([^/?]+)$/.exec(url);
+    if (!m) return realFetch(input as never, init as never);
+    calls.push({ url, headers: init?.headers ?? {} });
+    const r = tenants[decodeURIComponent(m[1]!)] ?? { status: 404, body: { code: "NOT_FOUND" } };
+    if (r === "throw") throw new TypeError("fetch failed: connect ECONNREFUSED");
+    return new Response(JSON.stringify(r.body), { status: r.status, headers: { "content-type": "application/json" } });
+  }));
+  return calls;
+}
+const withIdentity = (documentIdentity: Record<string, unknown>, name = "Tenant Display Name"): TenantReply =>
+  ({ status: 200, body: { data: { id: "t", name, settings: { documentIdentity, other: 1 } } } });
 
 type Probe = { name: string; method: "GET" | "POST"; url: string; payload?: Record<string, unknown> };
 const refusingReturns = (): Probe[] => [
@@ -64,6 +92,11 @@ const refusingReturns = (): Probe[] => [
   { name: "Form 16 PDF (html)", method: "GET", url: `/v1/payroll/tax/form16/${EMP}/pdf?fy=2026-27&output=html` },
   { name: "Form 16 bulk", method: "POST", url: "/v1/payroll/tax/form16/bulk-generate", payload: { fy: "2026-27" } },
 ];
+const forceFile24Q = (tenant: string) => app.inject({ method: "POST", url: "/v1/payroll/statutory/form24q/force-file", headers: authFor(tenant),
+  payload: { fy: "2026-27", quarter: "Q1", confirmForce: true, reason: "D-15 probe" } });
+const form16 = (tenant: string) => app.inject({ method: "GET", url: `/v1/payroll/tax/form16?employeeId=${EMP}&fy=2026-27`, headers: authFor(tenant) });
+const form12ba = (tenant: string) => app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba?employeeId=${EMP}&fy=2026-27`, headers: authFor(tenant) });
+const getDeductor = (tenant: string) => app.inject({ method: "GET", url: "/v1/payroll/settings/deductor", headers: authFor(tenant) });
 
 describe("D-15 deductor validation (pure)", () => {
   it("accepts a well-formed TAN / PAN / name", () => {
@@ -88,18 +121,36 @@ describe("D-15 deductor validation (pure)", () => {
       "deductor TAN is a placeholder", "deductor PAN is a placeholder",
     ]);
   });
+  it("PANNOTREQD is accepted only for a government deductor (TRACES / 24Q convention); TAN stays mandatory", () => {
+    expect(PAN_NOT_REQUIRED).toBe("PANNOTREQD");
+    expect(deductorProblems({ name: "PAO (Civil)", tan: "DELP12345C", pan: "PANNOTREQD", deductorCategory: "government" })).toEqual([]);
+    expect(deductorProblems({ name: "PAO (Civil)", tan: "DELP12345C", pan: "pannotreqd", deductorCategory: "Government" })).toEqual([]);
+    for (const deductorCategory of [undefined, null, "company", "governments", ""]) {
+      const p = deductorProblems({ name: "PAO (Civil)", tan: "DELP12345C", pan: "PANNOTREQD", deductorCategory });
+      expect(p).toHaveLength(1);
+      expect(p[0]).toMatch(/^deductor PAN "PANNOTREQD" is allowed only for a government deductor/);
+    }
+    // A government deductor still needs a real TAN.
+    expect(deductorProblems({ name: "PAO (Civil)", tan: null, pan: "PANNOTREQD", deductorCategory: "government" })).toEqual(["deductor TAN is missing"]);
+    expect(deductorProblems({ name: "PAO (Civil)", tan: "DELP1234C", pan: "PANNOTREQD", deductorCategory: "government" })).toEqual([
+      "deductor TAN \"DELP1234C\" is not a valid TAN (format AAAA99999A)",
+    ]);
+  });
 });
 
-describe("D-15: nothing configured -> every TDS return / certificate refuses with 422, never placeholder text", () => {
+describe("D-15: nothing configured -> every TDS return / certificate refuses with 422 FORM16_EMPLOYER_NOT_CONFIGURED", () => {
   it.each(refusingReturns().map((p) => [p.name, p] as const))("%s", async (_n, p) => {
     clearEnv();
     const tenant = randomUUID();
+    // tenant-service answers, but the tenant has no documentIdentity (its display name alone is not a deductor).
+    stubTenantService({ [tenant]: { status: 200, body: { data: { id: tenant, name: "Some Tenant", settings: {} } } } });
     const res = await app.inject({ method: p.method, url: p.url, headers: authFor(tenant), ...(p.payload ? { payload: p.payload } : {}) });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe(DEDUCTOR_NOT_CONFIGURED);
+    expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
     expect(res.json().message).toContain("deductor name is missing");
     expect(res.json().message).toContain("deductor TAN is missing");
     expect(res.json().message).toContain("deductor PAN is missing");
+    expect(res.json().message).toContain("documentIdentity");
     expect(res.body).not.toContain("configure EMPLOYER");
   });
 
@@ -107,9 +158,9 @@ describe("D-15: nothing configured -> every TDS return / certificate refuses wit
     vi.stubEnv("EMPLOYER_NAME", "Directorate of Accounts");
     vi.stubEnv("EMPLOYER_TAN", "<TAN — configure EMPLOYER_TAN>");
     vi.stubEnv("EMPLOYER_PAN", "AAAG1234K");
-    const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba?employeeId=${EMP}&fy=2026-27`, headers: authFor(randomUUID()) });
+    const res = await form12ba(randomUUID());
     expect(res.statusCode).toBe(422);
-    expect(res.json()).toMatchObject({ code: DEDUCTOR_NOT_CONFIGURED });
+    expect(res.json()).toMatchObject({ code: FORM16_EMPLOYER_NOT_CONFIGURED });
     expect(res.json().message).toContain("deductor TAN is a placeholder");
     expect(res.json().message).toContain("deductor PAN \"AAAG1234K\" is not a valid PAN");
     expect(res.json().message).not.toContain("deductor name");
@@ -126,73 +177,160 @@ describe("D-15: nothing configured -> every TDS return / certificate refuses wit
   });
 });
 
-describe("D-15: tenant deductor configuration (PUT /v1/payroll/settings/deductor)", () => {
-  it("rejects a malformed TAN / PAN up front with 400 and stores nothing", async () => {
-    clearEnv();
+describe("D-15: tenant documentIdentity is the deductor source", () => {
+  it("documentIdentity is used by Form 16 / 24Q / 26Q / 12BA / NPS-SCF and wins over the deployment env", async () => {
+    deploymentEnv();
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "d15-internal-secret"); // gitleaks:allow (test-only value)
     const tenant = randomUUID();
-    const bad = await app.inject({ method: "PUT", url: "/v1/payroll/settings/deductor", headers: authFor(tenant),
-      payload: { name: "Directorate of Accounts", tan: "DEL1234C", pan: "AAAAA0000A" } });
-    expect(bad.statusCode).toBe(400);
-    expect(bad.json().code).toBe("VALIDATION_FAILED");
-    await memQueue.drain();
-    const got = await app.inject({ method: "GET", url: "/v1/payroll/settings/deductor", headers: authFor(tenant) });
-    expect(got.statusCode).toBe(200);
-    expect(got.json()).toMatchObject({ configured: false, source: null, name: null, tan: null, pan: null });
-  });
-
-  it("a valid tenant deductor is used by Form 16 / 24Q / 26Q / 12BA / NPS-SCF, and wins over the deployment env", async () => {
-    // A different, valid deployment-wide identity: the tenant own values must win.
-    vi.stubEnv("EMPLOYER_NAME", "Deployment Default Office");
-    vi.stubEnv("EMPLOYER_TAN", "MUMD54321E");
-    vi.stubEnv("EMPLOYER_PAN", "AAACD5432L");
-    const tenant = randomUUID();
-    const put = await app.inject({ method: "PUT", url: "/v1/payroll/settings/deductor", headers: authFor(tenant),
-      payload: { name: "  Pay and Accounts Office (Civil)  ", tan: "delp12345c", pan: "AAAGP1234K", reason: "set the deductor for UAT D-15" } });
-    expect(put.statusCode).toBe(202);
-    await memQueue.drain();
+    const calls = stubTenantService({ [tenant]: withIdentity({ orgName: "  Pay and Accounts Office (Civil)  ", tan: "delp12345c", pan: "AAAGP1234K", address: "Lodhi Road, New Delhi" }) });
     const want = { name: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "AAAGP1234K" };
 
-    const got = await app.inject({ method: "GET", url: "/v1/payroll/settings/deductor", headers: authFor(tenant) });
-    expect(got.json()).toMatchObject({ configured: true, source: "tenant", ...want, problems: [] });
+    const got = await getDeductor(tenant);
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toEqual({
+      source: "documentIdentity", ...want, address: "Lodhi Road, New Delhi", deductorCategory: null, configured: true, problems: [],
+    });
+    // The tenant-service request is the internal-boundary one (#2463 resolveDocIdentity).
+    expect(calls[0]!.url).toBe(`http://127.0.0.1:1/v1/tenants/${tenant}`);
+    expect(calls[0]!.headers).toMatchObject({ "x-internal": "1", "x-service-secret": "d15-internal-secret", "x-tenant-id": tenant }); // gitleaks:allow (test-only value)
 
-    const f24 = await app.inject({ method: "POST", url: "/v1/payroll/statutory/form24q/force-file", headers: authFor(tenant),
-      payload: { fy: "2026-27", quarter: "Q1", confirmForce: true, reason: "D-15 probe" } });
+    const f24 = await forceFile24Q(tenant);
     expect(f24.statusCode).toBe(200);
     expect(f24.json().deductor).toEqual(want);
     const f26 = await app.inject({ method: "GET", url: "/v1/payroll/statutory/form26q?fy=2026-27&quarter=Q1&format=file", headers: authFor(tenant) });
     expect(f26.statusCode).toBe(200);
     expect(f26.body.split("\r\n")[0]).toBe("FH|26Q|2026-27|Q1|DELP12345C|AAAGP1234K|Pay and Accounts Office (Civil)|0");
-    const ba = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba?employeeId=${EMP}&fy=2026-27`, headers: authFor(tenant) });
+    const ba = await form12ba(tenant);
     expect(ba.statusCode).toBe(200);
     expect(ba.json().employer).toEqual(want);
-    const f16 = await app.inject({ method: "GET", url: `/v1/payroll/tax/form16?employeeId=${EMP}&fy=2026-27`, headers: authFor(tenant) });
+    const f16 = await form16(tenant);
     expect(f16.statusCode).toBe(200);
     expect(f16.json().form16PartA.deductor).toEqual(want);
     await seedNps(tenant);
     const nps = await app.inject({ method: "GET", url: "/v1/payroll/statutory/nps-scf?month=2026-08", headers: authFor(tenant) });
     expect(nps.statusCode).toBe(200);
     expect(nps.json().employer).toEqual(want);
-
-    // The change is audited with before / after and the reason.
-    const ev = await runWithTenant(tenant, () => db.transaction(async (tx) => (await tx.execute(sql`
-      SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"}
-         AND payload->>${"action"} = ${"deductor_updated"} AND payload->>${"resourceId"} = ${tenant}`)) as unknown as Array<{ payload: Record<string, unknown> }>));
-    expect(ev).toHaveLength(1);
-    expect(ev[0]!.payload).toMatchObject({
-      service: "payroll", resourceType: "payroll_settings", outcome: "success",
-      detail: { before: null, after: want, reason: "set the deductor for UAT D-15" },
-    });
+    // 60 s cache: one tenant-service read for all of the above.
+    expect(calls).toHaveLength(1);
   });
 
-  it("with no tenant row, a valid deployment-wide EMPLOYER_* identity is used (source env)", async () => {
-    vi.stubEnv("EMPLOYER_NAME", "Deployment Default Office");
-    vi.stubEnv("EMPLOYER_TAN", "MUMD54321E");
-    vi.stubEnv("EMPLOYER_PAN", "AAACD5432L");
+  it("body without the data envelope ({ settings }) is read too; no orgName -> the tenant name (as #2463)", async () => {
+    clearEnv();
     const tenant = randomUUID();
-    const got = await app.inject({ method: "GET", url: "/v1/payroll/settings/deductor", headers: authFor(tenant) });
-    expect(got.json()).toMatchObject({ configured: true, source: "env", name: "Deployment Default Office", tan: "MUMD54321E", pan: "AAACD5432L" });
-    const ba = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba?employeeId=${EMP}&fy=2026-27`, headers: authFor(tenant) });
+    stubTenantService({ [tenant]: { status: 200, body: { id: tenant, name: "Directorate of Treasuries", settings: { documentIdentity: { tan: "BLRD12345F", pan: "AAAGD1234M" } } } } });
+    const got = await getDeductor(tenant);
+    expect(got.json()).toMatchObject({ source: "documentIdentity", configured: true, name: "Directorate of Treasuries", tan: "BLRD12345F", pan: "AAAGD1234M" });
+  });
+
+  it("PANNOTREQD + deductorCategory government is accepted: 24Q and Form 16 print PANNOTREQD", async () => {
+    clearEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({ orgName: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "PANNOTREQD", deductorCategory: "government" }) });
+    const want = { name: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "PANNOTREQD" };
+    expect((await getDeductor(tenant)).json()).toMatchObject({ configured: true, deductorCategory: "government", problems: [], ...want });
+    const f24 = await forceFile24Q(tenant);
+    expect(f24.statusCode).toBe(200);
+    expect(f24.json().deductor).toEqual(want);
+    const f16 = await form16(tenant);
+    expect(f16.statusCode).toBe(200);
+    expect(f16.json().form16PartA.deductor).toEqual(want);
+    const html = await app.inject({ method: "GET", url: `/v1/payroll/tax/form16/${EMP}/pdf?fy=2026-27&output=html`, headers: authFor(tenant) });
+    expect(html.statusCode).toBe(200);
+    expect(html.body).toContain("PANNOTREQD");
+    const f26 = await app.inject({ method: "GET", url: "/v1/payroll/statutory/form26q?fy=2026-27&quarter=Q1&format=file", headers: authFor(tenant) });
+    expect(f26.body.split("\r\n")[0]).toBe("FH|26Q|2026-27|Q1|DELP12345C|PANNOTREQD|Pay and Accounts Office (Civil)|0");
+  });
+
+  it("PANNOTREQD without deductorCategory government is refused naming the PAN field", async () => {
+    deploymentEnv(); // a valid env is NOT mixed in field by field
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({ orgName: "Acme Payroll Pvt Ltd", tan: "DELA12345C", pan: "PANNOTREQD", deductorCategory: "company" }) });
+    for (const res of [await forceFile24Q(tenant), await form16(tenant)]) {
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
+      expect(res.json().message).toContain("deductor PAN \"PANNOTREQD\" is allowed only for a government deductor");
+      expect(res.json().message).not.toContain("deductor TAN");
+      expect(res.json().message).not.toContain("deductor name");
+    }
+  });
+
+  it("a malformed documentIdentity TAN is refused (no fallback to the valid env TAN)", async () => {
+    deploymentEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({ orgName: "Pay and Accounts Office (Civil)", tan: "DEL12345C", pan: "PANNOTREQD", deductorCategory: "government" }) });
+    const res = await forceFile24Q(tenant);
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
+    expect(res.json().message).toContain("deductor TAN \"DEL12345C\" is not a valid TAN");
+    expect(res.json().message).not.toContain("deductor PAN");
+    expect((await getDeductor(tenant)).json()).toMatchObject({ source: "documentIdentity", configured: false, tan: "DEL12345C",
+      problems: ["deductor TAN \"DEL12345C\" is not a valid TAN (format AAAA99999A)"] });
+  });
+
+  it("documentIdentity without name / TAN / PAN -> the deployment-wide EMPLOYER_* identity (source env)", async () => {
+    deploymentEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({ address: "only an address", gstin: "07AAAGP1234K1Z5" }) });
+    const env = { name: "Deployment Default Office", tan: "MUMD54321E", pan: "AAACD5432L" };
+    expect((await getDeductor(tenant)).json()).toEqual({ source: "env", ...env, address: null, deductorCategory: null, configured: true, problems: [] });
+    const ba = await form12ba(tenant);
     expect(ba.statusCode).toBe(200);
-    expect(ba.json().employer).toEqual({ name: "Deployment Default Office", tan: "MUMD54321E", pan: "AAACD5432L" });
+    expect(ba.json().employer).toEqual(env);
+  });
+
+  it("GET with nothing anywhere -> source null and every problem listed", async () => {
+    clearEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({}) });
+    expect((await getDeductor(tenant)).json()).toEqual({
+      source: null, name: null, tan: null, pan: null, address: null, deductorCategory: null, configured: false,
+      problems: ["deductor name is missing", "deductor TAN is missing", "deductor PAN is missing"],
+    });
+  });
+});
+
+describe("D-15: tenant-service unreachable fails OPEN (env fallback or 422), never a 500", () => {
+  const outages: Array<[string, (tenant: string) => void]> = [
+    ["connection refused (real, dead TENANT_SERVICE_URL)", () => { /* no stub: TENANT_SERVICE_URL is a dead port in vitest.config.ts */ }],
+    ["fetch throws", (tenant) => { stubTenantService({ [tenant]: "throw" }); }],
+    ["tenant-service 500", (tenant) => { stubTenantService({ [tenant]: { status: 500, body: { code: "INTERNAL" } } }); }],
+    ["tenant-service 200 with a non-JSON-object body", (tenant) => { stubTenantService({ [tenant]: { status: 200, body: null } }); }],
+  ];
+  it.each(outages)("%s: env fallback is used", async (_n, outage) => {
+    deploymentEnv();
+    const tenant = randomUUID();
+    outage(tenant);
+    const f24 = await forceFile24Q(tenant);
+    expect(f24.statusCode).toBe(200);
+    expect(f24.json().deductor).toEqual({ name: "Deployment Default Office", tan: "MUMD54321E", pan: "AAACD5432L" });
+    expect((await getDeductor(tenant)).json()).toMatchObject({ source: "env", configured: true });
+  });
+  it.each(outages)("%s: no env -> 422 FORM16_EMPLOYER_NOT_CONFIGURED", async (_n, outage) => {
+    clearEnv();
+    const tenant = randomUUID();
+    outage(tenant);
+    for (const res of [await forceFile24Q(tenant), await form16(tenant), await form12ba(tenant)]) {
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
+    }
+    const got = await getDeductor(tenant);
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toMatchObject({ source: null, configured: false });
+  });
+  it("a failed read is not cached: the next request sees the configured identity", async () => {
+    clearEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: "throw" });
+    expect((await forceFile24Q(tenant)).statusCode).toBe(422);
+    stubTenantService({ [tenant]: withIdentity({ orgName: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "AAAGP1234K" }) });
+    expect((await forceFile24Q(tenant)).statusCode).toBe(200);
+  });
+});
+
+describe("D-15: the payroll-owned write path is gone (documentIdentity is set in tenant-service)", () => {
+  it("PUT /v1/payroll/settings/deductor no longer exists", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/payroll/settings/deductor", headers: authFor(randomUUID()),
+      payload: { name: "Directorate of Accounts", tan: "DELP12345C", pan: "AAAGP1234K" } });
+    expect(res.statusCode).toBe(404);
   });
 });

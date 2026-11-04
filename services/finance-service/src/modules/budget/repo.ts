@@ -1,5 +1,6 @@
 import { eq, and, or, sql, inArray, desc, isNull, isNotNull } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { outstandingSanctionsTx } from "./sanction-outstanding.js";
 import { DomainError, headSearchPattern } from "./domain.js";
 import {
   financeBudgets, financeSanctions, financeHeads, financeReappropriations, financeDemands, financeSchemes,
@@ -387,11 +388,17 @@ export async function transferBudgetReMinorGuarded(
   tenantId: string,
   updatedBy: string,
 ): Promise<boolean> {
+  // #2464 review (TE-02): leave room for the approved sanctions still outstanding on the source head.
+  const src = (await tx.execute(sql`
+    SELECT head_id::text AS head_id, fy FROM budget.finance_budgets WHERE id = ${fromId} AND tenant_id = ${tenantId} FOR UPDATE
+  `)) as unknown as Array<{ head_id: string; fy: string }>;
+  if (!src[0]) return false;
+  const sanctioned = await outstandingSanctionsTx(tx, tenantId, src[0].head_id, src[0].fy);
   const debited = await tx.execute(sql`
     UPDATE budget.finance_budgets
        SET re_minor = re_minor - ${amountMinor}, updated_by = ${updatedBy}, updated_at = now()
      WHERE id = ${fromId} AND tenant_id = ${tenantId}
-       AND re_minor - utilised_minor >= ${amountMinor}
+       AND re_minor - utilised_minor - ${sanctioned} >= ${amountMinor}
     RETURNING id
   `);
   if ((debited as unknown as unknown[]).length === 0) return false; // insufficient savings / unknown source

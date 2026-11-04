@@ -1,5 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { and, eq, inArray } from "drizzle-orm";
+import { financeHeads } from "../budget/schema.js";
 import { payrollDeductionHeads } from "../gl/system-heads.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -51,6 +53,35 @@ export function deductionLines(
     }
   }
   return [leg("2102", statutory, "Statutory deductions payable")];
+}
+
+type AccrualLine = { accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string };
+
+/**
+ * UAT T-PERIOD review (blocker 2): the split deduction heads (2104-2108, the TDS head) may not exist yet in a tenant
+ * chart -- the standard-heads backfill is a deploy prerequisite, but the accrual must never dead-letter for it. A line
+ * whose head is missing goes to the 2102 "other deductions" head instead (narration says so); the caller warns.
+ * Runs in the caller transaction (tenant-scoped).
+ */
+export async function deductionHeadFallbackTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any, tenantId: string, lines: AccrualLine[],
+): Promise<{ lines: AccrualLine[]; missing: string[] }> {
+  const heads = payrollDeductionHeads();
+  const split = new Set((Object.keys(heads) as Array<keyof typeof heads>).filter((k) => k !== "other").map((k) => heads[k]).filter((c) => c !== heads.other));
+  const wanted = [...new Set(lines.map((l) => l.accountCode).filter((c) => split.has(c)))];
+  if (wanted.length === 0) return { lines, missing: [] };
+  const found: Array<{ code: string }> = await tx.select({ code: financeHeads.code }).from(financeHeads)
+    .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, wanted)));
+  const have = new Set(found.map((r) => r.code));
+  const missing = wanted.filter((c) => !have.has(c));
+  if (missing.length === 0) return { lines, missing };
+  return {
+    missing,
+    lines: lines.map((l) => (missing.includes(l.accountCode)
+      ? { ...l, accountCode: heads.other, narration: `${l.narration} (head ${l.accountCode} not in the chart of accounts: posted to ${heads.other})` }
+      : l)),
+  };
 }
 
 export function registerIntegrationConsumers(queue: Queue): void {
@@ -344,6 +375,17 @@ export function registerIntegrationConsumers(queue: Queue): void {
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // UAT T-PERIOD review (blocker 2): a split deduction head missing from the chart falls back to 2102 with a warning.
+      const fb = await deductionHeadFallbackTx(tx, msg.tenantId, lines);
+      if (fb.missing.length > 0) {
+        log.warn({ tenantId: msg.tenantId, runId: p.runId, missing: fb.missing }, "payroll accrual: deduction head(s) missing, posted to 2102 (run backfill-standard-gl-heads)");
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "finance", action: "warning", resourceType: "payroll_run", resourceId: p.runId, outcome: "success", code: "PAYROLL_DEDUCTION_HEAD_MISSING", missingHeads: fb.missing, fallbackHead: payrollDeductionHeads().other, journalId },
+        });
+      }
+      const postLines = fb.lines;
       await enqueue(tx, {
         topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -355,7 +397,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
           postingDate: todayIST(),
           ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
           // H3: paise passed as bigint strings so > 2^53 paise stays exact.
-          lines: lines.map((l) => ({
+          lines: postLines.map((l) => ({
             accountCode: l.accountCode,
             debitMinor: l.debitMinor.toString(),
             creditMinor: l.creditMinor.toString(),

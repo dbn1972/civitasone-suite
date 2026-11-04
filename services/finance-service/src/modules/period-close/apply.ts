@@ -8,14 +8,28 @@
 import { enqueue } from "../../shared/outbox.js";
 import { DomainError } from "../masters/domain.js";
 import * as periodRepo from "./repo.js";
+import { fyClosedReasonTx, fyClosedMessage } from "../gl/fy-guard.js";
+import { fyOfDate } from "../../shared/ist-date.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
+
+/**
+ * UAT T-PERIOD review (blocker 1): a month of a CLOSED financial year (closed, or its year-end close has run) is never
+ * reopened -- the next year opening balances were generated from it; corrections are prior-period adjustments in the
+ * open year. Throws DomainError FY_CLOSED (an approved period_reopen request becomes a recorded rejection).
+ */
+export async function assertPeriodFyOpenTx(tx: Tx, tenantId: string, period: string): Promise<void> {
+  const reason = await fyClosedReasonTx(tx, tenantId, fyOfDate(`${period}-01`));
+  if (reason) throw new DomainError("FY_CLOSED", fyClosedMessage(reason, period));
+}
+
 export type ReopenMeta = { tenantId: string; actorId: string; correlationId: string };
 
 export async function applyPeriodReopen(
   tx: Tx, meta: ReopenMeta, p: { period: string; reason: string | null; requestId?: string },
 ): Promise<{ fromStatus: string } | null> {
+  await assertPeriodFyOpenTx(tx, meta.tenantId, p.period);
   const moved = await periodRepo.reopenPeriodTx(tx, meta.tenantId, p.period);
   if (!moved) return null;
   await periodRepo.logReopen(tx, {

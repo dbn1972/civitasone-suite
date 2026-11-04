@@ -96,6 +96,14 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
 
     for (const r of rows) {
       const closing = r.closingMinor; // debit-positive
+      // #2464 review: a carry-forward head of income / expense nature (a 5xxx head classified advance / deposit /
+      // suspense, an 8xxx head classified expense) carries an opening balance, so it is a balance-sheet item by its
+      // closing balance: a debit balance is an asset, a credit balance a liability.
+      if (r.carryForward && (r.nature === "income" || r.nature === "expense")) {
+        if (closing > 0n) { assets.push(fyLine({ ...r, nature: "asset" }, closing)); totalAssets += closing; }
+        else if (closing < 0n) { liabilities.push(fyLine({ ...r, nature: "liability" }, -closing)); totalLiabilities += -closing; }
+        continue;
+      }
       if (r.nature === "asset") {
         if (closing !== 0n) assets.push(fyLine(r, closing));
         totalAssets += closing;

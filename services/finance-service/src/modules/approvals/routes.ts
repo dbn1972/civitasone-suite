@@ -17,6 +17,7 @@ import { scopedRead } from "../../shared/db.js";
 import type { FinanceSettings } from "./domain.js";
 import { alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl } from "./domain.js";
 import type { ChangeRequestRow } from "./schema.js";
+import { assertPeriodFyOpenHttp } from "../period-close/routes.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 const DECIDER_ROLES = ["finance_admin", "super_admin"];
@@ -121,6 +122,11 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
       const row = await repo.findChangeRequest(ctx.tenantId, id);
       if (!row) throw new HttpError(404, "NOT_FOUND", "change request not found");
       if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `change request is already ${row.status}`);
+      // UAT T-PERIOD review (blocker 1): approving a reopen of a month of a closed financial year is refused now
+      // (409 FY_CLOSED); the consumer re-checks and records a rejection if the year closed after this check.
+      if (decision === "approve" && row.kind === "period_reopen") {
+        await assertPeriodFyOpenHttp(ctx.tenantId, String((row.payload as { period?: unknown }).period ?? row.subjectKey));
+      }
       const settings = await repo.readSettings(ctx.tenantId);
       try {
         assertDistinctApprover(row.requestedBy, ctx.actorId, settings.makerCheckerEnabled || alwaysDistinctApprover(row.kind));

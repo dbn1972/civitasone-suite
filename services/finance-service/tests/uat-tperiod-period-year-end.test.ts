@@ -23,6 +23,7 @@ import { registerApprovalsConsumers } from "../src/modules/approvals/consumer.js
 import { registerYearEndConsumers } from "../src/modules/year-end/consumer.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
+import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { financeLedger, financeJournals } from "../src/modules/gl/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { COMMANDS } from "../src/topics.js";
@@ -225,5 +226,80 @@ describe("D-05 / D-09 / D-13: year-end", () => {
     expect(cash.periods.find((p: { period: string }) => p.period === "2026-06").openingMinor).toBe("74000");
     const edu = (await call("GET", `/v1/finance/ledger/balances?headId=${heads[`${YE}:2202`]}&fy=2026-27`, as(YE, OFFICER, ["finance_officer"]))).json();
     expect(edu).toMatchObject({ openingMinor: "0", closingMinor: "1000", head: { carryForward: false } });
+  });
+});
+
+describe("#2464 review blocker 1: a closed financial year takes no reopen and no posting", () => {
+  const fyRow = (t: string, code: string, status: string) => scoped(t, (tx) => tx.execute(sql`INSERT INTO gl.finance_fiscal_years (tenant_id, code, label, start_date, end_date, status, created_by)
+    VALUES (${t}::uuid, ${code}, ${`FY ${code}`}, ${`${code.slice(0, 4)}-04-01`}::date, ${`${Number(code.slice(0, 4)) + 1}-03-31`}::date, ${status}, ${ADMIN_A}::uuid)`));
+  const rejected = async (t: string, journalId: string) => ((await scoped(t, (tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, t), eq(outboxMessages.topic, "finance.gl.rejected"))))) as Array<{ payload: Record<string, unknown> }>)
+    .filter((r) => r.payload.journalId === journalId).map((r) => r.payload.code);
+  const receipt = (t: string, id: string, postingDate: string) => ({ topic: COMMANDS.journalPost, env: { messageId: randomUUID(), type: COMMANDS.journalPost, tenantId: t, actorId: ADMIN_A, correlationId: "b19-fyc", schemaVersion: "1.0",
+    payload: { id, tenantId: t, voucherNo: `FYC-${id.slice(0, 8)}`, type: "receipt", postingDate, lines: [{ accountCode: "1100", debitMinor: "500", creditMinor: "0" }, { accountCode: "4100", debitMinor: "0", creditMinor: "500" }] } } });
+
+  it("a month of a closed FY (its year-end close has run) cannot be reopened: 409 FY_CLOSED", async () => {
+    const r = await call("POST", "/v1/finance/periods/2025-06/reopen", as(YE, ADMIN_A), REASON);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("FY_CLOSED");
+    await deliver();
+    expect(await periodStatus(YE, "2025-06")).toBe("hard_close");
+  });
+
+  it("a pending reopen request whose FY closed meanwhile: the approval is refused (409 FY_CLOSED), and the consumer records a rejection", async () => {
+    const P = "2024-05";
+    expect((await call("POST", `/v1/finance/periods/${P}/hard-close`, as(MC, ADMIN_A), REASON)).statusCode).toBe(202);
+    await deliver();
+    const req = await call("POST", `/v1/finance/periods/${P}/reopen`, as(MC, ADMIN_A), REASON);
+    expect(req.json().status).toBe("pending_approval");
+    await deliver();
+    await fyRow(MC, "2024-25", "closed");
+    const ap = await call("POST", `/v1/finance/change-requests/${req.json().id}/approve`, as(MC, ADMIN_B), {});
+    expect(ap.statusCode).toBe(409);
+    expect(ap.json().code).toBe("FY_CLOSED");
+    // a decision that reaches the consumer anyway (published another way) is a recorded rejection, nothing reopened
+    sent.push({ topic: COMMANDS.changeRequestDecide, env: { messageId: randomUUID(), type: COMMANDS.changeRequestDecide, tenantId: MC, actorId: ADMIN_B, correlationId: "b19-fyc-cr", schemaVersion: "1.0",
+      payload: { requestId: req.json().id, tenantId: MC, decision: "approve", note: null } } });
+    await deliver();
+    const [cr] = await rows<{ status: string; decision_note: string }>(MC, sql`SELECT status, decision_note FROM gl.finance_change_requests WHERE id = ${req.json().id}::uuid`);
+    expect(cr!.status).toBe("rejected");
+    expect(cr!.decision_note).toMatch(/closed/);
+    expect(await periodStatus(MC, P)).toBe("hard_close");
+    expect((await audits(MC, "reopen")).filter((a) => a.resourceId === P)).toHaveLength(0);
+  });
+
+  it("posting into any month of a closed FY is refused FY_CLOSED (route and consumer), also when only its year-end close has run", async () => {
+    await fyRow(DIRECT, "2023-24", "closed");
+    const res = await call("POST", "/v1/finance/journals", { ...as(DIRECT, OFFICER, ["finance_officer"]), "x-idempotency-key": randomUUID() },
+      { type: "receipt", postingDate: "2023-07-10", lines: [{ accountCode: "1100", debitMinor: "500", creditMinor: "0" }, { accountCode: "4100", debitMinor: "0", creditMinor: "500" }] });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("FY_CLOSED");
+    const a = randomUUID();
+    sent.push(receipt(DIRECT, a, "2023-07-10"));
+    await deliver();
+    expect(await scoped(DIRECT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, a)))).toHaveLength(0);
+    expect(await rejected(DIRECT, a)).toEqual(["FY_CLOSED"]);
+    // no fiscal-year row at all, but a year-end close has run for 2022-23
+    await scoped(DIRECT, (tx) => tx.execute(sql`INSERT INTO gl.finance_year_end_runs (tenant_id, fy_code, next_fy_code, reason, run_by) VALUES (${DIRECT}::uuid, '2022-23', '2023-24', 'test run', ${ADMIN_A}::uuid)`));
+    const b = randomUUID();
+    sent.push(receipt(DIRECT, b, "2022-07-10"));
+    await deliver();
+    expect(await rejected(DIRECT, b)).toEqual(["FY_CLOSED"]);
+  });
+});
+
+describe("#2464 review: lapse statement expenditure is the ledger figure, the same as Budget Monitoring", () => {
+  it("a reversal / recovery credit reduces the expenditure (utilised_minor does not); lapse statement and monitoring agree", async () => {
+    await scoped(YE, (tx) => tx.insert(financeBudgetAllocation).values({ tenantId: YE, headId: heads[`${YE}:2202`]!, fy: "2026-27", allocatedMinor: 40000n, createdBy: ADMIN_A, updatedBy: ADMIN_A }));
+    // Rs 4 of the Rs 10 spent on 2202 in 2026-27 is recovered (Cr 2202 / Dr cash)
+    await ledger(YE, "1100", 400n, 0n, "2026-06-10"); await ledger(YE, "2202", 0n, 400n, "2026-06-10");
+    const ls = (await call("GET", "/v1/finance/budgets/lapse-statement?fy=2026-27", as(YE, OFFICER, ["finance_officer"]))).json();
+    const row = ls.rows.find((r: { headCode: string }) => r.headCode === "2202");
+    expect(row).toMatchObject({ expenditureMinor: "600", lapseMinor: "39400" });
+    const mon = (await call("GET", "/v1/finance/budget-monitoring?fy=2026-27", as(YE, OFFICER, ["finance_officer"]))).json();
+    const line = mon.lines.find((l: { headCode: string }) => l.headCode === "2202");
+    expect(line.actualMinor).toBe(row.expenditureMinor);
+    // the budget control figure is unchanged (it is never released by a reversal)
+    const [b] = await scoped(YE, (tx) => tx.select().from(financeBudgets).where(and(eq(financeBudgets.headId, heads[`${YE}:2202`]!), eq(financeBudgets.fy, "2026-27"))));
+    expect(b!.utilisedMinor).toBe(1000n);
   });
 });

@@ -42,7 +42,7 @@ const ENV_USE: Record<string, Nature> = {
   FINANCE_STORES_INVENTORY_CODE: "asset", FINANCE_STORES_CONSUMPTION_CODE: "expense",
   FINANCE_GRNI_CODE: "liability", FINANCE_STORES_SUSPENSE_CODE: "liability",
   // UAT T-PERIOD (b19): cash-basis disposal proceeds receipt; the year-end accumulated fund
-  FINANCE_ASSET_SALE_RECEIPT_CODE: "income", FINANCE_ACCUMULATED_FUND_CODE: "equity",
+  FINANCE_ASSET_SALE_RECEIPT_CODE: "income", FINANCE_ACCUMULATED_FUND_CODE: "equity", FINANCE_MISC_RECEIPTS_CODE: "income",
 };
 /** Literal `accountCode: "1234"` legs (payroll accrual, integrations/consumer.ts). */
 const LITERAL_USE: Record<string, Nature> = { "5001": "expense", "5002": "expense", "2101": "liability", "2102": "liability", "2103": "liability" };

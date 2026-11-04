@@ -39,10 +39,13 @@ export default defineConfig({
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
       // UAT P3 b19 D-15: Form 16 / 24Q / 26Q / 12BA refuse (422
-      // DEDUCTOR_NOT_CONFIGURED) without a valid deductor. A tenant with no
-      // deductor of its own falls back to this deployment-wide identity, so the
+      // FORM16_EMPLOYER_NOT_CONFIGURED) without a valid deductor. A tenant with
+      // no documentIdentity falls back to this deployment-wide identity, so the
       // suites that build those returns for throwaway tenants get a valid one
       // (test values only; tests/uat-p3-b19-d15-* clears / overrides them).
+      // The deductor is read from tenant-service: point it at a dead port so a
+      // test never reaches a real tenant-service on the host (tests stub fetch).
+      TENANT_SERVICE_URL: "http://127.0.0.1:1",
       EMPLOYER_NAME: "Test Pay and Accounts Office",
       EMPLOYER_TAN: "TSTP12345T",
       EMPLOYER_PAN: "AAAGT1234T",

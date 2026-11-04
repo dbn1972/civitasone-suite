@@ -9,8 +9,11 @@
  *
  * Usage (from services/finance-service; DATABASE_URL must be able to read every tenant's heads, i.e. the owner/admin
  * role -- under the NOBYPASSRLS app role tenant discovery sees nothing, so pass --tenant explicitly):
- *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts --dry-run
- *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts [--tenant <uuid> ...] [--fill-missing-hoa]
+ *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts [--tenant <uuid> ...]            (dry run, the default)
+ *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts --apply [--tenant <uuid> ...] [--fill-missing-hoa]
+ * #2464 review: DRY RUN BY DEFAULT (--apply writes; --apply and --dry-run together are refused). Running it (dry run,
+ * then --apply) is a MANDATORY deploy prerequisite of bundle 19: the heads it adds include the payroll deduction heads
+ * 2104-2108, the accumulated fund 3100 and the sale-proceeds receipt head 4310 (and every standard head since).
  * --fill-missing-hoa (opt-in): also set the standard HoA on an EXISTING standard head whose hoa_code is NULL (bills
  * raised against it fail the HoA check otherwise). Nothing else about an existing head is ever changed.
  * Without --tenant, every tenant that already has a chart (any row in budget.finance_heads) is backfilled.
@@ -87,18 +90,21 @@ export async function backfillStandardGlHeads(
   return plans;
 }
 
-function parseArgs(argv: string[]): { dryRun: boolean; tenants: string[]; fillMissingHoa: boolean } {
+export function parseArgs(argv: string[]): { dryRun: boolean; tenants: string[]; fillMissingHoa: boolean } {
   const tenants: string[] = [];
-  let dryRun = false;
+  let apply = false;
+  let dryRunFlag = false;
   let fillMissingHoa = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (a === "--dry-run") dryRun = true;
+    if (a === "--dry-run") dryRunFlag = true;
+    else if (a === "--apply") apply = true;
     else if (a === "--tenant") tenants.push(argv[++i] ?? "");
     else if (a === "--fill-missing-hoa") fillMissingHoa = true;
     else throw new Error(`unknown argument: ${a}`);
   }
-  return { dryRun, tenants, fillMissingHoa };
+  if (apply && dryRunFlag) throw new Error("--apply and --dry-run are mutually exclusive");
+  return { dryRun: !apply, tenants, fillMissingHoa };
 }
 
 async function main(): Promise<void> {

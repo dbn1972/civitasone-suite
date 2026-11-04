@@ -186,7 +186,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
   const { startYear, endYear } = parseFy(fy);
   const months = fyMonths(startYear);
   // UAT P3 b19 D-15: Part A carries the configured, validated deductor -- or
-  // the certificate is refused (422 DEDUCTOR_NOT_CONFIGURED), never placeholder text.
+  // the certificate is refused (422 FORM16_EMPLOYER_NOT_CONFIGURED), never placeholder text.
   const deductor = await requireDeductor(tenantId, "Form 16");
 
   // M3: only count figures from runs that have actually been finalised

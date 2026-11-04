@@ -483,6 +483,19 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["back", "help"],
   },
+  // fx-p3: 409 when a period reopen (or a posting) targets a month whose financial year has already been closed
+  // by the year-end close. The year is final; corrections go in as a prior-period adjustment in the open year.
+  FY_CLOSED: {
+    en: {
+      what: "The financial year of this month has been closed (the year-end close has run and its accounts are final), so this month cannot be reopened and nothing can be posted into it.",
+      next: "Make the correction as a prior-period adjustment in the current open year. Ask the finance admin if you need help.",
+    },
+    hi: {
+      what: "इस महीने का वित्तीय वर्ष बंद हो चुका है (वर्ष-समापन हो चुका है और उसके लेखे अंतिम हैं), इसलिए यह महीना फिर से नहीं खोला जा सकता और इसमें कुछ भी पोस्ट नहीं किया जा सकता।",
+      next: "सुधार को चालू खुले वर्ष में पूर्व-अवधि समायोजन के रूप में करें। सहायता के लिए वित्त प्रशासक से पूछें।",
+    },
+    actions: ["back", "help"],
+  },
   // fx-p3: 409 from fiscal-year activation / year-end close while a month of the year is not hard-closed.
   FY_OPEN_PERIODS: {
     en: {
@@ -519,15 +532,16 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
-  // fx-p3 (payroll-service): 422 when Form 16 / 24Q needs the deductor (employer) name, TAN or PAN and it is missing.
-  DEDUCTOR_NOT_CONFIGURED: {
+  // fx-p3 (payroll-service, shared with PR #2463): 422 when Form 16 / 24Q needs the employer (deductor) name, TAN or PAN
+  // and it is missing or malformed. Deductor identity lives in tenant settings (documentIdentity; shown to clerks as office settings), not payroll settings.
+  FORM16_EMPLOYER_NOT_CONFIGURED: {
     en: {
-      what: "The deductor (employer) name, TAN or PAN is missing or not in the right format in payroll settings, so the form was not generated.",
-      next: "Ask the payroll admin to set the deductor details in payroll settings, then try again.",
+      what: "The employer (deductor) name, TAN or PAN is missing or not in the right format in the office settings (document identity), so the form or return was not generated.",
+      next: "Ask the office administrator to set the employer details in the office settings (document identity), then try again.",
     },
     hi: {
-      what: "पेरोल सेटिंग में कटौतीकर्ता (नियोक्ता) का नाम, TAN या PAN नहीं है या सही प्रारूप में नहीं है, इसलिए फ़ॉर्म नहीं बना।",
-      next: "पेरोल प्रशासक से पेरोल सेटिंग में कटौतीकर्ता का विवरण भरवाएँ, फिर प्रयास करें।",
+      what: "कार्यालय सेटिंग (दस्तावेज़ पहचान) में नियोक्ता (कटौतीकर्ता) का नाम, TAN या PAN नहीं है या सही प्रारूप में नहीं है, इसलिए फ़ॉर्म या रिटर्न नहीं बना।",
+      next: "कार्यालय प्रशासक से कार्यालय सेटिंग (दस्तावेज़ पहचान) में नियोक्ता का विवरण भरवाएँ, फिर प्रयास करें।",
     },
     actions: ["back", "help"],
   },

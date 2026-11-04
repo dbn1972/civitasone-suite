@@ -6,6 +6,9 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as periodRepo from "./repo.js";
 import * as commands from "./commands.js";
+import { assertPeriodFyOpenTx } from "./apply.js";
+import { scopedRead } from "../../shared/db.js";
+import { DomainError } from "../masters/domain.js";
 import { readSettings, findPendingBySubject } from "../approvals/repo.js";
 import { submitChangeRequest } from "../approvals/commands.js";
 
@@ -22,6 +25,16 @@ const periodParam = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$
 const transitionBody = z.object({
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
 });
+
+/** 409 FY_CLOSED when the period belongs to a closed financial year (shared with the period_reopen approval route). */
+export async function assertPeriodFyOpenHttp(tenantId: string, period: string): Promise<void> {
+  try {
+    await scopedRead((tx) => assertPeriodFyOpenTx(tx, tenantId, period));
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message.replace(/^\[[A-Z_]+\]\s*/, ""));
+    throw err;
+  }
+}
 
 export async function isPeriodHardClosed(tenantId: string, period: string): Promise<boolean> {
   return periodRepo.isPeriodHardClosedDb(tenantId, period);
@@ -78,6 +91,8 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     if (!existing || existing.status === "open") {
       throw new HttpError(409, "NOT_CLOSED", "period is already open");
     }
+    // UAT T-PERIOD review (blocker 1): never a month of a closed financial year.
+    await assertPeriodFyOpenHttp(ctx.tenantId, period);
 
     // UAT T-PERIOD D-01: reopening a HARD-closed month is a maker-checker change (a second finance_admin approves it on
     // the change-requests screen) whenever the tenant has the second-approver setting on (the default). Until then

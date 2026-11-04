@@ -17,6 +17,8 @@ import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { financeHeads, financeBudgets, financeSanctions } from "../src/modules/budget/schema.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { currentFyIST } from "../src/shared/ist-date.js";
+import { COMMANDS } from "../src/topics.js";
+import * as budgetRepo from "../src/modules/budget/repo.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
 const T = randomUUID();
@@ -30,6 +32,7 @@ type Sent = { topic: string; env: Record<string, unknown> };
 let sent: Sent[] = [];
 let app: Awaited<ReturnType<typeof buildApp>>;
 
+let lastDlq: unknown[] = [];
 async function deliver(): Promise<void> {
   const q = new MemoryQueue({ maxAttempts: 1 });
   const raw = q.subscribe.bind(q);
@@ -39,6 +42,7 @@ async function deliver(): Promise<void> {
   const batch = sent; sent = [];
   for (const b of batch) await q.publish(b.topic, b.env as never);
   await q.drain();
+  lastDlq = [...q.dlq];
   await q.stop();
 }
 async function createSanction(headId: string, amountMinor: number) {
@@ -101,5 +105,39 @@ describe("TE-02: sanctions are checked against the head allocation", () => {
     expect(await status(id)).toBe("approved");
     // nothing left: one more paisa is refused
     expect((await createSanction(H.med, 1)).statusCode).toBe(422);
+  });
+});
+
+describe("#2464 review: sanctioned money cannot be re-appropriated away", () => {
+  // after the tests above: 2202 has a Rs 1.5 lakh allocation and Rs 1 lakh approved; 2210 Rs 5,000 allocated, all sanctioned
+  const alloc = async (headId: string) => (await scoped(T, (tx) => tx.select().from(financeBudgetAllocation).where(and(eq(financeBudgetAllocation.tenantId, T), eq(financeBudgetAllocation.headId, headId), eq(financeBudgetAllocation.fy, FY)))))[0]!;
+  const reappropriate = (amountMinor: number) => sent.push({ topic: COMMANDS.budgetAllocationReappropriate, env: {
+    messageId: randomUUID(), type: COMMANDS.budgetAllocationReappropriate, tenantId: T, actorId: CHECK_B, correlationId: "te02-reapp", schemaVersion: "1.0",
+    payload: { id: randomUUID(), tenantId: T, fy: FY, fromHeadId: H.edu, toHeadId: H.med, amountMinor, reason: "TE-02 guard", toAllocId: randomUUID(), logId: randomUUID() } } });
+  it("an allocation re-appropriation may not take the sanctioned part: Rs 60,000 of Rs 50,000 free is refused, Rs 50,000 moves", async () => {
+    reappropriate(6000000);
+    await deliver();
+    expect(lastDlq).toHaveLength(1);
+    expect((await alloc(H.edu)).allocatedMinor).toBe(15000000n);
+    reappropriate(5000000);
+    await deliver();
+    expect(lastDlq).toHaveLength(0);
+    expect((await alloc(H.edu)).allocatedMinor).toBe(10000000n);
+    expect((await alloc(H.med)).allocatedMinor).toBe(5500000n);
+  });
+  it("an allocation may not be reduced below its approved sanctions", async () => {
+    sent.push({ topic: COMMANDS.budgetAllocationUpsert, env: { messageId: randomUUID(), type: COMMANDS.budgetAllocationUpsert, tenantId: T, actorId: CHECK_B, correlationId: "te02-upsert", schemaVersion: "1.0",
+      payload: { id: randomUUID(), tenantId: T, headId: H.edu, fy: FY, allocatedMinor: 9999999 } } });
+    await deliver();
+    expect(lastDlq).toHaveLength(1);
+    expect((await alloc(H.edu)).allocatedMinor).toBe(10000000n);
+  });
+  it("a budget (RE) re-appropriation leaves room for the approved sanctions too", async () => {
+    const budgetOf = async (headId: string) => (await scoped(T, (tx) => tx.select().from(financeBudgets).where(and(eq(financeBudgets.tenantId, T), eq(financeBudgets.headId, headId), eq(financeBudgets.fy, FY)))))[0]!;
+    const edu = await budgetOf(H.edu); const med = await budgetOf(H.med);
+    // RE Rs 1.5 lakh, Rs 1 lakh sanctioned: Rs 50,000 is free
+    expect(await scoped(T, (tx) => budgetRepo.transferBudgetReMinorGuarded(tx, edu.id, med.id, 5000001n, T, CHECK_B))).toBe(false);
+    expect(await scoped(T, (tx) => budgetRepo.transferBudgetReMinorGuarded(tx, edu.id, med.id, 5000000n, T, CHECK_B))).toBe(true);
+    expect((await budgetOf(H.edu)).reMinor).toBe(10000000n);
   });
 });

@@ -52,7 +52,8 @@ export function isRelaxingControl(current: FinanceSettings, changes: Partial<Fin
 
 /** Request kinds that always need a distinct approver, whatever the maker-checker setting says. */
 export function alwaysDistinctApprover(kind: string): boolean {
-  return kind === "settings_relax";
+  // UAT T-PERIOD review: a hard-close reopen always needs a second officer, whatever the setting says at decision time.
+  return kind === "settings_relax" || kind === "period_reopen";
 }
 
 export type DebtGlHeads = { loanLiability: string; interestExpense: string; bank: string };

@@ -6,6 +6,7 @@ import { deductionLines } from "../src/modules/integrations/consumer.js";
 import { needsBudgetProvision } from "../src/modules/budget/provision.js";
 import { depreciationMemoReason } from "../src/modules/gl/depreciation-memo.js";
 import { sanctionAvailable } from "../src/modules/budget/sanction-control.js";
+import { headNatureOf } from "../src/shared/head-nature.js";
 
 describe("D-06: the IST calendar date, never the UTC date", () => {
   it("23:59 IST on 31 March is still 31 March, FY 2026-27", () => {
@@ -69,9 +70,9 @@ describe("D-05: which heads carry forward", () => {
 
 describe("D-13: 31 March lapse statement", () => {
   it("unspent final grant lapses; re-appropriation is part of the final grant; an overrun is excess, never negative lapse", () => {
-    const a = lapseRow({ budgetId: "b1", headId: "h1", headCode: "2202", headName: "Edu", beMinor: 1000000n, reMinor: 1200000n, utilisedMinor: 204000n });
+    const a = lapseRow({ budgetId: "b1", headId: "h1", headCode: "2202", headName: "Edu", beMinor: 1000000n, reMinor: 1200000n, expenditureMinor: 204000n });
     expect(a).toMatchObject({ reappropriationNetMinor: 200000n, lapseMinor: 996000n, excessMinor: 0n });
-    const b = lapseRow({ budgetId: "b2", headId: "h2", headCode: "2210", headName: "Med", beMinor: 500n, reMinor: 400n, utilisedMinor: 450n });
+    const b = lapseRow({ budgetId: "b2", headId: "h2", headCode: "2210", headName: "Med", beMinor: 500n, reMinor: 400n, expenditureMinor: 450n });
     expect(b).toMatchObject({ reappropriationNetMinor: -100n, lapseMinor: 0n, excessMinor: 50n });
     expect(lapseTotals([a, b])).toMatchObject({ reMinor: 1200400n, lapseMinor: 996000n, excessMinor: 50n });
   });
@@ -109,5 +110,31 @@ describe("D-03 / D-02: rule tables", () => {
   it("TE-02: available = allocation - (outstanding sanctions + committed + expended)", () => {
     expect(sanctionAvailable(1500000n, 1000000n, { committedMinor: 0n, expendedMinor: 0n })).toBe(500000n);
     expect(sanctionAvailable(1500000n, 0n, { committedMinor: 200000n, expendedMinor: 300000n })).toBe(1000000n);
+  });
+});
+
+describe("#2464 review: LMMH major-head range + CoA head type", () => {
+  // [code, classification, nature, needs a budget provision when debited, carried forward at year end]
+  const table: Array<[string, string | null, string, boolean, boolean]> = [
+    ["0020", "receipt", "income", false, false],   // Corporation Tax (receipt major head)
+    ["0075", "revenue", "income", false, false],   // Misc General Services receipts
+    ["1475", "receipt", "income", false, false],   // receipt major head in 1xxx
+    ["1100", "asset", "asset", false, true],       // this chart: cash / bank
+    ["1200", "capital", "asset", false, true],     // this chart: fixed assets
+    ["2202", "expense", "expense", true, false],   // revenue expenditure major head
+    ["4059", "capital", "expense", true, false],   // capital outlay on public works (CGA seed type)
+    ["4210", "expenditure", "expense", true, false],
+    ["4100", "income", "income", false, false],    // this chart: citizen service fees
+    ["4200", "expense", "expense", true, false],   // gain / loss on disposal
+    ["5054", "capital", "expense", true, false],   // capital outlay on roads and bridges
+    ["5001", "expense", "expense", true, false],
+    ["8443", "public_account", "liability", false, true], // civil deposits
+    ["8550", "public_account", "liability", false, true], // civil advances
+    ["3100", "equity", "equity", false, true],
+  ];
+  it.each(table)("%s (%s) is %s; budget check %s; carried forward %s", (code, cls, nature, provision, carry) => {
+    expect(headNatureOf(code, cls)).toBe(nature);
+    expect(needsBudgetProvision({ code, classification: cls }, { type: "journal" })).toBe(provision);
+    expect(isCarryForwardHead(code, cls)).toBe(carry);
   });
 });

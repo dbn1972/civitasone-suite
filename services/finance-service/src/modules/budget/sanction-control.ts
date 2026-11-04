@@ -16,7 +16,7 @@
  */
 import { sql } from "drizzle-orm";
 import { enqueue } from "../../shared/outbox.js";
-import { fyBounds } from "../../shared/ist-date.js";
+import { outstandingSanctionsTx } from "./sanction-outstanding.js";
 import { DomainError } from "./domain.js";
 import { NO_BUDGET_PROVISION } from "./provision.js";
 import * as allocRepo from "./allocation-repo.js";
@@ -76,14 +76,8 @@ export async function assertSanctionWithinAllocationTx(
   const [head] = rowsOf(await tx.execute(sql`SELECT code FROM budget.finance_heads WHERE id = ${s.headId}::uuid AND tenant_id = ${tenantId}::uuid`));
   const headCode = String(head?.code ?? s.headId);
   if (!ceil) throw new DomainError(NO_BUDGET_PROVISION, `no budget provision or allocation for head ${headCode} in financial year ${fy}: a sanction cannot be issued without one (GFR)`);
-  const { start, end } = fyBounds(fy);
-  const [out] = rowsOf(await tx.execute(sql`
-    SELECT COALESCE(SUM(GREATEST(amount_minor - utilised_minor, 0)), 0)::text AS outstanding
-      FROM budget.finance_sanctions
-     WHERE tenant_id = ${tenantId}::uuid AND head_id = ${s.headId}::uuid AND status = 'approved' AND id <> ${s.id}::uuid
-       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN ${start}::date AND ${end}::date
-  `));
-  const available = sanctionAvailable(BigInt(String(ceil.ceiling)), BigInt(String(out?.outstanding ?? "0")), pre);
+  const outstanding = await outstandingSanctionsTx(tx, tenantId, s.headId, fy, s.id);
+  const available = sanctionAvailable(BigInt(String(ceil.ceiling)), outstanding, pre);
   if (s.amountMinor > available) throw new SanctionBudgetExceeded(available, s.amountMinor, headCode, fy);
   return { availableMinor: available };
 }

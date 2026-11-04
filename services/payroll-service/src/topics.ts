@@ -57,8 +57,6 @@ export const COMMANDS = {
   dscConfigRemove:        "payroll.dsc_config.remove",
   sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
   bankFileSigningUpdate:  "payroll.bank_file_signing.update",
-  // UAT P3 b19 D-15: the tenant TDS deductor (name / TAN / PAN) for Form 16 / 24Q / 26Q / 12BA.
-  deductorUpdate:         "payroll.deductor.update",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
   // GAP-PAYROLL-TAX-DECLARATION-02: investment-proof upload / verification / retention

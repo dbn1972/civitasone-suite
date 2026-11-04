@@ -85,9 +85,10 @@ specific reason helps the user act:
 | DEP_FUTURE_PERIOD | Depreciation cannot be charged for a month that has not ended yet, so nothing was posted. Choose a month that has already ended and run depreciation again. |
 | PERIOD_REOPEN_PENDING | A request to reopen this period is already waiting for a second officer. Wait for another finance administrator to approve or reject it in the pending approvals list. |
 | FY_OPEN_PERIODS | Every month of this financial year must be hard-closed first, so nothing was changed. Hard-close the remaining months in Period Close, then try again. |
+| FY_CLOSED | The financial year of this month has been closed (the year-end close has run and its accounts are final), so this month cannot be reopened and nothing can be posted into it. Make the correction as a prior-period adjustment in the current open year. Ask the finance admin if you need help. |
 | OPENING_BALANCES_MANUAL | Opening balances for the next year were entered by hand, so the year-end step cannot generate them and nothing was changed. Review those opening balances with the finance administrator before running the year-end close again. |
 | DUPLICATE_RUN_NO | This payroll run number is already used. Choose another run number and try again. |
-| DEDUCTOR_NOT_CONFIGURED | The deductor (employer) name, TAN or PAN is missing or not in the right format in payroll settings, so the form was not generated. Ask the payroll admin to set the deductor details in payroll settings, then try again. |
+| FORM16_EMPLOYER_NOT_CONFIGURED | The employer (deductor) name, TAN or PAN is missing or not in the right format in the office settings (document identity), so the form or return was not generated. Ask the office administrator to set the employer details in the office settings (document identity), then try again. |
 
 A call site that has its own translated sentence for a code (for example
 `postWithErrorCode`'s `codeMessages`) keeps using it; the central map is the fallback.

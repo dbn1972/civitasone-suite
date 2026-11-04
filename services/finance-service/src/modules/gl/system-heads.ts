@@ -13,6 +13,8 @@ export const FIXED_ASSET = process.env.FINANCE_FIXED_ASSET_CODE ?? "1200";
  * depreciation reversal, only the sale proceeds RECEIPT: Dr cash / Cr this receipt head.
  */
 export const ASSET_SALE_RECEIPT = process.env.FINANCE_ASSET_SALE_RECEIPT_CODE ?? "4310";
+/** Fallback receipt head for the sale proceeds when a tenant has no 4310 yet (the standard Revenue Income head). */
+export const MISC_RECEIPTS = process.env.FINANCE_MISC_RECEIPTS_CODE ?? "4001";
 
 /**
  * UAT T-PERIOD D-05: the fund that carries the net of the income and expenditure heads into the next financial year

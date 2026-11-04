@@ -140,9 +140,16 @@ export async function headMonthlyBalances(tx: Tx, tenantId: string, head: HeadIn
 }
 
 export async function lapseRowsForFy(tx: Tx, tenantId: string, fy: string): Promise<LapseRow[]> {
+  const { start, end } = fyBounds(fy);
   const rows = rowsOf(await tx.execute(sql`
     SELECT b.id::text AS budget_id, b.head_id::text AS head_id, h.code, h.name,
-           b.be_minor::text AS be, b.re_minor::text AS re, b.utilised_minor::text AS utilised
+           b.be_minor::text AS be, b.re_minor::text AS re,
+           -- #2464 review: expenditure from the LEDGER (net debits of the head in the FY), the same source as Budget
+           -- Monitoring / Expended (monitoring-books.ts): reversals and recoveries reduce it. utilised_minor stays the
+           -- control figure only (it is never released by a reversal).
+           COALESCE((SELECT SUM(fl.debit_minor) - SUM(fl.credit_minor) FROM gl.finance_ledger fl
+                      WHERE fl.tenant_id = b.tenant_id AND fl.head_id = b.head_id
+                        AND fl.posting_date >= ${start}::date AND fl.posting_date <= ${end}::date), 0)::text AS expended
       FROM budget.finance_budgets b
       JOIN budget.finance_heads h ON h.id = b.head_id AND h.tenant_id = b.tenant_id
      WHERE b.tenant_id = ${tenantId}::uuid AND b.fy = ${fy}
@@ -150,7 +157,7 @@ export async function lapseRowsForFy(tx: Tx, tenantId: string, fy: string): Prom
   `));
   return rows.map((r) => lapseRow({
     budgetId: String(r.budget_id), headId: String(r.head_id), headCode: String(r.code), headName: String(r.name),
-    beMinor: big(r.be), reMinor: big(r.re), utilisedMinor: big(r.utilised),
+    beMinor: big(r.be), reMinor: big(r.re), expenditureMinor: big(r.expended),
   }));
 }
 
