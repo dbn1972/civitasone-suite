@@ -60,9 +60,11 @@ import {
   Diamond,
   ChevronDown,
   FileSignature,
+  Inbox,
   LucideIcon,
 } from "lucide-react";
-import { FINANCE_ROLES, HR_ROLES } from "@/lib/auth/workRoles";
+import { FINANCE_ROLES, HR_ROLES, WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
+import { ApprovalsBadge } from "./ApprovalsBadge";
 import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
 import { GRANTS_VIEW_ROLES } from "@/app/(app)/grants/roles";
 import { TENANT_ADMIN_ROLES } from "@/app/(app)/tenant/_roles";
@@ -90,6 +92,15 @@ function useNavLabel(): (href: string, fallback: string) => string {
     return (href, fallback) => (href === "/dashboard" ? t("dashboard") : fallback);
   } catch {
     return (_href, fallback) => fallback;
+  }
+}
+
+/** UX R1: the Approvals entry uses the inbox page title (en/hi); same provider-less fallback as above. */
+function useApprovalsNavLabel(): string | null {
+  try {
+    return useTranslations("approvalsInbox")("title");
+  } catch {
+    return null;
   }
 }
 
@@ -121,6 +132,14 @@ const NAV: NavGroup[] = [
       { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", moduleKey: null },
       { icon: Rocket, label: "Getting Started", href: "/setup", moduleKey: null },
       { icon: HelpCircle, label: "Help Centre", href: "/help", moduleKey: null },
+    ],
+  },
+  {
+    // UX R1: one approvals inbox for every module (the module queues now redirect to it). Gated
+    // like the page itself: workflow module + a role that workflow-service lets read tasks.
+    group: "MY WORK",
+    items: [
+      { icon: Inbox, label: "Approvals", href: "/approvals", moduleKey: "workflow", rolesAllowed: WORKFLOW_TASK_ROLES },
     ],
   },
   {
@@ -264,6 +283,7 @@ export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarPr
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const navLabel = useNavLabel();
+  const approvalsLabel = useApprovalsNavLabel();
 
   useEffect(() => {
     try {
@@ -359,7 +379,8 @@ export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarPr
                   <span className="i" aria-hidden="true">
                     <Icon size={16} strokeWidth={1.75} />
                   </span>
-                  {navLabel(href, label)}
+                  {href === "/approvals" ? (approvalsLabel ?? label) : navLabel(href, label)}
+                  {href === "/approvals" && <ApprovalsBadge />}
                 </Link>
               ))}
             </div>

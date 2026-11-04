@@ -1,99 +1,82 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, within } from "@/test-utils/intl-render";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({ fetchJson: (...a: unknown[]) => fetchJsonMock(...a) }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => ({ value: "token-abc" }) }),
+  headers: () => new Map(),
+}));
 
-import MyApprovalsPage from "./page";
-import type { MyApprovalItem } from "@/app/_data/loaders";
+import ApprovalsPage from "./page";
 
-/** Find the StatCard tile (".stat") whose label is exactly `label`. */
-function statTile(label: string): HTMLElement {
-  const tiles = Array.from(document.querySelectorAll<HTMLElement>(".stat"));
-  const match = tiles.find((t) => t.querySelector(".lab")?.textContent === label);
-  if (!match) throw new Error(`no stat tile labelled "${label}"`);
-  return match;
-}
+const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const tasks = [
+  { id: id(1), instanceId: id(11), name: "Review", status: "pending", refType: "procurement_po", refId: id(21), dueAt: null, createdAt: "2026-11-01T00:00:00.000Z", instanceName: "Purchase Order Approval" },
+  { id: id(2), instanceId: id(12), name: "Reporting Officer Approval", status: "pending", refType: "leave_app", refId: id(22), dueAt: "2020-01-01T00:00:00.000Z", createdAt: "2026-11-01T00:00:00.000Z", instanceName: "Leave Application" },
+];
+const counts = { waiting: 2, overdue: 1, sent: 4, done: 7 };
 
-function statValue(label: string): string {
-  return statTile(label).querySelector(".val")?.textContent ?? "";
-}
+/** UX R1: /approvals is the unified inbox (GET /v1/workflow/inbox + POST /v1/workflow/ref-summaries). */
+describe("ApprovalsPage (UX R1 unified inbox)", () => {
+  const realFetch = globalThis.fetch;
+  let summariesBody: unknown = null;
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    process.env.CIVITASONE_API_BASE_URL = "http://gw.test";
+    summariesBody = null;
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url) === "http://gw.test/api/v1/workflow/ref-summaries") {
+        summariesBody = JSON.parse(String(init?.body));
+        return new Response(JSON.stringify({ data: [
+          { refType: "procurement_po", refId: id(21), kind: "business", instanceId: id(11), instanceName: "Purchase Order Approval", reference: "PO/2026/0033", amountMinor: "12345600", fields: [], maker: { name: "Anita Verma", designation: "Section Officer" }, stage: { level: 2, of: 3, step: "Deputy Secretary" } },
+          { refType: "leave_app", refId: id(22), kind: "business", instanceId: id(12), instanceName: "Leave Application", reference: null, amountMinor: null, fields: [{ key: "leaveType", value: "Earned Leave" }, { key: "days", value: "3" }], maker: { name: "Ravi Kumar", designation: "Assistant" }, stage: { level: 1, of: 1, step: "Reporting Officer Approval" } },
+        ] }), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    }) as unknown as typeof fetch;
+  });
+  afterEach(() => { globalThis.fetch = realFetch; });
 
-function makeItems(n: number, from = 0): MyApprovalItem[] {
-  return Array.from({ length: n }, (_, i) => ({
-    id: `t${from + i}`,
-    taskId: `t${from + i}`,
-    instanceName: `Task ${from + i}`,
-    refType: "leave_app",
-    refId: `r${from + i}`,
-    instanceId: `inst-${from + i}`,
-    module: "leave",
-    status: "pending",
-    assignedAt: "2026-09-01T00:00:00Z",
-    dueDate: null,
-    link: "/hr/leave/approvals",
-  }));
-}
-
-/** The real getMyApprovals runs; only the HTTP layer (fetchJson) is mocked, so
- * the loader's mapResponse-shaped result is what we hand back here. */
-describe("MyApprovalsPage (GAP-APPROVALS-HOME-01 / -03)", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
-
-  it("Pending reflects the API total, not the loaded page length; a later page is reachable", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: { items: makeItems(15), total: 40, hasMore: true },
-      source: "api",
-    });
-    render(await MyApprovalsPage({}));
-
-    // Pending stat shows the whole total (40), not the 15 rows loaded.
-    expect(statValue("Pending")).toBe("40");
-
-    // The scope notice makes the "first N of M" cap explicit, and a Next link
-    // reaches the following page.
-    expect(screen.getByText(/Showing 1–15 of 40/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/approvals?page=2");
+  it("loads the waiting tab (up to 200 rows), batches one summaries call, and renders business rows", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { tasks, total: 2, counts }, source: "api" });
+    render(await ApprovalsPage({ searchParams: Promise.resolve({}) }));
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toBe("/api/v1/workflow/inbox?tab=waiting&limit=200&offset=0");
+    expect(summariesBody).toEqual({ refs: [{ refType: "procurement_po", refId: id(21) }, { refType: "leave_app", refId: id(22) }] });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Approvals");
+    const nav = screen.getByRole("navigation", { name: "Approval lists" });
+    expect(within(nav).getByRole("link", { name: /Waiting for me\s*2/ })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: /Sent by me\s*4/ })).toHaveAttribute("href", "/approvals?tab=sent");
+    expect(within(nav).getByRole("link", { name: /Done by me\s*7/ })).toBeInTheDocument();
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("Approve leave: Earned Leave, 3 days");
+    expect(rows[1]).toHaveTextContent("Approve purchase order PO/2026/0033");
+    expect(rows[1]).toHaveTextContent("₹1,23,456.00");
+    expect(screen.queryByText("Review")).toBeNull();
   });
 
-  it("forwards the requested page to the loader as limit/offset and makes page 3 reachable", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: { items: makeItems(10, 30), total: 40, hasMore: false },
-      source: "api",
-    });
-    render(await MyApprovalsPage({ searchParams: Promise.resolve({ page: "3" }) }));
-
-    // page 3, pageSize 15 -> offset 30.
-    expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("limit=15&offset=30");
-    expect(screen.getByText(/Showing 31–40 of 40/)).toBeInTheDocument();
-    // Previous link back to page 2, no Next (last page).
-    expect(screen.getByRole("link", { name: /Previous/ })).toHaveAttribute("href", "/approvals?page=2");
-    expect(screen.queryByRole("link", { name: /Next/ })).not.toBeInTheDocument();
+  it("a module filter from an old queue bookmark narrows the server query; an unknown tab falls back to waiting", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { tasks: [], total: 0, counts }, source: "api" });
+    render(await ApprovalsPage({ searchParams: Promise.resolve({ module: "procurement", tab: "bogus" }) }));
+    const url = String(fetchJsonMock.mock.calls[0]![0]);
+    expect(url).toContain("tab=waiting");
+    expect(url).toContain("refType=procurement_indent&refType=procurement_po&refType=procurement_po_amendment&refType=procurement_plan");
+    expect(screen.getByText("Nothing is waiting for you")).toBeInTheDocument();
   });
 
-  it("on a failed load every stat shows an em dash, never a misleading 0", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: { items: [], total: null, hasMore: false },
-      source: "error",
-      status: 500,
-    });
-    render(await MyApprovalsPage({}));
-
-    for (const label of ["Pending", "Overdue", "Modules", "Due within 7 days"]) {
-      expect(statValue(label), `${label} tile`).toBe("—");
-    }
-    // A real retry (RefreshErrorState), not a 0-count empty table.
-    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  it("the done tab asks for tab=done", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { tasks: [], total: 0, counts }, source: "api" });
+    render(await ApprovalsPage({ searchParams: Promise.resolve({ tab: "done" }) }));
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("tab=done");
+    expect(screen.getByText("No decisions in the last 30 days")).toBeInTheDocument();
   });
 
-  it("ignores a junk page param (falls back to page 1 / offset 0)", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: { items: makeItems(5), total: 5, hasMore: false },
-      source: "api",
-    });
-    render(await MyApprovalsPage({ searchParams: Promise.resolve({ page: "-9x" }) }));
-    expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("offset=0");
+  it("a failed load shows the retry state from the error layer, with the tabs but no counts", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { tasks: [], total: 0, counts: null }, source: "error", status: 500 });
+    render(await ApprovalsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "Approval lists" });
+    expect(within(nav).getByRole("link", { name: "Waiting for me" })).toBeInTheDocument();
   });
 });

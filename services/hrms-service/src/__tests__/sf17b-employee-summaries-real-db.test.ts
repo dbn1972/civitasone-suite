@@ -96,6 +96,11 @@ describe("SF-17b internal employee-summaries (real DB)", () => {
     expect(rows.map((r) => r.fullName).sort()).toEqual(["Sf17b Person 0005", "Sf17b Person 2100"]);
   });
 
+  it("UX R1: each row carries the designation name, so an approver reads Name, Designation", async () => {
+    const rows = (await feed(TENANT, `?actorIds=${loginOf(5)}`)).json() as Array<{ fullName: string; designationName?: string }>;
+    expect(rows).toEqual([expect.objectContaining({ fullName: "Sf17b Person 0005", designationName: "Clerk" })]);
+  });
+
   it("cross-tenant: another tenant's employee id and login resolve to nothing", async () => {
     const byId = (await feed(TENANT, `?ids=${FOREIGN_EMP}`)).json() as unknown[];
     const byActor = (await feed(TENANT, `?actorIds=${FOREIGN_LOGIN}`)).json() as unknown[];

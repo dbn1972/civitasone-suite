@@ -31,6 +31,7 @@ import { quorumRoutes } from "./modules/quorum/routes.js";
 import { slaRoutes } from "./modules/sla/routes.js";
 import { finalizationRoutes } from "./modules/finalization/routes.js";
 import { historyRoutes } from "./modules/history/routes.js";
+import { inboxRoutes } from "./modules/inbox/routes.js";
 
 // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
 // external caller cannot forge it. Same value as hrms/billing-service. Deliberately not `true`.
@@ -98,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(slaRoutes);
   await app.register(finalizationRoutes);
   await app.register(historyRoutes);
+  // UX R1: unified approvals inbox, cross-module ref summaries, decision-panel context.
+  await app.register(inboxRoutes);
   const { caseRegistryRoutes } = await import("./modules/case-registry/routes.js"); await app.register(caseRegistryRoutes);
   const { caseLinksRoutes } = await import("./modules/case-links/routes.js"); await app.register(caseLinksRoutes);
   const { deviationsRoutes } = await import("./modules/deviations/routes.js"); await app.register(deviationsRoutes);
