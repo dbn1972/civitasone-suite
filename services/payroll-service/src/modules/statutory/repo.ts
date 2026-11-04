@@ -1,6 +1,6 @@
 import { eq, and, desc, sql, type AnyColumn } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool } from "./schema.js";
+import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollEpfAdminTopups } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -81,6 +81,17 @@ export async function insertGpf(tx: Writer, row: typeof payrollGpf.$inferInsert)
 
 export async function insertNps(tx: Writer, row: typeof payrollNps.$inferInsert): Promise<void> {
   await tx.insert(payrollNps).values(row);
+}
+
+export async function upsPoolForSlip(tenantId: string, slipId: string): Promise<Array<{ contribMinor: bigint }>> {
+  return scopedRead((tx) => tx.select({ contribMinor: payrollUpsPool.contribMinor }).from(payrollUpsPool)
+    .where(and(eq(payrollUpsPool.tenantId, tenantId), eq(payrollUpsPool.slipId, slipId))));
+}
+
+export async function adminTopUpForPeriod(tenantId: string, period: string) {
+  const rows = await scopedRead((tx) => tx.select().from(payrollEpfAdminTopups)
+    .where(and(eq(payrollEpfAdminTopups.tenantId, tenantId), eq(payrollEpfAdminTopups.period, period))).limit(1));
+  return rows[0] ?? null;
 }
 
 export async function insertUpsPool(tx: Writer, row: typeof payrollUpsPool.$inferInsert): Promise<void> {

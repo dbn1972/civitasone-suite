@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  defaultPensionScheme, schemeForMonth, retroPeriods, statutoryIncomplete, isValidUan,
+  defaultPensionScheme, schemeForMonth, retroPeriods, statutoryIncomplete, isValidUan, schemeChangeVerdict, attains58On,
 } from "../src/modules/employee/pension-scheme.js";
 import { buildTypeResolver, DEFAULT_POLICY } from "../src/modules/employee/engagement-policy.js";
 import { createEmployeeBody, updateEmployeeBody } from "../src/modules/employee/validators.js";
@@ -23,6 +23,53 @@ describe("D1: default pension scheme at hire", () => {
     expect(defaultPensionScheme({ dateOfJoining: "2003-12-31", employeeType: "permanent" })).toBe("GPF");
     expect(defaultPensionScheme({ dateOfJoining: "2004-01-01", employeeType: "permanent" })).toBe("NPS");
     expect(defaultPensionScheme({ dateOfJoining: "2026-10-28", employeeType: null })).toBe("NPS");
+  });
+});
+
+describe("Review SF6: apprentices and consultants are on no pension scheme", () => {
+  it("apprentice / consultant -> NONE, whatever the joining date", () => {
+    expect(defaultPensionScheme({ dateOfJoining: "2026-10-28", employeeType: "apprentice" })).toBe("NONE");
+    expect(defaultPensionScheme({ dateOfJoining: "1999-01-01", employeeType: "Consultant" })).toBe("NONE");
+  });
+});
+
+describe("Review SF5: scheme change eligibility matrix", () => {
+  const v = (employeeType: string, dateOfJoining: string, fromScheme: string, toScheme: string, history: Array<{ fromScheme: string; toScheme: string }> = []) =>
+    schemeChangeVerdict({ employeeType, dateOfJoining, fromScheme, toScheme, history }).ok;
+  it("contract / PSU -> EPF only", () => {
+    expect(v("contract", "2026-10-28", "NPS", "EPF")).toBe(true);
+    expect(v("psu", "1999-01-01", "GPF", "EPF")).toBe(true);
+    for (const to of ["NPS", "GPF", "UPS"]) expect(v("contract", "2026-10-28", "EPF", to)).toBe(false);
+  });
+  it("regular, joined before 2004 -> GPF only", () => {
+    expect(v("permanent", "2003-12-31", "NPS", "GPF")).toBe(true);
+    expect(v("permanent", "2003-12-31", "GPF", "NPS")).toBe(false);
+    expect(v("permanent", "2003-12-31", "NPS", "UPS")).toBe(false);
+  });
+  it("regular, joined 2004 or later: NPS -> UPS once; UPS -> NPS (switch back) once; nothing else", () => {
+    expect(v("permanent", "2010-01-01", "NPS", "UPS")).toBe(true);
+    expect(v("permanent", "2010-01-01", "EPF", "UPS")).toBe(false);
+    expect(v("permanent", "2010-01-01", "NPS", "UPS", [{ fromScheme: "NPS", toScheme: "UPS" }, { fromScheme: "UPS", toScheme: "NPS" }])).toBe(false);
+    expect(v("permanent", "2010-01-01", "UPS", "NPS", [{ fromScheme: "NPS", toScheme: "UPS" }])).toBe(true);
+    expect(v("permanent", "2010-01-01", "UPS", "NPS", [{ fromScheme: "UPS", toScheme: "NPS" }, { fromScheme: "NPS", toScheme: "UPS" }])).toBe(false);
+    expect(v("permanent", "2010-01-01", "NPS", "GPF")).toBe(false);
+    expect(v("permanent", "2010-01-01", "NPS", "EPF")).toBe(false);
+    expect(v("permanent", "2010-01-01", "EPF", "NPS")).toBe(false);
+  });
+  it("apprentices / consultants have no allowed change", () => {
+    for (const to of ["GPF", "NPS", "EPF", "UPS"]) expect(v("apprentice", "2026-01-01", "NONE", to)).toBe(false);
+  });
+  it("a refusal carries the code and a readable reason", () => {
+    expect(schemeChangeVerdict({ employeeType: "contract", dateOfJoining: "2026-10-28", fromScheme: "EPF", toScheme: "NPS", history: [] }))
+      .toEqual({ ok: false, code: "PENSION_SCHEME_NOT_ALLOWED", reason: "contract and PSU staff are EPF members only" });
+  });
+});
+
+describe("Review SF1: the 58th-birthday date (sent to payroll instead of the DOB)", () => {
+  it("DOB + 58 years; null without a DOB", () => {
+    expect(attains58On("1969-02-15")).toBe("2027-02-15");
+    expect(attains58On(null)).toBeNull();
+    expect(attains58On("bad")).toBeNull();
   });
 });
 

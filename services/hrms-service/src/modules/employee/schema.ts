@@ -65,6 +65,10 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   payStructureId:   uuid("pay_structure_id"),
   pensionScheme:    varchar("pension_scheme", { length: 8 }).notNull().default("NPS"),
+  // UAT b18 SF1 (migration 0262): EPF membership facts for EPS eligibility.
+  epfFirstJoinedOn:        date("epf_first_joined_on"),
+  epfVoluntaryJointOption: boolean("epf_voluntary_joint_option").notNull().default(false),
+  epsMember:               boolean("eps_member"),
   // Statutory identifiers (DIC): EPFO UAN is above; ESIC Insured-Person no. + NPS PRAN.
   esicIpNumber:     varchar("esic_ip_number", { length: 17 }),
   pran:             varchar("pran", { length: 12 }),
@@ -222,6 +226,11 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
   decidedAt:     timestamp("decided_at", { withTimezone: true }),
   decisionNote:  text("decision_note"),
   appliedAt:     timestamp("applied_at", { withTimezone: true }),
+  // migration 0262 (review SF1 / SF5)
+  overrideReason:          text("override_reason"),
+  epfFirstJoinedOn:        date("epf_first_joined_on"),
+  epfVoluntaryJointOption: boolean("epf_voluntary_joint_option"),
+  epsMember:               boolean("eps_member"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

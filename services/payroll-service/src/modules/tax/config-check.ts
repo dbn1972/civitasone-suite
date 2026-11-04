@@ -15,7 +15,10 @@
  * group(s) when the run is scoped to them; a DDO-wide run is checked against
  * the whole tenant (it may over-include, never miss). A pensioner run needs
  * the new-regime slabs only. HRMS is asked only when the old-regime slabs are
- * missing; if it is unreachable the run is refused (502 HRMS_UNAVAILABLE).
+ * missing, through the regime-only internal feed (review SF9: no PAN / bank).
+ * Review SF8 (ERP-head decision): if HRMS is unreachable, nobody can be shown
+ * to be on the new regime only, so BOTH regimes are required and the run is
+ * refused with the same actionable 422 TAX_CONFIG_MISSING (details.hrmsUnavailable).
  *
  * Config rows come from payroll.tax_slab_config (tenant override or the
  * platform default, platform_default_read_policy of migration 0039).
@@ -23,7 +26,7 @@
 import { sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
-import { fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { fetchTaxRegimes, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { isPayrollEligible } from "../payroll/domain.js";
 import { resolveMonthMembers } from "../payroll/pay-group-repo.js";
 import { fyStartYearForMonth, PLATFORM_DEFAULT_TENANT_ID, type Regime } from "./engine.js";
@@ -38,6 +41,8 @@ export interface TaxConfigMissingDetails {
   missingRegimes: Regime[];
   /** When the old-regime slabs are missing: the employees in the run who opted for it. */
   oldRegimeEmployees?: Array<{ employeeId: string; employeeNo: string | null }>;
+  /** HRMS could not be asked who is on the old regime, so both regimes are required. */
+  hrmsUnavailable?: true;
 }
 
 /** 422 TAX_CONFIG_MISSING with the FY, the missing regime and who needs it. */
@@ -108,10 +113,13 @@ export async function assertTaxConfigForRun(tenantId: string, run: RunScope): Pr
 
   let employees: RegimeCandidate[];
   try {
-    employees = (await fetchPayrollInput(tenantId, run.month)).employees as unknown as RegimeCandidate[];
+    employees = await fetchTaxRegimes(tenantId);
   } catch (err) {
     if (err instanceof HrmsUnavailableError) {
-      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot check the employees' tax regime: HRMS payroll input unreachable");
+      throw new TaxConfigMissingError(
+        `No old-regime income-tax slab configuration for FY ${fy}, and HRMS could not be reached to confirm that nobody in this run opted for the old regime. Configure the FY ${fy} old-regime slabs (or retry when HRMS is available) before creating a payroll run for ${run.month}.`,
+        { fy, missingRegimes: ["old"], hrmsUnavailable: true },
+      );
     }
     throw err;
   }

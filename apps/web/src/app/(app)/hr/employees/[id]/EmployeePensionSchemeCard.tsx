@@ -4,6 +4,7 @@ import { useCallback, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, Modal } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 const SCHEMES = ["GPF", "NPS", "EPF", "UPS"] as const;
 type Scheme = (typeof SCHEMES)[number];
@@ -11,6 +12,8 @@ const KNOWN_ERRORS = [
   "PENSION_SCHEME_UNCHANGED", "PENSION_SCHEME_CHANGE_PENDING", "PENSION_SCHEME_CHANGE_NOT_PENDING",
   "PENSION_SCHEME_EFFECTIVE_BEFORE_JOINING", "PENSION_SCHEME_EFFECTIVE_NOT_AFTER_LAST", "UAN_REQUIRED",
   "MAKER_CHECKER_VIOLATION", "EMPLOYEE_EXITED",
+  // Review SF5: outside the eligibility matrix / override by a non-super_admin.
+  "PENSION_SCHEME_NOT_ALLOWED", "PENSION_SCHEME_OVERRIDE_FORBIDDEN",
 ] as const;
 type KnownError = (typeof KNOWN_ERRORS)[number];
 
@@ -37,7 +40,8 @@ export function EmployeePensionSchemeCard(props: {
   const ids = { scheme: useId(), month: useId(), reason: useId(), uan: useId(), note: useId(), help: useId() };
   const [changes, setChanges] = useState<SchemeChange[]>(Array.isArray(initialChanges) ? initialChanges : []);
   const [open, setOpen] = useState(false);
-  const [scheme, setScheme] = useState<Scheme>("EPF");
+  // Review nit: open on a scheme other than the current one.
+  const [scheme, setScheme] = useState<Scheme>(SCHEMES.find((s) => s !== currentScheme) ?? "EPF");
   const [month, setMonth] = useState("");
   const [reason, setReason] = useState("");
   const [uan, setUan] = useState("");
@@ -120,7 +124,8 @@ export function EmployeePensionSchemeCard(props: {
     }
   }
 
-  const schemeLabel = (s: string) => ((SCHEMES as readonly string[]).includes(s) ? t(`schemes.${s as Scheme}`) : s);
+  const schemeLabel = (s: string) => (s === "NONE" ? t("schemes.NONE") : (SCHEMES as readonly string[]).includes(s) ? t(`schemes.${s as Scheme}`) : s);
+  const day = (iso: string) => formatIndianDate(iso);
   const pending = changes.find((c) => c.status === "pending") ?? null;
   const decided = changes.filter((c) => c.status !== "pending");
 
@@ -137,7 +142,7 @@ export function EmployeePensionSchemeCard(props: {
       {pending && (
         <section aria-label={t("pendingTitle")} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, margin: "8px 0" }}>
           <h3 style={{ margin: "0 0 6px", fontSize: 14 }}>{t("pendingTitle")}</h3>
-          <p style={{ margin: "0 0 4px" }}>{t("changeLine", { from: schemeLabel(pending.fromScheme), to: schemeLabel(pending.toScheme), date: pending.effectiveFrom })}</p>
+          <p style={{ margin: "0 0 4px" }}>{t("changeLine", { from: schemeLabel(pending.fromScheme), to: schemeLabel(pending.toScheme), date: day(pending.effectiveFrom) })}</p>
           <p style={{ margin: "0 0 8px", color: "var(--mut)", fontSize: 13 }}>{t("reasonText", { reason: pending.reason })}</p>
           {canDecide && (
             <>
@@ -162,7 +167,7 @@ export function EmployeePensionSchemeCard(props: {
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
             {decided.map((c) => (
               <li key={c.id}>
-                {t("changeLine", { from: schemeLabel(c.fromScheme), to: schemeLabel(c.toScheme), date: c.effectiveFrom })} — {t(`status.${c.status}`)}
+                {t("changeLine", { from: schemeLabel(c.fromScheme), to: schemeLabel(c.toScheme), date: day(c.effectiveFrom) })} — {t(`status.${c.status}`)}
               </li>
             ))}
           </ul>

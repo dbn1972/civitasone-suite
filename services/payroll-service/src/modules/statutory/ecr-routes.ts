@@ -58,7 +58,9 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       : [];
     const slipById = new Map(slipRows.map((s) => [s.id, s]));
 
-    const problems = uanProblems(pfRecords.map((pf) => ({
+    // Review nit: an all-zero PF row (EPF scheme but the engagement excludes
+    // PF) contributes nothing and does not block the ECR on its UAN.
+    const problems = uanProblems(pfRecords.filter((pf) => minorFromDb(pf.empContribMinor) > 0n || minorFromDb(pf.erContribMinor) > 0n).map((pf) => ({
       employeeId: pf.employeeId,
       employeeNo: master.get(pf.employeeId)?.employeeNo ?? slipById.get(pf.slipId)?.employeeNo ?? null,
       uan: master.get(pf.employeeId)?.uan ?? null,
@@ -91,7 +93,11 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       // the ones the contributions were computed on (configured ceilings); rows
       // written before it fall back to min(Basic + DA, Rs 15,000).
       const epfWages = pf.epfWageMinor != null ? toSafeInt(roundMinorToRupees(minorFromDb(pf.epfWageMinor))) : pensionableWages;
-      const epsWages = epfWages > EPF_WAGE_CEILING ? EPF_WAGE_CEILING : epfWages;
+      // Review SF1: EPS wages as persisted (0 for a member who is not
+      // EPS-eligible); older rows: min(EPF wages, Rs 15,000).
+      const epsWages = pf.epsWageMinor != null
+        ? toSafeInt(roundMinorToRupees(minorFromDb(pf.epsWageMinor)))
+        : (epfWages > EPF_WAGE_CEILING ? EPF_WAGE_CEILING : epfWages);
       const edliWages = pf.edliWageMinor != null ? toSafeInt(roundMinorToRupees(minorFromDb(pf.edliWageMinor))) : pensionableWages;
 
       const epfEE = toSafeInt(roundMinorToRupees(minorFromDb(pf.empContribMinor)));          // Employee 12%
@@ -99,7 +105,7 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       const epsER = toSafeInt(roundMinorToRupees(minorFromDb(pf.epsContribMinor)));
       const epfER = toSafeInt(roundMinorToRupees(minorFromDb(pf.epfErContribMinor)));
       // NCP days = the loss-of-pay days recorded on the slip LOP line.
-      const ncpDays = ncpDaysFromComponents(components as Array<{ code: string; lopDays?: number }>);
+      const ncpDays = ncpDaysFromComponents(components as Array<{ code: string; lopDays?: number; notInServiceDays?: number }>);
       const refundAdvances = 0;
 
       // H4: ecrText (ecr-domain.ts) strips the separator characters and CR/LF

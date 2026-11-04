@@ -103,10 +103,16 @@ export function uanProblems(members: Array<{ employeeId: string; employeeNo: str
   return out;
 }
 
-/** NCP (non-contributing) days for the month: the loss-of-pay days on the slip, rounded to whole days. */
-export function ncpDaysFromComponents(components: Array<{ code: string; lopDays?: number | string | null }>): number {
+/**
+ * NCP (non-contributing period) days for the month: the attendance / leave
+ * loss-of-pay days on the slip LOP line, i.e. its lopDays LESS the days the
+ * member was not in service (before joining / after leaving -- review SF2:
+ * those are not days of membership and must not reduce EPS service). Half
+ * days are summed, then rounded half up to whole days (EPFO takes whole days).
+ */
+export function ncpDaysFromComponents(components: Array<{ code: string; lopDays?: number | string | null; notInServiceDays?: number | string | null }>): number {
   const days = components
     .filter((c) => c.code === "LOP" && c.lopDays != null)
-    .reduce((s, c) => s + Number(c.lopDays), 0);
+    .reduce((s, c) => s + Math.max(0, Number(c.lopDays) - Number(c.notInServiceDays ?? 0)), 0);
   return Number.isFinite(days) && days > 0 ? Math.round(days) : 0;
 }

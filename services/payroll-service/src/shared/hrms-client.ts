@@ -47,7 +47,9 @@ export type PayrollInputEmployee = {
   taxRegime: "old" | "new";
   departmentId: string;
   /** The scheme in effect for the requested month (HRMS resolves effective-dated changes, UAT b18 D1). */
-  pensionScheme: "GPF" | "NPS" | "EPF" | "UPS";
+  pensionScheme: "GPF" | "NPS" | "EPF" | "UPS" | "NONE";
+  /** Review SF1 (additive): EPF membership facts for EPS eligibility; absent from an older HRMS. */
+  epf?: { firstJoinedOn: string | null; voluntaryJointOption: boolean; epsMember: boolean | null; attains58On: string | null };
   /** HRMS gender (male | female | other) or null; picks the gender-specific professional-tax slab. */
   gender?: string | null;
   /** State of employment (ISO 3166-2:IN code, e.g. MH); professional tax is levied per state. null = not recorded in HRMS. */
@@ -276,6 +278,28 @@ export function parsePayrollInput(raw: unknown): HrmsPayrollInput {
     throw new HrmsUnavailableError(`hrms payroll-input invalid: ${first ? `${first.path.join(".")}: ${first.message}` : "schema mismatch"}`);
   }
   return parsed.data as unknown as HrmsPayrollInput;
+}
+
+/** Review SF9: one row of GET /v1/hrms/internal/tax-regimes -- no PAN, bank or pay. */
+export interface TaxRegimeRow {
+  id: string; employeeNo: string | null; departmentId: string | null;
+  taxRegime: "old" | "new"; eligibleForPayroll: boolean; paymentRoute: string;
+}
+
+/** Review SF9: the minimal regime feed the run-creation tax pre-check reads. Throws HrmsUnavailableError. */
+export async function fetchTaxRegimes(tenantId: string): Promise<TaxRegimeRow[]> {
+  const url = `${HRMS_URL}/v1/hrms/internal/tax-regimes`;
+  const serviceSecret = process.env.INTERNAL_SERVICE_SECRET ?? "";
+  const res = await fetchInternalWithRetry(
+    url,
+    { "x-internal": "1", "x-service-secret": serviceSecret, "x-tenant-id": tenantId },
+    10000,
+    (detail) => `hrms tax-regimes unreachable: ${detail}`,
+  );
+  if (!res.ok) throw new HrmsUnavailableError(`hrms tax-regimes failed: ${res.status}`);
+  const body = (await res.json()) as { employees?: unknown };
+  if (!Array.isArray(body.employees)) throw new HrmsUnavailableError("hrms tax-regimes invalid: no employees array");
+  return body.employees as TaxRegimeRow[];
 }
 
 export async function fetchPendingPayrollRuns(tenantId: string): Promise<number> {

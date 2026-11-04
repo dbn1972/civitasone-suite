@@ -92,6 +92,25 @@ describe("EmployeePensionSchemeCard (UAT b18)", () => {
     expect(alert.textContent).not.toContain("UAN_REQUIRED");
   });
 
+  it("a change outside the eligibility matrix is explained in plain words (review SF5)", async () => {
+    mockApi([], () => json(422, { code: "PENSION_SCHEME_NOT_ALLOWED", message: "raw" }));
+    renderCard({ currentScheme: "EPF" });
+    fireEvent.click(await screen.findByRole("button", { name: m.changeButton }));
+    expect(screen.getByLabelText(m.schemeLabel)).not.toHaveValue("EPF"); // opens on another scheme
+    fireEvent.change(screen.getByLabelText(m.effectiveMonthLabel), { target: { value: "2027-02" } });
+    fireEvent.change(screen.getByLabelText(m.reasonLabel), { target: { value: "A long enough reason here" } });
+    fireEvent.click(screen.getByRole("button", { name: m.submitButton }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(m.error.PENSION_SCHEME_NOT_ALLOWED);
+    expect(alert.textContent).not.toContain("PENSION_SCHEME_NOT_ALLOWED");
+  });
+
+  it("an employee on no pension scheme is shown as such", () => {
+    mockApi([]);
+    renderCard({ currentScheme: "NONE" });
+    expect(screen.getByText(m.schemes.NONE)).toBeInTheDocument();
+  });
+
   it("an HR admin approves the pending change; the maker-checker refusal is explained", async () => {
     const calls = mockApi([PENDING], (c) => (c.url.endsWith("/approve") ? json(403, { code: "MAKER_CHECKER_VIOLATION" }) : json(200, {})));
     renderCard({ canDecide: true });

@@ -6,7 +6,16 @@
 
 /** Schemes a change can move an employee TO (and that payroll computes). */
 export const PENSION_SCHEMES = ["GPF", "NPS", "EPF", "UPS"] as const;
-export type PensionScheme = (typeof PENSION_SCHEMES)[number];
+/** Recorded at hire / by an override, never offered as an ordinary change: no pension scheme. */
+export const NO_SCHEME = "NONE";
+export type PensionScheme = (typeof PENSION_SCHEMES)[number] | typeof NO_SCHEME;
+
+/**
+ * Review SF6 (ERP-head decision 2026-11-05): engagement types on NO pension
+ * scheme and with no pension deduction -- apprentices (Apprentices Act stipend)
+ * and consultants (invoice-billed). Matched case-insensitively.
+ */
+export const NO_SCHEME_ENGAGEMENT_TYPES: ReadonlySet<string> = new Set(["apprentice", "consultant"]);
 
 /** The New Pension System applies to central government appointments on/after 1 Jan 2004 (GPF before it). */
 export const NPS_START_DATE = "2004-01-01";
@@ -21,6 +30,7 @@ export const EPF_ENGAGEMENT_TYPES: ReadonlySet<string> = new Set(["contract", "c
 /**
  * Default scheme at hire, by rule (it used to be the column default NPS for
  * everyone, contract staff included):
+ *   - apprentice / consultant                     -> NONE (no pension scheme)
  *   - contract / contractual / PSU employee types  -> EPF (any joining date;
  *     GPF and NPS are government-servant schemes, contract and PSU staff are
  *     never on them)
@@ -30,6 +40,7 @@ export const EPF_ENGAGEMENT_TYPES: ReadonlySet<string> = new Set(["contract", "c
  */
 export function defaultPensionScheme(input: { dateOfJoining: string; employeeType?: string | null }): PensionScheme {
   const type = (input.employeeType ?? "").trim().toLowerCase();
+  if (NO_SCHEME_ENGAGEMENT_TYPES.has(type)) return NO_SCHEME;
   if (EPF_ENGAGEMENT_TYPES.has(type)) return "EPF";
   if (input.dateOfJoining < NPS_START_DATE) return "GPF";
   return "NPS";
@@ -47,6 +58,48 @@ export function isValidUan(uan: string | null | undefined): boolean {
  */
 export function statutoryIncomplete(emp: { pensionScheme: string | null; uanNumber: string | null }): string[] {
   return emp.pensionScheme === "EPF" && !isValidUan(emp.uanNumber) ? ["UAN_MISSING"] : [];
+}
+
+/** The day a member born on `dateOfBirth` attains 58 (EPS contributions stop, para 6A). null without a DOB. */
+export function attains58On(dateOfBirth: string | null | undefined): string | null {
+  if (!dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
+  return `${Number(dateOfBirth.slice(0, 4)) + 58}${dateOfBirth.slice(4)}`;
+}
+
+export type SchemeChangeVerdict = { ok: true } | { ok: false; code: "PENSION_SCHEME_NOT_ALLOWED"; reason: string };
+
+/**
+ * Review SF5 (ERP-head decision 2026-11-05): the scheme changes allowed
+ * without an override.
+ *   - contract / contractual / PSU  -> EPF only
+ *   - apprentice / consultant       -> none (they stay on NONE)
+ *   - regular, joined before 2004   -> GPF only
+ *   - regular, joined 2004 or later -> NPS <-> UPS: UPS only from NPS and only
+ *     once; the one-time switch back UPS -> NPS also only once (UPS rules,
+ *     notification of 24 Jan 2025)
+ * `history`: the approved changes so far (to tell "once" apart). Anything else
+ * needs an explicit override reason recorded by a super_admin. Pure.
+ */
+export function schemeChangeVerdict(input: {
+  employeeType?: string | null; dateOfJoining: string; fromScheme: string; toScheme: string;
+  history: ReadonlyArray<{ fromScheme: string; toScheme: string }>;
+}): SchemeChangeVerdict {
+  const type = (input.employeeType ?? "").trim().toLowerCase();
+  const no = (reason: string): SchemeChangeVerdict => ({ ok: false, code: "PENSION_SCHEME_NOT_ALLOWED", reason });
+  if (NO_SCHEME_ENGAGEMENT_TYPES.has(type)) return no(`a ${type} is on no pension scheme`);
+  if (EPF_ENGAGEMENT_TYPES.has(type)) return input.toScheme === "EPF" ? { ok: true } : no("contract and PSU staff are EPF members only");
+  if (input.dateOfJoining < NPS_START_DATE) return input.toScheme === "GPF" ? { ok: true } : no("a regular employee who joined before 2004-01-01 is on GPF");
+  if (input.toScheme === "UPS") {
+    if (input.fromScheme !== "NPS") return no("UPS can be chosen only from NPS");
+    if (input.history.some((h) => h.toScheme === "UPS")) return no("the UPS option has already been exercised once");
+    return { ok: true };
+  }
+  if (input.toScheme === "NPS") {
+    if (input.fromScheme !== "UPS") return no("a regular employee who joined in 2004 or later moves to NPS only back from UPS");
+    if (input.history.some((h) => h.fromScheme === "UPS" && h.toScheme === "NPS")) return no("the one-time switch back from UPS to NPS has already been used");
+    return { ok: true };
+  }
+  return no(`a regular employee who joined in 2004 or later is on NPS or UPS, not ${input.toScheme}`);
 }
 
 /** YYYY-MM-01 for a YYYY-MM month. */

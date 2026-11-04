@@ -29,6 +29,8 @@ export interface PayComponent {
   /** UAT L2-N5: on the LOP line only -- the loss-of-pay days it recovers and the days of the month. */
   lopDays?: number;
   daysInMonth?: number;
+  /** Review SF2: of lopDays, the days the employee was NOT in service (before joining / after leaving) -- never NCP days. */
+  notInServiceDays?: number;
 }
 
 /** Raw structure component as configured (fixed amount OR percentage of basic). */
@@ -45,7 +47,7 @@ export interface RawComponent {
  * government staff from 2025-04-01) is computed like NPS on Basic + DA but
  * with the UPS employer share (UPS_ER_BPS below).
  */
-export type PensionScheme = "GPF" | "NPS" | "EPF" | "UPS";
+export type PensionScheme = "GPF" | "NPS" | "EPF" | "UPS" | "NONE";
 export type CityClass = "X" | "Y" | "Z";
 
 export interface SlipInput {
@@ -71,6 +73,13 @@ export interface SlipInput {
   statutoryPf?: boolean;
   statutoryEsi?: boolean;
   statutoryNps?: boolean;
+  /**
+   * Review SF1 (EPS 1995 para 6A): false for an EPF member who is not an EPS
+   * member -- EPS = 0 and the whole employer 12% goes to EPF (A/c 1). Default
+   * true: omitting it computes exactly what computeSlip always has. See
+   * epsEligibility() for the rule.
+   */
+  epsEligible?: boolean;
   /** Income-tax regime + FY start year for monthly TDS (defaults: new / 2025). */
   taxRegime?: Regime;
   fyStartYear?: number;
@@ -378,6 +387,43 @@ export interface EpfEmployerCharges {
  * per establishment per month, so it is applied on the period summary
  * (epfAdminChargeForPeriod), not per member.
  */
+/** EPS 1995 para 6A (GSR 609(E), 22.08.2014): the 01.09.2014 cut-off and the EPS wage ceiling (Rs 15,000, statutory, not the configurable PF ceiling). */
+export const EPS_CUTOFF_DATE = "2014-09-01";
+export const EPS_WAGE_CEILING_MINOR = 1_500_000n;
+
+export interface EpsMembershipFacts {
+  /** Date the member first joined EPF anywhere (via the UAN); null = this joining date. */
+  firstJoinedOn?: string | null;
+  /** Member by joint option under para 26(6) EPF Scheme (wages above the ceiling at joining). */
+  voluntaryJointOption?: boolean | null;
+  /** Explicit EPS membership recorded by HR; null = derived. */
+  epsMember?: boolean | null;
+  /** The day the member attains 58; null = unknown (no DOB). */
+  attains58On?: string | null;
+}
+
+/**
+ * Review SF1 (ERP-head decision 2026-11-05): is this EPF member an EPS member
+ * for wage month `month` (YYYY-MM)? Pure.
+ *   - aged 58 or more before the month starts -> no (EPS stops at 58; the
+ *     month of the 58th birthday still counts)
+ *   - explicit epsMember -> as recorded
+ *   - para 26(6) joint-option member -> no (wages above the ceiling at joining)
+ *   - first EPF membership before 01.09.2014 -> yes (EPS capped at Rs 1,250)
+ *   - first membership on/after 01.09.2014 -> only with wages <= Rs 15,000 at
+ *     joining; the joining wage is not held here, so this month's EPF wage base
+ *     (Basic + DA) stands in for it -- record epsMember explicitly when they
+ *     differ.
+ */
+export function epsEligibility(facts: EpsMembershipFacts, dateOfJoining: string, month: string, pensionBaseMinor: bigint): boolean {
+  if (facts.attains58On && facts.attains58On < `${month}-01`) return false;
+  if (facts.epsMember != null) return facts.epsMember;
+  if (facts.voluntaryJointOption) return false;
+  const first = facts.firstJoinedOn ?? dateOfJoining;
+  if (first < EPS_CUTOFF_DATE) return true;
+  return pensionBaseMinor <= EPS_WAGE_CEILING_MINOR;
+}
+
 export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig): EpfEmployerCharges {
   const base = pensionBaseMinor > 0n ? pensionBaseMinor : 0n;
   const pfWageMinor = base > cfg.pfWageCapMinor ? cfg.pfWageCapMinor : base;
@@ -468,6 +514,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     rawComponents = [],
     statutoryPf = true,
     statutoryEsi = true,
+    epsEligible = true,
     taxRegime = "new",
     fyStartYear = 2025,
     declaration = {},
@@ -575,6 +622,8 @@ export function computeSlip(input: SlipInput): SlipResult {
     // no longer suppresses a scheme-driven contribution.)
     npsEmployeeMinor = pct(npsPensionBaseMinor, NPS_EMP_PCT);
     npsEmployerMinor = pct(npsPensionBaseMinor, NPS_ER_PCT);
+  } else if (pensionScheme === "NONE") {
+    // Review SF6: apprentices / consultants -- no pension scheme, no deduction.
   } else if (pensionScheme === "UPS") {
     // UAT b18 D1: UPS is an option under NPS -- same base, same PRAN/CRA
     // ledger, the higher UPS Government share.
@@ -586,7 +635,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     pfEmployeeMinor = pct(pfWage, statutoryConfig.pfRatePct);
     pfEmployerMinor = pct(pfWage, statutoryConfig.pfRatePct);
     const epsWage   = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
-    epsMinor        = roundRupee((epsWage * statutoryConfig.epsRateBps) / 10000n);
+    epsMinor        = epsEligible ? roundRupee((epsWage * statutoryConfig.epsRateBps) / 10000n) : 0n;
     if (epsMinor > statutoryConfig.epsCapMinor) epsMinor = statutoryConfig.epsCapMinor;
     epfEmployerMinor = pfEmployerMinor - epsMinor;
   }

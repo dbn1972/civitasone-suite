@@ -20,6 +20,8 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   epfErContribMinor: bigint("epf_er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   // UAT b18 D5 / D6 (migration 0162): wages actually used + employer EDLI / admin charges.
   epfWageMinor:      bigint("epf_wage_minor", { mode: "bigint" }),
+  // Review SF1 (migration 0163): EPS wages; 0 when the member is not EPS-eligible.
+  epsWageMinor:      bigint("eps_wage_minor", { mode: "bigint" }),
   edliWageMinor:     bigint("edli_wage_minor", { mode: "bigint" }),
   edliContribMinor:  bigint("edli_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epfAdminMinor:     bigint("epf_admin_minor", { mode: "bigint" }).notNull().default(0n),
@@ -53,6 +55,24 @@ export const payrollUpsPool = statutorySchema.table("payroll_ups_pool", {
   createdBy:        uuid("created_by").notNull(),
   updatedBy:        uuid("updated_by").notNull(),
   version:          integer("version").notNull().default(1),
+});
+
+/** Review SF3 (migration 0163): the A/c 2 minimum top-up, one row per tenant per wage month. */
+export const payrollEpfAdminTopups = statutorySchema.table("payroll_epf_admin_topups", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  period:            char("period", { length: 7 }).notNull(),
+  memberCount:       integer("member_count").notNull(),
+  adminAccruedMinor: bigint("admin_accrued_minor", { mode: "bigint" }).notNull(),
+  minimumMinor:      bigint("minimum_minor", { mode: "bigint" }).notNull(),
+  topUpMinor:        bigint("top_up_minor", { mode: "bigint" }).notNull(),
+  journalId:         uuid("journal_id"),
+  currency:          char("currency", { length: 3 }).notNull().default("INR"),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:         uuid("created_by").notNull(),
+  updatedBy:         uuid("updated_by").notNull(),
+  version:           integer("version").notNull().default(1),
 });
 
 export const payrollEsi = statutorySchema.table("payroll_esi", {
@@ -268,4 +288,4 @@ export const bonusRuleConfig = statutorySchema.table("bonus_rule_config", {
 export type StatutoryConfigRow = typeof statutoryConfig.$inferSelect;
 export type StatutoryConfigInsert = typeof statutoryConfig.$inferInsert;
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollEpfAdminTopups, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };

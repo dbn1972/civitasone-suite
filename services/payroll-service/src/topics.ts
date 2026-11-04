@@ -146,4 +146,13 @@ export const CONSUMED_EVENTS = {
   ltcClaimApproved:  "hrms.claim.approved",
 } as const;
 
+/**
+ * Commands payroll sends to other services. Review SF3: the EPF A/c 2
+ * minimum top-up journal goes to finance-service's journal command (the same
+ * topic inventory-service posts stock journals to).
+ */
+export const INTEGRATION = {
+  glPost: "finance.gl.post",
+} as const;
+
 export const SERVICE = "payroll";

@@ -18401,7 +18401,9 @@
       "MAKER_CHECKER_VIOLATION": "A different person must approve or reject this change. You cannot decide your own request.",
       "EMPLOYEE_EXITED": "The pension scheme of an employee who has left cannot be changed.",
       "REASON_REQUIRED": "Enter a reason of at least 10 characters.",
-      "generic": "The pension scheme change could not be saved. Try again."
+      "generic": "The pension scheme change could not be saved. Try again.",
+      "PENSION_SCHEME_NOT_ALLOWED": "This pension scheme change is not allowed for this employee (contract and PSU staff: EPF only; regular staff who joined before 2004: GPF; others: NPS or UPS, with UPS chosen once). A super administrator can record an exception with a reason.",
+      "PENSION_SCHEME_OVERRIDE_FORBIDDEN": "Only a super administrator can record a pension scheme change outside the eligibility rules."
     },
     "title": "Pension scheme",
     "currentLabel": "Current scheme",
@@ -18434,7 +18436,8 @@
       "GPF": "GPF (General Provident Fund)",
       "NPS": "NPS (National Pension System)",
       "EPF": "EPF (Employees' Provident Fund)",
-      "UPS": "UPS (Unified Pension Scheme)"
+      "UPS": "UPS (Unified Pension Scheme)",
+      "NONE": "No pension scheme"
     },
     "status": {
       "pending": "pending",

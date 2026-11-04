@@ -18,7 +18,7 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
 import { runApprovedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
@@ -2359,10 +2359,12 @@ async function processPayrollRun(
         loanPlans.push({ loanId: l.id, principal, interest, outstanding: l.outstandingMinor });
       }
 
-      const adHoc: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number }> = [];
+      const adHoc: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number; notInServiceDays?: number }> = [];
       // UAT L2-N5: the LOP line records its days, so the arrears payable share
       // of the month (payableShare) no longer has to infer them from amounts.
-      if (lopDeduction > 0n) adHoc.push({ code: "LOP", name: "Loss of Pay", type: "deduction" as const, amountMinor: lopDeduction, lopDays, daysInMonth: Number(daysInMonth) });
+      // Review SF2: the out-of-service days ride on the LOP line separately, so
+      // the ECR reports NCP days = attendance / leave LOP only.
+      if (lopDeduction > 0n) adHoc.push({ code: "LOP", name: "Loss of Pay", type: "deduction" as const, amountMinor: lopDeduction, lopDays, daysInMonth: Number(daysInMonth), notInServiceDays: notInServiceLopDays });
       if (emiTotal > 0n) adHoc.push({ code: "LOAN_EMI", name: "Loan EMI", type: "deduction" as const, amountMinor: emiTotal });
 
       // P1: disburse recorded-but-dead earnings — pending/approved arrears,
@@ -2387,6 +2389,9 @@ async function processPayrollRun(
       // Engagement statutory gates carried on the run input (default: on).
       const eng = emp as { statutoryPf?: boolean; statutoryEsi?: boolean; statutoryNps?: boolean };
       const result = await computeAndInsertSlip(tx, msg, {
+        // Review SF1: EPS eligibility from the HRMS EPF membership facts.
+        dateOfJoining: emp.dateOfJoining,
+        epfFacts: (emp as { epf?: EpsMembershipFacts }).epf ?? {},
         runId: p.id,
         tenantId: p.tenantId,
         employeeId: emp.id,
@@ -2876,7 +2881,7 @@ export async function computeAndInsertSlip(
     ptForSalaryMinor?: (monthlySalaryMinor: bigint) => bigint;
     declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint; prevEmployerSalaryMinor?: bigint; otherSourcesIncomeMinor?: bigint; perquisitesMinor?: bigint };
     rawComponents?: RawComponent[];
-    components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number }>;
+    components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint; lopDays?: number; daysInMonth?: number; notInServiceDays?: number }>;
     /** FR 53 suspension pay lines (subsistence.ts); omitted for everyone else. */
     earningsOverride?: EarningsOverride;
     /** FR 53: this slip is a suspended employee's (skips an all-zero PF row for a GPF/NPS member). */
@@ -2887,6 +2892,9 @@ export async function computeAndInsertSlip(
     hraFloorMinor?: bigint;
     /** PAY-PROFILES: inputs the profile used, persisted on the slip for audit/F&F. */
     profileSnapshot?: Record<string, unknown>;
+    /** Review SF1: EPF membership facts + joining date for EPS eligibility; omitted = EPS-eligible (legacy). */
+    epfFacts?: EpsMembershipFacts;
+    dateOfJoining?: string;
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -2894,7 +2902,15 @@ export async function computeAndInsertSlip(
   // ESI employer amount) reflect the config actually used for this slip
   // instead of a second, independently hardcoded literal.
   const statutoryConfig = params.statutoryConfig ?? DEFAULT_STATUTORY_CONFIG;
+  // Review SF1: EPS eligibility (EPS 1995 para 6A) on this month's Basic + DA.
+  const estPensionBase = params.earningsOverride
+    ? params.earningsOverride.pensionBaseMinor
+    : params.basicMinor + (params.payProfile?.kind === "consolidated_contract" ? 0n : roundRupee((params.basicMinor * (params.daRateBps ?? 0n)) / 10000n));
+  const epsEligible = params.epfFacts && params.dateOfJoining
+    ? epsEligibility(params.epfFacts, params.dateOfJoining, params.month, estPensionBase)
+    : true;
   const result = computeSlip({
+    epsEligible,
     basicMinor: params.basicMinor,
     daRateBps: params.daRateBps ?? 0n,
     cityClass: params.cityClass ?? "X",
@@ -2944,6 +2960,7 @@ export async function computeAndInsertSlip(
       code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor),
       // UAT L2-N5: the LOP line keeps its days (read back by the arrears payable share).
       ...(c.lopDays != null && c.daysInMonth != null ? { lopDays: c.lopDays, daysInMonth: c.daysInMonth } : {}),
+      ...(c.notInServiceDays != null && c.notInServiceDays > 0 ? { notInServiceDays: c.notInServiceDays } : {}),
     })),
     pfEmployeeMinor: result.pfEmployeeMinor, pfEmployerMinor: result.pfEmployerMinor,
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
@@ -3002,6 +3019,8 @@ export async function computeAndInsertSlip(
       // UAT b18 D5 / D6: wages used and the employer EDLI (A/c 21) and admin
       // (A/c 2) charges. Zero when no PF applied (an all-zero row).
       epfWageMinor: pfApplied ? epfCharges.pfWageMinor : 0n,
+      // Review SF1: 0 for a member who is not EPS-eligible (EPS 0, all 12% to A/c 1).
+      epsWageMinor: pfApplied && epsEligible ? (pensionBaseMinor > EPS_WAGE_CEILING_MINOR ? EPS_WAGE_CEILING_MINOR : pensionBaseMinor) : 0n,
       edliWageMinor: pfApplied ? epfCharges.edliWageMinor : 0n,
       edliContribMinor: pfApplied ? epfCharges.edliMinor : 0n,
       epfAdminMinor: pfApplied ? epfCharges.epfAdminMinor : 0n,

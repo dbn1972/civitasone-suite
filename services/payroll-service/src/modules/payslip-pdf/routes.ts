@@ -11,6 +11,8 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { maskLast4, maskPan } from "../../shared/pii-mask.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
+import { computedSchemeOf } from "../payroll/pension-scheme-retro.js";
+import { upsPoolMinorForSlip } from "../statutory/queries.js";
 
 // UAT Phase 2 follow-up (security): a payslip PDF is per-employee pay data --
 // payroll + HR staff see any slip; everyone else (an employee, including a
@@ -118,6 +120,10 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       .where(and(eq(payrollRuns.id, slip.runId), eq(payrollRuns.tenantId, ctx.tenantId)))
       .limit(1));
     const run = runRows[0];
+    // Review SF7: a UPS slip shows the Government share as individual 10% +
+    // pool 8.5% (the pool share is its own statutory row, not on the slip).
+    const isUps = computedSchemeOf(slip) === "UPS";
+    const upsPoolMinor = isUps ? await upsPoolMinorForSlip(ctx.tenantId, slip.id) : 0n;
 
     // Load the tenant's custom template from hrms-service, which owns
     // payroll.payroll_slip_templates (it physically lives in hrms-service's
@@ -213,10 +219,12 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       pensionRows.push(`<tr><td>GPF (10% of Basic)</td><td class="amount">${formatAmount(slip.gpfMinor)}</td></tr>`);
     }
     if (slip.npsEmployeeMinor > 0n) {
-      pensionRows.push(`<tr><td>NPS (Employee 10%)</td><td class="amount">${formatAmount(slip.npsEmployeeMinor)}</td></tr>`);
+      pensionRows.push(`<tr><td>${isUps ? "UPS" : "NPS"} (Employee 10%)</td><td class="amount">${formatAmount(slip.npsEmployeeMinor)}</td></tr>`);
     }
     if (slip.npsEmployerMinor > 0n) {
-      pensionRows.push(`<tr><td>NPS (Employer 14%)</td><td class="amount">${formatAmount(slip.npsEmployerMinor)}</td></tr>`);
+      pensionRows.push(isUps
+        ? `<tr><td>UPS (Government 10% + pool 8.5%)</td><td class="amount">${formatAmount(slip.npsEmployerMinor + upsPoolMinor)}</td></tr>`
+        : `<tr><td>NPS (Employer 14%)</td><td class="amount">${formatAmount(slip.npsEmployerMinor)}</td></tr>`);
     }
     if (pensionRows.length === 0) {
       if (slip.pfEmployeeMinor > 0n) {

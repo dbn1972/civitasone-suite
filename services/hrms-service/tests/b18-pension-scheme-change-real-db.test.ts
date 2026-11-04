@@ -25,6 +25,12 @@ const C1 = randomUUID(); // contract, NPS on record (the UAT state), no UAN
 const C2 = randomUUID(); // permanent, NPS, valid UAN
 const C3 = randomUUID(); // for the reject path
 const C4 = randomUUID(); // separated
+// Review SF5 / SF8
+const R1 = randomUUID(); // regular post-2004 NPS: matrix + override
+const R2 = randomUUID(); // regular post-2004 NPS: UPS once / switch back once
+const R3 = randomUUID(); // contract NPS with UAN: concurrent requests
+const OTHER_TENANT = randomUUID();
+const SUPER = randomUUID();
 const UAN1 = "100200300401";
 
 const h = (actor: string, roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: actor, tid: TENANT, roles, sid: "b18" }, SECRET)}` });
@@ -80,6 +86,7 @@ beforeAll(async () => {
     for (const [id, no, type, status, uan] of [
       [C1, "B18-C1", "contract", "confirmed", null], [C2, "B18-C2", "permanent", "confirmed", "100200300402"],
       [C3, "B18-C3", "contract", "confirmed", "100200300403"], [C4, "B18-C4", "contract", "separated", null],
+      [R1, "B18-R1", "permanent", "confirmed", null], [R2, "B18-R2", "permanent", "confirmed", null], [R3, "B18-R3", "contract", "confirmed", "100200300405"],
     ] as const) {
       await tx.execute(sql`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, pension_scheme, uan_number, basic_minor, created_by, updated_by)
         VALUES (${id}::uuid, ${TENANT}::uuid, ${no}, ${"Staff " + no}, ${DEPT}::uuid, ${DESIG}::uuid, ${"2025-01-15"}, ${type}, ${status}, ${"NPS"}, ${uan}, 1800000, ${MAKER}::uuid, ${MAKER}::uuid)`);
@@ -170,21 +177,21 @@ describe("D1: back-dated and future-dated changes", () => {
     expect(same.json().code).toBe("PENSION_SCHEME_UNCHANGED");
   });
 
-  it("future-dated UPS -> EPF: not applied at approval, the worker tick applies it on the date, once", async () => {
+  it("future-dated UPS -> NPS (the one-time switch back): not applied at approval, the worker tick applies it on the date, once", async () => {
     const eff = addMonths(THIS_MONTH, 2);
-    const r = await request(C2, { toScheme: "EPF", effectiveFrom: first(eff), reason: "Moved to a PSU deputation post under EPF" });
+    const r = await request(C2, { toScheme: "NPS", effectiveFrom: first(eff), reason: "One-time switch back from UPS to NPS" });
     expect(r.statusCode).toBe(201);
     const a = await decide(r.json().id, "approve", {});
     expect(a.json()).toMatchObject({ appliedNow: false, appliedAt: null });
     expect((await empRow(C2)).pension_scheme).toBe("UPS");
     expect(await feedScheme(addMonths(THIS_MONTH, 1), C2)).toBe("UPS");
-    expect(await feedScheme(eff, C2)).toBe("EPF");
+    expect(await feedScheme(eff, C2)).toBe("NPS");
 
     await applyDuePensionSchemeChangesOnce(db, { asOf: `${addMonths(THIS_MONTH, 1)}-28` });
     expect((await empRow(C2)).pension_scheme).toBe("UPS"); // not due yet
     await applyDuePensionSchemeChangesOnce(db, { asOf: first(eff) });
     const after = await empRow(C2);
-    expect(after.pension_scheme).toBe("EPF");
+    expect(after.pension_scheme).toBe("NPS");
     await applyDuePensionSchemeChangesOnce(db, { asOf: first(eff) });
     expect((await empRow(C2)).version).toBe(after.version); // applied once
     expect((await audits(C2)).filter((x) => x.action === "pension_scheme_change_apply")).toHaveLength(1);
@@ -193,7 +200,7 @@ describe("D1: back-dated and future-dated changes", () => {
 
 describe("D1: reject, exited employee, history", () => {
   it("the checker rejects with a note (the maker cannot); nothing changes", async () => {
-    const r = await request(C3, { toScheme: "UPS", effectiveFrom: first(THIS_MONTH), reason: "Requested by mistake for this employee" });
+    const r = await request(C3, { toScheme: "EPF", effectiveFrom: first(THIS_MONTH), reason: "Requested by mistake for this employee" });
     expect(r.statusCode).toBe(201);
     expect((await decide(r.json().id, "reject", { note: "Not eligible" }, maker)).statusCode).toBe(403);
     expect((await decide(r.json().id, "reject", {})).statusCode).toBe(400);
@@ -212,7 +219,7 @@ describe("D1: reject, exited employee, history", () => {
   it("history and the pending queue are listed", async () => {
     const hist = await app.inject({ method: "GET", url: `/v1/hrms/employees/${C2}/pension-scheme-changes`, headers: maker });
     expect(hist.statusCode).toBe(200);
-    expect(hist.json().data.map((d: { toScheme: string }) => d.toScheme)).toEqual(["EPF", "UPS"]);
+    expect(hist.json().data.map((d: { toScheme: string }) => d.toScheme)).toEqual(["NPS", "UPS"]);
     const q = await app.inject({ method: "GET", url: "/v1/hrms/pension-scheme-changes?status=pending", headers: checker });
     expect(q.json().data).toEqual([]);
   });
@@ -250,5 +257,112 @@ describe("D1 / D3: scheme at hire by rule, incomplete without a UAN, not editabl
     const { id } = await schemeOf("B18-N3");
     expect((await app.inject({ method: "PATCH", url: `/v1/hrms/employees/${id}`, headers: maker, payload: { pensionScheme: "EPF" } })).statusCode).toBe(400);
     expect((await app.inject({ method: "PATCH", url: `/v1/hrms/employees/${id}`, headers: maker, payload: { uanNumber: "1234", reason: "Recording the member UAN" } })).statusCode).toBe(400);
+  });
+});
+
+describe("Review SF5: eligibility matrix and super_admin override", () => {
+  const superH = h(SUPER, ["super_admin"]);
+  it("contract staff can only be EPF: NPS is refused with 422 PENSION_SCHEME_NOT_ALLOWED", async () => {
+    const r = await request(C1, { toScheme: "NPS", effectiveFrom: first(addMonths(THIS_MONTH, 1)), reason: "Wrongly asked for NPS here" });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("PENSION_SCHEME_NOT_ALLOWED");
+    expect(r.json().message).toContain("contract and PSU staff are EPF members only");
+  });
+
+  it("outside the matrix: an override by hr_admin is refused (403); a super_admin override is recorded, approved and audited", async () => {
+    const body = { toScheme: "EPF", effectiveFrom: first(addMonths(THIS_MONTH, 1)), reason: "Posted to a PSU under EPF", uanNumber: "100200300406" };
+    expect((await request(R1, body)).json().code).toBe("PENSION_SCHEME_NOT_ALLOWED");
+    const override = { ...body, overrideReason: "Deputation to PSU XYZ under order 12/2026 dated 01-11-2026" };
+    const byHr = await request(R1, override);
+    expect(byHr.statusCode).toBe(403);
+    expect(byHr.json().code).toBe("PENSION_SCHEME_OVERRIDE_FORBIDDEN");
+    const bySuper = await request(R1, override, superH);
+    expect(bySuper.statusCode).toBe(201);
+    expect(bySuper.json().overrideReason).toBe(override.overrideReason);
+    const a = await decide(bySuper.json().id, "approve", {});
+    expect(a.statusCode).toBe(200);
+    const last = (await audits(R1)).pop()!;
+    expect(last).toMatchObject({ action: "pension_scheme_change", detail: { overrideReason: override.overrideReason } });
+  });
+
+  it("NPS -> UPS once; the one-time switch back UPS -> NPS once; a second UPS option is refused", async () => {
+    const step = async (to: string, n: number) => {
+      const r = await request(R2, { toScheme: to, effectiveFrom: first(addMonths(THIS_MONTH, n)), reason: `UPS option step ${n} for this test` });
+      if (r.statusCode === 201) expect((await decide(r.json().id, "approve", {})).statusCode).toBe(200);
+      return r;
+    };
+    expect((await step("UPS", 1)).statusCode).toBe(201);
+    expect((await step("NPS", 2)).statusCode).toBe(201);
+    const again = await step("UPS", 3);
+    expect(again.statusCode).toBe(422);
+    expect(again.json().message).toContain("already been exercised");
+  });
+});
+
+describe("Review SF1: EPF membership facts through the change flow", () => {
+  it("EPF -> EPF with only the membership facts is a membership request; on approval the joint option reaches payroll-input", async () => {
+    const eff = first(addMonths(THIS_MONTH, 1));
+    expect((await request(C1, { toScheme: "EPF", effectiveFrom: eff, reason: "Nothing changes in this request" })).json().code).toBe("PENSION_SCHEME_UNCHANGED");
+    const r = await request(C1, { toScheme: "EPF", effectiveFrom: eff, reason: "Para 26(6) joint option on joining (owner 2026-11-05)", epfVoluntaryJointOption: true, epfFirstJoinedOn: "2026-10-28" });
+    expect(r.statusCode).toBe(201);
+    expect(r.json()).toMatchObject({ kind: "membership", fromScheme: "EPF", toScheme: "EPF", epfVoluntaryJointOption: true });
+    expect((await decide(r.json().id, "approve", {})).statusCode).toBe(200);
+    const row = await asTenant((tx) => tx.execute(sql`SELECT epf_voluntary_joint_option AS vjo, epf_first_joined_on::text AS first FROM employee.hrms_employees WHERE id = ${C1}::uuid`)) as unknown as Array<{ vjo: boolean; first: string }>;
+    expect(row[0]).toEqual({ vjo: true, first: "2026-10-28" });
+    const feed = await app.inject({ method: "GET", url: `/v1/hrms/internal/payroll-input?month=${THIS_MONTH}`, headers: h(MAKER, ["payroll_admin"]) });
+    const c1 = (feed.json() as { employees: Array<{ id: string; epf: unknown; pensionScheme: string }> }).employees.find((e) => e.id === C1)!;
+    expect(c1.epf).toEqual({ firstJoinedOn: "2026-10-28", voluntaryJointOption: true, epsMember: null, attains58On: null });
+    expect(c1.pensionScheme).toBe("EPF");
+  });
+
+  it("membership facts are only accepted for EPF", async () => {
+    expect((await request(R2, { toScheme: "UPS", effectiveFrom: first(addMonths(THIS_MONTH, 6)), reason: "Not an EPF member at all", epsMember: true })).statusCode).toBe(400);
+  });
+});
+
+describe("Review SF8: concurrency and tenant isolation", () => {
+  it("two concurrent requests for the same employee: exactly one is filed, the other gets 409", async () => {
+    const body = { toScheme: "EPF", effectiveFrom: first(THIS_MONTH), reason: "Contract staff are EPF members (race test)" };
+    const [a, b] = await Promise.all([request(R3, body), request(R3, body, h(randomUUID(), ["hr_officer"]))]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([201, 409]);
+    const pending = await asTenant((tx) => tx.execute(sql`SELECT count(*)::int AS n FROM employee.hrms_pension_scheme_changes WHERE employee_id = ${R3}::uuid AND status = ${"pending"}`)) as unknown as Array<{ n: number }>;
+    expect(pending[0]!.n).toBe(1);
+  });
+
+  it("another tenant cannot see, request on, approve or reject this tenant's employees and changes (404 / empty)", async () => {
+    const other = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: randomUUID(), tid: OTHER_TENANT, roles, sid: "b18x" }, SECRET)}` });
+    const pending = (await app.inject({ method: "GET", url: "/v1/hrms/pension-scheme-changes?status=pending", headers: checker })).json().data[0];
+    expect(pending).toBeDefined();
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/pension-scheme-changes/${pending.id}/approve`, headers: other(["hr_admin"]), payload: {} })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/pension-scheme-changes/${pending.id}/reject`, headers: other(["hr_admin"]), payload: { note: "cross tenant" } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/employees/${C2}/pension-scheme-changes`, headers: other(["hr_admin"]),
+      payload: { toScheme: "NPS", effectiveFrom: first(addMonths(THIS_MONTH, 9)), reason: "Cross-tenant attempt" } })).statusCode).toBe(404);
+    const hist = await app.inject({ method: "GET", url: `/v1/hrms/employees/${C2}/pension-scheme-changes`, headers: other(["hr_admin"]) });
+    expect(hist.json().data).toEqual([]);
+  });
+});
+
+describe("Review SF9 / SF6: regime-only feed; no scheme for apprentices and consultants", () => {
+  it("GET /internal/tax-regimes carries ids, numbers and regimes only -- no PAN, bank or pay", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/internal/tax-regimes", headers: h(MAKER, ["payroll_admin"]) });
+    expect(r.statusCode).toBe(200);
+    const rows = r.json().employees as Array<Record<string, unknown>>;
+    expect(rows.find((e) => e.id === C2)).toEqual({ id: C2, employeeNo: "B18-C2", departmentId: DEPT, taxRegime: "new", eligibleForPayroll: true, paymentRoute: "payroll" });
+    expect(rows.some((e) => e.id === C4)).toBe(false); // separated employees are not in payroll
+    for (const e of rows) for (const k of ["pan", "bankAccountNo", "bankIfsc", "basicMinor", "uan", "fullName"]) expect(e).not.toHaveProperty(k);
+    expect((await app.inject({ method: "GET", url: "/v1/hrms/internal/tax-regimes", headers: h(MAKER, ["employee"]) })).statusCode).toBe(403);
+  });
+
+  it("an apprentice and a consultant are hired on NONE, and no scheme change is open to them", async () => {
+    for (const [no, type] of [["B18-AP1", "apprentice"], ["B18-CO1", "consultant"]] as const) {
+      const c = await app.inject({ method: "POST", url: "/v1/hrms/employees", headers: maker,
+        payload: { employeeNo: no, fullName: `New ${no}`, departmentId: DEPT, designationId: DESIG, dateOfJoining: "2026-10-28", employeeType: type } });
+      expect(c.statusCode).toBe(202);
+      const row = ((await asTenant((tx) => tx.execute(sql`SELECT id, pension_scheme FROM employee.hrms_employees WHERE tenant_id = ${TENANT}::uuid AND employee_no = ${no}`))) as unknown as Array<{ id: string; pension_scheme: string }>)[0]!;
+      expect(row.pension_scheme).toBe("NONE");
+      const r = await request(row.id, { toScheme: "NPS", effectiveFrom: first(THIS_MONTH), reason: "Should not be possible at all" });
+      expect(r.statusCode).toBe(422);
+      expect(r.json().code).toBe("PENSION_SCHEME_NOT_ALLOWED");
+    }
   });
 });

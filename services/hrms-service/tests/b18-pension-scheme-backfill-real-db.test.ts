@@ -21,10 +21,12 @@ const DEPT = randomUUID();
 const DESIG = randomUUID();
 const A = randomUUID(); // already has history
 const B = randomUUID(); // no history -> initial row
-const C = randomUUID(); // switched NPS -> EPF by SQL -> correction row
+const C = randomUUID(); // switched NPS -> EPF by SQL -> correction row (joint option)
+const D = randomUUID(); // CPF member -> initial row (review SF4: used to crash the backfill)
 const REASON = "UAT data correction 2026-11-05 (owner-approved switch to EPF)";
 const asTenant = <T>(fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>) => runWithTenant(TENANT, () => db.transaction(fn));
 let app: FastifyInstance;
+const h0 = (rows: Array<Record<string, unknown>>, id: string) => rows.find((x) => x.employee_id === id);
 
 async function history() {
   return await asTenant((tx) => tx.execute(sql`SELECT employee_id, kind, from_scheme, to_scheme, effective_from::text AS eff, status, requested_by, decided_by, reason, applied_at IS NOT NULL AS applied
@@ -45,7 +47,7 @@ beforeAll(async () => {
   await asTenant(async (tx) => {
     await tx.execute(sql`INSERT INTO employee.hrms_departments (id, tenant_id, code, name, created_by, updated_by) VALUES (${DEPT}::uuid, ${TENANT}::uuid, ${"BF"}, ${"BF"}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
     await tx.execute(sql`INSERT INTO employee.hrms_designations (id, tenant_id, code, name, level, created_by, updated_by) VALUES (${DESIG}::uuid, ${TENANT}::uuid, ${"BFD"}, ${"BFD"}, 1, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
-    for (const [id, no, scheme] of [[A, "BF-A", "NPS"], [B, "BF-B", "GPF"], [C, "UATG1-25595", "EPF"]] as const) {
+    for (const [id, no, scheme] of [[A, "BF-A", "NPS"], [B, "BF-B", "GPF"], [C, "UATG1-25595", "EPF"], [D, "BF-D", "CPF"]] as const) {
       await tx.execute(sql`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, pension_scheme, created_by, updated_by)
         VALUES (${id}::uuid, ${TENANT}::uuid, ${no}, ${"Staff " + no}, ${DEPT}::uuid, ${DESIG}::uuid, ${"2026-10-28"}, ${"contract"}, ${"confirmed"}, ${scheme}, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
     }
@@ -62,6 +64,8 @@ describe("arguments", () => {
     expect(() => parseArgs(["--apply"])).toThrow(/--actor/);
     expect(() => parseArgs(["--correction", "X=NPS:2027-02-01"])).toThrow(/--reason/);
     expect(() => parseArgs(["--correction", "X=NPS:2027-02-15", "--reason", REASON])).toThrow(/YYYY-MM-01/);
+    expect(() => parseArgs(["--correction", "X=ABC:2027-02-01", "--reason", REASON])).toThrow(/FROM must be one of/);
+    expect(parseArgs(["--correction", "X=NPS:2027-02-01:vjo", "--reason", REASON]).corrections.get("X")).toEqual({ fromScheme: "NPS", effectiveFrom: "2027-02-01", voluntaryJointOption: true });
     const a = parseArgs(["--apply", "--actor", ACTOR, "--tenant", TENANT, "--correction", "UATG1-25595=NPS:2027-02-01", "--reason", REASON]);
     expect(a).toMatchObject({ dryRun: false, actor: ACTOR, tenants: [TENANT], reason: REASON });
     expect(a.corrections.get("UATG1-25595")).toEqual({ fromScheme: "NPS", effectiveFrom: "2027-02-01" });
@@ -80,7 +84,7 @@ describe("arguments", () => {
 });
 
 describe("backfill against the database", () => {
-  const args = (apply: boolean) => parseArgs([...(apply ? ["--apply", "--actor", ACTOR] : []), "--tenant", TENANT, "--correction", "UATG1-25595=NPS:2027-02-01", "--reason", REASON]);
+  const args = (apply: boolean) => parseArgs([...(apply ? ["--apply", "--actor", ACTOR] : []), "--tenant", TENANT, "--correction", "UATG1-25595=NPS:2027-02-01:vjo", "--reason", REASON]);
 
   it("dry run reports the plan and writes nothing", async () => {
     const r = await backfillPensionSchemeHistory(args(false));
@@ -90,15 +94,18 @@ describe("backfill against the database", () => {
     expect((await history()).length).toBe(1);
   });
 
-  it("--apply writes approved, applied rows for B (initial) and C (correction), audited; A is untouched", async () => {
+  it("--apply writes approved, applied rows for B and D (initial, CPF included) and C (correction + joint option), audited; A is untouched", async () => {
     const r = await backfillPensionSchemeHistory(args(true));
-    expect(r.written).toBe(2);
+    expect(r.written).toBe(3);
+    expect(h0(await history(), D)).toMatchObject({ kind: "initial", from_scheme: "CPF", to_scheme: "CPF" });
+    const vjo = await asTenant((tx) => tx.execute(sql`SELECT epf_voluntary_joint_option AS v FROM employee.hrms_employees WHERE id = ${C}::uuid`)) as unknown as Array<{ v: boolean }>;
+    expect(vjo[0]!.v).toBe(true);
     const h = await history();
     expect(h.find((x) => x.employee_id === B)).toMatchObject({ kind: "initial", from_scheme: "GPF", to_scheme: "GPF", eff: "2026-10-01", status: "approved", decided_by: ACTOR, applied: true });
     expect(h.find((x) => x.employee_id === C)).toMatchObject({ kind: "correction", from_scheme: "NPS", to_scheme: "EPF", eff: "2027-02-01", status: "approved", reason: REASON, decided_by: ACTOR });
     expect(h.filter((x) => x.employee_id === A)).toHaveLength(1);
     const audits = await asTenant((tx) => tx.execute(sql`SELECT count(*)::int AS n FROM _outbox.messages WHERE tenant_id = ${TENANT} AND payload->>${"action"} = ${"pension_scheme_history_backfill"}`)) as unknown as Array<{ n: number }>;
-    expect(audits[0]!.n).toBe(2);
+    expect(audits[0]!.n).toBe(3);
     const emp = await asTenant((tx) => tx.execute(sql`SELECT pension_scheme FROM employee.hrms_employees WHERE id = ${C}::uuid`)) as unknown as Array<{ pension_scheme: string }>;
     expect(emp[0]!.pension_scheme).toBe("EPF");
   });
@@ -107,7 +114,7 @@ describe("backfill against the database", () => {
     const r = await backfillPensionSchemeHistory(args(true));
     expect(r.written).toBe(0);
     expect(r.planned).toEqual([]);
-    expect((await history()).length).toBe(3);
+    expect((await history()).length).toBe(4);
   });
 
   it("payroll-input: the corrected employee is NPS before 2027-02 and EPF from it", async () => {

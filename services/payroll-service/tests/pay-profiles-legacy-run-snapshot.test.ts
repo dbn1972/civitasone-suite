@@ -39,6 +39,17 @@
  *    (67,700 + 37,235 + 6,770) x 9/31 + (3,600 + 1,693) x 9/31;
  *  - the LOP line records its days (lopDays, daysInMonth) for the arrears payable share;
  *  - the taxable, net, run and register totals that follow from those.
+ *
+ * PR #2458 review (ERP-head decisions 2026-11-05) re-generated it once more,
+ * for law changes that apply to every profile alike; every changed value is one of:
+ *  - SF1 EPS eligibility (EPS 1995 para 6A, GSR 609(E) 22.08.2014): the three
+ *    EPF members (employees ...0002, ...0004, ...0008) first joined EPF on
+ *    2018-04-01, after 01.09.2014, with Basic + DA above Rs 15,000 and no
+ *    earlier membership recorded, so they are not EPS members: EPS 1,250 -> 0
+ *    and EPF-EPS difference 550 -> 1,800 (the employer 12% total is unchanged,
+ *    so no net / gross / total moves);
+ *  - SF2: SNAP-06's LOP line now also records notInServiceDays 9 (the 9 days
+ *    before joining), so NCP days exclude them; its amount is unchanged.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

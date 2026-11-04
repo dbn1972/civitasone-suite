@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { EMPLOYEE_STATUSES, employeeStatusEnum, isEmployeeStatus } from "./status.js";
-import { PENSION_SCHEMES } from "./pension-scheme.js";
+import { PENSION_SCHEMES, NO_SCHEME } from "./pension-scheme.js";
 
 /**
  * UAT b18 D3: a UAN (EPFO Universal Account Number) is exactly 12 digits; it
@@ -113,7 +113,12 @@ export const createEmployeeBody = z.object({
   // UAT b18 D1: optional explicit scheme at hire (e.g. UPS). Omitted -> the
   // rule in pension-scheme.ts (contract / PSU -> EPF, joined before 2004 -> GPF,
   // else NPS). Later changes go through the maker-checker change routes.
-  pensionScheme:  z.enum(PENSION_SCHEMES).optional(),
+  pensionScheme:  z.enum([...PENSION_SCHEMES, NO_SCHEME]).optional(),
+  // Review SF1: EPF membership facts for EPS eligibility (prior EPF membership
+  // carried via the UAN, para 26(6) joint option, explicit EPS membership).
+  epfFirstJoinedOn:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
+  epfVoluntaryJointOption: z.boolean().optional(),
+  epsMember:               z.boolean().optional(),
   managerId:    z.string().uuid().optional(),
   station:      z.string().max(128).optional(),
   category:     z.enum(["UR", "SC", "ST", "OBC", "EWS"]).optional(),

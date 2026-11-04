@@ -188,6 +188,11 @@ export async function pfChallanSummary(tenantId: string, period: string) {
     },
     employerCostMinor: (t.epfErContribMinor + t.epsContribMinor + ac2 + ac21 + ac22).toString(),
     totalChallanMinor: (ac1 + ac2 + ac10 + ac21 + ac22).toString(),
+    // Review SF3: the A/c 2 minimum top-up, once the month is closed (POST .../pf/challan/close).
+    adminMinimumTopUp: await (async () => {
+      const t2 = await repo.adminTopUpForPeriod(tenantId, period);
+      return t2 ? { closed: true, topUpMinor: t2.topUpMinor.toString(), journalId: t2.journalId ?? null } : { closed: false, topUpMinor: (ac2 - t.epfAdminMinor).toString(), journalId: null };
+    })(),
     rates: {
       edliRateBps: cfg.edliRateBps.toString(),
       edliWageCapMinor: cfg.edliWageCapMinor.toString(),
@@ -195,6 +200,12 @@ export async function pfChallanSummary(tenantId: string, period: string) {
       epfAdminMinMinor: cfg.epfAdminMinMinor.toString(),
     },
   };
+}
+
+/** Review SF7: the Government 8.5% UPS pool share booked for a slip (0 when none). */
+export async function upsPoolMinorForSlip(tenantId: string, slipId: string): Promise<bigint> {
+  const rows = await repo.upsPoolForSlip(tenantId, slipId);
+  return (rows ?? []).reduce((s: bigint, r: { contribMinor: bigint | string | number }) => s + BigInt(r.contribMinor), 0n);
 }
 
 export async function esiPeriodSummary(tenantId: string, period?: string) {

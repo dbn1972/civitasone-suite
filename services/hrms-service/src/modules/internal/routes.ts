@@ -12,7 +12,7 @@ import { loadPayProfileFeedInputs } from "../pay-profile/repo.js";
 import { buildEmployeePayFeed } from "../pay-profile/feed.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { completedYearsOfService, totalLeaveBalanceDays } from "../employee/fnf-service-snapshot.js";
-import { schemeForMonth } from "../employee/pension-scheme.js";
+import { schemeForMonth, attains58On } from "../employee/pension-scheme.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -70,6 +70,35 @@ export async function collectPayrollReadiness(
 }
 
 export async function internalRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * Review SF9: the payroll run-creation tax pre-check only needs who is in
+   * payroll and on which tax regime -- never PAN, bank details or pay. This
+   * returns exactly that (non-separated employees), so the pre-check no longer
+   * pulls the full payroll-input projection with decrypted PII.
+   */
+  app.get("/v1/hrms/internal/tax-regimes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const PAGE_SIZE = 500;
+    const employees: Awaited<ReturnType<typeof employeeRepo.listByTenant>> = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const page = await employeeRepo.listByTenant(ctx.tenantId, PAGE_SIZE, offset);
+      employees.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    const resolveType = await loadTypeResolver(ctx.tenantId);
+    return reply.send({
+      employees: employees.filter((e) => e.status !== "separated").map((e) => {
+        const pol = resolveType(e.employeeType);
+        return {
+          id: e.id, employeeNo: e.employeeNo, departmentId: e.departmentId,
+          taxRegime: (e.taxRegime ?? "new") as "old" | "new",
+          eligibleForPayroll: pol.eligibleForPayroll, paymentRoute: pol.paymentRoute,
+        };
+      }),
+    });
+  });
+
   app.get("/v1/hrms/internal/payroll-input", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
@@ -241,7 +270,15 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           gender: e.gender ?? null,
           // State of employment (ISO 3166-2:IN code), the key of the professional-tax slab set; null = not recorded.
           stateCode: e.workStateCode ?? null,
-          pensionScheme: schemeForMonth(e.pensionScheme ?? "NPS", schemeChanges.get(e.id) ?? [], q.month) as "GPF" | "NPS" | "EPF" | "UPS",
+          pensionScheme: schemeForMonth(e.pensionScheme ?? "NPS", schemeChanges.get(e.id) ?? [], q.month) as "GPF" | "NPS" | "EPF" | "UPS" | "NONE",
+          // Review SF1 (additive): EPF membership facts payroll needs for EPS
+          // eligibility (EPS 1995 para 6A). The 58th-birthday date, not the DOB.
+          epf: {
+            firstJoinedOn: e.epfFirstJoinedOn ?? null,
+            voluntaryJointOption: e.epfVoluntaryJointOption ?? false,
+            epsMember: e.epsMember ?? null,
+            attains58On: attains58On(e.dateOfBirth),
+          },
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
           // FR 53 (additive): the suspension window and any recorded review

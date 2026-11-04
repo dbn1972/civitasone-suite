@@ -56,6 +56,9 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
         // UAT b18 D1: by rule (contract / PSU -> EPF, joined before 2004 -> GPF,
         // else NPS) unless chosen explicitly; was the column default NPS for all.
         pensionScheme:  body.pensionScheme ?? defaultPensionScheme({ dateOfJoining: body.dateOfJoining, employeeType: body.employeeType ?? "permanent" }),
+        epfFirstJoinedOn:        body.epfFirstJoinedOn ?? null,
+        epfVoluntaryJointOption: body.epfVoluntaryJointOption ?? false,
+        epsMember:               body.epsMember ?? null,
         basicMinor:     BigInt(body.basicMinor ?? 0),
         currency:       body.currency ?? "INR",
         payStructureId: body.payStructureId ?? null,

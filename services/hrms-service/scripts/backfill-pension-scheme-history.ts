@@ -16,11 +16,17 @@
  *       --correction UATG1-71359=NPS:2027-02-01 --correction UATG1-34944=NPS:2027-02-01
  *       --correction UATG1-48782=NPS:2027-02-01 --correction UATG1-97489=NPS:2027-02-01
  *       --reason "UAT data correction 2026-11-05 (owner-approved switch to EPF)"
+ *     (ERP-head decision on the #2458 review: they are voluntary EPF members by
+ *     joint option, para 26(6) EPF Scheme, so NOT EPS-eligible -- add ":vjo" to
+ *     each, e.g. UATG1-25595=NPS:2027-02-01:vjo, which also sets
+ *     epf_voluntary_joint_option on the employee.) Run the corrections in the
+ *     FIRST --apply: an employee that already has history is skipped.
  *
  * Rows are written approved and applied (the scheme already is on record),
  * requested by the system actor and decided by --actor (the approving
  * officer's user id, required with --apply), each audited
- * (pension_scheme_history_backfill). hrms_employees is never changed.
+ * (pension_scheme_history_backfill). hrms_employees is changed only for a
+ * ":vjo" correction (epf_voluntary_joint_option = true).
  * Idempotent: an employee who has any history row is skipped (re-checked under
  * a row lock at write time), so a second --apply writes nothing.
  *
@@ -41,17 +47,19 @@ import { db, sqlClient, scopedPlatformRead } from "../src/shared/db.js";
 import { enqueue } from "../src/shared/outbox.js";
 import * as employeeRepo from "../src/modules/employee/repo.js";
 import { hrmsEmployees, hrmsPensionSchemeChanges } from "../src/modules/employee/schema.js";
-import { PENSION_SCHEMES } from "../src/modules/employee/pension-scheme.js";
+
 
 export const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 export const INITIAL_REASON = "Initial pension scheme recorded by the history backfill (scheme on record, no change)";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FIRST_OF_MONTH = /^\d{4}-(0[1-9]|1[0-2])-01$/;
 
-export interface Correction { fromScheme: string; effectiveFrom: string }
+export interface Correction { fromScheme: string; effectiveFrom: string; voluntaryJointOption?: boolean }
+/** Schemes a history row may name (migration 0262). */
+export const KNOWN_SCHEMES: readonly string[] = ["GPF", "NPS", "EPF", "UPS", "CPF", "NONE"];
 export interface BackfillArgs { dryRun: boolean; tenants: string[]; actor: string | null; corrections: Map<string, Correction>; reason: string | null }
 export interface EmployeeLite { id: string; employeeNo: string; pensionScheme: string; dateOfJoining: string }
-export interface PlannedRow { employeeId: string; employeeNo: string; kind: "initial" | "correction"; fromScheme: string; toScheme: string; effectiveFrom: string; reason: string }
+export interface PlannedRow { employeeId: string; employeeNo: string; kind: "initial" | "correction"; fromScheme: string; toScheme: string; effectiveFrom: string; reason: string; voluntaryJointOption?: boolean }
 
 export function parseArgs(argv: string[]): BackfillArgs {
   let apply = false, dry = false, actor: string | null = null, reason: string | null = null;
@@ -74,9 +82,10 @@ export function parseArgs(argv: string[]): BackfillArgs {
       if (v.length < 10) throw new Error("--reason needs at least 10 characters");
       reason = v;
     } else if (a === "--correction") {
-      const m = /^([^=]+)=([A-Z]{3}):(\d{4}-\d{2}-\d{2})$/.exec(argv[++i] ?? "");
-      if (!m || !FIRST_OF_MONTH.test(m[3]!)) throw new Error("--correction needs <employeeNo>=<FROM>:<YYYY-MM-01>");
-      corrections.set(m[1]!, { fromScheme: m[2]!, effectiveFrom: m[3]! });
+      const m = /^([^=]+)=([A-Z]{3,4}):(\d{4}-\d{2}-\d{2})(:vjo)?$/.exec(argv[++i] ?? "");
+      if (!m || !FIRST_OF_MONTH.test(m[3]!)) throw new Error("--correction needs <employeeNo>=<FROM>:<YYYY-MM-01>[:vjo]");
+      if (!KNOWN_SCHEMES.includes(m[2]!)) throw new Error(`--correction FROM must be one of ${KNOWN_SCHEMES.join(", ")}`);
+      corrections.set(m[1]!, { fromScheme: m[2]!, effectiveFrom: m[3]!, ...(m[4] ? { voluntaryJointOption: true } : {}) });
     } else throw new Error(`unknown argument ${a} (use --dry-run | --apply | --tenant <uuid> | --actor <uuid> | --correction <no>=<FROM>:<date> | --reason <text>)`);
   }
   if (apply && dry) throw new Error("--apply and --dry-run are mutually exclusive");
@@ -100,10 +109,14 @@ export function planBackfill(
     const joinMonth = `${e.dateOfJoining.slice(0, 7)}-01`;
     const c = corrections.get(e.employeeNo);
     if (c) {
-      if (!(PENSION_SCHEMES as readonly string[]).includes(e.pensionScheme) && e.pensionScheme !== "CPF") { skipped.push({ employeeNo: e.employeeNo, reason: `unknown recorded scheme ${e.pensionScheme}` }); continue; }
+      if (!KNOWN_SCHEMES.includes(e.pensionScheme)) { skipped.push({ employeeNo: e.employeeNo, reason: `unknown recorded scheme ${e.pensionScheme}` }); continue; }
+      if (c.voluntaryJointOption && e.pensionScheme !== "EPF") { skipped.push({ employeeNo: e.employeeNo, reason: "a joint option (:vjo) applies to an EPF member only" }); continue; }
       if (c.fromScheme === e.pensionScheme) { skipped.push({ employeeNo: e.employeeNo, reason: `correction from ${c.fromScheme} equals the recorded scheme` }); continue; }
       if (c.effectiveFrom < joinMonth) { skipped.push({ employeeNo: e.employeeNo, reason: `correction effective ${c.effectiveFrom} is before the joining month` }); continue; }
-      rows.push({ employeeId: e.id, employeeNo: e.employeeNo, kind: "correction", fromScheme: c.fromScheme, toScheme: e.pensionScheme, effectiveFrom: c.effectiveFrom, reason: reason! });
+      rows.push({ employeeId: e.id, employeeNo: e.employeeNo, kind: "correction", fromScheme: c.fromScheme, toScheme: e.pensionScheme, effectiveFrom: c.effectiveFrom, reason: reason!,
+        ...(c.voluntaryJointOption ? { voluntaryJointOption: true } : {}) });
+    } else if (!KNOWN_SCHEMES.includes(e.pensionScheme)) {
+      skipped.push({ employeeNo: e.employeeNo, reason: `unknown recorded scheme ${e.pensionScheme}` });
     } else {
       rows.push({ employeeId: e.id, employeeNo: e.employeeNo, kind: "initial", fromScheme: e.pensionScheme, toScheme: e.pensionScheme, effectiveFrom: joinMonth, reason: INITIAL_REASON });
     }
@@ -148,13 +161,18 @@ export async function backfillPensionSchemeHistory(args: BackfillArgs): Promise<
         const [row] = await tx.insert(hrmsPensionSchemeChanges).values({
           tenantId, employeeId: r.employeeId, fromScheme: r.fromScheme, toScheme: r.toScheme, effectiveFrom: r.effectiveFrom,
           reason: r.reason, status: "approved", kind: r.kind, requestedBy: SYSTEM_ACTOR, decidedBy: args.actor!, decidedAt: now,
+          ...(r.voluntaryJointOption ? { epfVoluntaryJointOption: true } : {}),
           decisionNote: "history backfill", appliedAt: now, createdBy: args.actor!, updatedBy: args.actor!,
         }).returning({ id: hrmsPensionSchemeChanges.id });
+        if (r.voluntaryJointOption) {
+          await tx.update(hrmsEmployees).set({ epfVoluntaryJointOption: true, updatedBy: args.actor!, updatedAt: now })
+            .where(and(eq(hrmsEmployees.id, r.employeeId), eq(hrmsEmployees.tenantId, tenantId)));
+        }
         await enqueue(tx, {
           topic: "audit.event.record", eventType: "audit.event.record", tenantId, actorId: args.actor!, correlationId: randomUUID(),
           payload: {
             service: "hrms", action: "pension_scheme_history_backfill", resourceType: "employee", resourceId: r.employeeId, outcome: "success",
-            oldValue: { pensionScheme: r.fromScheme }, newValue: { pensionScheme: r.toScheme, effectiveFrom: r.effectiveFrom, kind: r.kind },
+            oldValue: { pensionScheme: r.fromScheme }, newValue: { pensionScheme: r.toScheme, effectiveFrom: r.effectiveFrom, kind: r.kind, ...(r.voluntaryJointOption ? { epfVoluntaryJointOption: true } : {}) },
             reason: r.reason, detail: { changeId: row!.id },
           },
         });
