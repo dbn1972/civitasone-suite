@@ -13,7 +13,7 @@ import ApprovalsPage from "./page";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const tasks = [
   { id: id(1), instanceId: id(11), name: "Review", status: "pending", refType: "procurement_po", refId: id(21), dueAt: null, createdAt: "2026-11-01T00:00:00.000Z", instanceName: "Purchase Order Approval" },
-  { id: id(2), instanceId: id(12), name: "Reporting Officer Approval", status: "pending", refType: "leave_app", refId: id(22), dueAt: "2020-01-01T00:00:00.000Z", createdAt: "2026-11-01T00:00:00.000Z", instanceName: "Leave Application" },
+  { id: id(2), instanceId: id(12), name: "Reporting Officer Approval", status: "pending", refType: "leave_app", refId: id(22), dueAt: new Date(Date.now() - 2 * 86400000).toISOString(), createdAt: "2026-11-01T00:00:00.000Z", instanceName: "Leave Application" },
 ];
 const counts = { waiting: 2, overdue: 1, sent: 4, done: 7 };
 

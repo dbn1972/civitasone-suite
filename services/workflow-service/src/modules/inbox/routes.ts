@@ -12,7 +12,7 @@ import * as instanceRepo from "../instances/repo.js";
 import * as historyRepo from "../history/repo.js";
 import * as delegationRepo from "../delegations/repo.js";
 import { INBOX_TABS, inboxCounts, listInbox, countInbox, type InboxTab } from "./repo.js";
-import { getRefSummaries, MAX_SUMMARY_REFS } from "./summaries.js";
+import { getRefSummaries, getRefSummariesBatched, MAX_SUMMARY_REFS } from "./summaries.js";
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -35,6 +35,15 @@ function viewerOf(ctx: { roles: string[]; actorId: string }) {
   return { roles: ctx.roles, actorId: ctx.actorId };
 }
 
+/** The caller bearer token, passed on to the owning services so their own scope applies. */
+function callerAuthOf(req: { headers: Record<string, unknown> }): string | undefined {
+  const h = req.headers.authorization;
+  return typeof h === "string" && /^Bearer\s+\S+$/.test(h) ? h : undefined;
+}
+
+/** Server search looks at up to this many rows of a tab (module filter applied in SQL first). */
+export const SEARCH_CANDIDATES = 1000;
+
 /**
  * UX R1 (approvals inbox -> decide). Read-only endpoints; every decision still goes through the
  * existing POST /v1/workflow/tasks/:id/complete and /forward commands and their server checks.
@@ -45,18 +54,38 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TASK_ROUTE_ROLES);
     const q = inboxQuery.parse(req.query);
-    const filter = {
-      ...(q.refType !== undefined ? { refTypes: Array.isArray(q.refType) ? q.refType : [q.refType] } : {}),
-      ...(q.q ? { q: q.q } : {}),
-    };
-    const [rows, total, counts] = await Promise.all([
-      listInbox(ctx.tenantId, q.tab, ctx.roles, ctx.actorId, q.limit, q.offset, filter),
-      countInbox(ctx.tenantId, q.tab, ctx.roles, ctx.actorId, filter),
-      inboxCounts(ctx.tenantId, ctx.roles, ctx.actorId),
-    ]);
+    const refTypes = q.refType !== undefined ? (Array.isArray(q.refType) ? q.refType : [q.refType]) : undefined;
+    const filter = refTypes ? { refTypes } : {};
+    let rows;
+    let total: number;
+    let searchCapped = false;
+    if (q.q) {
+      // PR #2460 review: search matches what the row SHOWS (reference, sender name and designation,
+      // module facts, workflow names), so it resolves the summaries of the tab candidates first,
+      // under the same participant / strict gates, and keeps the module filter.
+      const candidates = await listInbox(ctx.tenantId, q.tab, ctx.roles, ctx.actorId, SEARCH_CANDIDATES, 0, filter);
+      searchCapped = candidates.length >= SEARCH_CANDIDATES;
+      const summaries = await getRefSummariesBatched(ctx.tenantId, viewerOf(ctx),
+        candidates.filter((r) => r.refType && r.refId).map((r) => ({ refType: r.refType!, refId: r.refId! })), callerAuthOf(req));
+      const byRef = new Map(summaries.map((x) => [`${x.refType}:${x.refId}`, x]));
+      const needle = q.q.toLowerCase();
+      const matched = candidates.filter((r) => {
+        const x = r.refType && r.refId ? byRef.get(`${r.refType}:${r.refId}`) : undefined;
+        return [r.instanceName, r.name, x?.reference, x?.maker?.name, x?.maker?.designation, ...(x?.fields ?? []).map((f) => f.value)]
+          .some((v) => typeof v === "string" && v.toLowerCase().includes(needle));
+      });
+      total = matched.length;
+      rows = matched.slice(q.offset, q.offset + q.limit);
+    } else {
+      [rows, total] = await Promise.all([
+        listInbox(ctx.tenantId, q.tab, ctx.roles, ctx.actorId, q.limit, q.offset, filter),
+        countInbox(ctx.tenantId, q.tab, ctx.roles, ctx.actorId, filter),
+      ]);
+    }
+    const counts = await inboxCounts(ctx.tenantId, ctx.roles, ctx.actorId);
     return reply.send({
       data: rows,
-      pagination: { total, pageSize: q.limit, hasMore: q.offset + rows.length < total },
+      pagination: { total, pageSize: q.limit, hasMore: q.offset + rows.length < total, ...(searchCapped ? { searchCapped: true } : {}) },
       counts,
     });
   });
@@ -73,7 +102,7 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TASK_ROUTE_ROLES);
     const body = summariesBody.parse(req.body ?? {});
-    return reply.send({ data: await getRefSummaries(ctx.tenantId, viewerOf(ctx), body.refs) });
+    return reply.send({ data: await getRefSummaries(ctx.tenantId, viewerOf(ctx), body.refs, callerAuthOf(req)) });
   });
 
   // Everything the decision panel needs for one task, for its participants only (404 otherwise).
@@ -99,10 +128,10 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
       instance.createdBy,
       ...(task.assigneeId ? [task.assigneeId] : []),
       ...trailRows.map((h) => h.actorId),
-    ]);
+    ], fetch, callerAuthOf(req));
     const person = (pid: string | null | undefined): Person | null => (pid ? people.get(pid) ?? null : null);
     const summary = task.refType && task.refId
-      ? (await getRefSummaries(ctx.tenantId, viewerOf(ctx), [{ refType: task.refType, refId: task.refId }]))[0] ?? null
+      ? (await getRefSummaries(ctx.tenantId, viewerOf(ctx), [{ refType: task.refType, refId: task.refId }], callerAuthOf(req)))[0] ?? null
       : null;
 
     // Can this caller decide? Mirrors the completeTask pre-checks (tasks/commands.ts) for the UI

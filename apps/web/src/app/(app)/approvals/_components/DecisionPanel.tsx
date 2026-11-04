@@ -11,10 +11,10 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useToastOptional } from "@/app/_components/ds";
 import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
-import { formatDateTimeIST, formatIndianDate } from "@/lib/formatters";
+import { formatDateTimeIST, formatIndianDate, formatPayPeriod } from "@/lib/formatters";
 import { humanErrorFromFailure, messageForThrown } from "@/lib/messages";
 import { formatReference, referenceFromHeaders } from "@/lib/errorCatalogue";
-import { personLabel, presentable, recordHref, type InboxRow, type InboxTab, type Person, type RefSummary } from "../_lib/inboxModel";
+import { asGiven, personLabel, presentable, recordHref, type InboxRow, type InboxTab, type Person, type RefSummary } from "../_lib/inboxModel";
 import { amountText, slaText, slaTone, stageText, taskTitle, type T } from "./rowText";
 import styles from "./inbox.module.css";
 
@@ -247,7 +247,7 @@ export function DecisionPanel({ row, tab, onDecided, onClose, headingRef, fetchI
           <dt>{t("panel.currentStage")}</dt><dd>{stageText(t, summary?.stage) ?? nr}</dd>
           {tab !== "done" && (<><dt>{t("panel.due")}</dt><dd><span className={`pill ${slaTone(row.sla.state)}`}>{slaText(t, row.sla, row.task.dueAt)}</span></dd></>)}
           {fields.map((f) => (
-            <FieldRow key={f.key} label={t(`panel.fields.${f.key}`)} value={f.key.endsWith("Date") ? formatIndianDate(f.value) : presentable(f.value) ?? nr} />
+            <FieldRow key={f.key} label={t(`panel.fields.${f.key}`)} value={f.key.endsWith("Date") ? formatIndianDate(f.value) : f.key === "payPeriod" ? formatPayPeriod(f.value) : asGiven(f.value) ?? nr} />
           ))}
         </dl>
         {href && <Link href={href} className="btn ghost sm">{t("panel.viewRecord")}</Link>}
@@ -282,7 +282,8 @@ export function DecisionPanel({ row, tab, onDecided, onClose, headingRef, fetchI
                 {" · "}{t(`panel.action.${e.action}`)}
                 {presentable(e.step) ? ` · ${presentable(e.step)}` : ""}
                 <span className={styles.sub}><time dateTime={e.at}>{formatDateTimeIST(e.at)}</time></span>
-                {presentable(e.remarks) && <blockquote className={styles.remarksQuote}>{e.remarks}</blockquote>}
+                {/* Officer remarks are user-entered noting text: shown exactly as written (React escapes it), never filtered. */}
+                {asGiven(e.remarks) && <blockquote className={styles.remarksQuote}>{e.remarks}</blockquote>}
               </li>
             ))}
           </ol>

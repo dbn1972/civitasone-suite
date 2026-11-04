@@ -44,6 +44,7 @@ function mapTask(v: unknown): InboxTask | null {
     createdAt: s("createdAt"),
     completedAt: s("completedAt"),
     instanceName: s("instanceName"),
+    raisedAt: s("raisedAt"),
   };
 }
 
@@ -70,6 +71,7 @@ function mapSummary(v: unknown): RefSummary | null {
       of: typeof stage.of === "number" ? stage.of : null,
       step: typeof stage.step === "string" ? stage.step : null,
     },
+    raisedAt: typeof v.raisedAt === "string" ? v.raisedAt : null,
     ...(typeof v.parentId === "string" ? { parentId: v.parentId } : {}),
   };
 }

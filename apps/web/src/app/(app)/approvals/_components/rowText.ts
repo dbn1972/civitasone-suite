@@ -1,5 +1,5 @@
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
-import { presentable, type InboxRow, type RefSummary, type SlaState } from "../_lib/inboxModel";
+import { formatIndianDate, formatMoney, formatPayPeriod } from "@/lib/formatters";
+import { asGiven, presentable, type InboxRow, type RefSummary, type SlaState } from "../_lib/inboxModel";
 
 /** next-intl translator for the approvalsInbox namespace (kept loose so tests can pass a stub). */
 export type T = (key: string, values?: Record<string, string | number>) => string;
@@ -8,9 +8,13 @@ export type T = (key: string, values?: Record<string, string | number>) => strin
 export function taskTitle(t: T, row: InboxRow): string {
   const f = new Map((row.summary?.fields ?? []).map((x) => [x.key, x.value]));
   if (row.type === "leave") {
-    const leaveType = presentable(f.get("leaveType"));
+    const leaveType = asGiven(f.get("leaveType"));
     const days = Number(f.get("days"));
     if (leaveType && Number.isFinite(days) && days > 0) return t("taskTitleLeave", { leaveType, days });
+  }
+  if (row.type === "payrollRun" && !row.reference) {
+    const period = asGiven(f.get("payPeriod"));
+    if (period) return t("taskTitle.payrollRun", { ref: formatPayPeriod(period) });
   }
   if (row.reference) return t(`taskTitle.${row.type}`, { ref: row.reference });
   if (row.type === "other") {
@@ -35,7 +39,8 @@ export function slaText(t: T, sla: { state: SlaState; days: number }, dueAt: str
     case "overdue": return t("sla.overdue", { days: sla.days });
     case "dueToday": return t("sla.dueToday");
     case "dueSoon": return t("sla.dueSoon", { days: sla.days });
-    case "onTrack": return t("sla.onTrack", { date: formatIndianDate(dueAt ?? null) });
+    case "onTrack":
+    case "farDate": return t("sla.onTrack", { date: formatIndianDate(dueAt ?? null) });
     default: return t("sla.none");
   }
 }

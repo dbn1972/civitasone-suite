@@ -17,14 +17,17 @@ type HrmsSummary = { userRef?: unknown; fullName?: unknown; designationName?: un
 /**
  * UX R1: resolve identity actor ids (task makers, trail actors) to "Name, Designation" in a bounded
  * number of calls: one hrms employee-summaries call per 50 ids (the employee linked to the login,
- * with its designation), then ONE identity user-summaries call for any id hrms did not know (a login
- * with no employee record still has a name). Tenant-scoped through the internal service path.
+ * with its designation), then the identity-service id directory (GET /v1/identity/users/directory
+ * ?ids=, {id, displayName} only, 200 ids per call) for the ids hrms did not know, called with the
+ * CALLER token so identity applies its own tenant scope. Only the needed ids are asked for; nothing
+ * reads the whole tenant. Without a caller token the identity fallback is skipped.
  * Fails soft: an id nobody resolves is simply absent; the caller shows "Name not recorded".
  */
 export async function resolvePeople(
   tenantId: string,
   actorIds: Iterable<string>,
   fetchImpl: typeof fetch = fetch,
+  callerAuth?: string,
 ): Promise<Map<string, Person>> {
   const ids = [...new Set([...actorIds].filter((id) => typeof id === "string" && UUID_RE.test(id)))];
   const out = new Map<string, Person>();
@@ -54,24 +57,29 @@ export async function resolvePeople(
   }));
   const missing = ids.filter((id) => !out.has(id));
   if (missing.length === 0) return out;
-  try {
-    const res = await fetchImpl(`${IDENTITY_URL}/identity/internal/user-summaries`, {
-      headers: internalHeaders(tenantId),
-      signal: AbortSignal.timeout(Number(process.env.IDENTITY_LOOKUP_TIMEOUT_MS ?? 5000)),
-    });
-    if (res.ok) {
-      const rows = (await res.json()) as unknown;
-      if (Array.isArray(rows)) {
-        const wanted = new Set(missing);
-        for (const r of rows as Array<{ id?: unknown; name?: unknown }>) {
-          if (typeof r?.id === "string" && wanted.has(r.id) && typeof r.name === "string" && r.name.trim()) {
-            out.set(r.id, { name: r.name.trim(), designation: null });
-          }
+  if (!callerAuth) return out;
+  const IDENTITY_IDS_PER_CALL = 200;
+  const idChunks: string[][] = [];
+  for (let i = 0; i < missing.length; i += IDENTITY_IDS_PER_CALL) idChunks.push(missing.slice(i, i + IDENTITY_IDS_PER_CALL));
+  await Promise.all(idChunks.map(async (chunk) => {
+    try {
+      const res = await fetchImpl(`${IDENTITY_URL}/v1/identity/users/directory?ids=${chunk.join(",")}`, {
+        headers: { authorization: callerAuth, "x-tenant-id": tenantId },
+        signal: AbortSignal.timeout(Number(process.env.IDENTITY_LOOKUP_TIMEOUT_MS ?? 5000)),
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as unknown;
+      const rows = Array.isArray(body) ? body : (body as { data?: unknown })?.data;
+      if (!Array.isArray(rows)) return;
+      const wanted = new Set(chunk);
+      for (const r of rows as Array<{ id?: unknown; displayName?: unknown }>) {
+        if (typeof r?.id === "string" && wanted.has(r.id) && typeof r.displayName === "string" && r.displayName.trim()) {
+          out.set(r.id, { name: r.displayName.trim(), designation: null });
         }
       }
+    } catch {
+      /* fail soft */
     }
-  } catch {
-    /* fail soft */
-  }
+  }));
   return out;
 }

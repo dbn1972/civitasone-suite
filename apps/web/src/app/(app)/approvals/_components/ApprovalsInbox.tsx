@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { EmptyState } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
@@ -52,6 +53,7 @@ function emitCounts(counts: InboxCounts) {
 
 export function ApprovalsInbox({ tab, tasks, summaries, counts: initialCounts, total, initialModule = "all", initialTaskId = null, serverQuery = "", tabLabels, now, fetchImpl }: ApprovalsInboxProps) {
   const t = useTranslations("approvalsInbox") as unknown as T;
+  const router = useRouter();
   const [clock] = useState(() => now ?? Date.now());
   const [allRows, setAllRows] = useState<InboxRow[]>(() => buildRows(tasks, summaries, clock));
   const [counts, setCounts] = useState<InboxCounts | null>(initialCounts);
@@ -135,7 +137,13 @@ export function ApprovalsInbox({ tab, tasks, summaries, counts: initialCounts, t
   }, [visible, allRows, t]);
 
   const loadedAll = allRows.length >= total || tasks.length >= total;
-  const tabCount = counts ? counts[tab] : total;
+  // "All N" counts what the current filters (all but the SLA chips) select: the server total when
+  // only server-side narrowing (module, search) applies, else the rows the client filters keep.
+  const clientNarrowed = filters.type !== "all" || filters.q.trim() !== "" || filters.minAmount.trim() !== "" || filters.maxAmount.trim() !== "";
+  const serverNarrowed = initialModule !== "all" || serverQuery !== "";
+  const tabCount = clientNarrowed
+    ? applyFilters(allRows, { ...filters, sla: "all" }).length
+    : serverNarrowed || !counts ? (loadedAll ? allRows.length : total) : counts[tab];
   const emptyTitle = t(`empty.${tab}Title`);
   const emptyMessage = t(`empty.${tab}Message`);
 
@@ -158,13 +166,24 @@ export function ApprovalsInbox({ tab, tasks, summaries, counts: initialCounts, t
 
           <form className={styles.filters} role="search" aria-label={t("filters.heading")} method="get" onSubmit={(e) => { if (loadedAll) e.preventDefault(); }}>
             <input type="hidden" name="tab" value={tab} />
+            {initialModule !== "all" && <input type="hidden" name="module" value={initialModule} />}
             <label>
               {t("filters.search")}
               <input type="search" name="q" defaultValue={serverQuery} onChange={(e) => setFilter("q", e.target.value)} autoComplete="off" />
             </label>
             <label>
               {t("filters.module")}
-              <select value={filters.module} onChange={(e) => setFilter("module", e.target.value as InboxFilters["module"])}>
+              <select
+                value={filters.module}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  const qs = new URLSearchParams({ tab });
+                  if (m !== "all") qs.set("module", m);
+                  if (serverQuery) qs.set("q", serverQuery);
+                  setFilter("module", m as InboxFilters["module"]);
+                  router.push(`/approvals?${qs.toString()}`);
+                }}
+              >
                 <option value="all">{t("filters.all")}</option>
                 {MODULES.map((m) => <option key={m} value={m}>{t(`modules.${m}`)}</option>)}
               </select>

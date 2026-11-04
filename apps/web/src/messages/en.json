@@ -17488,7 +17488,10 @@
         "leaveType": "Leave type",
         "fromDate": "From",
         "toDate": "To",
-        "days": "Days"
+        "days": "Days",
+        "subject": "Subject",
+        "payPeriod": "Pay period",
+        "employees": "Employees"
       },
       "viewRecord": "Open the full record",
       "noBusiness": "The module that owns this record did not send its details. Open the full record before you decide.",
@@ -17523,7 +17526,7 @@
       "confirmReject": "Reject {title}? This cannot be undone.",
       "confirmYes": "Confirm",
       "working": "Recording your decision…",
-      "sodMaker": "You raised this item, so you cannot approve it (maker-checker). It is waiting for another officer.",
+      "sodMaker": "You raised this item, so you cannot approve, return or reject it (maker-checker). It is waiting for another officer.",
       "sodRepeatActor": "You decided an earlier step of this item, so another officer must decide this step.",
       "blockedNotPending": "This item has already been decided.",
       "blockedAssignedToOther": "This item is assigned to another officer.",

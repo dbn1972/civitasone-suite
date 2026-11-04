@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn(), back: vi.fn(), prefetch: vi.fn() }), usePathname: () => "/approvals", useSearchParams: () => new URLSearchParams() }));
 import { render, screen, fireEvent, waitFor, within, act } from "@/test-utils/intl-render";
 import { ApprovalsInbox } from "./ApprovalsInbox";
 import { COUNTS_EVENT, type InboxTask, type RefSummary } from "../_lib/inboxModel";
@@ -44,7 +47,7 @@ function setup(n = 3, fetchImpl?: typeof fetch) {
   return { tasks, fetch: f };
 }
 
-beforeEach(() => { window.sessionStorage.clear(); });
+beforeEach(() => { window.sessionStorage.clear(); push.mockReset(); });
 
 describe("ApprovalsInbox rows (UX R1)", () => {
   it("each row names the task, reference, amount (Indian format), maker with designation, stage and SLA in words", () => {
@@ -92,8 +95,9 @@ describe("ApprovalsInbox rows (UX R1)", () => {
     fireEvent.change(screen.getByLabelText("Amount from (₹)"), { target: { value: "500000" } });
     expect(screen.getByText("No items match these filters.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    // The module is a server filter: changing it reloads the tab narrowed to that module.
     fireEvent.change(screen.getByLabelText("Module"), { target: { value: "leave" } });
-    expect(screen.getByText("No items match these filters.")).toBeInTheDocument();
+    expect(push).toHaveBeenCalledWith("/approvals?tab=waiting&module=leave");
   });
 
   it("J/K and the arrow keys move focus between rows; Enter (a native button) opens the panel", async () => {
@@ -142,5 +146,21 @@ describe("ApprovalsInbox rows (UX R1)", () => {
     render(<ApprovalsInbox tab="sent" tasks={[]} summaries={[]} counts={{ waiting: 0, overdue: 0, sent: 0, done: 0 }} total={0} tabLabels={LABELS} now={NOW} />);
     expect(screen.getByText("Nothing you raised is waiting")).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("All chip counts what the filters select (PR #2460 review)", () => {
+  it("unfiltered: the tab total; filtered by search: the filtered count", () => {
+    setup();
+    expect(screen.getByRole("button", { name: "All 3" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search by reference, subject or sender"), { target: { value: "0003" } });
+    expect(screen.getByRole("button", { name: "All 1" })).toBeInTheDocument();
+  });
+
+  it("a server module filter shows the server total and keeps the module in the search form", () => {
+    const tasks = [task(1), task(2)];
+    render(<ApprovalsInbox tab="waiting" tasks={tasks} summaries={tasks.map((x) => summary(x))} counts={{ waiting: 9, overdue: 0, sent: 0, done: 0 }} total={2} initialModule="procurement" tabLabels={LABELS} now={NOW} />);
+    expect(screen.getByRole("button", { name: "All 2" })).toBeInTheDocument();
+    expect(document.querySelector("input[type=hidden][name=module]")).toHaveAttribute("value", "procurement");
   });
 });

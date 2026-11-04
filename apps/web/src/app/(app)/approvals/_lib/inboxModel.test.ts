@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyFilters, buildRows, moduleOf, NO_FILTERS, personLabel, presentable, recordHref, slaOf, sortRows, typeOf,
+  applyFilters, asGiven, buildRows, moduleOf, NO_FILTERS, personLabel, presentable, recordHref, slaOf, sortRows, typeOf,
   type InboxTask, type RefSummary,
 } from "./inboxModel";
 
@@ -14,11 +14,16 @@ function summary(t: InboxTask, over: Partial<RefSummary> = {}): RefSummary {
   return { refType: t.refType!, refId: t.refId!, kind: "business", instanceId: t.instanceId, instanceName: "PO Approval", reference: "PO/2026/0033", amountMinor: "12345600", fields: [], maker: { name: "Anita Verma", designation: "Section Officer" }, stage: { level: 2, of: 3, step: "Deputy Secretary" }, ...over };
 }
 
-describe("presentable / personLabel: no ids, codes, placeholders or Unknown", () => {
+describe("presentable / personLabel: no ids, codes, placeholders or Unknown (system fields only)", () => {
   it.each([
     ["a51b49b9-8de6-4c1e-9d3f-2b8f0c1d2e3f", null],
-    ["actor 82310d88", null],
+    ["Approved by a51b49b9-8de6-4c1e-9d3f-2b8f0c1d2e3f", null],
     ["{{message}}", null],
+    ["tenant_admin", null],
+    // PR #2460 review, blocker 1: only genuine UUIDs and known role codes are ids; numbers are not.
+    ["Sanction 12345678 attached", "Sanction 12345678 attached"],
+    ["IND/20261104", "IND/20261104"],
+    ["Deputy Secretary 04112026", "Deputy Secretary 04112026"],
     ["proc_head", null],
     ["Unknown officer", null],
     ["", null],
@@ -96,5 +101,32 @@ describe("filters and ordering", () => {
     expect(d.reference).toBeNull();
     expect(d.amountMinor).toBeNull();
     expect(d.maker).toBeNull();
+  });
+});
+
+describe("PR #2460 review", () => {
+  it("references and module facts are shown as given, never filtered", () => {
+    expect(asGiven(" IND/20261104 ")).toBe("IND/20261104");
+    const t = task("r", { refType: "procurement_indent" });
+    const [row] = buildRows([t], [summary(t, { reference: "IND/20261104" })], NOW);
+    expect(row!.reference).toBe("IND/20261104");
+  });
+
+  it("a raw UUID in a name field is replaced (personLabel null), not shown", () => {
+    expect(personLabel({ name: "3f2a9b1c-0d4e-4f5a-8b6c-7d8e9f0a1b2c", designation: "Section Officer" })).toBeNull();
+  });
+
+  it("a due date more than a year away either way is a plain date, not overdue", () => {
+    expect(slaOf("2020-01-15T00:00:00.000Z", NOW).state).toBe("farDate");
+    expect(slaOf(new Date(NOW + 400 * DAY).toISOString(), NOW).state).toBe("farDate");
+    expect(slaOf(new Date(NOW - 300 * DAY).toISOString(), NOW).state).toBe("overdue");
+    const rows = buildRows([task("old", { dueAt: "2020-01-15T00:00:00.000Z" }), task("new", { dueAt: new Date(NOW - DAY).toISOString() })], [], NOW);
+    expect(sortRows(rows, "waiting").map((r) => r.task.id)).toEqual(["new", "old"]);
+    expect(applyFilters(rows, { ...NO_FILTERS, sla: "overdue" }).map((r) => r.task.id)).toEqual(["new"]);
+  });
+
+  it("the age is when the item was raised, not when the current step opened", () => {
+    const t = task("a", { createdAt: new Date(NOW).toISOString(), raisedAt: new Date(NOW - 6 * DAY).toISOString() });
+    expect(buildRows([t], [], NOW)[0]!.age).toBe(6);
   });
 });

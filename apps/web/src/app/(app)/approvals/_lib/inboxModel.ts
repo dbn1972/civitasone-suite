@@ -27,6 +27,8 @@ export type InboxTask = {
   createdAt?: string | null;
   completedAt?: string | null;
   instanceName?: string | null;
+  /** When the item was raised (instance creation), not when the current step opened. */
+  raisedAt?: string | null;
 };
 
 export type InboxCounts = { waiting: number; overdue: number; sent: number; done: number };
@@ -43,6 +45,7 @@ export type RefSummary = {
   fields: Array<{ key: string; value: string }>;
   maker: Person | null;
   stage: { level: number; of: number | null; step: string | null };
+  raisedAt?: string | null;
   parentId?: string;
 };
 
@@ -92,20 +95,36 @@ export function isModuleKey(v: unknown): v is ModuleKey {
 }
 
 const UUID_ANYWHERE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-const SHORT_HEX_ID = /\b[0-9a-f]{8}\b/i;
-const PLACEHOLDER = /\{\{[^}]*\}\}|\{[a-zA-Z_]+\}/;
-const ROLE_CODE = /^[a-z]+(?:_[a-z]+)+$/;
+const PLACEHOLDER = /\{\{[^}]*\}\}/;
+
+/** Role codes the platform issues; a system field that is exactly one of these is a leak. */
+export const KNOWN_ROLE_CODES: ReadonlySet<string> = new Set([
+  "super_admin", "tenant_admin", "platform_admin", "service_account", "default-roles-civitasone",
+  "workflow_user", "workflow_admin", "manager", "officer", "employee", "dept_head", "auditor", "audit_officer",
+  "hr_admin", "hr_staff", "hr_officer", "payroll_admin", "finance_admin", "finance_staff", "finance_officer",
+  "accounts_officer", "procurement_admin", "procurement_officer", "proc_head",
+  "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
+]);
 
 /**
- * A text that came from a service is shown only if it is human text: no uuid (or an 8-hex id
- * fragment), no {{placeholder}}, not a bare snake_case code, not "Unknown ...". Otherwise null.
+ * For SYSTEM-generated display fields only (actor names, designations, step and instance names):
+ * null when the value is a genuine UUID (8-4-4-4-12) or contains one, is exactly a known role
+ * code, is a {{placeholder}}, or says "Unknown ...". Never used for officer remarks, business
+ * references or module facts: those are shown as entered (React escapes them), so "Sanction
+ * 12345678 attached" and IND/20261104 are never hidden (PR #2460 review, blocker 1).
  */
 export function presentable(text: string | null | undefined): string | null {
   const t = (text ?? "").trim();
   if (!t) return null;
-  if (UUID_ANYWHERE.test(t) || SHORT_HEX_ID.test(t) || PLACEHOLDER.test(t) || ROLE_CODE.test(t)) return null;
+  if (UUID_ANYWHERE.test(t) || PLACEHOLDER.test(t) || KNOWN_ROLE_CODES.has(t)) return null;
   if (/^unknown\b/i.test(t)) return null;
   return t;
+}
+
+/** Business text (references, module facts): shown as given, only trimmed; empty is null. */
+export function asGiven(text: string | null | undefined): string | null {
+  const t = (text ?? "").trim();
+  return t ? t : null;
 }
 
 /** "Anita Verma, Section Officer" / "Anita Verma" / null. */
@@ -116,7 +135,10 @@ export function personLabel(p: Person | null | undefined): string | null {
   return des ? `${name}, ${des}` : name;
 }
 
-export type SlaState = "overdue" | "dueToday" | "dueSoon" | "onTrack" | "none";
+export type SlaState = "overdue" | "dueToday" | "dueSoon" | "onTrack" | "farDate" | "none";
+
+/** Same rule as workflow-service PLAUSIBLE_DUE_DAYS: a due date further away is shown as a plain date. */
+export const PLAUSIBLE_DUE_DAYS = 365;
 
 const DAY = 86_400_000;
 
@@ -130,6 +152,9 @@ export function slaOf(dueAt: string | null | undefined, now: number): { state: S
   const due = new Date(dueAt).getTime();
   if (!Number.isFinite(due)) return { state: "none", days: 0 };
   const dayDiff = istDay(due) - istDay(now);
+  // A due date more than a year away either way (a bad default, an old fixture) is not an SLA:
+  // never "Overdue by 2,485 days", just the date.
+  if (Math.abs(dayDiff) > PLAUSIBLE_DUE_DAYS) return { state: "farDate", days: 0 };
   if (due < now) return { state: "overdue", days: Math.max(1, istDay(now) - istDay(due)) };
   if (dayDiff === 0) return { state: "dueToday", days: 0 };
   if (dayDiff <= 2) return { state: "dueSoon", days: dayDiff };
@@ -165,11 +190,11 @@ export function buildRows(tasks: readonly InboxTask[], summaries: readonly RefSu
       summary,
       module: moduleOf(task.refType),
       type: typeOf(task.refType),
-      reference: presentable(summary?.reference),
+      reference: asGiven(summary?.reference),
       amountMinor: summary?.amountMinor ?? null,
       maker: summary?.maker ?? null,
       sla: slaOf(task.dueAt, now),
-      age: ageDays(task.createdAt, now),
+      age: ageDays(task.raisedAt ?? summary?.raisedAt ?? task.createdAt, now),
     };
   });
 }
@@ -195,7 +220,7 @@ function rupeesToMinor(v: string): bigint | null {
 
 /** The search text a row matches on: reference, title text, maker name. */
 export function searchText(row: InboxRow): string {
-  return [row.reference, presentable(row.summary?.instanceName ?? row.task.instanceName), personLabel(row.maker)]
+  return [row.reference, presentable(row.summary?.instanceName ?? row.task.instanceName), personLabel(row.maker), ...(row.summary?.fields ?? []).map((f) => f.value)]
     .filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -221,7 +246,7 @@ export function applyFilters(rows: readonly InboxRow[], f: InboxFilters): InboxR
   });
 }
 
-const SLA_RANK: Record<SlaState, number> = { overdue: 0, dueToday: 1, dueSoon: 2, onTrack: 3, none: 4 };
+const SLA_RANK: Record<SlaState, number> = { overdue: 0, dueToday: 1, dueSoon: 2, onTrack: 3, farDate: 4, none: 4 };
 
 /** Overdue first (most overdue first), then due today, due soon, the rest by age (oldest first). */
 export function sortRows(rows: readonly InboxRow[], tab: InboxTab): InboxRow[] {

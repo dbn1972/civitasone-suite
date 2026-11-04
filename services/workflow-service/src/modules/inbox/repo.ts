@@ -17,11 +17,24 @@ import type { TaskView } from "../tasks/schema.js";
 export type InboxTab = "waiting" | "sent" | "done";
 export const INBOX_TABS: readonly InboxTab[] = ["waiting", "sent", "done"];
 export const DONE_WINDOW_DAYS = 30;
+/**
+ * A due date further than this from now (either way) is treated as implausible (a bad default or a
+ * fixture such as 2020-01-15): it is never "overdue" and never sorts first. The web applies the same
+ * rule and shows the plain date instead of "Overdue by N days".
+ */
+export const PLAUSIBLE_DUE_DAYS = 365;
+const overdueSql = sql`(${tasks.dueAt} IS NOT NULL AND ${tasks.dueAt} < now() AND ${tasks.dueAt} > now() - make_interval(days => ${PLAUSIBLE_DUE_DAYS}))`;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type InboxFilter = { refTypes?: readonly string[]; q?: string };
-export type InboxRow = TaskView & { instanceName: string | null; requesterId: string | null; completedAt: string | null };
+export type InboxRow = TaskView & {
+  instanceName: string | null;
+  requesterId: string | null;
+  completedAt: string | null;
+  /** When the item was raised (the instance), not when the current step opened. */
+  raisedAt: string | null;
+};
 export type InboxCounts = { waiting: number; overdue: number; sent: number; done: number };
 
 function likeOf(q: string): string {
@@ -58,8 +71,8 @@ export async function listInbox(
   const where = tabWhere(tenantId, tab, roles, actorId, f);
   const order = tab === "done"
     ? [desc(tasks.updatedAt), asc(tasks.id)]
-    : [sql`(${tasks.dueAt} IS NOT NULL AND ${tasks.dueAt} < now()) DESC`, sql`${tasks.dueAt} ASC NULLS LAST`, asc(tasks.createdAt), asc(tasks.id)];
-  const rows = await scopedRead((tx) => tx.select({ task: tasks, instanceName: instances.name, requesterId: instances.createdBy })
+    : [sql`${overdueSql} DESC`, sql`${tasks.dueAt} ASC NULLS LAST`, asc(instances.createdAt), asc(tasks.createdAt), asc(tasks.id)];
+  const rows = await scopedRead((tx) => tx.select({ task: tasks, instanceName: instances.name, requesterId: instances.createdBy, raisedAt: instances.createdAt })
     .from(tasks)
     .leftJoin(instances, and(eq(instances.id, tasks.instanceId), eq(instances.tenantId, tasks.tenantId)))
     .where(where)
@@ -71,6 +84,7 @@ export async function listInbox(
     instanceName: r.instanceName ?? null,
     requesterId: r.requesterId ?? null,
     completedAt: r.task.status === "completed" && r.task.updatedAt ? r.task.updatedAt.toISOString() : null,
+    raisedAt: r.raisedAt ? r.raisedAt.toISOString() : null,
   }));
 }
 
@@ -89,7 +103,7 @@ export async function countInbox(
 /** The unfiltered tab totals the tabs and the sidebar badge show, plus the overdue part of "waiting". */
 export async function inboxCounts(tenantId: string, roles: readonly string[], actorId: string | undefined): Promise<InboxCounts> {
   const [waiting, sent, done] = await Promise.all(INBOX_TABS.map((t) => countInbox(tenantId, t, roles, actorId)));
-  const overdueWhere = and(tabWhere(tenantId, "waiting", roles, actorId), isNotNull(tasks.dueAt), lt(tasks.dueAt, sql`now()`));
+  const overdueWhere = and(tabWhere(tenantId, "waiting", roles, actorId), isNotNull(tasks.dueAt), lt(tasks.dueAt, sql`now()`), sql`${tasks.dueAt} > now() - make_interval(days => ${PLAUSIBLE_DUE_DAYS})`);
   const overdue = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks).where(overdueWhere));
   return { waiting: waiting ?? 0, overdue: overdue[0]?.n ?? 0, sent: sent ?? 0, done: done ?? 0 };
 }
@@ -109,6 +123,12 @@ export type RefInstance = {
   doneSteps: number;
   /** Name of the step that is open now, if any. */
   currentStep: string | null;
+  /**
+   * PR #2460 review, blocker 2: a STRICT participant (the initiator, an actual past decider, or
+   * the assignee / role-holder of an OPEN task). Only strict participants get business facts from
+   * the owning modules; the admin bypass and closed-step role-holders see workflow facts only.
+   */
+  strict: boolean;
 };
 
 /**
@@ -126,6 +146,13 @@ export async function participantInstancesForRefs(
   const valid = refs.filter((r) => UUID_RE.test(r.refId) && r.refType.length > 0 && r.refType.length <= 64);
   if (valid.length === 0) return [];
   const pairs = sql.join(valid.map((r) => sql`(${r.refType}::text, ${r.refId}::uuid)`), sql`, `);
+
+  const actor = viewer.actorId && UUID_RE.test(viewer.actorId) ? viewer.actorId : null;
+  const roleList = viewer.roles.length ? sql.join(viewer.roles.map((r) => sql`${r}`), sql`, `) : sql`NULL`;
+  const initiator = actor === null ? sql`false` : sql`i.created_by = ${actor}::uuid`;
+  const openMine = actor === null ? sql`` : sql` OR s.assignee_id = ${actor}::uuid`;
+  const decidedMine = actor === null ? sql`` : sql` OR s.completed_by = ${actor}::uuid`;
+  const strictSql = sql`(${initiator} OR EXISTS (SELECT 1 FROM workflow.tasks s WHERE s.instance_id = i.id AND s.tenant_id = i.tenant_id AND ((s.status = ${"pending"} AND s.is_call = false AND (s.role_ref IN (${roleList})${openMine}))${decidedMine})))`;
   const rows = (await scopedExecute(sql`
     SELECT DISTINCT ON (i.ref_type, i.ref_id)
            i.id, i.ref_type, i.ref_id, i.name, i.status, i.created_by, i.created_at,
@@ -135,14 +162,15 @@ export async function participantInstancesForRefs(
              WHERE d.instance_id = i.id AND d.tenant_id = i.tenant_id AND d.status = ${"completed"} AND d.is_call = false) AS done_steps,
            (SELECT o.name FROM workflow.tasks o
              WHERE o.instance_id = i.id AND o.tenant_id = i.tenant_id AND o.status = ${"pending"} AND o.is_call = false
-             ORDER BY o.created_at ASC LIMIT 1) AS current_step
+             ORDER BY o.created_at ASC LIMIT 1) AS current_step,
+           ${strictSql} AS strict
     FROM workflow.instances i
     WHERE i.tenant_id = ${tenantId}
       AND (i.ref_type, i.ref_id) IN (${pairs})${participantFilterSql(viewer)}
     ORDER BY i.ref_type, i.ref_id, (i.status = ${"active"}) DESC, i.created_at DESC
   `)) as unknown as Array<{
     id: string; ref_type: string; ref_id: string; name: string; status: string; created_by: string; created_at: Date | string;
-    levels: number | null; done_steps: number | null; current_step: string | null;
+    levels: number | null; done_steps: number | null; current_step: string | null; strict: boolean | null;
   }>;
   return rows.map((r) => ({
     instanceId: r.id,
@@ -155,5 +183,6 @@ export async function participantInstancesForRefs(
     levels: Number(r.levels ?? 0),
     doneSteps: Number(r.done_steps ?? 0),
     currentStep: r.current_step ?? null,
+    strict: r.strict === true,
   }));
 }

@@ -1483,7 +1483,7 @@ const FIXTURES: Record<string, unknown> = {
 
 /** workflow-service GET /v1/workflow/tasks: 17 pending tasks, served 15 at a time (limit/offset). */
 const WORKFLOW_TASKS: Array<Record<string, unknown>> = [
-  { id: 'b2000000-0000-4000-8000-000000000001', name: 'Leave approval - Ravi Kumar', refType: 'leave_app', refId: 'b3000000-0000-4000-8000-000000000001', dueAt: '2020-01-15T00:00:00.000Z' },
+  { id: 'b2000000-0000-4000-8000-000000000001', name: 'Leave approval - Ravi Kumar', refType: 'leave_app', refId: 'b3000000-0000-4000-8000-000000000001', dueAt: `${daysFromToday(-2)}T00:00:00.000Z` },
   { id: 'b2000000-0000-4000-8000-000000000002', name: 'Purchase order PO-2026-0042', refType: 'procurement_po', refId: 'b3000000-0000-4000-8000-000000000002', dueAt: `${daysFromToday(3)}T00:00:00.000Z` },
   { id: 'b2000000-0000-4000-8000-000000000003', name: 'Bill approval - Stationery supply', refType: 'finance_bill', refId: 'b3000000-0000-4000-8000-000000000003', dueAt: `${daysFromToday(5)}T00:00:00.000Z` },
   ...Array.from({ length: 14 }, (_, i) => ({
@@ -1504,6 +1504,8 @@ const WORKFLOW_TASKS: Array<Record<string, unknown>> = [
   createdAt: new Date().toISOString(),
   instanceName: t.name,
   requesterId: null,
+  // When the item was raised (the inbox ages rows by this, not by the current step).
+  raisedAt: `${daysFromToday(-3)}T05:00:00.000Z`,
   version: 1,
   ...t,
 }));
@@ -1518,12 +1520,15 @@ const INBOX_SUMMARIES: Array<Record<string, unknown>> = WORKFLOW_TASKS.map((t) =
   refId: t.refId,
   instanceId: t.instanceId,
   instanceName: t.name,
+  // Only what the real backend returns: procurement and leave have module adapters; the others
+  // (finance_bill is not a workflow refType; estab files outside the fixture) are generic.
   kind: t.refType === "procurement_po" || t.refType === "leave_app" ? "business" : "generic",
-  reference: t.refType === "procurement_po" ? "PO/2026/0042" : t.refType === "finance_bill" ? "BILL/2026/0007" : null,
-  amountMinor: t.refType === "procurement_po" ? "12345600" : t.refType === "finance_bill" ? "4550000" : null,
+  reference: t.refType === "procurement_po" ? "PO/2026/0042" : null,
+  amountMinor: t.refType === "procurement_po" ? "12345600" : null,
   fields: t.refType === "leave_app" ? [{ key: "leaveType", value: "Earned Leave" }, { key: "days", value: "3" }] : [],
   maker: { name: "Anita Verma", designation: "Section Officer" },
   stage: { level: 2, of: 3, step: "Deputy Secretary Approval" },
+  raisedAt: `${daysFromToday(-3)}T05:00:00.000Z`,
 }));
 
 /** ai-agent-service GET /v1/ai/chat: { data, meta: { total } }, filtered by ?status= and capped by ?limit=. */

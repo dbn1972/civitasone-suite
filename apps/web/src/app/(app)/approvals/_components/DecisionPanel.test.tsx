@@ -21,6 +21,7 @@ function ctx(over: Partial<TaskContext> = {}): TaskContext {
     trail: [
       { action: "create", decision: null, step: null, actor: { name: "Anita Verma", designation: "Section Officer" }, remarks: null, at: "2026-10-30T05:00:00.000Z" },
       { action: "complete", decision: "approve", step: "Section Officer Check", actor: { name: "Suresh Rao", designation: "Under Secretary" }, remarks: "Rates verified.", at: "2026-10-31T06:30:00.000Z" },
+      { action: "complete", decision: "approve", step: null, actor: { name: "3f2a9b1c-0d4e-4f5a-8b6c-7d8e9f0a1b2c", designation: null }, remarks: "Sanction 12345678 attached. Approved for Rs 25000000 vide IND/20261104.", at: "2026-11-01T05:30:00.000Z" },
       { action: "return", decision: "return", step: null, actor: null, remarks: null, at: "2026-11-01T06:30:00.000Z" },
     ],
     permissions: { canAct: true, blockedReason: null, sodBlock: null, canForward: true },
@@ -58,7 +59,10 @@ describe("DecisionPanel (UX R1)", () => {
     expect(items[1]).toHaveTextContent("Suresh Rao, Under Secretary · Approved · Section Officer Check");
     expect(items[1]).toHaveTextContent("31 Oct 2026");
     expect(items[1]).toHaveTextContent("Rates verified.");
-    expect(items[2]).toHaveTextContent("Name not recorded · Returned");
+    // PR #2460 review, blocker 1: a remark with numbers is shown in full; a UUID name is replaced.
+    expect(items[2]).toHaveTextContent("Sanction 12345678 attached. Approved for Rs 25000000 vide IND/20261104.");
+    expect(items[2]).toHaveTextContent("Name not recorded · Approved");
+    expect(items[3]).toHaveTextContent("Name not recorded · Returned");
     expect(region.textContent).not.toMatch(UUID);
     expect(region.textContent).not.toMatch(/Unknown officer|\{\{/);
   });
@@ -83,7 +87,7 @@ describe("DecisionPanel (UX R1)", () => {
     const { calls } = mount(ctx({ isMaker: true, permissions: { canAct: true, blockedReason: null, sodBlock: "maker", canForward: false } }));
     const approve = await screen.findByRole("button", { name: "Approve" });
     expect(approve).toBeDisabled();
-    expect(approve).toHaveAccessibleDescription(/You raised this item, so you cannot approve it \(maker-checker\)/);
+    expect(approve).toHaveAccessibleDescription(/You raised this item, so you cannot approve, return or reject it \(maker-checker\)/);
     expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Return for clarification" })).toBeDisabled();
     fireEvent.click(approve);
@@ -134,5 +138,16 @@ describe("DecisionPanel (UX R1)", () => {
     mount(ctx(), undefined, (url) => (url.endsWith("/context") ? json({ code: "INTERNAL" }, 500) : undefined));
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("DecisionPanel: business reference shown as given (PR #2460 review)", () => {
+  it("shows the reference IND/20261104", async () => {
+    const ind: InboxTask = { ...t, refType: "procurement_indent" };
+    const r = buildRows([ind], [{ ...s, refType: "procurement_indent", reference: "IND/20261104" }], NOW)[0]!;
+    const fetchImpl = vi.fn(async () => json({ data: ctx({ summary: null }) })) as unknown as typeof fetch;
+    render(<DecisionPanel row={r} tab="waiting" onDecided={vi.fn()} onClose={() => {}} fetchImpl={fetchImpl} />);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Approve purchase indent IND/20261104");
+    expect(screen.getByText("IND/20261104")).toBeInTheDocument();
   });
 });

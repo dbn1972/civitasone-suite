@@ -52,6 +52,8 @@ test.describe("Approvals inbox (UX R1)", () => {
     await expect(po).toContainText("₹1,23,456.00");
     await expect(po).toContainText("Anita Verma, Section Officer");
     await expect(po).toContainText("Level 2 of 3: Deputy Secretary Approval");
+    // Aged by when the item was raised (the instance), not when the current step opened.
+    await expect(po).toContainText("Raised 3 days ago");
     await expect(po).toContainText(/Due \d{2} [A-Z][a-z]{2} \d{4}/);
     // The overdue leave is listed first, with its SLA in words (not colour only).
     const first = table.locator("tbody tr").first();
@@ -92,7 +94,7 @@ test.describe("Approvals inbox (UX R1)", () => {
     await page.getByRole("button", { name: "Open: Approve purchase order PO/2026/0042" }).click();
     const approve = page.getByRole("button", { name: "Approve", exact: true });
     await expect(approve).toBeDisabled();
-    await expect(page.getByText("You raised this item, so you cannot approve it (maker-checker).", { exact: false })).toBeVisible();
+    await expect(page.getByText("You raised this item, so you cannot approve, return or reject it (maker-checker).", { exact: false })).toBeVisible();
   });
 
   test("keyboard: J and K move between rows, Enter opens", async ({ page }) => {
