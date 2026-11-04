@@ -18,7 +18,7 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges } from "./domain.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
@@ -57,7 +57,8 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
     SELECT tenant_id, effective_from::text AS effective_from,
            pf_rate_pct, pf_wage_cap_minor, eps_rate_bps, eps_cap_minor,
            esi_wage_cap_minor, esi_employee_rate_bps, esi_employer_rate_bps,
-           sec80c_cap_minor, sec80d_cap_minor, sec80ccd1b_cap_minor
+           sec80c_cap_minor, sec80d_cap_minor, sec80ccd1b_cap_minor,
+           edli_rate_bps, edli_wage_cap_minor, epf_admin_rate_bps, epf_admin_min_minor
     FROM statutory.statutory_config
     WHERE tenant_id IN (${tenantId}::uuid, ${PLATFORM_TENANT_ID}::uuid)
       AND effective_from <= ${month + "-01"}::date
@@ -67,6 +68,8 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
     eps_rate_bps: number | string; eps_cap_minor: number | string;
     esi_wage_cap_minor: number | string; esi_employee_rate_bps: number | string; esi_employer_rate_bps: number | string;
     sec80c_cap_minor: number | string; sec80d_cap_minor: number | string; sec80ccd1b_cap_minor: number | string;
+    edli_rate_bps: number | string; edli_wage_cap_minor: number | string;
+    epf_admin_rate_bps: number | string; epf_admin_min_minor: number | string;
   }>;
   const mapped: StatutoryConfigRow[] = rows.map((r) => ({
     tenantId: r.tenant_id === PLATFORM_TENANT_ID ? null : r.tenant_id,
@@ -77,6 +80,8 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
     esiEmployeeRateBps: BigInt(r.esi_employee_rate_bps), esiEmployerRateBps: BigInt(r.esi_employer_rate_bps),
     sec80cCapMinor: BigInt(r.sec80c_cap_minor), sec80dCapMinor: BigInt(r.sec80d_cap_minor),
     sec80ccd1bCapMinor: BigInt(r.sec80ccd1b_cap_minor),
+    edliRateBps: BigInt(r.edli_rate_bps), edliWageCapMinor: BigInt(r.edli_wage_cap_minor),
+    epfAdminRateBps: BigInt(r.epf_admin_rate_bps), epfAdminMinMinor: BigInt(r.epf_admin_min_minor),
   }));
   return resolveStatutoryConfig(mapped, tenantId, month);
 }
@@ -2919,13 +2924,16 @@ export async function computeAndInsertSlip(
     ...(params.hraFloorMinor != null ? { hraFloorMinor: params.hraFloorMinor } : {}),
   });
   const slipId = randomUUID();
-  // PAY-PROFILES: the EPF wage this slip's PF was computed on (pre-ceiling):
-  // Basic + DA (consolidated pay has DA 0n). Only meaningful when PF applied.
   const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
   // The pension base computeSlip applied the GPF / NPS / EPF percentages to
   // (domain.ts `pensionBase`): Basic + DA, or the FR 53 suspension-adjusted base.
   const pensionBaseMinor = params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor;
-  const pfWageMinor = pfApplied ? pensionBaseMinor : null;
+  // UAT b18 D6: the EPF wage this slip's PF was actually computed on --
+  // min(Basic + DA, PF wage ceiling), the same figure computeSlip applied the
+  // 12% to (it used to store the uncapped Basic + DA). With it, the employer-
+  // only EDLI / admin charges (D5). Only meaningful when PF applied.
+  const epfCharges = epfEmployerCharges(pensionBaseMinor, statutoryConfig);
+  const pfWageMinor = pfApplied ? epfCharges.pfWageMinor : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
     id: slipId, tenantId: params.tenantId, runId: params.runId,
@@ -2962,7 +2970,8 @@ export async function computeAndInsertSlip(
       // (basicMinor above is Basic only), so a ledger row can be checked by eye.
       // T-STAT M-NPS: including the Basic + DA part of arrears on the slip.
       pensionBaseMinor: result.npsPensionBaseMinor,
-      empContribPct: "10", erContribPct: "14",
+      // UAT b18 D1: UPS members are on the same PRAN / CRA ledger with the UPS Government share.
+      empContribPct: "10", erContribPct: params.pensionScheme === "UPS" ? "18.5" : "14",
       empContribMinor: result.npsEmployeeMinor, erContribMinor: result.npsEmployerMinor,
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -2980,6 +2989,12 @@ export async function computeAndInsertSlip(
       empContribPct: String(statutoryConfig.pfRatePct), erContribPct: String(statutoryConfig.pfRatePct),
       empContribMinor: result.pfEmployeeMinor, erContribMinor: result.pfEmployerMinor,
       epsContribMinor: result.epsMinor, epfErContribMinor: result.epfEmployerMinor,
+      // UAT b18 D5 / D6: wages used and the employer EDLI (A/c 21) and admin
+      // (A/c 2) charges. Zero when no PF applied (an all-zero row).
+      epfWageMinor: pfApplied ? epfCharges.pfWageMinor : 0n,
+      edliWageMinor: pfApplied ? epfCharges.edliWageMinor : 0n,
+      edliContribMinor: pfApplied ? epfCharges.edliMinor : 0n,
+      epfAdminMinor: pfApplied ? epfCharges.epfAdminMinor : 0n,
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });

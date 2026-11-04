@@ -1,5 +1,8 @@
 import { minorToWireNumber } from "../../shared/money.js";
 import * as repo from "./repo.js";
+import { scopedRead } from "../../shared/db.js";
+
+import { epfAdminChargeForPeriod } from "../payroll/domain.js";
 import { fetchEmployeeSummaries, fetchNpsPranLast4 } from "../../shared/hrms-client.js";
 import { fetchRetirementAccounts } from "../../shared/hrms-retirement-client.js";
 import { reconcileGpf, reconcileNps, type HrmsCoverage } from "./reconcile.js";
@@ -147,6 +150,51 @@ function serialiseSummary(s: repo.LedgerPeriodSummary) {
 
 export async function pfPeriodSummary(tenantId: string, period?: string) {
   return serialiseSummary(await repo.summarisePfPeriod(tenantId, period));
+}
+
+/**
+ * UAT b18 D5: the EPFO challan for one wage month, from the PF ledger.
+ *   A/c 1  EPF: employee share + employer EPF (EPF-EPS difference)
+ *   A/c 2  EPF administrative charges (sum of member charges, at least the
+ *          configured statutory minimum when there is any member)
+ *   A/c 10 EPS (employer)
+ *   A/c 21 EDLI contribution (employer)
+ *   A/c 22 EDLI administrative charges: 0 (waived by EPFO since 2017-04-01;
+ *          not configurable here)
+ * A/c 2 and A/c 21 are employer cost only -- never deducted from the employee.
+ */
+export async function pfChallanSummary(tenantId: string, period: string) {
+  const t = await repo.sumPfChallanPeriod(tenantId, period);
+  // Lazy: payroll/consumer.ts imports this module's repo; a static import back would be a cycle.
+  const { resolveRunStatutoryConfig } = await import("../payroll/consumer.js");
+  const cfg = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, period));
+  const ac1 = t.empContribMinor + t.epfErContribMinor;
+  const ac2 = epfAdminChargeForPeriod(t.epfAdminMinor, t.recordCount, cfg);
+  const ac10 = t.epsContribMinor;
+  const ac21 = t.edliContribMinor;
+  const ac22 = 0n;
+  return {
+    period,
+    recordCount: t.recordCount,
+    epfWagesMinor: t.epfWageMinor.toString(),
+    edliWagesMinor: t.edliWageMinor.toString(),
+    employeeShareMinor: t.empContribMinor.toString(),
+    accounts: {
+      ac1EpfMinor: ac1.toString(),
+      ac2AdminMinor: ac2.toString(),
+      ac10EpsMinor: ac10.toString(),
+      ac21EdliMinor: ac21.toString(),
+      ac22EdliAdminMinor: ac22.toString(),
+    },
+    employerCostMinor: (t.epfErContribMinor + t.epsContribMinor + ac2 + ac21 + ac22).toString(),
+    totalChallanMinor: (ac1 + ac2 + ac10 + ac21 + ac22).toString(),
+    rates: {
+      edliRateBps: cfg.edliRateBps.toString(),
+      edliWageCapMinor: cfg.edliWageCapMinor.toString(),
+      epfAdminRateBps: cfg.epfAdminRateBps.toString(),
+      epfAdminMinMinor: cfg.epfAdminMinMinor.toString(),
+    },
+  };
 }
 
 export async function esiPeriodSummary(tenantId: string, period?: string) {

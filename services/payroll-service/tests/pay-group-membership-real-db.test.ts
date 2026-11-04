@@ -160,6 +160,12 @@ beforeAll(async () => {
     await asTenant(async (tx) => {
       await tx.execute(sql`INSERT INTO payroll.dearness_allowance_rates (tenant_id, effective_from, rate_bps) VALUES (${t}::uuid, '2026-01-01', 5500)`);
       await tx.execute(sql`INSERT INTO payroll.payroll_structures (id, tenant_id, name, is_default, status, created_by, updated_by) VALUES (${st}::uuid, ${t}::uuid, 'PG', true, 'active', ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+      // UAT b18 D2: run creation needs a tax slab config for the FY; FY 2027-28
+      // (the 2028-02 run below) has no platform default, so seed one per tenant.
+      for (const regime of ["new", "old"]) {
+        await tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands)
+          VALUES (${t}::uuid, 2027, ${regime}, ${JSON.stringify([{ from: 0, to: null, rate: 0 }])}::jsonb, 75000, 1200000, 60000, ${"[]"}::jsonb)`);
+      }
     }, t);
   }
 });
@@ -169,7 +175,7 @@ afterAll(async () => {
     await asTenant(async (tx) => {
       for (const tbl of ["payroll.payroll_register", "payroll.payroll_slips", "payroll.payroll_run_employee_claims", "payroll.payroll_runs",
         "payroll.employee_pay_group_assignments", "payroll.pay_group_settings", "payroll.pay_groups", "payroll.payroll_ddo_departments",
-        "payroll.payroll_ddos", "payroll.payroll_components", "payroll.payroll_structures", "payroll.dearness_allowance_rates"]) {
+        "payroll.payroll_ddos", "payroll.payroll_components", "payroll.payroll_structures", "payroll.dearness_allowance_rates", "payroll.tax_slab_config"]) {
         await tx.execute(sql.raw(`DELETE FROM ${tbl} WHERE tenant_id = '${t}'`));
       }
     }, t);

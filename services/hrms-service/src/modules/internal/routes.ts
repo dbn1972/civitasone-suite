@@ -12,6 +12,7 @@ import { loadPayProfileFeedInputs } from "../pay-profile/repo.js";
 import { buildEmployeePayFeed } from "../pay-profile/feed.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { completedYearsOfService, totalLeaveBalanceDays } from "../employee/fnf-service-snapshot.js";
+import { schemeForMonth } from "../employee/pension-scheme.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -198,6 +199,10 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // (pan / bankAccountNo / bankIfsc decrypted at rest and returned to payroll).
     req.log.info({ event: "pii.access", projection: "payroll-input", fields: ["pan","bankAccountNo","bankIfsc"], count: active.length, actorId: ctx.actorId, tenantId: ctx.tenantId, month: q.month }, "payroll-input PII projection");
 
+    // UAT b18 D1: the pension scheme IN EFFECT for q.month, from the approved
+    // effective-dated changes (earlier months keep the old scheme).
+    const schemeChanges = await employeeRepo.listApprovedPensionSchemeChanges(ctx.tenantId);
+
     return reply.send({
       month: q.month,
       employees: active.map((e) => {
@@ -236,7 +241,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           gender: e.gender ?? null,
           // State of employment (ISO 3166-2:IN code), the key of the professional-tax slab set; null = not recorded.
           stateCode: e.workStateCode ?? null,
-          pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
+          pensionScheme: schemeForMonth(e.pensionScheme ?? "NPS", schemeChanges.get(e.id) ?? [], q.month) as "GPF" | "NPS" | "EPF" | "UPS",
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
           // FR 53 (additive): the suspension window and any recorded review

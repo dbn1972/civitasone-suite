@@ -5,6 +5,7 @@ import { maskValue } from "../../shared/pii-mask.js";
 import * as repo from "./repo.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 import type { EmployeeRow } from "./schema.js";
+import { statutoryIncomplete } from "./pension-scheme.js";
 
 export async function getEmployee(id: string, tenantId: string): Promise<EmployeeRow | null> {
   return cache.getOrLoad<EmployeeRow>(
@@ -42,6 +43,10 @@ export type EmployeeDetailShape = {
   uanNumber?: string;
   esicIpNumber?: string;
   pran?: string;
+  /** UAT b18 D1: the recorded (current) pension scheme. */
+  pensionScheme?: string;
+  /** UAT b18 D3: missing statutory ids for that scheme, e.g. ["UAN_MISSING"] for an EPF member; absent when complete. */
+  statutoryIncomplete?: string[];
 };
 
 /**
@@ -170,6 +175,8 @@ export async function getEmployeeDetail(id: string, tenantId: string, opts: { in
     ...(emp.uanNumber      ? { uanNumber: emp.uanNumber }              : {}),
     ...(emp.esicIpNumber   ? { esicIpNumber: emp.esicIpNumber }        : {}),
     ...(emp.pran           ? { pran: emp.pran }                        : {}),
+    ...(emp.pensionScheme  ? { pensionScheme: emp.pensionScheme }      : {}),
+    ...(statutoryIncomplete(emp).length > 0 ? { statutoryIncomplete: statutoryIncomplete(emp) } : {}),
     // GAP-HR-EMPLOYEES-NEW-02: the wizard captures basic pay at creation but the
     // record never showed it back. Opt-in per request (see the doc comment), as
     // paise -- a safe integer for any real salary; anything beyond 2^53 paise is

@@ -17,6 +17,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
+import { pensionSchemeRoutes } from "./pension-scheme-routes.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -364,6 +365,9 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const body = loginLinkBody.parse(req.body);
     return reply.send(await setEmployeeLoginLink(ctx, id, body));
   });
+
+  // UAT b18 D1: maker-checker, effective-dated pension scheme changes.
+  await pensionSchemeRoutes(app);
 
   app.setErrorHandler(errorHandler);
 }

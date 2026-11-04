@@ -147,6 +147,44 @@ export async function summarisePfPeriod(tenantId: string, period?: string): Prom
   return ledgerPeriodSummary(payrollPf, tenantId, period);
 }
 
+/** UAT b18 D5: the EPF ledger totals one ECR / challan for a wage month is made of. */
+export type PfChallanTotals = {
+  recordCount: number;
+  empContribMinor: bigint;
+  epsContribMinor: bigint;
+  epfErContribMinor: bigint;
+  edliContribMinor: bigint;
+  epfAdminMinor: bigint;
+  epfWageMinor: bigint;
+  edliWageMinor: bigint;
+};
+
+/** Sums of the PF ledger for one period (excluded slips never count). */
+export async function sumPfChallanPeriod(tenantId: string, period: string): Promise<PfChallanTotals> {
+  return scopedRead(async (tx) => {
+    const [agg] = await tx.select({
+      n: sql<string>`count(*)`,
+      emp: sql<string>`coalesce(sum(${payrollPf.empContribMinor}), 0)`,
+      eps: sql<string>`coalesce(sum(${payrollPf.epsContribMinor}), 0)`,
+      epfEr: sql<string>`coalesce(sum(${payrollPf.epfErContribMinor}), 0)`,
+      edli: sql<string>`coalesce(sum(${payrollPf.edliContribMinor}), 0)`,
+      admin: sql<string>`coalesce(sum(${payrollPf.epfAdminMinor}), 0)`,
+      epfWage: sql<string>`coalesce(sum(${payrollPf.epfWageMinor}), 0)`,
+      edliWage: sql<string>`coalesce(sum(${payrollPf.edliWageMinor}), 0)`,
+    }).from(payrollPf).where(and(eq(payrollPf.tenantId, tenantId), eq(payrollPf.period, period), notExcludedSlip(payrollPf.slipId)));
+    return {
+      recordCount: Number(agg?.n ?? 0),
+      empContribMinor: BigInt(agg?.emp ?? 0),
+      epsContribMinor: BigInt(agg?.eps ?? 0),
+      epfErContribMinor: BigInt(agg?.epfEr ?? 0),
+      edliContribMinor: BigInt(agg?.edli ?? 0),
+      epfAdminMinor: BigInt(agg?.admin ?? 0),
+      epfWageMinor: BigInt(agg?.epfWage ?? 0),
+      edliWageMinor: BigInt(agg?.edliWage ?? 0),
+    };
+  });
+}
+
 export async function summariseEsiPeriod(tenantId: string, period?: string): Promise<LedgerPeriodSummary> {
   return ledgerPeriodSummary(payrollEsi, tenantId, period);
 }

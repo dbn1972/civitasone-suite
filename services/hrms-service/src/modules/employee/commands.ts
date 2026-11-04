@@ -11,6 +11,7 @@ import { scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { isUniqueViolation } from "../../shared/safe-error-log.js";
 import { hrmsEmployees } from "./schema.js";
+import { defaultPensionScheme } from "./pension-scheme.js";
 import { idempotentId } from "@civitasone/auth";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -52,6 +53,9 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
         email:          body.email ?? null,
         photoKey,
         employeeType:   body.employeeType ?? "permanent",
+        // UAT b18 D1: by rule (contract / PSU -> EPF, joined before 2004 -> GPF,
+        // else NPS) unless chosen explicitly; was the column default NPS for all.
+        pensionScheme:  body.pensionScheme ?? defaultPensionScheme({ dateOfJoining: body.dateOfJoining, employeeType: body.employeeType ?? "permanent" }),
         basicMinor:     BigInt(body.basicMinor ?? 0),
         currency:       body.currency ?? "INR",
         payStructureId: body.payStructureId ?? null,

@@ -46,7 +46,8 @@ export type PayrollInputEmployee = {
   cityClass: "X" | "Y" | "Z";
   taxRegime: "old" | "new";
   departmentId: string;
-  pensionScheme: "GPF" | "NPS" | "EPF";
+  /** The scheme in effect for the requested month (HRMS resolves effective-dated changes, UAT b18 D1). */
+  pensionScheme: "GPF" | "NPS" | "EPF" | "UPS";
   /** HRMS gender (male | female | other) or null; picks the gender-specific professional-tax slab. */
   gender?: string | null;
   /** State of employment (ISO 3166-2:IN code, e.g. MH); professional tax is levied per state. null = not recorded in HRMS. */

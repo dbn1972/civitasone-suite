@@ -20,6 +20,7 @@ import {
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
+import { assertTaxConfigForMonth } from "../tax/config-check.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -99,6 +100,10 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
       throw new HttpError(400, "STRUCTURE_NOT_FOUND", `payroll structure ${body.structureId} does not exist for this tenant`);
     }
   }
+  // UAT b18 D2: refuse a run for an FY with no tax slab config up front (422
+  // TAX_CONFIG_MISSING) instead of letting every slip fail during compute.
+  // Before the pay-group branch so every run type and scope is covered.
+  await assertTaxConfigForMonth(ctx.tenantId, body.month);
   // GAP-PAYROLL-PAY-GROUPS-03: pay-group runs (one run per group, members only).
   if (isPayGroupRun(body)) {
     const r = await createPayGroupRuns(ctx, body);

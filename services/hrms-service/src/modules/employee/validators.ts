@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { EMPLOYEE_STATUSES, employeeStatusEnum, isEmployeeStatus } from "./status.js";
+import { PENSION_SCHEMES } from "./pension-scheme.js";
+
+/**
+ * UAT b18 D3: a UAN (EPFO Universal Account Number) is exactly 12 digits; it
+ * used to be any string up to 12 characters. An empty string is still
+ * accepted (the edit form sends one to clear the field); an EPF member with
+ * no valid UAN is reported incomplete and the ECR refuses them.
+ */
+const uanField = z.string().trim().refine((v) => v === "" || /^\d{12}$/.test(v), "UAN must be exactly 12 digits");
 
 // GET /v1/hrms/employees query params: standard pagination plus an optional
 // tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
@@ -95,12 +104,16 @@ export const createEmployeeBody = z.object({
   workStateCode:  workStateCode.optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
-  uanNumber:      z.string().max(12).optional(),
+  uanNumber:      uanField.optional().transform((v) => (v === "" ? undefined : v)),
   pran:           z.string().max(12).optional(),
   gstin:          z.string().max(15).optional(),
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
+  // UAT b18 D1: optional explicit scheme at hire (e.g. UPS). Omitted -> the
+  // rule in pension-scheme.ts (contract / PSU -> EPF, joined before 2004 -> GPF,
+  // else NPS). Later changes go through the maker-checker change routes.
+  pensionScheme:  z.enum(PENSION_SCHEMES).optional(),
   managerId:    z.string().uuid().optional(),
   station:      z.string().max(128).optional(),
   category:     z.enum(["UR", "SC", "ST", "OBC", "EWS"]).optional(),
@@ -176,13 +189,16 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.undefined({ message: "Basic pay cannot be changed here. Use a salary revision in Payroll, which is approved, effective-dated and audited." }).optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
-  uanNumber:      z.string().max(12).optional(),
+  uanNumber:      uanField.optional(),
   esicIpNumber:   z.string().max(17).optional(),
   pran:           z.string().max(12).optional(),
   gstin:          z.string().max(15).optional(),
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
+  // UAT b18 D1: the pension scheme is NOT editable here: it changes through
+  // the maker-checker, effective-dated POST .../pension-scheme-changes.
+  pensionScheme:  z.undefined({ message: "The pension scheme cannot be changed here. Use a pension scheme change, which is approved, effective-dated and audited." }).optional(),
   // GAP-HR-EMPLOYEES-NEW-01
   serviceGrade:   z.string().trim().min(1).max(64).optional(),
   maritalStatus:  z.enum(MARITAL_STATUSES).optional(),

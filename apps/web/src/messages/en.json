@@ -2088,7 +2088,8 @@
       "DDO_INACTIVE": "That DDO is inactive. Pick an active DDO.",
       "DUPLICATE_RUN_FOR_PERIOD": "A run already exists for this pay group and month.",
       "PAY_GROUP_INACTIVE": "A selected pay group is inactive. Reactivate it or pick another.",
-      "PAY_GROUP_NOT_FOUND": "A selected pay group no longer exists. Refresh the page and try again."
+      "PAY_GROUP_NOT_FOUND": "A selected pay group no longer exists. Refresh the page and try again.",
+      "TAX_CONFIG_MISSING": "No income-tax slab configuration exists for this month's financial year. Configure the tax slabs for that year before creating the run."
     }
   },
   "createSalaryRevisionForm": {
@@ -2820,7 +2821,10 @@
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Generate EPFO ECR file?",
     "confirmLabel": "Confirm & Download",
-    "confirmDescription": "Generate and download the EPFO Electronic Challan cum Return for period <strong>{month}</strong>."
+    "confirmDescription": "Generate and download the EPFO Electronic Challan cum Return for period <strong>{month}</strong>.",
+    "errors": {
+      "UAN_MISSING": "ECR not generated. These EPF members have no valid 12-digit UAN: {employees}. Record their UAN in the employee record and try again."
+    }
   },
   "employeeDetail": {
     "notFoundTitle": "Employee Profile",
@@ -18384,6 +18388,20 @@
         "name": "Themes",
         "summary": "The look of the application for your office: colours, logo and branding."
       }
+    }
+  },
+  "pensionSchemeChange": {
+    "error": {
+      "PENSION_SCHEME_UNCHANGED": "The employee is already on this pension scheme from that date.",
+      "PENSION_SCHEME_CHANGE_PENDING": "A pension scheme change for this employee is already waiting for approval.",
+      "PENSION_SCHEME_CHANGE_NOT_PENDING": "This request has already been approved or rejected.",
+      "PENSION_SCHEME_EFFECTIVE_BEFORE_JOINING": "The effective date cannot be before the employee's joining month.",
+      "PENSION_SCHEME_EFFECTIVE_NOT_AFTER_LAST": "The effective date must be after the last approved pension scheme change.",
+      "UAN_REQUIRED": "An EPF member needs a valid 12-digit UAN. Record the UAN or enter it with the request.",
+      "MAKER_CHECKER_VIOLATION": "A different person must approve or reject this change. You cannot decide your own request.",
+      "EMPLOYEE_EXITED": "The pension scheme of an employee who has left cannot be changed.",
+      "REASON_REQUIRED": "Enter a reason of at least 10 characters.",
+      "generic": "The pension scheme change could not be saved. Try again."
     }
   }
 }

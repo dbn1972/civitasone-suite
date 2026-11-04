@@ -40,7 +40,12 @@ export interface RawComponent {
   pctOfBasic?: number | null; // e.g. 10 => 10% of basic
 }
 
-export type PensionScheme = "GPF" | "NPS" | "EPF";
+/**
+ * UAT b18 D1: UPS (Unified Pension Scheme, an option under NPS for central
+ * government staff from 2025-04-01) is computed like NPS on Basic + DA but
+ * with the UPS employer share (UPS_ER_BPS below).
+ */
+export type PensionScheme = "GPF" | "NPS" | "EPF" | "UPS";
 export type CityClass = "X" | "Y" | "Z";
 
 export interface SlipInput {
@@ -290,6 +295,11 @@ export interface StatutoryConfig {
   sec80cCapMinor: bigint;     // Chapter VI-A Sec 80C cap, paise (₹1,50,000 = 15_000_000n)
   sec80dCapMinor: bigint;     // Chapter VI-A Sec 80D cap, paise (₹75,000 = 7_500_000n)
   sec80ccd1bCapMinor: bigint; // Chapter VI-A Sec 80CCD(1B) cap (NPS additional), paise (₹50,000 = 5_000_000n) — DOM-034
+  // UAT b18 D5 (migration 0162): employer-only EPFO charges, never deducted from the employee.
+  edliRateBps: bigint;        // EDLI contribution (A/c 21), e.g. 50n = 0.5% of EDLI wages
+  edliWageCapMinor: bigint;   // EDLI wage ceiling, paise (₹15,000 = 1_500_000n) -> max ₹75 per member
+  epfAdminRateBps: bigint;    // EPF administrative charges (A/c 2), e.g. 50n = 0.5% of EPF wages
+  epfAdminMinMinor: bigint;   // A/c 2 statutory minimum per establishment per wage month, paise (₹500 = 50_000n)
 }
 
 /** The exact values that were hardcoded pre-DOM-008 — never change silently. */
@@ -304,6 +314,10 @@ export const DEFAULT_STATUTORY_CONFIG: StatutoryConfig = {
   sec80cCapMinor: 15_000_000n,
   sec80dCapMinor: 7_500_000n,
   sec80ccd1bCapMinor: 5_000_000n,
+  edliRateBps: 50n,
+  edliWageCapMinor: 1_500_000n,
+  epfAdminRateBps: 50n,
+  epfAdminMinMinor: 50_000n,
 };
 
 /** A `statutory.statutory_config` row as loaded from the DB; `tenantId: null` means platform default (DB sentinel zero-UUID mapped to null at the repo boundary). */
@@ -334,16 +348,68 @@ export function resolveStatutoryConfig(rows: StatutoryConfigRow[], tenantId: str
   const {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
     esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
+    edliRateBps, edliWageCapMinor, epfAdminRateBps, epfAdminMinMinor,
   } = picked;
   return {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
     esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
+    edliRateBps, edliWageCapMinor, epfAdminRateBps, epfAdminMinMinor,
   };
+}
+
+/** Employer-only EPFO charges on one EPF member slip (UAT b18 D5 / D6). */
+export interface EpfEmployerCharges {
+  /** The EPF wage the 12% was actually computed on: min(Basic + DA, PF wage ceiling). */
+  pfWageMinor: bigint;
+  /** EDLI wages: min(Basic + DA, EDLI wage ceiling). */
+  edliWageMinor: bigint;
+  /** Employer EDLI contribution (A/c 21): EDLI rate x EDLI wages, rounded to the rupee. */
+  edliMinor: bigint;
+  /** Employer EPF administrative charges (A/c 2) for this member before the establishment minimum. */
+  epfAdminMinor: bigint;
+}
+
+/**
+ * UAT b18 D5 / D6: the EPF wage actually used, and the employer EDLI and EPF
+ * admin charges, for an EPF member whose Basic + DA (pension base) is
+ * `pensionBaseMinor`. Pure. Kept OUT of computeSlip so its result (and the
+ * legacy-oracle proof of it) is unchanged: these are employer cost lines, they
+ * never touch gross, deductions or net pay. The A/c 2 statutory minimum applies
+ * per establishment per month, so it is applied on the period summary
+ * (epfAdminChargeForPeriod), not per member.
+ */
+export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig): EpfEmployerCharges {
+  const base = pensionBaseMinor > 0n ? pensionBaseMinor : 0n;
+  const pfWageMinor = base > cfg.pfWageCapMinor ? cfg.pfWageCapMinor : base;
+  const edliWageMinor = base > cfg.edliWageCapMinor ? cfg.edliWageCapMinor : base;
+  return {
+    pfWageMinor,
+    edliWageMinor,
+    edliMinor: roundRupee((edliWageMinor * cfg.edliRateBps) / 10000n),
+    epfAdminMinor: roundRupee((pfWageMinor * cfg.epfAdminRateBps) / 10000n),
+  };
+}
+
+/**
+ * A/c 2 for a wage month: the sum of the per-member admin charges, raised to
+ * the configured statutory minimum when the establishment has at least one
+ * EPF member that month (no members: nothing is due).
+ */
+export function epfAdminChargeForPeriod(sumMemberAdminMinor: bigint, memberCount: number, cfg: StatutoryConfig): bigint {
+  if (memberCount <= 0) return 0n;
+  return sumMemberAdminMinor < cfg.epfAdminMinMinor ? cfg.epfAdminMinMinor : sumMemberAdminMinor;
 }
 
 const GPF_PCT     = 10n;
 const NPS_EMP_PCT = 10n;
 const NPS_ER_PCT  = 14n;
+/**
+ * UAT b18 D1: UPS contributions on Basic + DA. Employee 10% (same as NPS);
+ * Government 18.5% (10% to the individual corpus + 8.5% to the pool corpus),
+ * per the UPS notification of 24 Jan 2025 (PFRDA UPS regulations, 2025).
+ */
+const UPS_EMP_PCT = 10n;
+const UPS_ER_BPS  = 1850n;
 const GRATUITY_CAP = 200_000_000n; // 20 lakh INR
 
 /** Round a paise amount to the nearest whole rupee (round-half-up). */
@@ -486,7 +552,7 @@ export function computeSlip(input: SlipInput): SlipResult {
 
   // T-STAT M-NPS: NPS also falls on the Basic + DA part of arrears.
   const npsBaseRaw = pensionBase + arrearPensionBaseMinor;
-  const npsPensionBaseMinor = pensionScheme === "NPS" ? (npsBaseRaw > 0n ? npsBaseRaw : 0n) : 0n;
+  const npsPensionBaseMinor = pensionScheme === "NPS" || pensionScheme === "UPS" ? (npsBaseRaw > 0n ? npsBaseRaw : 0n) : 0n;
   if (pensionScheme === "GPF") {
     gpfMinor = pct(pensionBase, GPF_PCT);
   } else if (pensionScheme === "NPS") {
@@ -499,6 +565,11 @@ export function computeSlip(input: SlipInput): SlipResult {
     // no longer suppresses a scheme-driven contribution.)
     npsEmployeeMinor = pct(npsPensionBaseMinor, NPS_EMP_PCT);
     npsEmployerMinor = pct(npsPensionBaseMinor, NPS_ER_PCT);
+  } else if (pensionScheme === "UPS") {
+    // UAT b18 D1: UPS is an option under NPS -- same base, same PRAN/CRA
+    // ledger, the higher UPS Government share.
+    npsEmployeeMinor = pct(npsPensionBaseMinor, UPS_EMP_PCT);
+    npsEmployerMinor = roundRupee((npsPensionBaseMinor * UPS_ER_BPS) / 10000n);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;

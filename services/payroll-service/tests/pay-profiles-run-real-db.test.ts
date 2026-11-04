@@ -160,7 +160,7 @@ describe("mixed-profile salary run", () => {
     expect(comp("PP-B", "DEP_ALLOW")).toBeUndefined();
 
     // consolidated: 30,000 pro-rated 27/30 days, no DA/HRA/TA, EPF on the ceiling, no LOP line
-    expect(by["PP-C"]).toMatchObject({ pay_profile: "consolidated_contract", basic_minor: "2700000", gross_minor: "2700000", pf_employee_minor: "180000", nps_employee_minor: "0", pf_wage_minor: "2700000" });
+    expect(by["PP-C"]).toMatchObject({ pay_profile: "consolidated_contract", basic_minor: "2700000", gross_minor: "2700000", pf_employee_minor: "180000", nps_employee_minor: "0", pf_wage_minor: "1500000" }); // UAT b18 D6: the capped wage the 12% was computed on
     expect((by["PP-C"]!.components as Array<{ code: string }>).map((c) => c.code)).toEqual(["BASIC"]);
     expect(by["PP-C"]!.profile_snapshot).toMatchObject({ profile: "consolidated_contract", consolidatedMonthlyMinor: "3000000" });
 

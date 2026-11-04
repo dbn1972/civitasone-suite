@@ -98,6 +98,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(loansRoutes);
   await app.register(statutoryRoutes);
   await app.register(ecrRoutes);
+  await app.register((await import("./modules/payroll/pension-scheme-retro.js")).pensionSchemeRetroRoutes);
   await app.register(payslipPdfRoutes);
   await app.register(payslipDownloadRoutes);
   await app.register(taxRoutes);

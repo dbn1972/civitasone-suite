@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
@@ -25,6 +25,15 @@ export async function statutoryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { period } = periodQuerySchema.parse(req.query);
     return reply.send(await queries.pfPeriodSummary(ctx.tenantId, period));
+  });
+
+  // UAT b18 D5: EPFO challan (A/c 1 / 2 / 10 / 21 / 22) for one wage month.
+  app.get("/v1/payroll/statutory/pf/challan", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { period } = periodQuerySchema.parse(req.query);
+    if (!period) throw new HttpError(400, "VALIDATION_FAILED", "period query param required in YYYY-MM format");
+    return reply.send(await queries.pfChallanSummary(ctx.tenantId, period));
   });
 
   app.get("/v1/payroll/statutory/esi", async (req, reply) => {

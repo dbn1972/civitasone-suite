@@ -66,6 +66,24 @@ describe("EcrGeneratorForm", () => {
     });
   });
 
+  it("names the EPF members without a valid UAN when the ECR is refused (UAT b18 D3)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "UAN_MISSING", message: "raw server text",
+      employees: [{ employeeId: "e1", employeeNo: "UATG1-25595", problem: "missing" }, { employeeId: "e2", employeeNo: "UATG1-37007", problem: "invalid" }],
+    }), { status: 422, headers: { "content-type": "application/json" } }));
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2026-06" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate ECR" }));
+    await waitFor(() => expect(screen.getByText("Generate EPFO ECR file?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Confirm & Download"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/These EPF members have no valid 12-digit UAN: UATG1-25595, UATG1-37007\./)).toBeInTheDocument();
+    });
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
 

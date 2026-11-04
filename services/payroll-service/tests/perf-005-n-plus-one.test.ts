@@ -110,7 +110,8 @@ describe("PERF-005 — payroll-service N+1 fixes", () => {
       const employees = Array.from({ length: n }, (_, i) => ({
         id: randomUUID(), employeeNo: `ECR-EMP-${i}`, fullName: `ECR Employee ${i}`,
         basicMinor: "100000", dateOfJoining: "2020-01-01", payStructureId: null,
-        bankAccountNo: null, bankIfsc: null, pan: null, uan: `UAN${1000 + i}`,
+        // UAT b18 D3: a UAN must be 12 digits or the ECR is refused.
+        bankAccountNo: null, bankIfsc: null, pan: null, uan: String(100000000000 + i),
         cityClass: "X" as const, taxRegime: "new" as const, departmentId: randomUUID(),
         pensionScheme: "EPF" as const,
       }));
@@ -168,7 +169,8 @@ describe("PERF-005 — payroll-service N+1 fixes", () => {
       const lines = (res.body as string).trim().split(/\r\n/);
       expect(lines).toHaveLength(20);
       for (const line of lines) {
-        const cols = line.split("|");
+        // UAT b18 D4: ECR 2.0 field separator.
+        const cols = line.split("#~#");
         expect(cols[2]).not.toBe("0"); // Gross Wages
       }
     } finally {

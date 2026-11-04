@@ -42,6 +42,8 @@ const RUN_ERROR_CODES = [
   "DUPLICATE_RUN_FOR_PERIOD",
   "PAY_GROUP_INACTIVE",
   "PAY_GROUP_NOT_FOUND",
+  // UAT b18 D2: refused at creation when the FY has no tax slab config.
+  "TAX_CONFIG_MISSING",
 ] as const;
 
 const MONTHS = [

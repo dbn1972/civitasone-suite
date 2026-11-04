@@ -9,6 +9,7 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { registerConsumers } from "./consumers.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 import { applyDueEffectiveChangesOnce } from "./modules/lifecycle/effective-scheduler.js";
+import { applyDuePensionSchemeChangesOnce } from "./modules/employee/pension-scheme-scheduler.js";
 import { runWithTenant } from "@civitasone/db";
 import { loadModuleProfile } from "./shared/module-profile.js";
 import EventEmitter from "node:events";
@@ -91,6 +92,14 @@ async function schedulerTick(): Promise<void> {
     );
   } catch (err) {
     log.error({ err }, "effective-changes scheduler tick failed");
+  }
+  try {
+    // UAT b18 D1: approved future-dated pension scheme changes reach their
+    // effective date. Own try/catch, like the two ticks above.
+    const psRes = await applyDuePensionSchemeChangesOnce(db);
+    log.info({ event: "scheduler.tick", ...psRes }, "scheduler tick applied due pension scheme changes");
+  } catch (err) {
+    log.error({ err }, "pension scheme scheduler tick failed");
   } finally {
     schedulerBusy = false;
   }

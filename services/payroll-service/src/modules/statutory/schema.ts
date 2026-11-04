@@ -18,6 +18,11 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   erContribMinor:    bigint("er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epsContribMinor:   bigint("eps_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epfErContribMinor: bigint("epf_er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  // UAT b18 D5 / D6 (migration 0162): wages actually used + employer EDLI / admin charges.
+  epfWageMinor:      bigint("epf_wage_minor", { mode: "bigint" }),
+  edliWageMinor:     bigint("edli_wage_minor", { mode: "bigint" }),
+  edliContribMinor:  bigint("edli_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  epfAdminMinor:     bigint("epf_admin_minor", { mode: "bigint" }).notNull().default(0n),
   currency:          char("currency", { length: 3 }).notNull().default("INR"),
   period:            char("period", { length: 7 }).notNull(),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -193,6 +198,11 @@ export const statutoryConfig = statutorySchema.table("statutory_config", {
   sec80cCapMinor:     bigint("sec80c_cap_minor", { mode: "bigint" }).notNull().default(15_000_000n),
   sec80dCapMinor:     bigint("sec80d_cap_minor", { mode: "bigint" }).notNull().default(7_500_000n),
   sec80ccd1bCapMinor: bigint("sec80ccd1b_cap_minor", { mode: "bigint" }).notNull().default(5_000_000n),
+  // UAT b18 D5 (migration 0162): employer-only EPFO charges.
+  edliRateBps:        integer("edli_rate_bps").notNull().default(50),
+  edliWageCapMinor:   bigint("edli_wage_cap_minor", { mode: "bigint" }).notNull().default(1_500_000n),
+  epfAdminRateBps:    integer("epf_admin_rate_bps").notNull().default(50),
+  epfAdminMinMinor:   bigint("epf_admin_min_minor", { mode: "bigint" }).notNull().default(50_000n),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),
 });
