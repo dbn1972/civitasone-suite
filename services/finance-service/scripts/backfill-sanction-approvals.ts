@@ -11,7 +11,14 @@
  * outbox was purged) is reported as UNRESOLVED and left NULL: its order then refuses with 422
  * SANCTION_APPROVAL_NOT_RECORDED until an operator records the approver from the paper file.
  *
- * DRY RUN BY DEFAULT. Usage (from services/finance-service; DATABASE_URL = owner/admin role):
+ * Tenant scoping: budget.finance_sanctions is FORCE ROW LEVEL SECURITY (policy on app.tenant_id), so every read and
+ * write here runs per tenant inside its own transaction that first sets the tenant GUC with
+ * set_config('app.tenant_id', <tenant>, true) (transaction-local, never a session SET: pgbouncer transaction
+ * pooling), the same pattern as scripts/backfill-standard-gl-heads.ts. It therefore also works under the
+ * RLS-enforced finance_svc role -- but with that role tenant DISCOVERY (no --tenant) sees no rows, so pass --tenant
+ * explicitly, or run discovery with the owner/admin role.
+ *
+ * DRY RUN BY DEFAULT. Usage (from services/finance-service):
  *   DATABASE_URL=... pnpm exec tsx scripts/backfill-sanction-approvals.ts [--tenant <uuid> ...]          # report only
  *   DATABASE_URL=... pnpm exec tsx scripts/backfill-sanction-approvals.ts --apply [--tenant <uuid> ...]  # write
  * Idempotent: a second --apply finds nothing to do.
@@ -31,40 +38,76 @@ export interface SanctionApprovalPlan {
   source: "sanction_approved_event" | "approve_audit_event" | "unresolved";
 }
 
+/** Run `fn` in a transaction scoped to one tenant (transaction-local GUC, so RLS applies exactly as in the service). */
+function inTenant<T>(sql: Sql, tenantId: string, fn: (tx: Sql) => Promise<T>): Promise<T> {
+  return sql.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+    return fn(tx as unknown as Sql);
+  }) as Promise<T>;
+}
+
+/**
+ * Tenants that have an approved/exhausted sanction with no approver. Without an explicit list this is a plain
+ * query: it sees every tenant only as the owner/admin role (under RLS-enforced finance_svc it returns none).
+ */
+async function tenantsToScan(sql: Sql, tenants?: string[]): Promise<string[]> {
+  if (tenants && tenants.length > 0) return [...new Set(tenants)];
+  const rows = await sql<{ tenant_id: string }[]>`
+    SELECT DISTINCT tenant_id::text AS tenant_id FROM budget.finance_sanctions
+     WHERE approved_by IS NULL AND status IN ('approved', 'exhausted') ORDER BY 1`;
+  return rows.map((r) => r.tenant_id);
+}
+
 export async function planSanctionApprovals(sql: Sql, tenants?: string[]): Promise<SanctionApprovalPlan[]> {
   for (const t of tenants ?? []) if (!UUID_RE.test(t)) throw new Error(`not a tenant uuid: ${t}`);
-  const rows = await sql<{ id: string; tenant_id: string; sanction_no: string }[]>`
-    SELECT id::text, tenant_id::text, sanction_no FROM budget.finance_sanctions
-     WHERE approved_by IS NULL AND status IN ('approved', 'exhausted')
-       ${tenants && tenants.length > 0 ? sql`AND tenant_id = ANY(${tenants}::uuid[])` : sql``}
-     ORDER BY tenant_id, created_at, id`;
   const plans: SanctionApprovalPlan[] = [];
-  for (const r of rows) {
-    const [ev] = await sql<{ actor_id: string; created_at: Date }[]>`
-      SELECT actor_id::text, created_at FROM _outbox.messages
-       WHERE tenant_id = ${r.tenant_id}::uuid AND topic = 'finance.sanction.approved' AND payload->>'sanctionId' = ${r.id}
-       ORDER BY created_at ASC LIMIT 1`;
-    if (ev) { plans.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: ev.actor_id, approvedAt: ev.created_at.toISOString(), source: "sanction_approved_event" }); continue; }
-    const [au] = await sql<{ actor_id: string; created_at: Date }[]>`
-      SELECT actor_id::text, created_at FROM _outbox.messages
-       WHERE tenant_id = ${r.tenant_id}::uuid AND topic = 'audit.event.record'
-         AND payload->>'resourceType' = 'sanction' AND payload->>'resourceId' = ${r.id} AND payload->>'action' = 'approve'
-       ORDER BY created_at ASC LIMIT 1`;
-    if (au) { plans.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: au.actor_id, approvedAt: au.created_at.toISOString(), source: "approve_audit_event" }); continue; }
-    plans.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: null, approvedAt: null, source: "unresolved" });
+  for (const tenantId of await tenantsToScan(sql, tenants)) {
+    plans.push(...await inTenant(sql, tenantId, async (tx) => {
+      const out: SanctionApprovalPlan[] = [];
+      const rows = await tx<{ id: string; tenant_id: string; sanction_no: string }[]>`
+        SELECT id::text, tenant_id::text, sanction_no FROM budget.finance_sanctions
+         WHERE tenant_id = ${tenantId}::uuid AND approved_by IS NULL AND status IN ('approved', 'exhausted')
+         ORDER BY created_at, id`;
+      for (const r of rows) {
+        const [ev] = await tx<{ actor_id: string; created_at: Date }[]>`
+          SELECT actor_id::text, created_at FROM _outbox.messages
+           WHERE tenant_id = ${r.tenant_id}::uuid AND topic = 'finance.sanction.approved' AND payload->>'sanctionId' = ${r.id}
+           ORDER BY created_at ASC LIMIT 1`;
+        if (ev) { out.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: ev.actor_id, approvedAt: ev.created_at.toISOString(), source: "sanction_approved_event" }); continue; }
+        const [au] = await tx<{ actor_id: string; created_at: Date }[]>`
+          SELECT actor_id::text, created_at FROM _outbox.messages
+           WHERE tenant_id = ${r.tenant_id}::uuid AND topic = 'audit.event.record'
+             AND payload->>'resourceType' = 'sanction' AND payload->>'resourceId' = ${r.id} AND payload->>'action' = 'approve'
+           ORDER BY created_at ASC LIMIT 1`;
+        if (au) { out.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: au.actor_id, approvedAt: au.created_at.toISOString(), source: "approve_audit_event" }); continue; }
+        out.push({ sanctionId: r.id, tenantId: r.tenant_id, sanctionNo: r.sanction_no, approvedBy: null, approvedAt: null, source: "unresolved" });
+      }
+      return out;
+    }));
   }
   return plans;
 }
 
-/** Writes the resolved plans; returns how many rows were updated. Never overwrites a set approver. */
+/** Writes the resolved plans, one transaction per tenant; returns how many rows were updated. Never overwrites a set approver. */
 export async function applySanctionApprovals(sql: Sql, plans: SanctionApprovalPlan[]): Promise<number> {
-  let n = 0;
+  const byTenant = new Map<string, SanctionApprovalPlan[]>();
   for (const p of plans) {
     if (!p.approvedBy || !p.approvedAt) continue;
-    const res = await sql`
-      UPDATE budget.finance_sanctions SET approved_by = ${p.approvedBy}::uuid, approved_at = ${p.approvedAt}::timestamptz
-       WHERE id = ${p.sanctionId}::uuid AND tenant_id = ${p.tenantId}::uuid AND approved_by IS NULL`;
-    n += res.count;
+    if (!UUID_RE.test(p.tenantId)) throw new Error(`not a tenant uuid: ${p.tenantId}`);
+    byTenant.set(p.tenantId, [...(byTenant.get(p.tenantId) ?? []), p]);
+  }
+  let n = 0;
+  for (const [tenantId, list] of byTenant) {
+    n += await inTenant(sql, tenantId, async (tx) => {
+      let c = 0;
+      for (const p of list) {
+        const res = await tx`
+          UPDATE budget.finance_sanctions SET approved_by = ${p.approvedBy}::uuid, approved_at = ${p.approvedAt}::timestamptz
+           WHERE id = ${p.sanctionId}::uuid AND tenant_id = ${tenantId}::uuid AND approved_by IS NULL`;
+        c += res.count;
+      }
+      return c;
+    });
   }
   return n;
 }

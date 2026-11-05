@@ -6,6 +6,7 @@
  *
  * Env vars:
  *   RENDER_PDF_MODE        — "playwright" (default if available) | "html-only"
+ *   RENDER_PDF_TIMEOUT_MS  — per-render timeout (default 30000); a hung render is torn down, its slot freed
  *   PLAYWRIGHT_CHROMIUM_PATH — override chromium executable path
  *   DSC_P12_PATH           — path to PKCS#12 DSC keystore for PDF signing
  *   DSC_PASSPHRASE         — passphrase for the PKCS#12 keystore
@@ -62,8 +63,12 @@ interface PwPage {
   evaluate<T>(fn: () => T | Promise<T>): Promise<T>;
   pdf(o: Record<string, unknown>): Promise<Uint8Array | Buffer>;
 }
-interface PwContext { newPage(): Promise<PwPage>; close(): Promise<void> }
-interface PwBrowser { newContext(): Promise<PwContext>; close(): Promise<void>; on(ev: "disconnected", cb: () => void): void; isConnected(): boolean }
+interface PwRoute { request(): { url(): string }; abort(): Promise<void>; continue(): Promise<void> }
+interface PwContext {
+  newPage(): Promise<PwPage>; close(): Promise<void>;
+  route(url: string, handler: (route: PwRoute) => void | Promise<void>): Promise<void>;
+}
+interface PwBrowser { newContext(o?: Record<string, unknown>): Promise<PwContext>; close(): Promise<void>; on(ev: "disconnected", cb: () => void): void; isConnected(): boolean }
 
 let browserPromise: Promise<PwBrowser> | null = null;
 let active = 0;
@@ -114,31 +119,52 @@ export async function closePdfRenderer(): Promise<void> {
   try { await (await p).close(); } catch { /* already gone */ }
 }
 
+function renderTimeoutMs(): number {
+  const n = Number(process.env.RENDER_PDF_TIMEOUT_MS ?? 30_000);
+  return Number.isFinite(n) && n > 0 ? n : 30_000;
+}
+
+/** Only inline content is allowed to load: data:, blob: and about: URLs. Everything else (http, https, file, ...) is aborted. */
+const INLINE_URL = /^(data|blob|about):/i;
+
 async function chromiumPdf(opts: PdfRenderOptions): Promise<Buffer> {
   await acquireSlot();
   let ctx: PwContext | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const browser = await sharedBrowser();
-    ctx = await browser.newContext();
+    // Official documents are static HTML with inline fonts and images: no script, no network (a missed escape in
+    // a template can then neither run code nor reach internal hosts or local files).
+    ctx = await browser.newContext({ javaScriptEnabled: false, acceptDownloads: false });
+    await ctx.route("**/*", (route) => (INLINE_URL.test(route.request().url()) ? route.continue() : route.abort()));
     const page = await ctx.newPage();
-    await page.setContent(opts.html, { waitUntil: "load" });
-    // Inline @font-face (data: URIs) must be decoded before printing.
-    await page.evaluate(() => (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready.then(() => true));
-    const pdf = await page.pdf({
-      format: opts.format ?? "A4",
-      landscape: opts.landscape ?? false,
-      margin: opts.margin ?? { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-      displayHeaderFooter: opts.displayHeaderFooter ?? false,
-      headerTemplate: opts.headerTemplate ?? "",
-      footerTemplate: opts.footerTemplate ?? "",
-      printBackground: true,
-      preferCSSPageSize: opts.preferCSSPageSize ?? false,
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`PDF render timed out after ${renderTimeoutMs()} ms`)), renderTimeoutMs());
     });
-    return Buffer.from(pdf);
+    // The race rejects on timeout; the finally below closes the context, which aborts the hung page.
+    return await Promise.race([renderPage(page, opts), timeout]);
   } finally {
+    if (timer) clearTimeout(timer);
     if (ctx) await ctx.close().catch(() => undefined);
     releaseSlot();
   }
+}
+
+async function renderPage(page: PwPage, opts: PdfRenderOptions): Promise<Buffer> {
+  await page.setContent(opts.html, { waitUntil: "load" });
+  // Inline @font-face (data: URIs) must be decoded before printing.
+  await page.evaluate(() => (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready.then(() => true));
+  const pdf = await page.pdf({
+    format: opts.format ?? "A4",
+    landscape: opts.landscape ?? false,
+    margin: opts.margin ?? { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+    displayHeaderFooter: opts.displayHeaderFooter ?? false,
+    headerTemplate: opts.headerTemplate ?? "",
+    footerTemplate: opts.footerTemplate ?? "",
+    printBackground: true,
+    preferCSSPageSize: opts.preferCSSPageSize ?? false,
+  });
+  return Buffer.from(pdf);
 }
 
 /**
