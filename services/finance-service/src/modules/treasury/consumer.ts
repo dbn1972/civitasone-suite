@@ -9,6 +9,7 @@ import { postCashBook } from "../../shared/cashbook.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
 import type { JournalLine } from "../gl/schema.js";
 import { parseMinor } from "@civitasone/schemas/money";
+import { todayIST } from "../../shared/ist-date.js";
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
 // Deposits / retention liability control + forfeiture income (seeded in 0015).
@@ -39,7 +40,7 @@ export function registerTreasuryConsumers(queue: Queue): void {
       // application). Optional — absent for finance-ops-initiated challans.
       sourceService?: string; sourceRef?: string;
     };
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P1-1: gapless, strictly-sequential challan number from the shared atomic
@@ -100,7 +101,7 @@ export function registerTreasuryConsumers(queue: Queue): void {
       administrator: string; balanceMinor: number; currency?: string;
       sourceBillId?: string;
     };
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P1-1: gapless deposit/PD number.
@@ -203,7 +204,7 @@ async function depositDisposition(
   ) => Promise<JournalLine[]>,
   reference?: string,
 ): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const amount = BigInt(p.amountMinor);
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;

@@ -4,6 +4,7 @@ import * as mastersRepo from "../masters/repo.js";
 import type { PaymentRow } from "./schema.js";
 import { billThreeWayMatchStatus } from "./domain.js";
 import { fetchProcurementVendorNames } from "../../shared/procurement-client.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 /**
  * GAP2-FINANCE-BILLS-VENDORNAME-01: shown when a bill's vendor id cannot be
@@ -208,7 +209,7 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
       // H3: string to avoid 2^53 precision loss on large government bill amounts.
       amount: netMinor.toString(),
       amountDisplay: formatMinor(netMinor),
-      submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+      submittedDate: todayIST(new Date(row.createdAt as unknown as string)),
       dueDate: undefined,
       status: mapBillStatus(row.status),
       poRef: row.poRef ?? undefined,
@@ -313,7 +314,7 @@ export async function getBillDetail(id: string, tenantId: string) {
     // H3: string to avoid 2^53 precision loss on large government bill amounts.
     amount: netMinor.toString(),
     amountDisplay: formatMinor(netMinor),
-    submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+    submittedDate: todayIST(new Date(row.createdAt as unknown as string)),
     status: mapBillStatus(row.status),
     poRef: row.poRef ?? undefined,
     poNumber: row.poNumber ?? undefined,

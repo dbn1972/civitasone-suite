@@ -76,6 +76,8 @@ export const EMPLOYEE_PII_REVEAL_ROLES = ["hr_admin", "super_admin"];
  * page is unchanged.
  */
 export const EMPLOYEE_LOGIN_LINK_ROLES = [...HR_ADMIN_TIER_ROLES];
+/** UAT b18: who approves / rejects a pension scheme change (hrms CHECKER_ROLES); the requester never can. */
+export const PENSION_SCHEME_CHECKER_ROLES = [...HR_ADMIN_TIER_ROLES];
 export const EMPLOYEE_PHONE_REVEAL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 /**
@@ -362,6 +364,8 @@ export const PAYROLL_CONFIG_ROLES = ["payroll_admin", "super_admin"];
 
 /** W1 SF-09b: payroll run/admin tier (mirrors roleGuard.PAYROLL_ADMIN_ROLES; kept here so pages whose tests mock roleGuard can share it). */
 export const PAYROLL_STAFF_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+/** PR #2459 review B1: opening YTD approvers -- payroll-service opening-ytd/routes.ts CHECKER_ROLES (makers: PAYROLL_STAFF_ROLES). */
+export const OPENING_YTD_CHECKER_ROLES = ["payroll_admin", "super_admin"];
 
 /**
  * Roles that can OPEN the payroll runs page (hr/payroll/page.tsx renders

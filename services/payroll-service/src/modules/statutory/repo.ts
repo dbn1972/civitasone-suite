@@ -1,6 +1,6 @@
 import { eq, and, desc, sql, type AnyColumn } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps } from "./schema.js";
+import { payrollPf, payrollTds, payrollEsi, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollEpfAdminTopups } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -15,7 +15,7 @@ export function notExcludedSlip(slipIdColumn: AnyColumn) {
   return sql`NOT EXISTS (SELECT 1 FROM payroll.payroll_slips xs WHERE xs.id = ${slipIdColumn} AND xs.status = ${"excluded"})`;
 }
 
-type LedgerKey = "pf" | "esi" | "nps" | "gpf" | "tds";
+type LedgerKey = "pf" | "esi" | "nps" | "ups_pool" | "gpf" | "tds";
 /**
  * Business columns of each ledger, as returned by the DELETE (fixed lists:
  * no PII, nothing beyond the employee id) -- enough to rebuild every removed
@@ -25,6 +25,8 @@ const LEDGER_AUDIT_COLUMNS: Record<LedgerKey, { scheme: string; columns: string[
   pf:  { scheme: "EPF", columns: ["basic_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor", "eps_contrib_minor", "epf_er_contrib_minor"] },
   esi: { scheme: "ESI", columns: ["gross_minor", "emp_contrib_minor", "er_contrib_minor"] },
   nps: { scheme: "NPS", columns: ["basic_minor", "pension_base_minor", "emp_contrib_pct", "er_contrib_pct", "emp_contrib_minor", "er_contrib_minor"] },
+  // UAT b18: the Government 8.5% UPS pool share (its own row, migration 0162).
+  ups_pool: { scheme: "UPS_POOL", columns: ["pension_base_minor", "contrib_pct", "contrib_minor"] },
   gpf: { scheme: "GPF", columns: ["basic_minor", "contrib_pct", "emp_contrib_minor"] },
   tds: { scheme: "TDS", columns: ["annual_basic_minor", "taxable_minor", "tds_minor"] },
 };
@@ -53,7 +55,7 @@ export async function deleteLedgerRowsForRunTx(tx: Pick<typeof db, "execute">, r
 }
 
 async function deleteLedgerRowsWhere(tx: Pick<typeof db, "execute">, where: ReturnType<typeof sql>): Promise<{ counts: Record<LedgerKey, number>; rows: RemovedLedgerRow[] }> {
-  const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, gpf: 0, tds: 0 };
+  const counts: Record<LedgerKey, number> = { pf: 0, esi: 0, nps: 0, ups_pool: 0, gpf: 0, tds: 0 };
   const rows: RemovedLedgerRow[] = [];
   for (const k of Object.keys(counts) as LedgerKey[]) {
     const { scheme, columns } = LEDGER_AUDIT_COLUMNS[k];
@@ -92,6 +94,52 @@ export async function insertGpf(tx: Writer, row: typeof payrollGpf.$inferInsert)
 
 export async function insertNps(tx: Writer, row: typeof payrollNps.$inferInsert): Promise<void> {
   await tx.insert(payrollNps).values(row);
+}
+
+/** Delta review: EPF members of a run whose EPS eligibility was defaulted (eps_basis = default). */
+export async function epsUnrecordedEmployeeIdsByRunTx(tx: Writer, runId: string, tenantId: string): Promise<string[]> {
+  const rows = await tx.select({ employeeId: payrollPf.employeeId }).from(payrollPf)
+    .where(and(eq(payrollPf.runId, runId), eq(payrollPf.tenantId, tenantId), eq(payrollPf.epsBasis, "default"), notExcludedSlip(payrollPf.slipId)));
+  return [...new Set(rows.map((r) => r.employeeId))];
+}
+
+export async function epsUnrecordedEmployeeIdsByRun(runId: string, tenantId: string): Promise<string[]> {
+  return scopedRead((tx) => epsUnrecordedEmployeeIdsByRunTx(tx as unknown as Writer, runId, tenantId));
+}
+
+export async function upsPoolForSlip(tenantId: string, slipId: string): Promise<Array<{ contribMinor: bigint }>> {
+  return scopedRead((tx) => tx.select({ contribMinor: payrollUpsPool.contribMinor }).from(payrollUpsPool)
+    .where(and(eq(payrollUpsPool.tenantId, tenantId), eq(payrollUpsPool.slipId, slipId))));
+}
+
+export async function adminTopUpForPeriod(tenantId: string, period: string) {
+  // The latest close of the month (append-only rows, one per approved run set).
+  const rows = await scopedRead((tx) => tx.select().from(payrollEpfAdminTopups)
+    .where(and(eq(payrollEpfAdminTopups.tenantId, tenantId), eq(payrollEpfAdminTopups.period, period)))
+    .orderBy(desc(payrollEpfAdminTopups.createdAt)).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function insertUpsPool(tx: Writer, row: typeof payrollUpsPool.$inferInsert): Promise<void> {
+  await tx.insert(payrollUpsPool).values(row);
+}
+
+/**
+ * UAT b18 (ERP-head decision 2026-11-05): employer amounts payable that are
+ * NOT in sumEmployerContribByRunTx and are accrued as their own GL lines on
+ * payroll.run.approved -- EDLI (EPFO A/c 21) and EPF admin charges (A/c 2)
+ * from the PF ledger, and the Government 8.5% UPS pool share. Per run, per
+ * member; the A/c 2 Rs 500 establishment minimum is a challan-level figure
+ * (pf/challan), not accrued per run. Read through the caller's tx.
+ */
+export async function sumEmployerChargesByRunTx(tx: Writer, runId: string, tenantId: string): Promise<{ edliMinor: bigint; epfAdminMinor: bigint; upsPoolMinor: bigint }> {
+  const [pf] = await tx.select({
+    edli: sql<string>`coalesce(sum(${payrollPf.edliContribMinor}), 0)`,
+    admin: sql<string>`coalesce(sum(${payrollPf.epfAdminMinor}), 0)`,
+  }).from(payrollPf).where(and(eq(payrollPf.runId, runId), eq(payrollPf.tenantId, tenantId), notExcludedSlip(payrollPf.slipId)));
+  const [ups] = await tx.select({ pool: sql<string>`coalesce(sum(${payrollUpsPool.contribMinor}), 0)` })
+    .from(payrollUpsPool).where(and(eq(payrollUpsPool.runId, runId), eq(payrollUpsPool.tenantId, tenantId), notExcludedSlip(payrollUpsPool.slipId)));
+  return { edliMinor: BigInt(pf?.edli ?? 0), epfAdminMinor: BigInt(pf?.admin ?? 0), upsPoolMinor: BigInt(ups?.pool ?? 0) };
 }
 
 /**
@@ -160,6 +208,44 @@ export async function summarisePfPeriod(tenantId: string, period?: string): Prom
   return ledgerPeriodSummary(payrollPf, tenantId, period);
 }
 
+/** UAT b18 D5: the EPF ledger totals one ECR / challan for a wage month is made of. */
+export type PfChallanTotals = {
+  recordCount: number;
+  empContribMinor: bigint;
+  epsContribMinor: bigint;
+  epfErContribMinor: bigint;
+  edliContribMinor: bigint;
+  epfAdminMinor: bigint;
+  epfWageMinor: bigint;
+  edliWageMinor: bigint;
+};
+
+/** Sums of the PF ledger for one period (excluded slips never count). */
+export async function sumPfChallanPeriod(tenantId: string, period: string): Promise<PfChallanTotals> {
+  return scopedRead(async (tx) => {
+    const [agg] = await tx.select({
+      n: sql<string>`count(*)`,
+      emp: sql<string>`coalesce(sum(${payrollPf.empContribMinor}), 0)`,
+      eps: sql<string>`coalesce(sum(${payrollPf.epsContribMinor}), 0)`,
+      epfEr: sql<string>`coalesce(sum(${payrollPf.epfErContribMinor}), 0)`,
+      edli: sql<string>`coalesce(sum(${payrollPf.edliContribMinor}), 0)`,
+      admin: sql<string>`coalesce(sum(${payrollPf.epfAdminMinor}), 0)`,
+      epfWage: sql<string>`coalesce(sum(${payrollPf.epfWageMinor}), 0)`,
+      edliWage: sql<string>`coalesce(sum(${payrollPf.edliWageMinor}), 0)`,
+    }).from(payrollPf).where(and(eq(payrollPf.tenantId, tenantId), eq(payrollPf.period, period), notExcludedSlip(payrollPf.slipId)));
+    return {
+      recordCount: Number(agg?.n ?? 0),
+      empContribMinor: BigInt(agg?.emp ?? 0),
+      epsContribMinor: BigInt(agg?.eps ?? 0),
+      epfErContribMinor: BigInt(agg?.epfEr ?? 0),
+      edliContribMinor: BigInt(agg?.edli ?? 0),
+      epfAdminMinor: BigInt(agg?.admin ?? 0),
+      epfWageMinor: BigInt(agg?.epfWage ?? 0),
+      edliWageMinor: BigInt(agg?.edliWage ?? 0),
+    };
+  });
+}
+
 export async function summariseEsiPeriod(tenantId: string, period?: string): Promise<LedgerPeriodSummary> {
   return ledgerPeriodSummary(payrollEsi, tenantId, period);
 }
@@ -213,4 +299,22 @@ export async function sumEmployerContribByRunTx(tx: Writer, runId: string, tenan
     return rows.reduce((s: bigint, r: { v: bigint }) => s + (r.v ?? 0n), 0n);
   };
   return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));
+}
+
+/**
+ * UAT P3 b19 D-10: run totals of the EMPLOYEE statutory deductions, in paise,
+ * over non-excluded slips (same filter as the employer sum above), read through
+ * the caller transaction. pf is the EPF employee share (emp_contrib_minor, the
+ * employee 12%); the employer columns are never read here.
+ */
+export async function sumEmployeeStatutoryByRunTx(tx: Writer, runId: string, tenantId: string): Promise<{
+  tdsMinor: bigint; gpfMinor: bigint; npsMinor: bigint; pfMinor: bigint; esiMinor: bigint;
+}> {
+  const total = (rows: Array<{ v: bigint | null }>): bigint => rows.reduce((s, r) => s + (r.v ?? 0n), 0n);
+  const emp = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps | typeof payrollGpf): Promise<bigint> =>
+    total(await tx.select({ v: tbl.empContribMinor }).from(tbl)
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId), notExcludedSlip(tbl.slipId))));
+  const tdsMinor = total(await tx.select({ v: payrollTds.tdsMinor }).from(payrollTds)
+    .where(and(eq(payrollTds.runId, runId), eq(payrollTds.tenantId, tenantId), notExcludedSlip(payrollTds.slipId))));
+  return { tdsMinor, gpfMinor: await emp(payrollGpf), npsMinor: await emp(payrollNps), pfMinor: await emp(payrollPf), esiMinor: await emp(payrollEsi) };
 }

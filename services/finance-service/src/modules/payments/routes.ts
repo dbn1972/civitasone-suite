@@ -18,6 +18,8 @@ import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { actorsQuery } from "./validators.js";
+import { assertProvisionHttp } from "../budget/provision.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 /**
  * UAT W8-D (P7): POST/DELETE /v1/finance/bills/sample-data are a developer "try it" aid
@@ -238,6 +240,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       assertDistinctMakerChecker(bill.createdBy, ctx.actorId);
       assertBillApprovable(bill.status, bill.stage ?? "section");
     } catch (err) { toDomain(err, 409); }
+    // UAT T-PERIOD D-03 (GFR): a bill is not passed against a head with no budget provision for the FY of the bill.
+    await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "bill");
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
   });
 
@@ -255,6 +259,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
         assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId);
       } catch (err) { toDomain(err, 409); }
     }
+    // UAT T-PERIOD D-03 (GFR): no payment against a head that has no budget provision for the FY it is charged to.
+    if (bill) await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment");
     return sendAccepted(reply, acceptedResponseSchema, await commands.initiatePayment(ctx, body));
   });
 

@@ -91,6 +91,8 @@ vi.mock("../src/modules/period-close/repo.js", () => ({
   // (this file's mock replaces the whole module, so the real lockPeriodTx
   // exported from repo.ts never runs).
   lockPeriodTx: vi.fn(async () => undefined),
+  // UAT T-PERIOD D-01: the reopen is one conditional UPDATE returning the status it moved from.
+  reopenPeriodTx: vi.fn(async () => ({ fromStatus: "soft_close" })),
 }));
 vi.mock("../src/modules/reports/routes.js", () => ({
   deriveFY: vi.fn((period: string) => `${period.slice(0, 4)}-${(Number(period.slice(0, 4)) + 1).toString().slice(2)}`),

@@ -25,6 +25,18 @@ function previousMonthYYYYMM(): string {
   return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** The employee numbers of a 422 UAN_MISSING response, or null for any other body. */
+async function uanMissingEmployees(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { code?: string; employees?: Array<{ employeeId?: string; employeeNo?: string | null }> };
+    if (body?.code !== "UAN_MISSING") return null;
+    const list = (body.employees ?? []).map((e) => e.employeeNo ?? e.employeeId ?? "").filter(Boolean);
+    return list.length > 0 ? list.join(", ") : "-";
+  } catch {
+    return null;
+  }
+}
+
 export function EcrGeneratorForm() {
   const t = useTranslations("ecrGeneratorForm");
   const [month, setMonth] = useState(previousMonthYYYYMM);
@@ -57,7 +69,16 @@ export function EcrGeneratorForm() {
     setDialogError(undefined);
     try {
       const res = await browserFetch(`v1/payroll/statutory/ecr?month=${encodeURIComponent(month)}`);
-      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+      if (!res.ok) {
+        // UAT b18 D3: the ECR is refused while EPF members lack a valid UAN;
+        // name them instead of showing a generic failure.
+        const uanProblem = res.status === 422 ? await uanMissingEmployees(res.clone()) : null;
+        if (uanProblem) {
+          setDialogError(t("errors.UAN_MISSING", { employees: uanProblem }));
+          return;
+        }
+        throw new Error(await errorMessageFromResponse(res));
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

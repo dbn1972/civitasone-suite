@@ -1,7 +1,7 @@
 import { toSafeInt, minorToRupees } from "../../shared/money.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
-import { payrollSlips, payrollRuns } from "../payroll/schema.js";
+import { payrollSlips, payrollRuns, payrollOpeningYtd } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { notExcludedSlip } from "../statutory/repo.js";
 import { taxDeclarations } from "./schema.js";
@@ -10,6 +10,7 @@ import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
 import { computeHraClaimedMinor } from "./consumer.js";
 import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
+import { requireDeductor } from "../deductor-config/repo.js";
 
 /**
  * Parse "2025-26" → start/end year. Throws on malformed input.
@@ -43,6 +44,8 @@ export interface Form16 {
     deductor: { name: string; tan: string; pan: string };
     deductee: { name: string; pan: string; panFlag: string };
     quarterlyTds: { Q1: number; Q2: number; Q3: number; Q4: number };
+    /** PR #2459 delta review B2: TDS this employer deducted before payroll went live here (approved opening YTD; in its earlier 24Q returns). */
+    preGoLiveTds: number;
     totalTdsDeposited: number;
     note: string;
   };
@@ -53,6 +56,11 @@ export interface Form16 {
     taxableIncome: number; taxOnIncome: number; rebate87A: number; surcharge: number; cess: number;
     totalTaxLiability: number; totalTdsDeducted: number; prevEmployerTds: number;
     balanceTaxPayable: number; refundDue: number; regime: "old" | "new";
+    /** Delta review B2: salary paid / TDS deducted before go-live by this employer (included in grossSalary / totalTdsDeducted). */
+    preGoLiveSalary: number;
+    preGoLiveTds: number;
+    /** s.192(2) / Form 12B: each previous employer of the FY (approved opening YTD), in prevEmployerSalary / prevEmployerTds. */
+    prevEmployers: Array<{ name: string; tan: string | null; salary: number; tds: number }>;
   };
 }
 
@@ -71,12 +79,16 @@ export interface Form16PartBMinor {
   taxableIncomeMinor: bigint; taxOnIncomeMinor: bigint; rebate87AMinor: bigint; surchargeMinor: bigint; cessMinor: bigint;
   totalTaxLiabilityMinor: bigint; totalTdsDeductedMinor: bigint; prevEmployerTdsMinor: bigint;
   balanceTaxPayableMinor: bigint; refundDueMinor: bigint;
+  /** Delta review B2: the pre-go-live part of grossSalaryMinor / totalTdsDeductedMinor (approved opening YTD). */
+  preGoLiveSalaryMinor: bigint; preGoLiveTdsMinor: bigint;
   regime: "old" | "new";
 }
 
 export interface Form16WithMinor {
   form16: Form16;
   partBMinor: Form16PartBMinor;
+  /** Delta review B2: each previous employer (Form 12B) of the approved opening YTD, exact paise. */
+  prevEmployersMinor: Array<{ name: string; tan: string | null; salaryMinor: bigint; tdsMinor: bigint }>;
 }
 
 /**
@@ -184,6 +196,9 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
 export async function buildForm16WithMinor(tenantId: string, employeeId: string, fy: string): Promise<Form16WithMinor> {
   const { startYear, endYear } = parseFy(fy);
   const months = fyMonths(startYear);
+  // UAT P3 b19 D-15: Part A carries the configured, validated deductor -- or
+  // the certificate is refused (422 FORM16_EMPLOYER_NOT_CONFIGURED), never placeholder text.
+  const deductor = await requireDeductor(tenantId, "Form 16");
 
   // M3: only count figures from runs that have actually been finalised
   // (approved/disbursed). A draft/processing/failed run must not contribute to
@@ -198,7 +213,18 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId))));
   // Delta review D-B1: an excluded slip was never paid -- not Form 16 salary.
   const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId) && s.status !== "excluded");
-  const grossMinor = roundRupeeMinor(fySlips.reduce((a, s) => a + BigInt(s.grossMinor), 0n));
+  // PR #2459 delta review B2: the APPROVED opening YTD is authoritative here as
+  // in the run (s.192) -- salary and TDS of this employer before go-live are part
+  // of this employer Form 16; previous employers (Form 12B) replace the
+  // declaration figures. Without it the T-PERIOD Form 16 showed tax 0 and a
+  // refund of the whole TDS.
+  const opening = await scopedRead((tx) => tx.select().from(payrollOpeningYtd)
+    .where(and(eq(payrollOpeningYtd.tenantId, tenantId), eq(payrollOpeningYtd.employeeId, employeeId), eq(payrollOpeningYtd.fy, fy), eq(payrollOpeningYtd.status, "approved"))));
+  const preGoLive = opening.find((o) => o.source === "pre_go_live") ?? null;
+  const priorRows = opening.filter((o) => o.source === "prior_employer");
+  const preGoLiveSalaryMinor = preGoLive ? BigInt(preGoLive.salaryMinor) : 0n;
+  const preGoLiveTdsMinor = preGoLive ? roundRupeeMinor(BigInt(preGoLive.tdsMinor)) : 0n;
+  const grossMinor = roundRupeeMinor(fySlips.reduce((a, s) => a + BigInt(s.grossMinor), 0n) + preGoLiveSalaryMinor);
   const grossSalary = toSafeInt(grossMinor / 100n);
 
   // Quarterly TDS breakup.
@@ -226,7 +252,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     Q1: minorToRupees(quartersMinor.Q1), Q2: minorToRupees(quartersMinor.Q2),
     Q3: minorToRupees(quartersMinor.Q3), Q4: minorToRupees(quartersMinor.Q4),
   };
-  const totalTdsDeductedMinor = roundRupeeMinor(totalTdsMinor);
+  const totalTdsDeductedMinor = roundRupeeMinor(totalTdsMinor) + preGoLiveTdsMinor;
 
   const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
     .where(and(eq(taxDeclarations.tenantId, tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
@@ -243,9 +269,9 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
   // Additions taxed under both regimes (Sec 17(2) perquisites, prev-employer
   // salary Sec 192(2), income from other sources).
   const perquisitesMinor        = dec ? BigInt(dec.perquisitesMinor) : 0n;
-  const prevEmployerSalaryMinor = dec ? BigInt(dec.prevEmployerSalaryMinor) : 0n;
+  const prevEmployerSalaryMinor = priorRows.length > 0 ? priorRows.reduce((s, r) => s + BigInt(r.salaryMinor), 0n) : dec ? BigInt(dec.prevEmployerSalaryMinor) : 0n;
   const otherSourcesIncomeMinor = dec ? BigInt(dec.otherSourcesIncomeMinor) : 0n;
-  const prevEmployerTdsMinor    = dec ? BigInt(dec.prevEmployerTdsMinor) : 0n;
+  const prevEmployerTdsMinor    = priorRows.length > 0 ? priorRows.reduce((s, r) => s + BigInt(r.tdsMinor), 0n) : dec ? BigInt(dec.prevEmployerTdsMinor) : 0n;
 
   // DOM-025/DOM-030: this function used to apply computeForm16Deductions'
   // own internal CAP_80D_MINOR/CAP_80C_MINOR (Rs 50,000 / Rs 1,50,000)
@@ -297,15 +323,14 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     fy,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
     form16PartA: {
-      deductor: {
-        name: process.env.EMPLOYER_NAME ?? "<EMPLOYER NAME — configure EMPLOYER_NAME>",
-        tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
-        pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
-      },
+      deductor,
       deductee: { name: deducteeName, pan: deducteePan, panFlag: deducteePan ? "" : "PANNOTAVBL" },
       quarterlyTds: quarters,
+      preGoLiveTds: toSafeInt(preGoLiveTdsMinor / 100n),
       totalTdsDeposited: toSafeInt(totalTdsDeductedMinor / 100n),
-      note: "Verify challan/TRACES references before issuing Part A.",
+      note: preGoLive
+        ? "Verify challan/TRACES references before issuing Part A. Includes TDS deducted before payroll went live here (approved opening YTD, filed in the earlier 24Q returns); the quarterly figures are those deducted in this system."
+        : "Verify challan/TRACES references before issuing Part A.",
     },
     form16PartB: {
       grossSalary,
@@ -323,6 +348,9 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
       totalTdsDeducted: toSafeInt(totalTdsDeductedMinor / 100n),
       prevEmployerTds: toSafeInt(prevEmployerTdsRoundedMinor / 100n),
       balanceTaxPayable: balance > 0 ? balance : 0, refundDue: balance < 0 ? -balance : 0, regime,
+      preGoLiveSalary: toSafeInt(roundRupeeMinor(preGoLiveSalaryMinor) / 100n),
+      preGoLiveTds: toSafeInt(preGoLiveTdsMinor / 100n),
+      prevEmployers: priorRows.map((r) => ({ name: r.priorEmployerName ?? "", tan: r.priorEmployerTan, salary: minorToRupees(BigInt(r.salaryMinor)), tds: minorToRupees(BigInt(r.tdsMinor)) })),
     },
   };
 
@@ -347,8 +375,10 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     prevEmployerTdsMinor: prevEmployerTdsRoundedMinor,
     balanceTaxPayableMinor: balanceMinor > 0n ? balanceMinor : 0n,
     refundDueMinor: balanceMinor < 0n ? -balanceMinor : 0n,
+    preGoLiveSalaryMinor: roundRupeeMinor(preGoLiveSalaryMinor), preGoLiveTdsMinor,
     regime,
   };
 
-  return { form16, partBMinor };
+  const prevEmployersMinor = priorRows.map((r) => ({ name: r.priorEmployerName ?? "", tan: r.priorEmployerTan, salaryMinor: BigInt(r.salaryMinor), tdsMinor: BigInt(r.tdsMinor) }));
+  return { form16, partBMinor, prevEmployersMinor };
 }

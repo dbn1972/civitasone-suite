@@ -10,6 +10,8 @@ import { alwaysDistinctApprover, assertDistinctApprover, DomainError, type Finan
 import { loadSettingsTx } from "./repo.js";
 import { applyFiscalYearActivation, applyOpeningBalances, applyHoaChange, applySettingsChange, auditEvent, type ActorMeta, type OpeningBalanceEntry, type Tx } from "./apply.js";
 
+import { applyPeriodReopenRequest } from "../period-close/apply.js";
+
 const log = pino({ name: "finance.approvals.consumer" });
 
 type SubmitPayload = {
@@ -33,6 +35,8 @@ async function applyApproved(
     case "hoa_change":
       await applyHoaChange(tx, meta, { headId: String(p.headId), hoaCode: String(p.hoaCode), reason: req.reason, requestId: req.id });
       return;
+    case "period_reopen":
+      return applyPeriodReopenRequest(tx, meta, { period: String(p.period), reason: req.reason, requestId: req.id });
     case "settings_relax":
       return applySettingsChange(tx, meta, { changes: p.changes as Partial<FinanceSettings>, reason: req.reason, requestId: req.id });
     default:
@@ -121,6 +125,7 @@ export function registerApprovalsConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "masters");
     await cache.invalidateResource(msg.tenantId, "accounts");
+    await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: p.requestId, decision: p.decision }, "change request decided");
   });
 

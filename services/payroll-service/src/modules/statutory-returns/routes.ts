@@ -15,6 +15,7 @@ import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
 import { buildForm16WithMinor, parseFy, type Form16PartBMinor } from "../tax/form16.js";
+import { optionalDeductor, requireDeductor } from "../deductor-config/repo.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -75,11 +76,9 @@ function quarterMonths(startYear: number, q: Quarter): string[] {
   return map[q].map(([off, m]) => `${startYear + off}-${String(m).padStart(2, "0")}`);
 }
 
-const employerIdentity = () => ({
-  name: process.env.EMPLOYER_NAME ?? "<EMPLOYER NAME — configure EMPLOYER_NAME>",
-  tan: process.env.EMPLOYER_TAN ?? "<TAN — configure EMPLOYER_TAN>",
-  pan: process.env.EMPLOYER_PAN ?? "<PAN — configure EMPLOYER_PAN>",
-});
+// UAT P3 b19 D-15: the deductor identity (name / TAN / PAN) comes from the
+// tenant documentIdentity (deductor-config/repo.ts), validated; a TDS return
+// refuses with 422 FORM16_EMPLOYER_NOT_CONFIGURED instead of placeholder text.
 
 /**
  * H4: pipe-delimited flat-file safety. Strip the field separator and CR/LF from
@@ -122,6 +121,8 @@ function wholeRupees(minor: number): number {
 type Form16PartBOnWire = { [K in Exclude<keyof Form16PartBMinor, "regime">]: number } & { regime: Form16PartBMinor["regime"] };
 
 type AnnexureIIRow = { employeeId: string; pan: string; name: string } & Form16PartBOnWire;
+/** Delta review B2: one row per previous employer (Form 12B) of a deductee, beside Annexure II (whose rows stay flat paise). */
+type AnnexureIIPrevEmployerRow = { employeeId: string; name: string; tan: string | null; salaryMinor: number; tdsMinor: number };
 
 function partBOnWire(p: Form16PartBMinor): Form16PartBOnWire {
   const { regime, ...amounts } = p;
@@ -150,7 +151,10 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   // Restrict to disbursed/approved runs so we only report deposited TDS.
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
-  const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed" || r.status === "paid").map((r) => r.id));
+  // PR #2459 review SF3: a failed / draft / processing run never counts, even
+  // when the quarter has no approved run (same rule as challan-routes.ts).
+  const nonFinalRunIds = new Set(runs.filter((r) => !validRunIds.has(r.id)).map((r) => r.id));
 
   const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
@@ -160,6 +164,7 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   // figure the UI shows could drift from the stored deductions.
   const byEmp = new Map<string, { tdsMinor: bigint; periods: Set<string> }>();
   for (const t of tdsRows) {
+    if (nonFinalRunIds.has(t.runId)) continue;
     if (validRunIds.size > 0 && !validRunIds.has(t.runId)) continue;
     const e = byEmp.get(t.employeeId) ?? { tdsMinor: 0n, periods: new Set<string>() };
     e.tdsMinor += BigInt(t.tdsMinor);
@@ -192,6 +197,8 @@ async function buildForm24Q(
 
   const { startYear, endYear } = parseFyOr400(fyRaw);
   const months = quarterMonths(startYear, q);
+  // D-15: before the reconciliation gate, so a refused export never records a forced filing.
+  const deductor = await requireDeductor(ctx.tenantId, "Form 24Q");
 
   // P1: TRACES reconciliation gate. Sum TDS deducted (payroll_tds, finalised
   // runs) vs deposited (challans) per month. Block 24Q when they do not
@@ -276,13 +283,14 @@ async function buildForm24Q(
   // restricted to approved/disbursed runs.
   const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
-  const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed" || r.status === "paid").map((r) => r.id));
+  const challanNonFinalRunIds = new Set(challanRuns.filter((r) => !challanValidRunIds.has(r.id)).map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
   const challanBigs = months.map((month) => ({
     month,
     minor: challanTdsRows
-      .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
+      .filter((t) => t.period === month && !challanNonFinalRunIds.has(t.runId) && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
       .reduce((s, t) => s + BigInt(t.tdsMinor), 0n),
   }));
   const challans = challanBigs.map(({ month, minor }) => {
@@ -292,17 +300,23 @@ async function buildForm24Q(
 
   // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
   let annexureII: AnnexureIIRow[] | undefined;
+  let annexureIIPrevEmployers: AnnexureIIPrevEmployerRow[] | undefined;
   if (q === "Q4") {
     annexureII = [];
+    annexureIIPrevEmployers = [];
     for (const d of deductees) {
       try {
-        const { form16: f16, partBMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
+        const { form16: f16, partBMinor, prevEmployersMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
         annexureII.push({
           employeeId: d.employeeId,
           pan: f16.form16PartA.deductee.pan,
           name: f16.form16PartA.deductee.name,
           ...partBOnWire(partBMinor),
         });
+        // Delta review B2: previous employers (Form 12B) of the approved opening YTD.
+        for (const pe of prevEmployersMinor) {
+          annexureIIPrevEmployers.push({ employeeId: d.employeeId, name: pe.name, tan: pe.tan, salaryMinor: minorToNumber(pe.salaryMinor), tdsMinor: minorToNumber(pe.tdsMinor) });
+        }
       } catch (err) {
         // M4: never silently drop a deductee because HRMS is down — fail the export.
         if (err instanceof HrmsUnavailableError) {
@@ -330,7 +344,7 @@ async function buildForm24Q(
     challanRef: challanCins.length > 0 ? challanCins.join(", ") : null,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
     quarter: q,
-    deductor: employerIdentity(),
+    deductor,
     deducteeCount: deductees.length,
     deductees,
     challanSummary: challans,
@@ -347,6 +361,7 @@ async function buildForm24Q(
     totalTdsDeductedMinor,
     totalTdsDepositedMinor,
     ...(annexureII ? { annexureII } : {}),
+    ...(annexureIIPrevEmployers ? { annexureIIPrevEmployers } : {}),
     reconciliation: {
       matched: reconciled,
       perPeriod: reconciliation.map(reconciliationOnWire),
@@ -377,8 +392,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (format !== "file") return reply.send(structured);
 
     // NSDL/EPFO-style pipe-delimited flat file (RPU-like line records).
-    const { deductees, challanSummary: challans, annexureII, fy: resolvedFy, quarter: q } = structured;
-    const emp = employerIdentity();
+    const { deductees, challanSummary: challans, annexureII, fy: resolvedFy, quarter: q, deductor: emp } = structured;
     const lines: string[] = [];
     // File Header (FH)
     lines.push(["FH", "24Q", resolvedFy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
@@ -461,6 +475,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
     const { startYear, endYear } = parseFyOr400(fy);
+    const employer = await requireDeductor(ctx.tenantId, "Form 12BA");
 
     const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
@@ -546,7 +561,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       formType: "12BA",
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
-      employer: employerIdentity(),
+      employer,
       // GAP-PAYROLL-STATUTORY-PERQUISITE-04: the PAN is DPDP-sensitive -- masked
       // server-side (ABCDE****F), never sent in the clear to the browser. A staff
       // member who needs the full value uses the audited reveal on the HRMS
@@ -622,7 +637,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const structured = {
       fileType: "NPS-SCF",
       month,
-      employer: employerIdentity(),
+      // D-15: not a TDS return, so not refused -- but never placeholder text.
+      employer: await optionalDeductor(ctx.tenantId),
       subscriberCount: subscribers.length,
       subscribers,
       totalEmployeeContribution: totalEmployee,
@@ -706,6 +722,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
     const { startYear, endYear } = parseFyOr400(fy);
     const months = quarterMonths(startYear, q);
+    const deductor = await requireDeductor(ctx.tenantId, "Form 26Q");
 
     const rows = await scopedRead((tx) => tx.select().from(payrollTdsNonSalary)
       .where(and(eq(payrollTdsNonSalary.tenantId, ctx.tenantId), inArray(payrollTdsNonSalary.period, months))));
@@ -742,7 +759,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       quarter: q,
-      deductor: employerIdentity(),
+      deductor,
       deducteeCount: deductees.length,
       deductees,
       totalTdsDeductedMinor: minorToNumber(totalTdsMinor),
@@ -755,7 +772,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
 
     if (format !== "file") return reply.send(structured);
 
-    const emp = employerIdentity();
+    const emp = deductor;
     const lines: string[] = [];
     lines.push(["FH", "26Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     deductees.forEach((d, i) => {

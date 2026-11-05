@@ -13,18 +13,20 @@ import { minorString } from "@civitasone/schemas/money";
 import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
+import { grnBillHeadCode, payrollDeductionHeads } from "../gl/system-heads.js";
+import { payrollAccrualLines, payrollAccrualJournalCommand, accrualDateOnApproval, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
+import { loadSettingsTx } from "../approvals/repo.js";
+import { deterministicId } from "../gl/spine.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
 
-/**
- * Expense head CODE for the AP bill drafted from an accepted GRN. Resolved per tenant (finance.bill.create looks it
- * up in the bill tenant's own chart of accounts). Default 2202 is the head the old literal id pointed at.
- */
-export function grnBillHeadCode(): string {
-  const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
-  return configured ? configured : "2202";
-}
+// UAT L2-N6: one definition, shared with the stock-receipt journal (it is also the GRN clearing head).
+export { grnBillHeadCode };
+
+export { deductionLines, deductionHeadFallbackTx, type DeductionKind } from "./payroll-deductions.js";
+import { deductionHeadFallbackTx } from "./payroll-deductions.js";
 
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */
@@ -125,7 +127,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
       accountName: prepared.agencyCode,
       amountMinor: BigInt(p.amountMinor),
       narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: todayIST(),
     };
     // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set. No DB
     // transaction is open while this network call runs (TX-007): a slow or
@@ -274,38 +276,13 @@ export function registerIntegrationConsumers(queue: Queue): void {
 
   /** payroll.run.approved → post salary GL accrual journal */
   queue.subscribe(CONSUMED_EVENTS.payrollRunApproved, async (msg) => {
-    const p = msg.payload as {
-      runId: string; month: string; totalGrossMinor: string; totalNetMinor: string;
-      totalEmployerContribMinor?: string;
-      legalEntityId?: string;
-    };
-    const gross = BigInt(p.totalGrossMinor);
-    const net = BigInt(p.totalNetMinor);
-    // H2: the statutory leg is DERIVED as (gross - net) so the employee side is
-    // provably balanced: Dr gross == Cr net + Cr statutory == gross, regardless
-    // of how net was clamped (negative-net employees forced to 0). We never clamp
-    // the statutory amount; if it would be negative (net > gross, pathological)
-    // we book it on the opposite side so the journal still nets to zero.
-    const statutory = gross - net;
-    // H3: keep all paise as bigint (no Number() on aggregate paise) so amounts
-    // above 2^53 do not silently lose precision in the GL legs.
-    const employer = BigInt(p.totalEmployerContribMinor ?? "0");
-    const journalId = randomUUID();
-    // Employee-side legs: Dr salary expense (gross); Cr net payable; Cr statutory.
-    const lines: Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }> = [
-      { accountCode: "5001", debitMinor: gross, creditMinor: 0n, narration: "Salary expense" },
-      { accountCode: "2101", debitMinor: 0n, creditMinor: net, narration: "Net salary payable" },
-      statutory >= 0n
-        ? { accountCode: "2102", debitMinor: 0n, creditMinor: statutory, narration: "Statutory deductions payable" }
-        : { accountCode: "2102", debitMinor: -statutory, creditMinor: 0n, narration: "Statutory deductions payable" },
-    ];
-    // Employer statutory contributions (PF/EPS, ESI, NPS) are an additional
-    // expense + liability, separate from the employee-side gross above. The two
-    // legs are equal and opposite, so they keep the voucher balanced.
-    if (employer > 0n) {
-      lines.push({ accountCode: "5002", debitMinor: employer, creditMinor: 0n, narration: "Employer contributions expense" });
-      lines.push({ accountCode: "2103", debitMinor: 0n, creditMinor: employer, narration: "Employer contributions payable" });
-    }
+    const p = msg.payload as PayrollRunApprovedPayload;
+    // UAT T-PERIOD D-04: deterministic per run, shared with the cash-basis
+    // accrual posted on disbursal (gl/consumer.ts), so it can never post twice.
+    const journalId = deterministicId(`payroll_accrual:${p.runId}`);
+    // Lines (employee side H2/H3, employer contributions, and -- UAT b18 -- the
+    // EDLI, EPF admin and UPS pool lines) are built by payroll-accrual.ts.
+    const lines = payrollAccrualLines(p);
     // Defensive: assert the voucher balances before we publish it.
     const totalDr = lines.reduce((s, l) => s + l.debitMinor, 0n);
     const totalCr = lines.reduce((s, l) => s + l.creditMinor, 0n);
@@ -314,24 +291,30 @@ export function registerIntegrationConsumers(queue: Queue): void {
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): the accrual date
+      // follows the accounting basis -- accrual: last day of the pay month;
+      // cash: deferred to the payment date (payroll.run.disbursed).
+      const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+      const postingDate = accrualDateOnApproval(basis, p, new Date());
+      if (postingDate === null) {
+        await audit(tx, msg, "payroll_gl_accrual_deferred", "payroll_run", p.runId);
+        return;
+      }
+      // UAT T-PERIOD review (blocker 2): a split deduction head missing from the chart falls back to 2102 with a warning.
+      const fb = await deductionHeadFallbackTx(tx, msg.tenantId, lines);
+      if (fb.missing.length > 0) {
+        log.warn({ tenantId: msg.tenantId, runId: p.runId, missing: fb.missing }, "payroll accrual: deduction head(s) missing, posted to 2102 (run backfill-standard-gl-heads)");
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "finance", action: "warning", resourceType: "payroll_run", resourceId: p.runId, outcome: "success", code: "PAYROLL_DEDUCTION_HEAD_MISSING", missingHeads: fb.missing, fallbackHead: payrollDeductionHeads().other, journalId },
+        });
+      }
+      const postLines = fb.lines;
       await enqueue(tx, {
         topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          id: journalId,
-          tenantId: msg.tenantId,
-          voucherNo: `PAY/${p.month}/${p.runId.slice(0, 8)}`,
-          type: "payroll_accrual",
-          postingDate: new Date().toISOString().slice(0, 10),
-          ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
-          // H3: paise passed as bigint strings so > 2^53 paise stays exact.
-          lines: lines.map((l) => ({
-            accountCode: l.accountCode,
-            debitMinor: l.debitMinor.toString(),
-            creditMinor: l.creditMinor.toString(),
-            narration: l.narration,
-          })),
-        },
+        payload: payrollAccrualJournalCommand(p, journalId, msg.tenantId, postingDate, postLines),
       });
       await audit(tx, msg, "payroll_gl_accrual", "payroll_run", p.runId);
     });

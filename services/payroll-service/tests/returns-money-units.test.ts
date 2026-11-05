@@ -37,6 +37,14 @@ vi.mock("../src/shared/db.js", async () => {
 });
 
 const mockPublish = vi.fn().mockResolvedValue(undefined);
+// UAT P3 b19 D-15: the deductor read is a scopedRead of its own; this suite
+// queues its scopedRead results in order, so the (valid) deductor is stubbed.
+vi.mock("../src/modules/deductor-config/repo.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/modules/deductor-config/repo.js")>("../src/modules/deductor-config/repo.js");
+  const deductor = { name: "Test Pay and Accounts Office", tan: "TSTP12345T", pan: "AAAGT1234T" };
+  return { ...actual, requireDeductor: vi.fn(async () => deductor), optionalDeductor: vi.fn(async () => deductor) };
+});
+
 vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: (...a: unknown[]) => mockPublish(...a), subscribe: vi.fn(), start: vi.fn(), stop: vi.fn(), ping: vi.fn() },
   cache: {
@@ -282,14 +290,16 @@ const FY_2026_27_MONTHS = [
 const GROSS_PAISE = 150_000_000n;
 
 /**
- * The 17 reads buildForm16 makes for one deductee with no tax declaration (new
- * regime): runs, slips, 12 monthly TDS reads (the Rs 35,000 sits in 2027-01, a Q4
- * month), declaration, proof-plan, statutory config.
+ * The 18 reads buildForm16 makes for one deductee with no tax declaration (new
+ * regime): runs, slips, the approved opening YTD (PR #2459 delta review B2; none
+ * here), 12 monthly TDS reads (the Rs 35,000 sits in 2027-01, a Q4 month),
+ * declaration, proof-plan, statutory config.
  */
 function queueForm16() {
   const runs = [{ id: "run-1", status: "approved" }];
   readQueue.push(runs);
   readQueue.push([{ runId: "run-1", grossMinor: GROSS_PAISE }]);
+  readQueue.push([]);   // approved opening YTD: none
   for (const month of FY_2026_27_MONTHS) {
     readQueue.push(month === "2027-01" ? [{ runId: "run-1", tdsMinor: BigInt(TDS_PAISE) }] : []);
   }
@@ -340,6 +350,9 @@ const ANNEXURE_II_PAISE = {
   prevEmployerTdsMinor: 0,
   balanceTaxPayableMinor: 6_250_000,
   refundDueMinor: 0,
+  // PR #2459 delta review B2: the approved opening YTD (none here)
+  preGoLiveSalaryMinor: 0,
+  preGoLiveTdsMinor: 0,
   regime: "new",
 };
 

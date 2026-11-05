@@ -8,6 +8,7 @@ import { registerRoleConsumers } from "./modules/roles/consumer.js";
 import { registerBindingConsumers } from "./modules/bindings/consumer.js";
 import { registerAbacConsumers } from "./modules/abac/consumer.js";
 import { registerRoleFeatureConsumers } from "./modules/role-features/consumer.js";
+import { registerTenantProvisionConsumers } from "./modules/tenant-provision/consumer.js";
 
 const log = pino({ name: "policy-worker" });
 
@@ -27,6 +28,7 @@ registerRoleConsumers(queue);
 registerBindingConsumers(queue);
 registerAbacConsumers(queue);
 registerRoleFeatureConsumers(queue);
+registerTenantProvisionConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { idempotentId } from "@civitasone/auth";
+import { db } from "../../shared/db.js";
+import { approveSanctionTx, assertSanctionWithinAllocationTx, sanctionPreRead, SanctionBudgetExceeded } from "./sanction-control.js";
+import { currentFyIST } from "../../shared/ist-date.js";
 import { ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
@@ -198,12 +201,24 @@ export async function approveSanction(ctx: RequestContext, id: string, reason?: 
     throw new HttpError(409, "EFILE_IN_FLIGHT",
       `this sanction is awaiting an eOffice decision${existing.efileFileNo ? ` (file ${existing.efileFileNo})` : ""}; it cannot be approved directly`);
   }
-  await queue.publish(COMMANDS.sanctionApprove, {
-    messageId: randomUUID(), type: COMMANDS.sanctionApprove,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
-  });
+  if (existing.status === "approved") return { id, status: "accepted", correlationId: ctx.correlationId }; // idempotent
+  if (existing.status !== "pending_approval" && existing.status !== "draft") {
+    throw new HttpError(409, "INVALID_SANCTION_STATE", `a ${existing.status} sanction cannot be approved`);
+  }
+  // UAT T-EDGE TE-02: the approval is applied HERE, synchronously, in one transaction that locks the head allocation
+  // row and checks available = allocation - (approved sanctions + committed + expended). Two approvals racing on one
+  // head serialise on that lock: exactly one is approved, the other gets 422 BUDGET_EXCEEDED with what is left. (A
+  // queued approval could only refuse after its 202 had already been sent.) The consumer keeps the same rule for a
+  // command published any other way.
+  const fy = currentFyIST();
+  const pre = await sanctionPreRead(ctx.tenantId, existing.headId, fy);
+  let approved: boolean;
+  try {
+    approved = await db.transaction((tx) => approveSanctionTx(tx, ctx, { id, headId: existing.headId, amountMinor: existing.amountMinor }, fy, pre, reason));
+  } catch (err) { throw sanctionLimitHttpError(err); }
+  if (!approved) throw new HttpError(409, "SANCTION_STATE_CHANGED", "this sanction changed while it was being approved (decided by another officer, or sent to eOffice); reload it");
   await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
+  await cache.invalidateResource(ctx.tenantId, "sanctions");
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
@@ -224,4 +239,28 @@ export async function submitReappropriationForApproval(ctx: RequestContext, id: 
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "reappropriation", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** UAT T-EDGE TE-02: the sanction allocation refusals as HTTP answers (422, with the available amount). */
+export function sanctionLimitHttpError(err: unknown): unknown {
+  if (err instanceof SanctionBudgetExceeded) {
+    const avail = err.availableMinor > 0n ? err.availableMinor : 0n;
+    const rupees = `${avail / 100n}.${String(avail % 100n).padStart(2, "0")}`;
+    return new HttpError(422, "BUDGET_EXCEEDED", err.message.replace(/^\[[A-Z_]+\]\s*/, ""), [
+      { field: "amountMinor", message: `Only Rs ${rupees} is still available on this head for the year (allocation less approved sanctions, commitments and expenditure).` },
+    ]);
+  }
+  if (err instanceof DomainError && err.code === "NO_BUDGET_PROVISION") {
+    return new HttpError(422, err.code, err.message.replace(/^\[[A-Z_]+\]\s*/, ""), [{ field: "headId", message: "This head has no budget provision or allocation for the financial year." }]);
+  }
+  return err;
+}
+
+/** UAT T-EDGE TE-02: synchronous create-time check (the create consumer re-checks under the lock). */
+export async function assertSanctionCreatable(ctx: RequestContext, headId: string, amountMinor: bigint): Promise<void> {
+  const fy = currentFyIST();
+  const pre = await sanctionPreRead(ctx.tenantId, headId, fy);
+  try {
+    await db.transaction((tx) => assertSanctionWithinAllocationTx(tx, ctx.tenantId, { id: randomUUID(), headId, amountMinor }, fy, pre));
+  } catch (err) { throw sanctionLimitHttpError(err); }
 }

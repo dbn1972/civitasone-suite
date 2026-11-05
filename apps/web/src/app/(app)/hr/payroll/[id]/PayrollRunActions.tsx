@@ -99,6 +99,9 @@ export function PayrollRunActions({
   const [review, setReview] = useState<ApprovalReview | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  // UAT T-PERIOD D-02b: slips that pay nothing, acknowledged one by one (409 NET_PAY_NON_POSITIVE).
+  const [netAcknowledged, setNetAcknowledged] = useState<Set<string>>(new Set());
+  const [tdsAcknowledged, setTdsAcknowledged] = useState<Set<string>>(new Set());
   const [reviewNote, setReviewNote] = useState("");
   const reviewNoteId = useId();
   const router = useRouter();
@@ -125,20 +128,34 @@ export function PayrollRunActions({
   }, [status]);
 
   const arrearsToAck = review ? review.arrears.employees.filter((e) => e.requiresReview) : [];
+  const netToAck = review?.nonPositiveNet ?? [];
+  // PR #2459 review B2: presumed months / unrecoverable TDS shortfall, acknowledged per employee.
+  const tdsItems = review?.tds ?? [];
+  const tdsToAck = [...new Map(tdsItems.filter((i) => i.requiresAck).map((i) => [i.employeeId, i])).values()];
+  const tdsInfo = tdsItems.filter((i) => !i.requiresAck);
+  const tdsText = (i: (typeof tdsItems)[number]): string =>
+    tr(`tdsKind.${i.kind}`, { employee: i.employeeNo, months: i.presumedMonths, amount: formatMinorString(i.amountMinor) })
+    + (i.kind === "shortfall" && i.finalMonth ? ` ${tr("tdsUnrecoverable")}` : "");
 
   function approveBody(reason?: string): Record<string, unknown> | null {
     if (!review) return { reason };
     const note = reviewNote.trim();
     const complete = note.length >= 10
       && review.zeroBasic.every((z) => excluded.has(z.employeeId))
-      && arrearsToAck.every((e) => acknowledged.has(e.employeeId));
+      && arrearsToAck.every((e) => acknowledged.has(e.employeeId))
+      && netToAck.every((n) => netAcknowledged.has(n.employeeId))
+      && tdsToAck.every((i) => tdsAcknowledged.has(i.employeeId));
     if (!complete) return null;
     const zeroBasicExclusions = review.zeroBasic.map((z) => ({ employeeId: z.employeeId, reason: note }));
     const arrearsAcknowledgements = arrearsToAck.map((e) => ({ employeeId: e.employeeId, reason: note }));
+    const netPayAcknowledgements = netToAck.map((n) => ({ employeeId: n.employeeId, reason: note }));
+    const tdsAcknowledgements = tdsToAck.map((i) => ({ employeeId: i.employeeId, reason: note }));
     return {
       reason,
       ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
       ...(arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements } : {}),
+      ...(netPayAcknowledgements.length > 0 ? { netPayAcknowledgements } : {}),
+      ...(tdsAcknowledgements.length > 0 ? { tdsAcknowledgements } : {}),
     };
   }
 
@@ -377,6 +394,13 @@ export function PayrollRunActions({
                     ))}
                   </fieldset>
                 )}
+                {review.epsUnrecorded && review.epsUnrecorded.employees.length > 0 && (
+                  <div role="note" className={`pill ${review.epsUnrecorded.policy === "block" ? "bad" : "warn"}`} style={{ margin: "0 0 10px", display: "block" }}>
+                    <strong>{tr("epsUnrecordedHeading")}</strong>
+                    <p style={{ margin: "4px 0" }}>{tr(review.epsUnrecorded.policy === "block" ? "epsUnrecordedBlock" : "epsUnrecordedAdvisory")}</p>
+                    <p style={{ margin: 0 }}>{review.epsUnrecorded.employees.map((e) => e.employeeNo).join(", ")}</p>
+                  </div>
+                )}
                 {arrearsToAck.length > 0 && (
                   <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
                     <legend><strong>{tr("arrearsHeading")}</strong></legend>
@@ -391,6 +415,41 @@ export function PayrollRunActions({
                       </label>
                     ))}
                   </fieldset>
+                )}
+                {netToAck.length > 0 && (
+                  <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
+                    <legend><strong>{tr("netPayHeading")}</strong></legend>
+                    {netToAck.map((n) => (
+                      <label key={n.employeeId} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={netAcknowledged.has(n.employeeId)}
+                          onChange={(ev) => setNetAcknowledged((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(n.employeeId); else next.delete(n.employeeId); return next; })}
+                        />
+                        {tr("netPayAcknowledge", { employee: n.employeeNo, gross: formatMinorString(n.grossMinor), deductions: formatMinorString(n.totalDeductionsMinor), net: formatMinorString(n.netPayMinor) })}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {tdsToAck.length > 0 && (
+                  <fieldset style={{ border: 0, padding: 0, margin: "0 0 10px" }}>
+                    <legend><strong>{tr("tdsHeading")}</strong></legend>
+                    {tdsToAck.map((i) => (
+                      <label key={i.employeeId} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                        <input
+                          type="checkbox"
+                          checked={tdsAcknowledged.has(i.employeeId)}
+                          onChange={(ev) => setTdsAcknowledged((prev) => { const next = new Set(prev); if (ev.target.checked) next.add(i.employeeId); else next.delete(i.employeeId); return next; })}
+                        />
+                        {tr("tdsAcknowledge", { employee: i.employeeNo })}: {tdsItems.filter((x) => x.employeeId === i.employeeId && x.requiresAck).map(tdsText).join("; ")}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {tdsInfo.length > 0 && (
+                  <ul aria-label={tr("tdsInfoHeading")} style={{ margin: "0 0 10px", paddingInlineStart: 18, fontSize: 13 }}>
+                    {tdsInfo.map((i) => <li key={`${i.employeeId}-${i.kind}`}>{tdsText(i)}</li>)}
+                  </ul>
                 )}
                 <label htmlFor={reviewNoteId} style={{ display: "block", fontWeight: 600 }}>{tr("reviewNoteLabel")}</label>
                 <textarea

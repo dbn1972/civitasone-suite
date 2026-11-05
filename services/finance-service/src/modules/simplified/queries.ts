@@ -8,6 +8,7 @@
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { paiseToRupees } from "./auto-journal.js";
+import { todayIST, currentPeriodIST } from "../../shared/ist-date.js";
 
 /**
  * Returns MSME-friendly financial summary for a given period (YYYY-MM).
@@ -20,7 +21,7 @@ import { paiseToRupees } from "./auto-journal.js";
  * - GST liability: 2002
  */
 export async function getSummary(tenantId: string, period?: string) {
-  const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+  const targetPeriod = period ?? currentPeriodIST();
   const [year, month] = targetPeriod.split("-");
   const startDate = `${year}-${month}-01`;
   const endDate = getLastDayOfMonth(Number(year), Number(month));
@@ -136,7 +137,7 @@ export async function getExpenseList(tenantId: string, opts: { from?: string | u
  */
 export async function getCashflow(tenantId: string, opts: { from?: string | undefined; to?: string | undefined }) {
   const from = opts.from ?? getFirstDayOfMonth();
-  const to = opts.to ?? new Date().toISOString().slice(0, 10);
+  const to = opts.to ?? todayIST();
 
   const rows = await scopedRead((tx) => tx.execute(sql`
     SELECT
@@ -163,11 +164,11 @@ export async function getCashflow(tenantId: string, opts: { from?: string | unde
 // --- helpers ---
 
 function getLastDayOfMonth(year: number, month: number): string {
-  const d = new Date(year, month, 0); // day 0 of next month = last day of this month
-  return d.toISOString().slice(0, 10);
+  // day 0 of next month = last day of this month; built in UTC so the server time zone cannot shift the date
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
 function getFirstDayOfMonth(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  // UAT T-PERIOD D-06: the current month in IST.
+  return `${currentPeriodIST()}-01`;
 }

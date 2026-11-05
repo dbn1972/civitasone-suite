@@ -457,12 +457,13 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
       // call site; before that RLS-scoping fix this read was always blind
       // and daMinor was silently always 0, which is what the previous
       // 233300 (Basic-only) expectation here was quietly depending on).
-      // dailyRate = (3500000+1750000)/30 = 175000; * 2 days = 350000 exactly
-      // (no rounding needed). If the ledger's 2 days did NOT win, this would
-      // instead reflect the HRMS feed's 10 days (1750000) -- 5x off, so this
-      // assertion still discriminates.
+      // UAT L2-N5: LOP also falls on HRA (X, DA 50% -> 30% of basic = 1050000).
+      // dailyRate = (3500000+1750000+1050000)/30 = 210000; * 2 days = 420000
+      // exactly (no rounding needed). If the ledger's 2 days did NOT win, this
+      // would instead reflect the HRMS feed's 10 days (2100000) -- 5x off, so
+      // this assertion still discriminates.
       const lop = components.find((c) => c.code === "LOP");
-      expect(lop?.amountMinor, `LOP for ${emp.employeeNo}`).toBe(350000);
+      expect(lop?.amountMinor, `LOP for ${emp.employeeNo}`).toBe(420000);
 
       // H14: PT differs by the employee's own state, from the SAME batched fetch.
       const pt = components.find((c) => c.code === "PT");

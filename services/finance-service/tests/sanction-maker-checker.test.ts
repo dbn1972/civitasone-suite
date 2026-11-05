@@ -15,7 +15,8 @@ import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { assertSanctionApproverDistinct, DomainError } from "../src/modules/budget/domain.js";
-import { financeSanctions } from "../src/modules/budget/schema.js";
+import { financeSanctions, financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
+import { currentFyIST } from "../src/shared/ist-date.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
@@ -47,6 +48,11 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
 }
 
 beforeEach(clean);
+// A sanction needs a budget for its head in the year (UAT T-PERIOD D-03 / T-EDGE TE-02).
+beforeEach(async () => {
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values({ id: HEAD, tenantId: TENANT, code: "MC-SAN", name: "Maker-checker sanction head", level: 1, classification: "expense", createdBy: MAKER, updatedBy: MAKER }).onConflictDoNothing());
+  await scoped(TENANT, (tx) => tx.insert(financeBudgets).values({ tenantId: TENANT, headId: HEAD, fy: currentFyIST(), beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: MAKER, updatedBy: MAKER }).onConflictDoNothing());
+});
 afterAll(async () => { await clean(); await sqlClient.end(); });
 
 describe("sanction SoD (R11) — pure", () => {

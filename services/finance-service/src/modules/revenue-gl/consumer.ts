@@ -15,6 +15,7 @@ import * as budgetRepo from "../budget/repo.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import type { JournalLine } from "../gl/schema.js";
 import { registerRefundGlConsumer } from "./refund-consumer.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
 // Citizen fee income has its own INCOME head (4100). It defaulted to 4200, the gain/loss-on-disposal head, which the
@@ -39,7 +40,7 @@ export function registerRevenueGlConsumers(queue: Queue): void {
     if (amount <= 0n) return;
 
     const revenueCode = (p.hoaCode?.trim() || DEFAULT_REVENUE_CODE);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     const journalSourceKey = `citizen_receipt:${p.id}`;
 
     try {

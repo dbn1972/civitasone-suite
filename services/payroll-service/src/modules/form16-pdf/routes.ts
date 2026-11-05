@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
+import { requireDeductor } from "../deductor-config/repo.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { renderPdf } from "@civitasone/render";
 import { signPdfWithDsc, DscValidationError } from "@civitasone/render";
@@ -58,11 +59,13 @@ th,td{border:1px solid #333;padding:6px 8px} .amount{text-align:right}
 <tr><td>Q2 (Jul–Sep)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q2)}</td></tr>
 <tr><td>Q3 (Oct–Dec)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q3)}</td></tr>
 <tr><td>Q4 (Jan–Mar)</td><td class="amount">₹ ${inr(a.quarterlyTds.Q4)}</td></tr>
+${a.preGoLiveTds > 0 ? `<tr><td>Before go-live here (approved opening YTD)</td><td class="amount">₹ ${inr(a.preGoLiveTds)}</td></tr>` : ""}
 <tr><td><strong>Total</strong></td><td class="amount"><strong>₹ ${inr(a.totalTdsDeposited)}</strong></td></tr>
 </table>
 <h2>Part B — Details of Salary Paid and Tax Deducted (${esc(b.regime)} regime)</h2>
 <table>
 ${row("Gross Salary", b.grossSalary)}
+${(b.prevEmployers ?? []).map((p) => row(`Previous employer (Form 12B, s.192(2)): ${esc(p.name)}${p.tan ? ` (${esc(p.tan)})` : ""} -- salary`, p.salary) + row(`Previous employer TDS: ${esc(p.name)}`, p.tds)).join("")}
 ${row("Standard Deduction (Sec 16)", b.standardDeduction)}
 ${row("HRA Exemption (Sec 10(13A))", b.hraExempt)}
 ${row("Deduction 80C", b.section80c)}
@@ -262,6 +265,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     // Validate FY format
     try { parseFy(body.fy); }
     catch { throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26"); }
+    // UAT P3 b19 D-15: refuse the whole batch up front (422) instead of failing every certificate.
+    await requireDeductor(ctx.tenantId, "Form 16");
 
     // Check for duplicate running job for same tenant + FY. A re-run leaves the
     // earlier (completed/failed) rows in place, so look specifically for a row

@@ -143,3 +143,34 @@ describe("TenantDetailPage lifecycle", () => {
     expect(screen.getByText(/approval policy could not be loaded/)).toBeInTheDocument();
   });
 });
+
+// UAT L1-N1: a tenant with no edition / module config answers GET .../config with 404. That is an
+// empty state ("No modules configured yet" + a way to configure them), not "could not load".
+describe("TenantDetailPage module config", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+  const tenantOk = { name: "Acme Board", edition: "PSU", status: "active", region: "ap-south-1" };
+  function configAnswers(status: number) {
+    fetchJsonMock.mockImplementation((...args: unknown[]) => { const path = String(args[0] ?? "");
+      if (path.endsWith("/config")) return Promise.resolve({ data: [], source: "error", status });
+      if (path.endsWith(`/tenants/${TID}`)) return Promise.resolve({ data: tenantOk, source: "api" });
+      return Promise.resolve({ data: null, source: "api" });
+    });
+  }
+
+  it("config 404 -> No modules configured yet, with a configure action, and no load error", async () => {
+    configAnswers(404);
+    await renderPage();
+    expect(screen.getByText("Tenant: Acme Board")).toBeInTheDocument();
+    expect(screen.getByText("No modules configured yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Configure modules" })).toHaveAttribute("href", "/admin/entitlements");
+    expect(screen.queryByText(/could(n.t| not) load tenant modules/i)).not.toBeInTheDocument();
+  });
+
+  it("any other config failure (500) is still shown as a load error", async () => {
+    configAnswers(500);
+    await renderPage();
+    expect(screen.getByText("Tenant: Acme Board")).toBeInTheDocument();
+    expect(screen.queryByText("No modules configured yet")).not.toBeInTheDocument();
+    expect(screen.getByText(/tenant modules/i)).toBeInTheDocument();
+  });
+});

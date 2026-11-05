@@ -14,6 +14,7 @@ import { CONSUMED_EVENTS } from "../../topics.js";
 import * as budgetRepo from "../budget/repo.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import type { JournalLine } from "../gl/schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 /** Owned by citizen-service (EVENTS.refundApproved). */
 export const CITIZEN_REFUND_APPROVED = CONSUMED_EVENTS.citizenRefundApproved;
@@ -33,7 +34,7 @@ export function registerRefundGlConsumer(queue: Queue): void {
     const amount = BigInt(typeof p.amountMinor === "string" ? p.amountMinor : String(p.amountMinor));
     if (amount <= 0n) return;
     const revenueCode = p.hoaCode?.trim() || DEFAULT_REVENUE_CODE;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
 
     try {
       await db.transaction(async (tx) => {

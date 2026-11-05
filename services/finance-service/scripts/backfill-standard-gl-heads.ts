@@ -9,20 +9,27 @@
  *
  * Usage (from services/finance-service; DATABASE_URL must be able to read every tenant's heads, i.e. the owner/admin
  * role -- under the NOBYPASSRLS app role tenant discovery sees nothing, so pass --tenant explicitly):
- *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts --dry-run
- *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts [--tenant <uuid> ...] [--fill-missing-hoa]
+ *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts [--tenant <uuid> ...]            (dry run, the default)
+ *   DATABASE_URL=... pnpm exec tsx scripts/backfill-standard-gl-heads.ts --apply [--tenant <uuid> ...] [--fill-missing-hoa]
+ * #2464 review: DRY RUN BY DEFAULT (--apply writes; --apply and --dry-run together are refused). Running it (dry run,
+ * then --apply) is a MANDATORY deploy prerequisite of bundle 19: the heads it adds include the payroll deduction heads
+ * 2104-2108, the accumulated fund 3100 and the sale-proceeds receipt head 4310 (and every standard head since).
  * --fill-missing-hoa (opt-in): also set the standard HoA on an EXISTING standard head whose hoa_code is NULL (bills
  * raised against it fail the HoA check otherwise). Nothing else about an existing head is ever changed.
  * Without --tenant, every tenant that already has a chart (any row in budget.finance_heads) is backfilled.
+ * UAT L2-N6 review: an ACCRUAL-basis tenant (gl.finance_settings.accounting_basis) also gets the stores heads
+ * (accrualStoresHeads: 1400 / GRNI 2080 / stores suspense 2085 / 5300); a cash-basis tenant never does.
  */
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
-import { missingStandardHeads, standardGlHeads, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
+import { missingStandardHeads, missingAccrualStoresHeads, standardGlHeads, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
 
 type Sql = ReturnType<typeof postgres>;
 export type TenantPlan = {
   tenantId: string; missing: StandardGlHead[]; inserted: string[];
+  /** UAT L2-N6 review: gl.finance_settings.accounting_basis (absent row = cash). Only accrual tenants get the stores heads. */
+  basis: "cash" | "accrual";
   /** --fill-missing-hoa: existing standard heads whose hoa_code is NULL and gets the standard HoA (planned / done). */
   hoaFill: string[];
 };
@@ -42,7 +49,12 @@ export async function backfillStandardGlHeads(
       // Transaction-scoped tenant GUC (RLS), never a session SET (pgbouncer transaction pooling).
       await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       const existing = await tx<{ code: string; hoa_code: string | null }[]>`SELECT code, hoa_code FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid`;
-      const missing = missingStandardHeads(existing.map((r) => r.code));
+      // UAT L2-N6 review: the stores heads (1400 / GRNI / suspense / 5300) are for ACCRUAL tenants only; a cash-basis
+      // tenant (the default) posts no stock journal and gets none of them.
+      const basisRow = await tx<{ accounting_basis: string }[]>`SELECT accounting_basis FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid`;
+      const basis: "cash" | "accrual" = basisRow[0]?.accounting_basis === "accrual" ? "accrual" : "cash";
+      const codes = existing.map((r) => r.code);
+      const missing = [...missingStandardHeads(codes), ...(basis === "accrual" ? missingAccrualStoresHeads(codes) : [])];
       const inserted: string[] = [];
       if (!opts.dryRun) {
         for (const h of missing) {
@@ -71,25 +83,28 @@ export async function backfillStandardGlHeads(
           if (rows[0]) hoaFill.push(rows[0].code);
         }
       }
-      return { tenantId, missing, inserted, hoaFill };
+      return { tenantId, missing, inserted, hoaFill, basis };
     });
     plans.push(plan as TenantPlan);
   }
   return plans;
 }
 
-function parseArgs(argv: string[]): { dryRun: boolean; tenants: string[]; fillMissingHoa: boolean } {
+export function parseArgs(argv: string[]): { dryRun: boolean; tenants: string[]; fillMissingHoa: boolean } {
   const tenants: string[] = [];
-  let dryRun = false;
+  let apply = false;
+  let dryRunFlag = false;
   let fillMissingHoa = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (a === "--dry-run") dryRun = true;
+    if (a === "--dry-run") dryRunFlag = true;
+    else if (a === "--apply") apply = true;
     else if (a === "--tenant") tenants.push(argv[++i] ?? "");
     else if (a === "--fill-missing-hoa") fillMissingHoa = true;
     else throw new Error(`unknown argument: ${a}`);
   }
-  return { dryRun, tenants, fillMissingHoa };
+  if (apply && dryRunFlag) throw new Error("--apply and --dry-run are mutually exclusive");
+  return { dryRun: !apply, tenants, fillMissingHoa };
 }
 
 async function main(): Promise<void> {
@@ -103,7 +118,7 @@ async function main(): Promise<void> {
     for (const p of plans) {
       const codes = p.missing.map((h) => h.code).join(",") || "-";
       total += args.dryRun ? p.missing.length : p.inserted.length;
-      console.log(`${args.dryRun ? "[dry-run] would add" : "added"} ${args.dryRun ? p.missing.length : p.inserted.length} head(s) for tenant ${p.tenantId}: ${args.dryRun ? codes : p.inserted.join(",") || "-"}`);
+      console.log(`${args.dryRun ? "[dry-run] would add" : "added"} ${args.dryRun ? p.missing.length : p.inserted.length} head(s) for tenant ${p.tenantId} (${p.basis} basis): ${args.dryRun ? codes : p.inserted.join(",") || "-"}`);
       if (p.hoaFill.length > 0) console.log(`${args.dryRun ? "[dry-run] would set" : "set"} the standard HoA on existing head(s) with none for tenant ${p.tenantId}: ${p.hoaFill.join(",")}`);
     }
     console.log(`${args.dryRun ? "[dry-run] " : ""}tenants: ${plans.length}, heads ${args.dryRun ? "to add" : "added"}: ${total}`);

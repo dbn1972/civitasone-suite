@@ -1,5 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { outstandingSanctionsTx } from "./sanction-outstanding.js";
 import {
   financeBudgetAllocation, financeReappropriationLog,
   type BudgetAllocationRow, type BudgetAllocationInsert,
@@ -25,6 +26,25 @@ export async function findAllocationTx(tx: Writer, tenantId: string, headId: str
       eq(financeBudgetAllocation.fy, fy),
     )).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Synchronous route pre-check for POST /v1/finance/budget-allocations (#2464 review should-fix 2): when the request
+ * would cut an existing allocation below committed + expended + approved sanctions, the floor in paise; else null.
+ * The consumer keeps the same guard as the race-safe backstop.
+ */
+export async function allocationCutFloor(
+  tenantId: string, headId: string, fy: string, requestedMinor: bigint,
+): Promise<{ floor: bigint; committed: bigint; expended: bigint; sanctioned: bigint } | null> {
+  return scopedRead(async (tx) => {
+    const existing = await findAllocationTx(tx, tenantId, headId, fy);
+    if (!existing || requestedMinor >= existing.allocatedMinor) return null;
+    const sanctioned = await outstandingSanctionsTx(tx, tenantId, headId, fy);
+    const floor = existing.committedMinor + existing.actualMinor + sanctioned;
+    return requestedMinor < floor
+      ? { floor, committed: existing.committedMinor, expended: existing.actualMinor, sanctioned }
+      : null;
+  });
 }
 
 export async function upsertAllocation(tx: Writer, row: BudgetAllocationInsert): Promise<void> {
@@ -127,11 +147,18 @@ export async function settleCommittedToActualGuarded(tx: Exec, id: string, amoun
  * the source guard rejected the move.
  */
 export async function moveAllocationGuarded(tx: Exec, fromId: string, toId: string, amountMinor: bigint): Promise<boolean> {
+  // #2464 review (TE-02): the approved sanctions still outstanding on the source head are committed too -- sanctioned
+  // money cannot be re-appropriated away. The source row is locked first (the sanction approval locks the same row).
+  const src = (await tx.execute(sql`
+    SELECT tenant_id::text AS tenant_id, head_id::text AS head_id, fy FROM budget.finance_budget_allocation WHERE id = ${fromId} FOR UPDATE
+  `)) as unknown as Array<{ tenant_id: string; head_id: string; fy: string }>;
+  if (!src[0]) return false;
+  const sanctioned = await outstandingSanctionsTx(tx, src[0].tenant_id, src[0].head_id, src[0].fy);
   const dec = await tx.execute(sql`
     UPDATE budget.finance_budget_allocation
        SET allocated_minor = allocated_minor - ${amountMinor}, updated_at = now()
      WHERE id = ${fromId}
-       AND allocated_minor - committed_minor - actual_minor >= ${amountMinor}
+       AND allocated_minor - committed_minor - actual_minor - ${sanctioned} >= ${amountMinor}
     RETURNING id
   `);
   if ((dec as unknown as unknown[]).length === 0) return false;

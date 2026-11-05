@@ -50,6 +50,8 @@ const {
   insertJournalLineMock,
   insertLedgerLineMock,
   findHeadByCodeTxMock,
+  loadSettingsTxMock,
+  findJournalByVoucherNoTxMock,
 } = vi.hoisted(() => {
   const _mockTx = { execute: vi.fn(async () => []) };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
@@ -64,8 +66,14 @@ const {
     findHeadByCodeTxMock: vi.fn(async (_tx: unknown, _tenantId: string, code: string) => ({
       id: `head-uuid-${code}`, code, name: `Head ${code}`,
     })) as any,
+    // UAT T-PERIOD D-04: the tenant accounting basis (gl.finance_settings, #2455).
+    loadSettingsTxMock: vi.fn(async () => ({ accountingBasis: "cash" })) as any,
+    findJournalByVoucherNoTxMock: vi.fn(async () => null) as any,
   };
 });
+vi.mock("../src/modules/approvals/repo.js", () => ({
+  loadSettingsTx: (...args: any[]) => loadSettingsTxMock(...args),
+}));
 
 vi.mock("../src/shared/db.js", () => ({
   scopedRead: dbTransactionFn,
@@ -88,6 +96,7 @@ vi.mock("../src/modules/gl/repo.js", () => ({
   insertLedgerLine: (...args: any[]) => insertLedgerLineMock(...args),
   findJournalById: vi.fn(async () => null),
   findJournalByIdTx: vi.fn(async () => null),
+  findJournalByVoucherNoTx: (...args: any[]) => findJournalByVoucherNoTxMock(...args),
   markJournalReversed: vi.fn(async () => undefined),
   resolveHeadId: vi.fn(async () => "head-uuid"),
   getLedgerLines: vi.fn(async () => []),
@@ -176,6 +185,58 @@ describe("BL-03: payroll.run.disbursed → settlement journal", () => {
       payload: { runId: randomUUID(), month: "2026-06", totalNetMinor: "0" },
     });
     expect(insertJournalMock).not.toHaveBeenCalled();
+  });
+
+  describe("UAT T-PERIOD D-04: posting date by accounting basis", () => {
+    // 1 April 2027 IST (the payroll payment date of March 2027 pay).
+    const carried = (runId: string) => ({
+      runId, month: "2027-03", totalNetMinor: "17392200", totalGrossMinor: "42130800", totalEmployerContribMinor: "4957100",
+      totalEdliMinor: "0", totalEpfAdminMinor: "0", totalUpsPoolMinor: "0", paymentDate: "2027-04-01",
+    });
+    const accrualPosts = () => enqueueMock.mock.calls.filter((c: any[]) => c[1]?.topic === "finance.gl.post" && c[1]?.payload?.type === "payroll_accrual");
+
+    it("cash basis: the settlement AND the deferred salary accrual are dated the payment date (new FY)", async () => {
+      const runId = randomUUID();
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(runId) });
+      expect(insertJournalMock).toHaveBeenCalledTimes(1);
+      expect(insertJournalMock.mock.calls[0][1].postingDate).toBe("2027-04-01");
+      const posts = accrualPosts();
+      expect(posts).toHaveLength(1);
+      expect(posts[0][1].payload.postingDate).toBe("2027-04-01");
+      expect(posts[0][1].payload.voucherNo).toBe(`PAY/2027-03/${runId.slice(0, 8)}`);
+      const lines = posts[0][1].payload.lines as Array<{ debitMinor: string; creditMinor: string }>;
+      expect(lines.reduce((s, l) => s + BigInt(l.debitMinor) - BigInt(l.creditMinor), 0n)).toBe(0n);
+    });
+
+    it("cash basis: an accrual already posted for the run (before this build) is not posted again", async () => {
+      findJournalByVoucherNoTxMock.mockResolvedValueOnce({ id: "old", status: "posted" });
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(randomUUID()) });
+      expect(accrualPosts()).toHaveLength(0);
+      expect(insertJournalMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("accrual basis: only the settlement, dated the payment date, when the accrual was posted on approval", async () => {
+      loadSettingsTxMock.mockResolvedValueOnce({ accountingBasis: "accrual" });
+      findJournalByVoucherNoTxMock.mockResolvedValueOnce({ id: "acc", status: "posted" });
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(randomUUID()) });
+      expect(accrualPosts()).toHaveLength(0);
+      expect(insertJournalMock.mock.calls[0][1].postingDate).toBe("2027-04-01");
+    });
+
+    it("review SF4: basis switched cash -> accrual between approval and disbursal: the never-posted accrual is posted on disbursal, dated the pay-month end", async () => {
+      loadSettingsTxMock.mockResolvedValueOnce({ accountingBasis: "accrual" });
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: carried(randomUUID()) });
+      const posts = accrualPosts();
+      expect(posts).toHaveLength(1);
+      expect(posts[0][1].payload.postingDate).toBe("2027-03-31");
+      expect(insertJournalMock.mock.calls[0][1].postingDate).toBe("2027-04-01");
+    });
+
+    it("an older payroll payload (no amounts, no payment date): settlement only, on the IST date", async () => {
+      await queue.publish(CONSUMED_EVENTS.payrollRunDisbursed, { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), payload: { runId: randomUUID(), month: "2026-06", totalNetMinor: "500000" } });
+      expect(accrualPosts()).toHaveLength(0);
+      expect(insertJournalMock.mock.calls[0][1].postingDate).toBe(new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10));
+    });
   });
 
   it("emits finance.gl.rejected when a head code is missing from the COA", async () => {

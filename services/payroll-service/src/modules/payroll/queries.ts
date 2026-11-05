@@ -5,8 +5,9 @@ import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
 import { db, scopedRead } from "../../shared/db.js";
-import { arrearsReviewOf, zeroBasicSlipsOf, runActionDenial, stuckRunHours } from "./domain.js";
-import { resolveArrearsReviewThresholdBps } from "./consumer.js";
+import { arrearsReviewOf, zeroBasicSlipsOf, nonPositiveNetSlipsOf, tdsReviewOf, tdsReviewText, runActionDenial, stuckRunHours } from "./domain.js";
+import { resolveArrearsReviewThresholdBps, resolveEpsUnrecordedPolicy } from "./consumer.js";
+import { epsUnrecordedEmployeeIdsByRun } from "../statutory/repo.js";
 import type { RunApprovalReview } from "./validators.js";
 import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
@@ -355,8 +356,12 @@ export async function getRunApprovalReview(runId: string, tenantId: string): Pro
   const slips = await repo.listSlipsByRun(runId, tenantId);
   const thresholdBps = await scopedRead((tx) => resolveArrearsReviewThresholdBps(tx as unknown as typeof db, tenantId));
   const review = arrearsReviewOf(slips, thresholdBps);
+  const epsPolicy = await scopedRead((tx) => resolveEpsUnrecordedPolicy(tx as unknown as typeof db, tenantId));
+  const noOf = new Map(slips.map((sl) => [sl.employeeId, sl.employeeNo]));
+  const epsIds = await epsUnrecordedEmployeeIdsByRun(runId, tenantId);
   return {
     runId,
+    epsUnrecorded: { policy: epsPolicy, employees: epsIds.map((id) => ({ employeeId: id, employeeNo: noOf.get(id) ?? id })) },
     zeroBasic: zeroBasicSlipsOf(slips).filter((sl) => sl.status !== "excluded").map((sl) => ({ employeeId: sl.employeeId, employeeNo: sl.employeeNo })),
     arrears: {
       totalMinor: review.totalArrearsMinor.toString(),
@@ -366,5 +371,13 @@ export async function getRunApprovalReview(runId: string, tenantId: string): Pro
         regularGrossMinor: e.regularGrossMinor.toString(), requiresReview: e.requiresReview,
       })),
     },
+    nonPositiveNet: nonPositiveNetSlipsOf(slips).map((sl) => ({
+      employeeId: sl.employeeId, employeeNo: sl.employeeNo, grossMinor: sl.grossMinor.toString(),
+      totalDeductionsMinor: sl.totalDeductionsMinor.toString(), netPayMinor: sl.netPayMinor.toString(), tdsMinor: sl.tdsMinor.toString(),
+    })),
+    tds: tdsReviewOf(slips).map((i) => ({
+      employeeId: i.employeeId, employeeNo: i.employeeNo, kind: i.kind, amountMinor: i.amountMinor.toString(),
+      presumedMonths: i.presumedMonths, finalMonth: i.finalMonth, requiresAck: i.requiresAck, message: tdsReviewText(i),
+    })),
   };
 }

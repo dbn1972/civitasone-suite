@@ -29,6 +29,14 @@ export async function findJournalByIdTx(tx: Writer, id: string): Promise<Journal
   return rows[0] ?? null;
 }
 
+/** UAT T-PERIOD D-04: the journal holding this voucher number for the tenant, inside a tx (null if none). */
+export async function findJournalByVoucherNoTx(tx: Writer, tenantId: string, voucherNo: string): Promise<{ id: string; status: string } | null> {
+  const rows = await (tx as typeof db).select({ id: financeJournals.id, status: financeJournals.status }).from(financeJournals)
+    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.voucherNo, voucherNo)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /**
  * GAP-FINANCE-JOURNAL-ENTRY-06: the journal (any status, including a
  * pending_approval draft) that already holds this hand-typed voucher number

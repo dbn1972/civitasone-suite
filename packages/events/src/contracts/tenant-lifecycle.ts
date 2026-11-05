@@ -20,8 +20,9 @@ export const tenantTenantCreated = defineContract({
   kind: "event",
   owner: "tenant-service",
   version: "1.1",
-  // admin-service registers the tenant from the directory fields; hrms, meeting and workflow read only tenantId.
-  consumers: ["admin-service", "hrms-service", "meeting-service", "workflow-service"],
+  // admin-service registers the tenant from the directory fields; hrms, meeting, workflow and policy (POLICY-SEED-1:
+  // standard approve grants) read only tenantId.
+  consumers: ["admin-service", "hrms-service", "meeting-service", "policy-service", "workflow-service"],
   // Organisation directory data only (office name, domain, region): no personal data.
   pii: [],
   schema: z.object({

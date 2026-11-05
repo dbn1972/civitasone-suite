@@ -7,7 +7,7 @@ import { testDbHostPort } from "../../vitest.testdb";
 export default defineConfig({
   test: {
     ...sharedTestTimeouts,
-    setupFiles: ["./tests/setup-tax-config.ts"],
+    setupFiles: ["./tests/setup-tax-config.ts", "./tests/setup-tenant-identity.ts"],
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
@@ -38,6 +38,20 @@ export default defineConfig({
       PAYROLL_SIGNING_KEY_FILE: join(tmpdir(), `civitasone-payroll-test-signing-key-${process.pid}`),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // UAT P3 b19 D-15: Form 16 / 24Q / 26Q / 12BA refuse (422
+      // FORM16_EMPLOYER_NOT_CONFIGURED) without a valid deductor. A tenant with
+      // no documentIdentity falls back (single-tenant only) to this deployment-wide identity, so the
+      // suites that build those returns for throwaway tenants get a valid one
+      // (test values only; tests/uat-p3-b19-d15-* clears / overrides them).
+      // The deductor is read from tenant-service: point it at a dead port so a
+      // test never reaches a real tenant-service on the host (tests stub fetch).
+      TENANT_SERVICE_URL: "http://127.0.0.1:1",
+      // The env fallback is honoured only on an explicitly single-tenant deployment
+      // (repo.ts); the read of tenant-service itself fails closed (503).
+      PAYROLL_DEDUCTOR_ENV_FALLBACK: "single-tenant",
+      EMPLOYER_NAME: "Test Pay and Accounts Office",
+      EMPLOYER_TAN: "TSTP12345T",
+      EMPLOYER_PAN: "AAAGT1234T",
     },
     coverage: {
       provider: "v8",

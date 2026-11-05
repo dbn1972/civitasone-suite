@@ -8,6 +8,7 @@ import { enqueueSpineJournal } from "../gl/spine.js";
 import type { JournalLine } from "../gl/schema.js";
 import * as repo from "./repo.js";
 import type { PaymentRow } from "./schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 // Same control heads paymentInitiate (consumer.ts) posted the payment against.
 const AP_CONTROL_CODE = process.env.FINANCE_AP_CONTROL_CODE ?? "2050";
@@ -37,7 +38,7 @@ export async function reversePostedPayment(
   }
 
   // Same payDate / FY derivation as paymentInitiate.
-  const payDate = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+  const payDate = bill.billDate ?? todayIST(new Date(bill.createdAt));
   const amount = BigInt(payment.amountMinor);
 
   // Un-settle actual -> committed, guarded so actual can never go negative.
@@ -60,7 +61,7 @@ export async function reversePostedPayment(
   const apHead = await budgetRepo.findHeadByCodeTx(tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], ctx.tenantId, AP_CONTROL_CODE);
   const bankHead = await budgetRepo.findHeadByCodeTx(tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], ctx.tenantId, BANK_CODE);
   if (!apHead || !bankHead) throw new Error("MISSING_CONTROL_HEAD: accounts_payable/bank head not found for tenant");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const lines: JournalLine[] = [
     { accountCode: bankHead.id, debitMinor: amount, creditMinor: 0n },
     { accountCode: apHead.id,   debitMinor: 0n,      creditMinor: amount },

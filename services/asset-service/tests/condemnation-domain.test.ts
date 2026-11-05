@@ -55,4 +55,8 @@ describe("Condemnation — retirement date computation", () => {
     const date = new Date("2026-07-15T10:30:00Z");
     expect(computeRetirementDate(date)).toBe("2026-07-15");
   });
+  it("UAT T-PERIOD D-06: is the IST date -- an approval at 00:01 IST on 1 April (18:31 UTC on 31 March) retires on 1 April", () => {
+    expect(computeRetirementDate(new Date("2027-03-31T18:31:00Z"))).toBe("2027-04-01");
+    expect(computeRetirementDate(new Date("2027-03-31T18:29:00Z"))).toBe("2027-03-31");
+  });
 });

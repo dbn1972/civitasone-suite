@@ -262,8 +262,20 @@ describe("DOM-007 — GL posting path budget check", () => {
     expect(incrementBudgetUtilisedForcedMock).not.toHaveBeenCalled();
   });
 
-  it("a head with no finance_budgets row is not budget-controlled and posts unaffected", async () => {
-    // findBudgetTxMock default already returns null for every head.
+  // UAT T-PERIOD D-03 (ERP-head decision, GFR): an EXPENDITURE head with no finance_budgets row for the FY is no longer
+  // "not budget-controlled" -- the debit is refused (no expenditure without a budget provision). A head that is not an
+  // expenditure head (here: an asset) is still not budget-controlled and posts unaffected.
+  it("an expenditure head with no finance_budgets row is refused NO_BUDGET_PROVISION and posts nothing", async () => {
+    // findBudgetTxMock default returns null for every head; findHeadByIdTx says expense (5010).
+    const q = await buildQueue();
+    await expect(q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 1_000)))).rejects.toThrow(/NO_BUDGET_PROVISION/);
+    expect(insertJournalMock).not.toHaveBeenCalled();
+    expect(insertLedgerLineMock).not.toHaveBeenCalled();
+    expect(incrementBudgetUtilisedGuardedMock).not.toHaveBeenCalled();
+  });
+
+  it("a non-expenditure head with no finance_budgets row is not budget-controlled and posts unaffected", async () => {
+    findHeadByIdTxMock.mockImplementation(async (_tx: unknown, id: string) => ({ id, code: "1100", name: "Cash", classification: "asset" }));
     const q = await buildQueue();
     await q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 999_999_999)));
     expect(insertJournalMock).toHaveBeenCalled();

@@ -3,7 +3,8 @@ import { DomainError } from "../masters/domain.js";
 
 export { DomainError };
 
-export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax"] as const;
+// UAT T-PERIOD D-01: period_reopen -- reopening a HARD-closed month (second finance_admin; migration 0161).
+export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen"] as const;
 export type ChangeRequestKind = (typeof CHANGE_REQUEST_KINDS)[number];
 
 export type FinanceSettings = {
@@ -15,7 +16,17 @@ export type FinanceSettings = {
   debtLoanLiabilityHeadId: string | null;
   debtInterestExpenseHeadId: string | null;
   debtBankHeadId: string | null;
+  /**
+   * UAT L2-N6 review: how stock movements reach the GL. "cash" (DEFAULT -- Indian government accounts): expenditure
+   * is booked against the budget head when the bill is passed and stores are a memorandum only, so an inventory
+   * movement posts NO journal. "accrual": stock is an asset (Dr Stores / Cr GRNI or stores suspense; issue Dr the
+   * consuming head / Cr Stores) and the GRN bill clears GRNI (gl/inventory-movement.ts, gl/grni-clearing.ts).
+   */
+  accountingBasis: AccountingBasis;
 };
+
+export type AccountingBasis = "cash" | "accrual";
+export const ACCOUNTING_BASES = ["cash", "accrual"] as const;
 
 /** Conservative defaults used when a tenant has no gl.finance_settings row. */
 export const SETTINGS_DEFAULTS: FinanceSettings = {
@@ -26,6 +37,7 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   debtLoanLiabilityHeadId: null,
   debtInterestExpenseHeadId: null,
   debtBankHeadId: null,
+  accountingBasis: "cash",
 };
 
 /** The controls whose switching OFF needs a second admin (turning one ON stays direct). */
@@ -33,12 +45,15 @@ export const RELAXABLE_SETTINGS = ["makerCheckerEnabled", "blockFyActivationOpen
 
 /** True when `changes` turns any control in RELAXABLE_SETTINGS from true to false. */
 export function isRelaxingControl(current: FinanceSettings, changes: Partial<FinanceSettings>): boolean {
+  // UAT L2-N6 review: switching the accounting basis changes what every later stock movement books -- a second admin.
+  if (changes.accountingBasis !== undefined && changes.accountingBasis !== current.accountingBasis) return true;
   return RELAXABLE_SETTINGS.some((k) => current[k] === true && changes[k] === false);
 }
 
 /** Request kinds that always need a distinct approver, whatever the maker-checker setting says. */
 export function alwaysDistinctApprover(kind: string): boolean {
-  return kind === "settings_relax";
+  // UAT T-PERIOD review: a hard-close reopen always needs a second officer, whatever the setting says at decision time.
+  return kind === "settings_relax" || kind === "period_reopen";
 }
 
 export type DebtGlHeads = { loanLiability: string; interestExpense: string; bank: string };

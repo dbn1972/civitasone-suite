@@ -93,6 +93,29 @@ export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClo
   `);
 }
 
+/**
+ * UAT T-PERIOD D-01: reopen a closed period. upsertPeriodClose above can NEVER move a hard_close row (its ON CONFLICT
+ * guard deliberately protects hard_close from a later soft-close), so reopening a hard-closed month through it was a
+ * silent no-op -- while the reopen log, the audit event and finance.period.reopened all said "reopened". This is the
+ * ONE write that may leave hard_close: a conditional UPDATE of a soft_close / hard_close row to open, returning the
+ * status it moved FROM. Null = nothing changed (no row, or already open): the caller must then write no success
+ * record. Takes the period lock itself (re-entrant) so it serialises with postJournal and close.
+ */
+export async function reopenPeriodTx(tx: Writer, tenantId: string, period: string): Promise<{ fromStatus: string } | null> {
+  await lockPeriodTx(tx as any, tenantId, period);
+  const rows = (await (tx as any).execute(sql`
+    UPDATE gl.finance_period_close pc
+       SET status = 'open', closed_by = NULL, closed_at = NULL
+      FROM (SELECT id, status FROM gl.finance_period_close
+             WHERE tenant_id = ${tenantId}::uuid AND period = ${period}
+               AND status IN ('soft_close', 'hard_close')
+             FOR UPDATE) prev
+     WHERE pc.id = prev.id
+    RETURNING prev.status AS from_status
+  `)) as unknown as Array<{ from_status: string }>;
+  return rows[0] ? { fromStatus: rows[0].from_status } : null;
+}
+
 export async function listPeriodClose(tenantId: string, limit = 50) {
   return scopedRead((tx) => tx.select().from(financePeriodClose)
     .where(eq(financePeriodClose.tenantId, tenantId)).limit(limit));

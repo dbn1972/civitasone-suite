@@ -18,8 +18,62 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   erContribMinor:    bigint("er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epsContribMinor:   bigint("eps_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epfErContribMinor: bigint("epf_er_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  // UAT b18 D5 / D6 (migration 0162): wages actually used + employer EDLI / admin charges.
+  epfWageMinor:      bigint("epf_wage_minor", { mode: "bigint" }),
+  // Review SF1 (migration 0163): EPS wages; 0 when the member is not EPS-eligible.
+  epsWageMinor:      bigint("eps_wage_minor", { mode: "bigint" }),
+  // Delta review (migration 0164): recorded | default (no fact recorded -> EPS member).
+  epsBasis:          varchar("eps_basis", { length: 16 }),
+  edliWageMinor:     bigint("edli_wage_minor", { mode: "bigint" }),
+  edliContribMinor:  bigint("edli_contrib_minor", { mode: "bigint" }).notNull().default(0n),
+  epfAdminMinor:     bigint("epf_admin_minor", { mode: "bigint" }).notNull().default(0n),
   currency:          char("currency", { length: 3 }).notNull().default("INR"),
   period:            char("period", { length: 7 }).notNull(),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:         uuid("created_by").notNull(),
+  updatedBy:         uuid("updated_by").notNull(),
+  version:           integer("version").notNull().default(1),
+});
+
+/**
+ * UAT b18 (migration 0162, ERP-head decision 2026-11-05): the Government 8.5%
+ * UPS pool corpus contribution, one row per UPS slip -- separate from the
+ * individual 10% on payroll_nps (it is not credited to the employee account).
+ */
+export const payrollUpsPool = statutorySchema.table("payroll_ups_pool", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  slipId:           uuid("slip_id").notNull(),
+  employeeId:       uuid("employee_id").notNull(),
+  runId:            uuid("run_id").notNull(),
+  pensionBaseMinor: bigint("pension_base_minor", { mode: "bigint" }).notNull(),
+  contribPct:       numeric("contrib_pct", { precision: 5, scale: 2 }).notNull().default("8.5"),
+  contribMinor:     bigint("contrib_minor", { mode: "bigint" }).notNull(),
+  currency:         char("currency", { length: 3 }).notNull().default("INR"),
+  period:           char("period", { length: 7 }).notNull(),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
+  version:          integer("version").notNull().default(1),
+});
+
+/** Review SF3 (migration 0163): the A/c 2 minimum top-up, one row per tenant per wage month. */
+export const payrollEpfAdminTopups = statutorySchema.table("payroll_epf_admin_topups", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  period:            char("period", { length: 7 }).notNull(),
+  memberCount:       integer("member_count").notNull(),
+  adminAccruedMinor: bigint("admin_accrued_minor", { mode: "bigint" }).notNull(),
+  minimumMinor:      bigint("minimum_minor", { mode: "bigint" }).notNull(),
+  /** The DELTA this close booked (negative when a later run reduced the shortfall). */
+  topUpMinor:        bigint("top_up_minor", { mode: "bigint" }).notNull(),
+  // Delta review (migration 0164): the approved run set and its full shortfall.
+  runSetKey:         text("run_set_key").notNull().default(""),
+  targetTopUpMinor:  bigint("target_top_up_minor", { mode: "bigint" }).notNull(),
+  journalId:         uuid("journal_id"),
+  currency:          char("currency", { length: 3 }).notNull().default("INR"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:         uuid("created_by").notNull(),
@@ -193,6 +247,11 @@ export const statutoryConfig = statutorySchema.table("statutory_config", {
   sec80cCapMinor:     bigint("sec80c_cap_minor", { mode: "bigint" }).notNull().default(15_000_000n),
   sec80dCapMinor:     bigint("sec80d_cap_minor", { mode: "bigint" }).notNull().default(7_500_000n),
   sec80ccd1bCapMinor: bigint("sec80ccd1b_cap_minor", { mode: "bigint" }).notNull().default(5_000_000n),
+  // UAT b18 D5 (migration 0162): employer-only EPFO charges.
+  edliRateBps:        integer("edli_rate_bps").notNull().default(50),
+  edliWageCapMinor:   bigint("edli_wage_cap_minor", { mode: "bigint" }).notNull().default(1_500_000n),
+  epfAdminRateBps:    integer("epf_admin_rate_bps").notNull().default(50),
+  epfAdminMinMinor:   bigint("epf_admin_min_minor", { mode: "bigint" }).notNull().default(50_000n),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),
 });
@@ -235,4 +294,4 @@ export const bonusRuleConfig = statutorySchema.table("bonus_rule_config", {
 export type StatutoryConfigRow = typeof statutoryConfig.$inferSelect;
 export type StatutoryConfigInsert = typeof statutoryConfig.$inferInsert;
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollUpsPool, payrollEpfAdminTopups, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };

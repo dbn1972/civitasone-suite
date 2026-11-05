@@ -1153,6 +1153,10 @@ export type EmployeeDetail = {
   costCenterId?: string;
   /** State of employment (ISO 3166-2:IN code), the professional-tax state. */
   workStateCode?: string;
+  /** UAT b18: recorded pension scheme (GPF | NPS | EPF | UPS | CPF), see EmployeeDetailSchema. */
+  pensionScheme?: string;
+  /** UAT b18: statutory ids missing for that scheme, e.g. ["UAN_MISSING"]; absent when complete. */
+  statutoryIncomplete?: string[];
 };
 
 // Procurement types
@@ -3150,7 +3154,7 @@ export type FinanceDebtDetail = {
 /** A maker-checker change request (fiscal-year activation, opening balances, HoA change). */
 export type FinanceChangeRequest = {
   id: string;
-  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax";
+  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax" | "period_reopen";
   subjectKey: string;
   payload: Record<string, unknown>;
   reason: string;

@@ -58,6 +58,9 @@ export const COMMANDS = {
   dscConfigUpsert:        "payroll.dsc_config.upsert",
   dscConfigRemove:        "payroll.dsc_config.remove",
   sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
+  // PR #2459 review B1: opening YTD (pre-go-live / previous employer), maker-checker
+  openingYtdCreate:       "payroll.opening_ytd.create",
+  openingYtdDecide:       "payroll.opening_ytd.decide",
   bankFileSigningUpdate:  "payroll.bank_file_signing.update",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
@@ -146,6 +149,15 @@ export const CONSUMED_EVENTS = {
   employeeSeparated: "hrms.employee.separated",
   financePaymentMade: "finance.payment.made",
   ltcClaimApproved:  "hrms.claim.approved",
+} as const;
+
+/**
+ * Commands payroll sends to other services. Review SF3: the EPF A/c 2
+ * minimum top-up journal goes to finance-service's journal command (the same
+ * topic inventory-service posts stock journals to).
+ */
+export const INTEGRATION = {
+  glPost: "finance.gl.post",
 } as const;
 
 export const SERVICE = "payroll";

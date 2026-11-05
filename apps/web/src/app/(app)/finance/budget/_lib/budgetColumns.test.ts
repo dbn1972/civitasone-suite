@@ -57,8 +57,8 @@ describe("budget status enum: tab, pill and wording (GAP-FINANCE-BUDGET-FORMULAT
   /** Every tab id the list could offer, i.e. the status tabs plus Other. */
   const ALL_STATUS_TABS = [...BUDGET_STATUSES, BUDGET_TAB_OTHER];
 
-  it("the enum covers what the API computes today (active, exhausted) and the approval vocabulary", () => {
-    expect([...BUDGET_STATUSES].sort()).toEqual(["active", "approved", "draft", "exhausted", "pending", "rejected", "submitted"]);
+  it("the enum covers what the API computes today (active, exhausted, lapsed) and the approval vocabulary", () => {
+    expect([...BUDGET_STATUSES].sort()).toEqual(["active", "approved", "draft", "exhausted", "lapsed", "pending", "rejected", "submitted"]);
   });
 
   it.each(BUDGET_STATUSES)("%s appears under exactly one tab", (status) => {

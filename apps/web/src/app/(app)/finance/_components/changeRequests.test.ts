@@ -36,4 +36,13 @@ describe("toChangeRequestView", () => {
     const v = toChangeRequestView({ ...base, kind: "settings_relax", subjectKey: "settings", payload: { changes: { makerCheckerEnabled: false, fyCreateAsDraft: true, blockFyActivationOpenPeriods: false } } }, "x", true, fmt);
     expect(v.details).toEqual(["makerCheckerEnabled", "blockFyActivationOpenPeriods"]);
   });
+
+  // fx-p3: reopening a hard-closed period is a change request whose payload names the period.
+  it("a period reopen request shows the period from the payload", () => {
+    const v = toChangeRequestView({ ...base, kind: "period_reopen", subjectKey: "period:2026-03", payload: { period: "2026-03" } }, "x", true, fmt);
+    expect(v.kind).toBe("period_reopen");
+    expect(v.subject).toBe("2026-03");
+    const fallback = toChangeRequestView({ ...base, kind: "period_reopen", subjectKey: "2026-02", payload: {} }, "x", true, fmt);
+    expect(fallback.subject).toBe("2026-02");
+  });
 });

@@ -86,15 +86,62 @@ function genInput(seed: number, opts: { minBasic?: bigint; minDaBps?: bigint } =
 
 const N = 5000;
 
+/**
+ * UAT T-PERIOD D-02b (bundle 19): computeSlip also returns the s.192
+ * diagnostics tdsLiabilityMinor / tdsExcessMinor / tdsShortfallMinor (not in
+ * the legacy result, dropped before comparing), and TDS is now capped at the
+ * salary left after the other deductions and the protected-net floor. Where
+ * the cap binds (tdsShortfallMinor > 0) the legacy TDS was MORE than that
+ * salary: the legacy TDS must equal capped TDS + shortfall exactly, and the
+ * slip is checked against the cap instead. Every other seed: every legacy
+ * field identical.
+ */
+function legacyView(r: ReturnType<typeof computeSlip>): Omit<ReturnType<typeof computeSlip>, "tdsLiabilityMinor" | "tdsExcessMinor" | "tdsShortfallMinor"> {
+  const { tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
+  return rest;
+}
+/** s.288B (PR #2459 review): TDS is now rounded to the rupee; the legacy last-month balance could carry paise. */
+const rupee = (x: bigint): bigint => ((x + 50n) / 100n) * 100n;
+/** Every field neither the rupee rounding nor the cap can move. */
+const untouched = (r: Record<string, unknown>) => {
+  const { tdsMinor: _t, totalDeductionsMinor: _d, netPayMinor: _n, deductions: _x, recoveryCarryForwardMinor: _r, negativeNet: _g, tdsLiabilityMinor: _l, tdsExcessMinor: _e, tdsShortfallMinor: _s, ...rest } = r;
+  return rest;
+};
+function capBinds(actual: ReturnType<typeof computeSlip>, expected: ReturnType<typeof legacyComputeSlip>): boolean {
+  if (actual.tdsShortfallMinor === 0n && expected.tdsMinor % 100n === 0n) return false;
+  expect(untouched(actual as unknown as Record<string, unknown>)).toEqual(untouched(expected as unknown as Record<string, unknown>));
+  if (actual.tdsShortfallMinor === 0n) {
+    // legacy TDS with paise (final-month balance): the same TDS rounded to the rupee (s.288B);
+    // net and total move by exactly the rounding difference when no recovery is trimmed,
+    // and the non-TDS deduction lines are identical.
+    const d = rupee(expected.tdsMinor) - expected.tdsMinor;
+    expect(actual.tdsMinor).toBe(rupee(expected.tdsMinor));
+    if (actual.recoveryCarryForwardMinor === expected.recoveryCarryForwardMinor) {
+      expect(actual.totalDeductionsMinor).toBe(expected.totalDeductionsMinor + d);
+      expect(actual.netPayMinor).toBe(expected.negativeNet ? 0n : expected.netPayMinor - d);
+      expect(actual.deductions.filter((x) => x.code !== "TDS")).toEqual(expected.deductions.filter((x) => x.code !== "TDS"));
+    }
+    return true;
+  }
+  expect(rupee(expected.tdsMinor)).toBe(actual.tdsMinor + actual.tdsShortfallMinor);
+  expect(actual.negativeNet).toBe(false);
+  return true;
+}
+
 describe("computeSlip == pre-PAY-PROFILES computeSlip", () => {
   it(`${N} random legacy inputs (no profile, no floor): identical output`, () => {
+    let capped = 0;
     for (let seed = 1; seed <= N; seed++) {
       const expected = legacyComputeSlip(genInput(seed));
-      const actual = computeSlip(genInput(seed));
+      const full = computeSlip(genInput(seed));
+      if (capBinds(full, expected)) { capped += 1; continue; }
+      const actual = legacyView(full);
       if (JSON.stringify(actual, (_k, v) => (typeof v === "bigint" ? `${v}n` : v)) !== JSON.stringify(expected, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))) {
         expect({ seed, actual }).toEqual({ seed, actual: expected });
       }
     }
+    // the comparison stays the rule: the cap binds on a small share of the random inputs only
+    expect(capped).toBeLessThan(N / 10);
   });
 
   it(`${N} inputs with explicit govt_scale + default floors where the slab meets the floor: identical output`, () => {
@@ -103,7 +150,8 @@ describe("computeSlip == pre-PAY-PROFILES computeSlip", () => {
       const expected = legacyComputeSlip(base);
       const input = { ...genInput(seed + 100_000, { minBasic: 1_800_000n, minDaBps: 5000n }) };
       const actual = computeSlip({ ...input, payProfile: { kind: "govt_scale" }, hraFloorMinor: FLOORS[input.cityClass ?? "X"] });
-      expect(actual).toEqual(expected);
+      if (capBinds(actual, expected)) continue;
+      expect(legacyView(actual)).toEqual(expected);
     }
   });
 

@@ -55,6 +55,13 @@ function parseReadiness(body: unknown): Readiness | null {
   return { unpostedVouchers, unreconciledBankLines, dueRecurringEntries };
 }
 
+/** A 202 answer (bare or wrapped in `data`) saying the change waits for a second officer. */
+function isPendingApproval(body: unknown): boolean {
+  if (typeof body !== "object" || body === null) return false;
+  const b = body as { status?: unknown; data?: { status?: unknown } | null };
+  return b.status === "pending_approval" || b.data?.status === "pending_approval";
+}
+
 const REASON_LABEL: Record<PeriodAction, string> = {
   close: "Reason for soft-closing",
   "hard-close": "Reason for hard-closing",
@@ -137,7 +144,13 @@ export function PeriodsTable({
         setDialogError(await errorMessageFromResponse(res, "save", "period action"));
         return;
       }
-      setMessage(`Period ${pending.row.period}: ${ACTION_LABEL[pending.action].toLowerCase()} applied.`);
+      // fx-p3: reopening a HARD-closed period is a change request (202 pending_approval) that a different finance
+      // administrator approves; until then the period stays hard-closed, so it must not read as "applied".
+      if (pending.action === "reopen" && isPendingApproval(await res.json().catch(() => null))) {
+        setMessage(`Reopen requested - waiting for approval. Period ${pending.row.period} stays hard-closed until a second finance administrator approves it.`);
+      } else {
+        setMessage(`Period ${pending.row.period}: ${ACTION_LABEL[pending.action].toLowerCase()} applied.`);
+      }
       setPending(null);
       router.refresh();
     } catch {
@@ -241,10 +254,19 @@ export function PeriodsTable({
         </>
       );
     }
+    if (row.status === "hard_close") {
+      return (
+        <>
+          Reopen period <strong>{row.period}</strong>, currently <strong>hard-closed</strong>. A hard-closed month can
+          only be reopened with the approval of a <strong>second officer</strong>: your request goes to another Finance
+          Admin, and the period stays hard-closed until they approve it on the pending approvals list. The reopening
+          is recorded in the period reopen log.
+        </>
+      );
+    }
     return (
       <>
-        Reopen period <strong>{row.period}</strong>, currently{" "}
-        <strong>{row.status === "hard_close" ? "hard-closed" : "soft-closed"}</strong>. This restores posting access
+        Reopen period <strong>{row.period}</strong>, currently <strong>soft-closed</strong>. This restores posting access
         for the period and is restricted to Finance Admins; the reopening is recorded in the period reopen log.
       </>
     );

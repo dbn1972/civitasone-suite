@@ -7,10 +7,13 @@ import { PrintExportButton } from "../../_components/PrintExportButton";
 import { PrintHeader } from "../../_components/PrintHeader";
 import { FyFilter } from "../../_components/FyFilter";
 import { GL_PAGE_SIZE, GL_TAB_TYPE, parseGlView } from "./glPage";
+import { parseHeadParam } from "./ledgerBalances";
+import { getLedgerBalances } from "./ledgerBalancesLoader";
+import { HeadBalances, HeadPicker } from "./HeadBalances";
 
 export default async function GeneralLedgerPage(
   props: {
-    searchParams?: Promise<{ posted?: string; state?: string; fy?: string; type?: string; q?: string; page?: string }>;
+    searchParams?: Promise<{ posted?: string; state?: string; fy?: string; type?: string; q?: string; page?: string; head?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -21,13 +24,21 @@ export default async function GeneralLedgerPage(
   // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: fiscal year / voucher type / search / page are URL state;
   // the server returns one bounded page plus totals over the whole filtered set.
   const view = parseGlView(searchParams);
-  const [result, accounts] = await Promise.all([
+  // fx-p3: one head chosen (?head=<uuid or code>) -> its month-by-month opening / debit / credit / closing.
+  const head = parseHeadParam(searchParams?.head);
+  const [result, accounts, balancesResult] = await Promise.all([
     getFinanceGLPage({
       fy: view.fy, type: GL_TAB_TYPE[view.tab], q: view.q || undefined, page: view.page, pageSize: GL_PAGE_SIZE,
     }),
     // UAT Phase 1B (recon D13): resolve line account codes / head UUIDs to real head names.
     getChartOfAccounts(),
+    head ? getLedgerBalances(head, view.fy) : Promise.resolve(null),
   ]);
+  const headOptions = (accounts.source === "error" ? [] : accounts.data)
+    .flatMap((a) => {
+      const value = a.code || a.id;
+      return value ? [{ value, label: a.name ? `${a.code ?? value} · ${a.name}` : value }] : [];
+    });
   const heads = buildHeadLookup(accounts.source === "error" ? [] : accounts.data);
   const tj = await getTranslations("journalApprovals");
 
@@ -55,6 +66,15 @@ export default async function GeneralLedgerPage(
             ? `Voucher ${posted} accepted for processing - it may take a moment to appear. Refresh this page to check.`
             : `Voucher ${posted} posted.`}
         </Alert>
+      ) : null}
+
+      <HeadPicker heads={headOptions} selected={head} fy={view.fy} />
+      {balancesResult ? (
+        balancesResult.source === "error" || !balancesResult.data ? (
+          <LoadErrorState result={balancesResult} area="head balances" />
+        ) : (
+          <HeadBalances balances={balancesResult.data} />
+        )
       ) : null}
 
       {/* A failed load is its own state (retry / permission), never an empty or "Balanced" ledger. */}

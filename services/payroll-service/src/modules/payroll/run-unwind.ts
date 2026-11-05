@@ -39,7 +39,7 @@ const ARREAR_COLS = sql.raw(`id::text AS id, employee_id::text AS "employeeId", 
  * this reverses each of them inside the caller transaction (which holds the run
  * row lock) and RETURNS every affected row, so the reversal can be rebuilt from
  * the audit trail (the #2449 RETURNING pattern):
- *  - statutory ledger rows (PF / ESI / NPS / GPF / TDS) of the run: deleted;
+ *  - statutory ledger rows (PF / ESI / NPS / UPS pool / GPF / TDS) of the run: deleted;
  *  - loan EMI repayments the run recorded: deleted, and their principal is put
  *    back on the loan outstanding (a loan the run closed is open again);
  *  - due-minus-drawn arrears (source revision_dmd) the pass GENERATED for its

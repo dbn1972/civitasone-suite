@@ -1268,6 +1268,9 @@ export const EmployeeDetailSchema = z.object({
   // response against this exact schema) would silently strip them back out
   // before EditEmployeeForm.tsx ever saw them.
   uanNumber: z.string().optional(),
+  // UAT b18: recorded pension scheme + missing statutory ids for it (e.g. ["UAN_MISSING"]).
+  pensionScheme: z.string().optional(),
+  statutoryIncomplete: z.array(z.string()).optional(),
   esicIpNumber: z.string().optional(),
   pran: z.string().optional(),
   // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): profile fields the Add Employee
@@ -3331,7 +3334,8 @@ export const FinanceDebtDetailSchema = z.object({
 // fp-finance-01: maker-checker change requests and per-tenant finance settings.
 export const FinanceChangeRequestSchema = z.object({
   id: z.string(),
-  kind: z.enum(["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax"]),
+  // fx-p3: period_reopen = reopening a hard-closed accounting period (payload { period }).
+  kind: z.enum(["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen"]),
   subjectKey: z.string(),
   payload: z.record(z.unknown()),
   reason: z.string(),

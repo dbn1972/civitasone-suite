@@ -81,6 +81,13 @@ beforeAll(async () => {
       id: STRUCT, tenantId: TENANT, name: "Race Test Structure",
       isDefault: true, status: "active", createdBy: OFFICER, updatedBy: OFFICER,
     });
+    // UAT b18 D2: run creation now needs a tax slab config for the FY (2031-32
+    // here); seed one for this tenant so the duplicate guard is what is tested.
+    await tx.execute(sql`DELETE FROM payroll.tax_slab_config WHERE tenant_id = ${TENANT}::uuid`);
+    for (const regime of ["new", "old"]) {
+      await tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands)
+        VALUES (${TENANT}::uuid, 2031, ${regime}, ${JSON.stringify([{ from: 0, to: null, rate: 0 }])}::jsonb, 75000, 1200000, 60000, ${"[]"}::jsonb)`);
+    }
   }));
 });
 
@@ -88,6 +95,7 @@ afterAll(async () => {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
     await tx.delete(payrollStructures).where(eq(payrollStructures.id, STRUCT));
+    await tx.execute(sql`DELETE FROM payroll.tax_slab_config WHERE tenant_id = ${TENANT}::uuid`);
   }));
   await sqlClient.end();
 });

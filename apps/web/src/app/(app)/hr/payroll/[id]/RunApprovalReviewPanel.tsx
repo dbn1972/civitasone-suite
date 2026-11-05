@@ -24,13 +24,15 @@ export function RunApprovalReviewPanel({ runId }: { runId: string }) {
 
   if (!review) return null;
   const employees = review.arrears.employees;
-  if (employees.length === 0 && review.zeroBasic.length === 0) return null;
+  const nonPositive = review.nonPositiveNet ?? [];
+  const tds = review.tds ?? [];
+  if (employees.length === 0 && review.zeroBasic.length === 0 && nonPositive.length === 0 && tds.length === 0) return null;
   const needReview = employees.filter((e) => e.requiresReview).length;
 
   return (
     <section className="card" style={{ marginBottom: 16 }} aria-labelledby={headingId}>
       <div className="card-h">
-        <h3 id={headingId}>{t("summaryTitle")}</h3>
+        <h3 id={headingId}>{employees.length > 0 ? t("summaryTitle") : t("reviewTitle")}</h3>
       </div>
       <div className="pad">
         {employees.length > 0 && (
@@ -61,6 +63,23 @@ export function RunApprovalReviewPanel({ runId }: { runId: string }) {
         )}
         {review.zeroBasic.length > 0 && (
           <p role="note" className="pill warn" style={{ marginTop: 10 }}>{t("zeroBasicSummary", { count: review.zeroBasic.length })}</p>
+        )}
+        {nonPositive.length > 0 && (
+          <p role="note" className="pill warn" style={{ marginTop: 10 }}>{t("netPaySummary", { count: nonPositive.length })}</p>
+        )}
+        {tds.length > 0 && (
+          <>
+            <h4 style={{ margin: "12px 0 6px", fontSize: 14 }}>{t("tdsHeading")}</h4>
+            <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 13 }}>
+              {tds.map((i) => (
+                <li key={`${i.employeeId}-${i.kind}`}>
+                  {t(`tdsKind.${i.kind}`, { employee: i.employeeNo, months: i.presumedMonths, amount: formatMinorString(i.amountMinor) })}
+                  {i.kind === "shortfall" && i.finalMonth ? ` ${t("tdsUnrecoverable")}` : ""}
+                  {i.requiresAck ? ` (${t("needsReview")})` : ""}
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </section>

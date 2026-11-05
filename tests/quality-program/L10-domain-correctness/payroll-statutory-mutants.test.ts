@@ -121,17 +121,22 @@ describe("s.192 projection: every term of the annual estimate", () => {
     expect(s.annualTaxableMinor).toBe(R(140000));
   });
 
-  it("statutory deductions add up: PF + ESI + TDS (flat /12 without run context)", () => {
+  it("statutory deductions add up: PF + ESI + TDS (flat /12 without run context), TDS capped at the pay left (D-02b)", () => {
     const s = d.computeSlip({
       basicMinor: R(15000), cityClass: "X", pensionScheme: "EPF", taxRegime: "new", fyStartYear: FY,
       declaration: { otherSourcesIncomeMinor: R(2000000) },
     });
     // gross 15,000 + HRA 24% 3,600 = 18,600 (<= 21,000: ESI 0.75% = 139.5 -> 140); PF 12% of 15,000 = 1,800
     // taxable 18,600 x 12 + 20,00,000 - 75,000 = 21,48,200; tax 2,00,000 + 25% of 1,48,200 = 2,37,050 + 4% = 2,46,532 -> 2,46,530
-    // TDS 2,46,530 / 12 = 20,544.17 -> 20,544
-    expect([s.pfEmployeeMinor, s.esiMinor, s.tdsMinor]).toEqual([R(1800), R(140), R(20544)]);
-    expect(s.totalDeductionsMinor).toBe(R(1800 + 140 + 20544));
-    expect(s.negativeNet).toBe(true);
+    // s.192 TDS 2,46,530 / 12 = 20,544.17 -> 20,544 -- more than the month pays.
+    // UAT T-PERIOD D-02b (PR #2459): TDS never exceeds the salary left after the other deductions (no protected-net
+    // floor here, default share 100%): cap = 18,600 - (1,800 + 140) = 16,660, so TDS = 16,660, the shortfall
+    // 20,544 - 16,660 = 3,884 is reported (tdsShortfallMinor), and total deductions = 1,800 + 140 + 16,660 = 18,600
+    // = gross: net exactly 0, not negative (it used to deduct 20,544 and clamp the net).
+    expect([s.pfEmployeeMinor, s.esiMinor, s.tdsMinor]).toEqual([R(1800), R(140), R(16660)]);
+    expect(s.tdsShortfallMinor).toBe(R(3884));
+    expect(s.totalDeductionsMinor).toBe(R(1800 + 140 + 16660));
+    expect(s.negativeNet).toBe(false);
     expect(s.netPayMinor).toBe(0n);
   });
 });

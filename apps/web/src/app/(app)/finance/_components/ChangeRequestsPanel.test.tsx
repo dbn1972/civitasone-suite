@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 import type { FinanceChangeRequest } from "@civitasone/types";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: refreshMock }) }));
 
 import { ChangeRequestsPanel } from "./ChangeRequestsPanel";
+import type { WebFinanceChangeRequest } from "./changeRequests";
 
 const render = (ui: React.ReactElement) =>
   rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
@@ -91,5 +93,21 @@ describe("ChangeRequestsPanel", () => {
     render(<ChangeRequestsPanel requests={[rel]} viewerId="checker-1" canDecide />);
     expect(screen.getByText(/Switch off a control/)).toBeInTheDocument();
     expect(screen.getByText("Switches off: second approver")).toBeInTheDocument();
+  });
+
+  // fx-p3
+  it("a period reopen request reads Reopen accounting period: <period>, with its own approve help", async () => {
+    const reopen: WebFinanceChangeRequest = { ...REQ, id: "5", kind: "period_reopen", subjectKey: "period:2026-03", payload: { period: "2026-03" } };
+    render(<ChangeRequestsPanel requests={[reopen]} viewerId="checker-1" canDecide />);
+    expect(screen.getByText("Reopen accounting period: 2026-03")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByText(/reopened for posting/)).toBeInTheDocument();
+  });
+
+  it("the period reopen label exists in Hindi", () => {
+    const ns = (hiMessages as unknown as { financeApprovals: { kind: Record<string, string>; approveHelp: Record<string, string> } }).financeApprovals;
+    expect(ns.kind.period_reopen).toBeTruthy();
+    expect(ns.kind.period_reopen).not.toBe((enMessages as unknown as { financeApprovals: { kind: Record<string, string> } }).financeApprovals.kind.period_reopen);
+    expect(ns.approveHelp.period_reopen).toBeTruthy();
   });
 });

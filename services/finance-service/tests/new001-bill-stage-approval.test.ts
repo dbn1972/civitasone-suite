@@ -25,7 +25,7 @@ import { eq, and } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeBills } from "../src/modules/payments/schema.js";
-import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -53,6 +53,9 @@ async function seedHeads() {
     { id: HEAD, tenantId: TENANT, code: "4701-F601", name: "NEW-001 Expense Head", level: 2, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
     { id: AP_HEAD, tenantId: TENANT, code: "2050", name: "Accounts Payable (NEW-001)", level: 1, classification: "liability", createdBy: MAKER, updatedBy: MAKER },
   ]).onConflictDoNothing());
+  // #2464 review (LMMH): a 4xxx head classified expense is capital outlay expenditure, so passing a bill on it needs a
+  // budget provision for the FY of the bill (GFR, UAT T-PERIOD D-03).
+  await scoped(TENANT, (tx) => tx.insert(financeBudgets).values({ tenantId: TENANT, headId: HEAD, fy: "2026-27", beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: MAKER, updatedBy: MAKER }).onConflictDoNothing());
 }
 
 function seedBill(id: string) {
