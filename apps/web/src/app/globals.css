@@ -7,7 +7,7 @@
 
 body {
   margin: 0;
-  font-family: var(--civitas-font-sans);
+  font-family: var(--civitas-font-sans), "Noto Sans Devanagari";
   color: var(--civitas-color-text);
 }
 

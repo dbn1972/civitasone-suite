@@ -250,7 +250,8 @@ describe("CreatePOForm — NEW-05 delivery date in the past is blocked", () => {
     await pickIndent();
     fillOneLine();
     const dateInput = screen.getByLabelText("Delivery date") as HTMLInputElement;
-    expect(dateInput.min).toBe("2026-06-15");
+    // UX-R5: DD-MM-YYYY text entry; the ISO lower bound is carried for the blur check (no native date picker).
+    expect(dateInput.dataset.min).toBe("2026-06-15");
     fireEvent.change(dateInput, { target: { value: "2026-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
     expect(await screen.findByText(/Delivery date cannot be in the past/)).toBeInTheDocument();
@@ -420,5 +421,44 @@ describe("CreatePOForm — budget sanction reference", () => {
     await waitFor(() => expect(posted(fetchSpy)).toBeTruthy());
     const body = JSON.parse((posted(fetchSpy)![1] as RequestInit).body as string);
     expect(body.sanctionRef).toBeUndefined();
+  });
+});
+
+// UX-R5 form-field standard: required legend, inline validation on blur, DD-MM-YYYY delivery date.
+describe("CreatePOForm — form-field standard (UX-R5)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); pushMock.mockReset(); });
+
+  it("shows the required legend", () => {
+    mockFetch();
+    render(<CreatePOForm />);
+    expect(screen.getByText(/are required\./)).toBeInTheDocument();
+  });
+
+  it("says on blur when no vendor or indent was chosen", async () => {
+    mockFetch();
+    render(<CreatePOForm />);
+    fireEvent.blur(screen.getByLabelText("Vendor *"));
+    expect(await screen.findByText("Choose the vendor this order is placed with.")).toHaveAttribute("role", "alert");
+    fireEvent.blur(screen.getByLabelText("Source indent (approved) *"));
+    expect(await screen.findByText("Choose the approved indent this order is raised against.")).toBeInTheDocument();
+  });
+
+  it("takes the delivery date as DD-MM-YYYY, flags a past date on blur, and sends ISO", async () => {
+    const fetchSpy = mockFetch();
+    render(<CreatePOForm />);
+    await pickVendor();
+    await pickIndent();
+    fillOneLine();
+    const date = screen.getByLabelText("Delivery date") as HTMLInputElement;
+    fireEvent.change(date, { target: { value: "01-01-2026" } });
+    fireEvent.blur(date);
+    expect(screen.getByText("Delivery date cannot be before 15-06-2026.")).toBeInTheDocument();
+    fireEvent.change(date, { target: { value: "30072026" } });
+    expect(date.value).toBe("30-07-2026");
+    fireEvent.blur(date);
+    expect(screen.queryByText(/cannot be before/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    await waitFor(() => expect(posted(fetchSpy)).toBeDefined());
+    expect(JSON.parse((posted(fetchSpy)![1] as RequestInit).body as string).deliveryDate).toBe("2026-07-30");
   });
 });

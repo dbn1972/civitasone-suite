@@ -53,6 +53,9 @@ export async function getPo(id: string, tenantId: string): Promise<Record<string
       unitPriceMinor: Number(i.unitPriceMinor),
       unitPrice: Number(i.unitPriceMinor),
       totalPrice: Number(i.unitPriceMinor) * i.quantity,
+      // UAT ux-docs: GST rate (basis points) and HSN/SAC of the line, null when not recorded.
+      gstRateBp: i.gstRateBp ?? null,
+      hsnSac: i.hsnSac ?? null,
       grnQty: 0,
     })),
   };

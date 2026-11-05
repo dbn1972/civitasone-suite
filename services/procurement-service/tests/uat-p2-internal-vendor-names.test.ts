@@ -69,3 +69,27 @@ describe("internal vendor-names", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+// UX-R5 (names, not ids): the user-facing twin, so record screens name the vendor instead of a UUID.
+describe("GET /v1/procurement/vendors/names (reader roles)", () => {
+  const userUrl = `/v1/procurement/vendors/names?ids=${V1},${V_OTHER}`;
+  const bearer = (role: string, tid = TENANT) =>
+    ({ authorization: `Bearer ${signToken({ sub: ACTOR, tid, roles: [role], sid: "s-vn2" }, process.env.JWT_SECRET as string, 3600)}` });
+
+  it.each([["procurement_officer"], ["audit_officer"], ["finance_officer"], ["contract_manager"]])("%s: own-tenant id -> name only, no PII, other tenant never", async (role) => {
+    const res = await app.inject({ method: "GET", url: userUrl, headers: bearer(role) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: [{ id: V1, name: "UATTEST-g4-5-A" }] });
+    expect(res.body).not.toContain("AAAAA0000A");
+  });
+
+  it("a role outside the vendor-register readers is refused: 403", async () => {
+    const res = await app.inject({ method: "GET", url: userUrl, headers: bearer("employee") });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("401 without a token; 400 for a non-uuid id", async () => {
+    expect((await app.inject({ method: "GET", url: userUrl })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/v1/procurement/vendors/names?ids=nope", headers: bearer("procurement_officer") })).statusCode).toBe(400);
+  });
+});

@@ -224,6 +224,36 @@ services:
       retries: 10
     networks: [civitasone]
 
+  # UAT-P3 (NAV-01): global search answered "Search is temporarily unavailable"
+  # for every query because nothing served the search engine. The gateway
+  # search route (services/gateway-service/src/search-route.ts) and the
+  # knowledge/court/meeting/document indexers default to SEARCH_ENGINE=
+  # meilisearch at MEILISEARCH_HOST=http://localhost:7700; the helm chart ships
+  # Meilisearch (infra/onprem/helm values.yaml) but this compose stack did not,
+  # so the gateway got ECONNREFUSED ("fetch failed") and returned 503
+  # SEARCH_UNAVAILABLE. Bound to loopback only. Set MEILISEARCH_API_KEY (>= 16
+  # bytes) in the environment for any shared host; the services read the same
+  # variable. After first start, run the knowledge reindex
+  # (services/knowledge-service/src/reindex-search.ts).
+  meilisearch:
+    image: getmeili/meilisearch:v1.11.3
+    container_name: civitasone-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY:-}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "127.0.0.1:${MEILISEARCH_HOST_PORT:-7700}:7700"
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health | grep -q available"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [civitasone]
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: civitasone-keycloak
@@ -266,6 +296,7 @@ volumes:
   localstackdata:
   pgdata:
   redisdata:
+  meilidata:
 
 networks:
   civitasone:

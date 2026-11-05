@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, DataTable, EmptyState, StatGrid, StatCard, Segmented, RefreshErrorState } from "../../../_components/ds";
+import { Card, DataTable, EmptyState, SummaryStrip, Segmented, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
@@ -160,31 +160,27 @@ export function OrdersTable({
 
   return (
     <>
-      <StatGrid>
-        <StatCard icon="📦" tone="info" label="Total POs" value={erroredNoData ? null : stats.totalPos} />
-        <StatCard
-          icon="🔄"
-          tone="info"
-          label="In fulfilment"
-          hint="Approved, dispatched, partially received or GeM-placed POs working toward delivery. Excludes draft and pending-approval POs."
-          value={erroredNoData ? null : stats.inFulfilment}
-        />
-        <StatCard
-          icon="💰"
-          tone="warn"
-          label="Committed value"
-          hint="Total value of POs that represent a real commitment (approved, dispatched, partially/fully received, GeM-placed). Excludes draft, pending-approval, cancelled and closed POs."
-          value={erroredNoData ? null : formatMoney(stats.committedMinor)}
-        />
-        <StatCard
-          icon="📁"
-          tone="info"
-          label={labels.completedValue}
-          hint={labels.completedValueHint}
-          value={erroredNoData ? null : formatMoney(stats.closedMinor)}
-        />
-        <StatCard icon="✅" tone="good" label="Fully Received" value={erroredNoData ? null : stats.fullyReceived} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: slim summary strip instead of five KPI cards; hints stay on hover, a failed load reads "—". */}
+      <SummaryStrip
+        ariaLabel="Purchase orders summary"
+        items={[
+          { label: "Total POs", value: erroredNoData ? "—" : stats.totalPos },
+          {
+            key: "fulfilment",
+            label: <span title="Approved, dispatched, partially received or GeM-placed POs working toward delivery. Excludes draft and pending-approval POs.">In fulfilment</span>,
+            value: erroredNoData ? "—" : stats.inFulfilment,
+            tone: "info",
+          },
+          {
+            key: "committed",
+            label: <span title="Total value of POs that represent a real commitment (approved, dispatched, partially/fully received, GeM-placed). Excludes draft, pending-approval, cancelled and closed POs.">Committed value</span>,
+            value: erroredNoData ? "—" : formatMoney(stats.committedMinor),
+            tone: "warn",
+          },
+          { key: "closed", label: <span title={labels.completedValueHint}>{labels.completedValue}</span>, value: erroredNoData ? "—" : formatMoney(stats.closedMinor) },
+          { label: "Fully Received", value: erroredNoData ? "—" : stats.fullyReceived, tone: "good" },
+        ]}
+      />
 
       <Card title="Purchase orders">
         <DataSourceBadge

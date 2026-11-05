@@ -3,7 +3,7 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AcceptedNotice, ActionButton } from "../../../_components/ds";
+import { AcceptedNotice, ActionButton, StatusPill } from "../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
@@ -13,16 +13,23 @@ export type ContractMilestone = {
   title: string;
   status: string;
   dueDate?: string;
+  /** Past its due date and not delivered (computed by the page). */
+  overdue?: boolean;
 };
 
-type Props = { contractId: string; milestones: ContractMilestone[] };
+type Props = {
+  contractId: string;
+  milestones: ContractMilestone[];
+  /** UX-R5 / DS-3: set on a closed or terminated contract -- no Complete / Mark late is offered. */
+  lockedReason?: string | null;
+};
 
 // GAP-CONTRACTS-DETAIL-06: intervals (ms) for the post-202 refresh polls.
 // The consumer typically writes the new status within a few seconds; three
 // attempts (immediate, 5 s, 10 s) cover the P99 queue latency without
 // hammering the server.
 
-export function MilestoneActions({ contractId, milestones }: Props) {
+export function MilestoneActions({ contractId, milestones, lockedReason = null }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -105,6 +112,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
     }
   }
 
+  if (lockedReason) return null;
   if (actionable.length === 0 && !message) return null;
 
   return (
@@ -115,9 +123,11 @@ export function MilestoneActions({ contractId, milestones }: Props) {
             {m.title}
             {/* GAP-CONTRACTS-DETAIL-05: show the due date next to each action
                 row so "Complete"/"Mark late" is never decided blind. */}
+            {" "}<StatusPill status={m.status} />
             {m.dueDate ? (
               <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(m.dueDate)}</span>
             ) : null}
+            {m.overdue ? <> <StatusPill status="overdue" variant="bad" label="Overdue" /></> : null}
           </span>
           {/* GAP-CONTRACTS-DETAIL-06: Pending pill while the 202 write propagates. */}
           {pendingMap.has(m.id) ? (

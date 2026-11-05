@@ -9,9 +9,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-// ScannedDocumentsSection is an async server component (calls getTranslations)
-// that is irrelevant to the note-sheet rendering under test — stub it so the
-// synchronous render tree doesn't suspend on it.
+// ScannedDocumentsSection loads in the browser after the page (UX-R5 perf; own tests) and is
+// irrelevant to the note-sheet rendering under test -- stub it so the render stays offline.
 vi.mock("./ScannedDocumentsSection", () => ({
   ScannedDocumentsSection: () => null,
 }));
@@ -301,5 +300,39 @@ describe("EstabFileDetailPage - the allocated file number after create (GAP-ESTA
     render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }), searchParams: Promise.resolve({ created: "1" }) }));
     expect(screen.queryByText("Creating your file…")).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("EstabFileDetailPage - the note sheet comes first (UX-R5, S-14)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+  });
+
+  it("renders the note sheet ahead of the noting composer, attachments and file details", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        id: "f1", fileNo: "ESTAB-A/00009/2026", subject: "Leave travel concession", classification: "confidential",
+        department: "ADMIN", createdBy: "u1", createdDate: "2026-09-01T00:00:00.000Z",
+        currentHolder: "11111111-1111-4111-8111-111111111111", status: "active", tags: [],
+        noteSheets: [{
+          id: "n1", author: "33333333-3333-4333-8333-333333333333", content: "Proposal for approval.",
+          timestamp: "2026-09-18T08:00:00.000Z", type: "note", noteType: "yellow", noteStatus: "draft", eSigned: false, signedAt: null,
+        }],
+        dispatchHistory: [], attachments: [], movementHistory: [],
+      },
+    });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
+    render(ui);
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent ?? "");
+    const at = (label: string) => headings.findIndex((h) => h.startsWith(label));
+    expect(at("Note sheet")).toBe(0);
+    expect(at("Note sheet")).toBeLessThan(at("Noting & approval"));
+    expect(at("Note sheet")).toBeLessThan(at("Attachments"));
+    expect(at("Note sheet")).toBeLessThan(at("File details"));
+    // The noting itself is visible without scrolling past the composer.
+    const note = screen.getByText("Proposal for approval.");
+    const composer = screen.getAllByRole("heading", { name: /Noting & approval/ })[0]!;
+    expect(note.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

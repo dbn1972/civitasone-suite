@@ -9,7 +9,9 @@
     "./pdf": "./dist/pdf.js",
     "./xlsx": "./dist/xlsx.js",
     "./watermark": "./dist/watermark.js",
-    "./mask": "./dist/mask.js"
+    "./mask": "./dist/mask.js",
+    "./official": "./dist/official/index.js",
+    "./testing": "./dist/testing.js"
   },
   "scripts": {
     "build": "tsc",
@@ -17,11 +19,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/noto-sans-devanagari": "5.3.0",
+    "@pdf-lib/fontkit": "^1.1.1",
     "exceljs": "^4.4.0",
-    "node-forge": "1.4.1"
+    "node-forge": "1.4.1",
+    "pdf-lib": "^1.17.1",
+    "regenerator-runtime": "0.13.11"
   },
   "devDependencies": {
     "@types/node-forge": "1.3.14",
+    "pdfjs-dist": "4.10.38",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   },

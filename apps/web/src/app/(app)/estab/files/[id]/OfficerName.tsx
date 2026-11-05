@@ -34,6 +34,31 @@ export type OfficerMaps = {
 let cache: OfficerMaps | null = null;
 let inflight: Promise<OfficerMaps> | null = null;
 
+// UX-R5 perf (S-14): the operator roster was fetched twice per file view -- once by FileDetailActions (the
+// forward/refer picker) and again by loadMaps() for names, one after the other. One shared in-flight read now
+// serves both.
+let rosterInflight: Promise<Array<Operator & Record<string, unknown>> | null> | null = null;
+
+/** The operator roster (raw rows), fetched once per page load and shared by every caller; null when it failed. */
+export function loadOperatorRoster(): Promise<Array<Operator & Record<string, unknown>> | null> {
+  if (rosterInflight) return rosterInflight;
+  const task = (async () => {
+    try {
+      const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: Operator[] } | Operator[];
+      return (Array.isArray(body) ? body : (body.data ?? [])) as Array<Operator & Record<string, unknown>>;
+    } catch {
+      return null;
+    }
+  })();
+  rosterInflight = task;
+  // In-flight dedupe only: callers mounting together (the forward picker + every OfficerName) share one request;
+  // a later mount reads afresh (loadMaps keeps its own cache of the resolved maps).
+  void task.finally(() => { if (rosterInflight === task) rosterInflight = null; });
+  return task;
+}
+
 // GAP-ESTAB-FILES-DETAIL-04 (SF-17b batched lookup): names for the ids a screen
 // actually renders are resolved by ONE batched GET /v1/estab/officers/resolve per
 // tick (the service returns only {id, displayName, departmentName}), so an
@@ -94,6 +119,7 @@ export function requestOfficerNames(ids: readonly string[]): Promise<void> {
 export function __resetOfficerMapsCacheForTest(): void {
   cache = null;
   inflight = null;
+  rosterInflight = null;
   resolvedNames.clear();
   confirmedMisses.clear();
   wanted.clear();
@@ -117,22 +143,17 @@ export async function loadMaps(): Promise<OfficerMaps> {
     // the internal hrms employee-summaries endpoint and returns only
     // name/department — never full HR PII). We no longer pull the whole
     // `/hrms/employees?limit=200` directory into every viewer's browser.
-    try {
-      const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
-      if (res.ok) {
-        const body = (await res.json()) as { data?: Operator[] } | Operator[];
-        const list = Array.isArray(body) ? body : (body.data ?? []);
-        for (const o of list) {
-          if (o?.employeeId) {
-            operators.set(o.employeeId, o);
-            if (o.employeeName) names.set(o.employeeId, o.employeeName);
-          }
+    const list = await loadOperatorRoster();
+    if (list) {
+      for (const o of list) {
+        if (o?.employeeId) {
+          operators.set(o.employeeId, o);
+          if (o.employeeName) names.set(o.employeeId, o.employeeName);
         }
-        anySuccess = true;
       }
-    } catch {
-      /* degrade to short id */
+      anySuccess = true;
     }
+    /* a failed roster read degrades to short id */
 
     const maps: OfficerMaps = { operators, names };
     // GAP-ESTAB-FILES-DETAIL-04: only cache on SUCCESS, so a first-load failure

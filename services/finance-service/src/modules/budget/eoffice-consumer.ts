@@ -39,7 +39,12 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
       if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
 
       if (cb.decision === "approved") {
-        await repo.updateSanction(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy, efileSubmittedAt: null });
+        // UAT ux-docs: the eOffice decision maker and time are the sanction approval of record.
+        const decidedAt = new Date(cb.decidedAt);
+        await repo.updateSanction(tx, cb.refId, {
+          status: "approved", updatedBy: cb.decidedBy, efileSubmittedAt: null,
+          approvedBy: cb.decidedBy, approvedAt: Number.isNaN(decidedAt.getTime()) ? new Date() : decidedAt,
+        });
         await enqueue(tx, {
           topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
           tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,

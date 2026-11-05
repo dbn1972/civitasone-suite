@@ -268,3 +268,50 @@ describe("CreateGRNForm - receiving store (UAT b10 F95)", () => {
     expect(body.items.map((i) => i.poItemRef)).toEqual([ITEM_ID]);
   });
 });
+
+// UX-R5 form-field standard: required legend, labels above values, inline validation on blur, DD-MM-YYYY date.
+describe("CreateGRNForm - form-field standard (UX-R5)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("shows the required legend and keeps the Vendor label apart from its value", () => {
+    mockRoutes();
+    render(<CreateGRNForm />);
+    expect(screen.getByText(/are required\./)).toBeInTheDocument();
+    const label = screen.getByText("Vendor");
+    expect(label.textContent).toBe("Vendor");
+    expect(label.nextElementSibling).not.toBeNull();
+    expect(label.nextElementSibling!.getAttribute("aria-labelledby")).toBe(label.id);
+  });
+
+  it("says on blur when no purchase order was chosen", async () => {
+    mockRoutes();
+    render(<CreateGRNForm />);
+    fireEvent.blur(await screen.findByLabelText("Purchase order *"));
+    expect(await screen.findByText("Choose the purchase order these goods were received against.")).toHaveAttribute("role", "alert");
+  });
+
+  it("takes the received date as DD-MM-YYYY, refuses a future date on blur, and sends ISO", async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") calls.push({ url, body: String(init.body) });
+      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
+      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+      if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm />);
+    const date = screen.getByLabelText("Received date *") as HTMLInputElement;
+    fireEvent.change(date, { target: { value: "01-01-2099" } });
+    fireEvent.blur(date);
+    expect(screen.getByText(/Received date cannot be after/)).toBeInTheDocument();
+    fireEvent.change(date, { target: { value: "02012026" } });
+    expect(date.value).toBe("02-01-2026");
+    await pickPo(/PO\/2026\/0001/);
+    await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Received qty row 1"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(JSON.parse(calls[0]!.body!).receivedDate).toBe("2026-01-02");
+  });
+});

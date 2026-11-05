@@ -1483,7 +1483,7 @@ const FIXTURES: Record<string, unknown> = {
 
 /** workflow-service GET /v1/workflow/tasks: 17 pending tasks, served 15 at a time (limit/offset). */
 const WORKFLOW_TASKS: Array<Record<string, unknown>> = [
-  { id: 'b2000000-0000-4000-8000-000000000001', name: 'Leave approval - Ravi Kumar', refType: 'leave_app', refId: 'b3000000-0000-4000-8000-000000000001', dueAt: '2020-01-15T00:00:00.000Z' },
+  { id: 'b2000000-0000-4000-8000-000000000001', name: 'Leave approval - Ravi Kumar', refType: 'leave_app', refId: 'b3000000-0000-4000-8000-000000000001', dueAt: `${daysFromToday(-2)}T00:00:00.000Z` },
   { id: 'b2000000-0000-4000-8000-000000000002', name: 'Purchase order PO-2026-0042', refType: 'procurement_po', refId: 'b3000000-0000-4000-8000-000000000002', dueAt: `${daysFromToday(3)}T00:00:00.000Z` },
   { id: 'b2000000-0000-4000-8000-000000000003', name: 'Bill approval - Stationery supply', refType: 'finance_bill', refId: 'b3000000-0000-4000-8000-000000000003', dueAt: `${daysFromToday(5)}T00:00:00.000Z` },
   ...Array.from({ length: 14 }, (_, i) => ({
@@ -1504,8 +1504,31 @@ const WORKFLOW_TASKS: Array<Record<string, unknown>> = [
   createdAt: new Date().toISOString(),
   instanceName: t.name,
   requesterId: null,
+  // When the item was raised (the inbox ages rows by this, not by the current step).
+  raisedAt: `${daysFromToday(-3)}T05:00:00.000Z`,
   version: 1,
   ...t,
+}));
+
+/**
+ * UX R1: workflow-service GET /v1/workflow/inbox (the "waiting" tab is WORKFLOW_TASKS) and
+ * POST /v1/workflow/ref-summaries (business context per ref; the mock answers for every task).
+ */
+const INBOX_COUNTS = { waiting: WORKFLOW_TASKS.length, overdue: 1, sent: 0, done: 0 };
+const INBOX_SUMMARIES: Array<Record<string, unknown>> = WORKFLOW_TASKS.map((t) => ({
+  refType: t.refType,
+  refId: t.refId,
+  instanceId: t.instanceId,
+  instanceName: t.name,
+  // Only what the real backend returns: procurement and leave have module adapters; the others
+  // (finance_bill is not a workflow refType; estab files outside the fixture) are generic.
+  kind: t.refType === "procurement_po" || t.refType === "leave_app" ? "business" : "generic",
+  reference: t.refType === "procurement_po" ? "PO/2026/0042" : null,
+  amountMinor: t.refType === "procurement_po" ? "12345600" : null,
+  fields: t.refType === "leave_app" ? [{ key: "leaveType", value: "Earned Leave" }, { key: "days", value: "3" }] : [],
+  maker: { name: "Anita Verma", designation: "Section Officer" },
+  stage: { level: 2, of: 3, step: "Deputy Secretary Approval" },
+  raisedAt: `${daysFromToday(-3)}T05:00:00.000Z`,
 }));
 
 /** ai-agent-service GET /v1/ai/chat: { data, meta: { total } }, filtered by ?status= and capped by ?limit=. */
@@ -1542,6 +1565,16 @@ const intParam = (url: URL, name: string, fallback: number): number => {
 
 /** Fixtures that depend on the query string. Keyed by path like FIXTURES; consulted first. */
 const DYNAMIC: Record<string, (url: URL) => unknown> = {
+  '/api/v1/workflow/inbox': (url) => {
+    const tab = url.searchParams.get('tab') ?? 'waiting';
+    const limit = intParam(url, 'limit', 50);
+    const offset = intParam(url, 'offset', 0);
+    const all = tab === 'waiting' ? WORKFLOW_TASKS : [];
+    const data = all.slice(offset, offset + limit);
+    return { data, pagination: { total: all.length, pageSize: limit, hasMore: offset + data.length < all.length }, counts: INBOX_COUNTS };
+  },
+  '/api/v1/workflow/inbox/counts': () => ({ data: INBOX_COUNTS }),
+  '/api/v1/workflow/ref-summaries': () => ({ data: INBOX_SUMMARIES }),
   '/api/v1/workflow/tasks': (url) => {
     const limit = intParam(url, 'limit', 15);
     const offset = intParam(url, 'offset', 0);
@@ -1589,6 +1622,7 @@ const SCENARIOS: Record<string, Record<string, Override>> = {
   down: { '*': { status: 500, body: { code: 'INTERNAL', message: 'upstream unavailable' } } },
   empty: {
     '/api/v1/workflow/tasks': { status: 200, body: { data: [], pagination: { total: 0, hasMore: false } } },
+    '/api/v1/workflow/inbox': { status: 200, body: { data: [], pagination: { total: 0, pageSize: 200, hasMore: false }, counts: { waiting: 0, overdue: 0, sent: 0, done: 0 } } },
     '/api/v1/admin/roles': EMPTY_LIST,
     '/api/v1/admin/permissions': EMPTY_LIST,
     '/api/v1/admin/users': { status: 200, body: { data: [], meta: { page: 1, pageSize: 25, total: 0, counts: { active: 0, suspended: 0, locked: 0, deactivated: 0 } } } },

@@ -76,7 +76,7 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/finance">Finance</a> <span aria-hidden="true">›</span>{" "}
         <a href="/finance/payments">Payments</a> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{paymentNo}</span>

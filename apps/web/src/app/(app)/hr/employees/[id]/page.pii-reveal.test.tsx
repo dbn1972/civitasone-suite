@@ -12,6 +12,9 @@ let mockRoles: string[] = [];
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => mockRoles, PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"] }));
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({ fetchJson: (...a: unknown[]) => fetchJsonMock(...a) }));
+// The below-the-fold sections load in the browser after the page (DeferredSections.tsx, own tests); stubbed here
+// so this suite keeps asserting that NOTHING is fetched for PII until a reveal is confirmed.
+vi.mock("./DeferredSections", () => ({ DeferredScannedDocuments: () => null, DeferredMedicalInsurance: () => null }));
 
 import EmployeeDetailPage from "./page";
 

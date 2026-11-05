@@ -32,6 +32,9 @@ async function wipe() {
   });
 }
 beforeAll(async () => {
+  // UAT ux-docs review (Rule 46(a)): an invoice names its supplier - deploy configuration.
+  process.env.BILLING_SUPPLIER_NAME = "CivitasOne Platform Services";
+  process.env.BILLING_SUPPLIER_ADDRESS = "Bengaluru";
   app = await buildApp();
   await wipe();
   await asTenant(async (tx) => {
@@ -50,7 +53,7 @@ beforeAll(async () => {
     ]);
   });
 });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+afterAll(async () => { delete process.env.BILLING_SUPPLIER_NAME; delete process.env.BILLING_SUPPLIER_ADDRESS; await wipe(); await app.close(); const { closePdfRenderer } = await import("@civitasone/render"); await closePdfRenderer(); await sqlClient.end(); });
 
 describe("formatMinor (bigint minor units, never float)", () => {
   it("formats paise exactly, including values above 2^53", () => {
@@ -98,6 +101,18 @@ describe("GET /v1/billing/invoices/:id/pdf", () => {
     const r = await app.inject({ method: "GET", url: `/v1/billing/invoices/${DRAFT}/pdf`, headers: auth(["tenant_admin"]) });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("INVOICE_NOT_ISSUED");
+  });
+
+  it("422 INVOICE_SUPPLIER_NOT_CONFIGURED when the supplier name is not configured (never a blank letterhead)", async () => {
+    const saved = process.env.BILLING_SUPPLIER_NAME;
+    delete process.env.BILLING_SUPPLIER_NAME;
+    try {
+      const r = await app.inject({ method: "GET", url: `/v1/billing/invoices/${INV}/pdf`, headers: auth(["tenant_admin"]) });
+      expect(r.statusCode).toBe(422);
+      expect(r.json().code).toBe("INVOICE_SUPPLIER_NOT_CONFIGURED");
+    } finally {
+      process.env.BILLING_SUPPLIER_NAME = saved;
+    }
   });
 
   it("a malformed id is a 400", async () => {

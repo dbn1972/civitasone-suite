@@ -155,3 +155,30 @@ describe("MinutesPanel — outage vs not-drafted (GAP-...-MINUTES-05)", () => {
     expect(screen.getByText("Minutes couldn't be loaded")).toBeInTheDocument();
   });
 });
+
+describe("MinutesPanel record trust (UX-R5)", () => {
+  const MAKER = "82310d88-a7e7-440d-9c1b-7a2d4f6e0d88";
+  const CHECKER = "6f1f06c0-0000-4000-8000-00000000c4e1";
+  it("shows maker and checker as Name, Designation and never prints their ids", () => {
+    render(
+      <MinutesPanel
+        meetingId="m1"
+        initialMinutes={minutes({ status: "approved", createdBy: MAKER, approvedBy: CHECKER })}
+        people={{
+          [MAKER]: { name: "Asha Rao", designation: "Meeting Secretary" },
+          [CHECKER]: { name: "N. Gupta", designation: "Chairperson" },
+        }}
+      />,
+    );
+    expect(screen.getByText("Asha Rao, Meeting Secretary")).toBeInTheDocument();
+    expect(screen.getByText("N. Gupta, Chairperson")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(MAKER);
+    expect(document.body.textContent).not.toContain(CHECKER);
+  });
+
+  it("an unresolved maker reads Name not available (ID ending ...), never the UUID", () => {
+    render(<MinutesPanel meetingId="m1" initialMinutes={minutes({ status: "draft", createdBy: MAKER })} />);
+    expect(screen.getByText("Name not available (ID ending 0d88)")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(MAKER);
+  });
+});

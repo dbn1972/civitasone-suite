@@ -35,7 +35,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const inspectors = Array.isArray(insp.assignedInspectors) ? (insp.assignedInspectors as unknown[]).map(String) : [];
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb style={{ fontSize: 13, marginBottom: 8 }}>
         <Link href="/inspection" className="lnk">Inspection</Link>
         <span aria-hidden style={{ margin: "0 7px" }}>/</span>
         <Link href="/inspection/inspections" className="lnk">Inspections</Link>

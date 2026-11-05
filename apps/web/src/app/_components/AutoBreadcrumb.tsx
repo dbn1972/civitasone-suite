@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isLinkableCrumb } from "./navRouteManifest";
+import { useShellT } from "./useShellT";
 
 /** Human-readable label overrides for URL segments. */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -27,7 +28,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   works: "Works",
   citizen: "Citizen Portal",
   visitor: "Visitor Mgmt",
-  meeting: "Meeting Mgmt",
+  // UAT-P3 (NAV-06): plain labels, not slug-derived ("Meeting Mgmt", "Grn", "Instances").
+  meeting: "Meetings",
+  grn: "GRN",
+  instances: "Approvals",
   court: "Court Mgmt",
   inspection: "Inspection",
   locations: "Locations",
@@ -117,7 +121,10 @@ function isId(segment: string): boolean {
 }
 
 export function AutoBreadcrumb() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
+  // UAT-P3 (H-1): every crumb label translates (appNav.crumb.<segment>); a
+  // segment with no message keeps the English label / Title Case fallback.
+  const t = useShellT("appNav");
   const segments = pathname.split("/").filter(Boolean);
 
   // Skip dynamic [id] segments — show their parent context only
@@ -126,7 +133,7 @@ export function AutoBreadcrumb() {
   for (const seg of segments) {
     path += "/" + seg;
     if (isId(seg)) continue; // skip UUID / numeric IDs
-    crumbs.push({ label: labelFor(seg), href: path });
+    crumbs.push({ label: t(`crumb.${seg}`, labelFor(seg)), href: path });
   }
 
   if (crumbs.length === 0) return <b>CivitasOne</b>;
@@ -142,7 +149,7 @@ export function AutoBreadcrumb() {
         return (
           <li key={crumb.href} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             {i > 0 && (
-              <span aria-hidden="true" style={{ opacity: 0.35, fontSize: 10 }}>›</span>
+              <span aria-hidden="true" className="auto-crumb-sep" style={{ opacity: 0.5, fontSize: 12 }}>›</span>
             )}
             {isLast ? (
               <b aria-current="page">{crumb.label}</b>

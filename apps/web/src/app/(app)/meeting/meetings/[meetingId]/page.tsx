@@ -7,6 +7,7 @@ import {
   getActiveVotes,
 } from "../../_data/loaders";
 import { MeetingConsole } from "./MeetingConsole";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
 import {
   getSessionRoles,
   hasAnyRole,
@@ -100,6 +101,10 @@ export default async function MeetingConsolePage(
     canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
   };
 
+  // UX-R5 (names, not ids): participants the attendance feed sends without a display name.
+  const unnamed = (attendance.data?.participants ?? []).filter((p) => !p.displayName).map((p) => p.employeeId);
+  const people = unnamed.length ? Object.fromEntries((await resolveRecordRefs({ people: unnamed })).people) : {};
+
   const degraded =
     agenda.source === "error" ||
     attendance.source === "error" ||
@@ -128,6 +133,7 @@ export default async function MeetingConsolePage(
         initialActiveVotes={activeVotes.data}
         activeVotesSource={activeVotes.source}
         viewerPermissions={viewerPermissions}
+        people={people}
       />
     </>
   );

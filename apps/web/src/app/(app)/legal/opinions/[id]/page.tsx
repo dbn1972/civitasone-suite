@@ -59,7 +59,7 @@ export default async function LegalOpinionDetailPage(props: { params: Promise<{ 
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <Link href="/legal">Legal</Link> <span aria-hidden="true">›</span>{" "}
         <Link href="/legal/opinions">Opinions</Link> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{title}</span>

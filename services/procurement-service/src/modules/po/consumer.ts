@@ -124,7 +124,7 @@ export function registerPoConsumers(queue: Queue): void {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; rateContractRef?: string; deliveryDate?: string;
       tenderId?: string; gemOrderRef?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string; gstRateBp?: number; hsnSac?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
 
@@ -251,6 +251,7 @@ export function registerPoConsumers(queue: Queue): void {
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
         itemType: i.itemType ?? "consumable",
+        gstRateBp: i.gstRateBp ?? null, hsnSac: i.hsnSac ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);
@@ -406,7 +407,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; gemOrderNo: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string; gstRateBp?: number; hsnSac?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {
@@ -461,6 +462,7 @@ export function registerPoConsumers(queue: Queue): void {
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
         itemType: i.itemType ?? "consumable",
+        gstRateBp: i.gstRateBp ?? null, hsnSac: i.hsnSac ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);

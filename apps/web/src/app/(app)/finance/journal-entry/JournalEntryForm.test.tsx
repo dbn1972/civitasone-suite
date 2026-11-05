@@ -18,11 +18,11 @@ function fillBalancedLines() {
   // "Voucher Number" label wraps a nested HelpTip button (aria-label "What is
   // Voucher?"), so the plain text query needs to be scoped to the input.
   fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "JV-TEST-001" } });
-  fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
-  fireEvent.change(screen.getByLabelText("Narration"), { target: { value: "Test entry" } });
-  fireEvent.change(screen.getByLabelText("Account code, line 1"), { target: { value: "2202-exp" } });
+  fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
+  fireEvent.change(screen.getByLabelText(/^Narration/), { target: { value: "Test entry" } });
+  fireEvent.change(screen.getByLabelText("Head of account, line 1"), { target: { value: "2202-exp" } });
   fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "5000" } });
-  fireEvent.change(screen.getByLabelText("Account code, line 2"), { target: { value: "2202-cash" } });
+  fireEvent.change(screen.getByLabelText("Head of account, line 2"), { target: { value: "2202-cash" } });
   fireEvent.change(screen.getByLabelText("Credit amount, line 2"), { target: { value: "5000" } });
 }
 
@@ -116,14 +116,23 @@ describe("JournalEntryForm", () => {
 
     render(<JournalEntryForm accounts={accounts} />);
     fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "JV-TEST-002" } });
-    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
-    fireEvent.change(screen.getByLabelText("Narration"), { target: { value: "Unbalanced test" } });
-    fireEvent.change(screen.getByLabelText("Account code, line 1"), { target: { value: "2202-exp" } });
+    fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
+    fireEvent.change(screen.getByLabelText(/^Narration/), { target: { value: "Unbalanced test" } });
+    fireEvent.change(screen.getByLabelText("Head of account, line 1"), { target: { value: "2202-exp" } });
     fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "5000" } });
-    fireEvent.change(screen.getByLabelText("Account code, line 2"), { target: { value: "2202-cash" } });
+    fireEvent.change(screen.getByLabelText("Head of account, line 2"), { target: { value: "2202-cash" } });
     fireEvent.change(screen.getByLabelText("Credit amount, line 2"), { target: { value: "1000" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    // UX-R2: Post is disabled while unbalanced, with the reason next to it and the live difference shown.
+    const post = screen.getByRole("button", { name: "Post Journal Entry" });
+    expect(post).toBeDisabled();
+    const reason = document.getElementById("jv-submit-reason")!;
+    expect(post.getAttribute("aria-describedby")).toBe("jv-submit-reason");
+    expect(reason).toHaveTextContent(`Debit and credit must be equal before you can submit. Add a credit of ${formatMoney(400000)} or correct an amount.`);
+    expect(document.querySelector("[data-jv-difference]")).toHaveTextContent(`${formatMoney(400000)} Dr`);
+
+    // The submit-time guard still holds for any other submit path (Enter in a field / a disabled button bypass).
+    fireEvent.submit(post.closest("form")!);
 
     // GAP-FINANCE-JOURNAL-ENTRY-05: one alert (the balance one), no second generic banner.
     expect(screen.queryByText("Please correct the highlighted fields before posting.")).not.toBeInTheDocument();
@@ -175,7 +184,7 @@ describe("JournalEntryForm", () => {
   it("renders no form and no free-text account input when there are no accounts", () => {
     render(<JournalEntryForm accounts={[]} />);
     expect(screen.getByText("No accounts configured")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Account code/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Head of account/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Post Journal Entry" })).not.toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("1000");
     expect(document.body.innerHTML).not.toContain("2000");
@@ -186,12 +195,8 @@ describe("JournalEntryForm", () => {
     render(<JournalEntryForm accounts={[...accounts, { code: "9999-old", name: "Closed", type: "asset", currency: "INR", balanceDisplay: "0", status: "inactive" }]} />);
     expect(screen.queryByText(/9999-old/)).not.toBeInTheDocument();
     fillBalancedLines();
-    // tamper: force a code that is not a postable account
-    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
-    const opt = document.createElement("option");
-    opt.value = "NOPE"; opt.textContent = "NOPE";
-    select.appendChild(opt);
-    fireEvent.change(select, { target: { value: "NOPE" } });
+    // type a code that is not a postable account: the combobox clears the choice, never sends free text
+    fireEvent.change(screen.getByLabelText("Head of account, line 1"), { target: { value: "NOPE" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     expect(screen.getByText("Select an account from the list.")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -260,8 +265,8 @@ describe("JournalEntryForm", () => {
         ]}
       />,
     );
-    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
-    const values = [...select.options].map((o) => o.value);
+    fireEvent.keyDown(screen.getByLabelText("Head of account, line 1"), { key: "ArrowDown" });
+    const values = screen.getAllByRole("option").map((o) => o.getAttribute("data-code"));
     expect(values).toContain("2100");
     expect(values).not.toContain("2000");
   });
@@ -276,8 +281,8 @@ describe("JournalEntryForm", () => {
         ]}
       />,
     );
-    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
-    const values = [...select.options].map((o) => o.value);
+    fireEvent.keyDown(screen.getByLabelText("Head of account, line 1"), { key: "ArrowDown" });
+    const values = screen.getAllByRole("option").map((o) => o.getAttribute("data-code"));
     expect(values).toContain("2202-cash");
     expect(values).not.toContain("2300-ctl");
   });
@@ -288,7 +293,8 @@ describe("JournalEntryForm", () => {
     try {
       vi.setSystemTime(new Date("2026-03-31T19:00:00.000Z")); // 00:30 IST, 1 April 2026
       render(<JournalEntryForm accounts={accounts} />);
-      expect((screen.getByLabelText("Posting Date") as HTMLInputElement).value).toBe("2026-04-01");
+      // UX-R5 form-field standard: shown DD-MM-YYYY (sent as ISO 2026-04-01, see the request-body tests).
+      expect((screen.getByLabelText(/^Posting Date/) as HTMLInputElement).value).toBe("01-04-2026");
     } finally {
       vi.useRealTimers();
     }
@@ -316,9 +322,12 @@ describe("voucherNoError (GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05)", () => {
   });
   it("shows the error under the field and blocks posting", () => {
     render(<JournalEntryForm accounts={accounts} />);
+    // Balanced lines first: Post is disabled until the voucher balances (UX-R2), so the voucher error is what blocks.
+    fillBalancedLines();
     fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "bad#no" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     expect(screen.getByText(/Use letters, numbers and/)).toBeInTheDocument();
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
   });
 });
 
@@ -335,7 +344,7 @@ describe("JournalEntryForm posting-date period check (GAP-FINANCE-JOURNAL-ENTRY-
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<JournalEntryForm accounts={accounts} periods={periods} />);
     fillBalancedLines();
-    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-03-20" } });
+    fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-03-20" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     expect(screen.getAllByText(/Period 2026-03 is hard-closed/).length).toBeGreaterThan(0);
     expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
@@ -346,7 +355,7 @@ describe("JournalEntryForm posting-date period check (GAP-FINANCE-JOURNAL-ENTRY-
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<JournalEntryForm accounts={accounts} periods={periods} />);
     fillBalancedLines();
-    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-02-10" } });
+    fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-02-10" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     expect(screen.getAllByText(/only adjustment\/closing journals are accepted in a soft-closed period/).length).toBeGreaterThan(0);
     expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
@@ -355,13 +364,13 @@ describe("JournalEntryForm posting-date period check (GAP-FINANCE-JOURNAL-ENTRY-
 
   it("an open period shows an open pill", () => {
     render(<JournalEntryForm accounts={accounts} periods={periods} />);
-    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
+    fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
     expect(screen.getByText("Period 2026-04 is open.")).toBeInTheDocument();
   });
 
   it("when the periods failed to load, status is shown as unverified rather than silently allowed", () => {
     render(<JournalEntryForm accounts={accounts} periods={null} />);
-    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
+    fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
     expect(screen.getByText(/could not be loaded, so 2026-04 is unverified/)).toBeInTheDocument();
   });
 });
@@ -372,14 +381,32 @@ describe("JournalEntryForm account picker (GAP-FINANCE-JOURNAL-ENTRY-04)", () =>
 
   it("groups accounts by type and filters them as the user types", () => {
     render(<JournalEntryForm accounts={accounts} />);
-    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
-    expect(Array.from(select.querySelectorAll("optgroup")).map((g) => g.label)).toEqual(["Assets", "Expenses"]);
-    fireEvent.change(screen.getByLabelText("Filter accounts"), { target: { value: "cash" } });
-    const names = Array.from((screen.getByLabelText("Account code, line 1") as HTMLSelectElement).options).map((o) => o.textContent);
-    expect(names).toContain("2202-cash — Cash");
-    expect(names).not.toContain("2202-exp — Office Expense");
-    // line 2 is already set to Office Expense: a filter never blanks an existing selection.
-    expect(Array.from((screen.getByLabelText("Account code, line 2") as HTMLSelectElement).options).map((o) => o.textContent)).toContain("2202-exp — Office Expense");
+    const line1 = screen.getByLabelText("Head of account, line 1");
+    expect(line1).toHaveAttribute("role", "combobox");
+    fireEvent.keyDown(line1, { key: "ArrowDown" });
+    expect(line1).toHaveAttribute("aria-expanded", "true");
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups.map((g) => document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Assets", "Expenses"]);
+    fireEvent.change(line1, { target: { value: "cash" } });
+    const names = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(names).toContain("2202-cash · Cash");
+    expect(names).not.toContain("2202-exp · Office Expense");
+    // line 2 keeps its own chosen head: one line search never blanks another line selection.
+    expect(screen.getByLabelText("Head of account, line 2")).toHaveValue("2202-exp · Office Expense");
+  });
+
+  it("is keyboard operable: ArrowDown/Enter picks a head, Escape closes and restores it", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    const line1 = screen.getByLabelText("Head of account, line 1");
+    fireEvent.change(line1, { target: { value: "office" } });
+    expect(line1.getAttribute("aria-activedescendant")).toBeTruthy();
+    fireEvent.keyDown(line1, { key: "Enter" });
+    expect(line1).toHaveValue("2202-exp · Office Expense");
+    expect(line1).toHaveAttribute("aria-expanded", "false");
+    fireEvent.change(line1, { target: { value: "zz" } });
+    expect(screen.getByText(/No postable head of account matches/)).toBeInTheDocument();
+    fireEvent.keyDown(line1, { key: "Escape" });
+    expect(line1).toHaveAttribute("aria-expanded", "false");
   });
 });
 
@@ -409,8 +436,9 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
     await waitFor(() => expect(screen.getByText(/This voucher number already exists/)).toBeInTheDocument());
     // under the input: the message is the field's described-by and the field is flagged invalid
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input.getAttribute("aria-describedby")).toBe("jv-voucher-srv-err");
-    expect(document.getElementById("jv-voucher-srv-err")).toHaveTextContent(/already exists/);
+    // UX-R5 Field: the hint and the error are both described-by (error id from the shared Field).
+    expect(input.getAttribute("aria-describedby")).toBe("jv-voucher-hint jv-voucher-error");
+    expect(document.getElementById("jv-voucher-error")).toHaveTextContent(/already exists/);
     // the confirm dialog is closed so the message is not hidden behind it, and what was typed is kept
     expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
     expect(input).toHaveValue("JV-TEST-001");
@@ -426,8 +454,8 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
     await submitAndConfirm(
       json(422, { code: "PERIOD_CLOSED", message: "cannot post to hard-closed period 2026-04", fieldErrors: [{ field: "postingDate", message: "This accounting period is closed. Choose a posting date in an open period." }] }),
     );
-    const date = screen.getByLabelText("Posting Date");
-    await waitFor(() => expect(document.getElementById("jv-date-srv-err")).toHaveTextContent(/accounting period is closed/));
+    const date = screen.getByLabelText(/^Posting Date/);
+    await waitFor(() => expect(document.getElementById("jv-date-error")).toHaveTextContent(/accounting period is closed/));
     expect(date).toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
     await waitFor(() => expect(date).toHaveFocus());
@@ -440,7 +468,7 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
   it("any other server failure still shows inside the confirm dialog, which stays open", async () => {
     await submitAndConfirm(json(500, { code: "INTERNAL", message: "internal error" }));
     await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
-    expect(document.getElementById("jv-voucher-srv-err")).toBeNull();
+    expect(document.getElementById("jv-voucher-error")).toBeNull();
   });
 });
 
@@ -500,5 +528,63 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     expect((voucherInput as HTMLInputElement).value).toBe("JV-TEST-001");
     expect(screen.queryByText(/Journal entry accepted/)).not.toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// UX-R2 / UX-R5: live difference, disabled Post, blur validation and Indian date entry.
+describe("JournalEntryForm R2 balance guard and form-field standard", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("shows the live difference as Cr when credit is ahead and enables Post only once balanced", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    const post = screen.getByRole("button", { name: "Post Journal Entry" });
+    expect(post).toBeDisabled();
+    expect(screen.getByText("Not started")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Credit amount, line 2"), { target: { value: "250" } });
+    expect(document.querySelector("[data-jv-difference]")).toHaveTextContent(`${formatMoney(25000)} Cr`);
+    expect(document.getElementById("jv-submit-reason")).toHaveTextContent(`Add a debit of ${formatMoney(25000)}`);
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "250" } });
+    expect(post).toBeEnabled();
+    expect(document.getElementById("jv-submit-reason")).toBeNull();
+    expect(post).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("validates a required narration on blur with a clear message", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    const narration = screen.getByLabelText(/^Narration/);
+    expect(narration.tagName).toBe("TEXTAREA");
+    fireEvent.blur(narration);
+    expect(screen.getByText("Narration is required.")).toHaveAttribute("role", "alert");
+    expect(narration).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(narration, { target: { value: "Month-end accrual" } });
+    expect(screen.queryByText("Narration is required.")).not.toBeInTheDocument();
+  });
+
+  it("takes the posting date as DD-MM-YYYY and sends it as ISO", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines();
+    const date = screen.getByLabelText(/^Posting Date/);
+    fireEvent.change(date, { target: { value: "04112026" } });
+    expect(date).toHaveValue("04-11-2026");
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string).postingDate).toBe("2026-11-04");
+  });
+
+  it("flags an impossible posting date on blur", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    const date = screen.getByLabelText(/^Posting Date/);
+    fireEvent.change(date, { target: { value: "31-02-2026" } });
+    fireEvent.blur(date);
+    expect(screen.getByText(/31-02-2026 is not a real date/)).toBeInTheDocument();
+  });
+
+  it("shows the required legend", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    expect(screen.getByText(/are required\./)).toBeInTheDocument();
   });
 });

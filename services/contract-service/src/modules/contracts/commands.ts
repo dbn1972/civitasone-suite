@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { resolvePoRef, ProcurementUnavailableError } from "../../shared/procurement-client.js";
-import { assertDistinctMakerChecker, assertCanAmend, assertTransitionAllowed, DomainError, type ContractStatus } from "./domain.js";
+import { assertDistinctMakerChecker, assertCanAmend, assertTransitionAllowed, DomainError, FINISHED_CONTRACT_STATUSES, type ContractStatus } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
   ActivateContractBody, CloseContractBody, TerminateContractBody,
@@ -49,6 +49,18 @@ function assertTransition409(contract: { status: string | null }, to: ContractSt
   } catch (err) {
     if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
     throw err;
+  }
+}
+
+/**
+ * UX-R5 / DS-3 (status-aware actions): a closed or terminated contract is finished -- its milestones can no
+ * longer be completed or marked late. Refused synchronously (409 CONTRACT_CLOSED) so the screen never queues a
+ * command the record can no longer take.
+ */
+export { FINISHED_CONTRACT_STATUSES };
+export function assertContractOpen(contract: { status: string | null }): void {
+  if (FINISHED_CONTRACT_STATUSES.includes(contract.status ?? "")) {
+    throw new HttpError(409, "CONTRACT_CLOSED", `a ${contract.status} contract takes no further milestone changes`);
   }
 }
 
@@ -203,7 +215,7 @@ export async function submitContractForApproval(ctx: RequestContext, id: string)
 export async function completeMilestone(
   ctx: RequestContext, contractId: string, milestoneId: string, body: CompleteMilestoneBody,
 ): Promise<Accepted> {
-  await loadScoped(ctx, contractId);
+  assertContractOpen(await loadScoped(ctx, contractId));
   const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
   if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
   if (milestone.status === "completed" || milestone.status === "completed_late") {
@@ -222,7 +234,7 @@ export async function completeMilestone(
 export async function markMilestoneLate(
   ctx: RequestContext, contractId: string, milestoneId: string, body: MarkMilestoneLateBody,
 ): Promise<Accepted> {
-  await loadScoped(ctx, contractId);
+  assertContractOpen(await loadScoped(ctx, contractId));
   const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
   if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
   if (milestone.status === "completed" || milestone.status === "completed_late") {

@@ -21,7 +21,12 @@ export type ContractObligation = {
 
 // GAP-CONTRACTS-DETAIL-06: intervals for post-202 polling.
 
-type Props = { contractId: string; obligations: ContractObligation[] };
+type Props = {
+  contractId: string;
+  obligations: ContractObligation[];
+  /** UX-R5 / DS-3: set on a closed or terminated contract -- no Start / Mark complete / Add obligation. */
+  lockedReason?: string | null;
+};
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -30,7 +35,7 @@ const STATUS_LABEL: Record<string, string> = {
   overdue: "Overdue",
 };
 
-export function ObligationsPanel({ contractId, obligations }: Props) {
+export function ObligationsPanel({ contractId, obligations, lockedReason = null }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -154,7 +159,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
                 <span className="pill mut" aria-label="Status update pending" style={{ marginInlineStart: 4 }}>Pending</span>
               ) : null}
               {o.dueDate ? <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(o.dueDate)}</span> : null}
-              {o.status !== "completed" ? (
+              {o.status !== "completed" && !lockedReason ? (
                 <>
                   {" "}
                   {o.status === "pending" ? (
@@ -186,6 +191,9 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
         </ul>
       )}
 
+      {lockedReason ? (
+        <p data-testid="obligations-locked" style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{lockedReason}</p>
+      ) : (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end" }}>
         <label style={{ fontSize: 12 }}>
           Title
@@ -218,6 +226,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
           Add obligation
         </button>
       </div>
+      )}
 
       {accepted.phase !== "idle" ? (
         <AcceptedNotice {...accepted.noticeProps} message={message} />

@@ -164,6 +164,10 @@ jobs:
       - name: Install Postgres client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pnpm install --frozen-lockfile
+      # UAT ux-docs (PR #2463): issued PDFs are printed by Chromium through packages/render
+      # (renderPdf); the document tests generate real PDFs, so the browser must be present.
+      - name: Install Playwright chromium (PDF renderer)
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
@@ -1571,6 +1575,10 @@ jobs:
       - name: Install Postgres client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pnpm install --frozen-lockfile
+      # UAT ux-docs (PR #2463): issued PDFs are printed by Chromium through packages/render
+      # (renderPdf); the document tests generate real PDFs, so the browser must be present.
+      - name: Install Playwright chromium (PDF renderer)
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh

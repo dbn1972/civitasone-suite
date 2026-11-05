@@ -7,6 +7,7 @@ import { SSEConnectionStatus } from "./SSEConnectionStatus";
 import { Bell } from "lucide-react";
 import { Button } from "./ds";
 import { useMenuKeyboard } from "./ds/useMenuKeyboard";
+import { useShellT } from "./useShellT";
 
 /**
  * Where a notification's "Review" action should navigate. A truthful
@@ -98,6 +99,7 @@ function formatBadgeCount(count: number): string {
 }
 
 export function NotificationBell({ notifications: propNotifications, unreadCount, streamUrl, showConnectionStatus = true }: NotificationBellProps) {
+  const tb = useShellT("appNav");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>(propNotifications ?? []);
   const [localUnreadCount, setLocalUnreadCount] = useState<number>(unreadCount ?? 0);
@@ -268,8 +270,8 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         onClick={() => setOpen(!open)}
         type="button"
         className="iconbtn"
-        title="Notifications"
-        aria-label={`Notifications${count > 0 ? `, ${formatBadgeCount(count)} unread` : ""}`}
+        title={tb("topbar.notifications", "Notifications")}
+        aria-label={count > 0 ? tb("topbar.notificationsUnread", "Notifications, {count} unread", { count: formatBadgeCount(count) }) : tb("topbar.notifications", "Notifications")}
         aria-expanded={open}
         aria-haspopup="true"
         style={{ position: "relative" }}
@@ -285,11 +287,12 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
               right: 0,
               background: "#ef4444",
               color: "#fff",
-              fontSize: 9,
+              // UAT-P3 (DS-2): 12 px floor (was 9 px).
+              fontSize: 12,
               fontWeight: 700,
               borderRadius: 9,
-              minWidth: 16,
-              height: 16,
+              minWidth: 18,
+              height: 18,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -311,7 +314,8 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
             position: "absolute",
             top: "calc(100% + 8px)",
             right: 0,
-            width: 380,
+            // UAT-P3 (DS-1): never wider than a phone screen.
+            width: "min(380px, calc(100vw - 24px))",
             background: "var(--surface, #fff)",
             borderRadius: 10,
             boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
@@ -404,7 +408,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
                       {n.module && (
                         <span
                           style={{
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: 500,
                             background: "var(--badge-bg, #e2e8f0)",
                             color: "var(--badge-text, #475569)",
@@ -416,14 +420,14 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
                           {n.module}
                         </span>
                       )}
-                      <span style={{ fontSize: 11, color: "var(--mut)" }}>
+                      <span style={{ fontSize: 12, color: "var(--mut)" }}>
                         {n.time}
                       </span>
                       {n.actionUrl && (
                         <Link
                           href={n.actionUrl}
                           style={{
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: 600,
                             color: "var(--primary, #4f46e5)",
                             textDecoration: "none",

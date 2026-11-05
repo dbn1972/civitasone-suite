@@ -33,7 +33,8 @@ export function HeaderLanguageToggle() {
       onClick={switchLanguage}
       aria-label={t("switchLanguageTo", { language: label })}
     >
-      <span lang={target}>{label}</span>
+      <span lang={target} className="tb-lang-long">{label}</span>
+      <span lang={target} className="tb-lang-short" aria-hidden="true">{target === "hi" ? "अ" : "A"}</span>
     </button>
   );
 }

@@ -157,3 +157,20 @@ describe("ObligationsPanel", () => {
     expect(document.body.textContent).not.toContain("Failed to fetch");
   });
 });
+
+describe("ObligationsPanel on a finished contract (UX-R5 / DS-3)", () => {
+  it("offers no Start / Mark complete / Add obligation and says why", () => {
+    render(
+      <ObligationsPanel
+        contractId="c1"
+        obligations={[{ id: "o1", title: "Monthly report", status: "pending", version: 1 }]}
+        lockedReason="This contract is terminated. Milestones and obligations can no longer be changed."
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Add obligation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark complete" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("obligations-locked")).toHaveTextContent(/terminated/);
+    expect(screen.getByText("Monthly report")).toBeInTheDocument();
+  });
+});
