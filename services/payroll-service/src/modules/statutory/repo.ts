@@ -83,14 +83,27 @@ export async function insertNps(tx: Writer, row: typeof payrollNps.$inferInsert)
   await tx.insert(payrollNps).values(row);
 }
 
+/** Delta review: EPF members of a run whose EPS eligibility was defaulted (eps_basis = default). */
+export async function epsUnrecordedEmployeeIdsByRunTx(tx: Writer, runId: string, tenantId: string): Promise<string[]> {
+  const rows = await tx.select({ employeeId: payrollPf.employeeId }).from(payrollPf)
+    .where(and(eq(payrollPf.runId, runId), eq(payrollPf.tenantId, tenantId), eq(payrollPf.epsBasis, "default"), notExcludedSlip(payrollPf.slipId)));
+  return [...new Set(rows.map((r) => r.employeeId))];
+}
+
+export async function epsUnrecordedEmployeeIdsByRun(runId: string, tenantId: string): Promise<string[]> {
+  return scopedRead((tx) => epsUnrecordedEmployeeIdsByRunTx(tx as unknown as Writer, runId, tenantId));
+}
+
 export async function upsPoolForSlip(tenantId: string, slipId: string): Promise<Array<{ contribMinor: bigint }>> {
   return scopedRead((tx) => tx.select({ contribMinor: payrollUpsPool.contribMinor }).from(payrollUpsPool)
     .where(and(eq(payrollUpsPool.tenantId, tenantId), eq(payrollUpsPool.slipId, slipId))));
 }
 
 export async function adminTopUpForPeriod(tenantId: string, period: string) {
+  // The latest close of the month (append-only rows, one per approved run set).
   const rows = await scopedRead((tx) => tx.select().from(payrollEpfAdminTopups)
-    .where(and(eq(payrollEpfAdminTopups.tenantId, tenantId), eq(payrollEpfAdminTopups.period, period))).limit(1));
+    .where(and(eq(payrollEpfAdminTopups.tenantId, tenantId), eq(payrollEpfAdminTopups.period, period)))
+    .orderBy(desc(payrollEpfAdminTopups.createdAt)).limit(1));
   return rows[0] ?? null;
 }
 

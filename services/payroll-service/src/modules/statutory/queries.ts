@@ -191,7 +191,7 @@ export async function pfChallanSummary(tenantId: string, period: string) {
     // Review SF3: the A/c 2 minimum top-up, once the month is closed (POST .../pf/challan/close).
     adminMinimumTopUp: await (async () => {
       const t2 = await repo.adminTopUpForPeriod(tenantId, period);
-      return t2 ? { closed: true, topUpMinor: t2.topUpMinor.toString(), journalId: t2.journalId ?? null } : { closed: false, topUpMinor: (ac2 - t.epfAdminMinor).toString(), journalId: null };
+      return t2 ? { closed: true, topUpMinor: t2.targetTopUpMinor.toString(), journalId: t2.journalId ?? null } : { closed: false, topUpMinor: (ac2 - t.epfAdminMinor).toString(), journalId: null };
     })(),
     rates: {
       edliRateBps: cfg.edliRateBps.toString(),

@@ -24,10 +24,12 @@ export type ApprovalReview = {
    * server text. requiresAck items need an acknowledgement to approve.
    */
   tds?: Array<{ employeeId: string; employeeNo: string; kind: "presumed_months" | "excess" | "shortfall" | "recovery_deferred"; amountMinor: string; presumedMonths: number; finalMonth: boolean; requiresAck: boolean; message: string }>;
+  /** PR #2458 delta review: EPF members with no recorded EPS eligibility (treated as EPS members). */
+  epsUnrecorded?: { policy: "advisory" | "block"; employees: Array<{ employeeId: string; employeeNo: string }> };
 };
 
 /** Server codes that mean "this run needs the review fields before approval". */
-export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED", "NET_PAY_NON_POSITIVE", "UNRECORDED_FY_MONTHS_ESTIMATED", "TDS_SHORTFALL_UNRECOVERABLE"]);
+export const APPROVAL_REVIEW_CODES = new Set(["ZERO_BASIC_SLIPS", "ARREARS_REVIEW_REQUIRED", "NET_PAY_NON_POSITIVE", "UNRECORDED_FY_MONTHS_ESTIMATED", "TDS_SHORTFALL_UNRECOVERABLE", "EPS_ELIGIBILITY_UNRECORDED"]);
 
 export function approvalReviewUrl(runId: string): string {
   return `/api/proxy/v1/payroll/runs/${runId}/approval-review`;

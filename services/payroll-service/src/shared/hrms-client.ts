@@ -49,7 +49,7 @@ export type PayrollInputEmployee = {
   /** The scheme in effect for the requested month (HRMS resolves effective-dated changes, UAT b18 D1). */
   pensionScheme: "GPF" | "NPS" | "EPF" | "UPS" | "NONE";
   /** Review SF1 (additive): EPF membership facts for EPS eligibility; absent from an older HRMS. */
-  epf?: { firstJoinedOn: string | null; voluntaryJointOption: boolean; epsMember: boolean | null; attains58On: string | null };
+  epf?: { firstJoinedOn: string | null; voluntaryJointOption: boolean; epsMember: boolean | null; joiningWageMinor: string | null; ageCutoffReached: boolean | null };
   /** HRMS gender (male | female | other) or null; picks the gender-specific professional-tax slab. */
   gender?: string | null;
   /** State of employment (ISO 3166-2:IN code, e.g. MH); professional tax is levied per state. null = not recorded in HRMS. */

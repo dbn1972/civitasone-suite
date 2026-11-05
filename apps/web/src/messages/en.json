@@ -5633,7 +5633,10 @@
         "excess": "{employee}: TDS deducted this year exceeds the estimated tax by {amount}; no TDS this month (refundable through the income-tax return).",
         "shortfall": "{employee}: {amount} of TDS not deducted this month (deduction limit, Code on Wages 2019 s.18(2)).",
         "recovery_deferred": "{employee}: {amount} of loan / arrear recovery deferred to keep deductions within the limit (Code on Wages 2019 s.18(2))."
-      }
+      },
+      "epsUnrecordedHeading": "EPS eligibility not recorded",
+      "epsUnrecordedAdvisory": "These EPF members are treated as EPS members because their first EPF joining date, joining wage, joint option or EPS membership is not recorded in HRMS. Record it before the next run.",
+      "epsUnrecordedBlock": "Approval is blocked until EPS eligibility is recorded in HRMS for these EPF members (first EPF joining date, joining wage, joint option or EPS membership); then recompute the run."
     }
   },
   "payrollRunsTable": {
@@ -18417,7 +18420,8 @@
       "REASON_REQUIRED": "Enter a reason of at least 10 characters.",
       "generic": "The pension scheme change could not be saved. Try again.",
       "PENSION_SCHEME_NOT_ALLOWED": "This pension scheme change is not allowed for this employee (contract and PSU staff: EPF only; regular staff who joined before 2004: GPF; others: NPS or UPS, with UPS chosen once). A super administrator can record an exception with a reason.",
-      "PENSION_SCHEME_OVERRIDE_FORBIDDEN": "Only a super administrator can record a pension scheme change outside the eligibility rules."
+      "PENSION_SCHEME_OVERRIDE_FORBIDDEN": "Only a super administrator can record a pension scheme change outside the eligibility rules.",
+      "EPF_JOINING_WAGE_RECORDED": "The EPF joining wage is already recorded for this employee and cannot be changed by a request."
     },
     "title": "Pension scheme",
     "currentLabel": "Current scheme",
@@ -18457,7 +18461,19 @@
       "pending": "pending",
       "approved": "approved",
       "rejected": "rejected"
-    }
+    },
+    "membershipTitle": "EPF membership details (optional)",
+    "membershipHelp": "Used to decide EPS membership. Record what is known from the UAN history; leave the rest blank.",
+    "firstJoinedLabel": "First joined EPF on (from the UAN history)",
+    "joiningWageLabel": "EPF wages at first joining (Rs, Basic + DA)",
+    "jointOptionLabel": "Member by joint option (para 26(6); wages above Rs 15,000 at joining)",
+    "epsMemberLabel": "EPS membership",
+    "epsMemberUnknown": "Not recorded (decided from the details above)",
+    "epsMemberYes": "EPS member",
+    "epsMemberNo": "Not an EPS member",
+    "overrideLabel": "Override reason (super administrator only; for a change outside the eligibility rules)",
+    "overrideTooShort": "An override reason needs at least 20 characters.",
+    "joiningWageInvalid": "Enter the joining wage in rupees, e.g. 15000."
   },
   "openingYtd": {
     "title": "Opening year-to-date (TDS)",

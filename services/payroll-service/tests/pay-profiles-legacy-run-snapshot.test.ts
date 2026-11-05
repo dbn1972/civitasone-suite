@@ -42,12 +42,6 @@
  *
  * PR #2458 review (ERP-head decisions 2026-11-05) re-generated it once more,
  * for law changes that apply to every profile alike; every changed value is one of:
- *  - SF1 EPS eligibility (EPS 1995 para 6A, GSR 609(E) 22.08.2014): the three
- *    EPF members (employees ...0002, ...0004, ...0008) first joined EPF on
- *    2018-04-01, after 01.09.2014, with Basic + DA above Rs 15,000 and no
- *    earlier membership recorded, so they are not EPS members: EPS 1,250 -> 0
- *    and EPF-EPS difference 550 -> 1,800 (the employer 12% total is unchanged,
- *    so no net / gross / total moves);
  *  - SF2: SNAP-06's LOP line now also records notInServiceDays 9 (the 9 days
  *    before joining), so NCP days exclude them; its amount is unchanged.
  *
@@ -57,6 +51,14 @@
  *    the annual tax over the 8 months left, not the whole year: SNAP-01 TDS 3,960 -> 2,640,
  *    SNAP-08 2,294 -> 1,529, SNAP-10 49,460 -> 32,973 (each exactly 2/3, rupee-rounded);
  *  - the TDS rows, slip deductions / net, run and register totals that follow from those.
+ *
+ * The PR #2458 DELTA review (ERP-head decision 2026-11-05) then removed the
+ * current-wage proxy for EPS eligibility: it is decided only from recorded
+ * facts, and a member with none recorded is treated as an EPS member (the
+ * pre-PR behaviour, flagged EPS_ELIGIBILITY_UNRECORDED). The three EPF members
+ * (employees ...0002, ...0004, ...0008, joined 2018-04-01, no facts recorded)
+ * are therefore back to EPS 1,250 / EPF-EPS difference 550 -- the values this
+ * snapshot had before the review round; nothing else moved.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

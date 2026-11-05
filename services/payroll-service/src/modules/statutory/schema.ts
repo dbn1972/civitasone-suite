@@ -22,6 +22,8 @@ export const payrollPf = statutorySchema.table("payroll_pf", {
   epfWageMinor:      bigint("epf_wage_minor", { mode: "bigint" }),
   // Review SF1 (migration 0163): EPS wages; 0 when the member is not EPS-eligible.
   epsWageMinor:      bigint("eps_wage_minor", { mode: "bigint" }),
+  // Delta review (migration 0164): recorded | default (no fact recorded -> EPS member).
+  epsBasis:          varchar("eps_basis", { length: 16 }),
   edliWageMinor:     bigint("edli_wage_minor", { mode: "bigint" }),
   edliContribMinor:  bigint("edli_contrib_minor", { mode: "bigint" }).notNull().default(0n),
   epfAdminMinor:     bigint("epf_admin_minor", { mode: "bigint" }).notNull().default(0n),
@@ -65,7 +67,11 @@ export const payrollEpfAdminTopups = statutorySchema.table("payroll_epf_admin_to
   memberCount:       integer("member_count").notNull(),
   adminAccruedMinor: bigint("admin_accrued_minor", { mode: "bigint" }).notNull(),
   minimumMinor:      bigint("minimum_minor", { mode: "bigint" }).notNull(),
+  /** The DELTA this close booked (negative when a later run reduced the shortfall). */
   topUpMinor:        bigint("top_up_minor", { mode: "bigint" }).notNull(),
+  // Delta review (migration 0164): the approved run set and its full shortfall.
+  runSetKey:         text("run_set_key").notNull().default(""),
+  targetTopUpMinor:  bigint("target_top_up_minor", { mode: "bigint" }).notNull(),
   journalId:         uuid("journal_id"),
   currency:          char("currency", { length: 3 }).notNull().default("INR"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

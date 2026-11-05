@@ -18,7 +18,7 @@ import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js"
 import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, nextMonthOf, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, type EpsMembershipFacts } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, nextMonthOf, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, EPS_ELIGIBILITY_UNRECORDED, type EpsMembershipFacts, type EpsUnrecordedPolicy } from "./domain.js";
 import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
@@ -365,6 +365,14 @@ export async function resolveUnrecordedLopDaysTx(tx: typeof db, tenantId: string
  * (payroll_settings.arrears_review_threshold_bps, migration 0160; default one
  * month). Reads through the caller tx / scopedRead (FORCE RLS).
  */
+/** Delta review: the tenant's policy for unrecorded EPS eligibility (default advisory). */
+export async function resolveEpsUnrecordedPolicy(tx: typeof db, tenantId: string): Promise<EpsUnrecordedPolicy> {
+  const rows = (await tx.execute(sql`
+    SELECT eps_unrecorded_policy FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1
+  `)) as unknown as Array<{ eps_unrecorded_policy: string | null }>;
+  return rows[0]?.eps_unrecorded_policy === "block" ? "block" : "advisory";
+}
+
 export async function resolveArrearsReviewThresholdBps(tx: typeof db, tenantId: string): Promise<number> {
   const rows = (await tx.execute(sql`
     SELECT arrears_review_threshold_bps FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1
@@ -1982,6 +1990,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       maxDeductionShareBps?: number;
       deductionCapApplies?: boolean;
       payrollGoLiveDate?: string | null;
+      epsUnrecordedPolicy?: EpsUnrecordedPolicy;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -2040,6 +2049,13 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       `);
       // GAP-PAYROLL-FLEX-BENEFITS-05: only touched when the command carries it
       // (omitted keeps the stored value; a first row defaults to ON).
+      // Delta review: advisory -> block after one cycle (only when sent).
+      if (p.epsUnrecordedPolicy !== undefined) {
+        await tx.execute(sql`
+          UPDATE payroll.payroll_settings SET eps_unrecorded_policy = ${p.epsUnrecordedPolicy}
+           WHERE tenant_id = ${p.tenantId}::uuid
+        `);
+      }
       if (p.flexElectionMakerChecker !== undefined) {
         await tx.execute(sql`
           UPDATE payroll.payroll_settings SET flex_election_maker_checker = ${p.flexElectionMakerChecker}
@@ -2859,6 +2875,20 @@ async function processPayrollRun(
         employees: unrecordedEstimated.slice(0, 50),
       });
     }
+    // Delta review (ERP-head decision 2026-11-05): EPF members whose EPS
+    // eligibility no recorded fact decides -- treated as EPS members, listed for
+    // HR to record the facts (approval review; a hard block when the tenant
+    // setting eps_unrecorded_policy is "block").
+    const epsUnrecorded = await statutoryRepo.epsUnrecordedEmployeeIdsByRunTx(tx, p.id, p.tenantId);
+    if (epsUnrecorded.length > 0) {
+      const noOf = new Map((await repo.listSlipsByRunTx(tx, p.id, p.tenantId)).map((sl) => [sl.employeeId, sl.employeeNo]));
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: EPS_ELIGIBILITY_UNRECORDED,
+        message: `${epsUnrecorded.length} EPF member(s) have no recorded EPS eligibility (first EPF joining date, joining wage, joint option or EPS membership); they are treated as EPS members until it is recorded`,
+        count: epsUnrecorded.length,
+        employees: epsUnrecorded.slice(0, 50).map((id) => ({ employeeId: id, employeeNo: noOf.get(id) ?? null })),
+      });
+    }
     if (npsBaseDaMissing.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "ARREAR_NPS_BASE_DA_MISSING",
@@ -3160,13 +3190,13 @@ export async function computeAndInsertSlip(
   // ESI employer amount) reflect the config actually used for this slip
   // instead of a second, independently hardcoded literal.
   const statutoryConfig = params.statutoryConfig ?? DEFAULT_STATUTORY_CONFIG;
-  // Review SF1: EPS eligibility (EPS 1995 para 6A) on this month's Basic + DA.
-  const estPensionBase = params.earningsOverride
-    ? params.earningsOverride.pensionBaseMinor
-    : params.basicMinor + (params.payProfile?.kind === "consolidated_contract" ? 0n : roundRupee((params.basicMinor * (params.daRateBps ?? 0n)) / 10000n));
-  const epsEligible = params.epfFacts && params.dateOfJoining
-    ? epsEligibility(params.epfFacts, params.dateOfJoining, params.month, estPensionBase)
-    : true;
+  // Review SF1 + delta blocker: EPS eligibility (EPS 1995 para 6A) from the
+  // recorded EPF membership facts only -- never this month's wage. Unknown ->
+  // EPS member, flagged on the PF row (eps_basis = default) for the run warning.
+  const epsDecision = params.epfFacts && params.dateOfJoining
+    ? epsEligibility(params.epfFacts, params.dateOfJoining)
+    : null;
+  const epsEligible = epsDecision?.eligible ?? true;
   const result = computeSlip({
     epsEligible,
     basicMinor: params.basicMinor,
@@ -3287,6 +3317,8 @@ export async function computeAndInsertSlip(
       epfWageMinor: pfApplied ? epfCharges.pfWageMinor : 0n,
       // Review SF1: 0 for a member who is not EPS-eligible (EPS 0, all 12% to A/c 1).
       epsWageMinor: pfApplied && epsEligible ? (pensionBaseMinor > EPS_WAGE_CEILING_MINOR ? EPS_WAGE_CEILING_MINOR : pensionBaseMinor) : 0n,
+      // Delta review: how eligibility was decided (null = caller passed no facts).
+      epsBasis: epsDecision ? (epsDecision.recorded ? "recorded" : "default") : null,
       edliWageMinor: pfApplied ? epfCharges.edliWageMinor : 0n,
       edliContribMinor: pfApplied ? epfCharges.edliMinor : 0n,
       epfAdminMinor: pfApplied ? epfCharges.epfAdminMinor : 0n,

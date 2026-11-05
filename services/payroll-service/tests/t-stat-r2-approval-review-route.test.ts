@@ -57,6 +57,8 @@ describe("GET /v1/payroll/runs/:id/approval-review", () => {
       nonPositiveNet: [],
       // PR #2459 review B2: TDS signals (none on these hand-seeded slips).
       tds: [],
+      // PR #2458 delta review: no EPF member with unrecorded EPS eligibility in this run; tenant default policy.
+      epsUnrecorded: { policy: "advisory", employees: [] },
     });
   });
 

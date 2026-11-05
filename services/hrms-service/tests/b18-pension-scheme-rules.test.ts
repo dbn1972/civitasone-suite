@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  defaultPensionScheme, schemeForMonth, retroPeriods, statutoryIncomplete, isValidUan, schemeChangeVerdict, attains58On,
+  defaultPensionScheme, schemeForMonth, retroPeriods, statutoryIncomplete, isValidUan, schemeChangeVerdict, attains58On, epsAgeCutoffReached,
 } from "../src/modules/employee/pension-scheme.js";
 import { buildTypeResolver, DEFAULT_POLICY } from "../src/modules/employee/engagement-policy.js";
 import { createEmployeeBody, updateEmployeeBody } from "../src/modules/employee/validators.js";
@@ -56,8 +56,12 @@ describe("Review SF5: scheme change eligibility matrix", () => {
     expect(v("permanent", "2010-01-01", "NPS", "EPF")).toBe(false);
     expect(v("permanent", "2010-01-01", "EPF", "NPS")).toBe(false);
   });
-  it("apprentices / consultants have no allowed change", () => {
+  it("apprentices / consultants move only to NONE (delta review SF3: the existing ones on NPS can be moved); nobody else does", () => {
     for (const to of ["GPF", "NPS", "EPF", "UPS"]) expect(v("apprentice", "2026-01-01", "NONE", to)).toBe(false);
+    expect(v("apprentice", "2026-01-01", "NPS", "NONE")).toBe(true);
+    expect(v("consultant", "2020-01-01", "NPS", "NONE")).toBe(true);
+    expect(v("permanent", "2010-01-01", "NPS", "NONE")).toBe(false);
+    expect(v("contract", "2026-01-01", "EPF", "NONE")).toBe(false);
   });
   it("a refusal carries the code and a readable reason", () => {
     expect(schemeChangeVerdict({ employeeType: "contract", dateOfJoining: "2026-10-28", fromScheme: "EPF", toScheme: "NPS", history: [] }))
@@ -66,6 +70,12 @@ describe("Review SF5: scheme change eligibility matrix", () => {
 });
 
 describe("Review SF1: the 58th-birthday date (sent to payroll instead of the DOB)", () => {
+  it("payroll-input gets only the per-month boolean: 58 before the month began", () => {
+    expect(epsAgeCutoffReached("1969-02-15", "2027-02")).toBe(false); // birthday month still counts
+    expect(epsAgeCutoffReached("1969-02-15", "2027-03")).toBe(true);
+    expect(epsAgeCutoffReached("1969-03-01", "2027-03")).toBe(false);
+    expect(epsAgeCutoffReached(null, "2027-03")).toBeNull();
+  });
   it("DOB + 58 years; null without a DOB", () => {
     expect(attains58On("1969-02-15")).toBe("2027-02-15");
     expect(attains58On(null)).toBeNull();

@@ -610,8 +610,8 @@
         "er_contrib_pct": "12.00",
         "emp_contrib_minor": "180000",
         "er_contrib_minor": "180000",
-        "eps_contrib_minor": "0",
-        "epf_er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
         "period": "2026-08"
       },
       {
@@ -621,8 +621,8 @@
         "er_contrib_pct": "12.00",
         "emp_contrib_minor": "180000",
         "er_contrib_minor": "180000",
-        "eps_contrib_minor": "0",
-        "epf_er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
         "period": "2026-08"
       },
       {
@@ -643,8 +643,8 @@
         "er_contrib_pct": "12.00",
         "emp_contrib_minor": "180000",
         "er_contrib_minor": "180000",
-        "eps_contrib_minor": "0",
-        "epf_er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
         "period": "2026-08"
       }
     ]

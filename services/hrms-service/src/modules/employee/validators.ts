@@ -119,6 +119,8 @@ export const createEmployeeBody = z.object({
   epfFirstJoinedOn:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
   epfVoluntaryJointOption: z.boolean().optional(),
   epsMember:               z.boolean().optional(),
+  // Delta review: EPF wages (Basic + DA, paise) at first joining EPF, stamped at hire.
+  epfJoiningWageMinor:     z.number().int().nonnegative().max(1_000_000_000).optional(),
   managerId:    z.string().uuid().optional(),
   station:      z.string().max(128).optional(),
   category:     z.enum(["UR", "SC", "ST", "OBC", "EWS"]).optional(),

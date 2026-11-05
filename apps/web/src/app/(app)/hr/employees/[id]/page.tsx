@@ -589,6 +589,7 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
           canRequest={!exited}
           canDecide={roles.some((r) => PENSION_SCHEME_CHECKER_ROLES.includes(r))}
           initialChanges={schemeChanges && schemeChanges.source !== "error" ? (schemeChanges.data ?? []) : null}
+          canOverride={roles.includes("super_admin")}
         />
       )}
 

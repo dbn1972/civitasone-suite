@@ -43,7 +43,7 @@ import { HttpError } from "../../shared/context.js";
 import { todayIST } from "../../shared/ist.js";
 import { hrmsEmployees, hrmsPensionSchemeChanges, type PensionSchemeChangeRow } from "./schema.js";
 import { isExitedStatus } from "./status.js";
-import { PENSION_SCHEMES, isValidUan, retroPeriods, schemeForMonth, schemeChangeVerdict, type ApprovedSchemeChange } from "./pension-scheme.js";
+import { PENSION_SCHEMES, NO_SCHEME, isValidUan, retroPeriods, schemeForMonth, schemeChangeVerdict, type ApprovedSchemeChange } from "./pension-scheme.js";
 
 const AUDIT = "audit.event.record";
 export const MAKER_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -61,6 +61,8 @@ export const PENSION_SCHEME_ERRORS = {
   // Review SF5: outside the eligibility matrix, and an override by a non-super_admin.
   NOT_ALLOWED: "PENSION_SCHEME_NOT_ALLOWED",
   OVERRIDE_FORBIDDEN: "PENSION_SCHEME_OVERRIDE_FORBIDDEN",
+  // Delta review: the joining wage is stamped once and never overwritten.
+  JOINING_WAGE_RECORDED: "EPF_JOINING_WAGE_RECORDED",
 } as const;
 
 /** Review SF5: only a super_admin may record a change outside the matrix (with a reason). */
@@ -69,7 +71,8 @@ export const OVERRIDE_ROLES = ["super_admin"];
 export const idParam = z.object({ id: z.string().uuid() });
 export const changeIdParam = z.object({ changeId: z.string().uuid() });
 export const pensionSchemeChangeBody = z.object({
-  toScheme: z.enum(PENSION_SCHEMES),
+  // Delta review SF3: NONE for apprentices / consultants (matrix-checked).
+  toScheme: z.enum([...PENSION_SCHEMES, NO_SCHEME]),
   effectiveFrom: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/, "effectiveFrom must be the first day of a month (YYYY-MM-01)"),
   reason: z.string().trim().min(10, "reason must be at least 10 characters").max(500),
   uanNumber: z.string().trim().regex(/^\d{12}$/, "UAN must be exactly 12 digits").optional(),
@@ -81,14 +84,16 @@ export const pensionSchemeChangeBody = z.object({
   epfFirstJoinedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
   epfVoluntaryJointOption: z.boolean().optional(),
   epsMember: z.boolean().optional(),
+  // Delta review: EPF wages (Basic + DA, paise) at first joining EPF; stamped once.
+  epfJoiningWageMinor: z.number().int().nonnegative().max(1_000_000_000).optional(),
 }).strict().refine(
-  (b) => b.toScheme === "EPF" || (b.epfFirstJoinedOn === undefined && b.epfVoluntaryJointOption === undefined && b.epsMember === undefined),
+  (b) => b.toScheme === "EPF" || (b.epfFirstJoinedOn === undefined && b.epfVoluntaryJointOption === undefined && b.epsMember === undefined && b.epfJoiningWageMinor === undefined),
   { message: "EPF membership details can only be given for EPF", path: ["toScheme"] },
 );
 
 type ChangeBody = z.infer<typeof pensionSchemeChangeBody>;
-const hasMembership = (b: Pick<ChangeBody, "epfFirstJoinedOn" | "epfVoluntaryJointOption" | "epsMember">): boolean =>
-  b.epfFirstJoinedOn !== undefined || b.epfVoluntaryJointOption !== undefined || b.epsMember !== undefined;
+const hasMembership = (b: Pick<ChangeBody, "epfFirstJoinedOn" | "epfVoluntaryJointOption" | "epsMember" | "epfJoiningWageMinor">): boolean =>
+  b.epfFirstJoinedOn !== undefined || b.epfVoluntaryJointOption !== undefined || b.epsMember !== undefined || b.epfJoiningWageMinor !== undefined;
 
 function assertAllowed(ctx: RequestContext | null, emp: { employeeType: string; dateOfJoining: string }, fromScheme: string, toScheme: string,
   history: ApprovedSchemeChange[], overrideReason: string | null | undefined): void {
@@ -113,6 +118,7 @@ export function shape(r: PensionSchemeChangeRow) {
     effectiveFrom: r.effectiveFrom, reason: r.reason, uanNumber: r.uanNumber ?? null, status: r.status, kind: r.kind,
     overrideReason: r.overrideReason ?? null,
     epfFirstJoinedOn: r.epfFirstJoinedOn ?? null, epfVoluntaryJointOption: r.epfVoluntaryJointOption ?? null, epsMember: r.epsMember ?? null,
+    epfJoiningWageMinor: r.epfJoiningWageMinor != null ? r.epfJoiningWageMinor.toString() : null,
     requestedBy: r.requestedBy, decidedBy: r.decidedBy ?? null,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null, decisionNote: r.decisionNote ?? null,
     appliedAt: r.appliedAt ? r.appliedAt.toISOString() : null, createdAt: r.createdAt.toISOString(),
@@ -125,6 +131,7 @@ async function lockEmployee(tx: Tx, tenantId: string, employeeId: string) {
     uanNumber: hrmsEmployees.uanNumber, dateOfJoining: hrmsEmployees.dateOfJoining, employeeNo: hrmsEmployees.employeeNo,
     employeeType: hrmsEmployees.employeeType, epfFirstJoinedOn: hrmsEmployees.epfFirstJoinedOn,
     epfVoluntaryJointOption: hrmsEmployees.epfVoluntaryJointOption, epsMember: hrmsEmployees.epsMember,
+    epfJoiningWageMinor: hrmsEmployees.epfJoiningWageMinor,
   }).from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.id, employeeId), eq(hrmsEmployees.tenantId, tenantId)))
     .for("update").limit(1);
@@ -193,6 +200,9 @@ export async function requestPensionSchemeChange(ctx: RequestContext, employeeId
       assertAllowed(ctx, emp, fromScheme, body.toScheme, history, body.overrideReason);
     }
     assertUan(body.toScheme, body.uanNumber ?? emp.uanNumber);
+    if (body.epfJoiningWageMinor !== undefined && emp.epfJoiningWageMinor != null && BigInt(body.epfJoiningWageMinor) !== emp.epfJoiningWageMinor) {
+      throw new HttpError(409, PENSION_SCHEME_ERRORS.JOINING_WAGE_RECORDED, "the EPF joining wage is already recorded for this employee and is not changed by a later request");
+    }
     const [row] = await tx.insert(hrmsPensionSchemeChanges).values({
       tenantId: ctx.tenantId, employeeId, fromScheme, toScheme: body.toScheme, effectiveFrom: body.effectiveFrom,
       reason: body.reason, uanNumber: body.uanNumber ?? null, status: "pending", kind,
@@ -200,12 +210,13 @@ export async function requestPensionSchemeChange(ctx: RequestContext, employeeId
       epfFirstJoinedOn: body.epfFirstJoinedOn ?? null,
       epfVoluntaryJointOption: body.epfVoluntaryJointOption ?? null,
       epsMember: body.epsMember ?? null,
+      epfJoiningWageMinor: body.epfJoiningWageMinor != null ? BigInt(body.epfJoiningWageMinor) : null,
       requestedBy: ctx.actorId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
     }).returning();
     await audit(tx, ctx, "pension_scheme_change_request", employeeId, {
       oldValue: { pensionScheme: fromScheme },
       newValue: { pensionScheme: body.toScheme, effectiveFrom: body.effectiveFrom, kind,
-        ...(hasMembership(body) ? { epfFirstJoinedOn: body.epfFirstJoinedOn ?? null, epfVoluntaryJointOption: body.epfVoluntaryJointOption ?? null, epsMember: body.epsMember ?? null } : {}) },
+        ...(hasMembership(body) ? { epfFirstJoinedOn: body.epfFirstJoinedOn ?? null, epfVoluntaryJointOption: body.epfVoluntaryJointOption ?? null, epsMember: body.epsMember ?? null, epfJoiningWageMinor: body.epfJoiningWageMinor ?? null } : {}) },
       reason: body.reason,
       detail: { changeId: row!.id, uanSupplied: body.uanNumber != null, ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}) },
     });
@@ -250,6 +261,8 @@ export async function approvePensionSchemeChange(ctx: RequestContext, changeId: 
     if (c.epfFirstJoinedOn != null) empPatch.epfFirstJoinedOn = c.epfFirstJoinedOn;
     if (c.epfVoluntaryJointOption != null) empPatch.epfVoluntaryJointOption = c.epfVoluntaryJointOption;
     if (c.epsMember != null) empPatch.epsMember = c.epsMember;
+    // Delta review: the joining wage is stamped once (never overwritten).
+    if (c.epfJoiningWageMinor != null && emp.epfJoiningWageMinor == null) empPatch.epfJoiningWageMinor = c.epfJoiningWageMinor;
     if (Object.keys(empPatch).length > 0) {
       await tx.update(hrmsEmployees)
         .set({ ...empPatch, updatedBy: ctx.actorId, updatedAt: now, version: sql`${hrmsEmployees.version} + 1` })
@@ -263,7 +276,8 @@ export async function approvePensionSchemeChange(ctx: RequestContext, changeId: 
       newValue: { pensionScheme: c.toScheme, effectiveFrom: c.effectiveFrom, appliedNow: applyNow, kind: c.kind, ...(empPatch.uanNumber ? { uanNumber: empPatch.uanNumber } : {}),
         ...(c.epfFirstJoinedOn != null ? { epfFirstJoinedOn: c.epfFirstJoinedOn } : {}),
         ...(c.epfVoluntaryJointOption != null ? { epfVoluntaryJointOption: c.epfVoluntaryJointOption } : {}),
-        ...(c.epsMember != null ? { epsMember: c.epsMember } : {}) },
+        ...(c.epsMember != null ? { epsMember: c.epsMember } : {}),
+        ...(empPatch.epfJoiningWageMinor != null ? { epfJoiningWageMinor: empPatch.epfJoiningWageMinor.toString() } : {}) },
       reason: c.reason,
       detail: { changeId: c.id, requestedBy: c.requestedBy, approvedBy: ctx.actorId, note: body.note ?? null, retroPeriods: retro,
         ...(c.overrideReason ? { overrideReason: c.overrideReason } : {}) },

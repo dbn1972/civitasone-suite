@@ -44,6 +44,13 @@ const VJO = { id: randomUUID(), no: "B18-VJO-1" };   // para 26(6) joint option,
 const PRE = { id: randomUUID(), no: "B18-PRE-1" };   // first EPF membership 2013 (via UAN)
 const JOIN = { id: randomUUID(), no: "B18-JOIN-1" }; // joined 2027-03-28, Basic + DA within the ceiling
 const OTHER_TENANT = randomUUID();
+// Delta review: open / supplementary runs for the challan close; a computed run for the EPS block.
+const RUN_OPEN = randomUUID();
+const RUN_SUP = randomUUID();
+const SUP = { id: randomUUID(), no: "B18-SUP-1" };
+const RUN3 = randomUUID();
+const JOIN2 = { id: randomUUID(), no: "B18-JOIN-2" };
+const APPROVER = randomUUID();
 const auth = { authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["payroll_admin"], sid: "b18" }, SECRET)}` };
 const asTenant = <T>(fn: (tx: typeof db) => Promise<T>): Promise<T> => runWithTenant(TENANT, () => db.transaction((tx) => fn(tx as unknown as typeof db)));
 
@@ -70,6 +77,7 @@ async function wipe(): Promise<void> {
     await tx.delete(payrollStructures).where(eq(payrollStructures.tenantId, TENANT));
     await tx.execute(sql`DELETE FROM payroll.tax_slab_config WHERE tenant_id = ${TENANT}::uuid`);
     await tx.execute(sql`DELETE FROM statutory.payroll_epf_admin_topups WHERE tenant_id = ${TENANT}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.payroll_settings WHERE tenant_id = ${TENANT}::uuid`);
     await tx.execute(sql`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`);
     await tx.execute(sql`DELETE FROM payroll.payroll_tax_declarations WHERE tenant_id = ${TENANT}::uuid`);
   });
@@ -101,6 +109,11 @@ beforeAll(async () => {
     await computeAndInsertSlip(tx as never, { actorId: ACTOR }, { ...common, employeeId: JOIN.id, employeeNo: JOIN.no, basicMinor: 900_000n, daRateBps: 0n,
       dateOfJoining: "2027-03-28", epfFacts: {},
       components: [{ code: "LOP", name: "Loss of Pay", type: "deduction", amountMinor: 783_900n, lopDays: 27, daysInMonth: 31, notInServiceDays: 27 }] });
+    // Delta review: a computed (not yet approved) run with a member whose EPS eligibility is unrecorded.
+    await tx.insert(payrollRuns).values({ id: RUN3, tenantId: TENANT, runNo: "B18-EPS-2027-05", month: "2027-05", structureId: STRUCT,
+      totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing", createdBy: ACTOR, updatedBy: ACTOR });
+    await computeAndInsertSlip(tx as never, { actorId: ACTOR }, { ...common, runId: RUN3, month: "2027-05", employeeId: JOIN2.id, employeeNo: JOIN2.no, basicMinor: 1_800_000n,
+      dateOfJoining: "2026-10-28", epfFacts: {} });
     // A UPS member: Basic Rs 50,000, DA 58% -> pension base Rs 79,000.
     await computeAndInsertSlip(tx as never, { actorId: ACTOR }, {
       runId: RUN, tenantId: TENANT, employeeId: UPS_EMP.id, employeeNo: UPS_EMP.no, basicMinor: 5_000_000n, month: MONTH,
@@ -162,6 +175,29 @@ describe("UPS: the Government 8.5% pool share is its own statutory row, apart fr
 });
 
 describe("Review SF1 / SF2: EPS eligibility and NCP days reach the ledger and the ECR", () => {
+  it("a member with no recorded fact stays an EPS member (eps_basis default); recorded ones are marked recorded", async () => {
+    const rows = await asTenant((tx) => tx.execute(sql`SELECT s.employee_no AS no, p.eps_contrib_minor::text AS eps, p.eps_basis AS basis
+      FROM statutory.payroll_pf p JOIN payroll.payroll_slips s ON s.id = p.slip_id WHERE p.tenant_id = ${TENANT}::uuid AND p.run_id IN (${RUN2}::uuid, ${RUN3}::uuid) ORDER BY s.employee_no`)) as unknown as Array<Record<string, string>>;
+    expect(rows.find((r) => r.no === JOIN2.no)).toEqual({ no: JOIN2.no, eps: "125000", basis: "default" }); // Basic + DA Rs 28,440, joined 2026: still EPS
+    expect(rows.find((r) => r.no === VJO.no)!.basis).toBe("recorded");
+    expect(rows.find((r) => r.no === PRE.no)!.basis).toBe("recorded");
+  });
+
+  it("approval review lists the unrecorded members (advisory); with the tenant policy block, approval is refused 409", async () => {
+    const review = await app.inject({ method: "GET", url: `/v1/payroll/runs/${RUN3}/approval-review`, headers: auth });
+    expect(review.statusCode).toBe(200);
+    expect(review.json().epsUnrecorded).toEqual({ policy: "advisory", employees: [{ employeeId: JOIN2.id, employeeNo: JOIN2.no }] });
+    await asTenant((tx) => tx.execute(sql`INSERT INTO payroll.payroll_settings (tenant_id, eps_unrecorded_policy, created_at, updated_at) VALUES (${TENANT}::uuid, ${"block"}, NOW(), NOW())
+      ON CONFLICT (tenant_id) DO UPDATE SET eps_unrecorded_policy = EXCLUDED.eps_unrecorded_policy`));
+    expect((await app.inject({ method: "GET", url: `/v1/payroll/runs/${RUN3}/approval-review`, headers: auth })).json().epsUnrecorded.policy).toBe("block");
+    const approver = { authorization: `Bearer ${signToken({ sub: APPROVER, tid: TENANT, roles: ["super_admin"], sid: "b18a" }, SECRET)}` };
+    const r = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${RUN3}/approve`, headers: approver, payload: {} });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("EPS_ELIGIBILITY_UNRECORDED");
+    expect(r.json().message).toContain(JOIN2.no);
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET eps_unrecorded_policy = ${"advisory"} WHERE tenant_id = ${TENANT}::uuid`));
+  });
+
   it("joint-option member: EPS 0, EPS wages 0, the whole employer 12% to A/c 1; pre-2014 member: EPS Rs 1,250", async () => {
     const rows = await asTenant((tx) => tx.execute(sql`SELECT s.employee_no AS no, p.eps_contrib_minor::text AS eps, p.epf_er_contrib_minor::text AS epf_er, p.eps_wage_minor::text AS eps_wage
       FROM statutory.payroll_pf p JOIN payroll.payroll_slips s ON s.id = p.slip_id WHERE p.tenant_id = ${TENANT}::uuid AND p.run_id = ${RUN2}::uuid ORDER BY s.employee_no`)) as unknown as Array<Record<string, string>>;
@@ -186,6 +222,16 @@ describe("Review SF1 / SF2: EPS eligibility and NCP days reach the ledger and th
 
 describe("Review SF3: closing the EPF challan accrues the A/c 2 minimum shortfall once", () => {
   const close = (period: string, headers = auth) => app.inject({ method: "POST", url: "/v1/payroll/statutory/pf/challan/close", headers, payload: { period } });
+  it("refused while a run of the month is not approved (409 RUNS_OPEN); cancelled / failed runs do not count", async () => {
+    await asTenant((tx) => tx.insert(payrollRuns).values({ id: RUN_OPEN, tenantId: TENANT, runNo: "B18-OPEN-2027-02", month: MONTH, structureId: STRUCT,
+      runType: "supplementary", totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing", createdBy: ACTOR, updatedBy: ACTOR }));
+    const r = await close(MONTH);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("RUNS_OPEN");
+    expect(r.json().message).toContain("B18-OPEN-2027-02 (processing)");
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_runs SET status = ${"cancelled"} WHERE id = ${RUN_OPEN}::uuid`));
+  });
+
   it("3 members x Rs 75 = Rs 225 -> top-up Rs 275, one balanced finance journal; a second close posts nothing", async () => {
     const r = await close(MONTH);
     expect(r.statusCode).toBe(201);
@@ -201,6 +247,28 @@ describe("Review SF3: closing the EPF challan accrues the A/c 2 minimum shortfal
     expect(after[0]!.n).toBe(1);
     const challan = await app.inject({ method: "GET", url: `/v1/payroll/statutory/pf/challan?period=${MONTH}`, headers: auth });
     expect(challan.json().adminMinimumTopUp).toEqual({ closed: true, topUpMinor: "27500", journalId: r.json().journalId });
+  });
+
+  it("a supplementary run approved later: a re-close books only the delta (here a Rs 75 reversal), append-only", async () => {
+    await asTenant(async (tx) => {
+      await tx.insert(payrollRuns).values({ id: RUN_SUP, tenantId: TENANT, runNo: "B18-SUP-2027-02", month: MONTH, structureId: STRUCT,
+        runType: "supplementary", totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "approved", createdBy: ACTOR, updatedBy: ACTOR });
+      await computeAndInsertSlip(tx as never, { actorId: ACTOR }, { runId: RUN_SUP, tenantId: TENANT, employeeId: SUP.id, employeeNo: SUP.no, basicMinor: 1_800_000n,
+        month: MONTH, pensionScheme: "EPF", daRateBps: 5800n, cityClass: "X", taxRegime: "new", fyStartYear: 2026 });
+    });
+    const r = await close(MONTH);
+    expect(r.statusCode).toBe(201);
+    // 4 x Rs 75 = Rs 300 -> shortfall Rs 200; Rs 275 already booked -> delta -Rs 75
+    expect(r.json()).toMatchObject({ memberCount: 4, adminAccruedMinor: "30000", targetTopUpMinor: "20000", topUpMinor: "-7500", alreadyClosed: false });
+    expect(r.json().runIds).toEqual([RUN, RUN_SUP].sort());
+    const journals = await asTenant((tx) => tx.execute(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT} AND topic = ${"finance.gl.post"} ORDER BY created_at`)) as unknown as Array<{ payload: { id: string; lines: Array<{ accountCode: string; debitMinor: string; creditMinor: string }> } }>;
+    expect(journals).toHaveLength(2);
+    expect(journals[1]!.payload.lines.map((l) => [l.accountCode, l.debitMinor, l.creditMinor])).toEqual([["2103", "7500", "0"], ["5002", "0", "7500"]]);
+    expect((await close(MONTH)).json()).toMatchObject({ alreadyClosed: true, topUpMinor: "-7500" });
+    const rows = await asTenant((tx) => tx.execute(sql`SELECT count(*)::int AS n FROM statutory.payroll_epf_admin_topups WHERE tenant_id = ${TENANT}::uuid`)) as unknown as Array<{ n: number }>;
+    expect(rows[0]!.n).toBe(2);
+    // Keep the rest of this file on the original 3 members: the supplementary slip is excluded.
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_slips SET status = ${"excluded"} WHERE run_id = ${RUN_SUP}::uuid`));
   });
   it("a month with no PF member cannot be closed; payroll_officer may not close", async () => {
     expect((await close("2027-06")).statusCode).toBe(404);

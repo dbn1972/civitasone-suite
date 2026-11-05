@@ -137,6 +137,22 @@ describe("PayrollRunActions — approval review (Rs 0-basic exclusions, arrears 
     });
   });
 
+  it("409 EPS_ELIGIBILITY_UNRECORDED (tenant policy block) lists the EPF members whose EPS eligibility is not recorded (PR #2458 delta review)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ code: "EPS_ELIGIBILITY_UNRECORDED", message: "raw" }, 409))
+      .mockResolvedValueOnce(json({ runId: "r1", zeroBasic: [], arrears: { totalMinor: "0", thresholdBps: 10000, employees: [] },
+        epsUnrecorded: { policy: "block", employees: [{ employeeId: "e1", employeeNo: "UATG1-25595" }, { employeeId: "e2", employeeNo: "UATG1-37007" }] } }));
+    open();
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Reviewed and correct" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+    const box = (await within(dialog).findByText(enMessages.payroll.runApproval.epsUnrecordedHeading)).closest("div")!;
+    expect(box).toHaveAttribute("role", "note");
+    expect(box).toHaveTextContent(enMessages.payroll.runApproval.epsUnrecordedBlock);
+    expect(box).toHaveTextContent("UATG1-25595, UATG1-37007");
+    expect(box.textContent).not.toContain("EPS_ELIGIBILITY_UNRECORDED");
+  });
+
   it("a plain approval sends only the remarks (no review fields)", async () => {
     fetchMock.mockResolvedValueOnce(json({ id: "r1", status: "accepted", correlationId: "c" }, 202));
     open();

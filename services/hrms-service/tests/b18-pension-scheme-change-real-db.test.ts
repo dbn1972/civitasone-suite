@@ -30,6 +30,7 @@ const R1 = randomUUID(); // regular post-2004 NPS: matrix + override
 const R2 = randomUUID(); // regular post-2004 NPS: UPS once / switch back once
 const R3 = randomUUID(); // contract NPS with UAN: concurrent requests
 const OTHER_TENANT = randomUUID();
+const AP2 = randomUUID(); // an existing apprentice still on NPS (delta review SF3)
 const SUPER = randomUUID();
 const UAN1 = "100200300401";
 
@@ -87,6 +88,7 @@ beforeAll(async () => {
       [C1, "B18-C1", "contract", "confirmed", null], [C2, "B18-C2", "permanent", "confirmed", "100200300402"],
       [C3, "B18-C3", "contract", "confirmed", "100200300403"], [C4, "B18-C4", "contract", "separated", null],
       [R1, "B18-R1", "permanent", "confirmed", null], [R2, "B18-R2", "permanent", "confirmed", null], [R3, "B18-R3", "contract", "confirmed", "100200300405"],
+      [AP2, "B18-AP2", "apprentice", "confirmed", null],
     ] as const) {
       await tx.execute(sql`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, pension_scheme, uan_number, basic_minor, created_by, updated_by)
         VALUES (${id}::uuid, ${TENANT}::uuid, ${no}, ${"Staff " + no}, ${DEPT}::uuid, ${DESIG}::uuid, ${"2025-01-15"}, ${type}, ${status}, ${"NPS"}, ${uan}, 1800000, ${MAKER}::uuid, ${MAKER}::uuid)`);
@@ -311,7 +313,8 @@ describe("Review SF1: EPF membership facts through the change flow", () => {
     expect(row[0]).toEqual({ vjo: true, first: "2026-10-28" });
     const feed = await app.inject({ method: "GET", url: `/v1/hrms/internal/payroll-input?month=${THIS_MONTH}`, headers: h(MAKER, ["payroll_admin"]) });
     const c1 = (feed.json() as { employees: Array<{ id: string; epf: unknown; pensionScheme: string }> }).employees.find((e) => e.id === C1)!;
-    expect(c1.epf).toEqual({ firstJoinedOn: "2026-10-28", voluntaryJointOption: true, epsMember: null, attains58On: null });
+    expect(c1.epf).toEqual({ firstJoinedOn: "2026-10-28", voluntaryJointOption: true, epsMember: null, joiningWageMinor: null, ageCutoffReached: null });
+    expect(c1).not.toHaveProperty("dateOfBirth");
     expect(c1.pensionScheme).toBe("EPF");
   });
 
@@ -364,5 +367,40 @@ describe("Review SF9 / SF6: regime-only feed; no scheme for apprentices and cons
       expect(r.statusCode).toBe(422);
       expect(r.json().code).toBe("PENSION_SCHEME_NOT_ALLOWED");
     }
+  });
+});
+
+describe("Delta review: joining wage stamped once, per-month age cutoff, apprentices to NONE", () => {
+  it("the EPF joining wage is recorded once through a membership request and then reaches payroll-input; a different later value is refused", async () => {
+    const eff = first(addMonths(THIS_MONTH, 2));
+    const r = await request(C1, { toScheme: "EPF", effectiveFrom: eff, reason: "Joining wage at EPF enrolment (Basic + DA)", epfJoiningWageMinor: 2_844_000 });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().epfJoiningWageMinor).toBe("2844000");
+    expect((await decide(r.json().id, "approve", {})).statusCode).toBe(200);
+    const feed = await app.inject({ method: "GET", url: `/v1/hrms/internal/payroll-input?month=${THIS_MONTH}`, headers: h(MAKER, ["payroll_admin"]) });
+    const c1 = (feed.json() as { employees: Array<{ id: string; epf: Record<string, unknown> }> }).employees.find((e) => e.id === C1)!;
+    expect(c1.epf.joiningWageMinor).toBe("2844000");
+    const again = await request(C1, { toScheme: "EPF", effectiveFrom: first(addMonths(THIS_MONTH, 3)), reason: "Trying to change the joining wage", epfJoiningWageMinor: 1_200_000 });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("EPF_JOINING_WAGE_RECORDED");
+  });
+
+  it("payroll-input carries a per-month age cutoff boolean, never the DOB", async () => {
+    await asTenant((tx) => tx.execute(sql`UPDATE employee.hrms_employees SET date_of_birth = ${"1969-03-10"} WHERE id = ${R1}::uuid`));
+    const at = async (month: string) => ((await app.inject({ method: "GET", url: `/v1/hrms/internal/payroll-input?month=${month}`, headers: h(MAKER, ["payroll_admin"]) }))
+      .json() as { employees: Array<{ id: string; epf: { ageCutoffReached: boolean | null } }> }).employees.find((e) => e.id === R1)!;
+    expect((await at("2027-03")).epf.ageCutoffReached).toBe(false);
+    const after = await at("2027-04");
+    expect(after.epf.ageCutoffReached).toBe(true);
+    expect(JSON.stringify(after)).not.toContain("1969");
+  });
+
+  it("an existing apprentice on NPS moves to NONE through the normal maker-checker (no override)", async () => {
+    const r = await request(AP2, { toScheme: "NONE", effectiveFrom: first(THIS_MONTH), reason: "Apprentices are on no pension scheme" });
+    expect(r.statusCode).toBe(201);
+    expect(r.json()).toMatchObject({ fromScheme: "NPS", toScheme: "NONE", overrideReason: null });
+    expect((await decide(r.json().id, "approve", {})).statusCode).toBe(200);
+    expect((await empRow(AP2)).pension_scheme).toBe("NONE");
+    expect(await feedScheme(THIS_MONTH, AP2)).toBe("NONE");
   });
 });
