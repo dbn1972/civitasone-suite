@@ -13,7 +13,7 @@ import { minorString } from "@civitasone/schemas/money";
 import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
 import { sendNachFile } from "./nach-release.js";
-import { grnBillHeadCode } from "../gl/system-heads.js";
+import { grnBillHeadCode, payrollDeductionHeads } from "../gl/system-heads.js";
 import { payrollAccrualLines, payrollAccrualJournalCommand, accrualDateOnApproval, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
 import { loadSettingsTx } from "../approvals/repo.js";
 import { deterministicId } from "../gl/spine.js";

@@ -45,12 +45,20 @@ beforeAll(async () => {
     await tx.insert(payrollStructures).values({
       id: STRUCT, tenantId: TENANT, name: "D-16 Structure", isDefault: true, status: "active", createdBy: OFFICER, updatedBy: OFFICER,
     });
+    // Bundle 17-19 merge: createRun now refuses an FY with no new-regime slabs (b18 D2, 422 TAX_CONFIG_MISSING)
+    // before it looks at the run number, so the FYs of the months below get slabs for this tenant.
+    // Both regimes, so the pre-check never has to ask HRMS (unreachable here) who opted for the old one.
+    for (const fy of [2031, 2032]) for (const regime of ["new", "old"]) {
+      await tx.execute(sql`INSERT INTO payroll.tax_slab_config (tenant_id, fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands, created_by)
+        VALUES (${TENANT}::uuid, ${fy}, ${regime}, ${JSON.stringify([{ from: 0, to: null, rate: 0 }])}::jsonb, 75000, 1200000, 60000, ${"[]"}::jsonb, ${OFFICER}::uuid)`);
+    }
   }));
 });
 afterAll(async () => {
   await queue.stop();
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
+    await tx.execute(sql`DELETE FROM payroll.tax_slab_config WHERE tenant_id = ${TENANT}::uuid`);
     await tx.delete(payrollStructures).where(eq(payrollStructures.id, STRUCT));
   }));
   await app.close(); await sqlClient.end();

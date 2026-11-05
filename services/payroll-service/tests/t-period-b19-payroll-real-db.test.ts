@@ -126,7 +126,7 @@ describe("T-PERIOD D-02b: March true-up and the net-pay approval guard", () => {
   });
 
   it("a slip paying Rs 0 blocks approval (409 NET_PAY_NON_POSITIVE), is listed by approval-review, and approves once acknowledged (audited)", async () => {
-    const runId = await insertRun("2027-05", "processing", "B19-MAY");
+    const runId = await insertRun("2027-05", "computed", "B19-MAY");
     const zeroNetEmp = randomUUID();
     await asTenant(async (tx) => {
       await repo.insertSlip(tx, {
@@ -152,7 +152,7 @@ describe("T-PERIOD D-02b: March true-up and the net-pay approval guard", () => {
     expect((err as HttpError).code).toBe("NET_PAY_NON_POSITIVE");
     expect((err as HttpError).message).toContain("TP-EMP-01");
     await memQueue.drain();
-    expect((await runWithTenant(tenantId, () => repo.findRunById(runId, tenantId)))!.status).toBe("processing");
+    expect((await runWithTenant(tenantId, () => repo.findRunById(runId, tenantId)))!.status).toBe("computed");
 
     const blank = await runWithTenant(tenantId, () => approveRun(ctx(), runId, undefined, [], [], [{ employeeId: zeroNetEmp, reason: "   " }])).catch((e: unknown) => e);
     expect((blank as HttpError).code).toBe("NET_PAY_NON_POSITIVE");

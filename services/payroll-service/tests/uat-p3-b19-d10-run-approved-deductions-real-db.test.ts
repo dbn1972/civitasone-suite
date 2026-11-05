@@ -60,7 +60,7 @@ describe("D-10: payroll.run.approved carries the employee deductions split (real
     const runId = randomUUID();
     await inTenant(tenant, (tx) => repo.insertRun(tx as never, {
       id: runId, tenantId: tenant, runNo: `D10-${runId.slice(0, 8)}`, month: "2026-08", departmentId: null, structureId: randomUUID(), runType: "regular",
-      ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing", createdBy: creator, updatedBy: creator,
+      ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "computed", createdBy: creator, updatedBy: creator,
     }));
     const LIC = [{ code: "LIC", name: "LIC Premium", type: "deduction" as const, fixedMinor: R(1500) }];
     const TA = [{ code: "TA", name: "Transport Allowance", type: "earning" as const, fixedMinor: R(3600) }];

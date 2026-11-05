@@ -111,7 +111,7 @@ beforeAll(async () => {
       components: [{ code: "LOP", name: "Loss of Pay", type: "deduction", amountMinor: 783_900n, lopDays: 27, daysInMonth: 31, notInServiceDays: 27 }] });
     // Delta review: a computed (not yet approved) run with a member whose EPS eligibility is unrecorded.
     await tx.insert(payrollRuns).values({ id: RUN3, tenantId: TENANT, runNo: "B18-EPS-2027-05", month: "2027-05", structureId: STRUCT,
-      totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing", createdBy: ACTOR, updatedBy: ACTOR });
+      totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "computed", createdBy: ACTOR, updatedBy: ACTOR });
     await computeAndInsertSlip(tx as never, { actorId: ACTOR }, { ...common, runId: RUN3, month: "2027-05", employeeId: JOIN2.id, employeeNo: JOIN2.no, basicMinor: 1_800_000n,
       dateOfJoining: "2026-10-28", epfFacts: {} });
     // A UPS member: Basic Rs 50,000, DA 58% -> pension base Rs 79,000.
