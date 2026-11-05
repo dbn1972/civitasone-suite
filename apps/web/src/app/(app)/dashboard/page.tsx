@@ -8,6 +8,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { visibleModules } from "./visibleModules";
 import { SelfServiceCard } from "./SelfServiceCard";
 import { getTranslations } from "next-intl/server";
+import { getEnabledModules } from "@/lib/moduleVisibility";
 
 export default async function DashboardPage() {
   const t = await getTranslations("home");
@@ -29,7 +30,7 @@ export default async function DashboardPage() {
         actions={<Link href="/workflow" className="btn primary">{t("myApprovals")}</Link>}
       />
       {/* UAT-P3 (S-02): employees get their self-service links first. */}
-      {roles.includes("employee") ? <SelfServiceCard roles={roles} /> : null}
+      {roles.includes("employee") ? <SelfServiceCard roles={roles} enabledModules={await getEnabledModules()} /> : null}
       <Link
         href="/setup"
         aria-label={t("setupBannerTitle")}

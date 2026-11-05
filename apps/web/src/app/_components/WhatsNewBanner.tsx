@@ -3,6 +3,11 @@
 /**
  * What's New changelog banner — shows below the TopBar when a new version
  * is detected. Dismissable and remembers dismissal via localStorage.
+ *
+ * UAT-P3 (DASH-02): intentionally NOT mounted in AppShell any more (a stale
+ * "New: Module configuration" banner sat on every page and print). Release
+ * notes live under Help. Kept, with its tests, for a future release-announcement
+ * channel; mount it only with a current changelog entry and a print-hidden class.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";

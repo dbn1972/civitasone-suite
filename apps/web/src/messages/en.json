@@ -5588,6 +5588,7 @@
     "topbar": {
       "breadcrumb": "Breadcrumb",
       "openSearch": "Open search",
+      "askMenu": "Ask CivitasOne",
       "search": "Search…",
       "accountMenu": "Account menu",
       "preferences": "Preferences",

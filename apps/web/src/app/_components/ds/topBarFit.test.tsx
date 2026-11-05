@@ -59,8 +59,16 @@ describe("top bar fits a phone (UAT-P3 DS-1)", () => {
     expect(phone).toMatch(/\.tb-search \.tb-search-label,\.tb-search kbd\{display:none\}/);
   });
 
-  it("the language toggle folds into the Account menu below 480 px", () => {
-    expect(small).toMatch(/\.tb-lang-slot\{display:none\}/);
+  it("the language toggle stays visible below 480 px as a 44 px compact button (GIGW 3.0), and Ask moves into the Account menu", () => {
+    expect(small).not.toMatch(/\.tb-lang-slot\{display:none\}/);
+    expect(small).toMatch(/\.tb-lang-slot \.tb-lang\{min-width:44px;min-height:44px/);
+    expect(small).toMatch(/\.tb-lang \.tb-lang-long\{display:none\}/);
+    expect(small).toMatch(/\.tb-lang \.tb-lang-short\{display:inline/);
+    expect(small).toMatch(/\.iconbtn\.tb-ask\{display:none\}/);
+    expect(small).toMatch(/\.am-ask\{display:block\}/);
+    // outside the phone block the long label shows and the Account-menu Ask row is hidden
+    expect(css).toMatch(/\n\.tb-lang \.tb-lang-short\{display:none\}/);
+    expect(css).toMatch(/\n\.am-ask\{display:none\}/);
   });
 
   it.each([320, 360, 390])("leaves at least 48 px for the page title at %ipx", (vw) => {
@@ -70,6 +78,7 @@ describe("top bar fits a phone (UAT-P3 DS-1)", () => {
     const actionsGap = px(phone, /\.tb-actions\{gap:(\d+)px/);
     const control = px(phone, /\.tb-search\{flex:0 0 (\d+)px/); // menu, search, Ask, bell are all this size
     const avatar = px(css, /\.av\.sm\{width:(\d+)px/);
+    // <= 480: the 44 px language toggle takes the place Ask had (Ask is in the Account menu).
     const languageToggle = vw <= 480 ? 0 : 44 + actionsGap;
     // [menu] gap [crumb] gap [search] gap [actions: Ask, bell, avatar (+ language)]
     const fixed = 2 * pad + 3 * gap + 2 * control + (2 * control + avatar + 2 * actionsGap) + languageToggle;
@@ -121,6 +130,25 @@ describe("12 px text floor (UAT-P3 DS-2)", () => {
 
 describe("one breadcrumb (UAT-P3 NAV-05)", () => {
   it("an in-page trail that repeats the top-bar breadcrumb is not shown", () => {
-    expect(css).toMatch(/#main nav\[aria-label="Breadcrumb"\]:has\(\[aria-current="page"\]\)\{display:none\}/);
+    expect(css).toMatch(/#main nav\[data-dup-crumb\]\{display:none\}/);
+    // the old language-dependent selector is gone (it hid trails only when aria-label was the English word)
+    expect(css).not.toMatch(/nav\[aria-label="Breadcrumb"\]:has/);
+  });
+
+  it("every in-page trail that repeats the top-bar one is opted out in source, whatever its aria-label language", () => {
+    const root = join(process.cwd(), "src/app");
+    const marked = [
+      "(app)/audit/_components/AuditBreadcrumb.tsx",
+      "(app)/platform-admin/Breadcrumb.tsx",
+      "(app)/legal/cases/[id]/page.tsx",
+      "(app)/legal/opinions/[id]/page.tsx",
+      "(app)/inspection/reports/[id]/page.tsx",
+      "(app)/inspection/inspections/[id]/page.tsx",
+      "(app)/finance/payments/[id]/page.tsx",
+      "(app)/contracts/[id]/page.tsx",
+      "(app)/hr/disciplinary/[id]/page.tsx",
+      "(app)/hr/locations/[id]/page.tsx",
+    ];
+    for (const f of marked) expect(readFileSync(join(root, f), "utf8"), f).toContain("data-dup-crumb");
   });
 });

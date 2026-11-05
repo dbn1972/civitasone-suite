@@ -7,6 +7,7 @@ import { DarkModeToggle } from "./DarkModeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { performLogout } from "@/lib/sync/logout";
 import { useShellT } from "./useShellT";
+import { ASK_OPEN_EVENT } from "./AskCivitasOne";
 
 /** Account avatar with preferences (dark mode, language) and sign-out. */
 export function AccountMenu({ name = "User" }: { name?: string }) {
@@ -91,6 +92,19 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
           </div>
 
           <div style={{ borderTop: "1px solid var(--line, #eee)", marginTop: 4, paddingTop: 4 }}>
+            {/* Phones (< 480 px): the header Ask button is hidden to make room for the language toggle. */}
+            <button
+              type="button"
+              role="menuitem"
+              className="am-ask"
+              onClick={() => {
+                close();
+                window.dispatchEvent(new CustomEvent(ASK_OPEN_EVENT));
+              }}
+              style={{ width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: "inherit" }}
+            >
+              {t("topbar.askMenu", "Ask CivitasOne")}
+            </button>
             <button
               type="button"
               role="menuitem"

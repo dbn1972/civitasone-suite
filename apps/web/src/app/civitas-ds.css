@@ -512,8 +512,9 @@ form.fields.jv-form>*{min-width:0}
    breadcrumb that could not shrink, the actions pushed off-screen), which
    panned every page sideways (147 of 158 phone FAILs). Now: the crumb
    shrinks with an ellipsis and shows only the current page on phones, search
-   is a 44 px icon button, the language toggle folds into the Account menu
-   below 480 px, and Ask is a header button. topBarFit.test.ts + the
+   is a 44 px icon button, the language toggle shrinks to a 44 px अ / A button
+   below 480 px (Ask moves into the Account menu there), and Ask is a header
+   button above that. topBarFit.test.ts + the
    Playwright overflow test (tests/e2e/shell-overflow.spec.ts) guard this. */
 .tb .crumb{flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .tb .crumb .auto-crumb{min-width:0;flex-wrap:nowrap;overflow:hidden}
@@ -536,12 +537,22 @@ form.fields.jv-form>*{min-width:0}
 }
 @media(max-width:480px){
   .tb{padding:0 8px;gap:6px}
-  .tb-lang-slot{display:none}
+  /* GIGW 3.0: the language option stays visible on every page. It takes the
+     place Ask had (Ask moves into the Account menu), so the width budget is
+     unchanged: a 44 px compact अ / A button. */
+  .iconbtn.tb-ask{display:none}
+  .tb-lang-slot .tb-lang{min-width:44px;min-height:44px;padding:0;justify-content:center}
+  .tb-lang .tb-lang-long{display:none}
+  .tb-lang .tb-lang-short{display:inline;font-size:var(--fs-lg);font-weight:700}
+  .am-ask{display:block}
 }
+.tb-lang .tb-lang-short{display:none}
+.am-ask{display:none}
 /* UAT-P3 (NAV-05): one breadcrumb. The top bar trail (AutoBreadcrumb) is the
-   breadcrumb; an in-page trail that repeats it (a Breadcrumb landmark that
-   marks a current page) is not shown. Back links (no aria-current) stay. */
-#main nav[aria-label="Breadcrumb"]:has([aria-current="page"]){display:none}
+   breadcrumb; an in-page trail that only repeats it is opted out in source with
+   data-dup-crumb (explicit, language-independent; a trail that adds context is
+   never hidden by accident). Back links (no aria-current) stay. */
+#main nav[data-dup-crumb]{display:none}
 @media(max-width:768px){.app-foot{padding:14px 16px 96px}}
 
 /* Screen-reader-only utility (visible to AT, hidden visually). */

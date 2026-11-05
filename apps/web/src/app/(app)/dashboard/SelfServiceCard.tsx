@@ -9,8 +9,15 @@ import { SELF_SERVICE_ITEMS, isNavItemVisible } from "@/lib/nav/navModel";
  * This card lists the same self-service entries as the sidebar, filtered by
  * the same role gates (lib/nav/navModel.ts).
  */
-export async function SelfServiceCard({ roles }: { roles: readonly string[] }) {
-  const items = SELF_SERVICE_ITEMS.filter((i) => isNavItemVisible(i, { roles }));
+export async function SelfServiceCard({
+  roles,
+  enabledModules = null,
+}: {
+  roles: readonly string[];
+  /** Tenant module keys (null = unknown: show). A standalone tenant without hrms-* must not be offered ModuleGate-blocked links. */
+  enabledModules?: readonly string[] | null;
+}) {
+  const items = SELF_SERVICE_ITEMS.filter((i) => isNavItemVisible(i, { roles, enabledModules }));
   if (items.length === 0) return null;
   const t = await getTranslations("appNav");
   return (

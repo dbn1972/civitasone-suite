@@ -11,7 +11,7 @@
  * and appNav.page.<id> (extra pages), English `label` as the fallback.
  */
 import { NAV_GROUPS, isNavItemVisible, type NavAccess } from "./navModel";
-import { FINANCE_ROLES, HR_ROLES } from "@/lib/auth/workRoles";
+import { FINANCE_ROLES, HR_ROLES, WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
 import { HR_TILE_ROLE_OVERRIDES } from "@/lib/auth/hrTileAccess";
 
 export type PageEntry = {
@@ -117,7 +117,7 @@ const HR = "hrms";
 /** Screens below the sidebar level that officers look for by name. */
 const EXTRA_PAGES: PageEntry[] = [
   { id: "approvals", kind: "page", href: "/approvals", label: "My approvals", groupId: "overview", groupLabel: "Overview",
-    keywords: ["approvals", "pending", "inbox", "approve", "अनुमोदन", "लंबित"], moduleKey: null },
+    keywords: ["approvals", "pending", "inbox", "approve", "अनुमोदन", "लंबित"], moduleKey: "workflow", rolesAllowed: WORKFLOW_TASK_ROLES, failClosed: true },
   { id: "jvNew", kind: "page", href: "/finance/accounting/vouchers/new", label: "New journal voucher (JV)", groupId: "finance", groupLabel: "Finance",
     keywords: ["JV", "journal voucher", "journal entry", "voucher", "जर्नल वाउचर", "वाउचर"], moduleKey: "finance", rolesAllowed: FINANCE_ROLES },
   { id: "jvApprovals", kind: "page", href: "/finance/accounting/journal-approvals", label: "Journal voucher approvals", groupId: "finance", groupLabel: "Finance",

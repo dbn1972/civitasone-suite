@@ -85,7 +85,8 @@ export const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_a
  * failed fetches, and declares the module's owner. super_admin is included so
  * platform operators keep access.
  */
-export const CATALOGUE_READER_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { CATALOGUE_READER_ROLES } from "./navRoles";
 
 /**
  * GAP-CATALOGUE-HOME-02: roles permitted to CREATE/EDIT catalogue entries.
@@ -128,12 +129,8 @@ export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
  * PII — see health/scoring-routes.ts), so this role gate plus the service RBAC
  * is the control; there is no unmasked phone/email to leak.
  */
-export const RECOMMENDATION_READER_ROLES = [
-  "recommendation_admin",
-  "crm_user",
-  "sales_user",
-  "super_admin",
-];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { RECOMMENDATION_READER_ROLES } from "./navRoles";
 
 /**
  * Roles permitted to approve/reject a cycle count. Mirrors inventory-service's
@@ -190,15 +187,8 @@ export const PROJECT_READER_ROLES = [
  * absent from PROJECT_READER_ROLES, which mirrors only the beneficiaries
  * endpoint's reader set).
  */
-export const PROJECT_VIEW_ROLES = [
-  "project_officer",
-  "project_manager",
-  "project_admin",
-  "finance_officer",
-  "tenant_admin",
-  "super_admin",
-  "audit_officer",
-];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { PROJECT_VIEW_ROLES } from "./navRoles";
 
 /**
  * Roles permitted to DISBURSE a project fund release (a money-moving,
@@ -848,7 +838,8 @@ export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "tenant_a
  * user whose GET would 403 sees PermissionDenied instead of an unexplained
  * failed fetch, and member references/balances are not loaded for them.
  */
-export const LOYALTY_READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { LOYALTY_READ_ROLES } from "./navRoles";
 
 /**
  * GAP-LOYALTY-REDEMPTIONS-02 / PROGRAMS-02: roles permitted to perform loyalty
@@ -1104,15 +1095,8 @@ export const ML_INSIGHTS_READ_ROLES = ["ml_admin", "analytics_admin", "super_adm
  * report_viewer the reverse) with no web signal. The service remains the
  * authority; this gate is defence-in-depth + honest UX.
  */
-export const REPORTS_READER_ROLES = [
-  "report_user",
-  "report_viewer",
-  "report_admin",
-  "finance_admin",
-  "admin",
-  "tenant_admin",
-  "super_admin",
-];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { REPORTS_READER_ROLES } from "./navRoles";
 
 /**
  * GAP-ESTAB-DFA-02: roles permitted to approve, return and sign a Draft For
@@ -1146,13 +1130,5 @@ export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"
  * service stays the authority; this gate only stops a role with no inspection
  * permission from landing on a hub whose every call 403s.
  */
-export const INSPECTION_ROLES = [
-  "inspector",
-  "reviewing_officer",
-  "supervising_officer",
-  "planning_officer",
-  "audit_officer",
-  "inspection_admin",
-  "tenant_admin",
-  "super_admin",
-];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { INSPECTION_ROLES } from "./navRoles";

@@ -10,7 +10,7 @@ import { AUDIT_HOME, AUDIT_HOME_LABEL } from "./auditNav";
  */
 export function AuditBreadcrumb({ current, isHome = false, parent }: { current: string; isHome?: boolean; parent?: { label: string; href: string } }) {
   return (
-    <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
+    <nav aria-label="Breadcrumb" data-dup-crumb style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
       {isHome ? (
         <span aria-current="page">{current}</span>
       ) : (

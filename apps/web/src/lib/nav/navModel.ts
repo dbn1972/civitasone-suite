@@ -9,9 +9,10 @@
  *     (ModuleGate) uses, lib/moduleMatch.ts, and
  *  2. rolesAllowed, copied from the destination layout/page guard (each list
  *     cites where it comes from). Unknown roles (null / undefined) show the
- *     entry, the long-standing advisory-hide convention, EXCEPT failClosed
- *     entries whose layout itself denies an empty roles claim
- *     (revenue/layout.tsx PermissionDenied, billing/layout.tsx requireAnyRole).
+ *     entry (the long-standing advisory convention); an explicit empty roles
+ *     array hides every rolesAllowed entry, because each destination guard
+ *     (requireAnyRole) redirects it. navModel.parity.test.ts pins every
+ *     rolesAllowed list to the guard in the destination layout.
  *
  * The backend stays the authority; this only stops the nav offering a link
  * whose page would deny the user.
@@ -34,6 +35,10 @@ import { HR_TILE_ROLE_OVERRIDES } from "@/lib/auth/hrTileAccess";
 import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
 import { ADMIN_TENANT_ROLES, BILLING_GSTN_ROLES, BILLING_MODULE_ROLES } from "@/lib/auth/adminRoles";
 import { MEETING_CONFIG_ADMIN_ROLES, MEETING_CREATE_ROLES } from "@/lib/auth/meetingRoles";
+import {
+  AUDIT_ROLES, CATALOGUE_READER_ROLES, CRM_ROLES, INSPECTION_ROLES, LEGAL_ROLES, LOCATION_VIEW_ROLES,
+  LOYALTY_READ_ROLES, PROJECT_VIEW_ROLES, RECOMMENDATION_READER_ROLES, REPORTS_READER_ROLES,
+} from "@/lib/auth/navRoles";
 import { GRANTS_VIEW_ROLES } from "@/app/(app)/grants/roles";
 import { TENANT_ADMIN_ROLES } from "@/app/(app)/tenant/_roles";
 
@@ -45,7 +50,7 @@ export type NavItemDef = {
   href: string;
   moduleKey: string | null;
   rolesAllowed?: readonly string[];
-  /** Hide when the roles claim is known to be empty, because the destination fails closed. */
+  /** Informational: the destination fails closed on an empty roles claim (now true of every rolesAllowed entry). */
   failClosed?: boolean;
 };
 
@@ -145,7 +150,7 @@ export const NAV_GROUPS: NavGroupDef[] = [
       { id: "procurement", label: "Procurement", href: "/procurement", moduleKey: "procurement" },
       // GAP-CONTRACTS-HOME-02: same moduleKey as the contracts/layout.tsx ModuleGate.
       { id: "contracts", label: "Contracts", href: "/contracts", moduleKey: "contracts" },
-      { id: "projects", label: "Projects", href: "/projects", moduleKey: "projects" },
+      { id: "projects", label: "Projects", href: "/projects", moduleKey: "projects", rolesAllowed: PROJECT_VIEW_ROLES, failClosed: true },
       { id: "grants", label: "Grants", href: "/grants", moduleKey: "grants", rolesAllowed: GRANTS_VIEW_ROLES },
       { id: "establishment", label: "Establishment", href: "/estab", moduleKey: "establishment" },
       { id: "documents", label: "Documents", href: "/documents", moduleKey: "documents" },
@@ -189,7 +194,7 @@ export const NAV_GROUPS: NavGroupDef[] = [
     id: "citizenServices",
     label: "CITIZEN SERVICES",
     items: [
-      { id: "crm", label: "CRM", href: "/crm", moduleKey: "crm" },
+      { id: "crm", label: "CRM", href: "/crm", moduleKey: "crm", rolesAllowed: CRM_ROLES, failClosed: true },
       { id: "helpdesk", label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
       { id: "serviceCatalogue", label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
       { id: "citizen", label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
@@ -198,7 +203,7 @@ export const NAV_GROUPS: NavGroupDef[] = [
       { id: "workflow", label: "Workflow", href: "/workflow", moduleKey: "workflow" },
       { id: "visitor", label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { id: "court", label: "Court Mgmt", href: "/court", moduleKey: "court" },
-      { id: "inspection", label: "Inspection", href: "/inspection", moduleKey: "inspection" },
+      { id: "inspection", label: "Inspection", href: "/inspection", moduleKey: "inspection", rolesAllowed: INSPECTION_ROLES, failClosed: true },
       // GAP-TELEPHONY-HOME-01: moduleKey matches the telephony/layout.tsx ModuleGate.
       { id: "telephony", label: "Telephony", href: "/telephony", moduleKey: "telephony" },
     ],
@@ -207,17 +212,17 @@ export const NAV_GROUPS: NavGroupDef[] = [
     id: "locations",
     label: "LOCATIONS & GIS",
     items: [
-      { id: "locations", label: "Locations", href: "/locations", moduleKey: null },
-      { id: "mapViewer", label: "Map Viewer", href: "/locations/maps", moduleKey: null },
-      { id: "mapMonitoring", label: "Map Monitoring", href: "/locations/maps/monitoring", moduleKey: null },
+      { id: "locations", label: "Locations", href: "/locations", moduleKey: "locations", rolesAllowed: LOCATION_VIEW_ROLES, failClosed: true },
+      { id: "mapViewer", label: "Map Viewer", href: "/locations/maps", moduleKey: "locations", rolesAllowed: LOCATION_VIEW_ROLES, failClosed: true },
+      { id: "mapMonitoring", label: "Map Monitoring", href: "/locations/maps/monitoring", moduleKey: "locations", rolesAllowed: LOCATION_VIEW_ROLES, failClosed: true },
     ],
   },
   {
     id: "governance",
     label: "GOVERNANCE",
     items: [
-      { id: "audit", label: "Audit", href: "/audit", moduleKey: "audit" },
-      { id: "legal", label: "Legal", href: "/legal", moduleKey: "legal" },
+      { id: "audit", label: "Audit", href: "/audit", moduleKey: "audit", rolesAllowed: AUDIT_ROLES, failClosed: true },
+      { id: "legal", label: "Legal", href: "/legal", moduleKey: "legal", rolesAllowed: LEGAL_ROLES, failClosed: true },
     ],
   },
   {
@@ -226,18 +231,18 @@ export const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { id: "ai", label: "AI & Copilot", href: "/ai", moduleKey: "ai-agent" },
       { id: "field", label: "Field Ops", href: "/field", moduleKey: "field" },
-      { id: "loyalty", label: "Loyalty", href: "/loyalty", moduleKey: "loyalty" },
-      { id: "catalogue", label: "Catalogue", href: "/catalogue", moduleKey: "catalogue" },
+      { id: "loyalty", label: "Loyalty", href: "/loyalty", moduleKey: "loyalty", rolesAllowed: LOYALTY_READ_ROLES, failClosed: true },
+      { id: "catalogue", label: "Catalogue", href: "/catalogue", moduleKey: "catalogue", rolesAllowed: CATALOGUE_READER_ROLES, failClosed: true },
       { id: "cdp", label: "CDP", href: "/cdp", moduleKey: "cdp" },
       { id: "journeys", label: "Journeys", href: "/journeys", moduleKey: "journey" },
-      { id: "recommendations", label: "Recommendations", href: "/recommendations", moduleKey: "recommendation" },
+      { id: "recommendations", label: "Recommendations", href: "/recommendations", moduleKey: "recommendation", rolesAllowed: RECOMMENDATION_READER_ROLES, failClosed: true },
     ],
   },
   {
     id: "platform",
     label: "PLATFORM",
     items: [
-      { id: "reports", label: "Reports", href: "/reports", moduleKey: "reports" },
+      { id: "reports", label: "Reports", href: "/reports", moduleKey: "reports", rolesAllowed: REPORTS_READER_ROLES, failClosed: true },
       { id: "knowledge", label: "Knowledge", href: "/knowledge", moduleKey: "knowledge" },
       { id: "policies", label: "Policies & SOPs", href: "/knowledge/policies", moduleKey: "knowledge" },
       { id: "faq", label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
@@ -258,7 +263,7 @@ export type NavAccess = {
   enabledModules?: readonly string[] | null;
   /**
    * JWT roles claim. null/undefined = unknown (advisory show). An explicit []
-   * is a session with no roles: shown except failClosed entries.
+   * is a session with no roles: every rolesAllowed entry is hidden.
    */
   roles?: readonly string[] | null;
 };
@@ -270,11 +275,10 @@ export function isNavItemVisible(
 ): boolean {
   const roles = access.roles ?? null;
   if (item.rolesAllowed && roles) {
-    if (roles.length > 0) {
-      if (!roles.some((r) => item.rolesAllowed!.includes(r))) return false;
-    } else if (item.failClosed) {
-      return false;
-    }
+    // An explicit [] is a session that is known to hold no roles: every
+    // destination guard (requireAnyRole) redirects it, so hide the entry.
+    // Only null/undefined (roles unknown) keeps the advisory show.
+    if (!roles.some((r) => item.rolesAllowed!.includes(r))) return false;
   }
   const enabled = access.enabledModules ? [...access.enabledModules] : null;
   // platformAlwaysOn:false keeps the long-standing sidebar rule that platform

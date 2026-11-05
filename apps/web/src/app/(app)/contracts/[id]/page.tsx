@@ -89,7 +89,7 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/contracts" className="lnk">Contracts</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <Link href="/contracts/list" className="lnk">List</Link>

@@ -49,7 +49,10 @@ export function AskCivitasOne() {
   const handleClose = useCallback(() => {
     setIsOpen(false);
     // Return focus to the control that opened the panel (WCAG 2.4.3).
-    document.querySelector<HTMLElement>("[data-ask-trigger]")?.focus();
+    // Below 480 px the header trigger is hidden (Ask lives in the Account menu),
+    // so fall back to the account button.
+    const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-ask-trigger]")).find((el) => el.getClientRects().length > 0);
+    (visible ?? document.querySelector<HTMLElement>(".tb-account"))?.focus();
   }, []);
 
   return isOpen ? <AskCivitasOnePanel onClose={handleClose} /> : null;

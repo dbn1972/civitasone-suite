@@ -92,7 +92,13 @@ for (const width of [320, 360, 390]) {
           expect(m.overflow, `document wider than the screen (${m.offender})`).toBeLessThanOrEqual(4);
           // Search and the account menu stay reachable on the phone.
           await expect(page.locator("header.tb .tb-search")).toBeVisible();
-          await expect(page.locator("header.tb [data-ask-trigger]")).toBeVisible();
+          // At <= 480 px Ask lives in the Account menu so a visible language toggle fits (GIGW 3.0).
+          if (width <= 480) {
+            await expect(page.locator("header.tb .tb-lang")).toBeVisible();
+            await expect(page.locator("header.tb [data-ask-trigger]")).toBeHidden();
+          } else {
+            await expect(page.locator("header.tb [data-ask-trigger]")).toBeVisible();
+          }
         });
       }
     }
