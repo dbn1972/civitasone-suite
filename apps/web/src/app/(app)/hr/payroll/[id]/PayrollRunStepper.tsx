@@ -12,7 +12,7 @@ const STEPS = [
 
 /**
  * GAP-PAYROLL-DETAIL-08: the wire status enum (payroll-service queries.ts
- * mapRunStatus) is only ever draft/processing/completed/paid/failed --
+ * mapRunStatus) is draft/processing/computed/completed/paid/failed --
  * "approved" and "disbursed" are internal-only values the backend remaps to
  * "completed"/"paid" before the API responds, so a branch keyed on the
  * literal string "approved" can never match a real run; it used to point
@@ -26,6 +26,8 @@ function statusToStepIndex(status: string): number {
   switch (status) {
     case "draft":      return 0;
     case "processing": return 1;
+    // UAT L2-N3: calculated, waiting on a reviewer to check and approve.
+    case "computed":   return 2;
     case "completed":  return 4;
     case "paid":       return 4;
     case "disbursed":  return 4; // defensive synonym; not sent by this endpoint

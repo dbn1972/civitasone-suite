@@ -419,7 +419,19 @@ describe("pension, age and run lifecycle", () => {
   });
 
   it("run status transitions: disbursed is terminal; unknown states are refused with a coded error", () => {
-    expect(() => d.assertRunStatusTransition("processing", "approved")).not.toThrow();
+    // UAT L2-N3 (bundle 16): a run is approvable only once its computation has
+    // finished (computed); processing -> approved is refused with the coded error;
+    // a payroll admin may send a computed run back (computed -> failed).
+    expect(() => d.assertRunStatusTransition("processing", "computed")).not.toThrow();
+    expect(() => d.assertRunStatusTransition("computed", "approved")).not.toThrow();
+    expect(() => d.assertRunStatusTransition("computed", "failed")).not.toThrow();
+    let early: { code?: string; message?: string } = {};
+    try { d.assertRunStatusTransition("processing", "approved"); } catch (e) { early = e as typeof early; }
+    expect(early.code).toBe("INVALID_STATUS_TRANSITION");
+    expect(early.message).toMatch(/cannot move payroll run from .processing. to .approved./);
+    for (const next of ["draft", "processing", "computed", "approved", "failed"]) {
+      expect(() => d.assertRunStatusTransition("disbursed", next), next).toThrow(/INVALID_STATUS_TRANSITION/);
+    }
     let err: { code?: string; message?: string } = {};
     try { d.assertRunStatusTransition("disbursed", "approved"); } catch (e) { err = e as typeof err; }
     expect(err.code).toBe("INVALID_STATUS_TRANSITION");

@@ -1,5 +1,6 @@
 import createNextIntlPlugin from 'next-intl/plugin'
 import bundleAnalyzer from '@next/bundle-analyzer'
+import { buildTimeIso } from './scripts/build-info.mjs'
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 const withBundleAnalyzer = bundleAnalyzer({
@@ -15,6 +16,9 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_PRODUCT_NAME: "CivitasOne Suite",
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+    // A-N2 (GIGW 3.0): the footer "Last updated" date is the build time
+    // (BUILD_TIME / SOURCE_DATE_EPOCH can pin it). Non-secret.
+    NEXT_PUBLIC_BUILD_TIME: buildTimeIso(),
   },
   async headers() {
     return [

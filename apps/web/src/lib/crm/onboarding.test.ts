@@ -205,7 +205,7 @@ describe("onboarding HTTP client", () => {
         { status: 422 },
       ),
     );
-    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow("This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.");
     await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.not.toThrow(
       /KYC_NOT_VERIFIED|must be 'verified'/,
     );
@@ -215,7 +215,7 @@ describe("onboarding HTTP client", () => {
     fetchMock.mockResolvedValue(
       res({ code: "INVALID_TRANSITION", message: "cannot move from 'initiated' to 'completed' (allowed: documents_submitted, cancelled)" }, { status: 422 }),
     );
-    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow("This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.");
     await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.not.toThrow(
       /INVALID_TRANSITION|allowed: documents_submitted/,
     );
@@ -233,7 +233,7 @@ describe("onboarding HTTP client", () => {
     fetchMock.mockResolvedValue(
       res({ code: "INVALID_KYC_TRANSITION", message: "cannot move KYC from 'verified' to 'submitted' (allowed: )" }, { status: 422 }),
     );
-    await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
+    await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.toThrow("This record is not at a stage that allows this action. Refresh the page to see its current status, then choose an action that is available.");
     await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.not.toThrow(/INVALID_KYC_TRANSITION/);
   });
 

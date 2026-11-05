@@ -191,7 +191,7 @@ describe("payroll.run.approve → payroll.run.approved event", () => {
     totalGrossMinor: 0n,
     totalNetMinor: 0n,
     currency: "INR",
-    status: "processing",
+    status: "computed",
     createdBy: ACTOR,
     updatedBy: ACTOR,
     approvedBy: null,

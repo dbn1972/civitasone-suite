@@ -119,7 +119,7 @@ describe("ContactsTable", () => {
     expect(statusNodes[0]).toHaveTextContent(/Showing saved data/i);
     expect(statusNodes[0]).toHaveTextContent(/could not refresh/i);
     // The old, contradictory copy must never appear alongside it.
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
   });
 
   // UX-002 regression: fetch failed and there is genuinely no cache — an
@@ -139,7 +139,7 @@ describe("ContactsTable", () => {
     // own live region (a11y HIGH-3 — a screen reader must hear "no results"
     // too, not just see it). Assert each by its specific text rather than
     // assuming there is exactly one status node.
-    expect(screen.getByText(/Couldn't load — showing nothing/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn't load this information, so nothing is shown here\./i)).toBeInTheDocument();
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
     // GAP-CRM-CONTACTS-05: a failed load shows a retry state, never the
     // "No contacts yet" first-create nudge.

@@ -181,7 +181,7 @@ describe("NewTsForm: GAP-WORKS-APPROVALS-TS-NEW-01 DAO-finalized precondition", 
     render(<NewTsPage />);
     fireEvent.focus(screen.getByLabelText("Work"));
     fireEvent.change(screen.getByLabelText("Work"), { target: { value: "WK" } });
-    expect(await screen.findByText("Could not load the works. Check your connection and try again.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't search the works. Try again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
   });
 

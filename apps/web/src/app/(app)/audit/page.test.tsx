@@ -47,7 +47,7 @@ describe("AuditPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await AuditPage());
     expect(screen.getByText("No audit events yet")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   it("GAP-AUDIT-HOME-04: a real fetch failure shows '—' KPIs and the error state, not zeros", async () => {

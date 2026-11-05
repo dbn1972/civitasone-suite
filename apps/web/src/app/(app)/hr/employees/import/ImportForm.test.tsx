@@ -277,7 +277,7 @@ describe("ImportForm — client-side row validation", () => {
 
     review(fileOf(csv));
 
-    await waitFor(() => expect(screen.getByText(/invalid basic pay/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/basic pay ".*" is not a valid amount/i)).toBeInTheDocument());
     // No valid row => there is nothing to confirm, and nothing was sent.
     expect(screen.getByRole("button", { name: /import 0 valid rows/i })).toBeDisabled();
     expect(postedOf(fetchMock)).toHaveLength(0);
@@ -306,7 +306,7 @@ describe("ImportForm — client-side row validation", () => {
 
     review(fileOf(csv));
 
-    await waitFor(() => expect(screen.getByText(/invalid date/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/is not in the right format; enter it as YYYY-MM-DD/i)).toBeInTheDocument());
     expect(postedOf(fetchMock)).toHaveLength(0);
   });
 
@@ -318,7 +318,7 @@ describe("ImportForm — client-side row validation", () => {
 
     review(fileOf(csv));
 
-    expect(await screen.findByText(/invalid date "2024-02-30"/i)).toBeInTheDocument();
+    expect(await screen.findByText(/the date "2024-02-30" is not in the right format/i)).toBeInTheDocument();
   });
 
   it("flags a second row that repeats an employeeNo from earlier in the file, keeping the first", async () => {
@@ -345,8 +345,8 @@ describe("ImportForm — client-side row validation", () => {
 
     review(fileOf(csv));
 
-    expect(await screen.findByText(/invalid email address/i)).toBeInTheDocument();
-    expect(screen.getByText(/invalid mobile number/i)).toBeInTheDocument();
+    expect(await screen.findByText(/the email address is not in the right format/i)).toBeInTheDocument();
+    expect(screen.getByText(/the mobile number is not valid/i)).toBeInTheDocument();
     // PII: the offending values are never echoed into the page (nor, via it, the error report).
     expect(document.body.textContent).not.toContain("not-an-email");
     expect(document.body.textContent).not.toContain("12ab");
@@ -377,7 +377,7 @@ describe("ImportForm — preview before import", () => {
 
     review();
 
-    const status = await screen.findByText(/2 rows read: 1 ready to import, 1 with errors/i);
+    const status = await screen.findByText(/2 rows read: 1 ready to import, 1 has errors and will be skipped/i);
     expect(status).toHaveAttribute("role", "status");
     expect(screen.getByText(/nothing has been sent yet/i)).toBeInTheDocument();
     // Only the two read-only master lookups have happened; no write.
@@ -415,7 +415,7 @@ describe("ImportForm — preview before import", () => {
 
     review(fileOf(HEADER + rows));
 
-    await screen.findByText(/12 rows read: 12 ready to import, 0 with errors/i);
+    await screen.findByText(/12 rows read: 12 ready to import, 0 have errors and will be skipped/i);
     const table = screen.getByRole("table");
     // header row + 10 body rows
     expect(within(table).getAllByRole("row")).toHaveLength(11);
@@ -690,7 +690,7 @@ describe("ImportForm — confirms the real outcome through the status route", ()
     vi.stubGlobal("fetch", backend({ statuses: [failed] }));
     renderForm({ pollIntervalMs: 5, pollMaxMs: 5000 });
     await chooseAndSubmit(TWO_ROW_CSV);
-    expect(await screen.findByText("Row 2 (Ravi Kumar): the employee could not be created")).toBeInTheDocument();
+    expect(await screen.findByText("Row 2 (Ravi Kumar): the employee could not be created; check this row and import it again")).toBeInTheDocument();
   });
 
   it("never shows a green 'created' when polling times out: it says how many are confirmed and how many are still pending", async () => {

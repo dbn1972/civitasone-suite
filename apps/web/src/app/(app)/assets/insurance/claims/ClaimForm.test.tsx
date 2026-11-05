@@ -79,7 +79,7 @@ describe("ClaimForm", () => {
     fireEvent.click(screen.getByText("File claim"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
+      expect(screen.getByText(/The claim amount is more than the sum insured under this policy\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/CLAIM_EXCEEDS_COVERAGE/)).not.toBeInTheDocument();
   });

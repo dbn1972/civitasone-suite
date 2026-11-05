@@ -173,7 +173,7 @@ describe("DataQualityView record naming (GAP-CRM-DATA-QUALITY-01)", () => {
     });
     render(ui());
     const row = (await screen.findByText("Row X")).closest("tr")!;
-    expect(within(row).getByText("Missing Lead source, Invalid GSTIN, Not updated recently, legacy free text")).toBeInTheDocument();
+    expect(within(row).getByText("Missing Lead source, GSTIN is not in the right format, Not updated recently, legacy free text")).toBeInTheDocument();
     expect(within(row).queryByText(/missing:/)).not.toBeInTheDocument();
   });
 

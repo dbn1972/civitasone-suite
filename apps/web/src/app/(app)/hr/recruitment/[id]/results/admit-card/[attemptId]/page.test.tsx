@@ -33,6 +33,6 @@ describe("Admit card page (DETAIL-14)", () => {
   it("shows a generic failure when the request fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("x", { status: 500 })));
     renderPage();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/We couldn.t load the admit card\./);
   });
 });

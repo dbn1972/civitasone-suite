@@ -5,7 +5,7 @@ import enMessages from "@/messages/en.json";
 
 /**
  * Regression coverage for the self-service leave-application bug: a plain
- * `employee` role was shown "Couldn't load — showing nothing" and an empty
+ * `employee` role was shown "We couldn't load this information, so nothing is shown here. Refresh the page to try again." and an empty
  * "No employees loaded" dropdown, with no way to select even themselves,
  * because the page only ever populated the picker from the admin-only
  * GET /v1/hrms/employees list (correctly 403'd for that role — see

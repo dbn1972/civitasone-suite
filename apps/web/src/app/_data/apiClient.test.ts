@@ -145,7 +145,8 @@ describe("fetchJson timeout (CLOS3-S3-24)", () => {
     await vi.advanceTimersByTimeAsync(19_000);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(2_000);
-    expect(await p).toEqual({ data: [], source: "error" });
+    // The loader marks its own timeout, so the error state can say "taking longer than usual".
+    expect(await p).toEqual({ data: [], source: "error", timedOut: true });
   });
 
   it("honours a per-loader timeoutMs override", async () => {

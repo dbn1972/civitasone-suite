@@ -69,7 +69,7 @@ describe("LegacyDelegationsTable", () => {
     let n = 0;
     stub(() => (n++ === 0 ? new Response("x", { status: 500 }) : body([legacyRow()])));
     render(<LegacyDelegationsTable />);
-    expect(await screen.findByText("We couldn’t load the legacy delegations.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load the older delegations. Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.queryByText("No legacy delegations")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Legacy cover")).toBeInTheDocument();

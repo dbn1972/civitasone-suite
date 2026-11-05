@@ -22,6 +22,16 @@ describe("payrollRunStatusVariant", () => {
     expect(payrollRunStatusVariant("completed")).not.toBe(payrollRunStatusVariant("paid"));
   });
 
+  it("UAT L2-N3: computed (awaiting approval) has its own label key in en and hi and is not shown as paid", async () => {
+    const en = (await import("@/messages/en.json")).default as { payrollRunsTable: { status: Record<string, string> } };
+    const hi = (await import("@/messages/hi.json")).default as { payrollRunsTable: { status: Record<string, string> } };
+    expect(payrollRunStatusVariant("computed")).toBe("info");
+    expect(isPaidPayrollRunStatus("computed")).toBe(false);
+    expect(en.payrollRunsTable.status.computed).toBe("Ready for approval");
+    expect(hi.payrollRunsTable.status.computed).toBeTruthy();
+    expect(bucketPayrollRuns([{ status: "computed" }])).toEqual({ total: 1, paid: 0, failed: 0, inProgress: 1 });
+  });
+
   it("returns undefined for an unknown status so StatusPill's own default applies", () => {
     expect(payrollRunStatusVariant("mystery")).toBeUndefined();
   });

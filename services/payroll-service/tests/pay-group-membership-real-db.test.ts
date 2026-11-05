@@ -272,17 +272,40 @@ describe("membership: assign, overlap, move, end, mid-month", () => {
   });
 
   it("two concurrent assignments of one employee to different groups: exactly one wins (no double membership)", async () => {
-    const results = await Promise.all([assign(GB, E5, "2026-10-01"), assign(GC, E5, "2026-10-01")]);
-    expect(results.map((r) => r.statusCode)).toEqual([202, 202]); // both pass the read-only pre-check
-    // Wait for BOTH commands to be processed (each writes exactly one audit event, whatever its outcome),
-    // not a fixed 600ms: the loser can still be in flight after that, and would then land after the
-    // cleanup below and leave a stray E5 membership that breaks the bulk-assign tests that follow.
-    const e5Audits = async () => [...(await auditsFor(GB)), ...(await auditsFor(GC))].filter((r) => (r.payload as Row).employeeId === E5.id);
-    await until(e5Audits, (a) => a.length >= 2);
-    const rows = await assignments(E5.id);
-    expect(rows.filter((r) => r.effective_to === null)).toHaveLength(1);
-    // the loser's command was a move or a rejection - never two open memberships
-    await asTenant((tx) => tx.execute(sql`DELETE FROM payroll.employee_pay_group_assignments WHERE employee_id = ${E5.id}::uuid`));
+    // The scenario is two requests that BOTH pass the read-only pre-check and race in the consumer, where
+    // the database decides. The memory queue delivers a command on the next macrotask, so under CI load
+    // the first command could commit before the second request even ran its pre-check: that request then
+    // (correctly) answered 409 and this test failed -- and, failing before its cleanup, left a stray E5
+    // membership that broke seven later tests (bundle 16 gate). Hold the queue until both requests have
+    // answered, so the race is the one the test is about, and always clean up.
+    const held: Array<() => Promise<unknown>> = [];
+    const rawPublish = queue.publish.bind(queue);
+    const hold = vi.spyOn(queue, "publish").mockImplementation((async (topic: string, env: { messageId: string }) => {
+      held.push(() => rawPublish(topic as never, env as never));
+      return env.messageId;
+    }) as never);
+    try {
+      let results: Awaited<ReturnType<typeof assign>>[];
+      try {
+        results = await Promise.all([assign(GB, E5, "2026-10-01"), assign(GC, E5, "2026-10-01")]);
+      } finally {
+        hold.mockRestore();
+        for (const release of held) await release();
+      }
+      expect(held).toHaveLength(2);
+      expect(results.map((r) => r.statusCode)).toEqual([202, 202]); // both pass the read-only pre-check
+      // Wait for BOTH commands to be processed (each writes exactly one audit event, whatever its outcome),
+      // not a fixed 600ms: the loser can still be in flight after that, and would then land after the
+      // cleanup below and leave a stray E5 membership that breaks the bulk-assign tests that follow.
+      const e5Audits = async () => [...(await auditsFor(GB)), ...(await auditsFor(GC))].filter((r) => (r.payload as Row).employeeId === E5.id);
+      await until(e5Audits, (a) => a.length >= 2);
+      const rows = await assignments(E5.id);
+      expect(rows.filter((r) => r.effective_to === null)).toHaveLength(1);
+      // the loser's command was a move or a rejection - never two open memberships
+    } finally {
+      await (queue as unknown as { drain: () => Promise<void> }).drain();
+      await asTenant((tx) => tx.execute(sql`DELETE FROM payroll.employee_pay_group_assignments WHERE employee_id = ${E5.id}::uuid`));
+    }
   });
 
   it("a mid-month start is allowed once the tenant setting is switched on (audited), then switched back", async () => {

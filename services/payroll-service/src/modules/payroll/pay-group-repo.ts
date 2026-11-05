@@ -155,11 +155,11 @@ export async function countCurrentMembers(tx: Executor, tenantId: string, payGro
   return Number(r[0]?.n ?? 0);
 }
 
-/** Draft / processing runs scoped to the group. */
+/** Draft / processing / computed (not yet approved) runs scoped to the group. */
 export async function countActiveRuns(tx: Executor, tenantId: string, payGroupId: string): Promise<number> {
   const r = rows<{ n: string }>(await tx.execute(sql`
     SELECT COUNT(*)::text AS n FROM payroll.payroll_runs
-     WHERE tenant_id = ${tenantId}::uuid AND pay_group_id = ${payGroupId}::uuid AND status IN ('draft', 'processing')
+     WHERE tenant_id = ${tenantId}::uuid AND pay_group_id = ${payGroupId}::uuid AND status IN ('draft', 'processing', 'computed')
   `));
   return Number(r[0]?.n ?? 0);
 }

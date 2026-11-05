@@ -131,7 +131,7 @@ describe("VendorsTable", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
     render(<VendorsTable vendors={[vendor({ name: "Alpha" })] as never} source="api" summary={SUMMARY} />);
     fireEvent.change(screen.getByLabelText("Search the full vendor directory"), { target: { value: "zzz" } });
-    expect(await screen.findByText("Couldn’t search the vendor directory.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't search the vendor directory. Try again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText("No vendors found")).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     fetchSpy.mockRestore();

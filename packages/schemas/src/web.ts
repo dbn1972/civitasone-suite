@@ -1029,7 +1029,9 @@ export const PayrollRunDetailSchema = z.object({
   // threw indistinguishable from a healthy new one. failureReason carries
   // the recorded cause when available (migration 0046 payroll_runs.last_error);
   // null for every other status or when no reason was recorded.
-  status: z.enum(["draft", "processing", "completed", "paid", "failed"]),
+  // UAT L2-N3: computed = slips calculated, awaiting approval ("processing" is
+  // the computation still running; only a computed run can be approved).
+  status: z.enum(["draft", "processing", "computed", "completed", "paid", "failed"]),
   failureReason: z.string().nullable().optional(),
 });
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);
@@ -1040,6 +1042,9 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
   // null until the run is approved.
   createdBy: z.string().nullable().optional(),
   approvedBy: z.string().nullable().optional(),
+  // PR #2454 delta review: processing with no update for the stuck threshold
+  // (the web offers "Mark stuck run as failed" only then). Optional for older services.
+  stuck: z.boolean().optional(),
   salarySlips: z.array(z.object({
     id: z.string(),
     employeeId: z.string(),

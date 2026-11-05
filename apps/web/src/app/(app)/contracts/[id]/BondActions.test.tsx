@@ -79,7 +79,7 @@ describe("BondActions", () => {
     fireEvent.change(dates[0]!, { target: { value: "2026-04-01" } });
     fireEvent.change(dates[1]!, { target: { value: "2027-03-31" } });
     fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
-    await waitFor(() => expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This action can.t be done on this record right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./)).toBeInTheDocument());
     expect(screen.queryByText(/bond rejected/i)).not.toBeInTheDocument();
   });
 

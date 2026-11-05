@@ -87,6 +87,6 @@ describe("/hr/interns stipend + period (GAP-HR-WORKFORCE-INTERNS-01)", () => {
     mockFetches({ apprFail: true });
     render(await InternsPage());
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/couldn.t be loaded/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/We couldn.t load the stipend and training-period details/);
   });
 });

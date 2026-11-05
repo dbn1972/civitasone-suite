@@ -101,7 +101,7 @@ describe("LoansPage", () => {
     const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the employee loans, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("computes stats over active loans only for a mixed-status fixture (GAP-PAYROLL-LOANS-03)", async () => {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MobileNav } from "./MobileNav";
+import { SiteFooterGigwLinks, SiteFooterIdentity } from "./_gigw/SiteFooterGigw";
 
 export const metadata: Metadata = {
   title: "CivitasOne — The ERP that works without internet",
@@ -58,45 +59,51 @@ function NavBar() {
   );
 }
 
+// A-N1 (UAT post-b14, WCAG 1.4.3): the footer text colours were Tailwind
+// literals; the copyright line (text-gray-400 on gray-50) was 2.42:1 on every
+// public page. They are now the footer design tokens (.site-foot*, civitas-ds.css),
+// pinned to their light values on this light-only surface.
 function Footer() {
   return (
-    <footer className="border-t border-gray-100 bg-gray-50">
+    <footer className="site-foot">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
           <div className="col-span-2">
-            <Link href="/" className="flex items-center gap-2 text-lg font-bold text-gray-900">
+            <Link href="/" className="site-foot-heading flex items-center gap-2 text-lg font-bold">
               <span className="text-2xl" aria-hidden="true">◈</span> CivitasOne
             </Link>
-            <p className="mt-3 text-sm text-gray-500">
+            <p className="mt-3 text-sm">
               Made in India 🇮🇳 for India
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Product</h3>
+            <h3 className="site-foot-heading text-sm font-semibold">Product</h3>
             <ul className="mt-3 space-y-2">
-              <li><Link href="/#features" className="text-sm text-gray-500 hover:text-gray-700">Features</Link></li>
-              <li><Link href="/#modules" className="text-sm text-gray-500 hover:text-gray-700">Modules</Link></li>
-              <li><Link href="/pricing" className="text-sm text-gray-500 hover:text-gray-700">Pricing</Link></li>
+              <li><Link href="/#features" className="text-sm">Features</Link></li>
+              <li><Link href="/#modules" className="text-sm">Modules</Link></li>
+              <li><Link href="/pricing" className="text-sm">Pricing</Link></li>
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Resources</h3>
+            <h3 className="site-foot-heading text-sm font-semibold">Resources</h3>
             <ul className="mt-3 space-y-2">
-              <li><Link href="/docs" className="text-sm text-gray-500 hover:text-gray-700">Documentation</Link></li>
-              <li><Link href="/docs/api" className="text-sm text-gray-500 hover:text-gray-700">API</Link></li>
-              <li><Link href="https://github.com/civitasone" className="text-sm text-gray-500 hover:text-gray-700">GitHub</Link></li>
+              <li><Link href="/docs" className="text-sm">Documentation</Link></li>
+              <li><Link href="/docs/api" className="text-sm">API</Link></li>
+              <li><Link href="https://github.com/civitasone" className="text-sm">GitHub</Link></li>
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Company</h3>
+            <h3 className="site-foot-heading text-sm font-semibold">Company</h3>
             <ul className="mt-3 space-y-2">
-              <li><Link href="/contact" className="text-sm text-gray-500 hover:text-gray-700">Contact</Link></li>
-              <li><Link href="/careers" className="text-sm text-gray-500 hover:text-gray-700">Careers</Link></li>
+              <li><Link href="/contact" className="text-sm">Contact</Link></li>
+              <li><Link href="/careers" className="text-sm">Careers</Link></li>
             </ul>
           </div>
+          <SiteFooterGigwLinks />
         </div>
-        <div className="mt-12 border-t border-gray-200 pt-8 text-center text-sm text-gray-400">
+        <div className="site-foot-rule mt-12 pt-8 text-center text-sm">
           © 2026 CivitasOne. All rights reserved.
+          <SiteFooterIdentity />
         </div>
       </div>
     </footer>

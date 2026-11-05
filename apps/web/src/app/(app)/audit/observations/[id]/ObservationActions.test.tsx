@@ -56,7 +56,7 @@ describe("ObservationActions", () => {
     fireEvent.change(screen.getByLabelText(/Reason \/ ATN reference/), { target: { value: "ATN-441" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm & record" }));
 
-    expect(await screen.findByText(/This observation action was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
+    expect(await screen.findByText(/This action can.t be done on this observation action right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./)).toBeInTheDocument();
     expect(screen.queryByText(/observation already closed/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

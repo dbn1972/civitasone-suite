@@ -161,7 +161,7 @@ describe("JournalEntryForm", () => {
     // the first one findByRole would grab.
     await waitFor(async () => {
       const alerts = await screen.findAllByRole("alert");
-      expect(alerts.some((a) => /This journal entry was changed by someone else\. Refresh to see the latest version, then try again\./.test(a.textContent ?? ""))).toBe(true);
+      expect(alerts.some((a) => /This action can.t be done on this journal entry right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./.test(a.textContent ?? ""))).toBe(true);
     });
     const alerts = screen.getAllByRole("alert");
     for (const alert of alerts) {

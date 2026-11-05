@@ -135,7 +135,7 @@ describe("AccountCompilePage — UX-016 clerk-safe errors", () => {
 
     await waitFor(() =>
       expect(
-        screen.getAllByText(/This account compile was changed by someone else\. Refresh to see the latest version, then try again\./).length,
+        screen.getAllByText(/This action can.t be done on this account compile right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./).length,
       ).toBeGreaterThan(0),
     );
     expect(screen.queryByText(/\b409\b/)).not.toBeInTheDocument();

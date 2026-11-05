@@ -59,7 +59,7 @@ describe("RefundsPage", () => {
     const ui = await RefundsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("never presents '0 receipts' as fact when the receipts fetch errored (CRITICAL-2 regression)", async () => {

@@ -137,7 +137,7 @@ describe("RevenueAnalyticsPage", () => {
 
     const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("shows a retry error state on the Defaulters tab when that fetch fails, not a false 'No defaulters' (ANALYTICS-02)", async () => {
@@ -201,6 +201,6 @@ describe("RevenueAnalyticsPage", () => {
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 });

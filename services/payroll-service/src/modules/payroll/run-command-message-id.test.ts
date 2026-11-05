@@ -80,7 +80,7 @@ describe("payroll run commands: per-command messageId + consumer duplicate guard
   });
 
   it("each approve / disburse / revert invocation publishes its own messageId", async () => {
-    const runId = await seedRun("processing");
+    const runId = await seedRun("computed");
     const spy = vi.spyOn(memQueue, "publish");
     await approveRun(ctx(approverId), runId);
     await approveRun(ctx(approverId), runId);
@@ -98,7 +98,7 @@ describe("payroll run commands: per-command messageId + consumer duplicate guard
   });
 
   it("approve twice: applied once, the duplicate is a clean no-op (one accrual event, run stays approved)", async () => {
-    const runId = await seedRun("processing");
+    const runId = await seedRun("computed");
     await approveRun(ctx(approverId), runId);
     await approveRun(ctx(approverId), runId);
     await memQueue.drain();
@@ -108,7 +108,7 @@ describe("payroll run commands: per-command messageId + consumer duplicate guard
   });
 
   it("disburse must never double-disburse: two racing + one late disburse produce exactly one EFT initiation", async () => {
-    const runId = await seedRun("processing");
+    const runId = await seedRun("computed");
     await approveRun(ctx(approverId), runId);
     await memQueue.drain();
     await Promise.all([disburseRun(ctx(disburserId), runId), disburseRun(ctx(disburserId), runId)]);
@@ -122,10 +122,10 @@ describe("payroll run commands: per-command messageId + consumer duplicate guard
   });
 
   it("disburse of a run that is not approved is still refused (guard is not a blanket no-op)", async () => {
-    const runId = await seedRun("processing");
+    const runId = await seedRun("computed");
     await disburseRun(ctx(disburserId), runId);
     await memQueue.drain();
-    expect((await getRun(runId))?.status).toBe("processing");
+    expect((await getRun(runId))?.status).toBe("computed");
     expect(await outboxCount(EFT_INITIATE, "payrollRunId", runId)).toBe(0);
   });
 
@@ -142,7 +142,7 @@ describe("payroll run commands: per-command messageId + consumer duplicate guard
   });
 
   it("a client X-Idempotency-Key still gives wire-level dedupe, scoped per action and run", async () => {
-    const runId = await seedRun("processing");
+    const runId = await seedRun("computed");
     const spy = vi.spyOn(memQueue, "publish");
     const keyed = ctx(approverId, { idempotencyKey: "abc" });
     await approveRun(keyed, runId);

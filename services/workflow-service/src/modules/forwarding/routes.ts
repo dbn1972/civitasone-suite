@@ -3,6 +3,8 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as commands from "./commands.js";
+import { canViewInstance, findById as findTaskById, TASK_ADMIN_ROLES } from "../tasks/repo.js";
+import type { TaskForwardRow } from "./schema.js";
 
 const ROLES = [
   "workflow_user", "workflow_admin", "super_admin", "hr_admin", "manager",
@@ -19,6 +21,24 @@ const forwardBody = z.object({
 const recallBody = z.object({
   remarks: z.string().max(512).optional(),
 });
+
+/**
+ * UAT J14 follow-up (security): who may read a task forward chain. Same participant gate as the
+ * per-instance reads of #2445 (canViewInstance: the requester, or the holder / assignee /
+ * completer of one of its tasks; super_admin / workflow_admin exempt), plus the parties of the
+ * chain itself (a forwarder who no longer holds the task can still see where it went).
+ */
+async function canViewTaskForwards(
+  ctx: { tenantId: string; roles: string[]; actorId: string },
+  taskId: string,
+  forwards: readonly TaskForwardRow[],
+): Promise<boolean> {
+  if (ctx.roles.some((r) => TASK_ADMIN_ROLES.includes(r))) return true;
+  const task = await findTaskById(taskId, ctx.tenantId);
+  if (!task) return false;
+  if (forwards.some((f) => f.fromUser === ctx.actorId || f.toUser === ctx.actorId)) return true;
+  return canViewInstance(ctx.tenantId, task.instanceId, ctx.roles, ctx.actorId);
+}
 
 export async function forwardingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/tasks/:id/forward", async (req, reply) => {
@@ -44,6 +64,8 @@ export async function forwardingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = idParam.parse(req.params);
     const forwards = await commands.listForwards(id, ctx.tenantId);
+    // A non-participant gets the same 404 as for a task that does not exist.
+    if (!(await canViewTaskForwards(ctx, id, forwards))) throw new HttpError(404, "NOT_FOUND", "task not found");
     return reply.send({ data: forwards });
   });
 

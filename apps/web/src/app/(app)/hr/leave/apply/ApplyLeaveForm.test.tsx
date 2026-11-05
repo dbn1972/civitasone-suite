@@ -299,10 +299,10 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     await fillAndSubmit();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This action can.t be done on this leave request right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(alert.textContent).not.toMatch(/leave-service/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
-    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/This action can.t be done on this leave request right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
   });
 
   it("shows a clerk-safe message when there is no response at all (network failure, not queued)", async () => {
@@ -490,7 +490,7 @@ describe("ApplyLeaveForm — offline fallback (preview unreachable)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/you are applying for 14 days but only have 10 days balance/i);
+    expect(dialog).toHaveTextContent(/you are applying for 14 days but have a balance of only 10 days/i);
     expect(fetchOrQueue).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: /submit anyway/i }));

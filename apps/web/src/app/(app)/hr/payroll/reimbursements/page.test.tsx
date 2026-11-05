@@ -125,6 +125,6 @@ describe("ReimbursementsPage", () => {
   it("shows the saved-information badge when the source is error", async () => {
     withData({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the reimbursements, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 });

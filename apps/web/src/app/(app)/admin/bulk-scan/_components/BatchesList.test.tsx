@@ -57,7 +57,7 @@ describe("BatchesList", () => {
     f.mockResolvedValue(jsonResponse(500, {}));
     renderIntl(<BatchesList result={ready([BATCH])} />);
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    expect(await screen.findByText("The list could not be refreshed. Showing the last loaded batches.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't refresh the list, so the last loaded batches are shown. Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "March scans" })).toBeInTheDocument();
   });
 

@@ -50,7 +50,7 @@ describe("DomainClient — CONFIRM/WIRING/A11Y (01/02/03/04)", () => {
     const dialog = screen.getByRole("dialog", { name: "Register Custom Domain" });
     fireEvent.change(within(dialog).getByLabelText(/^Domain Name(\s*\*)?$/), { target: { value: "new.example.gov.in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Register" }));
-    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/already|couldn't|could not|try again/i));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/can.t be done on this [\w -]+ right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     // No new domain row was added.
     expect(screen.queryByText("new.example.gov.in")).toBeNull();
   });

@@ -78,7 +78,7 @@ describe("BillingInvoicesPage", () => {
     const ui = await BillingInvoicesPage();
     render(ui);
     expect(screen.queryByText("No invoices yet")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     // RefreshErrorState exposes a retry affordance
     expect(screen.getAllByText(/try again|retry/i).length).toBeGreaterThan(0);
   });

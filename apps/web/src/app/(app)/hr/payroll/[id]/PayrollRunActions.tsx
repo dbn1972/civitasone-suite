@@ -35,9 +35,25 @@ type Props = {
   approvedBy?: string | null;
   /** GAP-PAYROLL-DETAIL-05: employees with unresolved pre-disbursement issues; shown as a warning in the Approve / Disburse confirmations. */
   exceptionCount?: number;
+  /** PR #2454 delta review: the API says this processing run is idle past the stuck threshold. */
+  stuck?: boolean;
 };
 
-type PendingAction = "approve" | "disburse" | "revert" | null;
+type RunAction = "approve" | "disburse" | "revert" | "reject" | "failStuck";
+type PendingAction = RunAction | null;
+
+/**
+ * UAT L2-N3 review: payroll-service run-state codes (409). Worded locally under
+ * payroll.runErrors (en/hi) -- the shared error-mapping layer is not touched.
+ */
+export const RUN_STATE_ERROR_CODES = new Set([
+  "RUN_NOT_READY_FOR_APPROVAL", "RUN_ALREADY_APPROVED", "RUN_NOT_READY_FOR_DISBURSEMENT",
+  "RUN_ALREADY_DISBURSED", "RUN_NOT_REVERTIBLE", "RUN_NOT_REJECTABLE", "RUN_NOT_PROCESSING", "RUN_NOT_STUCK",
+]);
+
+const RUN_ACTION_PATH: Record<RunAction, string> = {
+  approve: "approve", disburse: "disburse", revert: "revert", reject: "reject", failStuck: "fail-stuck",
+};
 
 /** The `code` of a failed response (reads a clone, so the body stays available to useFormError); never throws. */
 async function responseCode(res: Response): Promise<string | null> {
@@ -71,9 +87,12 @@ export function PayrollRunActions({
   currentUserId = null,
   createdBy = null,
   approvedBy = null,
+  stuck = false,
 }: Props) {
   const t = useTranslations("payrollRunActions");
   const tr = useTranslations("payroll.runApproval");
+  const tErr = useTranslations("payroll.runErrors");
+  const tRec = useTranslations("payroll.runRecovery");
   // T-STAT review SF7: when the server asks for a review (409 ZERO_BASIC_SLIPS /
   // ARREARS_REVIEW_REQUIRED) the approve dialog lists the items to exclude /
   // acknowledge, takes one review note, and re-sends the approval with them.
@@ -123,7 +142,7 @@ export function PayrollRunActions({
     };
   }
 
-  async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
+  async function runAction(action: RunAction, reason?: string) {
     let body: Record<string, unknown> = { reason };
     if (action === "approve") {
       const b = approveBody(reason);
@@ -132,12 +151,7 @@ export function PayrollRunActions({
     }
     setBusy(true);
     setError(undefined);
-    const path =
-      action === "approve"
-        ? `/api/proxy/v1/payroll/runs/${runId}/approve`
-        : action === "disburse"
-          ? `/api/proxy/v1/payroll/runs/${runId}/disburse`
-          : `/api/proxy/v1/payroll/runs/${runId}/revert`;
+    const path = `/api/proxy/v1/payroll/runs/${runId}/${RUN_ACTION_PATH[action]}`;
     try {
       const res = await fetch(path, {
         method: "PATCH",
@@ -152,6 +166,14 @@ export function PayrollRunActions({
             if (!loaded) { setError(tr("reviewLoadFailed")); return; }
             setReview(loaded);
             setError(tr("reviewNeededIntro"));
+            return;
+          }
+        }
+        // UAT L2-N3 review: a run-state refusal (409) gets its own plain wording.
+        if (res.status === 409) {
+          const code = await responseCode(res);
+          if (code && RUN_STATE_ERROR_CODES.has(code)) {
+            setError(tErr(code as Parameters<typeof tErr>[0]));
             return;
           }
         }
@@ -173,14 +195,22 @@ export function PayrollRunActions({
           ? t("approvedMessage", { period: payPeriod })
           : action === "disburse"
             ? t("disbursementInitiatedMessage", { amount: formatMinorString(netMinor), count: employeeCount })
-            : t("revertedMessage", { period: payPeriod }),
+            : action === "reject"
+              ? tRec("sentBackMessage", { period: payPeriod })
+              : action === "failStuck"
+                ? tRec("failedStuckMessage", { period: payPeriod })
+                : t("revertedMessage", { period: payPeriod }),
       );
       toast.success(
         action === "approve"
           ? t("approvedToast", { period: payPeriod })
           : action === "disburse"
             ? t("disbursementInitiatedToast", { amount: formatMinorString(netMinor) })
-            : t("revertedToast"),
+            : action === "reject"
+              ? tRec("sentBackToast")
+              : action === "failStuck"
+                ? tRec("failedStuckToast")
+                : t("revertedToast"),
       );
       setPending(null);
       setSettledAction(action);
@@ -199,17 +229,28 @@ export function PayrollRunActions({
   // fails server-side today; this used to render an Approve button that
   // could never succeed from that state.
   //
-  // The wire status enum (payroll-service queries.ts mapRunStatus) is only
-  // ever draft/processing/completed/paid/failed -- "approved" is remapped
+  // The wire status enum (payroll-service queries.ts mapRunStatus) is
+  // draft/processing/computed/completed/paid/failed -- "approved" is remapped
   // to "completed" before the API responds, so a check against the literal
   // string "approved" can never match anything the API actually sends. That
   // made Disburse a dead button: canDisburse was never true for any real
   // run, no matter how far along it was.
-  const canApprove  = canAdminister && status === "processing" && settledAction !== "approve";
+  //
+  // UAT L2-N3: "processing" now only ever means the slip computation is still
+  // running. A run is approvable once the computation has finished, which the
+  // API reports as "computed"; the server answers 409 RUN_NOT_READY_FOR_APPROVAL
+  // from any other state.
+  const canApprove  = canAdminister && status === "computed" && settledAction !== "approve";
   const canDisburse = canAdminister && status === "completed"  && settledAction !== "disburse";
   const canRevert   = canAdminister && status === "failed"     && settledAction !== "revert";
+  // UAT L2-N3 review: the ways out of computed / a stuck processing run. The
+  // server requires the payroll-admin role and a reason; maker-checker neutral.
+  const canReject    = canAdminister && status === "computed"   && settledAction !== "reject";
+  // Offered only once the API reports the run stuck (no update for the
+  // threshold); a run that is still computing shows nothing. The server re-checks.
+  const canFailStuck = canAdminister && status === "processing" && stuck && settledAction !== "failStuck";
 
-  if (!canApprove && !canDisburse && !canRevert) return null;
+  if (!canApprove && !canDisburse && !canRevert && !canReject && !canFailStuck) return null;
 
   // GAP-PAYROLL-DETAIL-02: maker-checker. Unknown ids (null) never block here;
   // the server enforces the same rule either way.
@@ -252,6 +293,24 @@ export function PayrollRunActions({
               onClick={() => { setError(undefined); setPending("revert"); }}
             >
               {t("revertToDraftBtn")}
+            </Button>
+          )}
+          {canReject && (
+            <Button
+              variant="secondary"
+              style={{ minHeight: 44 }}
+              onClick={() => { setError(undefined); setPending("reject"); }}
+            >
+              {tRec("sendBackBtn")}
+            </Button>
+          )}
+          {canFailStuck && (
+            <Button
+              variant="secondary"
+              style={{ minHeight: 44 }}
+              onClick={() => { setError(undefined); setPending("failStuck"); }}
+            >
+              {tRec("failStuckBtn")}
             </Button>
           )}
         </div>
@@ -395,6 +454,44 @@ export function PayrollRunActions({
           strong: (chunks) => <strong>{chunks}</strong>,
         })}
         onConfirm={(reason) => void runAction("revert", reason)}
+        onCancel={() => !busy && setPending(null)}
+      />
+
+      <ConfirmDialog
+        open={pending === "reject"}
+        title={tRec("sendBackTitle")}
+        danger
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={1000}
+        reasonLabel={tRec("sendBackReasonLabel")}
+        confirmLabel={tRec("sendBackConfirmLabel")}
+        busy={busy}
+        errorMessage={error}
+        description={tRec.rich("sendBackDescription", {
+          period: payPeriod,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
+        onConfirm={(reason) => void runAction("reject", reason)}
+        onCancel={() => !busy && setPending(null)}
+      />
+
+      <ConfirmDialog
+        open={pending === "failStuck"}
+        title={tRec("failStuckTitle")}
+        danger
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={1000}
+        reasonLabel={tRec("failStuckReasonLabel")}
+        confirmLabel={tRec("failStuckConfirmLabel")}
+        busy={busy}
+        errorMessage={error}
+        description={tRec.rich("failStuckDescription", {
+          period: payPeriod,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
+        onConfirm={(reason) => void runAction("failStuck", reason)}
         onCancel={() => !busy && setPending(null)}
       />
     </section>

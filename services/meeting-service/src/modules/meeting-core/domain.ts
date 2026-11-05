@@ -412,6 +412,19 @@ export const SECRETARIAL_STANDING_ROLES = ["secretary"] as const;
 export const CHAIR_STANDING_ROLES = ["chairperson"] as const;
 
 /**
+ * Token roles with the documented tenant-wide "Full CRUD" authority over meetings (design.md
+ * § Access Control Matrix). The route and the consumer apply the same list (UAT J14): a meeting
+ * admin who is not the named chairperson/secretary may still schedule, run, edit and cancel it.
+ */
+export const MEETING_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"] as const;
+
+/** True iff `roles` (the verified token roles, as stamped on a command) include a meeting admin role. */
+export function holdsMeetingAdminRole(roles: readonly string[] | undefined | null): boolean {
+  if (!Array.isArray(roles)) return false;
+  return roles.some((r) => (MEETING_ADMIN_ROLES as readonly string[]).includes(r));
+}
+
+/**
  * True iff `actorId` is recorded directly on the meeting row as its chairperson or secretary
  * (IDOR fix, Req 1.1: role-only gating previously let ANY `committee_secretary`/
  * `committee_chairperson` in the tenant write/transition ANY meeting). Committee-roster

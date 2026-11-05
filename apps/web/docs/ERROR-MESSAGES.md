@@ -50,11 +50,14 @@ never reached us) is a network failure.
 | 415 | This file type isn't accepted. Upload a {types} file. |
 | 429 | Too many attempts. Wait a minute, then try again. |
 | 5xx / other | We couldn't {verb} the {object} because of a problem on our side. Your changes haven't been saved. Try again in a few minutes. (Loads drop the "changes" sentence.) |
-| Network / timeout (408, 504, thrown fetch) | We couldn't connect. Check your internet connection and try again. |
+| Timeout (408, 504, our own request timeout) | We couldn't {verb} the {object} in time. The system is taking longer than usual. Check whether your changes were saved before you try again. (Loads: Try again in a few minutes.) |
+| Network: a genuine browser-side failure only (fetch rejected with a fetch-failure TypeError, or the browser is offline) | We couldn't connect. Check your internet connection and try again. |
 
 Failures with no HTTP status and no clear cause (a thrown error that is not a failed
-fetch) read: "We couldn't {verb} the {object}. Your changes haven't been saved. Check your
-internet connection and try again in a few minutes." (Loads drop the "changes" sentence.)
+fetch) read: "We couldn't {verb} the {object}. Your changes haven't been saved. Try again in
+a few minutes. If it keeps happening, contact your support team." (Loads drop the "changes"
+sentence.) They never mention the internet connection: a TypeError from a bug in our own
+code is not a network failure (UAT P3, see "Choosing the cause" below).
 
 Load failures (`LoadErrorState`) use the same copy with a Retry action for everything
 except 401 (Sign in) and 403 (`PermissionDenied`, "Access restricted", no retry).
@@ -83,6 +86,85 @@ specific reason helps the user act:
 
 A call site that has its own translated sentence for a code (for example
 `postWithErrorCode`'s `codeMessages`) keeps using it; the central map is the fallback.
+
+### Choosing the cause (UAT P3)
+
+"Check your internet connection" may appear only for a genuine browser-side network
+failure. The classification is:
+
+| Situation | Kind | Where |
+| --- | --- | --- |
+| Loader (server-side fetchJson) got no HTTP status: gateway down, timeout, a mapper threw | server ("because of a problem on our side") | `loadFailureKind` in `lib/messages.ts`, used by `LoadErrorState` |
+| Same, rendered in an online browser | unknown (honest, no connection blame) | `loadFailureKind` |
+| The browser reports `navigator.onLine === false` | network | `loadFailureKind`, `RouteError`, `isNetworkFailure` |
+| fetch rejected with a fetch-failure TypeError ("Failed to fetch", "NetworkError ...", "Load failed") | network | `isNetworkFailure` in `lib/userFacingError.ts` |
+| Any other TypeError ("Cannot read properties of undefined") | unknown | `classifyThrown` |
+| AbortError / TimeoutError, 408, 504 | timeout | `isTimeoutFailure`, `statusToKind` |
+
+The journal-approvals screen showed "We couldn't connect. Check your internet connection"
+while the browser of the officer was online: the server-side loader had no status and the old
+rule read "no status" as "the request never reached us". `LoadErrorState` now asks
+`loadFailureKind` first.
+
+### Service error codes (serviceErrorCodes.ts)
+
+After `DOMAIN_CODE_MESSAGES`, the resolver consults `src/lib/serviceErrorCodes.ts`:
+
+1. `SERVICE_CODE_MESSAGES`: a hand-written en + hi message for one code (TASK_NOT_AUTHORIZED,
+   SANCTION_REF_REQUIRED, BUDGET_EXCEEDED, ZERO_BASIC_SLIPS, NO_EMPLOYEE_RECORD,
+   EMPLOYEE_NO_EXISTS, LAST_TENANT_ADMIN, ...).
+2. `CODE_FAMILIES`: one en + hi message per naming family, first match wins:
+   unknownReference (UNKNOWN_*), notFound (*_NOT_FOUND, status copy), separationOfDuties
+   (SELF_*, SOD_*, MAKER_CHECKER*), permission (*_FORBIDDEN, NOT_ASSIGNEE, ...), duplicate
+   (DUPLICATE_*, *_EXISTS, *_TAKEN), session, wait (cooldowns), conflict (STALE_*, *_CHANGED,
+   status copy), inProgress, expired, virusScan, inactive, nothingToDo, limit, date, stage
+   (INVALID_STATE, NOT_*, *_CLOSED, ...), setupMissing (NO_*), required (*_REQUIRED; with field
+   errors the "highlighted fields" copy wins), timeout, upstream (server copy), mismatch,
+   validation (status copy).
+
+A caller-pinned situation (`forceKind`) still wins over a family; an explicit entry always
+wins. `serviceErrorCodes.test.ts` scans `services/*` for every code thrown with
+`HttpError(status, "CODE")`, `DomainError("CODE")` or `{ code: "CODE", message }` and fails
+when a code matches neither an entry nor a family: add an entry, in en and hi.
+
+### Thrown values
+
+`messageForThrown(err, { kind, area })` in `lib/messages.ts` is the one way to turn a caught
+value into words outside `useFormError`: a `UserFacingError` keeps its copy and reference; a
+fetch failure or timeout gets its kind; a bare code (`no_drafts_imported`, `BUDGET_EXCEEDED`)
+is looked up in the code map; a deliberate plain-language message is kept
+(`isPresentableMessage`); anything else (stack text, a raw body, a status in brackets)
+becomes the "cause unknown" copy. `useAsyncMutation` and `useConfirmAction` / `ActionButton`
+use it.
+
+## Message standard (12 rules, UAT P3)
+
+A good message:
+
+1. says WHAT happened, in plain words;
+2. says WHY, if known, without blaming the user;
+3. says WHAT TO DO NEXT, with a specific action or button;
+4. never shows raw codes, stack traces, HTTP status numbers, snake_case keys or English-only
+   technical words. A reference id for support is fine ("Reference: 7F3A...");
+5. never names the wrong cause. "Check your internet connection" only for a genuine
+   browser-side network failure, never for a server-side or loader error;
+6. is specific to the object: "We couldn't load the journal approvals", not "Something went
+   wrong";
+7. uses one tone and the same terms as the screen labels;
+8. has correct grammar and ICU plural forms: "1 joinee has overdue onboarding tasks",
+   "4 leave requests could not be sent for approval" (`{count, plural, one {...} other {...}}`,
+   never `request(s)` or a JSX `"s"` suffix);
+9. keeps the data of the user, and says so ("What you entered is kept");
+10. for permission errors, says which role is needed or whom to ask;
+11. for validation errors, sits next to the field and says the rule ("Enter at least 10
+    characters");
+12. has a Hindi translation that matches the English in meaning, in natural administrative
+    Hindi (as used in government offices: अनुमोदन, संस्वीकृति, शीर्ष, "पेज रीफ़्रेश करके फिर प्रयास करें"),
+    not word-by-word, and is never left in English.
+
+Standard next steps: loader badge or list: "Refresh the page to try again." /
+"पेज रीफ़्रेश करके फिर प्रयास करें।"; in-page fetch or action: "Try again in a few minutes." /
+"कुछ मिनट बाद फिर प्रयास करें।"; a partial load says what is still shown.
 
 ## Do / don't
 
@@ -129,8 +211,9 @@ if (!res.ok) await form.fromResponse(res);        // fieldErrors + summary messa
 // ...and in a catch block, ALWAYS pass the caught value:
 catch (caught) { form.fromException("save", caught); }
 //   UserFacingError (thrown by browserJson for a failed response) -> its status-aware message + reference
-//   failed fetch (TypeError / AbortError / TimeoutError)          -> "We couldn't connect..."
-//   anything else / nothing passed                                -> honest "cause unknown" copy
+//   failed fetch (fetch-failure TypeError, or browser offline)   -> "We couldn't connect..."
+//   AbortError / TimeoutError                                      -> "We couldn't ... in time" (timeout)
+//   anything else / nothing passed                                 -> honest "cause unknown" copy (no connection blame)
 // in JSX, top of the form (GOV.UK pattern):
 <ErrorSummary error={form} fieldId={(f) => `leave-${f}`} />
 ```

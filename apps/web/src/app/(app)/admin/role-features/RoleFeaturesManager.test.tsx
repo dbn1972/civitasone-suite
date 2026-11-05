@@ -143,8 +143,8 @@ describe("RoleFeaturesManager presets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Grant all Finance features" }));
     confirmWithReason("Grant");
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Granted 2 of 4; failed at finance.budget.");
-    expect(alert).toHaveTextContent("nothing was rolled back");
+    expect(alert).toHaveTextContent("Granted 2 of 4; stopped at finance.budget.");
+    expect(alert).toHaveTextContent("The grants already made are kept.");
     expect(screen.getByRole("checkbox", { name: "HR Admin access to finance.dashboard" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "HR Admin access to finance.vouchers" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "HR Admin access to finance.budget" })).not.toBeChecked();

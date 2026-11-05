@@ -106,7 +106,7 @@ describe("PayrollRegisterPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await PayrollRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("We couldn't load register.")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   it("denies employee/manager sessions without fetching (REGISTER-05)", async () => {

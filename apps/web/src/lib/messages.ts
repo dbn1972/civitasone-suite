@@ -8,10 +8,13 @@
 export type SafeAction = "retry" | "back" | "help" | "signin";
 
 import {
+  DOMAIN_CODE_MESSAGES,
   resolveHumanError,
   type ErrorContext,
   type ErrorStatusKind,
 } from "./errorCatalogue";
+import { classifyThrown, UserFacingError } from "./userFacingError";
+import { resolveServiceCode } from "./serviceErrorCodes";
 
 export type HumanError = {
   /** What happened, in plain words. (R6.1) */
@@ -146,6 +149,95 @@ export function humanErrorForStatus(
 ): HumanError {
   const r = resolveHumanError({ status, code: ctx?.code, ctx, forceKind: ctx?.forceKind });
   return { what: r.what, next: r.next, actions: r.actions };
+}
+
+/**
+ * Which situation a failed loader (fetchJson / LoaderResult) with no HTTP status is in.
+ *
+ * GAP-UAT-P3-ERRCOPY: a loader that runs on the Next.js server and gets no response
+ * from the gateway (timeout, upstream down, a mapper that threw) has NO status. That
+ * used to be read as "the request never reached us" and told the officer to check
+ * their internet connection -- on a page their browser had just loaded fine (the
+ * journal-approvals screen). Rule: "check your internet" only for a genuine
+ * browser-side failure, which is the browser reporting it is offline.
+ *
+ *   status present            -> undefined (the status decides)
+ *   browser reports offline   -> "network"
+ *   rendering on the server   -> "server"   (the server could not reach the service)
+ *   in the browser, online    -> "unknown"  (honest; never blames the connection)
+ */
+export function loadFailureKind(
+  status: number | undefined,
+  env: { onServer: boolean; offline: boolean } = {
+    onServer: typeof window === "undefined",
+    offline: typeof navigator !== "undefined" && navigator.onLine === false,
+  },
+): ErrorStatusKind | undefined {
+  if (status !== undefined && status !== 0) return undefined;
+  if (env.offline) return "network";
+  return env.onServer ? "server" : "unknown";
+}
+
+/**
+ * A raw thrown message that is safe to show as-is: a plain-language sentence, not a
+ * code, an HTTP status, a stack line or a serialised body. Anything else is replaced by
+ * the standard copy (rule 4 of apps/web/docs/ERROR-MESSAGES.md).
+ */
+export function isPresentableMessage(message: unknown): message is string {
+  if (typeof message !== "string") return false;
+  const m = message.trim();
+  if (m.length < 8 || m.length > 400 || !/\s/.test(m)) return false;
+  if (/^(error|typeerror|referenceerror|syntaxerror|rangeerror)\b\s*:?/i.test(m)) return false;
+  if (/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/.test(m)) return false; // SERVICE_CODE
+  if (/\b[a-z]+(?:_[a-z0-9]+)+\b/.test(m)) return false; // snake_case key
+  if (/\b(?:HTTP|status(?: code)?)\s*[45]\d\d\b|\([45]\d\d\)|\b[45]\d\d (?:Internal|Bad|Not|Forbidden|Unauthorized|Service|Gateway)/i.test(m)) return false;
+  if (/^[[{<]/.test(m) || /\bat \S+ \(|undefined|null\b|is not a function|Cannot read propert|Unexpected token|JSON|fetch failed|Failed to fetch/i.test(m)) return false;
+  // HTTP reason phrases and transport errors (Internal Server Error, Bad Gateway, timeout of 30000ms exceeded).
+  if (/\b(internal server error|bad gateway|service unavailable|gateway time-?out|too many requests|request failed|failed with|server returned|networkerror|network error|timeout of \d+ ?ms|timed out|econn\w*|etimedout|enotfound|socket hang up|stack trace)\b/i.test(m)) return false; // status-leak-ok: rejects raw reason phrases; never rendered
+  // A bare reason phrase on its own ("Not Found", "Forbidden").
+  if (/^(not found|bad request|unauthori[sz]ed|forbidden|conflict)\.?$/i.test(m)) return false;
+  // Any HTTP status number (a 4xx/5xx standing on its own), but not an amount or a count of something.
+  if (/(?<![\d₹.,])(?<!\b(?:Rs|INR)\.?\s?)\b[45]\d\d\b(?![.,]\d)(?!\s*(characters?|chars|words|days?|months?|years?|rupees|rs\.?|lakh|crore|%|kb|mb|items?|rows?|employees?|records?|pages?|units?|files?|nos?\.?|ms\b))/i.test(m)) return false;
+  // Stack-like lines: "at Foo (file.js:1:2)", "file.ts:12:3", "Error:" anywhere.
+  if (/\.(m?[jt]sx?):\d+|\n\s*at\s|\bError:/.test(m)) return false;
+  return true;
+}
+
+/**
+ * The words to show for a thrown value (a rejected mutation, a failed confirm action).
+ * A UserFacingError is already standard copy; a dropped connection or a timeout gets its
+ * own copy; a bare code ("no_drafts_imported", "BUDGET_EXCEEDED") is looked up in the
+ * code map; a plain-language message a caller deliberately threw is kept; anything else
+ * (stack text, a raw backend body, "TypeError: x is undefined") becomes the honest
+ * "couldn't ..." copy. Never echoes the raw text.
+ */
+export function messageForThrown(
+  err: unknown,
+  ctx?: { kind?: MessageKind; area?: string },
+): { message: string; reference: string | null; aborted?: true } {
+  const kind = ctx?.kind ?? "save";
+  const intent = kind === "load" || kind === "unknownStatus" ? "load" : "save";
+  const c = classifyThrown(err);
+  if (c === "aborted") return { message: "", reference: null, aborted: true };
+  if (c === "userFacing") return { message: (err as UserFacingError).message, reference: (err as UserFacingError).reference };
+  if (c === "network" || c === "timeout") {
+    const h = humanErrorForStatus(undefined, { area: ctx?.area, intent, forceKind: c });
+    return { message: `${h.what} ${h.next}`, reference: null };
+  }
+  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const bare = raw.trim().replace(/^error:\s*/i, "");
+  // "CODE" alone, or "CODE: developer text" (several services prefix their message with the code).
+  const lead = /^([A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)(?:\s*:.*)?$/s.exec(bare);
+  if (lead) {
+    const code = lead[1].toUpperCase();
+    // Only a hand-written entry explains a bare code; a naming family alone is too weak without a status.
+    const known = resolveServiceCode(code)?.source === "explicit" || Object.prototype.hasOwnProperty.call(DOMAIN_CODE_MESSAGES, code);
+    const h = humanErrorForStatus(undefined, { area: ctx?.area, intent, code, ...(known ? {} : { forceKind: "unknown" as const }) });
+    return { message: `${h.what} ${h.next}`, reference: null };
+  }
+  if (isPresentableMessage(raw)) return { message: raw.trim(), reference: null };
+  const h = humanErrorForStatus(undefined, { area: ctx?.area, intent, forceKind: "unknown" });
+  return { message: `${h.what} ${h.next}`, reference: null };
 }
 
 /** Backend codes that mean one specific situation whatever the HTTP status says. */

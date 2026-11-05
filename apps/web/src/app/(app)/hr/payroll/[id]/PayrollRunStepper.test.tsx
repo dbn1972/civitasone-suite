@@ -41,6 +41,14 @@ describe("PayrollRunStepper", () => {
     expect(current?.textContent).toBe("");
   });
 
+  it('UAT L2-N3: "computed" (calculated, awaiting approval) marks step 3 (Review) current, Data Lock and Calculate done, no spinner', () => {
+    const { container } = renderStepper("computed");
+    const current = container.querySelector('[aria-current="step"]');
+    expect(current).not.toBeNull();
+    expect(current?.textContent).toBe("3");
+    expect(container.textContent?.match(/✓/g)?.length).toBe(2);
+  });
+
   it('"completed" (approved, awaiting disbursement) marks step 5 (Disburse) current -- not stuck on Approve/Review -- with steps 1-4 done and no spinner', () => {
     const { container } = renderStepper("completed");
     const current = container.querySelector('[aria-current="step"]');

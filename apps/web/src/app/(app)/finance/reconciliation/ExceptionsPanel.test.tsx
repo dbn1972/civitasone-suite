@@ -99,7 +99,7 @@ describe("ExceptionsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This reconciliation exception was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This reconciliation exception is not at a stage that allows this action\. Refresh the page to see its current status, then choose an action that is available\./));
     expect(alert.textContent).not.toMatch(/INVALID_TRANSITION/);
     expect(alert.textContent).not.toMatch(/cannot resolve an exception/);
   });

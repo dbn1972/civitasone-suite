@@ -72,7 +72,7 @@ describe("CreateContractForm", () => {
     render(<CreateContractForm />);
     fireEvent.focus(await screen.findByRole("combobox"));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/Couldn.t load vendors/i);
+    expect(alert).toHaveTextContent(/We couldn.t load the vendors\./);
     expect(screen.queryByText(/Searching/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     // NEW-02: submit stays disabled while the vendor list cannot be loaded.

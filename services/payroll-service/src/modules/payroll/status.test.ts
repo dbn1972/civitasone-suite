@@ -4,7 +4,8 @@
  * Verifies that assertRunStatusTransition() enforces the correct FSM:
  *
  *   draft  → processing
- *   processing → approved | failed
+ *   processing → computed | failed   (UAT L2-N3: computation finished / threw)
+ *   computed   → approved | failed  (failed = sent back by a payroll admin)
  *   approved   → disbursed
  *   failed     → draft           (revert/retry)
  *   disbursed  → (terminal — no outgoing transitions)
@@ -21,8 +22,12 @@ describe("assertRunStatusTransition — allowed paths", () => {
     expect(() => assertRunStatusTransition("draft", "processing")).not.toThrow();
   });
 
-  it("processing → approved", () => {
-    expect(() => assertRunStatusTransition("processing", "approved")).not.toThrow();
+  it("processing → computed (slip computation finished)", () => {
+    expect(() => assertRunStatusTransition("processing", "computed")).not.toThrow();
+  });
+
+  it("computed → approved", () => {
+    expect(() => assertRunStatusTransition("computed", "approved")).not.toThrow();
   });
 
   it("processing → failed (computation error path)", () => {
@@ -74,6 +79,14 @@ describe("assertRunStatusTransition — disallowed paths throw DomainError", () 
     expect(() => assertRunStatusTransition("failed", "approved")).toThrow(DomainError);
   });
 
+  it("processing → approved (UAT L2-N3: the slips are still being computed)", () => {
+    expect(() => assertRunStatusTransition("processing", "approved")).toThrow(DomainError);
+  });
+
+  it("computed → disbursed (skips approved step)", () => {
+    expect(() => assertRunStatusTransition("computed", "disbursed")).toThrow(DomainError);
+  });
+
   it("processing → disbursed (skips approved step)", () => {
     expect(() => assertRunStatusTransition("processing", "disbursed")).toThrow(DomainError);
   });
@@ -114,7 +127,8 @@ describe("valid transitions map — completeness assertion", () => {
   // matches it exactly (no hidden transitions beyond what's documented).
   const EXPECTED_ALLOWED: Record<string, string[]> = {
     draft:      ["processing"],
-    processing: ["approved", "failed"],
+    processing: ["computed", "failed"],
+    computed:   ["approved", "failed"],
     approved:   ["disbursed"],
     disbursed:  [],
     failed:     ["draft"],

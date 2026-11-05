@@ -91,7 +91,7 @@ describe("InstalmentsPage", () => {
     const ui = await InstalmentsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   // Owner decision #3: a second officer must be able to DISCOVER plans awaiting approval.

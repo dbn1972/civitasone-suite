@@ -169,7 +169,7 @@ describe("OnboardingList (P1-9)", () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [], source: "error" });
     render(withIntl(<OnboardingList />));
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
-    expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t load the onboarding cases\./)).toBeInTheDocument();
     expect(screen.queryByText(/No onboarding cases/i)).not.toBeInTheDocument();
   });
 
@@ -182,7 +182,7 @@ describe("OnboardingList (P1-9)", () => {
     renderWithIntl(<OnboardingList />);
     const retry = await screen.findByRole("button", { name: /retry/i });
     // Only one data-source badge is rendered (the filter-row one), not two.
-    expect(screen.getAllByText(/Couldn't load — showing nothing/i).length).toBe(1);
+    expect(screen.getAllByText(/We couldn't load this information, so nothing is shown here\./i).length).toBe(1);
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByRole("link", { name: /Unnamed case/ })).toBeInTheDocument());
     expect(onb.getOnboardingCases).toHaveBeenCalledTimes(2);
@@ -239,7 +239,7 @@ describe("OnboardingList names (W2 crm cluster 07)", () => {
   it("does not look names up for a failed load", async () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [], source: "error" });
     render(withIntl(<OnboardingList />));
-    await waitFor(() => expect(screen.getByText(/couldn.t be loaded/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn.t load the onboarding cases\./)).toBeInTheDocument());
     expect(onb.getOnboardingLookups).not.toHaveBeenCalled();
   });
 });

@@ -65,6 +65,11 @@ export const runActionBody = z.object({
 });
 export type RunActionBody = z.infer<typeof runActionBody>;
 
+/** UAT L2-N3 review: send back / stuck-run recovery -- the reason is mandatory. */
+export const runReasonBody = z.object({
+  reason: z.string().trim().min(10).max(1000),
+});
+
 /**
  * T-STAT M-ZERO: PATCH /runs/:id/approve. `zeroBasicExclusions` explicitly
  * excludes named Rs 0-basic slips (HRMS basic missing) from the approval

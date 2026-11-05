@@ -49,4 +49,35 @@ describe("OrgTypeSelector — GAP-TENANT-ADMIN-ORG-TYPE-01/04", () => {
     // govt_dept card shows CPC Pay: On
     expect(screen.getAllByText(/CPC Pay: On/i).length).toBeGreaterThanOrEqual(1);
   });
+  // A-N3 (UAT post-b14, axe nested-interactive, WCAG 4.1.2): the per-flag
+  // HelpTip buttons used to sit inside each role="radio" card, so 8 radios
+  // each contained focusable buttons. No interactive control may be nested in
+  // a radio; the HelpTips stay reachable as siblings of the radio.
+  it("nests no interactive control inside any radio, and keeps the flag help reachable", () => {
+    render(<OrgTypeSelector currentType="private" tenantId="t1" settings={{}} />);
+    const radios = screen.getAllByRole("radio");
+    expect(radios.length).toBeGreaterThan(1);
+    for (const r of radios) {
+      expect(r.querySelectorAll("button, a[href], input, select, textarea, [tabindex], [role=button], [role=radio], [role=link]")).toHaveLength(0);
+    }
+    // every card still offers the three flag help buttons, outside the radio
+    const helpButtons = screen.getAllByRole("button").filter((b) => !radios.some((r) => r.contains(b)));
+    expect(helpButtons.length).toBeGreaterThanOrEqual(radios.length * 3);
+  });
+
+  it("chooses a type from the keyboard (Enter and Space) on the radio itself", () => {
+    render(<OrgTypeSelector currentType="private" tenantId="t1" settings={{}} />);
+    const ngo = screen.getByRole("radio", { name: /NGO/i });
+    expect(ngo).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(ngo, { key: "Enter" });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("describes each radio by its terminology and flags", () => {
+    render(<OrgTypeSelector currentType="private" tenantId="t1" settings={{}} />);
+    const ngo = screen.getByRole("radio", { name: /NGO/i });
+    const ids = (ngo.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+    expect(ids.length).toBe(2);
+    for (const id of ids) expect(document.getElementById(id)).not.toBeNull();
+  });
 });

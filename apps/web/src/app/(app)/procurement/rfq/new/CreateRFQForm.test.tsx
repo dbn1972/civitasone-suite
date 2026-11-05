@@ -205,7 +205,7 @@ describe("CreateRFQForm (GAP-PROCUREMENT-RFQ-NEW-01/02/04/05)", () => {
     vendorFails = 1;
     mockFetch();
     render(<CreateRFQForm />);
-    expect(await screen.findByText("Couldn’t search vendors.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't search the vendors. Try again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText("No vendors are registered yet.")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Acme")).toBeInTheDocument();

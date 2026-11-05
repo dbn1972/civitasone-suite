@@ -58,7 +58,7 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText("No e-invoice generated")).toBeInTheDocument();
     // GAP-BILLING-INVOICES-DETAIL-07: status humanized, not raw lowercase "issued"
     expect(screen.getAllByText("Issued").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   it("renders e-invoice status when one exists", async () => {
@@ -99,7 +99,7 @@ describe("InvoiceDetailPage", () => {
     const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     expect(screen.queryByText("This invoice may have been removed or the ID is invalid.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
     expect(screen.getAllByText(/try again|retry/i).length).toBeGreaterThan(0);
   });
 

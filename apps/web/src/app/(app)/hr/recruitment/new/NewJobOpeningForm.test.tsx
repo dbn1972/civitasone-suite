@@ -113,7 +113,7 @@ describe("NewJobOpeningForm", () => {
     await fillRequiredFields();
     submit();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/This job opening was changed by someone else\. Refresh to see the latest version, then try again\./);
+      expect(screen.getByRole("alert")).toHaveTextContent(/This action can.t be done on this job opening right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
     });
   });
 
@@ -124,7 +124,7 @@ describe("NewJobOpeningForm", () => {
     await fillRequiredFields();
     submit();
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/This job opening was changed by someone else\. Refresh to see the latest version, then try again\./));
+    await waitFor(() => expect(alert).toHaveTextContent(/This action can.t be done on this job opening right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./));
     expect(alert.textContent).not.toMatch(/duplicate refNo/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });
@@ -340,7 +340,7 @@ describe("NewJobOpeningForm", () => {
       let calls = 0;
       stubFetch({ [DEPT_URL]: () => (calls++ === 0 ? new Response("", { status: 500 }) : json({ data: [{ id: DEPT_ID, name: "Finance" }] })) });
       renderForm();
-      expect(await screen.findByText(/could not load departments/i)).toBeInTheDocument();
+      expect(await screen.findByText(/We couldn.t load the departments\./)).toBeInTheDocument();
       const dept = screen.getByLabelText(/^department/i);
       expect(dept.tagName).toBe("SELECT");
       expect(dept).toBeDisabled();

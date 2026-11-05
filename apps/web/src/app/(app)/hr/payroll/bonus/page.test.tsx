@@ -64,7 +64,7 @@ describe("BonusPage", () => {
     const ui = await BonusPage();
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the bonus details, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("GAP-PAYROLL-BONUS-04: employee/manager get a permission denial, no compute form, no list fetch", async () => {

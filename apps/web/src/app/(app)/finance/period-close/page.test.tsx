@@ -62,7 +62,7 @@ describe("PeriodCloseCockpitPage", () => {
     expect(screen.queryByText("No periods tracked yet")).not.toBeInTheDocument();
     expect(screen.queryByText("Soft-Close a Period")).not.toBeInTheDocument();
     expect(screen.queryByText("Hard-Closed")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-PERIOD-CLOSE-06

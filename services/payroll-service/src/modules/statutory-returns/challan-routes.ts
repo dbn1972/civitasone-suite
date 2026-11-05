@@ -82,14 +82,14 @@ async function tdsDepositedMinor(tenantId: string, period: string, formType: str
 
 /**
  * H2: true when a payroll run exists for the period but is NOT yet finalised
- * (draft/processing/failed). Such a period has deducted==0 only because the run
+ * (draft/processing/computed/failed). Such a period has deducted==0 only because the run
  * has not produced/approved its TDS rows yet — it is NOT "no liability". The 24Q
  * gate must block it (pending_finalisation) rather than green-light it as matched.
  */
 async function hasNonFinalRun(tenantId: string, period: string): Promise<boolean> {
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
-  return runs.some((r) => r.status === "draft" || r.status === "processing" || r.status === "failed");
+  return runs.some((r) => r.status === "draft" || r.status === "processing" || r.status === "computed" || r.status === "failed");
 }
 
 export interface Reconciliation {

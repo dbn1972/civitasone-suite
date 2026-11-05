@@ -61,7 +61,7 @@ describe("PayGroupsPage", () => {
   it("shows the data-source badge on a failed load (PAY-GROUPS-05)", async () => {
     mockApi([], { source: "error" });
     render(withIntl(await PayGroupsPage({})));
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the pay groups, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
     // A failed load must not read as "no pay groups yet".
     expect(screen.queryByText("No pay groups yet")).not.toBeInTheDocument();
   });

@@ -78,7 +78,7 @@ describe("CreateLeavePolicyForm — locale-safe load-error message", () => {
       </NextIntlClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: /new policy/i }));
-    await waitFor(() => expect(screen.getByText("Could not load leave types.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("We couldn't load the leave types. Refresh the page to try again.")).toBeInTheDocument());
 
     // The panel is still open and leaveTypes is still empty (the load
     // failed) -- only `t` itself changes here, exactly the case the missing
@@ -89,7 +89,7 @@ describe("CreateLeavePolicyForm — locale-safe load-error message", () => {
       </NextIntlClientProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText("अवकाश प्रकार लोड नहीं हो सके।")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("अवकाश के प्रकार लोड नहीं हो सके। पेज रीफ़्रेश करके फिर प्रयास करें।")).toBeInTheDocument());
     expect(screen.queryByText("Could not load leave types.")).not.toBeInTheDocument();
   });
 });

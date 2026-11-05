@@ -144,7 +144,7 @@ export default async function TendersPage(
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
             <Link href="/procurement/tenders/new" className="btn primary">+ New Tender</Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

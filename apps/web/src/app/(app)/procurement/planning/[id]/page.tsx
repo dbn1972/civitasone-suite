@@ -105,7 +105,7 @@ export default async function AnnualPlanDetailPage(props: { params: Promise<{ id
         actions={
           <>
             <StatusPill status={plan.status} label={PLAN_STATUS_LABELS[plan.status] ?? plan.status} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

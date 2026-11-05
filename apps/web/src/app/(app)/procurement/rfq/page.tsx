@@ -29,7 +29,7 @@ export default async function RFQPage() {
                 template model/endpoint exists. Removed rather than shipping a
                 dead control (decision recorded in batch report). */}
             <Link href="/procurement/rfq/new" className="btn primary">+ New RFQ</Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
