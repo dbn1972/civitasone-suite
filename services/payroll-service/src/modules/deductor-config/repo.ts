@@ -4,10 +4,15 @@
  *
  *   1. the tenant document identity: tenant-service settings.documentIdentity
  *      { orgName, tan, pan, address, deductorCategory } (tenant-identity.ts,
- *      fail-open read). orgName absent -> the tenant name, as #2463 does;
- *   2. only when documentIdentity has none of name / TAN / PAN: the
- *      deployment-wide EMPLOYER_NAME / EMPLOYER_TAN / EMPLOYER_PAN env (a
- *      single-deductor installation). The two are never mixed field by field.
+ *      fail-CLOSED read: a tenant-service failure is a 503
+ *      TENANT_IDENTITY_UNAVAILABLE, never an empty identity). orgName absent
+ *      -> the tenant name, as #2463 does;
+ *   2. only when the deployment is EXPLICITLY single-tenant
+ *      (PAYROLL_DEDUCTOR_ENV_FALLBACK=single-tenant) AND a successful read
+ *      found no name / TAN / PAN: the EMPLOYER_NAME / EMPLOYER_TAN /
+ *      EMPLOYER_PAN env. Otherwise the env is ignored (a multi-tenant
+ *      deployment must never print one deductor's TAN for another tenant).
+ *      The two are never mixed field by field.
  *
  * Either way the identity is validated (domain.ts deductorProblems); there is
  * no placeholder default. requireDeductor() refuses with 422
@@ -17,7 +22,7 @@ import { HttpError } from "../../shared/context.js";
 import {
   FORM16_EMPLOYER_NOT_CONFIGURED, deductorNotConfiguredMessage, deductorProblems, normaliseDeductor, type DeductorIdentity,
 } from "./domain.js";
-import { readTenantDocIdentity } from "./tenant-identity.js";
+import { TenantIdentityUnavailableError, readTenantDocIdentity } from "./tenant-identity.js";
 
 export type DeductorSource = "documentIdentity" | "env" | null;
 
@@ -31,8 +36,19 @@ export interface ResolvedDeductor {
   problems: string[];
 }
 
+export const SINGLE_TENANT_ENV_FALLBACK = "single-tenant";
+export const TENANT_IDENTITY_UNAVAILABLE = "TENANT_IDENTITY_UNAVAILABLE";
+
 export async function resolveDeductor(tenantId: string): Promise<ResolvedDeductor> {
-  const ident = await readTenantDocIdentity(tenantId);
+  let ident: Awaited<ReturnType<typeof readTenantDocIdentity>>;
+  try {
+    ident = await readTenantDocIdentity(tenantId);
+  } catch (err) {
+    if (err instanceof TenantIdentityUnavailableError) {
+      throw new HttpError(503, TENANT_IDENTITY_UNAVAILABLE, "The deductor identity could not be read from tenant-service; try again shortly.");
+    }
+    throw err;
+  }
   const hasIdent = ident.orgName !== null || ident.tan !== null || ident.pan !== null;
   if (hasIdent) {
     const v = normaliseDeductor({ name: ident.orgName ?? ident.tenantName, tan: ident.tan, pan: ident.pan });
@@ -42,7 +58,10 @@ export async function resolveDeductor(tenantId: string): Promise<ResolvedDeducto
       configured: problems.length === 0, problems,
     };
   }
-  const env = normaliseDeductor({ name: process.env.EMPLOYER_NAME, tan: process.env.EMPLOYER_TAN, pan: process.env.EMPLOYER_PAN });
+  const singleTenant = process.env.PAYROLL_DEDUCTOR_ENV_FALLBACK === SINGLE_TENANT_ENV_FALLBACK;
+  const env = normaliseDeductor(singleTenant
+    ? { name: process.env.EMPLOYER_NAME, tan: process.env.EMPLOYER_TAN, pan: process.env.EMPLOYER_PAN }
+    : {});
   const hasEnv = env.name !== null || env.tan !== null || env.pan !== null;
   // The env fallback has no deductor category: PANNOTREQD needs documentIdentity.deductorCategory.
   const problems = deductorProblems(env);

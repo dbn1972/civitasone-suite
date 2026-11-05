@@ -9,9 +9,12 @@
  * packages/render/src/official/identity.ts (#2463), which is not on this
  * branch yet. Same request (GET {TENANT_SERVICE_URL}/v1/tenants/:id with
  * x-internal: 1, x-service-secret: INTERNAL_SERVICE_SECRET, x-tenant-id),
- * same body parsing ({ data: { settings } } or { settings }), same 60 s cache
- * and the same fail-OPEN behaviour (tenant-service down / non-2xx / bad body
- * -> an empty identity, never an error).
+ * same body parsing ({ data: { settings } } or { settings }) and same 60 s
+ * cache, but it FAILS CLOSED: tenant-service down / timeout / non-2xx / bad
+ * body throws TenantIdentityUnavailableError (-> 503 at the route), never an
+ * empty identity, so a transient failure can never fall through to another
+ * deductor's deployment-wide EMPLOYER_* values. A successful read of a tenant
+ * with no documentIdentity is a normal empty identity (-> 422 not configured).
  * TODO(rebase onto #2463): switch to `resolveDocIdentity` from
  * @civitasone/render/official and delete this file (add `deductorCategory` to
  * its DocIdentity if it is not there yet).
@@ -29,9 +32,15 @@ export interface TenantDocIdentity {
   deductorCategory: string | null;
 }
 
+/** A tenant that was read successfully but has no documentIdentity. */
 export const EMPTY_TENANT_DOC_IDENTITY: TenantDocIdentity = {
   orgName: null, tenantName: null, address: null, tan: null, pan: null, deductorCategory: null,
 };
+
+/** tenant-service could not be read; the deductor identity is unknown (fail closed). */
+export class TenantIdentityUnavailableError extends Error {
+  constructor(reason: string) { super(`tenant document identity unavailable: ${reason}`); }
+}
 
 export const DOC_IDENTITY_SETTING = "documentIdentity";
 
@@ -61,24 +70,28 @@ export type FetchLike = (url: string, init?: { headers?: Record<string, string>;
 const cache = new Map<string, { value: TenantDocIdentity; at: number }>();
 const TTL_MS = 60_000;
 
-/** The tenant document identity; EMPTY_TENANT_DOC_IDENTITY when tenant-service cannot be read. */
+/** The tenant document identity; throws TenantIdentityUnavailableError when tenant-service cannot be read. */
 export async function readTenantDocIdentity(tenantId: string, fetchImpl: FetchLike = fetch as unknown as FetchLike): Promise<TenantDocIdentity> {
   const hit = cache.get(tenantId);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
   const base = (process.env.TENANT_SERVICE_URL ?? "http://127.0.0.1:3002").replace(/\/$/, "");
+  let res: Awaited<ReturnType<FetchLike>>;
   try {
-    const res = await fetchImpl(`${base}/v1/tenants/${encodeURIComponent(tenantId)}`, {
+    res = await fetchImpl(`${base}/v1/tenants/${encodeURIComponent(tenantId)}`, {
       headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return EMPTY_TENANT_DOC_IDENTITY;
-    const body = (await res.json()) as { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } } | null;
-    const value = tenantDocIdentityFrom(body?.data ?? body);
-    cache.set(tenantId, { value, at: Date.now() });
-    return value;
-  } catch {
-    return EMPTY_TENANT_DOC_IDENTITY;
+  } catch (err) {
+    throw new TenantIdentityUnavailableError(err instanceof Error ? err.message : "request failed");
   }
+  if (!res.ok) throw new TenantIdentityUnavailableError("tenant-service returned a non-2xx status");
+  let body: { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } } | null;
+  try { body = (await res.json()) as typeof body; } catch { throw new TenantIdentityUnavailableError("unreadable response body"); }
+  const tenant = body?.data ?? body;
+  if (!tenant || typeof tenant !== "object") throw new TenantIdentityUnavailableError("response body is not a tenant record");
+  const value = tenantDocIdentityFrom(tenant);
+  cache.set(tenantId, { value, at: Date.now() });
+  return value;
 }
 
 /** Test hook. */

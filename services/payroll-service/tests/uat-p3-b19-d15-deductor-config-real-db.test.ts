@@ -4,14 +4,15 @@
  *
  * Review decision: ONE source of deductor identity, shared with the official
  * documents of PR #2463 -- tenant-service `settings.documentIdentity`
- * { orgName, tan, pan, address, deductorCategory } -- falling back to the
- * deployment EMPLOYER_* env only when documentIdentity has none of
- * name / TAN / PAN. Validated (TAN AAAA99999A mandatory; PAN AAAAA9999A, or
+ * { orgName, tan, pan, address, deductorCategory }. The deployment EMPLOYER_*
+ * env is honoured ONLY when the deployment is explicitly single-tenant
+ * (PAYROLL_DEDUCTOR_ENV_FALLBACK=single-tenant) and a successful read found no
+ * name / TAN / PAN; a multi-tenant deployment ignores it. Validated (TAN AAAA99999A mandatory; PAN AAAAA9999A, or
  * PANNOTREQD for a deductorCategory "government" deductor only; no
  * placeholder). A missing / malformed / placeholder value refuses with 422
  * FORM16_EMPLOYER_NOT_CONFIGURED (the #2463 code) naming the field. Tenant-
- * service is stubbed at fetch; a tenant-service outage fails OPEN (env /
- * refusal), never a 500. Real Postgres.
+ * service is stubbed at fetch; a tenant-service outage FAILS CLOSED (503
+ * TENANT_IDENTITY_UNAVAILABLE, never the env of another deductor). Real Postgres.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -30,6 +31,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import * as statutoryRepo from "../src/modules/statutory/repo.js";
 import { deductorProblems, FORM16_EMPLOYER_NOT_CONFIGURED, PAN_NOT_REQUIRED } from "../src/modules/deductor-config/domain.js";
+import { TENANT_IDENTITY_UNAVAILABLE } from "../src/modules/deductor-config/repo.js";
 import { resetTenantDocIdentityCache } from "../src/modules/deductor-config/tenant-identity.js";
 
 /** An obviously fake internal-service value for the stubbed tenant-service call (assembled, not a literal). */
@@ -43,6 +45,7 @@ const realFetch = globalThis.fetch;
 
 let app: FastifyInstance;
 beforeAll(async () => {
+  vi.unstubAllGlobals(); // drop the suite-wide tenant-service answer (tests/setup-tenant-identity.ts): this file stubs / refuses it itself
   registerPayrollConsumers(queue); await queue.start(); app = await buildApp();
   vi.mocked(fetchPayrollInput).mockResolvedValue({ month: "2027-03", employees: [{ id: EMP, employeeNo: "D15-1", fullName: "Deductee One", pan: "BCDPK4321Q", basicMinor: "0" }], lopDays: {}, overtimeHours: {} } as never);
   vi.mocked(fetchEmployeeSummaries).mockResolvedValue(new Map() as never);
@@ -58,9 +61,13 @@ const seedNps = (tenant: string) => runWithTenant(tenant, () => db.transaction((
 
 /** No deployment-wide fallback either. */
 const clearEnv = () => { vi.stubEnv("EMPLOYER_NAME", ""); vi.stubEnv("EMPLOYER_TAN", ""); vi.stubEnv("EMPLOYER_PAN", ""); };
-const deploymentEnv = () => {
+const deploymentEnvValues = () => {
   vi.stubEnv("EMPLOYER_NAME", "Deployment Default Office"); vi.stubEnv("EMPLOYER_TAN", "MUMD54321E"); vi.stubEnv("EMPLOYER_PAN", "AAACD5432L");
 };
+/** An explicitly single-tenant deployment: the EMPLOYER_* env is honoured as the fallback. */
+const deploymentEnv = () => { deploymentEnvValues(); vi.stubEnv("PAYROLL_DEDUCTOR_ENV_FALLBACK", "single-tenant"); };
+/** A multi-tenant deployment that (wrongly) has EMPLOYER_* set: the env must never be used. */
+const multiTenantDeploymentEnv = () => { deploymentEnvValues(); vi.stubEnv("PAYROLL_DEDUCTOR_ENV_FALLBACK", ""); };
 
 type TenantReply = { status: number; body: unknown } | "throw";
 interface TenantCall { url: string; headers: Record<string, string> }
@@ -158,10 +165,13 @@ describe("D-15: nothing configured -> every TDS return / certificate refuses wit
   });
 
   it("a placeholder or malformed deployment-wide EMPLOYER_* value is refused too (message names the field)", async () => {
+    vi.stubEnv("PAYROLL_DEDUCTOR_ENV_FALLBACK", "single-tenant");
     vi.stubEnv("EMPLOYER_NAME", "Directorate of Accounts");
     vi.stubEnv("EMPLOYER_TAN", "<TAN — configure EMPLOYER_TAN>");
     vi.stubEnv("EMPLOYER_PAN", "AAAG1234K");
-    const res = await form12ba(randomUUID());
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({}) });
+    const res = await form12ba(tenant);
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({ code: FORM16_EMPLOYER_NOT_CONFIGURED });
     expect(res.json().message).toContain("deductor TAN is a placeholder");
@@ -172,6 +182,7 @@ describe("D-15: nothing configured -> every TDS return / certificate refuses wit
   it("NPS-SCF (not a TDS return) still generates, but never with placeholder employer text", async () => {
     clearEnv();
     const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({}) });
     await seedNps(tenant);
     const res = await app.inject({ method: "GET", url: "/v1/payroll/statutory/nps-scf?month=2026-08", headers: authFor(tenant) });
     expect(res.statusCode).toBe(200);
@@ -292,41 +303,87 @@ describe("D-15: tenant documentIdentity is the deductor source", () => {
   });
 });
 
-describe("D-15: tenant-service unreachable fails OPEN (env fallback or 422), never a 500", () => {
+describe("D-15: tenant-service unreachable FAILS CLOSED (503), never the env of another deductor", () => {
   const outages: Array<[string, (tenant: string) => void]> = [
     ["connection refused (real, dead TENANT_SERVICE_URL)", () => { /* no stub: TENANT_SERVICE_URL is a dead port in vitest.config.ts */ }],
     ["fetch throws", (tenant) => { stubTenantService({ [tenant]: "throw" }); }],
     ["tenant-service 500", (tenant) => { stubTenantService({ [tenant]: { status: 500, body: { code: "INTERNAL" } } }); }],
+    ["tenant-service 404 (tenant not found)", (tenant) => { stubTenantService({ [tenant]: { status: 404, body: { code: "NOT_FOUND" } } }); }],
     ["tenant-service 200 with a non-JSON-object body", (tenant) => { stubTenantService({ [tenant]: { status: 200, body: null } }); }],
   ];
-  it.each(outages)("%s: env fallback is used", async (_n, outage) => {
+  const expect503 = (res: { statusCode: number; json(): { code: string }; body: string }) => {
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe(TENANT_IDENTITY_UNAVAILABLE);
+    // Nothing of the deployment-wide deductor leaks into the refusal.
+    expect(res.body).not.toContain("MUMD54321E");
+    expect(res.body).not.toContain("Deployment Default Office");
+  };
+  it.each(outages)("%s: single-tenant env set -> still 503 on every return / certificate and on GET", async (_n, outage) => {
     deploymentEnv();
     const tenant = randomUUID();
     outage(tenant);
-    const f24 = await forceFile24Q(tenant);
-    expect(f24.statusCode).toBe(200);
-    expect(f24.json().deductor).toEqual({ name: "Deployment Default Office", tan: "MUMD54321E", pan: "AAACD5432L" });
-    expect((await getDeductor(tenant)).json()).toMatchObject({ source: "env", configured: true });
+    for (const res of [await forceFile24Q(tenant), await form16(tenant), await form12ba(tenant), await getDeductor(tenant)]) expect503(res);
   });
-  it.each(outages)("%s: no env -> 422 FORM16_EMPLOYER_NOT_CONFIGURED", async (_n, outage) => {
+  it.each(outages)("%s: multi-tenant deployment with EMPLOYER_* set -> 503, not another deductor's TAN", async (_n, outage) => {
+    multiTenantDeploymentEnv();
+    const tenant = randomUUID();
+    outage(tenant);
+    for (const res of [await forceFile24Q(tenant), await form16(tenant), await form12ba(tenant), await getDeductor(tenant)]) expect503(res);
+  });
+  it.each(outages)("%s: no env -> 503 too (a read failure is not 'not configured')", async (_n, outage) => {
     clearEnv();
     const tenant = randomUUID();
     outage(tenant);
     for (const res of [await forceFile24Q(tenant), await form16(tenant), await form12ba(tenant)]) {
-      expect(res.statusCode).toBe(422);
-      expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe(TENANT_IDENTITY_UNAVAILABLE);
     }
-    const got = await getDeductor(tenant);
-    expect(got.statusCode).toBe(200);
-    expect(got.json()).toMatchObject({ source: null, configured: false });
   });
   it("a failed read is not cached: the next request sees the configured identity", async () => {
     clearEnv();
     const tenant = randomUUID();
     stubTenantService({ [tenant]: "throw" });
-    expect((await forceFile24Q(tenant)).statusCode).toBe(422);
+    expect((await forceFile24Q(tenant)).statusCode).toBe(503);
     stubTenantService({ [tenant]: withIdentity({ orgName: "Pay and Accounts Office (Civil)", tan: "DELP12345C", pan: "AAAGP1234K" }) });
     expect((await forceFile24Q(tenant)).statusCode).toBe(200);
+  });
+});
+
+describe("D-15: no cross-tenant fallback to the deployment EMPLOYER_* env", () => {
+  it("missing documentIdentity on a multi-tenant deployment -> 422 not configured, env ignored (GET: source null)", async () => {
+    multiTenantDeploymentEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({ address: "only an address" }, "Tenant B Office") });
+    for (const res of [await forceFile24Q(tenant), await form16(tenant), await form12ba(tenant)]) {
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe(FORM16_EMPLOYER_NOT_CONFIGURED);
+      expect(res.json().message).toContain("deductor TAN is missing");
+      expect(res.body).not.toContain("MUMD54321E");
+      expect(res.body).not.toContain("AAACD5432L");
+    }
+    expect((await getDeductor(tenant)).json()).toMatchObject({ source: null, name: null, tan: null, pan: null, configured: false });
+  });
+  it("two tenants on one deployment: A has its own identity, B has none -> B never gets A's or the env's TAN", async () => {
+    multiTenantDeploymentEnv();
+    const a = randomUUID(); const b = randomUUID();
+    stubTenantService({
+      [a]: withIdentity({ orgName: "Office A", tan: "DELP12345C", pan: "AAAGP1234K" }),
+      [b]: withIdentity({}),
+    });
+    expect((await forceFile24Q(a)).json().deductor).toEqual({ name: "Office A", tan: "DELP12345C", pan: "AAAGP1234K" });
+    const rb = await forceFile24Q(b);
+    expect(rb.statusCode).toBe(422);
+    expect(rb.body).not.toContain("DELP12345C");
+    expect(rb.body).not.toContain("MUMD54321E");
+  });
+  it("the env fallback needs BOTH the explicit single-tenant flag and a successful read with no identity", async () => {
+    deploymentEnv();
+    const tenant = randomUUID();
+    stubTenantService({ [tenant]: withIdentity({}) });
+    expect((await getDeductor(tenant)).json()).toMatchObject({ source: "env", configured: true, tan: "MUMD54321E" });
+    vi.stubEnv("PAYROLL_DEDUCTOR_ENV_FALLBACK", "true"); // anything but the exact value does not count
+    resetTenantDocIdentityCache();
+    expect((await getDeductor(tenant)).json()).toMatchObject({ source: null, configured: false });
   });
 });
 

@@ -28,6 +28,25 @@ export async function findAllocationTx(tx: Writer, tenantId: string, headId: str
   return rows[0] ?? null;
 }
 
+/**
+ * Synchronous route pre-check for POST /v1/finance/budget-allocations (#2464 review should-fix 2): when the request
+ * would cut an existing allocation below committed + expended + approved sanctions, the floor in paise; else null.
+ * The consumer keeps the same guard as the race-safe backstop.
+ */
+export async function allocationCutFloor(
+  tenantId: string, headId: string, fy: string, requestedMinor: bigint,
+): Promise<{ floor: bigint; committed: bigint; expended: bigint; sanctioned: bigint } | null> {
+  return scopedRead(async (tx) => {
+    const existing = await findAllocationTx(tx, tenantId, headId, fy);
+    if (!existing || requestedMinor >= existing.allocatedMinor) return null;
+    const sanctioned = await outstandingSanctionsTx(tx, tenantId, headId, fy);
+    const floor = existing.committedMinor + existing.actualMinor + sanctioned;
+    return requestedMinor < floor
+      ? { floor, committed: existing.committedMinor, expended: existing.actualMinor, sanctioned }
+      : null;
+  });
+}
+
 export async function upsertAllocation(tx: Writer, row: BudgetAllocationInsert): Promise<void> {
   const existing = await findAllocationTx(tx, row.tenantId, row.headId, row.fy);
   if (existing) {

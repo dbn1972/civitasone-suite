@@ -59,6 +59,12 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = setAllocBody.parse(req.body);
+    // Synchronous 422 instead of a 202 that dead-letters in the consumer (same rule as the consumer's TE-02 guard).
+    const cut = await allocRepo.allocationCutFloor(ctx.tenantId, body.headId, body.fy, body.allocatedMinor);
+    if (cut) {
+      throw new HttpError(422, "ALLOCATION_BELOW_COMMITMENTS",
+        `allocation for this head and ${body.fy} cannot go below ${cut.floor} paise (committed ${cut.committed} + expended ${cut.expended} + approved sanctions ${cut.sanctioned})`);
+    }
     const id = randomUUID();
     await queue.publish(COMMANDS.budgetAllocationUpsert, {
       messageId: id, type: COMMANDS.budgetAllocationUpsert,
