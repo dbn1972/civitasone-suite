@@ -166,9 +166,15 @@ export function zIsoDate(opts: { window?: () => DateWindow; label?: string } = {
 
 /**
  * Age check for a date of birth against the date of joining (TE-07): the employee
- * must be `minAge`..`maxAge` (inclusive) on the joining date. Null when fine.
+ * must be `minAge`..`maxAge` (inclusive) on the joining date. Null when fine. Defaults 18..70,
+ * overridable with MIN_AGE_AT_JOINING / MAX_AGE_AT_JOINING (e.g. 14 for NAPS apprentices, higher for
+ * re-employed staff).
  */
-export function checkAgeAtJoining(dateOfBirth: string, dateOfJoining: string, minAge = 18, maxAge = 70): DateRangeFailure {
+export function ageAtJoiningBounds(env: NodeJS.ProcessEnv = process.env): { min: number; max: number } {
+  const pick = (raw: string | undefined, d: number) => (raw && /^\d{1,3}$/.test(raw.trim()) ? Number(raw.trim()) : d);
+  return { min: pick(env.MIN_AGE_AT_JOINING, 18), max: pick(env.MAX_AGE_AT_JOINING, 70) };
+}
+export function checkAgeAtJoining(dateOfBirth: string, dateOfJoining: string, minAge = ageAtJoiningBounds().min, maxAge = ageAtJoiningBounds().max): DateRangeFailure {
   const age = yearsBetween(dateOfBirth, dateOfJoining);
   if (age < minAge || age > maxAge) {
     return { code: FIELD_CODES.AGE_OUT_OF_RANGE, message: `age on the date of joining must be ${minAge} to ${maxAge} years (it is ${age})` };
@@ -189,7 +195,9 @@ export function zTrimmedText(max: number, opts: { min?: number; label?: string }
   const min = opts.min ?? 1;
   const label = opts.label ?? "this field";
   return z.string().max(max * 4).transform((v) => v.trim()).superRefine((v, ctx) => {
-    if (v.length === 0) {
+    // Invisible format characters (zero-width space, BOM, ...) are not content; ZWJ/ZWNJ stay
+    // legal inside Devanagari words, they only do not count towards "not blank".
+    if (v.replace(/\p{Cf}/gu, "").trim().length === 0) {
       fieldIssue(ctx, FIELD_CODES.TEXT_BLANK, `${label} must not be blank`);
       return;
     }
@@ -280,13 +288,15 @@ export function isValidPan(value: string): boolean {
 }
 
 /** Indian mobile: 10 digits starting 6-9, optionally written with +91 (or 91 / 0) in front. */
-export const MOBILE_RE = /^(?:\+91[\s-]?|91[\s-]?|0)?([6-9]\d{9})$/;
+export const MOBILE_RE = /^(?:\+?91|0091|0)?([6-9]\d{9})$/;
+/** Spaces, hyphens, dots and parentheses people type inside a number are not part of it. */
+const MOBILE_SEPARATORS_RE = /[\s().-]/g;
 export function isValidIndianMobile(value: string): boolean {
-  return MOBILE_RE.test(value.trim());
+  return MOBILE_RE.test(value.trim().replace(MOBILE_SEPARATORS_RE, ""));
 }
 /** The bare 10-digit number of a valid Indian mobile, or null. */
 export function normaliseIndianMobile(value: string): string | null {
-  const m = MOBILE_RE.exec(value.trim());
+  const m = MOBILE_RE.exec(value.trim().replace(MOBILE_SEPARATORS_RE, ""));
   return m ? (m[1] as string) : null;
 }
 
@@ -333,9 +343,10 @@ export const zUan = z.string().trim().superRefine((v, ctx) => {
 export const zGstin = z.string().trim().transform((v) => v.toUpperCase()).superRefine((v, ctx) => {
   if (!isValidGstin(v)) fieldIssue(ctx, FIELD_CODES.GSTIN_INVALID, "GSTIN is not valid (state code, PAN or check character)");
 });
+/** Valid input in any common spelling; the OUTPUT is the bare 10-digit number so one number is stored one way. */
 export const zIndianMobile = z.string().trim().superRefine((v, ctx) => {
   if (!isValidIndianMobile(v)) fieldIssue(ctx, FIELD_CODES.MOBILE_INVALID, "mobile must be a 10-digit Indian number starting 6-9, optionally with +91");
-});
+}).transform((v) => normaliseIndianMobile(v) ?? v);
 export const zPan = z.string().trim().superRefine((v, ctx) => {
   if (!PAN_RE.test(v)) fieldIssue(ctx, FIELD_CODES.PAN_INVALID, "must be a valid PAN (AAAAA9999A)");
 });

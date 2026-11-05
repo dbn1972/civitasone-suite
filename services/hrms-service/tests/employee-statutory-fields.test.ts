@@ -9,13 +9,13 @@ describe("employee statutory / type-specific identifier fields", () => {
     const r = updateEmployeeBody.parse({
       esicIpNumber: "3100000000",
       pran: "110012345678",
-      gstin: "29ABCDE1234F1Z5",
+      gstin: "27AAPFU0939F1ZV",
       sacCode: "998311",
       agencyRef: "AG/DEP/2025/017",
       napsId: "NAPS-2025-0001",
     });
     expect(r.pran).toBe("110012345678");
-    expect(r.gstin).toBe("29ABCDE1234F1Z5");
+    expect(r.gstin).toBe("27AAPFU0939F1ZV");
     expect(r.esicIpNumber).toBe("3100000000");
     expect(r.napsId).toBe("NAPS-2025-0001");
   });

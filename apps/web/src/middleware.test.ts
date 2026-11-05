@@ -171,6 +171,25 @@ describe("middleware public allow-list segment boundary (V4-A-04)", () => {
     },
   );
 
+  // PR #2465 review SF5: a plain link / address-bar navigation to an /api/ path (e.g. the Form 16
+  // bulk download) cannot render JSON, so it keeps the redirect to the sign-in page.
+  it("redirects a browser NAVIGATION to an /api/ path (Sec-Fetch-Mode: navigate)", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/payroll/form16/bulk"), { headers: { "sec-fetch-mode": "navigate" } });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+  it("redirects an /api/ navigation identified only by Accept: text/html", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/x"), { headers: { accept: "text/html,application/xhtml+xml" } });
+    expect((await middleware(req)).status).toBe(307);
+  });
+  it("still answers fetch()/XHR to an /api/ path with the JSON 401", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/x"), { headers: { "sec-fetch-mode": "cors", accept: "*/*" } });
+    const res = await middleware(req);
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe("SESSION_EXPIRED");
+  });
+
   it.each([
     "/auth",
     "/auth/login",

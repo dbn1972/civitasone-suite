@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   FIELD_CODES, isRealIsoDate, istToday, addYears, addDays, yearsBetween, financialYearOf, checkDateWindow, DATE_WINDOWS,
   zIsoDate, checkAgeAtJoining, zTrimmedText, zTrimmedCode, verhoeffValid, verhoeffCheckDigit, isValidAadhaar, maskAadhaar,
-  isMaskedAadhaar, zAadhaarMasked, isValidIfsc, zIfsc, isValidUan, isValidPan, isValidIndianMobile, normaliseIndianMobile,
+  isMaskedAadhaar, zAadhaarMasked, isValidIfsc, zIfsc, isValidUan, isValidPan, isValidIndianMobile, normaliseIndianMobile, zIndianMobile, ageAtJoiningBounds,
   gstinCheckChar, isValidGstin, isValidGstStateCode, zGstin, moneyMaxMinor, checkMoneyBound, boundedMinorNumber,
   isValidFyLabel, zFyLabel, BIGINT_MAX, yearsFromEnv,
 } from "../src/validators.js";
@@ -196,14 +196,33 @@ describe("IFSC / UAN / PAN / mobile (TE-05)", () => {
     expect(isValidPan("abcde1234f")).toBe(false);
   });
   it("mobile", () => {
-    for (const ok of ["9876543210", "+919876543210", "+91 9876543210", "+91-6123456789", "09876543210", "919876543210"]) {
+    // PR #2465 review SF3: spaces / hyphens / brackets inside the number and the 0091 prefix are valid spellings.
+    for (const ok of ["9876543210", "+919876543210", "+91 9876543210", "+91-6123456789", "09876543210", "919876543210",
+      "+91 98765 43210", "98765 43210", "98765-43210", "0091 9876543210", "(+91) 98765-43210"]) {
       expect(isValidIndianMobile(ok)).toBe(true);
     }
-    for (const bad of ["abcdefghij", "5876543210", "987654321", "98765432100", "+19876543210", "+91 98765 43210"]) {
+    for (const bad of ["abcdefghij", "5876543210", "987654321", "98765432100", "+19876543210"]) {
       expect(isValidIndianMobile(bad)).toBe(false);
     }
     expect(normaliseIndianMobile("+91 9876543210")).toBe("9876543210");
     expect(normaliseIndianMobile("abc")).toBeNull();
+    expect(normaliseIndianMobile("0091 98765-43210")).toBe("9876543210");
+  });
+  it("zIndianMobile stores ONE format (bare 10 digits) whatever the spelling", () => {
+    for (const raw of ["+91 98765 43210", "98765-43210", "0091 9876543210", "919876543210"]) {
+      expect(zIndianMobile.parse(raw)).toBe("9876543210");
+    }
+  });
+  it("zTrimmedText treats a zero-width-only value as blank but keeps ZWJ/ZWNJ inside real words", () => {
+    const s = zTrimmedText(50, { label: "name" });
+    expect(s.safeParse("\u200B\u200B").success).toBe(false);
+    expect(s.safeParse("\uFEFF").success).toBe(false);
+    expect(s.safeParse("क\u200Dष").success).toBe(true);
+  });
+  it("age bounds are configurable (NAPS apprentices from 14)", () => {
+    expect(checkAgeAtJoining("2010-01-01", "2024-06-01")).not.toBeNull();
+    expect(ageAtJoiningBounds({ MIN_AGE_AT_JOINING: "14", MAX_AGE_AT_JOINING: "75" } as NodeJS.ProcessEnv)).toEqual({ min: 14, max: 75 });
+    expect(checkAgeAtJoining("2010-01-01", "2024-06-01", 14, 70)).toBeNull();
   });
 });
 

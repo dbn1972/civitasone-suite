@@ -184,10 +184,10 @@ const noMaskChar = (v: string) => !v.includes("*");
 const MASK_CHAR_MESSAGE = "must not contain '*' -- this looks like a masked placeholder, not a real value";
 
 export const updateEmployeeBody = z.object({
-  mobile:         z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
+  mobile:         z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIndianMobile).optional(),
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
-  bankIfsc:       z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
+  bankIfsc:       z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIfsc).optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-04: basic pay is NOT editable on this generic
   // profile route. It is money that feeds every payslip, and this path has no
   // maker-checker, no effective date and no arrears handling; payroll's salary
@@ -197,10 +197,10 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.undefined({ message: "Basic pay cannot be changed here. Use a salary revision in Payroll, which is approved, effective-dated and audited." }).optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
-  uanNumber:      z.string().max(12).optional(),
+  uanNumber:      z.string().max(12).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zUan).optional(),
   esicIpNumber:   z.string().max(17).optional(),
   pran:           z.string().max(12).optional(),
-  gstin:          z.string().max(15).optional(),
+  gstin:          z.string().max(15).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zGstin).optional(),
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),

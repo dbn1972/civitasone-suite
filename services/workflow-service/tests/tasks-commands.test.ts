@@ -376,3 +376,61 @@ describe("tasks/commands — bulkComplete", () => {
     expect(results[1]!.code).toBe("NOT_FOUND");
   });
 });
+
+describe("tasks/commands — TASK_ALREADY_DECIDED does not leak the decider (PR #2465 blocker 1)", () => {
+  async function decidedTask(opts: { roleRef?: string; assigneeId?: string } = {}) {
+    q = new TestQueue();
+    registerInstancesConsumers(q);
+    registerTasksConsumers(q);
+    const tenantId = newTenant();
+    const { taskId } = await setupTask(tenantId, randomUUID(), { roleRef: opts.roleRef });
+    const decider = randomUUID();
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed', decision = 'approve', completed_by = ${decider}, assignee_id = ${opts.assigneeId ?? null} WHERE id = ${taskId}`);
+    return { tenantId, taskId, decider };
+  }
+
+  it("a caller without the task's roleRef gets 403 ROLE_NOT_AUTHORIZED and no decider details", async () => {
+    const { tenantId, taskId, decider } = await decidedTask({ roleRef: "finance_approver" });
+    const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
+    const err = await asTenant(tenantId, () => completeTask(ctx, taskId, "approve")).catch((e: unknown) => e) as { status: number; code: string; message: string; details?: unknown };
+    expect(err.status).toBe(403);
+    expect(err.code).toBe("ROLE_NOT_AUTHORIZED");
+    expect(err.details).toBeUndefined();
+    expect(JSON.stringify(err)).not.toContain(decider);
+  });
+
+  it("a role-holder who is not the assignee gets 403 NOT_ASSIGNEE, not the decider", async () => {
+    const { tenantId, taskId, decider } = await decidedTask({ roleRef: "workflow_user", assigneeId: randomUUID() });
+    const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
+    const err = await asTenant(tenantId, () => completeTask(ctx, taskId, "approve")).catch((e: unknown) => e) as { status: number; code: string; details?: unknown };
+    expect(err.status).toBe(403);
+    expect(err.code).toBe("NOT_ASSIGNEE");
+    expect(JSON.stringify(err)).not.toContain(decider);
+  });
+
+  it("an unrestricted (no roleRef) task refuses a non-admin non-assignee before revealing the decider", async () => {
+    const { tenantId, taskId, decider } = await decidedTask();
+    const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
+    const err = await asTenant(tenantId, () => completeTask(ctx, taskId, "approve")).catch((e: unknown) => e) as { status: number; code: string };
+    expect(err.status).toBe(403);
+    expect(err.code).toBe("TASK_NOT_AUTHORIZED");
+    expect(JSON.stringify(err)).not.toContain(decider);
+  });
+
+  it("an authorised role-holder still gets the 409 with who decided", async () => {
+    const { tenantId, taskId, decider } = await decidedTask({ roleRef: "workflow_user" });
+    const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
+    await expect(asTenant(tenantId, () => completeTask(ctx, taskId, "approve"))).rejects.toMatchObject({
+      status: 409, code: "TASK_ALREADY_DECIDED", details: { decision: "approve", decidedBy: { id: decider } },
+    });
+  });
+
+  it("bulkComplete reports the plain 403 for an unauthorised caller (no 'by <name>' in the message)", async () => {
+    const { tenantId, taskId, decider } = await decidedTask({ roleRef: "finance_approver" });
+    const ctx = makeCtx(tenantId, randomUUID(), ["workflow_user"]);
+    const res = await asTenant(tenantId, () => bulkComplete(ctx, [taskId], "approve"));
+    expect(res[0]).toMatchObject({ id: taskId, ok: false, code: "ROLE_NOT_AUTHORIZED" });
+    expect(JSON.stringify(res)).not.toContain(decider);
+    expect(res[0]!.message).not.toMatch(/already decided/);
+  });
+});

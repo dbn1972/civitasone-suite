@@ -64,7 +64,7 @@ async function assertAllocationAcceptable(tenantId: string, body: { headId: stri
       { field: "headId", message: "Choose an existing budget head.", code: "HEAD_NOT_FOUND" },
     ]);
   }
-  const current = (await allocRepo.listAllocations(tenantId, body.fy, 500)).find((r) => r.headId === body.headId);
+  const current = await allocRepo.findAllocation(tenantId, body.headId, body.fy);
   if (current) {
     const used = BigInt(current.committedMinor) + BigInt(current.actualMinor);
     if (body.allocatedMinor < used) {
