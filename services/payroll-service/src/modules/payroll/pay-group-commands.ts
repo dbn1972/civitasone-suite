@@ -20,6 +20,7 @@ import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
 import type { CreateRunBody } from "./validators.js";
 import { findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
+import { duplicateRunNoError, isRunNoUniqueViolation, runNoTaken } from "./run-no.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -154,6 +155,7 @@ export async function createPayGroupRuns(
   });
 
   const runs = runnable.map((e) => ({ id: randomUUID(), ...e }));
+  let currentRunNo: string | undefined;
   await db.transaction(async (tx) => {
     // One lock for every pay-group run of the tenant+month, then the legacy
     // per-DDO key so a concurrent legacy run for the same DDO serialises too.
@@ -180,10 +182,8 @@ export async function createPayGroupRuns(
         throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD", `a regular payroll run already exists for ${body.month} (pay group ${r.group.name}): ${dup[0].id}`);
       }
       const runNo = runNoFor(body.runNo, r.group, runs.length > 1);
-      const noClash = (await tx.execute(sql`
-        SELECT 1 FROM payroll.payroll_runs WHERE tenant_id = ${ctx.tenantId}::uuid AND run_no = ${runNo} LIMIT 1
-      `)) as unknown as unknown[];
-      if (noClash.length > 0) throw new HttpError(409, "DUPLICATE_RUN_NO", `run number ${runNo} is already used`);
+      currentRunNo = runNo;
+      if (await runNoTaken(tx, ctx.tenantId, runNo)) throw duplicateRunNoError(runNo);
       await repo.insertRun(tx, {
         id: r.id, tenantId: ctx.tenantId, runNo, month: body.month,
         departmentId: null, structureId: body.structureId!, runType: "regular",
@@ -195,6 +195,11 @@ export async function createPayGroupRuns(
         payGroupId: r.group.id, payGroupName: r.group.name, ddoCode: r.group.ddo_code, month: body.month, memberCount: r.employeeIds.length,
       });
     }
+  }).catch((err: unknown) => {
+    // UAT P3 b19 D-16: a run number taken by a concurrent, not yet committed
+    // run fails the INSERT on the unique key -- the same 409 as the check above.
+    if (isRunNoUniqueViolation(err)) throw duplicateRunNoError(currentRunNo ?? body.runNo);
+    throw err;
   });
 
   for (const r of runs) {

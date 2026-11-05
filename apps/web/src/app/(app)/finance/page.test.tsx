@@ -44,6 +44,14 @@ describe("finance hub tiles (GAP-FINANCE-HOME-01/02/03/04)", () => {
   });
 });
 
+describe("finance hub budget tiles (fx-p3)", () => {
+  it("the Lapse statement is reachable from the Budget section", async () => {
+    render(await FinanceHub());
+    const budget = screen.getByRole("heading", { name: "Budget" }).parentElement!;
+    expect(budget.querySelector('a[href="/finance/budget/lapse-statement"]')).not.toBeNull();
+  });
+});
+
 describe("finance loading fallback (GAP-FINANCE-HOME-05)", () => {
   it("/finance gets a tile-shaped skeleton (no stat-card table block)", () => {
     pathnameMock.mockReturnValue("/finance");

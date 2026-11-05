@@ -3,10 +3,17 @@ import type { FinanceChangeRequest } from "@civitasone/types";
 /** Roles that may approve / reject a finance change request (finance-service DECIDER_ROLES). */
 export const CHANGE_REQUEST_DECIDER_ROLES = ["finance_admin", "super_admin"];
 
+/**
+ * fx-p3: finance-service also raises a `period_reopen` request (reopening a HARD-closed period needs a second
+ * finance_admin; payload { period }). @civitasone/types does not list that kind yet, so the web widens it here.
+ */
+export type FinanceChangeRequestKind = FinanceChangeRequest["kind"] | "period_reopen";
+export type WebFinanceChangeRequest = Omit<FinanceChangeRequest, "kind"> & { kind: FinanceChangeRequestKind };
+
 /** Pure view-model for one pending request: what it is, and what the viewer may do about it. */
 export type ChangeRequestView = {
   id: string;
-  kind: FinanceChangeRequest["kind"];
+  kind: FinanceChangeRequestKind;
   subject: string;
   /** Short factual detail lines (old -> new HoA code, entry count, ...). */
   details: string[];
@@ -32,7 +39,7 @@ export function openingBalanceTotalMinor(entries: unknown): bigint {
 }
 
 export function toChangeRequestView(
-  r: FinanceChangeRequest,
+  r: WebFinanceChangeRequest,
   viewerId: string | null,
   canDecide: boolean,
   formatMoney: (minor: bigint) => string,
@@ -48,6 +55,8 @@ export function toChangeRequestView(
     const changes = typeof p.changes === "object" && p.changes !== null ? (p.changes as Record<string, unknown>) : {};
     // the controls this request switches OFF
     for (const [k, v] of Object.entries(changes)) if (v === false) details.push(k);
+  } else if (r.kind === "period_reopen") {
+    subject = str(p.period) || r.subjectKey;
   } else if (r.kind === "opening_balances_enter") {
     const entries = Array.isArray(p.entries) ? p.entries : [];
     details.push(`${entries.length}`);

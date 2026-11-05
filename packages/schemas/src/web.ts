@@ -3334,7 +3334,8 @@ export const FinanceDebtDetailSchema = z.object({
 // fp-finance-01: maker-checker change requests and per-tenant finance settings.
 export const FinanceChangeRequestSchema = z.object({
   id: z.string(),
-  kind: z.enum(["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax"]),
+  // fx-p3: period_reopen = reopening a hard-closed accounting period (payload { period }).
+  kind: z.enum(["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen"]),
   subjectKey: z.string(),
   payload: z.record(z.unknown()),
   reason: z.string(),

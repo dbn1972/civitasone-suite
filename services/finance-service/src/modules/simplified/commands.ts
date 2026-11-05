@@ -1,3 +1,4 @@
+import { todayIST } from "../../shared/ist-date.js";
 /**
  * Simplified module commands — publish to SQS for async processing.
  *
@@ -42,7 +43,7 @@ export async function recordIncome(ctx: RequestContext, body: RecordIncomeBody):
       gstRate: body.gstRate,
       invoiceNo: body.invoiceNo,
       incomeType: body.incomeType,
-      postingDate: body.postingDate ?? new Date().toISOString().slice(0, 10),
+      postingDate: body.postingDate ?? todayIST(),
     },
   });
 
@@ -73,7 +74,7 @@ export async function recordExpense(ctx: RequestContext, body: RecordExpenseBody
       vendorName: body.vendorName,
       description: body.description,
       gstRate: body.gstRate,
-      postingDate: body.postingDate ?? new Date().toISOString().slice(0, 10),
+      postingDate: body.postingDate ?? todayIST(),
     },
   });
 
@@ -98,7 +99,7 @@ export async function recordPaymentReceived(ctx: RequestContext, body: RecordPay
       amountMinor: amountMinor.toString(),
       customerName: body.customerName,
       invoiceNo: body.invoiceNo,
-      postingDate: body.postingDate ?? new Date().toISOString().slice(0, 10),
+      postingDate: body.postingDate ?? todayIST(),
     },
   });
 
@@ -123,7 +124,7 @@ export async function recordPaymentMade(ctx: RequestContext, body: RecordPayment
       amountMinor: amountMinor.toString(),
       vendorName: body.vendorName,
       description: body.description,
-      postingDate: body.postingDate ?? new Date().toISOString().slice(0, 10),
+      postingDate: body.postingDate ?? todayIST(),
     },
   });
 

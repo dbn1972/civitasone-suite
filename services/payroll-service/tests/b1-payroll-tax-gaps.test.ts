@@ -40,6 +40,14 @@ vi.mock("../src/shared/db.js", async () => {
 });
 
 const mockPublish = vi.fn().mockResolvedValue(undefined);
+// UAT P3 b19 D-15: the deductor read is a scopedRead of its own; this suite
+// queues its scopedRead results in order, so the (valid) deductor is stubbed.
+vi.mock("../src/modules/deductor-config/repo.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/modules/deductor-config/repo.js")>("../src/modules/deductor-config/repo.js");
+  const deductor = { name: "Test Pay and Accounts Office", tan: "TSTP12345T", pan: "AAAGT1234T" };
+  return { ...actual, requireDeductor: vi.fn(async () => deductor), optionalDeductor: vi.fn(async () => deductor) };
+});
+
 vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: (...a: unknown[]) => mockPublish(...a), subscribe: vi.fn(), start: vi.fn(), stop: vi.fn(), ping: vi.fn() },
   cache: {

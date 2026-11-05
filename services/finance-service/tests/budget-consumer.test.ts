@@ -54,6 +54,13 @@ vi.mock("../src/shared/outbox.js", () => ({
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
+// UAT T-EDGE TE-02 (b19): the allocation check itself is covered against Postgres in uat-te02-sanction-allocation.test.ts.
+vi.mock("../src/modules/budget/sanction-control.js", () => ({
+  sanctionPreRead: vi.fn(async () => ({ committedMinor: 0n, expendedMinor: 0n })),
+  sanctionPreReadFor: vi.fn(async () => ({ committedMinor: 0n, expendedMinor: 0n })),
+  assertSanctionWithinAllocationTx: vi.fn(async () => ({ availableMinor: 10n ** 15n })),
+}));
+
 vi.mock("../src/modules/budget/repo.js", () => ({
   approveSanctionIfNoEfile: (...a: any[]) => approveSanctionIfNoEfileMock(...a),
   insertBudget: (...a: any[]) => insertBudgetMock(...a),

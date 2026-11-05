@@ -11,6 +11,7 @@ import { COMMANDS } from "../../topics.js";
 import { getPolicy, readPolicyWith } from "../masters/policy.js";
 import { isStale, todayIso, validUntil } from "./domain.js";
 import type { IssueInstrumentBody, BounceInstrumentBody, ReasonedInstrumentBody } from "./validators.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 function serialize(row: InstrumentRow) {
   return {
@@ -96,7 +97,7 @@ function conflict(body: IssueInstrumentBody): HttpError {
  * material terms is a conflict (409 -> dead-lettered, nothing written).
  */
 export async function applyIssue(tx: Tx, actor: Actor, body: IssueInstrumentBody): Promise<void> {
-  const issueDate = body.issueDate ?? new Date().toISOString().slice(0, 10);
+  const issueDate = body.issueDate ?? todayIST();
   const res = await repo.insertInstrumentTx(tx, {
     tenantId: actor.tenantId,
     instrumentType: body.instrumentType,

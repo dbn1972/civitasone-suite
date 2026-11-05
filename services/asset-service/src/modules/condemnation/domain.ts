@@ -1,3 +1,4 @@
+import { todayIST } from "../../shared/ist-date.js";
 /**
  * Condemnation domain logic — pure functions, no IO.
  */
@@ -58,7 +59,8 @@ export function isCondemnableCondition(condition: string): boolean {
  * This is the date of condemnation approval (asset is retired).
  */
 export function computeRetirementDate(approvalDate: Date): string {
-  return approvalDate.toISOString().slice(0, 10);
+  // UAT T-PERIOD D-06 (#2464 review): the IST calendar date of the approval (an approval at 00:00-05:30 IST is that day).
+  return todayIST(approvalDate);
 }
 
 /**

@@ -5,6 +5,7 @@ import { ChangeRequestsPanel } from "../_components/ChangeRequestsPanel";
 import { CHANGE_REQUEST_DECIDER_ROLES } from "../_components/changeRequests";
 import { FiscalYearForm } from "./FiscalYearForm";
 import { FiscalYearsTable } from "./FiscalYearsTable";
+import { YearEndClosePanel } from "./YearEndClosePanel";
 import { getPeriods } from "../period-close/periodsLoader";
 
 export default async function FiscalYearsPage() {
@@ -51,6 +52,15 @@ export default async function FiscalYearsPage() {
             secondApprover={secondApprover}
             pendingCodes={pendingCodes}
           />
+
+          {/* fx-p3: the 31 March close (lapse statement + next-year opening balances), finance_admin / super_admin. */}
+          {fiscalYears.length > 0 ? (
+            <YearEndClosePanel
+              years={fiscalYears.map((y) => y.code)}
+              {...(activeYear ? { defaultFy: activeYear.code } : {})}
+              canRun={canDecide}
+            />
+          ) : null}
 
           {/* A failed load is its own state: never "nothing is waiting". */}
           {requestsResult.source === "error" ? (

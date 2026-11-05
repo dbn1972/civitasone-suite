@@ -18,6 +18,8 @@
  * The new fields are optional: a payload without them (older payroll build)
  * posts exactly the lines it always did.
  */
+import { deductionLines, type AccrualLine, type DeductionKind } from "./payroll-deductions.js";
+
 export interface PayrollRunApprovedPayload {
   runId: string;
   month: string;
@@ -28,6 +30,12 @@ export interface PayrollRunApprovedPayload {
   totalEpfAdminMinor?: string;
   totalUpsPoolMinor?: string;
   legalEntityId?: string;
+  /**
+   * UAT T-PERIOD D-10 (b19): employee deductions by type (paise strings; they sum to
+   * gross - net). Credited each to its own liability head by deductionLines(); absent
+   * (older payroll build) or not summing to gross - net -> the single 2102 leg.
+   */
+  employeeDeductionsMinor?: Partial<Record<DeductionKind, string>>;
   /**
    * UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): set by a payroll build
    * that also carries the accrual amounts on payroll.run.disbursed, so a
@@ -107,8 +115,8 @@ export function payrollAccrualVoucherNo(p: { runId: string; month: string }): st
 }
 
 /** The finance.gl.post command payload of a payroll accrual journal, dated `postingDate`. Pure. */
-export function payrollAccrualJournalCommand(p: PayrollRunApprovedPayload, journalId: string, tenantId: string, postingDate: string): Record<string, unknown> {
-  const lines = payrollAccrualLines(p);
+export function payrollAccrualJournalCommand(p: PayrollRunApprovedPayload, journalId: string, tenantId: string, postingDate: string, linesOverride?: AccrualLine[]): Record<string, unknown> {
+  const lines = linesOverride ?? payrollAccrualLines(p);
   return {
     id: journalId,
     tenantId,
@@ -126,7 +134,7 @@ export function payrollAccrualJournalCommand(p: PayrollRunApprovedPayload, journ
   };
 }
 
-export interface AccrualLine { accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }
+export type { AccrualLine };
 
 export const EMPLOYER_EXPENSE_HEAD = "5002";
 export const EMPLOYER_PAYABLE_HEAD = "2103";
@@ -144,9 +152,8 @@ export function payrollAccrualLines(p: PayrollRunApprovedPayload): AccrualLine[]
   const lines: AccrualLine[] = [
     { accountCode: "5001", debitMinor: gross, creditMinor: 0n, narration: "Salary expense" },
     { accountCode: "2101", debitMinor: 0n, creditMinor: net, narration: "Net salary payable" },
-    statutory >= 0n
-      ? { accountCode: "2102", debitMinor: 0n, creditMinor: statutory, narration: "Statutory deductions payable" }
-      : { accountCode: "2102", debitMinor: -statutory, creditMinor: 0n, narration: "Statutory deductions payable" },
+    // UAT T-PERIOD D-10: each employee deduction on its own liability head (see deductionLines()).
+    ...deductionLines(statutory, p.employeeDeductionsMinor),
   ];
   employerPair(lines, BigInt(p.totalEmployerContribMinor ?? "0"), "Employer contributions expense", "Employer contributions payable");
   employerPair(lines, BigInt(p.totalEdliMinor ?? "0"), "Employer EDLI contribution (EPFO A/c 21)", "EDLI contribution payable to EPFO (A/c 21)");

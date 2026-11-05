@@ -3154,7 +3154,7 @@ export type FinanceDebtDetail = {
 /** A maker-checker change request (fiscal-year activation, opening balances, HoA change). */
 export type FinanceChangeRequest = {
   id: string;
-  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax";
+  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax" | "period_reopen";
   subjectKey: string;
   payload: Record<string, unknown>;
   reason: string;

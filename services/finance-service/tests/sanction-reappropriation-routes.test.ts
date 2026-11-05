@@ -31,6 +31,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { scoped } from "./_tenant.js";
 import { financeBudgets, financeSanctions, financeHeads } from "../src/modules/budget/schema.js";
+import { currentFyIST } from "../src/shared/ist-date.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT_A  = "aaaaaaaa-1111-4000-8000-0000000fa099";
@@ -60,6 +61,7 @@ async function sanctionStatus(id: string): Promise<string | undefined> {
 async function seed() {
   await scoped(TENANT_A, (tx) => tx.delete(financeSanctions).where(eq(financeSanctions.headId, HEAD_SRC)));
   await scoped(TENANT_A, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.fy, FY)));
+  await scoped(TENANT_A, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.headId, HEAD_SRC)));
   await scoped(TENANT_A, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_SRC)));
   await scoped(TENANT_A, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_TGT)));
   // fk_fbudgets_head (migrations/0055_add_foreign_keys.sql) requires a parent
@@ -73,6 +75,8 @@ async function seed() {
     { id: SRC_BUDGET, tenantId: TENANT_A, headId: HEAD_SRC, fy: FY, beMinor: 100000000n, reMinor: 100000000n, allocatedMinor: 0n, utilisedMinor: 20000000n, currency: "INR", createdBy: MAKER, updatedBy: MAKER },
     { id: TGT_BUDGET, tenantId: TENANT_A, headId: HEAD_TGT, fy: FY, beMinor: 30000000n,  reMinor: 30000000n,  allocatedMinor: 0n, utilisedMinor: 0n,        currency: "INR", createdBy: MAKER, updatedBy: MAKER },
   ]));
+  // A sanction is raised in the current financial year and must fit that year budget (UAT T-EDGE TE-02)
+  await scoped(TENANT_A, (tx) => tx.insert(financeBudgets).values({ tenantId: TENANT_A, headId: HEAD_SRC, fy: currentFyIST(), beMinor: 10n ** 12n, reMinor: 10n ** 12n, createdBy: MAKER, updatedBy: MAKER }).onConflictDoNothing());
 }
 
 beforeAll(async () => {
@@ -82,6 +86,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await scoped(TENANT_A, (tx) => tx.delete(financeSanctions).where(eq(financeSanctions.headId, HEAD_SRC)));
   await scoped(TENANT_A, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.fy, FY)));
+  await scoped(TENANT_A, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.headId, HEAD_SRC)));
   await scoped(TENANT_A, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_SRC))).catch(() => {});
   await scoped(TENANT_A, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_TGT))).catch(() => {});
   await sqlClient.end();

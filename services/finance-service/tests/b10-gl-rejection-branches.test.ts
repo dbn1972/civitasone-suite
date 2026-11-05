@@ -117,10 +117,11 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   hasChildHeadsTx: (...args: any[]) => hasChildHeadsTxMock(...args),
 }));
 
-// UAT T-PERIOD D-04: the payroll settlement branch reads the tenant accounting basis.
-vi.mock("../src/modules/approvals/repo.js", () => ({
-  loadSettingsTx: vi.fn(async () => ({ accountingBasis: "cash" })),
-}));
+// UAT T-PERIOD (b19): these are the ACCRUAL-basis journals (company-book depreciation, disposal write-off); on the
+// cash basis (the default) they are memoranda -- covered by uat-tperiod-gl-posting-rules.test.ts.
+// The payroll settlement test below (payload without totalGrossMinor) is basis-independent: no accrual leg either way.
+vi.mock("../src/modules/approvals/repo.js", () => ({ loadSettingsTx: vi.fn(async () => ({ accountingBasis: "accrual", makerCheckerEnabled: true })) }));
+
 vi.mock("../src/modules/period-close/repo.js", () => ({
   getPeriodStatusTx: (...args: any[]) => getPeriodStatusTxMock(...args),
 }));

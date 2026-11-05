@@ -1,3 +1,4 @@
+import { todayIST } from "../../shared/ist-date.js";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
@@ -44,7 +45,7 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
         indicator: body.indicator, unit: body.unit, polarity: body.polarity,
         baselineValue: body.baselineValue, targetValue: body.targetValue,
         allocatedMinor: body.allocatedMinor, currency: body.currency,
-        effectiveFrom: body.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        effectiveFrom: body.effectiveFrom ?? todayIST(),
       },
     });
     return reply.code(202).send({ data: { id, status: "accepted" } });

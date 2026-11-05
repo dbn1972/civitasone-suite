@@ -17,12 +17,16 @@ import { grnBillHeadCode } from "../gl/system-heads.js";
 import { payrollAccrualLines, payrollAccrualJournalCommand, accrualDateOnApproval, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
 import { loadSettingsTx } from "../approvals/repo.js";
 import { deterministicId } from "../gl/spine.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
 
 // UAT L2-N6: one definition, shared with the stock-receipt journal (it is also the GRN clearing head).
 export { grnBillHeadCode };
+
+export { deductionLines, deductionHeadFallbackTx, type DeductionKind } from "./payroll-deductions.js";
+import { deductionHeadFallbackTx } from "./payroll-deductions.js";
 
 export function registerIntegrationConsumers(queue: Queue): void {
   /** grant-service / payroll-service → finance: process EFT disbursement */
@@ -123,7 +127,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
       accountName: prepared.agencyCode,
       amountMinor: BigInt(p.amountMinor),
       narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: todayIST(),
     };
     // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set. No DB
     // transaction is open while this network call runs (TX-007): a slow or
@@ -296,10 +300,21 @@ export function registerIntegrationConsumers(queue: Queue): void {
         await audit(tx, msg, "payroll_gl_accrual_deferred", "payroll_run", p.runId);
         return;
       }
+      // UAT T-PERIOD review (blocker 2): a split deduction head missing from the chart falls back to 2102 with a warning.
+      const fb = await deductionHeadFallbackTx(tx, msg.tenantId, lines);
+      if (fb.missing.length > 0) {
+        log.warn({ tenantId: msg.tenantId, runId: p.runId, missing: fb.missing }, "payroll accrual: deduction head(s) missing, posted to 2102 (run backfill-standard-gl-heads)");
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "finance", action: "warning", resourceType: "payroll_run", resourceId: p.runId, outcome: "success", code: "PAYROLL_DEDUCTION_HEAD_MISSING", missingHeads: fb.missing, fallbackHead: payrollDeductionHeads().other, journalId },
+        });
+      }
+      const postLines = fb.lines;
       await enqueue(tx, {
         topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: payrollAccrualJournalCommand(p, journalId, msg.tenantId, postingDate),
+        payload: payrollAccrualJournalCommand(p, journalId, msg.tenantId, postingDate, postLines),
       });
       await audit(tx, msg, "payroll_gl_accrual", "payroll_run", p.runId);
     });

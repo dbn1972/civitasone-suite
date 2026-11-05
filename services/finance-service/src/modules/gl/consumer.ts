@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { fyClosedReasonTx, fyClosedMessage } from "./fy-guard.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
@@ -22,8 +23,12 @@ import { parseInventoryMovement, accrualJournal, grnIdOf, INVENTORY_MOVEMENT_TYP
 import { recordStoresMovementTx } from "./stores-memo.js";
 import { clearGrniTx } from "./grni-clearing.js";
 import { loadSettingsTx } from "../approvals/repo.js";
-import { payrollAccrualJournalCommand, payrollAccrualVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
+import { deductionHeadFallbackTx } from "../integrations/payroll-deductions.js";
+import { payrollAccrualLines, payrollAccrualJournalCommand, payrollAccrualVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
 import { pino } from "pino";
+import { sql } from "drizzle-orm";
+import { needsBudgetProvision, noBudgetProvisionError } from "../budget/provision.js";
+import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:gl-consumer" });
@@ -61,7 +66,8 @@ export class UnknownAccountCodeError extends NonRetryableError {
   }
 }
 
-import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET } from "./system-heads.js";
+import { DEP_EXPENSE, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS } from "./system-heads.js";
+import { todayIST, currentPeriodIST } from "../../shared/ist-date.js";
 const GAIN_LOSS = process.env.FINANCE_GAIN_LOSS_CODE ?? "4200";
 const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
 
@@ -191,6 +197,21 @@ async function postJournal(
   // pre-checks in gl/routes.ts so the HTTP caller is told the same thing this authoritative check would say.
   const refusal = periodPostingRefusal(periodStatus, journal.type, period);
   if (refusal) throw new Error(`${refusal.code}: ${refusal.message}`);
+  // UAT T-PERIOD D-07: no posting into a financial year that is not active yet (created as a draft and not activated):
+  // a 1 April voucher posted into FY 2027-28 while that year was still draft. A year with no row at all is left to the
+  // period rules (tenants that never set up fiscal years).
+  const fyCode = fyFromDate(journal.postingDate);
+  const fyRaw = await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(sql`
+    SELECT status FROM gl.finance_fiscal_years WHERE tenant_id = ${journal.tenantId}::uuid AND code = ${fyCode} LIMIT 1
+  `);
+  const fyRows = (Array.isArray(fyRaw) ? fyRaw : ((fyRaw as { rows?: unknown[] } | undefined)?.rows ?? [])) as Array<{ status: string }>;
+  if (fyRows[0]?.status === "draft") {
+    throw new Error(`FY_NOT_ACTIVE: financial year ${fyCode} has not been activated; postings dated ${journal.postingDate} cannot be accepted until it is`);
+  }
+  // UAT T-PERIOD review (blocker 1): nor into ANY month of a closed financial year (closed, or its year-end close has
+  // run) -- even one whose period row was reopened: the next year opening balances were generated from it.
+  const closedReason = await fyClosedReasonTx(tx, journal.tenantId, fyCode);
+  if (closedReason) throw new Error(`FY_CLOSED: ${fyClosedMessage(closedReason, journal.postingDate)}`);
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
   // the source doc). If it already exists and is already posted/reversed, this
   // is a redelivery — skip silently so bills/payments/receipts never double-post.
@@ -265,9 +286,12 @@ async function postJournal(
   // consumed by expenditure (the debit side); a credit line never draws it
   // down. Multiple lines against the same head in one entry are summed
   // before the check so a multi-line journal can't split a single overdraw
-  // across lines to dodge it. A head with no finance_budgets row for this FY
-  // is not budget-controlled — skipped, matching skill 01's posting
-  // algorithm ("UPDATE finance_budgets.consumed (if budget controlled)").
+  // across lines to dodge it.
+  //
+  // UAT T-PERIOD D-03 (GFR): a debit to an EXPENDITURE head with no finance_budgets row for this FY is REFUSED
+  // (NO_BUDGET_PROVISION) -- it used to be treated as "not budget-controlled" and posted. A debit to a non-expenditure
+  // head (asset, liability, receipts side) with no budget row is still not budget-controlled; see budget/provision.ts
+  // for the non-cash journal types that never draw on a provision.
   {
     const fy = fyFromDate(journal.postingDate);
     const perHeadDebit = new Map<string, bigint>();
@@ -284,7 +308,11 @@ async function postJournal(
       const budget = await budgetRepo.findBudgetTx(
         tx as Parameters<typeof budgetRepo.findBudgetTx>[0], headId, fy, journal.tenantId,
       );
-      if (!budget) continue; // head not budget-controlled for this FY
+      if (!budget) {
+        const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
+        if (head && needsBudgetProvision(head, journal)) throw noBudgetProvisionError(head.code, fy);
+        continue; // a non-expenditure head is not budget-controlled
+      }
       const available = availableBalance({ reMinor: budget.reMinor, utilisedMinor: budget.utilisedMinor });
       if (journal.budgetOverride) {
         if (requested > available) {
@@ -394,16 +422,44 @@ export function registerGlConsumers(queue: Queue): void {
       };
       // M1: carry paise as a decimal string -> BigInt (no Number() on aggregate paise).
       const amount = BigInt(dep.depAmountMinor);
-      const expenseCode = dep.depBook === "statutory" ? DEP_EXPENSE_STAT : DEP_EXPENSE;
       // C1: deterministic journal id keyed off the depreciation source so an
       // outbox redelivery hits the journal PK and no-ops (mirrors the GL spine).
-      const depBook = dep.depBook ?? "company";
+      const depBook = dep.depBook === "statutory" ? "statutory" : "company";
       const depKey = `depreciation:${dep.assetId}:${dep.period}:${depBook}`;
       const journalId = deterministicId(depKey);
       const voucherNo = `DEP/${depBook}/${dep.period}/${String(dep.assetId).slice(0, 8)}`;
       try {
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
+          // UAT T-PERIOD D-07: depreciation is never charged in advance (March 2027 was posted on 4 Nov 2026). The month
+          // is judged by the IST calendar. A refusal: asset-service puts the entry back to unposted (F89).
+          const nowPeriod = currentPeriodIST();
+          if (dep.period > nowPeriod) {
+            throw new Error(`PERIOD_FUTURE: depreciation for ${dep.period} cannot be charged before that month has started (current month ${nowPeriod} IST)`);
+          }
+          // UAT T-PERIOD D-02 (ERP-head decision): the income-tax (statutory WDV) book is a MEMORANDUM for the tax
+          // computation -- never a GL charge (it was posted Dr 5101 / Cr 1250 beside the company book, double-charging
+          // accumulated depreciation). On the CASH basis (government accounts, the default) the company book is a
+          // memorandum too: the asset register is not a GL asset. Only an accrual tenant posts the company book.
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          const memoReason = depreciationMemoReason(depBook, basis);
+          if (memoReason) {
+            const recorded = await recordDepreciationMemoTx(tx, {
+              tenantId: msg.tenantId, assetId: dep.assetId, period: dep.period, depBook, amountMinor: amount, basis,
+              reason: memoReason, actorId: msg.actorId,
+            });
+            if (recorded) {
+              await enqueue(tx, {
+                topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: {
+                  service: "finance", action: "depreciation_memorandum", resourceType: "asset", resourceId: dep.assetId, outcome: "success",
+                  period: dep.period, depBook, basis, reason: memoReason, amountMinor: amount.toString(),
+                },
+              });
+            }
+            return;
+          }
           await postJournal(tx, msg, {
             id: journalId,
             tenantId: msg.tenantId,
@@ -411,15 +467,14 @@ export function registerGlConsumers(queue: Queue): void {
             type: "depreciation",
             postingDate: `${dep.period}-28`,
             lines: [
-              { accountCode: expenseCode, debitMinor: amount.toString(), creditMinor: "0" },
+              { accountCode: DEP_EXPENSE, debitMinor: amount.toString(), creditMinor: "0" },
               { accountCode: ACCUM_DEP, debitMinor: "0", creditMinor: amount.toString() },
             ],
           });
         });
       } catch (err) {
-        // F89: this branch used to rethrow a refusal with no finance.gl.rejected, while asset-service had already marked
-        // the entry posted and moved the book value -- the depreciation existed in Assets and not in the GL. The
-        // sourceRef is asset-service's own gl_ref for the entry, so it can put the entry back to unposted.
+        // F89: a refused depreciation journal is reported (finance.gl.rejected) so asset-service puts the entry back to
+        // unposted and undoes the book-value move; sourceRef is the asset-service gl_ref of the entry.
         await rejectRefusal(msg, err, {
           journalId, voucherNo, type: "depreciation",
           sourceRef: `dep:${depBook}:${dep.assetId}:${dep.period}`,
@@ -450,35 +505,79 @@ export function registerGlConsumers(queue: Queue): void {
     }
 
     if (raw.type === "asset_disposal" || raw.type === "asset_disposal_auction") {
-      const d = raw as { assetId: string; currency?: string };
+      const d = raw as { assetId: string; currency?: string; disposalDate?: unknown; capitalised?: unknown };
       // M1: carry paise as decimal strings -> BigInt (no Number() on paise).
       const { acq, accum, proceeds, gainLoss } = disposalAmounts(raw);
       // C1: deterministic journal id keyed off the asset disposal so redelivery
       // hits the journal PK and no-ops (mirrors the GL spine).
       const journalId = deterministicId(`asset_disposal:${d.assetId}`);
-      const today = new Date().toISOString().slice(0, 10);
-      const lines: JournalLine[] = [
-        { accountCode: ACCUM_DEP, debitMinor: accum.toString(), creditMinor: "0" },
-        { accountCode: FIXED_ASSET, debitMinor: "0", creditMinor: acq.toString() },
-      ];
-      if (proceeds > 0n) {
-        lines.push({ accountCode: CASH, debitMinor: proceeds.toString(), creditMinor: "0" });
-      }
-      if (gainLoss > 0n) {
-        lines.push({ accountCode: GAIN_LOSS, debitMinor: "0", creditMinor: gainLoss.toString() });
-      } else if (gainLoss < 0n) {
-        lines.push({ accountCode: GAIN_LOSS, debitMinor: (-gainLoss).toString(), creditMinor: "0" });
-      }
-      const voucherNo = `DISP/${today}/${String(d.assetId).slice(0, 8)}`;
+      // UAT T-PERIOD D-06/D-12: dated on the disposal date when asset-service sends it, else today in IST.
+      const postingDate = typeof d.disposalDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.disposalDate) ? d.disposalDate : todayIST();
+      const voucherNo = `DISP/${postingDate}/${String(d.assetId).slice(0, 8)}`;
       try {
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          if (basis === "cash") {
+            // UAT T-PERIOD D-12 (ERP-head decision): on the cash basis the asset register is a memorandum -- the cost was
+            // expenditure when the bill was passed and never a GL asset -- so the disposal reverses no cost or
+            // accumulated depreciation. The only GL effect is the sale proceeds RECEIPT: Dr cash / Cr sale proceeds.
+            if (proceeds > 0n) {
+              // UAT T-PERIOD review (blocker 2): a tenant whose chart has no sale-proceeds head yet (the standard-heads
+              // backfill is a deploy prerequisite) falls back to the miscellaneous receipts head, with a warning, rather
+              // than refusing the receipt; with neither head the receipt is refused (UNKNOWN_ACCOUNT_CODE) as before.
+              let receiptCode = ASSET_SALE_RECEIPT;
+              const headTx = tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0];
+              if (!(await budgetRepo.findHeadByCodeTx(headTx, msg.tenantId, ASSET_SALE_RECEIPT)) && (await budgetRepo.findHeadByCodeTx(headTx, msg.tenantId, MISC_RECEIPTS))) {
+                receiptCode = MISC_RECEIPTS;
+                log.warn({ tenantId: msg.tenantId, assetId: d.assetId, missing: ASSET_SALE_RECEIPT, fallback: MISC_RECEIPTS }, "sale proceeds head missing: receipt posted to the miscellaneous receipts head");
+                await enqueue(tx, {
+                  topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+                  tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                  payload: { service: "finance", action: "warning", resourceType: "journal", resourceId: journalId, outcome: "success", code: "ASSET_SALE_RECEIPT_HEAD_MISSING", missingHead: ASSET_SALE_RECEIPT, fallbackHead: MISC_RECEIPTS, assetId: d.assetId },
+                });
+              }
+              await postJournal(tx, msg, {
+                id: journalId, tenantId: msg.tenantId, voucherNo, type: "asset_disposal", postingDate,
+                lines: [
+                  { accountCode: CASH, debitMinor: proceeds.toString(), creditMinor: "0", narration: "Sale proceeds of disposed asset" },
+                  { accountCode: receiptCode, debitMinor: "0", creditMinor: proceeds.toString(), narration: "Sale proceeds of disposed asset" },
+                ],
+              });
+            }
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "finance", action: "asset_disposal_memorandum", resourceType: "asset", resourceId: d.assetId, outcome: "success",
+                basis, proceedsMinor: proceeds.toString(), journalId: proceeds > 0n ? journalId : null,
+              },
+            });
+            return;
+          }
+          // Accrual: write off cost and accumulated depreciation. Refused when the acquisition never reached the GL
+          // (the fixed-asset head would go negative, as it did in UAT T-PERIOD): capitalise it first, then re-drive.
+          if (d.capitalised === false && acq > 0n) {
+            throw new Error(`ASSET_NOT_CAPITALISED: asset ${d.assetId} was never capitalised in the GL (its acquisition journal is not posted); post the acquisition before the disposal`);
+          }
+          const lines: JournalLine[] = [
+            { accountCode: ACCUM_DEP, debitMinor: accum.toString(), creditMinor: "0" },
+            { accountCode: FIXED_ASSET, debitMinor: "0", creditMinor: acq.toString() },
+          ];
+          if (proceeds > 0n) {
+            lines.push({ accountCode: CASH, debitMinor: proceeds.toString(), creditMinor: "0" });
+          }
+          if (gainLoss > 0n) {
+            lines.push({ accountCode: GAIN_LOSS, debitMinor: "0", creditMinor: gainLoss.toString() });
+          } else if (gainLoss < 0n) {
+            lines.push({ accountCode: GAIN_LOSS, debitMinor: (-gainLoss).toString(), creditMinor: "0" });
+          }
           await postJournal(tx, msg, {
             id: journalId,
             tenantId: msg.tenantId,
             voucherNo,
             type: "asset_disposal",
-            postingDate: today,
+            postingDate,
             lines,
           });
         });
@@ -513,7 +612,7 @@ export function registerGlConsumers(queue: Queue): void {
       // dead letters the old generic path refused (and inbox-marked) -- outbox e6932aac -- can be re-driven.
       let j: InventoryMovementJournal | undefined;
       try {
-        const m = parseInventoryMovement(raw, new Date().toISOString().slice(0, 10));
+        const m = parseInventoryMovement(raw, todayIST());
         await db.transaction(async (tx) => {
           await markProcessed(tx, msg.messageId);
           const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
@@ -563,6 +662,22 @@ export function registerGlConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // UAT T-PERIOD D-12: an asset capitalisation (asset-service, Dr fixed asset / Cr acquisition offset) is an
+        // ACCRUAL entry. On the cash basis the asset register is a memorandum: nothing is posted, and asset-service is
+        // told the journal is settled as a memorandum so the asset does not wait for a journal that will never exist.
+        if (p.type === "asset_acquisition" && (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis === "cash") {
+          await enqueue(tx, {
+            topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { journalId: p.id, voucherNo: p.voucherNo, memorandum: true, basis: "cash" },
+          });
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { service: "finance", action: "asset_acquisition_memorandum", resourceType: "journal", resourceId: p.id, outcome: "success", basis: "cash" },
+          });
+          return;
+        }
         await postJournal(tx, msg, p);
       });
     } catch (err) {
@@ -736,7 +851,8 @@ export function registerGlConsumers(queue: Queue): void {
         // period, so dead-letter it at once instead of retrying a plain Error for minutes. The transaction rolls
         // back, so nothing posts and the draft stays pending_approval; gl/routes.ts refuses the next approval attempt
         // with 422 PERIOD_CLOSED until the period is reopened.
-        if (refusalCode(err)?.startsWith("PERIOD_") && !(err instanceof NonRetryableError)) {
+        const code = refusalCode(err);
+        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED") && !(err instanceof NonRetryableError)) {
           throw new NonRetryableError(String((err as Error).message));
         }
         throw err;
@@ -848,10 +964,16 @@ export function registerGlConsumers(queue: Queue): void {
             const already = (await repo.findJournalByIdTx(tx, accrualId))
               ?? (await repo.findJournalByVoucherNoTx(tx, msg.tenantId, payrollAccrualVoucherNo(p)));
             if (!already) {
+              // UAT T-PERIOD review (blocker 2): a split deduction head missing from the chart falls back to 2102 (warned).
+              const fb = await deductionHeadFallbackTx(tx, msg.tenantId, payrollAccrualLines(accrual));
+              if (fb.missing.length > 0) {
+                log.warn({ tenantId: msg.tenantId, runId: p.runId, missing: fb.missing }, "payroll accrual (disbursal): deduction head(s) missing, posted to 2102 (run backfill-standard-gl-heads)");
+              }
+              const accrualLines = fb.lines;
               await enqueue(tx, {
                 topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
                 tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-                payload: payrollAccrualJournalCommand(accrual, accrualId, msg.tenantId, dates.accrualDate),
+                payload: payrollAccrualJournalCommand(accrual, accrualId, msg.tenantId, dates.accrualDate, accrualLines),
               });
             }
           }
@@ -934,7 +1056,7 @@ export function registerGlConsumers(queue: Queue): void {
       // Deterministic mirror id keyed off the original, so redelivery cannot
       // create two mirror journals.
       const mirrorId = raw.id;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIST();
       await postJournal(tx, msg, {
         id: mirrorId,
         tenantId: msg.tenantId,

@@ -6,6 +6,11 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as periodRepo from "./repo.js";
 import * as commands from "./commands.js";
+import { assertPeriodFyOpenTx } from "./apply.js";
+import { scopedRead } from "../../shared/db.js";
+import { DomainError } from "../masters/domain.js";
+import { readSettings, findPendingBySubject } from "../approvals/repo.js";
+import { submitChangeRequest } from "../approvals/commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const PERIOD_ADMIN_ROLES = ["finance_admin", "super_admin"];
@@ -20,6 +25,16 @@ const periodParam = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$
 const transitionBody = z.object({
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
 });
+
+/** 409 FY_CLOSED when the period belongs to a closed financial year (shared with the period_reopen approval route). */
+export async function assertPeriodFyOpenHttp(tenantId: string, period: string): Promise<void> {
+  try {
+    await scopedRead((tx) => assertPeriodFyOpenTx(tx, tenantId, period));
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message.replace(/^\[[A-Z_]+\]\s*/, ""));
+    throw err;
+  }
+}
 
 export async function isPeriodHardClosed(tenantId: string, period: string): Promise<boolean> {
   return periodRepo.isPeriodHardClosedDb(tenantId, period);
@@ -75,6 +90,19 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (!existing || existing.status === "open") {
       throw new HttpError(409, "NOT_CLOSED", "period is already open");
+    }
+    // UAT T-PERIOD review (blocker 1): never a month of a closed financial year.
+    await assertPeriodFyOpenHttp(ctx.tenantId, period);
+
+    // UAT T-PERIOD D-01: reopening a HARD-closed month is a maker-checker change (a second finance_admin approves it on
+    // the change-requests screen) whenever the tenant has the second-approver setting on (the default). Until then
+    // the month stays hard-closed. A soft-closed month (and any month with the setting off) reopens directly.
+    if (existing.status === "hard_close" && (await readSettings(ctx.tenantId)).makerCheckerEnabled) {
+      if (await findPendingBySubject(ctx.tenantId, "period_reopen", period)) {
+        throw new HttpError(409, "PERIOD_REOPEN_PENDING", `a request to reopen ${period} is already waiting for a second officer`);
+      }
+      const accepted = await submitChangeRequest(ctx, "period_reopen", period, { period }, body.reason);
+      return reply.code(202).send({ ...accepted, period });
     }
 
     return sendAccepted(

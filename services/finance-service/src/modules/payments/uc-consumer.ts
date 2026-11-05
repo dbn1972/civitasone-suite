@@ -9,6 +9,7 @@ import { loadSettingsTx } from "../approvals/repo.js";
 import { financeUC } from "./schema.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction } from "./uc-domain.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 type Msg = { messageId: string; tenantId: string; actorId: string; correlationId: string; payload: unknown };
 
@@ -63,7 +64,7 @@ export function registerUCLifecycleConsumers(queue: Queue): void {
     () => ({
       from: "rejected", checker: false,
       set: {
-        status: "submitted", submittedDate: new Date().toISOString().slice(0, 10),
+        status: "submitted", submittedDate: todayIST(),
         resubmitCount: sql`${financeUC.resubmitCount} + 1`,
       },
     }),

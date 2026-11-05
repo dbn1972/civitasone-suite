@@ -37,6 +37,8 @@ import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
 import { MAKER_CHECKER_MESSAGES, MAKER_CHECKER_VIOLATION, runMakerCheckerDenial } from "./run-maker-checker.js";
+import { DUPLICATE_RUN_NO, duplicateRunNoMessage, isRunNoUniqueViolation } from "./run-no.js";
+import { ptOfSlips, splitEmployeeDeductions } from "./run-deductions.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -1052,6 +1054,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const runType: "regular" | "supplementary" | "arrears" | "pensioner" =
       p.runType === "supplementary" || p.runType === "arrears" || p.runType === "pensioner" ? p.runType : "regular";
     const ddoCode = p.ddoCode ?? null;
+    let created = true;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P3 (Iter2): the dup-guard blocks only a second *regular* run per
@@ -1121,7 +1124,17 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "payroll_run", p.id);
+    }).catch(async (err: unknown) => {
+      // UAT P3 b19 D-16: the run number is already used by this tenant (a
+      // racing duplicate past the route pre-check). Retrying can never
+      // succeed, so this is terminal: ack the message (marked processed, so a
+      // redelivery is a no-op) with a failure audit record instead of looping
+      // into the DLQ. No run row exists for p.id, so there is nothing to process.
+      if (!isRunNoUniqueViolation(err)) throw err;
+      created = false;
+      await recordDuplicateRunNo(msg, p);
     });
+    if (!created) return;
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
     try {
       if (runType === "pensioner") {
@@ -1225,6 +1238,21 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRunTx(tx, p.id, p.tenantId);
       // UAT b18: EDLI, EPF admin and the UPS pool share are accrued as their own lines.
       const employerCharges = await statutoryRepo.sumEmployerChargesByRunTx(tx, p.id, p.tenantId);
+      // UAT P3 b19 D-10: the employee deductions split, so finance can credit
+      // TDS / GPF / NPS / EPF / ESI / PT payable heads instead of one lump.
+      const employeeStatutory = await statutoryRepo.sumEmployeeStatutoryByRunTx(tx, p.id, p.tenantId);
+      const deductions = splitEmployeeDeductions({
+        grossMinor: totalGross, netMinor: totalNet, ...employeeStatutory, ptMinor: ptOfSlips(paySlips),
+      });
+      if (deductions.negativeOther) {
+        // The ledgers hold more than the slips deducted: the split is still
+        // exact (other is negative), but someone must look at this run.
+        log.warn({ runId: p.id, deductions: deductions.parts }, "payroll run approved: statutory ledgers exceed gross - net; employeeDeductionsMinor.other is negative");
+        await audit(tx, msg, "run_deductions_split_warning", "payroll_run", p.id, {
+          code: "NEGATIVE_OTHER_DEDUCTIONS", employeeDeductionsMinor: deductions.parts,
+          totalGrossMinor: totalGross.toString(), totalNetMinor: totalNet.toString(),
+        });
+      }
       await repo.updateRun(tx, p.id, {
         status: "approved",
         totalGrossMinor: totalGross,
@@ -1245,6 +1273,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           payload: runApprovedPayload({
             runId: p.id, month: run.month, totalGrossMinor: totalGross, totalNetMinor: totalNet,
             totalEmployerContribMinor: totalEmployerContrib, ...employerCharges,
+            employeeDeductionsMinor: deductions.parts,
             legalEntityId: run.legalEntityId ?? null,
           }),
         });
@@ -1317,12 +1346,21 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // cash-basis accrual then (the amounts the approval event carried).
       const disbursedEmployerContrib = await statutoryRepo.sumEmployerContribByRunTx(tx, p.id, p.tenantId);
       const disbursedEmployerCharges = await statutoryRepo.sumEmployerChargesByRunTx(tx, p.id, p.tenantId);
+      // UAT P3 b19 D-10: the employee deductions split travels too, so a cash-basis accrual posted on the
+      // payment date credits the same TDS / GPF / NPS / EPF / ESI / PT heads as one posted on approval.
+      // (finance falls back to the single 2102 leg if the parts do not add up to gross - net.)
+      const disbursedEmployeeStatutory = await statutoryRepo.sumEmployeeStatutoryByRunTx(tx, p.id, p.tenantId);
+      const disbursedDeductions = splitEmployeeDeductions({
+        grossMinor: run.totalGrossMinor, netMinor: slipNet, ...disbursedEmployeeStatutory,
+        ptMinor: ptOfSlips(slips.filter((sl) => sl.status !== "excluded")),
+      });
       await enqueue(tx, {
         topic: EVENTS.runDisbursed, eventType: EVENTS.runDisbursed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: runDisbursedPayload({
           runId: p.id, month: run.month, totalGrossMinor: run.totalGrossMinor, totalNetMinor: slipNet,
           totalEmployerContribMinor: disbursedEmployerContrib, ...disbursedEmployerCharges,
+          employeeDeductionsMinor: disbursedDeductions.parts,
           legalEntityId: run.legalEntityId ?? null, disbursedAt,
         }),
       });
@@ -3468,6 +3506,30 @@ export async function computeAndInsertSlip(
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
   return result;
+}
+
+/**
+ * UAT P3 b19 D-16: terminal outcome of a run-create command whose run number
+ * the tenant already used -- the message is marked processed and a failure
+ * audit record says why the requested run was never created.
+ */
+async function recordDuplicateRunNo(
+  msg: { messageId: string; tenantId: string; actorId: string; correlationId: string },
+  p: { id: string; runNo: string; month: string; runType?: string; ddoCode?: string },
+): Promise<void> {
+  log.warn({ messageId: msg.messageId, runId: p.id, runNo: p.runNo }, "payroll run not created: duplicate run number");
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    await enqueue(tx, {
+      topic: AUDIT, eventType: AUDIT,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: {
+        service: "payroll", action: "create", resourceType: "payroll_run", resourceId: p.id, outcome: "failure",
+        code: DUPLICATE_RUN_NO, message: duplicateRunNoMessage(p.runNo),
+        runNo: p.runNo, month: p.month, runType: p.runType ?? "regular", ddoCode: p.ddoCode ?? null,
+      },
+    });
+  });
 }
 
 // Exported (round2 concurrency fix) so commands.ts's createRun can record

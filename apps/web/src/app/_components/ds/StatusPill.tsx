@@ -349,6 +349,7 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "fully released": "mut",
   released: "mut",
   exhausted: "warn", // outlay fully drawn down: not an error, but needs attention
+  lapsed: "mut", // fx-p3: unspent provision lapsed on 31 March (GFR) -- a closed, neutral outcome
   invoked: "bad",
 
   // Recruitment: talent-pool stage "not_selected" (an applicant who was not chosen -- a closed,

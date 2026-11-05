@@ -26,7 +26,8 @@ export const BUDGET_COLUMN_LABELS = {
  * Budget row status values the Formulation list can show (GAP-FINANCE-BUDGET-FORMULATION-05).
  *
  * What finance-service really reports today: budget.finance_budgets has NO status column, so GET /v1/finance/budgets
- * computes one per row (budget/queries.ts listBudgetSummaries): `exhausted` once utilised >= allocated, else `active`.
+ * computes one per row (budget/queries.ts listBudgetSummaries): `exhausted` once utilised >= allocated, else `active`;
+ * fx-p3: a past year whose unspent provision has lapsed on 31 March (GFR, recorded by the year-end close) reads `lapsed`.
  * A freshly proposed estimate therefore reads `active`. The approval vocabulary (draft / pending / submitted /
  * approved / rejected) is kept for a row that carries one, but no live row does until the budget module gets a real
  * lifecycle (an owner decision, see docs/gap-ledger/finance.md). The keys of this map ARE the enum: the tabs, the stat
@@ -37,6 +38,7 @@ export const BUDGET_COLUMN_LABELS = {
 export const BUDGET_STATUS_LABEL = {
   active: "Active",
   exhausted: "Exhausted",
+  lapsed: "Lapsed",
   draft: "Draft",
   pending: "Pending",
   submitted: "Submitted",

@@ -1,3 +1,4 @@
+import { todayIST } from "../../shared/ist-date.js";
 /**
  * NACH / NEFT fixed-width bank file generator.
  *
@@ -84,7 +85,7 @@ function buildHeaderRecord(opts: {
   // Pos 34–41: file creation date DDMMYYYY
   // Pos 42–49: file sequence number, 8 digits
   // Pos 50–56: total detail records, 7 digits
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   return [
     "0",
     spacePad(opts.originatorCode, 16),
@@ -166,7 +167,7 @@ export function generateNACHFile(payments: BankFileRow[], opts: NACHFileOptions 
 
   const originatorCode =
     opts.originatorCode ?? process.env["SFTP_NACH_ORIGINATOR"] ?? "CIVITASONE";
-  const valueDate = opts.valueDate ?? new Date().toISOString().slice(0, 10);
+  const valueDate = opts.valueDate ?? todayIST();
   const fileSequenceNo = opts.fileSequenceNo ?? 1;
 
   const totalAmountPaise = payments.reduce((sum, p) => sum + p.amountMinor, 0n);

@@ -51,6 +51,8 @@ export const COMMANDS = {
   // period-close
   periodClose:          "finance.period.close",
   periodReopen:         "finance.period.reopen",
+  // UAT T-PERIOD: year-end close (opening balances for carry-forward heads + the 31 March lapse statement)
+  yearEndClose:         "finance.year_end.close",
   // pfms
   pfmsBatchSign:        "finance.pfms.batch_sign",
   pfmsBatchRelease:     "finance.pfms.batch_release",

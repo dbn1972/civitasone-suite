@@ -119,4 +119,24 @@ describe("FiscalYearsPage", () => {
     render(await FiscalYearsPage());
     expect(screen.getByText("No changes are waiting for approval.")).toBeInTheDocument();
   });
+
+  // fx-p3
+  it("offers the year-end close panel for the fiscal years, defaulting to the active year", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      fiscalYear: "2026-27", nextFiscalYear: "2027-28", status: "not_run", runAt: null, runBy: null,
+      openingBalanceCount: 0, lapseTotalMinor: "0", fundCarriedMinor: "0",
+    }), { status: 200 }));
+    respond({
+      data: [
+        { code: "2025-26", label: "FY 2025-26", startDate: "2025-04-01", endDate: "2026-03-31", status: "closed" },
+        { code: "2026-27", label: "FY 2026-27", startDate: "2026-04-01", endDate: "2027-03-31", status: "active" },
+      ],
+      source: "api",
+    });
+    render(await FiscalYearsPage());
+    expect(screen.getByRole("heading", { name: "Year-end close" })).toBeInTheDocument();
+    expect((screen.getByLabelText("Financial year to close") as HTMLSelectElement).value).toBe("2026-27");
+    expect(await screen.findByText("Not run yet for FY 2026-27.")).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
 });

@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { z } from "zod";
+import { assertProvisionTx, NO_BUDGET_PROVISION } from "../budget/provision.js";
 import { captureError } from "@civitasone/observability";
 import { financeBillCreate } from "@civitasone/events/contracts";
 import { randomUUID } from "node:crypto";
@@ -28,6 +29,7 @@ import { clearGrniTx } from "../gl/grni-clearing.js";
 import { loadSettingsTx } from "../approvals/repo.js";
 import { postCashBook } from "../../shared/cashbook.js";
 import type { JournalLine } from "../gl/schema.js";
+import { todayIST } from "../../shared/ist-date.js";
 
 const AP_CONTROL_CODE = process.env.FINANCE_AP_CONTROL_CODE ?? "2050";
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
@@ -151,7 +153,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     // to today (the create date), mirroring gl/consumer.ts which uses the document date.
     const billDate = (p.billDate && /^\d{4}-\d{2}-\d{2}$/.test(p.billDate))
       ? p.billDate
-      : new Date().toISOString().slice(0, 10);
+      : todayIST();
     const billPeriod = billDate.slice(0, 7);
     const netMinor = BigInt(p.netMinor);
     await db.transaction(async (tx) => {
@@ -374,11 +376,19 @@ export function registerPaymentsConsumers(queue: Queue): void {
         // the bill's own date here, in the SAME transaction as the AP stage
         // transition, instead of letting a closed period only surface later
         // when the async GL posting is rejected (see assertPeriodOpenForApPosting).
-        const billDateForClose = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+        const billDateForClose = bill.billDate ?? todayIST(new Date(bill.createdAt));
         const billPeriodForClose = billDateForClose.slice(0, 7);
         assertPeriodOpenForApPosting(
           await getPeriodStatusTx(tx, p.tenantId, billPeriodForClose), billPeriodForClose, "approve bill",
         );
+        // UAT T-PERIOD D-03 (GFR): no bill is passed against an expenditure head with no budget provision for the FY of
+        // the bill -- in the same transaction as the stage change, so a refused bill stays pending (nothing half-done).
+        try {
+          await assertProvisionTx(tx, p.tenantId, [bill.headId], billDateForClose, "bill");
+        } catch (err) {
+          if (err instanceof Error && (err as { code?: string }).code === NO_BUDGET_PROVISION) throw new NonRetryableError(`[finance/payments] ${err.message}`, err);
+          throw err;
+        }
       }
       // NEW-001 (house rule: "the database is the guard"). ONE guarded UPDATE
       // advances the stage only while stage == currentStage AND status ==
@@ -398,7 +408,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         );
       }
       if (isPassed) {
-        const billDateForClose = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+        const billDateForClose = bill.billDate ?? todayIST(new Date(bill.createdAt));
         await enqueue(tx, {
           topic: EVENTS.billPassed, eventType: EVENTS.billPassed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -518,7 +528,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       // C3: derive the period from the underlying bill's own value/posting date,
       // not wall-clock. Falls back to the bill's create date if no billDate set.
-      const payDate = (bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10));
+      const payDate = (bill.billDate ?? todayIST(new Date(bill.createdAt)));
       const payPeriod = payDate.slice(0, 7);
       // Period close: block payment initiation into a hard- or soft-closed
       // period — see assertPeriodOpenForApPosting for why soft_close blocks
@@ -615,7 +625,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
       sanctionAuthority?: string; reason?: string;
     };
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     // payee is required by createAdvanceBody; a legacy queued message without
     // one is rejected rather than back-filled from the (possibly PII) purpose.
     const beneficiary = p.payee?.trim();
@@ -661,7 +671,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       grantRef?: string; amountMinor: number | string; currency?: string; periodFrom?: string; periodTo?: string;
       declaration?: boolean;
     };
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     // A certificate is a signed statement: refuse one with no accepted declaration or grantee.
     if (p.declaration !== true) throw new NonRetryableError("[finance/payments] ucCreate SCHEMA_VIOLATION: declaration must be accepted");
     const grantee = (p.grantee ?? "").trim();

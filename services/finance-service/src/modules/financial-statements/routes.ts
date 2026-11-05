@@ -1,17 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { currentFyIST } from "../../shared/ist-date.js";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { headNatureOf, type HeadNature } from "../../shared/head-nature.js";
+import { fyBalances, type FyBalanceRow } from "../year-end/repo.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
+// UAT T-PERIOD D-06: the default financial year is the one containing TODAY IN IST (not the UTC / server-local date).
 function deriveFYFromDate(d = new Date()): string {
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const fyStart = month >= 4 ? year : year - 1;
-  return `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  return currentFyIST(d);
 }
 
 function fyBounds(fy: string): { start: string; end: string } {
@@ -43,87 +43,91 @@ export function natureOf(code: string, classification: string | null): HeadNatur
   return headNatureOf(code, classification);
 }
 
-async function loadTrialBalance(tenantId: string, end: string): Promise<TbRow[]> {
-  return (await scopedRead((tx) => tx.execute(sql`
-    SELECT fh.code, fh.name, fh.classification,
-           COALESCE(SUM(fl.debit_minor), 0)::bigint  AS dr,
-           COALESCE(SUM(fl.credit_minor), 0)::bigint AS cr
-    FROM budget.finance_heads fh
-    LEFT JOIN gl.finance_ledger fl
-      ON fl.head_id = fh.id AND fl.tenant_id = fh.tenant_id
-     AND fl.posting_date <= ${end}::date
-    WHERE fh.tenant_id = ${tenantId}::uuid
-    GROUP BY fh.code, fh.name, fh.classification
-    HAVING COALESCE(SUM(fl.debit_minor), 0) <> 0 OR COALESCE(SUM(fl.credit_minor), 0) <> 0
-    ORDER BY fh.code
-  `))) as unknown as TbRow[];
-}
-
 export async function financialStatementsRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/finance/statements/trial-balance-check — proves the GL balances.
+  // GET /v1/finance/statements/trial-balance-check -- proves the GL balances, FOR ONE FINANCIAL YEAR.
+  // UAT T-PERIOD D-05 (ERP-head decision): statements are bounded by the financial year, not cumulative from inception.
+  // Each head = its opening balance (carry-forward heads and the accumulated fund only -- revenue and expenditure heads
+  // start the year at zero) + this year debits and credits. The 2026-27 income / expenditure balances no longer roll
+  // into the 2027-28 trial balance; their net sits on the fund.
   app.get("/v1/finance/statements/trial-balance-check", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const fy = q.fy ?? deriveFYFromDate();
-    const { end } = fyBounds(fy);
-    const rows = await loadTrialBalance(ctx.tenantId, end);
-    const totalDr = rows.reduce((s, r) => s + bi(r.dr), 0n);
-    const totalCr = rows.reduce((s, r) => s + bi(r.cr), 0n);
+    const { start, end } = fyBounds(fy);
+    const { opening, rows } = await scopedRead((tx) => fyBalances(tx, ctx.tenantId, fy));
+    const lines = rows.filter((r) => r.openingMinor !== 0n || r.debitMinor !== 0n || r.creditMinor !== 0n).map((r) => {
+      const openDr = r.openingMinor > 0n ? r.openingMinor : 0n;
+      const openCr = r.openingMinor < 0n ? -r.openingMinor : 0n;
+      return {
+        code: r.code, name: r.name, classification: r.classification, nature: r.nature, carryForward: r.carryForward,
+        // debit / credit columns = opening (on its side) + this year movements, so the columns total the same
+        debitMinor: (openDr + r.debitMinor).toString(), creditMinor: (openCr + r.creditMinor).toString(),
+        openingMinor: r.openingMinor.toString(), periodDebitMinor: r.debitMinor.toString(),
+        periodCreditMinor: r.creditMinor.toString(), closingMinor: r.closingMinor.toString(),
+      };
+    });
+    const totalDr = lines.reduce((acc, l) => acc + BigInt(l.debitMinor), 0n);
+    const totalCr = lines.reduce((acc, l) => acc + BigInt(l.creditMinor), 0n);
     return reply.send({
-      fiscalYear: fy, asOf: end,
+      fiscalYear: fy, periodStart: start, asOf: end, openingSource: opening.source,
       totalDebitMinor: totalDr.toString(),
       totalCreditMinor: totalCr.toString(),
       differenceMinor: (totalDr - totalCr).toString(),
       isBalanced: totalDr === totalCr,
-      lines: rows.map((r) => ({
-        code: r.code, name: r.name, classification: r.classification,
-        nature: natureOf(r.code, r.classification),
-        debitMinor: bi(r.dr).toString(), creditMinor: bi(r.cr).toString(),
-      })),
+      lines,
     });
   });
 
-  // GET /v1/finance/statements/balance-sheet — GL-derived Balance Sheet.
+  // GET /v1/finance/statements/balance-sheet -- GL-derived Balance Sheet at 31 March of the financial year.
+  // UAT T-PERIOD D-05: balance-sheet heads = opening (carried from the previous year) + this year movements; the
+  // surplus / deficit is THIS year income - expenditure only, and the earlier years surplus is the accumulated fund.
   app.get("/v1/finance/statements/balance-sheet", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const fy = q.fy ?? deriveFYFromDate();
     const { end } = fyBounds(fy);
-    const rows = await loadTrialBalance(ctx.tenantId, end);
+    const { opening, rows } = await scopedRead((tx) => fyBalances(tx, ctx.tenantId, fy));
 
     const assets: any[] = [], liabilities: any[] = [], equity: any[] = [];
     let totalAssets = 0n, totalLiabilities = 0n, totalEquity = 0n;
     let income = 0n, expense = 0n;
 
     for (const r of rows) {
-      const nature = natureOf(r.code, r.classification);
-      const dr = bi(r.dr), cr = bi(r.cr);
-      if (nature === "asset") {
-        const bal = dr - cr;
-        assets.push(line(r, bal)); totalAssets += bal;
-      } else if (nature === "liability") {
-        const bal = cr - dr;
-        liabilities.push(line(r, bal)); totalLiabilities += bal;
-      } else if (nature === "equity") {
-        const bal = cr - dr;
-        equity.push(line(r, bal)); totalEquity += bal;
-      } else if (nature === "income") {
-        income += (cr - dr);
+      const closing = r.closingMinor; // debit-positive
+      // #2464 review: a carry-forward head of income / expense nature (a 5xxx head classified advance / deposit /
+      // suspense, an 8xxx head classified expense) carries an opening balance, so it is a balance-sheet item by its
+      // closing balance: a debit balance is an asset, a credit balance a liability.
+      if (r.carryForward && (r.nature === "income" || r.nature === "expense")) {
+        if (closing > 0n) { assets.push(fyLine({ ...r, nature: "asset" }, closing)); totalAssets += closing; }
+        else if (closing < 0n) { liabilities.push(fyLine({ ...r, nature: "liability" }, -closing)); totalLiabilities += -closing; }
+        continue;
+      }
+      if (r.nature === "asset") {
+        if (closing !== 0n) assets.push(fyLine(r, closing));
+        totalAssets += closing;
+      } else if (r.nature === "liability") {
+        if (closing !== 0n) liabilities.push(fyLine(r, -closing));
+        totalLiabilities += -closing;
+      } else if (r.nature === "equity") {
+        if (closing !== 0n) equity.push(fyLine(r, -closing));
+        totalEquity += -closing;
+      } else if (r.nature === "income") {
+        income += r.creditMinor - r.debitMinor;
       } else {
-        expense += (dr - cr);
+        expense += r.debitMinor - r.creditMinor;
       }
     }
 
-    // Net surplus/deficit for the period rolls into accumulated funds (equity).
+    // This year net surplus/deficit rolls into accumulated funds (equity).
     const surplusMinor = income - expense;
     const equityWithSurplus = totalEquity + surplusMinor;
     const totalLiabAndEquity = totalLiabilities + equityWithSurplus;
     const balanced = totalAssets === totalLiabAndEquity;
 
     return reply.send({
-      fiscalYear: fy, asOf: end,
+      fiscalYear: fy, asOf: end, openingSource: opening.source,
       assets, liabilities, equity,
       surplusDeficitMinor: surplusMinor.toString(),
       totals: {
@@ -136,7 +140,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
       balanceCheck: {
         balanced,
         differenceMinor: (totalAssets - totalLiabAndEquity).toString(),
-        equation: "assets = liabilities + equity + (income - expense)",
+        equation: "assets = liabilities + equity (incl. fund brought forward) + (this year income - expense)",
       },
     });
   });
@@ -240,6 +244,14 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
 function line(r: TbRow, balanceMinor: bigint) {
   return {
     code: r.code, name: r.name, classification: r.classification,
+    balanceMinor: balanceMinor.toString(),
+  };
+}
+
+function fyLine(r: FyBalanceRow, balanceMinor: bigint) {
+  return {
+    code: r.code, name: r.name, classification: r.classification,
+    openingMinor: (r.nature === "asset" ? r.openingMinor : -r.openingMinor).toString(),
     balanceMinor: balanceMinor.toString(),
   };
 }

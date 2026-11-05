@@ -9,6 +9,37 @@ export const ACCUM_DEP = process.env.FINANCE_ACCUM_DEP_CODE ?? "1250";
 export const FIXED_ASSET = process.env.FINANCE_FIXED_ASSET_CODE ?? "1200";
 
 /**
+ * UAT T-PERIOD D-12: on the CASH basis the asset register is a memorandum -- a disposal posts no cost / accumulated
+ * depreciation reversal, only the sale proceeds RECEIPT: Dr cash / Cr this receipt head.
+ */
+export const ASSET_SALE_RECEIPT = process.env.FINANCE_ASSET_SALE_RECEIPT_CODE ?? "4310";
+/** Fallback receipt head for the sale proceeds when a tenant has no 4310 yet (the standard Revenue Income head). */
+export const MISC_RECEIPTS = process.env.FINANCE_MISC_RECEIPTS_CODE ?? "4001";
+
+/**
+ * UAT T-PERIOD D-05: the fund that carries the net of the income and expenditure heads into the next financial year
+ * (they start the new year at zero; the year-end close generates its opening balance). Equity head.
+ */
+export const ACCUMULATED_FUND = process.env.FINANCE_ACCUMULATED_FUND_CODE ?? "3100";
+
+/**
+ * UAT T-PERIOD D-10: employee salary deductions are distinct liability heads (challan-wise clearing), configurable per
+ * deployment. "other" (LIC, society, loan recoveries ...) stays on 2102.
+ */
+export function payrollDeductionHeads(): Record<"tds" | "gpf" | "nps" | "pf" | "esi" | "pt" | "other", string> {
+  const env = (k: string, d: string) => process.env[k]?.trim() || d;
+  return {
+    tds: env("PAYROLL_GL_TDS_HEAD", process.env.FINANCE_TDS_PAYABLE_CODE?.trim() || "2200"),
+    gpf: env("PAYROLL_GL_GPF_HEAD", "2104"),
+    nps: env("PAYROLL_GL_NPS_HEAD", "2105"),
+    pf: env("PAYROLL_GL_EPF_HEAD", "2106"),
+    esi: env("PAYROLL_GL_ESI_HEAD", "2107"),
+    pt: env("PAYROLL_GL_PT_HEAD", "2108"),
+    other: env("PAYROLL_GL_OTHER_DEDUCTIONS_HEAD", "2102"),
+  };
+}
+
+/**
  * UAT L2-N6: stores heads for inventory-service stock movements on the ACCRUAL basis only (gl/inventory-movement.ts;
  * a cash-basis tenant -- the default, government accounts -- posts no stock journal and needs none of them):
  *  - STORES_INVENTORY: the stock asset;

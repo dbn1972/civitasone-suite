@@ -13,6 +13,8 @@ vi.mock("./GLTable", () => ({
   ),
 }));
 vi.mock("../../_components/FyFilter", () => ({ FyFilter: () => <div>fy-filter</div> }));
+// fx-p3: the head picker / balances panel are covered by page.balances.test.tsx.
+vi.mock("./HeadBalances", () => ({ HeadBalances: () => null, HeadPicker: () => null }));
 vi.mock("../../_components/PrintExportButton", () => ({ PrintExportButton: () => null }));
 vi.mock("../../_components/PrintHeader", () => ({ PrintHeader: () => null }));
 

@@ -2,6 +2,7 @@ import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { currentFyIST } from "../../shared/ist-date.js";
 import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import * as periodRepo from "../period-close/repo.js";
@@ -15,11 +16,9 @@ function deriveFY(period: string): string {
   return `${fyStart}-${String(fyStart + 1).slice(2)}`;
 }
 
+// UAT T-PERIOD D-06: the default financial year is the one containing TODAY IN IST (not the UTC / server-local date).
 function deriveFYFromDate(d = new Date()): string {
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const fyStart = month >= 4 ? year : year - 1;
-  return `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  return currentFyIST(d);
 }
 
 export async function reportsRoutes(app: FastifyInstance): Promise<void> {

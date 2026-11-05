@@ -20,6 +20,8 @@ export interface RunApprovedInput {
   edliMinor: bigint;
   epfAdminMinor: bigint;
   upsPoolMinor: bigint;
+  /** UAT T-PERIOD D-10: employee deductions by type, paise bigint; they sum to gross - net. */
+  employeeDeductionsMinor?: Record<string, bigint | string>;
   legalEntityId?: string | null;
 }
 
@@ -32,6 +34,8 @@ export type RunApprovedPayload = {
   totalEdliMinor: string;
   totalEpfAdminMinor: string;
   totalUpsPoolMinor: string;
+  /** UAT T-PERIOD D-10: { tds, gpf, nps, pf, esi, pt, other } paise strings; sum == gross - net. */
+  employeeDeductionsMinor?: Record<string, string>;
   legalEntityId?: string;
   /**
    * UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): this build also carries
@@ -72,6 +76,7 @@ export function runApprovedPayload(i: RunApprovedInput): RunApprovedPayload {
     totalEdliMinor: i.edliMinor.toString(),
     totalEpfAdminMinor: i.epfAdminMinor.toString(),
     totalUpsPoolMinor: i.upsPoolMinor.toString(),
+    ...(i.employeeDeductionsMinor ? { employeeDeductionsMinor: Object.fromEntries(Object.entries(i.employeeDeductionsMinor).map(([k, v]) => [k, v.toString()])) } : {}),
     ...(i.legalEntityId ? { legalEntityId: i.legalEntityId } : {}),
     accrualCarriedOnDisbursal: true,
   };
