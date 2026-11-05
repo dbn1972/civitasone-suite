@@ -106,3 +106,11 @@ export const ADMIN_CONSOLE_ROLES: readonly string[] = Array.from(
  * inventory-service still authorises every ledger read.
  */
 export const INVENTORY_LEDGER_EXPORT_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+
+/**
+ * Billing GSTN screens (billing/gstn/layout.tsx). Moved here from roleGuard.ts
+ * (UAT-P3 UX shell) so the client Sidebar can use it; roleGuard re-exports it.
+ */
+export const BILLING_GSTN_ROLES = ["finance_officer", "finance_admin", "billing_admin", "tenant_admin", "super_admin"];
+/** Union of every billing sub-route list: billing/layout.tsx requireAnyRole. */
+export const BILLING_MODULE_ROLES = Array.from(new Set([...BILLING_INVOICE_READER_ROLES, ...BILLING_GSTN_ROLES]));

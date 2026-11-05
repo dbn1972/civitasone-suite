@@ -11,7 +11,8 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
-import { renderInvoicePdf } from "./pdf.js";
+import { renderInvoicePdf, InvoiceSupplierNotConfiguredError } from "./pdf.js";
+import { resolveDocIdentity, DocumentUnavailableError } from "@civitasone/render/official";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
@@ -111,7 +112,15 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     if (!PDF_STATUSES.has(detail.status)) {
       throw new DomainError("INVOICE_NOT_ISSUED", `a tax invoice PDF is available once the bill is issued (status: ${detail.status})`);
     }
-    const bytes = await renderInvoicePdf(detail);
+    // UAT ux-docs: the recipient (this tenant) name and address from its document identity.
+    let bytes: Uint8Array;
+    try {
+      bytes = await renderInvoicePdf(detail, { recipient: await resolveDocIdentity(ctx.tenantId) });
+    } catch (err) {
+      if (err instanceof InvoiceSupplierNotConfiguredError) throw new HttpError(422, err.code, err.message);
+      if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
+      throw err;
+    }
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="${detail.invoiceNumber ?? "invoice"}.pdf"`)

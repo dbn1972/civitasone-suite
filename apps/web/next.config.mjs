@@ -69,6 +69,15 @@ const nextConfig = {
     // catch-all listed first would shadow the more specific redirects below.
     return [
       { source: '/hr/orgchart', destination: '/hr/org-chart', permanent: true },
+      // UX R1 (approvals inbox -> decide): ONE approvals inbox. The four separate queues 308 to it
+      // (permanent: true is a 308, so bookmarks keep working and the method is kept); a module queue
+      // becomes a ?module= filter of the inbox. Config redirects run before the module layouts' role
+      // gates, so nobody with an old bookmark lands on a PermissionDenied page first. Only the exact
+      // queue paths move: /procurement/approvals/escalation and every record page stay where they are.
+      { source: '/workflow/my-tasks', destination: '/approvals', permanent: true },
+      { source: '/procurement/approvals', destination: '/approvals?module=procurement', permanent: true },
+      { source: '/hr/leave/approvals', destination: '/approvals?module=leave', permanent: true },
+      { source: '/estab/approvals', destination: '/approvals?module=estab', permanent: true },
       // Legacy finance bookmarks -> HR modules. Done here (not as page-level
       // redirect() calls) because finance/layout.tsx role-gates every
       // /finance/* child BEFORE the page runs, so a non-finance employee would

@@ -143,3 +143,10 @@ export function assertBondTransition(from: string, to: BondStatus): void {
     throw new DomainError("INVALID_BOND_TRANSITION", `performance bond cannot transition from '${from}' to '${to}'`);
   }
 }
+
+/**
+ * A closed or terminated contract is finished: its milestones can no longer be completed or marked late.
+ * Shared by the synchronous guard (commands.ts, 409 CONTRACT_CLOSED) and the consumers, which re-assert it under
+ * the contract row lock (a command queued just before a terminate must not still apply).
+ */
+export const FINISHED_CONTRACT_STATUSES: readonly string[] = ["closed", "terminated"];

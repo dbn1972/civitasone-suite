@@ -31,7 +31,9 @@ const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_
   "/accessibility-statement", "/screen-reader-access", "/website-policies",
   // UAT post-b14 (GIGW 3.0): the remaining GIGW pages and their common aliases.
   "/accessibility", "/policies", "/sitemap", "/site-map", "/about", "/contact-us", "/help-desk", "/feedback",
-  "/privacy", "/privacy-policy", "/terms", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer"];
+  "/privacy", "/privacy-policy", "/terms", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer",
+  // UAT gigw-content (GIGW 3.0): the content policies listed on /website-policies.
+  "/content-contribution-policy", "/content-archival-policy", "/content-review-policy"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).

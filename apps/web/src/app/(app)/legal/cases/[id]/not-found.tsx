@@ -6,6 +6,7 @@ export default function LegalCaseNotFound() {
     <div className="wrap">
       <nav
         aria-label="Breadcrumb"
+        data-dup-crumb
         style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}
       >
         <Link href="/legal" className="lnk">Legal</Link>

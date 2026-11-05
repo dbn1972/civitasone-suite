@@ -4,6 +4,7 @@ import { testDbHostPort } from "../../vitest.testdb";
 
 export default defineConfig({
   test: {
+    setupFiles: ["../../packages/render/test-support/tenant-identity-setup.ts"],
     ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",

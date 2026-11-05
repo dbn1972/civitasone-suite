@@ -4,7 +4,22 @@ import { render, screen } from "@testing-library/react";
 const getById = vi.fn();
 vi.mock("../../../../../_data/loaders", () => ({ getFinanceSanctionById: (id: string) => getById(id) }));
 vi.mock("../../../_components/FinanceActions", () => ({ SanctionApproveAction: () => null }));
-vi.mock("../../../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: () => null }));
+const { raiseProps, MAKER, CHECKER, UNRESOLVED } = vi.hoisted(() => ({
+  raiseProps: [] as Array<Record<string, unknown>>,
+  MAKER: "11111111-2222-4000-8000-000000000001",
+  CHECKER: "11111111-2222-4000-8000-000000000002",
+  UNRESOLVED: "11111111-2222-4000-8000-00000000ab12",
+}));
+vi.mock("../../../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: Record<string, unknown>) => { raiseProps.push(p); return null; } }));
+vi.mock("@/lib/records/recordRefs", () => ({
+  resolveRecordRefs: async () => ({
+    people: new Map([
+      [MAKER, { name: "Asha Rao", designation: "Section Officer" }],
+      [CHECKER, { name: "N. Gupta", designation: "DDO" }],
+    ]),
+    vendors: new Map(),
+  }),
+}));
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => ["finance_officer"] }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }) }));
 
@@ -65,5 +80,48 @@ describe("SanctionDetailPage approval trail timestamps (GAP-FINANCE-BUDGET-SANCT
     render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("not-a-date")).not.toBeInTheDocument();
+  });
+});
+
+describe("SanctionDetailPage record template (UX-R5: names not ids, status-aware actions)", () => {
+  beforeEach(() => { getById.mockReset(); raiseProps.length = 0; });
+  const approved = {
+    id: "s1", sanctionNo: "W7-SAN-2026-0012", subject: "Laptops for the DDO office", amount: "14445763", sanctionedBy: "Unknown officer",
+    sanctionedById: MAKER, date: "2026-10-28", status: "approved", majorHead: "2059", lineItems: [],
+    approvalTrail: [
+      { actor: "Unknown officer", actorId: MAKER, action: "created", timestamp: "2026-10-28T05:00:00.000Z" },
+      { actor: "Unknown officer", actorId: CHECKER, action: "approved", timestamp: "2026-10-30T05:00:00.000Z" },
+    ],
+  };
+
+  it("names the maker and checker with designation, never Unknown officer or an id", async () => {
+    getById.mockResolvedValue({ data: approved, source: "api" });
+    const { container } = render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(screen.getAllByText("Asha Rao, Section Officer").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("N. Gupta, DDO").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toMatch(/Unknown officer/);
+    expect(container.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/i);
+  });
+
+  it("an approved sanction shows its outcome and never offers Raise for approval", async () => {
+    getById.mockResolvedValue({ data: approved, source: "api" });
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(screen.getByText("Approved by N. Gupta, DDO on 30 Oct 2026.")).toBeInTheDocument();
+    expect(raiseProps.at(-1)?.statusAllowsRaise).toBe(false);
+    expect(screen.queryByText("Review and decide")).not.toBeInTheDocument();
+  });
+
+  it("a pending sanction keeps one primary action and allows the eOffice raise", async () => {
+    getById.mockResolvedValue({ data: { ...approved, status: "pending", approvalTrail: approved.approvalTrail.slice(0, 1) }, source: "api" });
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(screen.getByText("Review and decide")).toBeInTheDocument();
+    expect(raiseProps.at(-1)?.statusAllowsRaise).toBe(true);
+  });
+
+  it("uses the shared DetailList (labels never glued to values) and an honest label for an unresolved id", async () => {
+    getById.mockResolvedValue({ data: { ...approved, sanctionedById: UNRESOLVED }, source: "api" });
+    const { container } = render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(container.querySelector("dl[data-detail-list]")).not.toBeNull();
+    expect(screen.getAllByText("Name not available (ID ending ab12)").length).toBeGreaterThan(0);
   });
 });

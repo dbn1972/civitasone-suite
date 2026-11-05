@@ -9,7 +9,7 @@ import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { Button } from "@/app/_components/ds";
+import { Button, DateInput, Field, Input, RequiredLegend, Textarea } from "@/app/_components/ds";
 
 // GAP2-PROCUREMENT-GFR-BANDS-07: the API now carries stable i18n keys
 // (nameKey/notesKey) instead of baked English prose; the band name and note are
@@ -163,59 +163,38 @@ export function CreateIndentForm({
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 860 }} noValidate>
+      {/* UX-R5 form-field standard: label above, one "* required" legend, inline validation on blur, DD-MM-YYYY dates. */}
+      <RequiredLegend />
       <div className="fields">
         {/* Indent No — assigned by the server on submit (NEW-04) */}
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="indentNo">Indent No</label>
-          <input id="indentNo" className="inp mono" value="Assigned on submit" readOnly style={{ minHeight: 44, cursor: "default", background: "var(--panel)", color: "var(--mut)" }} />
-        </div>
+        <Field id="indentNo" className="field" label="Indent No" hint="Assigned by the system when you submit.">
+          <Input className="mono" value="Assigned on submit" readOnly style={{ cursor: "default", color: "var(--mut)" }} />
+        </Field>
 
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="indentDate">Indent date *</label>
-          <input id="indentDate" type="date" className="inp" value={indentDate} onChange={(e) => setIndentDate(e.target.value)} required style={{ minHeight: 44 }} />
-        </div>
+        <Field id="indentDate" className="field" label="Indent date" required hint="DD-MM-YYYY">
+          <DateInput value={indentDate} onChange={setIndentDate} />
+        </Field>
 
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="department">Department *</label>
-          <input
-            id="department"
-            className="inp"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            required
-            placeholder="Enter the requesting department"
-            aria-invalid={deptError ? true : undefined}
-            aria-describedby={deptError ? "department-err" : undefined}
-            style={{ minHeight: 44 }}
-          />
-          {deptError && (
-            <span id="department-err" style={{ fontSize: 12, color: "var(--bad)" }}>{deptError}</span>
-          )}
-        </div>
+        <Field
+          id="department"
+          className="field"
+          label="Department"
+          required
+          requiredMessage="Choose the department raising this indent."
+          error={deptError}
+        >
+          <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Enter the requesting department" />
+        </Field>
 
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="requiredBy">Required by date</label>
-          <input
-            id="requiredBy"
-            type="date"
-            className="inp"
-            value={requiredBy}
-            min={indentDate || undefined}
-            onChange={(e) => setRequiredBy(e.target.value)}
-            aria-invalid={fieldErrors.requiredBy ? true : undefined}
-            aria-describedby={fieldErrors.requiredBy ? "requiredBy-err" : undefined}
-            style={{ minHeight: 44 }}
-          />
-          {fieldErrors.requiredBy && (
-            <span id="requiredBy-err" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.requiredBy}</span>
-          )}
-        </div>
+        <Field id="requiredBy" className="field" label="Required by date" hint="DD-MM-YYYY, on or after the indent date." error={fieldErrors.requiredBy}>
+          <DateInput value={requiredBy} min={indentDate || undefined} onChange={setRequiredBy} />
+        </Field>
 
         {/* GAP-PROCUREMENT-INDENTS-NEW-02: estimated value is DERIVED (read-only)
             from the line items and drives the GFR mode band — no second,
             independently-typed figure that could select the wrong band. */}
         <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
-          <span className="label">
+          <span className="label" style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
             Estimated total value (from line items)
             <span style={{ fontSize: 11, color: "var(--ink2)", marginInlineStart: 4 }}>— determines procurement mode</span>
           </span>
@@ -242,25 +221,24 @@ export function CreateIndentForm({
           </div>
         </div>
 
-        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="purpose">Purpose / justification *</label>
-          <textarea
-            id="purpose"
-            className="inp"
+        <Field
+          id="purpose"
+          className="field"
+          label="Purpose / justification"
+          required
+          error={purposeError}
+          validate={(v) => (v.trim().length < 3 ? "Enter a purpose of at least 3 characters." : undefined)}
+          style={{ gridColumn: "1 / -1" }}
+        >
+          <Textarea
             rows={2}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            required
             minLength={3}
             maxLength={500}
             placeholder="Why this purchase is needed (minimum 3 characters)"
-            aria-invalid={purposeError ? true : undefined}
-            aria-describedby={purposeError ? "purpose-err" : undefined}
           />
-          {purposeError && (
-            <span id="purpose-err" style={{ fontSize: 12, color: "var(--bad)" }}>{purposeError}</span>
-          )}
-        </div>
+        </Field>
       </div>
 
       {prefillTruncated ? (

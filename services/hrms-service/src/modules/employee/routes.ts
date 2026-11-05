@@ -6,7 +6,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { setEmployeeLoginLink } from "./login-link.js";
@@ -120,6 +120,15 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       ? undefined
       : await resolveManagerScope(ctx, req);
     sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses));
+  });
+
+  // UX-R5 (names, not ids): name + designation for the maker / checker / officer ids a record screen holds.
+  // Same who-may-browse gate as the directory list above; returns no other field, so no manager scope applies.
+  app.get("/v1/hrms/employees/officers", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DIRECTORY_ROLES);
+    const { ids } = officerIdsQuery.parse(req.query);
+    return reply.send({ data: await queries.officersByIds(ctx.tenantId, ids) });
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {

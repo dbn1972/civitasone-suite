@@ -12,7 +12,18 @@ const rolesMock = vi.fn<() => string[]>();
 const viewerMock = vi.fn<() => string | null>(() => null);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock(), getSessionUserId: () => viewerMock() }));
 const loaderMock = vi.fn();
-vi.mock("../../../../../_data/loaders", () => ({ getFinanceBillById: () => loaderMock() }));
+vi.mock("../../../../../_data/loaders", () => ({
+  getFinanceBillById: () => loaderMock(),
+  // UX-R5: the linked PO number is looked up by id when the bill carries no snapshot.
+  getProcurementPOById: async () => ({ data: { poNo: "PO/2026/0025" }, source: "api" }),
+}));
+const { VENDOR_ID, LODGER_ID } = vi.hoisted(() => ({ VENDOR_ID: "7e7e7e7e-0000-4000-8000-000000000001", LODGER_ID: "00000000-aaaa-4000-8000-000000000001" }));
+vi.mock("@/lib/records/recordRefs", () => ({
+  resolveRecordRefs: async () => ({
+    people: new Map([[LODGER_ID, { name: "K. Nair", designation: "Accounts Officer" }]]),
+    vendors: new Map(),
+  }),
+}));
 vi.mock("./BillLineItemsTable", () => ({ BillLineItemsTable: () => null }));
 // Async server component with its own loader + tests (scannedDocuments.test.ts / ScannedDocumentsSection.test.tsx).
 vi.mock("../../../_components/scanned/ScannedDocumentsSection", () => ({ ScannedDocumentsSection: () => null }));
@@ -54,7 +65,9 @@ describe("BillDetailPage", () => {
     expect(screen.getAllByText("₹2,500.00")).toHaveLength(1);
     expect(screen.getAllByText("BILL-77")).toHaveLength(1);
     expect(screen.getAllByText("Pending")).toHaveLength(1);
-    expect(screen.getByText("PO 5b1c2d3e")).toBeInTheDocument();
+    // UX-R5 (names, not ids): a PO with no snapshotted number is shown by its business number, never "PO 5b1c2d3e".
+    expect(screen.getByRole("link", { name: "PO/2026/0025" })).toHaveAttribute("href", `/procurement/orders/${PO_UUID}`);
+    expect(screen.queryByText("PO 5b1c2d3e")).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: Pass bill is APPROVER_ROLES-only on the server.
@@ -151,5 +164,31 @@ describe("BillDetailPage release-payment segregation of duties", () => {
     render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
     expect(screen.getByText("You passed this bill, so another officer must release its payment.")).toBeInTheDocument();
+  });
+});
+
+describe("BillDetailPage record template (UX-R5)", () => {
+  beforeEach(() => {
+    rolesMock.mockReturnValue(["accounts_officer"]);
+    viewerMock.mockReturnValue(OTHER);
+  });
+
+  it("names the lodging officer with designation and an unresolved payee honestly, never Unknown vendor or an id", async () => {
+    loaderMock.mockResolvedValue({ data: { ...BILL, vendor: "Unknown vendor", vendorId: VENDOR_ID }, source: "api" });
+    const { container } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
+    expect(screen.getAllByText("K. Nair, Accounts Officer").length).toBeGreaterThan(0);
+    expect(screen.getByText("Name not available (ID ending 0001)")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Unknown vendor/);
+    expect(container.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    expect(container.querySelector("dl[data-detail-list]")).not.toBeNull();
+  });
+
+  it("a paid bill shows its outcome and offers neither Pass bill nor Release payment", async () => {
+    rolesMock.mockReturnValue(["accounts_officer", "finance_officer"]);
+    loaderMock.mockResolvedValue({ data: { ...BILL, status: "paid" }, source: "api" });
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
+    expect(screen.getByText("Paid.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /pass bill/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
   });
 });

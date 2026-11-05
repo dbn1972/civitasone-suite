@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
+import { PageHeader, SummaryStrip, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceSanctions, getFinanceSanctionsSummary } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -44,12 +44,16 @@ export default async function SanctionsPage() {
         }
       />
 
-      <StatGrid>
-        <StatCard icon="🖊️" tone="info" label="Active Sanctions" value={summaryErrored ? "—" : summary.active} />
-        <StatCard icon="💰" tone="info" label="Sanctioned Value (approved)" value={summaryErrored ? "—" : formatMoney(summary.approvedMinor)} />
-        <StatCard icon="⏳" tone="warn" label={SANCTION_STATUS_LABEL.pending} value={summaryErrored ? "—" : summary.pending} />
-        <StatCard icon="📊" tone="good" label={SANCTION_STATUS_LABEL.approved} value={summaryErrored ? "—" : summary.approved} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: a slim summary strip instead of the tall KPI-card row, so the register starts above the fold. */}
+      <SummaryStrip
+        ariaLabel="Sanctions summary"
+        items={[
+          { label: "Active Sanctions", value: summaryErrored ? "—" : summary.active, tone: "info" },
+          { label: "Sanctioned Value (approved)", value: summaryErrored ? "—" : formatMoney(summary.approvedMinor) },
+          { label: SANCTION_STATUS_LABEL.pending, value: summaryErrored ? "—" : summary.pending, tone: "warn" },
+          { label: SANCTION_STATUS_LABEL.approved, value: summaryErrored ? "—" : summary.approved, tone: "good" },
+        ]}
+      />
 
       <Card title="Administrative & financial sanctions">
         {errored ? (

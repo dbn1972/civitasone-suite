@@ -7,8 +7,10 @@ import { testDbHostPort } from "../../vitest.testdb";
 export default defineConfig({
   test: {
     ...sharedTestTimeouts,
-    setupFiles: ["./tests/setup-tax-config.ts"],
+    setupFiles: ["./tests/setup-tax-config.ts", "../../packages/render/test-support/tenant-identity-setup.ts"],
     env: {
+      // The deploy-level EMPLOYER_* deductor is honoured only on an explicitly single-tenant deployment (form16-document.ts).
+      PAYROLL_DEDUCTOR_ENV_FALLBACK: "single-tenant",
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       PII_ENC_KEY: "test_pii_key_for_civitasone_dev_32chars",

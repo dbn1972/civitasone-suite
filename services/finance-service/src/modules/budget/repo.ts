@@ -96,7 +96,7 @@ export async function updateSanction(tx: Writer, id: string, patch: Partial<Sanc
  */
 export async function approveSanctionIfNoEfile(tx: Writer, id: string, tenantId: string, actorId: string): Promise<boolean> {
   const rows = await tx.update(financeSanctions)
-    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date() })
+    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date(), approvedBy: actorId, approvedAt: new Date() })
     .where(and(
       eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
       inArray(financeSanctions.status, ["pending_approval", "draft"]),
@@ -277,6 +277,21 @@ export async function findHeadLabels(
       .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.id, unique)))
   );
   return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name }]));
+}
+
+/**
+ * UAT ux-docs: account code -> head name for a printed voucher (journal lines carry
+ * codes only). Tenant-scoped; a code that is not in the chart is absent from the map.
+ */
+export async function findHeadNamesByCodes(tenantId: string, codes: readonly string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(codes)].filter((c) => c.length > 0);
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx.select({ code: financeHeads.code, name: financeHeads.name })
+      .from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, unique)))
+  );
+  return new Map(rows.map((r) => [r.code, r.name]));
 }
 
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {

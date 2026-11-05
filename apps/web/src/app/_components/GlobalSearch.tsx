@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./ds/Modal";
+import { searchPages, type PageEntry, type PageHit } from "@/lib/nav/pageIndex";
+import { useShellT } from "./useShellT";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,11 @@ interface SearchResponse {
   data: SearchResult[];
   meta: { page: number; pageSize: number; total: number };
 }
+
+/** One row in the listbox: a record hit (gateway search) or a page from the client index. */
+type SearchOption =
+  | { kind: "record"; key: string; record: SearchResult }
+  | { kind: "page"; key: string; hit: PageHit };
 
 // ── Module Badge Colors ───────────────────────────────────────────────────────
 
@@ -86,9 +93,9 @@ const MODULE_PATH_MAP: Record<string, string> = {
 // Modules whose detail record actually lives at `/<base>/<id>`. The gateway
 // search-route (services/gateway-service/src/search-route.ts) returns only
 // `{ module, id }` with NO canonical URL, and for every OTHER module
-// `/<base>/<id>` is not a real App Router route — navigating there 404s. So we
+// `/<base>/<id>` is not a real App Router route; navigating there 404s. So we
 // deep-link only where the detail route exists, and otherwise send the clerk to
-// the module's real landing page (all MODULE_PATH_MAP base paths resolve).
+// the module real landing page (all MODULE_PATH_MAP base paths resolve).
 // Verified against the (app) route tree on 2026-08-26.
 // HANDOFF: if the gateway search-route is extended to return a canonical `url`
 // per hit, prefer that here and this allowlist becomes removable.
@@ -108,6 +115,12 @@ function buildResultHref(result: SearchResult): string {
     : basePath;
 }
 
+function optionHref(option: SearchOption): string {
+  return option.kind === "record" ? buildResultHref(option.record) : option.hit.entry.href;
+}
+
+const plural = (n: number, one: string, other: string) => `${n} ${n === 1 ? one : other}`;
+
 // ── Debounce hook ─────────────────────────────────────────────────────────────
 
 function useDebounce(value: string, delay: number): string {
@@ -123,23 +136,45 @@ function useDebounce(value: string, delay: number): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function GlobalSearch() {
+export interface GlobalSearchProps {
+  /** JWT roles claim: the page index only offers pages these roles can open. */
+  roles?: string[] | null;
+  /** Tenant module keys (null = unknown, show all). */
+  enabledModules?: string[] | null;
+}
+
+/**
+ * Global search (Ctrl+K / Cmd+K, or the top-bar search button).
+ *
+ * UAT-P3 (NAV-01 / S-01): every query used to answer only "Search is
+ * temporarily unavailable" because record search (gateway /api/v1/search ->
+ * Meilisearch) was unreachable, and there was no fallback. Two sources now:
+ *  - Pages: a client-side index of every page the user can open, with
+ *    government abbreviations and Hindi names (lib/nav/pageIndex.ts). It is
+ *    synchronous and always answers.
+ *  - Records: the gateway search. When it fails, the pages still show,
+ *    plus "Record search unavailable — try again." and a retry button.
+ * Records are listed first (they are the more specific hit), then pages; the
+ * arrow keys move through both as one list.
+ */
+export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) {
+  const t = useShellT("appNav");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [recordsFailed, setRecordsFailed] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
   const router = useRouter();
 
   const debouncedQuery = useDebounce(query, 300);
 
   // ── Keyboard shortcut: Ctrl+K / Meta+K to toggle, Escape to close ─────────
   const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
       setOpen((prev) => !prev);
     }
@@ -174,12 +209,23 @@ export function GlobalSearch() {
       setQuery("");
       setResults([]);
       setTotal(0);
-      setError(null);
+      setRecordsFailed(false);
       setActiveIndex(-1);
     }
   }, [open]);
 
-  // ── Fetch search results when debounced query changes ─────────────────────
+  // ── Page index: synchronous, so it answers as the user types ──────────────
+  const pageLabel = useCallback(
+    (e: PageEntry) => t(`${e.kind}.${e.id}`, e.label),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is re-created per render but only reads the stable next-intl messages.
+    [],
+  );
+  const pageHits = useMemo(
+    () => (open ? searchPages(query, { roles, enabledModules }, pageLabel) : []),
+    [open, query, roles, enabledModules, pageLabel],
+  );
+
+  // ── Record search (gateway), debounced ────────────────────────────────────
   useEffect(() => {
     if (!open) return;
 
@@ -187,13 +233,13 @@ export function GlobalSearch() {
       setResults([]);
       setTotal(0);
       setLoading(false);
-      setError(null);
+      setRecordsFailed(false);
       return;
     }
 
     const controller = new AbortController();
     setLoading(true);
-    setError(null);
+    setRecordsFailed(false);
 
     async function fetchResults() {
       try {
@@ -203,16 +249,10 @@ export function GlobalSearch() {
           signal: controller.signal,
         });
 
-        if (res.status === 503) {
-          setError("Search is temporarily unavailable");
-          setResults([]);
-          setTotal(0);
-          setLoading(false);
-          return;
-        }
-
         if (!res.ok) {
-          setError("Search failed");
+          // 503 SEARCH_UNAVAILABLE (engine unreachable) or any other failure:
+          // the page results stay; the record half says so and offers a retry.
+          setRecordsFailed(true);
           setResults([]);
           setTotal(0);
           setLoading(false);
@@ -220,12 +260,12 @@ export function GlobalSearch() {
         }
 
         const body = (await res.json()) as SearchResponse;
-        setResults(body.data);
-        setTotal(body.meta.total);
+        setResults(Array.isArray(body.data) ? body.data : []);
+        setTotal(body.meta?.total ?? 0);
         setActiveIndex(-1);
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          setError("Unable to reach search service");
+        if ((e as Error).name !== "AbortError") {
+          setRecordsFailed(true);
           setResults([]);
           setTotal(0);
         }
@@ -236,39 +276,61 @@ export function GlobalSearch() {
 
     void fetchResults();
     return () => controller.abort();
-  }, [debouncedQuery, open]);
+  }, [debouncedQuery, open, retryNonce]);
+
+  const hasQuery = debouncedQuery.length >= 2;
+  const showRecords = hasQuery && !loading && !recordsFailed && results.length > 0;
+  const showPages = query.length >= 2 && pageHits.length > 0;
+
+  const options: SearchOption[] = useMemo(
+    () => [
+      ...(showRecords ? results.map<SearchOption>((r) => ({ kind: "record", key: `r-${r.module}-${r.id}`, record: r })) : []),
+      ...(showPages ? pageHits.map<SearchOption>((h) => ({ kind: "page", key: `p-${h.entry.href}`, hit: h })) : []),
+    ],
+    [showRecords, results, showPages, pageHits],
+  );
+
+  // Keep the highlight inside the list when it shrinks.
+  useEffect(() => {
+    if (activeIndex >= options.length) setActiveIndex(options.length > 0 ? 0 : -1);
+  }, [options.length, activeIndex]);
+
+  const navigate = useCallback(
+    (option: SearchOption) => {
+      setOpen(false);
+      router.push(optionHref(option));
+    },
+    [router],
+  );
 
   // ── Keyboard navigation within the dialog ─────────────────────────────────
   // Attached at the document level (not a JSX onKeyDown prop on the
-  // role="dialog" panel) so it doesn't trip jsx-a11y's
-  // non-interactive-element-interactions check; guarded to fire only while
-  // the search input itself is focused, matching the old scoped-to-the-dialog
-  // behaviour (GlobalSearch has no focus trap, so without this guard the keys
-  // would also act on results after focus moved elsewhere on the page).
+  // role="dialog" panel) so it does not trip jsx-a11y
+  // non-interactive-element-interactions; guarded to fire only while the
+  // search input itself is focused.
   const handleDialogKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (document.activeElement !== inputRef.current) return;
+      if (document.activeElement !== inputRef.current || options.length === 0) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((prev) => {
-          const next = prev < results.length - 1 ? prev + 1 : 0;
+          const next = prev < options.length - 1 ? prev + 1 : 0;
           scrollToItem(next);
           return next;
         });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setActiveIndex((prev) => {
-          const next = prev > 0 ? prev - 1 : results.length - 1;
+          const next = prev > 0 ? prev - 1 : options.length - 1;
           scrollToItem(next);
           return next;
         });
-      } else if (e.key === "Enter" && activeIndex >= 0 && results[activeIndex]) {
+      } else if (e.key === "Enter" && activeIndex >= 0 && options[activeIndex]) {
         e.preventDefault();
-        navigate(results[activeIndex]);
+        navigate(options[activeIndex]);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate only closes over router (stable per Next.js) and stable setters, so it cannot go stale.
-    [results, activeIndex],
+    [options, activeIndex, navigate],
   );
 
   useEffect(() => {
@@ -278,35 +340,100 @@ export function GlobalSearch() {
   }, [open, handleDialogKeyDown]);
 
   function scrollToItem(index: number) {
-    const list = listRef.current;
-    if (!list) return;
-    const item = list.children[index] as HTMLElement | undefined;
+    const item = document.getElementById(`search-result-${index}`);
     if (item && typeof item.scrollIntoView === "function") {
       item.scrollIntoView({ block: "nearest" });
     }
   }
 
-  function navigate(result: SearchResult) {
-    setOpen(false);
-    router.push(buildResultHref(result));
-  }
-
   if (!open) return null;
 
-  const hasQuery = debouncedQuery.length >= 2;
-  const showResults = hasQuery && !loading && !error && results.length > 0;
-  const showEmpty = hasQuery && !loading && !error && results.length === 0;
-  const showHint = !hasQuery && !loading;
+  const showEmpty = hasQuery && !loading && !recordsFailed && results.length === 0 && pageHits.length === 0;
+  const showNoRecords = hasQuery && !loading && !recordsFailed && results.length === 0 && pageHits.length > 0;
+  const showHint = query.length < 2 && !loading;
+  const recordCount = showRecords ? total : 0;
+  const recordsAnnouncement = hasQuery && !loading && !recordsFailed
+    ? results.length > 0
+      ? t("search.resultsFound", plural(total, "result found", "results found"), { count: total })
+      : pageHits.length === 0
+        ? t("search.noResultsSr", "No results found for {query}", { query: debouncedQuery })
+        : ""
+    : "";
+  const pagesAnnouncement = showPages
+    ? t("search.pagesFound", plural(pageHits.length, "matching page", "matching pages"), { count: pageHits.length })
+    : "";
+
+  const renderOption = (option: SearchOption, index: number) => {
+    const selected = index === activeIndex;
+    const common = {
+      id: `search-result-${index}`,
+      role: "option" as const,
+      "aria-selected": selected,
+      className: `flex items-start gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
+        selected ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-800"
+      }`,
+      onClick: () => navigate(option),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(option);
+        }
+      },
+      onMouseEnter: () => setActiveIndex(index),
+    };
+    if (option.kind === "record") {
+      const result = option.record;
+      return (
+        <li key={option.key} {...common}>
+          <span
+            className={`inline-flex items-center shrink-0 mt-0.5 px-1.5 py-0.5 text-xs font-semibold uppercase rounded ${getModuleColors(result.module).bg} ${getModuleColors(result.module).text}`}
+          >
+            {result.module}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{result.name}</span>
+              {result.refNumber && (
+                <span className="text-xs text-gray-600 dark:text-gray-300 shrink-0">{result.refNumber}</span>
+              )}
+            </div>
+            {result.snippet && (
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-1">{result.snippet}</p>
+            )}
+          </div>
+          {result.status && result.status !== "unknown" && (
+            <span className="text-xs text-gray-600 dark:text-gray-300 shrink-0 mt-1">{result.status}</span>
+          )}
+        </li>
+      );
+    }
+    const { entry, label } = option.hit;
+    return (
+      <li key={option.key} {...common}>
+        <span className="inline-flex items-center shrink-0 mt-0.5 px-1.5 py-0.5 text-xs font-semibold rounded bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+          {t("search.pageBadge", "Page")}
+        </span>
+        <div className="flex-1 min-w-0">
+          <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{label}</span>
+          <span className="block text-xs text-gray-600 dark:text-gray-300 truncate">
+            {t(`group.${entry.groupId}`, entry.groupLabel)} · {entry.href}
+          </span>
+        </div>
+      </li>
+    );
+  };
+
+  const recordOptions = options.filter((o) => o.kind === "record");
+  const pageOptions = options.filter((o) => o.kind === "page");
 
   // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore) replaces the
-  // hand-rolled dialog. The heading is visually hidden -- a command palette shows its
-  // input, not a title -- and the panel is restyled to the palette look (top-aligned,
-  // unpadded) with Tailwind important modifiers over the base .modal-* rules.
+  // hand-rolled dialog. The heading is visually hidden: a command palette shows its
+  // input, not a title.
   return (
     <Modal
       open
       onClose={() => setOpen(false)}
-      title="Global search"
+      title={t("search.title", "Global search")}
       titleClassName="sr-only"
       zIndex={9999}
       overlayClassName="!place-items-start !pt-[15vh]"
@@ -316,7 +443,7 @@ export function GlobalSearch() {
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <svg
-            className="w-4 h-4 text-gray-400 shrink-0"
+            className="w-4 h-4 text-gray-500 shrink-0"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -330,139 +457,108 @@ export function GlobalSearch() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search across all modules…"
-            aria-label="Global search"
+            placeholder={t("search.placeholder", "Search pages and records… (e.g. DDO, JV, PO/2026)")}
+            aria-label={t("search.inputLabel", "Global search")}
             aria-autocomplete="list"
             aria-controls="search-results-list"
-            aria-expanded={showResults}
-            aria-activedescendant={activeIndex >= 0 ? `search-result-${activeIndex}` : undefined}
+            aria-expanded={options.length > 0}
+            aria-activedescendant={activeIndex >= 0 && options[activeIndex] ? `search-result-${activeIndex}` : undefined}
             role="combobox"
-            className="flex-1 border-none outline-none text-sm bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+            className="flex-1 min-w-0 border-none outline-none text-sm bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-500"
             autoComplete="off"
             spellCheck={false}
           />
           {loading && (
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" aria-label="Searching" role="status" />
+            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" aria-label={t("search.searching", "Searching")} role="status" />
           )}
-          <kbd className="text-xs px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400">
+          <kbd className="text-xs px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">
             ESC
           </kbd>
         </div>
 
-        {/* Results */}
+        {/* Results: one listbox, records first, then pages. */}
         <ul
           id="search-results-list"
-          ref={listRef}
           role="listbox"
-          aria-label="Search results"
+          aria-label={t("search.resultsList", "Search results")}
           className="max-h-[360px] overflow-y-auto"
         >
-          {showResults &&
-            results.map((result, index) => (
-              <li
-                key={result.id}
-                id={`search-result-${index}`}
-                role="option"
-                aria-selected={index === activeIndex}
-                className={`flex items-start gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
-                  index === activeIndex
-                    ? "bg-blue-50 dark:bg-blue-900/20"
-                    : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                }`}
-                onClick={() => navigate(result)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate(result);
-                  }
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                {/* Module badge */}
-                <span
-                  className={`inline-flex items-center shrink-0 mt-0.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded ${getModuleColors(result.module).bg} ${getModuleColors(result.module).text}`}
-                >
-                  {result.module}
-                </span>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {result.name}
-                    </span>
-                    {result.refNumber && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                        {result.refNumber}
-                      </span>
-                    )}
-                  </div>
-                  {result.snippet && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
-                      {result.snippet}
-                    </p>
-                  )}
-                </div>
-
-                {/* Status */}
-                {result.status && result.status !== "unknown" && (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 mt-1">
-                    {result.status}
-                  </span>
-                )}
-              </li>
-            ))}
+          {recordOptions.length > 0 && (
+            <li role="group" aria-labelledby="search-group-records">
+              <div id="search-group-records" role="presentation" className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                {t("search.records", "Records")}
+              </div>
+              <ul role="none">{recordOptions.map((o) => renderOption(o, options.indexOf(o)))}</ul>
+            </li>
+          )}
+          {pageOptions.length > 0 && (
+            <li role="group" aria-labelledby="search-group-pages">
+              <div id="search-group-pages" role="presentation" className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                {t("search.pages", "Pages")}
+              </div>
+              <ul role="none">{pageOptions.map((o) => renderOption(o, options.indexOf(o)))}</ul>
+            </li>
+          )}
         </ul>
 
-        {/* States: loading indicator shown via spinner above, empty, error, hint */}
-        {showEmpty && (
-          <div className="px-4 py-8 text-center text-sm text-gray-400" role="status">
-            No results found for &ldquo;{debouncedQuery}&rdquo;
+        {/* Record search failed: pages above still answer. */}
+        {hasQuery && recordsFailed && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-300 border-t border-gray-200 dark:border-gray-700" role="alert">
+            <span>{t("search.recordsUnavailable", "Record search unavailable — try again.")}</span>
+            <button
+              type="button"
+              className="btn ghost sm"
+              onClick={() => {
+                setRetryNonce((n) => n + 1);
+                inputRef.current?.focus();
+              }}
+            >
+              {t("search.retry", "Try again")}
+            </button>
           </div>
         )}
 
-        {error && (
-          <div className="px-4 py-8 text-center text-sm text-red-500 dark:text-red-400" role="alert">
-            {error}
+        {showNoRecords && (
+          <div className="px-4 py-2 text-xs text-gray-600 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700">
+            {t("search.noRecords", "No matching records")}
+          </div>
+        )}
+
+        {showEmpty && (
+          <div className="px-4 py-8 text-center text-sm text-gray-600 dark:text-gray-300" role="status">
+            {t("search.noResults", "No results found for “{query}”", { query: debouncedQuery })}
           </div>
         )}
 
         {showHint && (
-          <div className="px-4 py-8 text-center text-sm text-gray-400">
-            Type at least 2 characters to search
+          <div className="px-4 py-8 text-center text-sm text-gray-600 dark:text-gray-300">
+            {t("search.hint", "Type at least 2 characters to search")}
           </div>
         )}
 
-        {/* Live region for screen readers — announces result count */}
-        <div
-          aria-live="polite"
-          aria-atomic="true"
-          className="sr-only"
-          role="status"
-        >
-          {hasQuery && !loading && !error
-            ? results.length > 0
-              ? `${total} result${total !== 1 ? "s" : ""} found`
-              : `No results found for ${debouncedQuery}`
-            : ""}
+        {/* Live region for screen readers: record count and page count. */}
+        <div aria-live="polite" aria-atomic="true" className="sr-only" role="status">
+          {recordsAnnouncement ? <span>{recordsAnnouncement}</span> : null}
+          {recordsAnnouncement && pagesAnnouncement ? " " : null}
+          {pagesAnnouncement ? <span>{pagesAnnouncement}</span> : null}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px]">↑↓</kbd>
-            navigate
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">↑↓</kbd>
+            {t("search.navigate", "navigate")}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px]">↵</kbd>
-            open
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">↵</kbd>
+            {t("search.open", "open")}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px]">esc</kbd>
-            close
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">esc</kbd>
+            {t("search.close", "close")}
           </span>
-          {hasQuery && !loading && total > 0 && (
-            <span className="ms-auto">{total} result{total !== 1 ? "s" : ""}</span>
+          {recordCount > 0 && (
+            <span className="ms-auto">{t("search.footerCount", plural(recordCount, "result", "results"), { count: recordCount })}</span>
           )}
         </div>
       </div>

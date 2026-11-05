@@ -135,7 +135,31 @@ export default async function EstabFileDetailPage(
           {t("fileCreatedBanner", { fileNo: file.fileNo })}
         </div>
       ) : null}
+      {/* UX-R5 (S-14, eOffice two-pane): the note sheet -- the chronological noting that IS the file -- comes
+          first, ahead of the composer, attachments and scans (it used to start at y 1,819). The file facts,
+          movement trail and dispatch sit in the right rail. */}
       <div className="grid g-main" style={{ alignItems: "start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card">
+            <div className="card-h"><h3>Note sheet</h3></div>
+            {noteRows.length === 0 ? (
+              <EmptyState icon="📝" title="No notes yet" message="Add a yellow note to start the noting chain." />
+            ) : (
+              <NoteSheetTable rows={noteRows} />
+            )}
+          </div>
+          <FileDetailActions
+            fileId={file.id}
+            draftNotingId={draftNoting?.id}
+            status={file.status}
+          />
+
+          <FileAttachments fileId={file.id} attachments={file.attachments ?? []} />
+
+          <ScannedDocumentsSection fileId={file.id} backHref="/estab/list" />
+
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
             <div className="card-h"><h3>File details</h3></div>
@@ -150,27 +174,6 @@ export default async function EstabFileDetailPage(
             </div>
           </div>
 
-          <FileDetailActions
-            fileId={file.id}
-            draftNotingId={draftNoting?.id}
-            status={file.status}
-          />
-
-          <FileAttachments fileId={file.id} attachments={file.attachments ?? []} />
-
-          <ScannedDocumentsSection fileId={file.id} backHref="/estab/list" />
-
-          <div className="card">
-            <div className="card-h"><h3>Note sheet</h3></div>
-            {noteRows.length === 0 ? (
-              <EmptyState icon="📝" title="No notes yet" message="Add a yellow note to start the noting chain." />
-            ) : (
-              <NoteSheetTable rows={noteRows} />
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
             <div className="card-h"><h3>Movement trail</h3></div>
             <div className="pad">

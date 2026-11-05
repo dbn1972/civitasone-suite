@@ -5,265 +5,94 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Avatar } from "./Avatar";
 import {
-  LayoutDashboard,
-  Rocket,
-  HelpCircle,
-  Banknote,
-  Receipt,
-  FileText,
-  Users,
-  ShoppingCart,
-  BarChart2,
-  Gift,
-  Building2,
-  HardHat,
-  Package,
-  GraduationCap,
-  BookOpen,
-  CalendarDays,
-  Target,
-  ClipboardList,
-  BadgeCheck,
-  Handshake,
-  Headphones,
-  FolderOpen,
-  Landmark,
-  Puzzle,
-  ShieldCheck,
-  Scale,
-  CalendarCheck,
-  Search,
-  Castle,
-  PhoneCall,
-  MapPin,
-  Map,
-  Satellite,
-  ScanSearch,
-  Gavel,
-  GitBranch,
-  Bot,
-  Truck,
-  Star,
-  Archive,
-  Dna,
-  Compass,
-  Sparkles,
-  TrendingUp,
-  BookMarked,
-  ScrollText,
-  MessageCircleQuestion,
-  Bell,
-  CreditCard,
-  Building,
-  Shield,
-  Wrench,
-  Diamond,
-  ChevronDown,
-  FileSignature,
-  LucideIcon,
+  LayoutDashboard, Rocket, HelpCircle, Banknote, Receipt, FileText, Users, ShoppingCart, BarChart2, Gift,
+  Building2, HardHat, Package, GraduationCap, BookOpen, CalendarDays, Target, ClipboardList, BadgeCheck,
+  Handshake, Headphones, FolderOpen, Landmark, Puzzle, ShieldCheck, Scale, CalendarCheck, Search, Castle,
+  PhoneCall, MapPin, Map, Satellite, ScanSearch, Gavel, GitBranch, Bot, Truck, Star, Archive, Dna, Compass,
+  Sparkles, TrendingUp, BookMarked, ScrollText, MessageCircleQuestion, Bell, CreditCard, Building, Shield,
+  Wrench, Diamond, ChevronDown, FileSignature, CalendarPlus, Clock, Wallet, UserRound, FileSpreadsheet,
+  ListChecks, Settings, IdCard, Coins, ReceiptText, Stamp, Percent, Inbox,
+  type LucideIcon,
 } from "lucide-react";
-import { FINANCE_ROLES, HR_ROLES } from "@/lib/auth/workRoles";
-import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
-import { GRANTS_VIEW_ROLES } from "@/app/(app)/grants/roles";
-import { TENANT_ADMIN_ROLES } from "@/app/(app)/tenant/_roles";
-import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
+import { NAV_GROUPS, activeNavHref, visibleNavGroups } from "@/lib/nav/navModel";
+import { useShellT } from "../useShellT";
+import { ApprovalsBadge } from "./ApprovalsBadge";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
 /**
- * GAP-DASHBOARD-HOME-2-05: the "Dashboard" nav label was a hard-coded English
- * string while the page it links to (/dashboard) rendered the next-intl key
- * home.title (previously "Command Center"), so nav and page title disagreed —
- * and the nav never translated for Hindi. We now align both to the single
- * `nav.dashboard` key (home.title also points at "Dashboard"/"डैशबोर्ड").
- *
- * Sidebar is a "use client" component rendered from many existing component
- * tests WITHOUT a <NextIntlClientProvider> (see Sidebar.test.tsx). A raw
- * useTranslations() throws when that provider is absent, which would break
- * those other tests. This guard mirrors DataTable.useSafeTranslations: fall
- * back to the plain English label (identical to the previous behaviour) when
- * no provider is present, and use the real translation when one is.
+ * GAP-DASHBOARD-HOME-2-05: the Dashboard entry keeps the `nav.dashboard` key
+ * (the same key the /dashboard page title reads), so nav and title agree.
+ * Provider-optional, like useShellT: plain English without a provider.
  */
-function useNavLabel(): (href: string, fallback: string) => string {
+function useDashboardLabel(): (fallback: string) => string {
   try {
     const t = useTranslations("nav");
-    return (href, fallback) => (href === "/dashboard" ? t("dashboard") : fallback);
+    return () => t("dashboard");
   } catch {
-    return (_href, fallback) => fallback;
+    return (fallback) => fallback;
   }
 }
 
-type NavItem = {
-  icon: LucideIcon;
-  label: string;
-  href: string;
-  moduleKey: string | null;
-  /**
-   * Optional role allow-list for a nav entry, on top of the tenant-level
-   * moduleKey gate above. Undefined (every item but Finance today) means no
-   * role restriction — fully backward compatible. See FINANCE_ROLES's own
-   * doc comment (lib/auth/workRoles.ts): a role with zero finance
-   * permission gets this entry hidden entirely rather than a dead link to
-   * finance/layout.tsx's PermissionDenied fallback.
-   */
-  rolesAllowed?: readonly string[];
+/** UX R1: the Approvals entry uses the inbox page title (en/hi); same provider-less fallback as above. */
+function useApprovalsNavLabel(): string | null {
+  try {
+    return useTranslations("approvalsInbox")("title");
+  } catch {
+    return null;
+  }
+}
+
+/** Icon per nav item id (lib/nav/navModel.ts). Unknown ids fall back to a document icon. */
+const ICONS: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard, setup: Rocket, help: HelpCircle, approvals: Inbox,
+  myLeave: CalendarPlus, myPayslips: Wallet, myAttendance: Clock, myTaxDeclaration: FileSpreadsheet, myProfile: UserRound,
+  finance: Banknote,
+  hr: Users, hrEmployees: IdCard, hrLeaveApprovals: ListChecks, hrPayrollRuns: Coins, hrSalarySlips: ReceiptText, hrDdos: Stamp,
+  revenue: Receipt, revenueAssessees: Users, revenueAssessments: ClipboardList, revenueBills: FileText,
+  revenueReceipts: ReceiptText, revenueWaivers: Percent, revenueTradeLicences: BadgeCheck,
+  billing: FileText, billingInvoices: ReceiptText, billingPayments: CreditCard, billingSubscriptions: CalendarCheck, billingGstn: Landmark,
+  procurement: ShoppingCart, contracts: FileSignature, projects: BarChart2, grants: Gift, establishment: Building2,
+  documents: FileText, assets: HardHat, fleet: Truck, stock: Package,
+  meeting: CalendarCheck, meetingList: CalendarDays, meetingNew: CalendarPlus, meetingAdmin: Settings,
+  learningCatalogue: GraduationCap, myLearning: BookOpen, trainingCalendar: CalendarDays, competencies: Target,
+  assessments: ClipboardList, verifyCertificate: BadgeCheck,
+  municipal: Castle,
+  crm: Handshake, helpdesk: Headphones, serviceCatalogue: FolderOpen, citizen: Landmark, designer: Puzzle,
+  workflow: GitBranch, visitor: ShieldCheck, court: Gavel, inspection: Search, telephony: PhoneCall,
+  locations: MapPin, mapViewer: Map, mapMonitoring: Satellite,
+  audit: ScanSearch, legal: Scale,
+  ai: Bot, field: Truck, loyalty: Star, catalogue: Archive, cdp: Dna, journeys: Compass, recommendations: Sparkles,
+  reports: TrendingUp, knowledge: BookMarked, policies: ScrollText, faq: MessageCircleQuestion, assistant: Bot,
+  notifications: Bell, identity: CreditCard, tenant: Building, administration: ShieldCheck, tenantAdmin: Shield, change: Wrench,
 };
 
-type NavGroup = {
-  group: string;
-  items: NavItem[];
+/** English role labels the app layout passes (ROLE_LABELS in (app)/layout.tsx) mapped to appNav.role.<key>. */
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  "Super Admin": "superAdmin", "Tenant Admin": "tenantAdmin", "Finance Admin": "financeAdmin",
+  "Finance Staff": "financeStaff", "HR Admin": "hrAdmin", "HR Staff": "hrStaff", "Procurement": "procurement",
+  "Auditor": "auditor", "Viewer": "viewer", "Staff": "staff",
 };
-
-const NAV: NavGroup[] = [
-  {
-    group: "OVERVIEW",
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", moduleKey: null },
-      { icon: Rocket, label: "Getting Started", href: "/setup", moduleKey: null },
-      { icon: HelpCircle, label: "Help Centre", href: "/help", moduleKey: null },
-    ],
-  },
-  {
-    group: "FINANCE",
-    items: [
-      { icon: Banknote, label: "Finance", href: "/finance", moduleKey: "finance", rolesAllowed: FINANCE_ROLES },
-      { icon: Receipt, label: "Revenue", href: "/revenue", moduleKey: "revenue" },
-      { icon: FileText, label: "Billing", href: "/billing", moduleKey: "billing" },
-    ],
-  },
-  {
-    group: "OPERATIONS",
-    items: [
-      { icon: Users, label: "HR & Payroll", href: "/hr", moduleKey: "hrms", rolesAllowed: HR_ROLES },
-      { icon: ShoppingCart, label: "Procurement", href: "/procurement", moduleKey: "procurement" },
-      // GAP-CONTRACTS-HOME-02: the /contracts area was reachable only from
-      // GlobalSearch/VoiceNav/navRouteManifest and had no Sidebar entry, so an
-      // officer with the contracts module enabled had no visible way in. Gate
-      // on the same moduleKey "contracts" that contracts/layout.tsx's
-      // ModuleGate uses, so the entry appears exactly when the module is on.
-      { icon: FileSignature, label: "Contracts", href: "/contracts", moduleKey: "contracts" },
-      { icon: BarChart2, label: "Projects", href: "/projects", moduleKey: "projects" },
-      { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants", rolesAllowed: GRANTS_VIEW_ROLES },
-      { icon: Building2, label: "Establishment", href: "/estab", moduleKey: "establishment" },
-      { icon: FileText, label: "Documents", href: "/documents", moduleKey: "documents" },
-      { icon: HardHat, label: "Assets", href: "/assets", moduleKey: "assets" },
-      // GAP-FLEET-HOME-03: the /fleet hub (gated on the "assets" module, see
-      // fleet/layout.tsx) had no sidebar entry though navRouteManifest lists it.
-      { icon: Truck, label: "Fleet", href: "/fleet", moduleKey: "assets" },
-      { icon: Package, label: "Stock", href: "/stock", moduleKey: "stock" },
-    ],
-  },
-  {
-    group: "LEARNING",
-    items: [
-      { icon: GraduationCap, label: "Catalogue", href: "/learning", moduleKey: "hrms" },
-      { icon: BookOpen, label: "My Learning", href: "/learning/my-learning", moduleKey: "hrms" },
-      { icon: CalendarDays, label: "Training Calendar", href: "/learning/calendar", moduleKey: "hrms" },
-      { icon: Target, label: "Competencies", href: "/learning/competency", moduleKey: "hrms" },
-      { icon: ClipboardList, label: "Assessments", href: "/learning/assessments", moduleKey: "hrms" },
-      { icon: BadgeCheck, label: "Verify Certificate", href: "/learning/assessments/verify", moduleKey: "hrms" },
-    ],
-  },
-  {
-    group: "MUNICIPAL",
-    items: [
-      { icon: Castle, label: "Municipal Services", href: "/municipal", moduleKey: null },
-    ],
-  },
-  {
-    group: "CITIZEN SERVICES",
-    items: [
-      { icon: Handshake, label: "CRM", href: "/crm", moduleKey: "crm" },
-      { icon: Headphones, label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
-      { icon: FolderOpen, label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
-      { icon: Landmark, label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
-      { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "designer" },
-      // GAP-WORKFLOW-LIST-05 / GAP-WORKFLOW-MY-TASKS-07: Workflow had no sidebar
-      // entry (reachable only from the dashboard, RoleCommandCenter and
-      // GlobalSearch). Gated on the "workflow" module like every other item.
-      { icon: GitBranch, label: "Workflow", href: "/workflow", moduleKey: "workflow" },
-      { icon: ShieldCheck, label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
-      { icon: CalendarCheck, label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
-      { icon: Gavel, label: "Court Mgmt", href: "/court", moduleKey: "court" },
-      { icon: Search, label: "Inspection", href: "/inspection", moduleKey: "inspection" },
-      // GAP-TELEPHONY-HOME-01: the Telephony call-centre module had no sidebar
-      // entry (only navRouteManifest + GlobalSearch knew the route), so an
-      // agent could reach it only by typing the URL. moduleKey "telephony"
-      // matches the ModuleGate key in telephony/layout.tsx, so the item is
-      // hidden when the module is disabled.
-      { icon: PhoneCall, label: "Telephony", href: "/telephony", moduleKey: "telephony" },
-    ],
-  },
-  {
-    group: "LOCATIONS & GIS",
-    items: [
-      { icon: MapPin, label: "Locations", href: "/locations", moduleKey: null },
-      { icon: Map, label: "Map Viewer", href: "/locations/maps", moduleKey: null },
-      { icon: Satellite, label: "Map Monitoring", href: "/locations/maps/monitoring", moduleKey: null },
-    ],
-  },
-  {
-    group: "GOVERNANCE",
-    items: [
-      { icon: ScanSearch, label: "Audit", href: "/audit", moduleKey: "audit" },
-      { icon: Scale, label: "Legal", href: "/legal", moduleKey: "legal" },
-    ],
-  },
-  {
-    group: "CITIZEN EXPERIENCE",
-    items: [
-      { icon: Bot, label: "AI & Copilot", href: "/ai", moduleKey: "ai-agent" },
-      { icon: Truck, label: "Field Ops", href: "/field", moduleKey: "field" },
-      { icon: Star, label: "Loyalty", href: "/loyalty", moduleKey: "loyalty" },
-      { icon: Archive, label: "Catalogue", href: "/catalogue", moduleKey: "catalogue" },
-      { icon: Dna, label: "CDP", href: "/cdp", moduleKey: "cdp" },
-      { icon: Compass, label: "Journeys", href: "/journeys", moduleKey: "journey" },
-      { icon: Sparkles, label: "Recommendations", href: "/recommendations", moduleKey: "recommendation" },
-    ],
-  },
-  {
-    group: "PLATFORM",
-    items: [
-      { icon: TrendingUp, label: "Reports", href: "/reports", moduleKey: "reports" },
-      { icon: BookMarked, label: "Knowledge", href: "/knowledge", moduleKey: "knowledge" },
-      { icon: ScrollText, label: "Policies & SOPs", href: "/knowledge/policies", moduleKey: "knowledge" },
-      { icon: MessageCircleQuestion, label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
-      { icon: Bot, label: "Assistant", href: "/knowledge/assistant", moduleKey: "knowledge" },
-      { icon: Bell, label: "Notifications", href: "/notifications", moduleKey: null },
-      { icon: CreditCard, label: "Identity", href: "/identity", moduleKey: "identity", rolesAllowed: IDENTITY_ADMIN_ROLES },
-      { icon: Building, label: "Tenant", href: "/tenant", moduleKey: "tenant", rolesAllowed: TENANT_ADMIN_ROLES },
-      // GAP-ADMIN-HOME-04: the /admin hub had no nav entry. The hub admits tenant_admin and above
-      // (each tile is then filtered to what the caller's role may open), so gate on the same list.
-      { icon: ShieldCheck, label: "Administration", href: "/admin", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
-      { icon: Shield, label: "Tenant Admin", href: "/tenant-admin", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
-      { icon: Wrench, label: "Change & Release", href: "/change", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
-    ],
-  },
-];
 
 export type SidebarProps = {
   enabledModules?: string[] | null;
   userName?: string;
   userRole?: string;
-  /** Real JWT roles claim (not the single display label `userRole` is) — used only to hide role-gated nav entries like Finance's. */
+  /** Real JWT roles claim (not the single display label `userRole` is): hides entries the user cannot open. */
   roles?: string[] | null;
 };
 
 export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarProps = {}) {
-  const pathname = usePathname();
-  const enabledSet = enabledModules ? new Set(enabledModules) : null;
+  const pathname = usePathname() ?? "";
+  const t = useShellT("appNav");
+  const dashboardLabel = useDashboardLabel();
+  const approvalsLabel = useApprovalsNavLabel();
 
   // Server-safe default: always start expanded (an empty collapsed set),
-  // matching what the server rendered. Reading localStorage here in the
-  // initializer would run during the client's first (hydration) render too
-  // — by then `window` already exists, so it'd return real stored state
-  // that the server couldn't have known about, and React would flag a
-  // hydration mismatch between the two trees. Deferring the read to an
-  // effect (same pattern as DarkModeToggle) means the collapsed groups pop
-  // in a frame after mount instead — an acceptable, deliberate trade-off.
+  // matching what the server rendered. Reading localStorage in the initializer
+  // would run during the hydration render too and mismatch the server tree, so
+  // the persisted state is applied in an effect (same pattern as DarkModeToggle).
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  const navLabel = useNavLabel();
 
   useEffect(() => {
     try {
@@ -283,94 +112,83 @@ export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarPr
     });
   }, []);
 
-  function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + "/");
-  }
+  // UAT-P3 (S-02): one model, the same module + role gates as each destination
+  // (lib/nav/navModel.ts). Unknown roles/modules keep the "show" convention.
+  const visibleNav = visibleNavGroups({ enabledModules, roles }, NAV_GROUPS);
+  // Only the most specific matching entry is current (My leave, not also HR & Payroll).
+  const activeHref = activeNavHref(pathname, visibleNav.flatMap((g) => g.items.map((i) => i.href)));
 
-  function isVisible(item: NavItem): boolean {
-    // Unknown roles (null/undefined/empty) -> show all, same "unknown -> show
-    // all" convention as the moduleKey check below: this nav hide is
-    // advisory UX only (finance/layout.tsx's PermissionDenied + the
-    // backend's own per-route 403 are the real boundary), never the sole
-    // gate, so an inability to read roles must never hide a legitimate
-    // entry.
-    if (item.rolesAllowed && roles && roles.length > 0) {
-      if (!roles.some((r) => item.rolesAllowed!.includes(r))) return false;
-    }
-    if (!enabledSet) return true;
-    if (item.moduleKey === null) return true;
-    return enabledSet.has(item.moduleKey);
-  }
-
-  const visibleNav = NAV.map(({ group, items }) => ({
-    group,
-    items: items.filter(isVisible),
-  })).filter(({ items }) => items.length > 0);
+  const itemLabel = (id: string, fallback: string) =>
+    id === "dashboard" ? dashboardLabel(fallback)
+      : id === "approvals" ? (approvalsLabel ?? fallback)
+      : t(`item.${id}`, fallback);
+  const roleKey = userRole ? ROLE_LABEL_KEYS[userRole] : undefined;
+  const roleLabel = userRole
+    ? (roleKey ? t(`role.${roleKey}`, userRole) : userRole)
+    : t("role.staff", "Staff");
 
   return (
     <aside id="app-sidebar" className="sb">
       <div className="sb-brand">
         {/*
-          Diamond icon, not a "◈" text glyph: axe's color-contrast rule cannot
-          reliably measure contrast for decorative Unicode symbol characters
-          (reported as "nonBmp" / non-text content) and treats that as an
-          undecided, blocking result. An SVG icon isn't subject to that
-          text-contrast heuristic.
+          Diamond icon, not a text glyph: axe cannot measure contrast for
+          decorative Unicode symbols ("nonBmp") and reports them as undecided.
         */}
         <div className="sb-logo" aria-hidden="true"><Diamond size={18} color="#fff" /></div>
         <div>
           <div className="sb-bn">CivitasOne</div>
-          <div className="sb-bs">Enterprise Suite</div>
+          <div className="sb-bs">{t("brandSubtitle", "Enterprise Suite")}</div>
         </div>
       </div>
-      <nav className="sb-nav" aria-label="Main navigation">
-        {visibleNav.map(({ group, items }) => {
-          const isCollapsed = collapsed.has(group);
-          const hasActive = items.some(({ href }) => isActive(href));
+      <nav className="sb-nav" aria-label={t("mainNav", "Main navigation")}>
+        {visibleNav.map(({ id: groupId, label: groupLabel, items }) => {
+          // The persisted collapsed key stays the English heading (stored state survives a language switch).
+          const isCollapsed = collapsed.has(groupLabel);
+          const hasActive = items.some(({ href }) => href === activeHref);
           const actuallyCollapsed = isCollapsed && !hasActive;
+          const heading = t(`group.${groupId}`, groupLabel);
           return (
-            <div key={group} role="group" aria-label={group}>
+            <div key={groupId} role="group" aria-label={heading}>
               <button
                 type="button"
                 className="sb-grp"
                 aria-expanded={!actuallyCollapsed}
-                onClick={() => toggleGroup(group)}
+                onClick={() => toggleGroup(groupLabel)}
                 style={{ width: "100%", textAlign: "start", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}
               >
-                <span>{group}</span>
-                {/*
-                  ChevronDown icon, not a "▾" text glyph: axe's color-contrast
-                  rule cannot reliably measure contrast for decorative Unicode
-                  symbol characters (reported as "nonBmp" / non-text content)
-                  and treats that as an undecided, blocking result. An SVG
-                  icon isn't subject to that text-contrast heuristic.
-                */}
+                <span>{heading}</span>
+                {/* ChevronDown icon, not a text glyph (axe nonBmp, see above). */}
                 <span aria-hidden="true" style={{ display: "inline-flex", opacity: 0.5, transition: "transform 160ms", transform: actuallyCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
                   <ChevronDown size={12} />
                 </span>
               </button>
-              {!actuallyCollapsed && items.map(({ icon: Icon, label, href }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={"sb-item" + (isActive(href) ? " on" : "")}
-                  aria-current={isActive(href) ? "page" : undefined}
-                >
-                  <span className="i" aria-hidden="true">
-                    <Icon size={16} strokeWidth={1.75} />
-                  </span>
-                  {navLabel(href, label)}
-                </Link>
-              ))}
+              {!actuallyCollapsed && items.map(({ id, label, href }) => {
+                const Icon = ICONS[id] ?? FileText;
+                const on = href === activeHref;
+                return (
+                  <Link
+                    key={id}
+                    href={href}
+                    className={"sb-item" + (on ? " on" : "")}
+                    aria-current={on ? "page" : undefined}
+                  >
+                    <span className="i" aria-hidden="true">
+                      <Icon size={16} strokeWidth={1.75} />
+                    </span>
+                    {itemLabel(id, label)}
+                    {id === "approvals" && <ApprovalsBadge />}
+                  </Link>
+                );
+              })}
             </div>
           );
         })}
       </nav>
       <div className="sb-foot">
-        <Avatar name={userName ?? "User"} color="#00439C" />
+        <Avatar name={userName ?? t("userFallback", "User")} color="#00439C" />
         <div>
-          <div className="nm">{userName ?? "User"}</div>
-          <div className="rl">{userRole ?? "Staff"}</div>
+          <div className="nm">{userName ?? t("userFallback", "User")}</div>
+          <div className="rl">{roleLabel}</div>
         </div>
       </div>
     </aside>

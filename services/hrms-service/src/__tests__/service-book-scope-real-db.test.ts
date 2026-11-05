@@ -20,6 +20,7 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
+import { pdfFlatText } from "@civitasone/render/testing";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -111,7 +112,8 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf — dept scoping (GAP-HR-S
       headers: { authorization: `Bearer ${managerToken}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.body).toContain("Joined as report");
+    // UAT ux-docs: the route returns a real PDF; read its text.
+    expect(await pdfFlatText(r.rawPayload)).toContain("Joined as report");
   });
 
   it("a manager may NOT print an outsider's (different-department) service book -- the gap this fix closes", async () => {
@@ -128,7 +130,8 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf — dept scoping (GAP-HR-S
       headers: { authorization: `Bearer ${hrToken}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.body).toContain("Joined as outsider");
+    // UAT ux-docs: the route returns a real PDF; read its text.
+    expect(await pdfFlatText(r.rawPayload)).toContain("Joined as outsider");
   });
 
   // GAP-HR-SERVICE-BOOK-06 side effect: assertCanReadEmployee's "employee:
@@ -142,7 +145,8 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf — dept scoping (GAP-HR-S
       headers: { authorization: `Bearer ${reportToken}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.body).toContain("Joined as report");
+    // UAT ux-docs: the route returns a real PDF; read its text.
+    expect(await pdfFlatText(r.rawPayload)).toContain("Joined as report");
   });
 
   it("a bare employee may NOT print a DIFFERENT employee's document via this route", async () => {

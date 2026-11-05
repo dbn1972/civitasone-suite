@@ -66,7 +66,8 @@ test.describe('Leave Management', () => {
 
     test('links to Leave Approvals page', async ({ page }) => {
       await page.goto('/hr/leave');
-      const approvalsLink = page.getByRole('link', { name: /approvals/i });
+      // UX R1: the sidebar now also has an Approvals entry; this checks the in-page link.
+      const approvalsLink = page.locator('#main').getByRole('link', { name: /approvals/i });
       await expect(approvalsLink).toBeVisible();
     });
   });
@@ -132,8 +133,10 @@ test.describe('Leave Management', () => {
   // ── Leave Approvals ──────────────────────────────────────────────────────
 
   test.describe('Leave Approvals', () => {
-    test('approvals page loads', async ({ page }) => {
+    // UX R1: the leave queue is now the Leave filter of the one approvals inbox (308 redirect).
+    test('approvals queue opens the approvals inbox filtered to leave', async ({ page }) => {
       await page.goto('/hr/leave/approvals');
+      await expect(page).toHaveURL(/\/approvals\?module=leave$/);
       await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });

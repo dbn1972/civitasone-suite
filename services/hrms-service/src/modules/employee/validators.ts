@@ -209,3 +209,13 @@ export const employeeQueryParams = z.object({
   empId: z.string().uuid().optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
 });
+
+/**
+ * UX-R5 (names, not ids): GET /v1/hrms/employees/officers?ids=a,b -- each id is an employee id OR a login
+ * user ref (the JWT sub record screens hold as maker/checker). Bounded to 100 per call.
+ */
+export const officerIdsQuery = z.object({
+  ids: z.string().min(1).max(4000)
+    .transform((s) => [...new Set(s.split(",").map((x) => x.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().uuid()).min(1).max(100)),
+});

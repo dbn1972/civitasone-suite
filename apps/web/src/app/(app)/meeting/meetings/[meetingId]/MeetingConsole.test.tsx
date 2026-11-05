@@ -291,6 +291,32 @@ describe("MeetingConsole — participant names (GAP-MEETING-MEETINGS-MEETINGID-0
   });
 });
 
+describe("MeetingConsole participant names (UX-R5, names not ids)", () => {
+  const EMP = "82310d88-a7e7-440d-9c1b-7a2d4f6e0d88";
+  const row = (over: Record<string, unknown>) => ({
+    meetingId: "m1",
+    generatedAt: "2026-09-01T05:00:00.000Z",
+    counts: { present: 0, absent: 1, joinedLate: 0, leftEarly: 0, attendingViaVc: 0, total: 1 },
+    participants: [{
+      participantId: "7aaaf93d-0000-4000-8000-000000000001", employeeId: EMP, displayName: null, designation: null,
+      role: "member", isMandatory: false, status: "absent", mode: null, method: null, checkInAt: null, checkOutAt: null, ...over,
+    }],
+  });
+
+  it("names an unnamed participant from the server-resolved people map, never the UUID", () => {
+    render(<MeetingConsole {...baseProps()} initialAttendance={row({}) as never} people={{ [EMP]: { name: "Bimal Das", designation: "Under Secretary" } }} />);
+    expect(screen.getByText("Bimal Das")).toBeInTheDocument();
+    expect(screen.getByText("Under Secretary")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(EMP);
+  });
+
+  it("an unresolved participant reads Name not available (ID ending ...)", () => {
+    render(<MeetingConsole {...baseProps()} initialAttendance={row({}) as never} />);
+    expect(screen.getByText("Name not available (ID ending 0d88)")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(EMP);
+  });
+});
+
 describe("MeetingConsole — misc a11y/copy", () => {
   it("GAP-MEETING-MEETINGS-MEETINGID-07: the VC link opens in a new tab safely", () => {
     render(
