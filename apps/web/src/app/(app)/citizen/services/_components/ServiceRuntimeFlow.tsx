@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { isPresentableMessage } from "@/lib/messages";
+import { UserFacingError } from "@/lib/userFacingError";
 import { FormRenderer } from "@/app/_components/ds/designer/FormRenderer";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { ErrorState, Button } from "@/app/_components/ds";
@@ -296,7 +298,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
       setSubmittedAt(new Date());
       setStep("submitted");
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("submitFailed"));
+      // Only standard copy or a deliberate plain sentence is shown; a raw backend text or code falls back to the localised message.
+      setError(e instanceof UserFacingError || (e instanceof Error && isPresentableMessage(e.message)) ? (e as Error).message : t("submitFailed"));
     } finally {
       setBusy(false);
     }

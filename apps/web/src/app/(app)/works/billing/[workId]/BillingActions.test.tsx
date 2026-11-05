@@ -137,7 +137,7 @@ describe("BillingActions — UX-016 clerk-safe errors", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/This bill was changed by someone else\. Refresh to see the latest version, then try again\./),
+        screen.getByText(/This action can.t be done on this bill right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./),
       ).toBeInTheDocument(),
     );
     expect(screen.queryByText(/Conflict: bill already at this status/)).not.toBeInTheDocument();
@@ -160,7 +160,7 @@ describe("BillingActions — UX-016 clerk-safe errors", () => {
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Advance" }));
 
-    await waitFor(() => expect(screen.getAllByText(/was changed by someone else/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/can.t be done on this [\w -]+ right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./).length).toBeGreaterThan(0));
     expect(screen.queryByText(/Conflict: mb already at this status/)).not.toBeInTheDocument();
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });

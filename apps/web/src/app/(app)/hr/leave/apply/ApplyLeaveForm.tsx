@@ -673,7 +673,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
           label={
             <>
               {t("reasonLabel")}
-              <span className="ms-1 font-normal text-slate-500">{t("reasonHint")}</span>
+              <span className="ms-1 font-normal" style={{ color: "var(--mut)" }}>{t("reasonHint")}</span>
             </>
           }
           required

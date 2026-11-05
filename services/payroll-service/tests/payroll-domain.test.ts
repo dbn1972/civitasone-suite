@@ -59,7 +59,9 @@ describe("core payroll — computeSlip", () => {
 
 describe("core payroll — run status transitions", () => {
   it("draft → processing", () => expect(() => assertRunStatusTransition("draft", "processing")).not.toThrow());
-  it("processing → approved", () => expect(() => assertRunStatusTransition("processing", "approved")).not.toThrow());
+  it("processing → computed", () => expect(() => assertRunStatusTransition("processing", "computed")).not.toThrow());
+  it("computed → approved", () => expect(() => assertRunStatusTransition("computed", "approved")).not.toThrow());
+  it("processing → approved is refused (UAT L2-N3)", () => expect(() => assertRunStatusTransition("processing", "approved")).toThrow());
   it("approved → disbursed", () => expect(() => assertRunStatusTransition("approved", "disbursed")).not.toThrow());
   it("disbursed is terminal", () => expect(() => assertRunStatusTransition("disbursed", "draft")).toThrow(DomainError));
   it("failed → draft (retry)", () => expect(() => assertRunStatusTransition("failed", "draft")).not.toThrow());

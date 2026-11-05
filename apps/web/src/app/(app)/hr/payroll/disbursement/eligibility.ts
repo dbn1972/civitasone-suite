@@ -13,7 +13,7 @@ export type RunRow = {
   grossAmount: number;
   netAmount: number;
   netMinor?: string;
-  status: "draft" | "processing" | "completed" | "paid" | "failed" | string;
+  status: "draft" | "processing" | "computed" | "completed" | "paid" | "failed" | string;
 } & Record<string, unknown>;
 
 /**

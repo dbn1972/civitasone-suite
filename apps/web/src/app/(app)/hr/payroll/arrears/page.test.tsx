@@ -164,7 +164,7 @@ describe("ArrearsPage", () => {
     const ui = await ArrearsPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the arrears computations, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("GAP-PAYROLL-ARREARS-05: back link returns to the payroll hub", async () => {

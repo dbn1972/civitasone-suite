@@ -56,14 +56,14 @@ describe("error catalogue: standard wording", () => {
     [401, "Your session has ended. Sign in again to continue."],
     [403, "You don't have permission to do this. Ask your administrator if you need access."],
     [404, "We couldn't find this leave request. It may have been removed or the link may be wrong."],
-    [409, "This leave request was changed by someone else. Refresh to see the latest version, then try again."],
+    [409, "This action can't be done on this leave request right now. It may have changed, or be in a state that doesn't allow it. Refresh to see its current status."],
     [413, "The file is too large. Upload a file smaller than 5 MB."],
     [415, "This file type isn't accepted. Upload a PDF file."],
     [429, "Too many attempts. Wait a minute, then try again."],
     [500, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     [503, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
     [undefined, "We couldn't connect. Check your internet connection and try again."],
-    [504, "We couldn't connect. Check your internet connection and try again."],
+    [504, "We couldn't save the leave request in time. The system is taking longer than usual. Check whether your changes were saved before you try again."],
   ])("status %s", (status, expected) => {
     expect(text(status as number | undefined)).toBe(expected);
   });
@@ -103,10 +103,10 @@ describe("error catalogue: standard wording", () => {
   it("an unclassified thrown error (no status, kind unknown) is honest about the cause", () => {
     const w = resolveHumanError({ forceKind: "unknown", ctx: { area: "leave request", intent: "save", locale: "en" } });
     expect(`${w.what} ${w.next}`).toBe(
-      "We couldn't save the leave request. Your changes haven't been saved. Check your internet connection and try again in a few minutes.",
+      "We couldn't save the leave request. Your changes may not have been saved. Check before you try again. If it keeps happening, contact your support team.",
     );
     const r = resolveHumanError({ forceKind: "unknown", ctx: { area: "payslips", intent: "load", locale: "en" } });
-    expect(`${r.what} ${r.next}`).toBe("We couldn't load the payslips. Check your internet connection and try again in a few minutes.");
+    expect(`${r.what} ${r.next}`).toBe("We couldn't load the payslips. Try again in a few minutes. If it keeps happening, contact your support team.");
   });
 
   it("400 with field errors points at the highlighted fields; without them it is action-neutral", () => {
@@ -199,7 +199,7 @@ describe("error catalogue: standard wording", () => {
 
   it("an unknown code falls back to the status copy and is never echoed", () => {
     const r = resolveHumanError({ status: 409, code: "TOTALLY_NEW_CODE", ctx: { locale: "en" } });
-    expect(r.what).toBe("This information was changed by someone else.");
+    expect(r.what).toBe("This action can't be done on this record right now.");
     expect(`${r.what} ${r.next}`).not.toContain("TOTALLY_NEW_CODE");
   });
 
@@ -233,7 +233,8 @@ describe("error catalogue: standard wording", () => {
   it("maps statuses to kinds", () => {
     expect(statusToKind(418)).toBe("server");
     expect(statusToKind(0)).toBe("network");
-    expect(statusToKind(412)).toBe("conflict");
+    expect(statusToKind(412)).toBe("concurrentEdit");
+    expect(statusToKind(409)).toBe("conflict");
   });
 });
 

@@ -4,6 +4,8 @@ export const COMMANDS = {
   runApprove:             "payroll.run.approve",
   runDisburse:            "payroll.run.disburse",
   runRevert:              "payroll.run.revert",
+  runReject:              "payroll.run.reject",
+  runFailStuck:           "payroll.run.fail_stuck",
   loanCreate:             "payroll.loan.create",
   loanDisburse:           "payroll.loan.disburse",
   taxDeclarationCreate:   "payroll.tax_declaration.create",

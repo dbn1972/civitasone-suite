@@ -54,7 +54,7 @@ describe.each(registers)("inventory $name register failure honesty", ({ ui, area
     expect(screen.getByText(area, { exact: false })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
     expect(screen.queryByText(/no records found/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
     // every stat is the "—" placeholder, never a fabricated 0
     const values = Array.from(container.querySelectorAll(".stat")).map((el) => el.textContent ?? "");
     expect(values.length).toBeGreaterThan(0);
@@ -67,7 +67,7 @@ describe.each(registers)("inventory $name register failure honesty", ({ ui, area
     state.rows = [sample];
     render(ui());
     expect(screen.getAllByText(/Showing saved data/)).toHaveLength(1);
-    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is shown here/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again|retry/i })).not.toBeInTheDocument();
   });
 

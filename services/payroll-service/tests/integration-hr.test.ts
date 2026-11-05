@@ -99,7 +99,7 @@ describe("HR integration consumers", () => {
       await tx.insert(payrollRuns).values({
         id: RUN_ID, tenantId: TENANT, runNo: "RUN/TEST", month: "2025-06",
         structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
-        currency: "INR", status: "processing",
+        currency: "INR", status: "computed",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
       await tx.insert(payrollSlips).values({
@@ -134,7 +134,7 @@ describe("HR integration consumers", () => {
     await q.stop();
   });
 
-  it("rejects self-approval (maker-checker): approver === creator keeps run in processing", async () => {
+  it("rejects self-approval (maker-checker): approver === creator keeps run computed (not approved)", async () => {
     const SELF_RUN = "55555555-aaaa-4000-8000-000000000033";
     const SELF_MSG = "66666666-bbbb-4000-8000-000000000033";
     await runWithTenant(TENANT, () => db.transaction(async (tx) => {
@@ -142,7 +142,7 @@ describe("HR integration consumers", () => {
       await tx.insert(payrollRuns).values({
         id: SELF_RUN, tenantId: TENANT, runNo: "RUN/SELF", month: "2025-07",
         structureId: STRUCT, totalGrossMinor: 100n, totalNetMinor: 80n,
-        currency: "INR", status: "processing",
+        currency: "INR", status: "computed",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
     }));
@@ -160,7 +160,7 @@ describe("HR integration consumers", () => {
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(payrollRuns).where(eq(payrollRuns.id, SELF_RUN))));
-    expect(rows[0]?.status).toBe("processing"); // unchanged — self-approval forbidden
+    expect(rows[0]?.status).toBe("computed"); // unchanged — self-approval forbidden
     expect(rows[0]?.approvedBy ?? null).toBeNull();
   });
 });

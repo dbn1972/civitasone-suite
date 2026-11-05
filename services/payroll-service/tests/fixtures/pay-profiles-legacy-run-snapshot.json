@@ -4,7 +4,7 @@
       {
         "month": "2026-08",
         "run_type": "regular",
-        "status": "processing",
+        "status": "computed",
         "total_gross_minor": "81324400",
         "total_net_minor": "65541800"
       }

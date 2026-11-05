@@ -191,7 +191,6 @@ export function OrdersTable({
           provenance={provenance ?? "live"}
           cachedAt={cachedAt}
           offline={offline}
-          message={erroredNoData ? "Couldn't load — showing nothing" : undefined}
         />
         {erroredNoData ? (
           <RefreshErrorState

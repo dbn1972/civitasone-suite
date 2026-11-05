@@ -55,7 +55,7 @@ describe("GratuityPage", () => {
   });
 
   it("shows the error state — not the honest-empty prompt — when the loader errors", async () => {
-    // UX-013: replaces the old floating "Couldn't load — showing nothing"
+    // UX-013: replaces the old floating "We couldn't load this information, so nothing is shown here. Refresh the page to try again."
     // badge, which coexisted with (and never gated) the register's own
     // .length === 0 check below it — a real outage and a tenant with zero
     // gratuity records rendered the same "No gratuity records" prompt.
@@ -121,7 +121,7 @@ describe("GratuityPage rule set (per edition)", () => {
   it("a rule that cannot be loaded falls back to the default AND says so", async () => {
     fetchJsonMock.mockImplementation(route({ ruleSet: "pog_act", minServiceYears: 5, ceilingMinor: "200000000", source: "default" }, "error"));
     renderPage(await GratuityPage());
-    expect(screen.getByText(/Could not load this organisation's gratuity rule/)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t load your office.s gratuity rule/)).toBeInTheDocument();
   });
 
   it("only payroll_admin / super_admin get the rule-set form", async () => {

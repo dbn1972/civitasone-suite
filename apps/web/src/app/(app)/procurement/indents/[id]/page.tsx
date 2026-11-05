@@ -97,7 +97,7 @@ export default async function IndentDetailPage(props: { params: Promise<{ id: st
               </Link>
             ) : null}
             <StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

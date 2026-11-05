@@ -7,7 +7,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { sql } from "drizzle-orm";
 import { sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000077";
@@ -23,10 +25,30 @@ function authHeader(roles?: string[], tenantId?: string) {
   return { authorization: `Bearer ${token(roles, tenantId)}` };
 }
 
+// UAT J14 follow-up: GET /tasks/:id/forwards is for the task participants only (see
+// task-forwards-participant-gate.test.ts), so the "no forwards yet" read is made by the
+// assignee of a real task (fixture only; the assertions are unchanged).
+const OWN_INST = "44444444-5555-4000-8000-000000000077";
+const OWN_TASK = "55555555-6666-4000-8000-000000000077";
+async function seedOwnTask(): Promise<void> {
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.tasks WHERE id = ${OWN_TASK}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instances WHERE id = ${OWN_INST}`);
+  await sqlAsTenant(TENANT, sql`
+    INSERT INTO workflow.instances (id, tenant_id, name, status, created_by, updated_by)
+    VALUES (${OWN_INST}, ${TENANT}, ${"Forwarding fixture"}, ${"active"}, ${ACTOR}, ${ACTOR})`);
+  await sqlAsTenant(TENANT, sql`
+    INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, assignee_id, is_call, created_by, updated_by)
+    VALUES (${OWN_TASK}, ${TENANT}, ${OWN_INST}, ${"Forwarding fixture task"}, ${"pending"}, ${ACTOR}, false, ${ACTOR}, ${ACTOR})`);
+}
+async function dropOwnTask(): Promise<void> {
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.tasks WHERE id = ${OWN_TASK}`);
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.instances WHERE id = ${OWN_INST}`);
+}
+
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => { await seedOwnTask(); app = await buildApp(); });
+afterAll(async () => { await app.close(); await dropOwnTask(); await sqlClient.end(); });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // POST /v1/workflow/tasks/:id/forward
@@ -198,7 +220,7 @@ describe("GET /v1/workflow/tasks/:id/forwards", () => {
   it("returns 200 with empty array for task with no forwards", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/workflow/tasks/${VALID_UUID}/forwards`,
+      url: `/v1/workflow/tasks/${OWN_TASK}/forwards`,
       headers: authHeader(["workflow_user"]),
     });
     expect(res.statusCode).toBe(200);

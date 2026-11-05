@@ -100,7 +100,7 @@ describe("PayGroupDetailPage", () => {
   it("an unknown pay group reads as not found", async () => {
     mockApi({ group: { data: null, source: "error", status: 404 } });
     render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "nope" }), searchParams: Promise.resolve({}) })));
-    expect(screen.getByText(/could not be found/)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t find this pay group\./)).toBeInTheDocument();
   });
 
   it("denies non-payroll roles without fetching", async () => {

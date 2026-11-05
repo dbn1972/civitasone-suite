@@ -98,7 +98,9 @@ export async function publishMeetingUpdate(
 ): Promise<MeetingCommandAccepted> {
   await queue.publish(COMMANDS.meetingUpdate, {
     ...envelopeBase(ctx, randomUUID(), COMMANDS.meetingUpdate),
-    payload: { meetingId, version, patch },
+    // UAT J14: the verified token roles, AFTER the body, so the consumer can apply the same
+    // admin bypass as the route; a client can never supply them.
+    payload: { meetingId, version, patch, actorRoles: [...ctx.roles] },
   });
   await invalidateMeeting(ctx.tenantId, meetingId);
   return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };
@@ -119,7 +121,8 @@ export async function publishMeetingTransition(
 ): Promise<MeetingCommandAccepted> {
   await queue.publish(COMMANDS.meetingTransition, {
     ...envelopeBase(ctx, randomUUID(), COMMANDS.meetingTransition),
-    payload: { meetingId, ...body },
+    // UAT J14: verified token roles after the body spread (see publishMeetingUpdate).
+    payload: { meetingId, ...body, actorRoles: [...ctx.roles] },
   });
   await invalidateMeeting(ctx.tenantId, meetingId);
   return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };
@@ -137,7 +140,8 @@ export async function publishMeetingCancel(
 ): Promise<MeetingCommandAccepted> {
   await queue.publish(COMMANDS.meetingCancel, {
     ...envelopeBase(ctx, randomUUID(), COMMANDS.meetingCancel),
-    payload: { meetingId, ...body },
+    // UAT J14: verified token roles after the body spread (see publishMeetingUpdate).
+    payload: { meetingId, ...body, actorRoles: [...ctx.roles] },
   });
   await invalidateMeeting(ctx.tenantId, meetingId);
   return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };

@@ -68,7 +68,8 @@ export default async function AccountHealthDetailPage(props: PageProps) {
           back="/crm/health"
           actions={<FollowUpModal accountId={params.accountId} accountName={accountName} defaultOpen={openFollowUp} />}
         />
-        {source === "error" && <DataSourceBadge source={source} />}
+        {/* A 404 means "not scored yet" (see above), not a failed load: no load-failed badge then. */}
+        {source === "error" && breakdownResult.status !== 404 && <DataSourceBadge source={source} />}
         <Card>
           <EmptyState
             icon="📊"

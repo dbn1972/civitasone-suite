@@ -130,7 +130,7 @@ describe("NewTemplateForm edit load -- GAP-HR-JD-TEMPLATES-DETAIL-04", () => {
     fetchMock.mockResolvedValue(json({ code: "NOT_FOUND" }, 404));
     renderForm(EDIT_ID);
 
-    expect(await screen.findByText("This template could not be found. It may have been removed.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't find this template. It may have been removed. Go back to the template list.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to JD Templates" })).toBeInTheDocument();
   });

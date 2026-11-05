@@ -61,7 +61,7 @@ export default async function AnnualProcurementPlanPage(
         subtitle="GFR 2017 — Ministry-level aggregated procurement intent"
         actions={
           <>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
             <Link href="/procurement/planning/new" className="btn primary">+ New Plan</Link>
           </>
         }

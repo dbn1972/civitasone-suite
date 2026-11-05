@@ -120,7 +120,8 @@ describe("SocialFeedPage", () => {
     });
     await renderPage();
     expect(screen.getByText("Latest Updates")).toBeInTheDocument();
-    expect(screen.getByText("We couldn't connect.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the social feed.")).toBeInTheDocument();
+    expect(screen.queryByText(/internet connection/)).not.toBeInTheDocument();
   });
 });
 

@@ -44,7 +44,7 @@ describe("UsageDisplay — GAP-TENANT-ADMIN-USAGE-01 (error vs empty)", () => {
 
   it("renders a retry-able error state (not 'No usage data') when the fetch failed", () => {
     render(<UsageDisplay resources={[]} anyWarning={false} source="error" />);
-    expect(screen.getByText(/Couldn't load — showing nothing/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn't load this information, so nothing is shown here\./i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(screen.queryByText(/No usage data/i)).not.toBeInTheDocument();
   });

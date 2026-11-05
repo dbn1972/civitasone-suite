@@ -124,7 +124,7 @@ describe("CreatePOForm — NEW-03 server-side search + load failure handling", (
     });
     render(<CreatePOForm />);
     fireEvent.focus(screen.getByLabelText("Vendor *"));
-    expect(await screen.findByText("Couldn’t load vendors.")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't load the vendors. Try again in a few minutes.")).toBeInTheDocument();
     expect(screen.queryByText("No vendors match your search.")).not.toBeInTheDocument();
     // A failed picker blocks submit. The search state reaches the form from an effect AFTER the
     // error text renders, so wait for the button to reflect it rather than asserting synchronously.

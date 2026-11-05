@@ -216,7 +216,7 @@ describe("StewardQueuePanel", () => {
     );
     fireEvent.click(dialogConfirm);
 
-    await waitFor(() => expect(within(dialog).getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText(/This item has already been decided or is not at this step\. Refresh to see its current status\./)).toBeInTheDocument());
     expect(within(dialog).queryByText(/ALREADY_DECIDED/)).not.toBeInTheDocument();
     expect(screen.getByText("Reject this merge suggestion?")).toBeInTheDocument();
   });

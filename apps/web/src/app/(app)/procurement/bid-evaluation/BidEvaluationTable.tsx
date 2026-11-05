@@ -109,7 +109,6 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
           provenance={provenance ?? "live"}
           cachedAt={cachedAt}
           offline={offline}
-          message={errored ? "Couldn't load — showing nothing" : undefined}
         />
         {errored ? (
           // GAP-PROCUREMENT-BID-EVALUATION-01: a failed load with no cache is an

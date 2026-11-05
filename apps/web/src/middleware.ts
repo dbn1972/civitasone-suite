@@ -28,7 +28,10 @@ const PUBLIC_EXACT = ["/"];
 const PUBLIC_SEGMENT = ["/pricing", "/docs"];
 const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known", "/logout", "/offline",
   // UAT-P2-D3 (A11Y-19, GIGW 3.0): compliance pages must be readable without signing in.
-  "/accessibility-statement", "/screen-reader-access", "/website-policies"];
+  "/accessibility-statement", "/screen-reader-access", "/website-policies",
+  // UAT post-b14 (GIGW 3.0): the remaining GIGW pages and their common aliases.
+  "/accessibility", "/policies", "/sitemap", "/site-map", "/about", "/contact-us", "/help-desk", "/feedback",
+  "/privacy", "/privacy-policy", "/terms", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).

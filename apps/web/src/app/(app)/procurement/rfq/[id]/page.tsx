@@ -69,7 +69,7 @@ export default async function RFQDetailPage(props: { params: Promise<{ id: strin
         actions={
           <>
             <StatusPill status={rfq.status} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

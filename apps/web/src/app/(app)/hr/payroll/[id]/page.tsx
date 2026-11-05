@@ -175,7 +175,7 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
       <ExceptionPanel exceptions={exceptions} />
 
       {/* T-STAT review SF4: arrears and Rs 0-basic slips to review before approval */}
-      {canAdminister && run.status === "processing" && <RunApprovalReviewPanel runId={run.id} />}
+      {canAdminister && run.status === "computed" && <RunApprovalReviewPanel runId={run.id} />}
 
       {/* Payroll lifecycle actions */}
       <PayrollRunActions
@@ -190,6 +190,7 @@ export default async function PayrollRunDetailPage(props: { params: Promise<{ id
         currentUserId={currentUserId}
         createdBy={run.createdBy ?? null}
         approvedBy={run.approvedBy ?? null}
+        stuck={run.stuck === true}
       />
 
       <Card title={t("runDetailsTitle")}>

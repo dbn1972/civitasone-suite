@@ -69,50 +69,62 @@ export function OrgTypeSelector({
         {ORG_TYPES.map((type) => {
           const t = getTerminology(type);
           const isCurrent = type === currentType;
+          const termsId = `org-type-${type}-terms`;
+          const flagsId = `org-type-${type}-flags`;
+          const inactive = busy || !tenantId;
+          // A-N3 (UAT post-b14, axe nested-interactive, WCAG 4.1.2): the card is
+          // a plain container. Only its upper part (name + terminology) is the
+          // role="radio" control; the per-flag HelpTip buttons sit BELOW it as
+          // siblings, never inside it, so no interactive element nests in
+          // another. The radio is described by its terminology and its flags
+          // (aria-describedby), so a screen reader still hears the whole card.
           return (
+            // GAP-TENANT-ADMIN-ORG-TYPE-03: theme tokens, not hard-coded hex,
+            // so cards follow dark mode. Current card gets an accent border.
             <div
               key={type}
-              role="radio"
-              aria-checked={isCurrent}
-              aria-disabled={busy || !tenantId ? true : undefined}
-              tabIndex={busy || !tenantId ? -1 : 0}
-              onClick={() => { if (!busy && tenantId) choose(type); }}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && !busy && tenantId) {
-                  e.preventDefault();
-                  choose(type);
-                }
-              }}
-              // GAP-TENANT-ADMIN-ORG-TYPE-03: theme tokens, not hard-coded hex,
-              // so cards follow dark mode. Current card gets an accent border.
-              // A <div role="radio"> (not <button>) so the per-flag HelpTip
-              // buttons are not invalid nested interactive elements.
               style={{
                 textAlign: "left", padding: "16px 18px", borderRadius: 12,
                 border: isCurrent ? "2px solid var(--accent)" : "1px solid var(--line)",
-                background: "var(--surface)", color: "var(--ink)", cursor: busy || !tenantId ? "default" : "pointer",
+                background: "var(--surface)", color: "var(--ink)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
-                {ORG_TYPE_LABELS[type]}
-                {isCurrent && <span className="pill good" style={{ fontSize: 11 }}>Current</span>}
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--mut)", lineHeight: 1.5 }}>
-                <div>You are: <strong>{t.orgUnit}</strong></div>
-                <div>Branches called: <strong>{t.branch}</strong></div>
-                <div>Head: <strong>{t.orgHead}</strong></div>
-                <div>Finance authority: <strong>{t.financeHead}</strong></div>
-                <div>Salary called: <strong>{t.salary}</strong></div>
-                {/* GAP-TENANT-ADMIN-ORG-TYPE-04: every flag shown on/off with a
-                    HelpTip explaining what it switches on. */}
-                <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {(["govtTerms", "cpcPayMatrix", "ccsLeaveRules"] as const).map((flag) => (
-                    <span key={flag} className={`pill ${t[flag] ? "info" : "mut"}`} style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                      {FLAG_HELP[flag].label}: {t[flag] ? "On" : "Off"}
-                      <HelpTip term={FLAG_HELP[flag].label}>{FLAG_HELP[flag].help}</HelpTip>
-                    </span>
-                  ))}
+              <div
+                role="radio"
+                aria-checked={isCurrent}
+                aria-disabled={inactive ? true : undefined}
+                aria-describedby={`${termsId} ${flagsId}`}
+                tabIndex={inactive ? -1 : 0}
+                onClick={() => { if (!inactive) choose(type); }}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && !inactive) {
+                    e.preventDefault();
+                    choose(type);
+                  }
+                }}
+                style={{ cursor: inactive ? "default" : "pointer", borderRadius: 8 }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+                  {ORG_TYPE_LABELS[type]}
+                  {isCurrent && <span className="pill good" style={{ fontSize: 11 }}>Current</span>}
                 </div>
+                <div id={termsId} style={{ fontSize: 12.5, color: "var(--mut)", lineHeight: 1.5 }}>
+                  <div>You are: <strong>{t.orgUnit}</strong></div>
+                  <div>Branches called: <strong>{t.branch}</strong></div>
+                  <div>Head: <strong>{t.orgHead}</strong></div>
+                  <div>Finance authority: <strong>{t.financeHead}</strong></div>
+                  <div>Salary called: <strong>{t.salary}</strong></div>
+                </div>
+              </div>
+              {/* GAP-TENANT-ADMIN-ORG-TYPE-04: every flag shown on/off with a
+                  HelpTip explaining what it switches on (outside the radio). */}
+              <div id={flagsId} style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4, fontSize: 12.5, color: "var(--mut)" }}>
+                {(["govtTerms", "cpcPayMatrix", "ccsLeaveRules"] as const).map((flag) => (
+                  <span key={flag} className={`pill ${t[flag] ? "info" : "mut"}`} style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    {FLAG_HELP[flag].label}: {t[flag] ? "On" : "Off"}
+                    <HelpTip term={FLAG_HELP[flag].label}>{FLAG_HELP[flag].help}</HelpTip>
+                  </span>
+                ))}
               </div>
             </div>
           );

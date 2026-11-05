@@ -65,7 +65,7 @@ describe("InsurancePoliciesPage", () => {
 
     render(await InsurancePoliciesPage());
 
-    expect(screen.queryAllByText("Couldn't load — showing nothing")).toHaveLength(0);
+    expect(screen.queryAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).toHaveLength(0);
     expect(screen.getAllByRole("button", { name: /retry|try again/i })).toHaveLength(1);
     expect(screen.queryByText("Total Policies")).not.toBeInTheDocument();
     expect(screen.queryByText("Policies", { selector: "h3" })).not.toBeInTheDocument();

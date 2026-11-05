@@ -162,7 +162,9 @@ describe("computeGratuity — Payment of Gratuity Act", () => {
 
 describe("assertRunStatusTransition", () => {
   it("draft → processing", () => expect(() => assertRunStatusTransition("draft", "processing")).not.toThrow());
-  it("processing → approved", () => expect(() => assertRunStatusTransition("processing", "approved")).not.toThrow());
+  it("processing → computed", () => expect(() => assertRunStatusTransition("processing", "computed")).not.toThrow());
+  it("computed → approved", () => expect(() => assertRunStatusTransition("computed", "approved")).not.toThrow());
+  it("processing → approved is illegal (UAT L2-N3: still being computed)", () => expect(() => assertRunStatusTransition("processing", "approved")).toThrow(DomainError));
   it("processing → failed", () => expect(() => assertRunStatusTransition("processing", "failed")).not.toThrow());
   it("approved → disbursed", () => expect(() => assertRunStatusTransition("approved", "disbursed")).not.toThrow());
   it("failed → draft (retry)", () => expect(() => assertRunStatusTransition("failed", "draft")).not.toThrow());

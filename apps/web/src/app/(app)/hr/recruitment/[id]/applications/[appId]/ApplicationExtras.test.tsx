@@ -73,9 +73,9 @@ describe("ApplicationExtras scorecards (GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPL
     let n = 0;
     mockApi(() => (n++ === 0 ? new Response("{}", { status: 500 }) : new Response(JSON.stringify({ data: [CARD] }))));
     renderIt();
-    expect(await screen.findByText(/Could not load the interview scorecards/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn.t load the interview scorecards\./)).toBeInTheDocument();
     expect(screen.getByText("No fee has been assessed for this application.")).toBeInTheDocument();
-    fireEvent.click(screen.getByText(/Could not load the interview scorecards/).querySelector("button")!);
+    fireEvent.click(screen.getByText(/We couldn.t load the interview scorecards\./).querySelector("button")!);
     await waitFor(() => expect(screen.getByText("Round 2")).toBeInTheDocument());
   });
 

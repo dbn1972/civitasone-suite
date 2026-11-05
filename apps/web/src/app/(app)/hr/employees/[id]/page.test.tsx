@@ -258,7 +258,7 @@ describe("EmployeeDetailPage", () => {
     payGroupMock.mockResolvedValue({ source: "error", data: null });
     const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
-    expect(screen.getByText("Pay group details couldn't be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the pay group details. Refresh the page to try again.")).toBeInTheDocument();
     expect(screen.queryByText("Not in any pay group.")).not.toBeInTheDocument();
   });
 

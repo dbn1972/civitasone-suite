@@ -122,7 +122,7 @@ describe("NewTenderPage — NEW-04 accessible error + UX-016 clerk-safe errors",
     fireEvent.click(screen.getByRole("button", { name: "Create Pre-Tender" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/This pre-tender was changed by someone else\. Refresh to see the latest version, then try again\./);
+    expect(alert.textContent).toMatch(/This action can.t be done on this pre-tender right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
     expect(document.body.textContent).not.toMatch(/duplicate reference number/i);
     expect(document.body.textContent).not.toMatch(/\b409\b/);
   });

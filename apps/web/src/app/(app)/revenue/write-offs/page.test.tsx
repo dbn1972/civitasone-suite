@@ -68,7 +68,7 @@ describe("WriteOffsPage", () => {
     route({ assessees: { data: [], source: "error" } });
     const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.").length).toBeGreaterThan(0);
   });
 
   it("no longer shows developer 'BACKEND FOLLOW-UPS' text to end users (GAP-REVENUE-WRITE-OFFS-04)", async () => {

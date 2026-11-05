@@ -31,7 +31,7 @@ describe("AccountHealthPage FAILMASK guard (GAP-CRM-HEALTH-01)", () => {
     const ui = await AccountHealthPage();
     render(ui);
 
-    expect(screen.getByText(/Account health could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t load the account health\./)).toBeInTheDocument();
     expect(screen.queryByText(/currently healthy or thriving/i)).not.toBeInTheDocument();
     // No StatGrid tiles rendered on error (Critical / At risk labels absent).
     expect(screen.queryByText("Critical")).not.toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("AccountHealthPage FAILMASK guard (GAP-CRM-HEALTH-01)", () => {
     const ui = await AccountHealthPage();
     render(ui);
 
-    expect(screen.getByText(/Account health could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn.t load the account health\./)).toBeInTheDocument();
     expect(screen.queryByText(/currently healthy or thriving/i)).not.toBeInTheDocument();
   });
 

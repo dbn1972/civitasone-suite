@@ -338,12 +338,13 @@ export default async function HRDashboardPage() {
           {!inboxFailed && routingFailedItems.length > 0 && (
             <div className="routing-failed-alert" role="alert" data-testid="routing-failed-alert">
               <div className="rf-head">
-                ⚠ {routingFailedItems.length} leave request{routingFailedItems.length !== 1 ? "s" : ""} could not be routed for approval
+                ⚠ {t("uxMessages.leaveRoutingFailedTitle", { count: routingFailedItems.length })}
               </div>
+              <p className="rf-next">{t("uxMessages.leaveRoutingFailedNext", { count: routingFailedItems.length })}</p>
               <ul className="rf-list">
                 {routingFailedItems.map((item) => (
                   <li key={item.id}>
-                    {item.employeeName} ({item.employeeNo}) · {item.fromDate}–{item.toDate} · {item.daysApplied} day{item.daysApplied !== 1 ? "s" : ""}
+                    {item.employeeName} ({item.employeeNo}) · {item.fromDate}–{item.toDate} · {t("uxMessages.leaveRoutingFailedDays", { count: item.daysApplied })}
                   </li>
                 ))}
               </ul>

@@ -117,7 +117,7 @@ export default async function GRNDetailPage(props: { params: Promise<{ id: strin
               <StatusPill status="pending" label="Match pending inspection" />
             )}
             <StatusPill status={grn.status} label={grnStatusLabel(grn.status)} />
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

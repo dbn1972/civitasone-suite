@@ -66,7 +66,7 @@ describe("SettingsPanel (fp-assets-01)", () => {
     expect(screen.getAllByText("Accounting not set up")).toHaveLength(2);
     expect(screen.getByText("Set up")).toBeInTheDocument();
     expect(screen.getByText(/Fixed asset account \(debit on capitalisation\), Acquisition offset account/)).toBeInTheDocument();
-    expect(screen.getByText("3 records are waiting for GL accounts and 1 journals were rejected by Finance.")).toBeInTheDocument();
+    expect(screen.getByText("3 records are waiting for GL accounts and 1 journal was rejected by Finance. Ask your finance team to map the missing accounts.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Post pending journals" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/settings/post-pending"))).toBe(true));
     expect(await screen.findByText(/Pending journals submitted/)).toBeInTheDocument();

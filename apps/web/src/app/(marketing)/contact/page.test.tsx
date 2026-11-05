@@ -1,14 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import MarketingLayout from "../layout";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The layout footer now renders the translated GIGW links / identity line (A-N2).
+function IntlForLayout({ children }: { children: React.ReactNode }) {
+  return <NextIntlClientProvider locale="en" messages={enMessages}>{children}</NextIntlClientProvider>;
+}
 import ContactPage from "./page";
 
 describe("Marketing header — Contact navigation (GAP-CONTACT-HOME-04)", () => {
   it("shows a Contact link in the header pointing to /contact", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>content</div>
-      </MarketingLayout>,
+      </MarketingLayout></IntlForLayout>,
     );
     const contactLinks = screen
       .getAllByRole("link", { name: /^Contact$/ })
@@ -18,9 +25,9 @@ describe("Marketing header — Contact navigation (GAP-CONTACT-HOME-04)", () => 
 
   it("exposes a Contact sales CTA in the header", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>content</div>
-      </MarketingLayout>,
+      </MarketingLayout></IntlForLayout>,
     );
     const cta = screen.getByRole("link", { name: /Contact sales/i });
     expect(cta).toHaveAttribute("href", "/contact");
@@ -28,9 +35,9 @@ describe("Marketing header — Contact navigation (GAP-CONTACT-HOME-04)", () => 
 
   it("has a mobile menu button that discloses nav links including Contact", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>content</div>
-      </MarketingLayout>,
+      </MarketingLayout></IntlForLayout>,
     );
     const toggle = screen.getByRole("button", { name: /toggle navigation menu/i });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -48,9 +55,9 @@ describe("Marketing header — Contact navigation (GAP-CONTACT-HOME-04)", () => 
 
   it("keeps the existing primary CTAs working", () => {
     render(
-      <MarketingLayout>
+      <IntlForLayout><MarketingLayout>
         <div>content</div>
-      </MarketingLayout>,
+      </MarketingLayout></IntlForLayout>,
     );
     expect(screen.getByRole("link", { name: /Try Sandbox/i })).toHaveAttribute("href", "/sandbox");
     expect(screen.getByRole("link", { name: /Sign In/i })).toHaveAttribute("href", "/auth/login");

@@ -155,7 +155,7 @@ describe("DisbursementPage", () => {
 
     await renderPage();
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the disbursement details, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it("notes the mandate list endpoint is not available, without fabricating data", async () => {
@@ -256,7 +256,7 @@ describe("DisbursementPage", () => {
     expect(paths.some((p) => p.includes("sponsor-bank-config"))).toBe(false);
     expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("Admin only");
     // No error badge just because the officer can't read admin config.
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   it("[DISB-04] payroll_admin sees the Sponsor and DSC configuration forms", async () => {
@@ -270,7 +270,7 @@ describe("DisbursementPage", () => {
     mockResponses({ dscSource: "error", dscStatus: 404, sponsorSource: "error", sponsorStatus: 404 });
     await renderPage();
     expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("Not configured");
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.")).not.toBeInTheDocument();
   });
 
   // ───────────────────────────────────────────────────────────────────────

@@ -144,7 +144,7 @@ describe("computing a run writes the department-wise register", () => {
   it("writes one row per department whose totals equal that department's slip totals", async () => {
     await computeRun(TENANT, AUG_RUN, "2026-08");
     const run = (await inTenant(TENANT, (tx) => tx.execute(sql`SELECT status, total_gross_minor::text AS g, total_net_minor::text AS n FROM payroll.payroll_runs WHERE id = ${AUG_RUN}::uuid`))) as unknown as Array<{ status: string; g: string; n: string }>;
-    expect(run[0]?.status).toBe("processing");
+    expect(run[0]?.status).toBe("computed"); // UAT L2-N3: a finished computation is ready for approval
 
     const rows = await registerRows(TENANT, AUG_RUN);
     expect(rows.map((r) => r.department_name)).toEqual(["Education", "Revenue"]);

@@ -16,7 +16,7 @@ vi.mock("@/app/_components/ds/Toast", () => ({ useToast: () => ({ toast: { succe
 
 import { PayrollRunActions } from "./PayrollRunActions";
 
-const PROPS = { runId: "r1", status: "processing", employeeCount: 3, grossMinor: "16000000", netMinor: "16000000", payPeriod: "2026-09", canAdminister: true };
+const PROPS = { runId: "r1", status: "computed", employeeCount: 3, grossMinor: "16000000", netMinor: "16000000", payPeriod: "2026-09", canAdminister: true };
 const REVIEW = {
   runId: "r1",
   zeroBasic: [{ employeeId: "11111111-1111-4111-8111-111111111111", employeeNo: "Z-1" }],

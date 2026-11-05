@@ -40,7 +40,7 @@ async function seedRun(month: string, slips: SlipSeed[]): Promise<string> {
   await asTenant(() => db.transaction(async (tx) => {
     await repo.insertRun(tx, {
       id: runId, tenantId, runNo: `R2-APR-${month}`, month, departmentId: null, structureId: randomUUID(), runType: "regular",
-      ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing", createdBy: creator, updatedBy: creator,
+      ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "computed", createdBy: creator, updatedBy: creator,
     });
     for (const s of slips) {
       const gross = R(s.gross + (s.arrear ?? 0));

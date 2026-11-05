@@ -154,7 +154,7 @@ describe("FnfPage", () => {
   it("shows the error data-source badge on API failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("Couldn't load F&F settlements — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the full and final settlements, so nothing is shown here. Refresh the page to try again.")).toBeInTheDocument();
   });
 
   it.each([["employee"], ["manager"], ["hr_officer"]])(

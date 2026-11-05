@@ -12,8 +12,7 @@
  *   />
  */
 import { useCallback, useState, type ReactNode } from "react";
-import { humanErrorFromFailure } from "@/lib/messages";
-import { isNetworkFailure } from "@/lib/userFacingError";
+import { messageForThrown } from "@/lib/messages";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export interface UseConfirmActionOptions {
@@ -49,13 +48,10 @@ export function useConfirmAction({ onConfirm, onSuccess }: UseConfirmActionOptio
         ok = true;
         setOpen(false);
       } catch (e) {
-        if (isNetworkFailure(e)) {
-          // A bare-fetch onConfirm rejects with TypeError("Failed to fetch"): never show that raw string.
-          const h = humanErrorFromFailure({ kind: "save", forceKind: "network" });
-          setError(`${h.what} ${h.next}`);
-        } else {
-          setError(e instanceof Error ? e.message : "Action failed. Please try again.");
-        }
+        // A bare-fetch onConfirm rejects with TypeError("Failed to fetch"), a service code or a raw
+        // body: never show that. UserFacingError copy and deliberate plain-language messages are kept.
+        const shown = messageForThrown(e, { kind: "save" });
+        setError(shown.aborted ? undefined : shown.message);
       } finally {
         setBusy(false);
       }

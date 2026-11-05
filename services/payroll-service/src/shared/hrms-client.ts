@@ -278,7 +278,7 @@ export async function fetchPendingPayrollRuns(tenantId: string): Promise<number>
   });
   if (!res.ok) return 0;
   const rows = await res.json() as Array<{ status: string }>;
-  return rows.filter((r) => r.status === "processing" || r.status === "draft").length;
+  return rows.filter((r) => r.status === "processing" || r.status === "computed" || r.status === "draft").length;
 }
 
 export async function fetchEmployeeSummaries(

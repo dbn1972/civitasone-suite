@@ -147,7 +147,7 @@ describe("LinkedAccountsPanel (AC-004)", () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "error" });
     render(<LinkedAccountsPanel />);
     await waitFor(() => expect(screen.getByText(/connections unavailable/i)).toBeInTheDocument());
-    const badges = screen.getAllByText("Couldn't load — showing nothing");
+    const badges = screen.getAllByText("We couldn't load this information, so nothing is shown here. Refresh the page to try again.");
     expect(badges).toHaveLength(1);
     // The Retry affordance remains in the error row.
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();

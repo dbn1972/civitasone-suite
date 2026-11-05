@@ -154,8 +154,9 @@ describe("Payroll run — state machine (pure)", () => {
     expect(() => assertRunStatusTransition("draft", "processing")).not.toThrow();
   });
 
-  it("processing → approved is valid", () => {
-    expect(() => assertRunStatusTransition("processing", "approved")).not.toThrow();
+  it("computed → approved is valid; processing → approved is not (UAT L2-N3)", () => {
+    expect(() => assertRunStatusTransition("computed", "approved")).not.toThrow();
+    expect(() => assertRunStatusTransition("processing", "approved")).toThrow();
   });
 
   it("approved → disbursed is valid", () => {
@@ -237,7 +238,7 @@ describe("Payroll run approve — event emitted (integration)", () => {
       await tx.insert(payrollRuns).values({
         id: RUN_2, tenantId: TENANT, runNo: "RUN-TEST-002", month: "2024-08",
         structureId: STRUCT_1, totalGrossMinor: 0n, totalNetMinor: 0n,
-        currency: "INR", status: "processing",
+        currency: "INR", status: "computed",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
       await tx.insert(payrollSlips).values({

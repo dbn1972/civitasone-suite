@@ -110,7 +110,7 @@ describe("ProposalExtActions", () => {
       const dialog = screen.getByRole("alertdialog");
       fireEvent.click(within(dialog).getByRole("button", { name: "Confirm Split" }));
 
-      const errorText = await within(dialog).findByText(/This proposal split was changed by someone else\. Refresh to see the latest version, then try again\./);
+      const errorText = await within(dialog).findByText(/This action can.t be done on this proposal split right now\. It may have changed, or be in a state that doesn.t allow it\. Refresh to see its current status\./);
       expect(errorText).toBeInTheDocument();
       expect(within(dialog).queryByText(/409/)).not.toBeInTheDocument();
     });

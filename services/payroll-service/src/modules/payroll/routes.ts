@@ -5,7 +5,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody, approveRunBody, runApprovalReviewResponse } from "./validators.js";
+import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody, runReasonBody, approveRunBody, runApprovalReviewResponse } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
@@ -27,6 +27,9 @@ async function requireRun(id: string, tenantId: string): Promise<void> {
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
+// UAT L2-N3 review: sending a computed run back and failing a stuck run are
+// payroll-admin actions (not payroll_officer).
+const PAYROLL_ADMIN_ROLES = ["payroll_admin", "super_admin"];
 // UAT Phase 2 C8 (security, roles-11021730 R1 / F108): payroll RUNS carry every
 // employee's period gross / deductions / net. They are payroll + HR data, so
 // finance_officer is no longer a reader of the run register or a run's detail
@@ -186,6 +189,26 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const body = runActionBody.parse(req.body ?? {});
     await requireRun(id, ctx.tenantId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id, body.reason));
+  });
+
+  // UAT L2-N3 review: send a computed run back (computed -> failed, unwound).
+  app.patch("/v1/payroll/runs/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = runReasonBody.parse(req.body ?? {});
+    await requireRun(id, ctx.tenantId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectRun(ctx, id, body.reason));
+  });
+
+  // UAT L2-N3 review: stuck-run recovery (processing, idle > PAYROLL_STUCK_RUN_HOURS -> failed).
+  app.patch("/v1/payroll/runs/:id/fail-stuck", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = runReasonBody.parse(req.body ?? {});
+    await requireRun(id, ctx.tenantId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.failStuckRun(ctx, id, body.reason));
   });
 
   /**

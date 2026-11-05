@@ -37,6 +37,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "contract_renewal",
   "contract_renewal_bulk",
   "dashboard",
+  "dearness_allowance_rates", // payroll da-rate-seed (uat_standard_da) audit
   "deputation",
   "device",
   "device_policy",
@@ -78,6 +79,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "manpower_requisition",
   "medical_claim",
   "medical_employee_record", // #2150 hrms medical audit
+  "medical_insurance", // hrms medical insurance-consumer PII reveal audit
   "nomination",
   "onboarding",
   "orgchart",

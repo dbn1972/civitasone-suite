@@ -88,6 +88,8 @@ export default async function OnboardingPage(
 ) {
   const searchParams = await props.searchParams;
   const t = await getTranslations("onboarding");
+  // GAP-UAT-P3-ERRCOPY: was hard-coded English with broken plurals ("1 onboarding have ...").
+  const tUx = await getTranslations("uxMessages");
   const statusFilter: StatusFilter = isStatusFilter(searchParams?.status) ? (searchParams!.status as StatusFilter) : "active";
   const page = Math.max(0, parseInt(searchParams?.page ?? "0", 10) || 0);
   const { data, source, status } = await getData(statusFilter, page * PAGE_SIZE);
@@ -251,7 +253,7 @@ export default async function OnboardingPage(
             >
               <span aria-hidden style={{ fontSize: 16 }}>⚠️</span>
               <span>
-                <strong>{meta.counts.overdue}</strong> onboarding{meta.counts.overdue > 1 ? "s" : ""} have overdue tasks — highlighted in amber below.
+                {tUx("onboardingOverdueNotice", { count: meta.counts.overdue })}
               </span>
             </div>
           )}
