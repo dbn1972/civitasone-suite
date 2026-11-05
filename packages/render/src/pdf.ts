@@ -32,6 +32,8 @@ export interface PdfRenderOptions {
   footerTemplate?: string | undefined;
   /** Display header and footer */
   displayHeaderFooter?: boolean | undefined;
+  /** Use the CSS @page size instead of `format` (official documents set A4 in CSS). */
+  preferCSSPageSize?: boolean | undefined;
 }
 
 export interface PdfRenderResult {
@@ -45,8 +47,102 @@ export interface PdfRenderResult {
   signed: boolean;
 }
 
+// ── Shared Chromium (one browser per process, reused) ───────────────────────
+//
+// UAT ux-docs review: every official document (Form 16, payslip, sanction order,
+// PO, invoice, GRN, voucher, minutes, service book, 12BA, note sheet) is HTML
+// printed to PDF by Chromium, so Devanagari is shaped by HarfBuzz (GSUB + GPOS:
+// matras, halant, nukta, anusvara in place) and the text layer is in logical
+// order. Launching Chromium per document cost ~1 s; the browser is now launched
+// once and reused, each render gets its own context, concurrency is bounded and
+// an idle browser is closed.
+
+interface PwPage {
+  setContent(html: string, o: { waitUntil: "load" | "networkidle" }): Promise<void>;
+  evaluate<T>(fn: () => T | Promise<T>): Promise<T>;
+  pdf(o: Record<string, unknown>): Promise<Uint8Array | Buffer>;
+}
+interface PwContext { newPage(): Promise<PwPage>; close(): Promise<void> }
+interface PwBrowser { newContext(): Promise<PwContext>; close(): Promise<void>; on(ev: "disconnected", cb: () => void): void; isConnected(): boolean }
+
+let browserPromise: Promise<PwBrowser> | null = null;
+let active = 0;
+const waiting: Array<() => void> = [];
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function maxConcurrency(): number {
+  const n = Number(process.env.RENDER_PDF_CONCURRENCY ?? 4);
+  return Number.isInteger(n) && n > 0 ? n : 4;
+}
+
+async function sharedBrowser(): Promise<PwBrowser> {
+  if (!browserPromise) {
+    const p = (async () => {
+      const pw = (await import("playwright-core")) as unknown as { chromium: { launch(o: Record<string, unknown>): Promise<PwBrowser> } };
+      const execPath = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? undefined;
+      const b = await pw.chromium.launch({ headless: true, ...(execPath ? { executablePath: execPath } : {}) });
+      b.on("disconnected", () => { if (browserPromise === p) browserPromise = null; });
+      return b;
+    })();
+    browserPromise = p;
+    p.catch(() => { if (browserPromise === p) browserPromise = null; });
+  }
+  return browserPromise;
+}
+
+async function acquireSlot(): Promise<void> {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  if (active >= maxConcurrency()) await new Promise<void>((resolve) => waiting.push(resolve));
+  active++;
+}
+
+function releaseSlot(): void {
+  active--;
+  const next = waiting.shift();
+  if (next) { next(); return; }
+  if (active === 0) {
+    idleTimer = setTimeout(() => { void closePdfRenderer(); }, Number(process.env.RENDER_PDF_IDLE_MS ?? 30_000));
+    (idleTimer as { unref?: () => void }).unref?.();
+  }
+}
+
+/** Close the shared browser (idle timeout, shutdown, test teardown). */
+export async function closePdfRenderer(): Promise<void> {
+  const p = browserPromise;
+  browserPromise = null;
+  if (!p) return;
+  try { await (await p).close(); } catch { /* already gone */ }
+}
+
+async function chromiumPdf(opts: PdfRenderOptions): Promise<Buffer> {
+  await acquireSlot();
+  let ctx: PwContext | null = null;
+  try {
+    const browser = await sharedBrowser();
+    ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.setContent(opts.html, { waitUntil: "load" });
+    // Inline @font-face (data: URIs) must be decoded before printing.
+    await page.evaluate(() => (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready.then(() => true));
+    const pdf = await page.pdf({
+      format: opts.format ?? "A4",
+      landscape: opts.landscape ?? false,
+      margin: opts.margin ?? { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
+      displayHeaderFooter: opts.displayHeaderFooter ?? false,
+      headerTemplate: opts.headerTemplate ?? "",
+      footerTemplate: opts.footerTemplate ?? "",
+      printBackground: true,
+      preferCSSPageSize: opts.preferCSSPageSize ?? false,
+    });
+    return Buffer.from(pdf);
+  } finally {
+    if (ctx) await ctx.close().catch(() => undefined);
+    releaseSlot();
+  }
+}
+
 /**
- * Render HTML to PDF using Playwright chromium.
+ * Render HTML to PDF using the shared Playwright Chromium.
  * Falls back to returning the HTML as a buffer if Playwright is not available.
  */
 export async function renderPdf(opts: PdfRenderOptions): Promise<PdfRenderResult> {
@@ -57,40 +153,9 @@ export async function renderPdf(opts: PdfRenderOptions): Promise<PdfRenderResult
   }
 
   try {
-    // Dynamic import — Playwright is a peer dep
-    const pw = await import("playwright-core");
-    const execPath = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? undefined;
-
-    const browser = await pw.chromium.launch({
-      headless: true,
-      ...(execPath ? { executablePath: execPath } : {}),
-    });
-
-    try {
-      const page = await browser.newPage();
-      await page.setContent(opts.html, { waitUntil: "networkidle" });
-
-      const pdfBuffer = await page.pdf({
-        format: opts.format ?? "A4",
-        landscape: opts.landscape ?? false,
-        margin: opts.margin ?? { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
-        displayHeaderFooter: opts.displayHeaderFooter ?? false,
-        headerTemplate: opts.headerTemplate ?? "",
-        footerTemplate: opts.footerTemplate ?? "",
-        printBackground: true,
-      });
-
-      const buffer = Buffer.from(pdfBuffer);
-      const signed = await maybeSignPdf(buffer);
-
-      return {
-        buffer: signed.buffer,
-        mode: "playwright",
-        signed: signed.applied,
-      };
-    } finally {
-      await browser.close();
-    }
+    const buffer = await chromiumPdf(opts);
+    const signed = await maybeSignPdf(buffer);
+    return { buffer: signed.buffer, mode: "playwright", signed: signed.applied };
   } catch (err) {
     // Playwright not available — fall back to HTML
     console.warn({ err: (err as Error).message }, "Playwright unavailable, returning HTML as fallback");

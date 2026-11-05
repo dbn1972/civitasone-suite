@@ -92,6 +92,9 @@ export const procurementPoItems = poSchema.table("procurement_po_items", {
   unitPriceMinor: bigint("unit_price_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
   itemType:       varchar("item_type", { length: 16 }).notNull().default("consumable"),
+  // UAT ux-docs (migration 0049): GST rate in basis points (1800 = 18%) and HSN/SAC; optional.
+  gstRateBp:      integer("gst_rate_bp"),
+  hsnSac:         varchar("hsn_sac", { length: 8 }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

@@ -140,6 +140,30 @@ export async function getMeetingStatus(tenantId: string, meetingId: string): Pro
   return rows[0] ?? null;
 }
 
+/** UAT ux-docs: the parent meeting fields printed on the minutes PDF header. */
+export interface MeetingHeader {
+  id: string;
+  title: string;
+  meetingNumber: string | null;
+  scheduledAt: Date | null;
+  venue: string | null;
+  fileReference: string | null;
+  chairpersonId: string | null;
+  secretaryId: string | null;
+}
+
+export async function getMeetingHeader(tenantId: string, meetingId: string): Promise<MeetingHeader | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({
+      id: meetings.id, title: meetings.title, meetingNumber: meetings.meetingNumber, scheduledAt: meetings.scheduledAt,
+      venue: meetings.venue, fileReference: meetings.fileReference, chairpersonId: meetings.chairpersonId, secretaryId: meetings.secretaryId,
+    })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 /** Ownership-relevant fields on the parent meeting, for the per-meeting standing check
  *  (IDOR fix, Req 7.5, 7.6, 8.1, 8.3) on the approve/reject/sign/submit/circulate write
  *  routes -- mirrors meeting-core/repo.ts's own read exactly. */

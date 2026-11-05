@@ -2,10 +2,8 @@
  * P1-002: PDF Salary Slip Download Route
  * GET /v1/payroll/slips/:id/download
  *
- * Takes the HTML from the existing /pdf endpoint and wraps it with a
- * content-disposition header for download. Full PDF binary conversion would need
- * puppeteer — for now the HTML download is the production deliverable since
- * browsers can print-to-PDF.
+ * UAT ux-docs: returns the same issuable PDF as /pdf (application/pdf) as an
+ * attachment. The legacy HTML download is still served with ?format=html.
  */
 import { formatRupeesIN, minorFromDb } from "../../shared/money.js";
 import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
@@ -18,6 +16,19 @@ import { eq, and } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
+import { loadSlipDocument, slipDocQuerySchema, slipPdfBytes } from "./routes.js";
+import { PdfRendererUnavailableError } from "@civitasone/render/official";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 // UAT Phase 2 follow-up (security): a payslip download is per-employee pay data
 // -- payroll + HR staff see any slip; everyone else (an employee, including a
@@ -53,6 +64,17 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = pathParamSchema.parse(req.params);
+    const q = slipDocQuerySchema.parse(req.query ?? {});
+    if (q.format === "pdf") {
+      const { slip: s, run: r, docInput } = await loadSlipDocument(ctx, id, req.log);
+      const pdf = await pdfOr503(() => slipPdfBytes(ctx.tenantId, docInput, q.lang));
+      await publishSlipDownloadAudit(ctx, s.id, "download");
+      const pdfName = `salary-slip-${safeFilenamePart(s.employeeNo)}-${safeFilenamePart(r?.month ?? "period")}.pdf`;
+      return reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `attachment; filename="${pdfName}"`)
+        .send(pdf);
+    }
 
     const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
       .where(and(eq(payrollSlips.id, id), eq(payrollSlips.tenantId, ctx.tenantId)))

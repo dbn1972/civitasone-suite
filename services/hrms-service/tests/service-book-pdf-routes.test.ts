@@ -7,7 +7,7 @@
  * markup in the generated PDF/HTML. Every interpolated value must now be
  * HTML-escaped.
  *
- * GET /v1/hrms/employees/:id/service-book/pdf
+ * GET /v1/hrms/employees/:id/service-book/pdf (?format=html: the printable HTML view these escaping tests cover)
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
@@ -99,7 +99,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
@@ -115,7 +115,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
@@ -131,7 +131,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
@@ -145,7 +145,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
@@ -158,7 +158,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
     });
     expect(r.statusCode).toBe(401);
     await app.close();
@@ -170,7 +170,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(USER, ["employee"]),
     });
     expect(r.statusCode).toBe(403);
@@ -184,7 +184,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(USER, ["employee"]),
     });
     expect(r.statusCode).toBe(403);
@@ -199,7 +199,7 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(USER, ["employee"]),
     });
     expect(r.statusCode).toBe(200);
@@ -211,10 +211,27 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf?format=html`,
       headers: auth(USER, ["citizen"]),
     });
     expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+describe("GET /v1/hrms/employees/:id/service-book/pdf — real PDF (UAT ux-docs)", () => {
+  it("200 — without ?format=html the route returns application/pdf, the entry text as PDF text", async () => {
+    listEntriesMock.mockResolvedValue([BASE_ENTRY]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`, headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers["content-type"]).toBe("application/pdf");
+    expect(r.rawPayload.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    const { pdfFlatText } = await import("@civitasone/render/testing");
+    const text = await pdfFlatText(r.rawPayload);
+    expect(text).toContain("Promoted to Senior Engineer");
+    expect(text).toContain("01 Jan 2026");
+    expect(text).not.toContain(EMP_ID);
     await app.close();
   });
 });

@@ -17,6 +17,10 @@ import "@civitasone/ui-kit/tokens.css";
 import "./globals.css";
 import "./civitas-ds.css";
 import "./globals-print.css";
+// UAT ux-docs: self-hosted Noto Sans Devanagari (OFL-1.1, pinned npm package), Devanagari subset
+// only, so Hindi screens and browser prints render on a machine with no Hindi font installed.
+import "@fontsource/noto-sans-devanagari/devanagari-400.css";
+import "@fontsource/noto-sans-devanagari/devanagari-700.css";
 
 export const metadata: Metadata = {
   title: "CivitasOne Suite",

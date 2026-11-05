@@ -45,6 +45,7 @@ export function WhatsNewBanner() {
     <div
       role="status"
       aria-live="polite"
+      data-print-hide
       style={{
         display: "flex",
         alignItems: "center",

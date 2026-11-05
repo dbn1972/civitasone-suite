@@ -6975,6 +6975,7 @@
     "submitBtn": "अवधि देखें"
   },
   "perquisite": {
+    "downloadForm12baPdf": "फॉर्म 12BA डाउनलोड करें (PDF)",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "अनुलाभ और फॉर्म 12BA",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -8777,7 +8778,7 @@
     "subtitleForEmployee": "इस कर्मचारी के पदस्थापन, स्थानांतरण, पदोन्नति और प्रशासनिक आदेश कालानुक्रमिक क्रम में।",
     "subtitleMine": "आपके पदस्थापन, स्थानांतरण, पदोन्नति और प्रशासनिक आदेश कालानुक्रमिक क्रम में।",
     "viewAllEmployeesLink": "सभी कर्मचारी देखें",
-    "printServiceBookLink": "सेवा पुस्तिका प्रिंट करें",
+    "printServiceBookLink": "सेवा पुस्तिका डाउनलोड करें (PDF)",
     "statTotalEntriesLabel": "कुल प्रविष्टियाँ",
     "statEmployeesLabel": "कर्मचारी",
     "statTransfersLabel": "स्थानांतरण / पदस्थापन",

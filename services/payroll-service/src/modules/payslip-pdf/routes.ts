@@ -11,6 +11,20 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { maskLast4, maskPan } from "../../shared/pii-mask.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
+import { resolveDocIdentity, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { renderPayslipPdf, type PayslipDocInput } from "./payslip-document.js";
+import type { FastifyBaseLogger } from "fastify";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 // UAT Phase 2 follow-up (security): a payslip PDF is per-employee pay data --
 // payroll + HR staff see any slip; everyone else (an employee, including a
@@ -21,6 +35,16 @@ const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 const pathParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+/**
+ * UAT ux-docs: /pdf and /download return a real PDF (application/pdf). The
+ * tenant-template HTML print is still available with ?format=html (unchanged).
+ * ?lang=hi prints Hindi-first labels and the net pay in Hindi words as well.
+ */
+export const slipDocQuerySchema = z.object({
+  format: z.enum(["pdf", "html"]).default("pdf"),
+  lang: z.enum(["en", "hi"]).default("en"),
 });
 
 /** Default HTML template for salary slip — used when no custom template found */
@@ -92,12 +116,8 @@ function formatAmount(minor: number | bigint): string {
 // HTML string by the caller below and passed in as a plain flat var —
 // keep it that way rather than growing a template engine for one seed row.
 
-export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/payroll/slips/:id/pdf", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
-    const { id } = pathParamSchema.parse(req.params);
-
+/** Everything both outputs of a slip need, read once (ownership + print gate enforced here). */
+export async function loadSlipDocument(ctx: ReturnType<typeof resolveContext>, id: string, log: FastifyBaseLogger) {
     // Fetch the salary slip
     const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
       .where(and(eq(payrollSlips.id, id), eq(payrollSlips.tenantId, ctx.tenantId)))
@@ -137,10 +157,10 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       }
     } catch (err) {
       if (err instanceof HrmsUnavailableError) {
-        req.log.warn({ err: err.message, tenantId: ctx.tenantId },
+        log.warn({ err: err.message, tenantId: ctx.tenantId },
           "payslip-pdf: HRMS unavailable — using default payslip template");
       } else {
-        req.log.warn({ err, tenantId: ctx.tenantId },
+        log.warn({ err, tenantId: ctx.tenantId },
           "payslip-pdf: unexpected error fetching payslip template — using default");
       }
     }
@@ -155,6 +175,11 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     let bankIfsc = "";
     let uan = "";
     let department = "";
+    let designation = "";
+    let payLevel: number | null = null;
+    let payGrade: string | null = null;
+    let rawPan: string | null = null;
+    let rawBankAccount: string | null = null;
 
     if (run?.month) {
       try {
@@ -171,16 +196,23 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
           bankAccount = maskLast4(emp.bankAccountNo);
           bankIfsc = emp.bankIfsc ?? "";
           uan = emp.uan ?? "";
+          rawPan = emp.pan ?? null;
+          rawBankAccount = emp.bankAccountNo ?? null;
+          // Additive HRMS fields (UAT ux-docs); absent from an older HRMS.
+          const extra = emp as { designation?: unknown; payLevel?: unknown; payGrade?: unknown };
+          designation = typeof extra.designation === "string" ? extra.designation : "";
+          payLevel = typeof extra.payLevel === "number" && extra.payLevel > 0 ? extra.payLevel : null;
+          payGrade = typeof extra.payGrade === "string" && extra.payGrade ? extra.payGrade : null;
         } else {
-          req.log.warn({ employeeId: slip.employeeId, month: run.month },
+          log.warn({ employeeId: slip.employeeId, month: run.month },
             "payslip-pdf: employee not found in HRMS payroll-input for month");
         }
       } catch (err) {
         if (err instanceof HrmsUnavailableError) {
-          req.log.warn({ err: err.message, employeeId: slip.employeeId },
+          log.warn({ err: err.message, employeeId: slip.employeeId },
             "payslip-pdf: HRMS unavailable — identity fields will be blank in PDF");
         } else {
-          req.log.warn({ err, employeeId: slip.employeeId },
+          log.warn({ err, employeeId: slip.employeeId },
             "payslip-pdf: unexpected error fetching HRMS payroll-input");
         }
       }
@@ -230,15 +262,16 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    const letterhead = await loadLetterhead(ctx.tenantId);
     const vars: Record<string, string> = {
       // GAP-PAYROLL-SALARY-SLIPS-DETAIL-02: the tenant's own issuing organisation
       // (HTML-escaped: an admin-entered string) -- never a platform default.
-      orgName: (await loadLetterhead(ctx.tenantId))?.orgName ?? "",
+      orgName: letterhead?.orgName ?? "",
       month: run?.month ?? "",
       employeeNo: slip.employeeNo,
       employeeName,
       department,
-      designation: "",
+      designation,
       uan,
       pan,
       bankAccount,
@@ -252,10 +285,65 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       footerText,
     };
 
-    const html = renderTemplate(template, vars, ["earningsRows", "deductionsRows", "pensionRows"]);
+    const docInput: Omit<PayslipDocInput, "lang"> = {
+      issuer: { orgName: letterhead?.orgName ?? null, department: letterhead?.department ?? null, address: letterhead?.address ?? null },
+      ddoName: letterhead?.ddoName ?? null,
+      ddoCode: letterhead?.ddoCode ?? null,
+      signatoryTitle: letterhead?.signatoryTitle ?? null,
+      showSignatureBlock: letterhead?.showSignatureBlock ?? false,
+      month: run?.month ?? "",
+      employee: {
+        employeeNo: slip.employeeNo, name: employeeName, designation: designation || null, payLevel, payGrade,
+        department: department || null, pan: rawPan, uan: uan || null, bankAccount: rawBankAccount, bankIfsc: bankIfsc || null,
+      },
+      slip: {
+        components: slip.components ?? [], grossMinor: BigInt(slip.grossMinor), totalDeductionsMinor: BigInt(slip.totalDeductionsMinor),
+        netPayMinor: BigInt(slip.netPayMinor), pfEmployeeMinor: BigInt(slip.pfEmployeeMinor), pfEmployerMinor: BigInt(slip.pfEmployerMinor),
+        gpfMinor: BigInt(slip.gpfMinor), npsEmployeeMinor: BigInt(slip.npsEmployeeMinor), npsEmployerMinor: BigInt(slip.npsEmployerMinor),
+        esiMinor: BigInt(slip.esiMinor), tdsMinor: BigInt(slip.tdsMinor),
+      },
+    };
+    return { slip, run, template, vars, docInput };
+}
+
+/** The issuable PDF of a loaded slip: the tenant document identity adds ministry and Hindi name. */
+export async function slipPdfBytes(tenantId: string, docInput: Omit<PayslipDocInput, "lang">, lang: "en" | "hi"): Promise<Buffer> {
+  const ident = await resolveDocIdentity(tenantId);
+  const issuer = {
+    ...docInput.issuer,
+    orgName: docInput.issuer.orgName || ident.orgName,
+    orgNameHi: ident.orgNameHi,
+    ministry: ident.ministry,
+    department: docInput.issuer.department || ident.department,
+    address: docInput.issuer.address || ident.address,
+  };
+  return Buffer.from(await renderPayslipPdf({ ...docInput, issuer, lang }));
+}
+
+export function renderSlipHtml(template: string, vars: Record<string, string>): string {
+  return renderTemplate(template, vars, ["earningsRows", "deductionsRows", "pensionRows"]);
+}
+
+export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/payroll/slips/:id/pdf", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = pathParamSchema.parse(req.params);
+    const q = slipDocQuerySchema.parse(req.query ?? {});
+    const { slip, run, template, vars, docInput } = await loadSlipDocument(ctx, id, req.log);
+    if (q.format === "html") {
+      const html = renderSlipHtml(template, vars);
+      await publishSlipDownloadAudit(ctx, slip.id, "pdf");
+      return reply
+        .header("content-type", "text/html; charset=utf-8")
+        .send(html);
+    }
+    const pdf = await pdfOr503(() => slipPdfBytes(ctx.tenantId, docInput, q.lang));
     await publishSlipDownloadAudit(ctx, slip.id, "pdf");
+    const fname = `salary-slip-${slip.employeeNo}-${run?.month ?? "period"}.pdf`.replace(/[^\w.-]+/g, "_");
     return reply
-      .header("content-type", "text/html; charset=utf-8")
-      .send(html);
+      .header("content-type", "application/pdf")
+      .header("content-disposition", `inline; filename="${fname}"`)
+      .send(pdf);
   });
 }

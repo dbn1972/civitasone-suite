@@ -1,103 +1,102 @@
-import { minorToMajorNumber } from "@civitasone/schemas/money";
+/**
+ * Printable procurement documents (UAT ux-docs): real A4 PDFs with the embedded document font.
+ *
+ *   GET /v1/procurement/pos/:id/pdf        purchase order (inline)
+ *   GET /v1/procurement/pos/:id/download   purchase order (attachment)
+ *   GET /v1/procurement/grns/:id/pdf       goods receipt note (inline)
+ *
+ * The buyer header, address and GSTIN come from the tenant document identity; officer names and
+ * designations from HRMS. See po-document.ts for the old "No line items" root cause.
+ */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { resolveDocIdentity, resolveSignatories, PdfRendererUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "../po/queries.js";
+import * as grnQueries from "../grn/queries.js";
+import { getVendor } from "../vendor/queries.js";
+import { poDocModel, renderPoPdf, renderGrnPdf, type GrnDocModel } from "./po-document.js";
+
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
 
 const READER_ROLES = ["procurement_officer", "procurement_admin", "super_admin", "finance_officer", "audit_officer"];
+// Same readers as GET /v1/procurement/grns/:id.
+const GRN_READER_ROLES = ["procurement_officer", "procurement_admin", "super_admin", "store_officer", "audit_officer", "finance_officer"];
+const idParam = z.object({ id: z.string().uuid() });
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+const fileSafe = (v: string) => v.replace(/[^\w.-]+/g, "_");
+
+async function poPdf(tenantId: string, id: string): Promise<{ pdf: Buffer; poNo: string }> {
+  const po = await queries.getPo(id, tenantId);
+  if (!po) throw new HttpError(404, "NOT_FOUND", "PO not found");
+  const vendor = typeof po.vendorId === "string" ? await getVendor(po.vendorId, tenantId) : null;
+  const model = poDocModel(po, vendor ? { gstin: vendor.gstin ?? null, address: (vendor as { address?: string | null }).address ?? null } : null);
+  const [buyer, people] = await Promise.all([
+    resolveDocIdentity(tenantId),
+    resolveSignatories(tenantId, [typeof po.createdBy === "string" ? po.createdBy : null]),
+  ]);
+  const signatory = typeof po.createdBy === "string" ? people.get(po.createdBy) ?? null : null;
+  return { pdf: Buffer.from(await renderPoPdf(model, buyer, signatory)), poNo: model.poNo || id.slice(0, 8) };
 }
-
-// itemRows is pre-built trusted HTML; everything else is escaped.
-const RAW_KEYS = new Set(["itemRows"]);
-
-function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const v = vars[key] ?? "";
-    return RAW_KEYS.has(key) ? v : escapeHtml(v);
-  });
-}
-
-const PO_TEMPLATE = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><title>Purchase Order {{poNo}}</title>
-<style>
-body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;font-size:13px}
-h1{text-align:center;font-size:18px}
-.meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:16px 0}
-table{width:100%;border-collapse:collapse;margin-top:12px}
-th,td{border:1px solid #ccc;padding:6px 8px}
-th{background:#f5f5f5}
-.amount{text-align:right}
-</style></head><body>
-<h1>Purchase Order</h1>
-<dl class="meta">
-<dt>PO Number</dt><dd>{{poNo}}</dd>
-<dt>Vendor</dt><dd>{{vendorName}}</dd>
-<dt>Date</dt><dd>{{orderDate}}</dd>
-<dt>Status</dt><dd>{{status}}</dd>
-<dt>Total</dt><dd>₹ {{totalAmount}}</dd>
-</dl>
-<table><thead><tr><th>Item</th><th>Qty</th><th class="amount">Rate (₹)</th><th class="amount">Amount (₹)</th></tr></thead>
-<tbody>{{itemRows}}</tbody>
-</table>
-<p style="margin-top:24px;font-size:11px;color:#666;text-align:center">GFR-compliant PO — system generated</p>
-</body></html>`;
 
 export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/pos/:id/pdf", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const po = await queries.getPo(id, ctx.tenantId);
-    if (!po) throw new HttpError(404, "NOT_FOUND", "PO not found");
-    const items = (po.items as Array<{ description?: string; qty?: number; unitPriceMinor?: number; amountMinor?: number }>) ?? [];
-    const itemRows = items.map((i) => {
-      const amt = ((i.amountMinor ?? 0) / 100).toFixed(2);
-      const rate = ((i.unitPriceMinor ?? 0) / 100).toFixed(2);
-      return `<tr><td>${escapeHtml(String(i.description ?? "Item"))}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
-    }).join("") || "<tr><td colspan=\"4\">No line items</td></tr>";
-    const html = renderTemplate(PO_TEMPLATE, {
-      poNo: String(po.poNo ?? id.slice(0, 8)),
-      vendorName: String(po.vendorName ?? po.vendorId ?? "Vendor"),
-      orderDate: String(po.orderDate ?? new Date().toISOString().slice(0, 10)),
-      status: String(po.status ?? "draft"),
-      totalAmount: minorToMajorNumber((po.totalMinor ?? 0) as string | number | bigint).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-      itemRows,
-    });
-    return reply.header("content-type", "text/html; charset=utf-8").send(html);
+    const { id } = idParam.parse(req.params);
+    const { pdf, poNo } = await pdfOr503(() => poPdf(ctx.tenantId, id));
+    return reply.header("content-type", "application/pdf")
+      .header("content-disposition", `inline; filename="PO-${fileSafe(poNo)}.pdf"`).send(pdf);
   });
 
   app.get("/v1/procurement/pos/:id/download", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const po = await queries.getPo(id, ctx.tenantId);
-    if (!po) throw new HttpError(404, "NOT_FOUND", "PO not found");
-    const items = (po.items as Array<{ description?: string; qty?: number; unitPriceMinor?: number; amountMinor?: number }>) ?? [];
-    const itemRows = items.map((i) => {
-      const amt = ((i.amountMinor ?? 0) / 100).toFixed(2);
-      const rate = ((i.unitPriceMinor ?? 0) / 100).toFixed(2);
-      return `<tr><td>${escapeHtml(String(i.description ?? "Item"))}</td><td>${i.qty ?? 1}</td><td class="amount">${rate}</td><td class="amount">${amt}</td></tr>`;
-    }).join("") || "<tr><td colspan=\"4\">No line items</td></tr>";
-    const poNo = String(po.poNo ?? id.slice(0, 8));
-    const html = renderTemplate(PO_TEMPLATE, {
-      poNo,
-      vendorName: String(po.vendorName ?? po.vendorId ?? "Vendor"),
-      orderDate: String(po.orderDate ?? new Date().toISOString().slice(0, 10)),
-      status: String(po.status ?? "draft"),
-      totalAmount: minorToMajorNumber((po.totalMinor ?? 0) as string | number | bigint).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-      itemRows,
-    });
-    return reply
-      .header("content-type", "text/html; charset=utf-8")
-      .header("content-disposition", `attachment; filename="PO-${poNo}.html"`)
-      .send(html);
+    const { id } = idParam.parse(req.params);
+    const { pdf, poNo } = await pdfOr503(() => poPdf(ctx.tenantId, id));
+    return reply.header("content-type", "application/pdf")
+      .header("content-disposition", `attachment; filename="PO-${fileSafe(poNo)}.pdf"`).send(pdf);
+  });
+
+  app.get("/v1/procurement/grns/:id/pdf", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, GRN_READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const grn = await grnQueries.getGrn(id, ctx.tenantId);
+    if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
+    // PO line descriptions for the received items (poItemRef = the PO line id).
+    const po = typeof grn.poId === "string" ? await queries.getPo(grn.poId, ctx.tenantId) : null;
+    const poLines = new Map(((po?.lineItems as Array<{ id: string; description?: string }> | undefined) ?? []).map((l) => [l.id, l.description ?? ""]));
+    const items = (grn.items as Array<{ poItemRef: string; itemCode: string; orderedQty: number; receivedQty: number; acceptedQty: number; unit: string }> | undefined) ?? [];
+    const insp = grn.inspection as { inspectorId?: string; inspectionDate?: string; result?: string; remarks?: string } | null;
+    const model: GrnDocModel = {
+      grnNo: String(grn.grnNo ?? ""),
+      receivedDate: typeof grn.receivedDate === "string" ? grn.receivedDate : null,
+      status: String(grn.status ?? ""),
+      // The PO reference NUMBER (PO/2026/0035), never the internal "procurement_po:<uuid>" ref.
+      poNo: typeof grn.poNo === "string" ? grn.poNo : null,
+      vendor: String(grn.vendor ?? ""),
+      notes: typeof grn.notes === "string" ? grn.notes : null,
+      items: items.map((i) => ({
+        itemCode: i.itemCode, description: poLines.get(i.poItemRef.replace(/^procurement_po_item:/, "")) ?? "",
+        orderedQty: i.orderedQty, receivedQty: i.receivedQty, acceptedQty: i.acceptedQty, unit: i.unit,
+      })),
+      inspection: insp ? { result: insp.result ?? "", date: insp.inspectionDate ?? null, remarks: insp.remarks ?? null } : null,
+    };
+    const receivedById = typeof grn.createdBy === "string" ? grn.createdBy : null;
+    const inspectorId = insp?.inspectorId ?? null;
+    const [buyer, people] = await Promise.all([resolveDocIdentity(ctx.tenantId), resolveSignatories(ctx.tenantId, [receivedById, inspectorId])]);
+    const pdf = await pdfOr503(() => renderGrnPdf(model, buyer, receivedById ? people.get(receivedById) ?? null : null, inspectorId ? people.get(inspectorId) ?? null : null));
+    return reply.header("content-type", "application/pdf")
+      .header("content-disposition", `inline; filename="GRN-${fileSafe(model.grnNo || id.slice(0, 8))}.pdf"`).send(Buffer.from(pdf));
   });
 }
