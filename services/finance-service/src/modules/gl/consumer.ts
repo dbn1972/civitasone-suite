@@ -66,7 +66,7 @@ export class UnknownAccountCodeError extends NonRetryableError {
   }
 }
 
-import { DEP_EXPENSE, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS } from "./system-heads.js";
+import { DEP_EXPENSE, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS, payrollDeductionHeads } from "./system-heads.js";
 import { todayIST, currentPeriodIST } from "../../shared/ist-date.js";
 const GAIN_LOSS = process.env.FINANCE_GAIN_LOSS_CODE ?? "4200";
 const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
@@ -968,6 +968,12 @@ export function registerGlConsumers(queue: Queue): void {
               const fb = await deductionHeadFallbackTx(tx, msg.tenantId, payrollAccrualLines(accrual));
               if (fb.missing.length > 0) {
                 log.warn({ tenantId: msg.tenantId, runId: p.runId, missing: fb.missing }, "payroll accrual (disbursal): deduction head(s) missing, posted to 2102 (run backfill-standard-gl-heads)");
+                // Same audit warning the approval path records (integrations/consumer.ts).
+                await enqueue(tx, {
+                  topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+                  tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                  payload: { service: "finance", action: "warning", resourceType: "payroll_run", resourceId: p.runId, outcome: "success", code: "PAYROLL_DEDUCTION_HEAD_MISSING", missingHeads: fb.missing, fallbackHead: payrollDeductionHeads().other, journalId: accrualId },
+                });
               }
               const accrualLines = fb.lines;
               await enqueue(tx, {

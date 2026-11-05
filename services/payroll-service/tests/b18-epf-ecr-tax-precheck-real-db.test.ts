@@ -20,7 +20,9 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips, payrollStructures } from "../src/modules/payroll/schema.js";
 import { payrollPf, payrollTds, payrollNps, payrollUpsPool } from "../src/modules/statutory/schema.js";
 import { sumEmployerChargesByRunTx } from "../src/modules/statutory/repo.js";
-import { computeAndInsertSlip } from "../src/modules/payroll/consumer.js";
+import { computeAndInsertSlip, registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
+import { MemoryQueue } from "@civitasone/queue";
+import { COMMANDS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
@@ -195,6 +197,19 @@ describe("Review SF1 / SF2: EPS eligibility and NCP days reach the ledger and th
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("EPS_ELIGIBILITY_UNRECORDED");
     expect(r.json().message).toContain(JOIN2.no);
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET eps_unrecorded_policy = ${"advisory"} WHERE tenant_id = ${TENANT}::uuid`));
+  });
+
+  it("the runApprove consumer re-asserts the block policy under the run lock (a command that skipped approveRun cannot approve)", async () => {
+    await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET eps_unrecorded_policy = ${"block"} WHERE tenant_id = ${TENANT}::uuid`));
+    const q = new MemoryQueue();
+    registerPayrollConsumers(q);
+    await q.publish(COMMANDS.runApprove, { messageId: randomUUID(), type: COMMANDS.runApprove, tenantId: TENANT, actorId: APPROVER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: RUN3, tenantId: TENANT, approvedBy: APPROVER } });
+    await q.drain();
+    const run = (await asTenant((tx) => tx.execute(sql`SELECT status FROM payroll.payroll_runs WHERE id = ${RUN3}::uuid`))) as unknown as Array<{ status: string }>;
+    expect(run[0]!.status).toBe("computed");
+    expect(JSON.stringify(q.dlq)).toContain("EPS_ELIGIBILITY_UNRECORDED");
     await asTenant((tx) => tx.execute(sql`UPDATE payroll.payroll_settings SET eps_unrecorded_policy = ${"advisory"} WHERE tenant_id = ${TENANT}::uuid`));
   });
 

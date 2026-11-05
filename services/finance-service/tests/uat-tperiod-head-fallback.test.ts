@@ -86,6 +86,16 @@ describe("payroll accrual: split deduction heads with a 2102 safety net", () => 
     expect(await scoped(BARE, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, String(p!.id))))).toHaveLength(1);
     expect(q.dlq).toHaveLength(0);
   });
+  it("disbursal path (cash basis, accrual deferred to the payment date): missing heads fall back to 2102 AND the same audit warning is recorded", async () => {
+    const runId = randomUUID();
+    await publish(BARE, CONSUMED_EVENTS.payrollRunDisbursed, { ...accrual(runId), paymentDate: todayIST() });
+    const p = await accrualPayload(BARE, runId);
+    expect(legs(p).sort()).toEqual([["2101", "0", "80000"], ["2102", "0", "10000"], ["2102", "0", "200"], ["2102", "0", "4800"], ["2102", "0", "5000"], ["5001", "100000", "0"]]);
+    const warn = (await outbox(BARE, "audit.event.record")).filter((a) => a.code === "PAYROLL_DEDUCTION_HEAD_MISSING" && a.resourceId === runId);
+    expect(warn).toHaveLength(1);
+    expect(warn[0]).toMatchObject({ service: "finance", action: "warning", resourceType: "payroll_run", outcome: "success", fallbackHead: "2102", journalId: p!.id });
+    expect((warn[0]!.missingHeads as string[]).sort()).toEqual(["2105", "2108", "2200"]);
+  });
   it("heads present: the split heads are used and no warning is recorded", async () => {
     const runId = randomUUID();
     await publish(FULL, CONSUMED_EVENTS.payrollRunApproved, accrual(runId));

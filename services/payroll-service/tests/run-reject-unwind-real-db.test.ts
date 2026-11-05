@@ -16,6 +16,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { payrollLoans } from "../src/modules/loans/schema.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
+import { deleteLedgerRowsForSlipTx } from "../src/modules/statutory/repo.js";
 import { COMMANDS } from "../src/topics.js";
 
 const ACTOR = randomUUID();
@@ -148,5 +149,64 @@ describe("send back a computed run: the computation is unwound (UAT L2-N3 review
     await publish(COMMANDS.runReject, { id: r1, rejectedBy: ADMIN, reason: "recompute after the DA rate fix" }, ADMIN);
     expect(queue.dlq).toHaveLength(0);
     expect(await loanRow()).toEqual({ outstanding_minor: "0", status: "closed" });
+  });
+});
+
+// UAT b18 (UPS pool share, statutory.payroll_ups_pool) x b16 (send-back unwind): the pool ledger is one of the
+// statutory ledgers the unwind and the excluded-slip removal must clear, or the Government 8.5% share of a run
+// that never pays would still reach the GL accrual and the returns.
+describe("UPS pool ledger rows are removed with the run's other statutory rows", () => {
+  async function computedRunWithPoolRow() {
+    const tenant = randomUUID();
+    const employee = {
+      id: randomUUID(), employeeNo: "E-UPSPOOL", fullName: "Pool Employee",
+      basicMinor: "3000000", dateOfJoining: "2020-01-01",
+      payStructureId: null, bankAccountNo: null, bankIfsc: null, pan: null, uan: null,
+      cityClass: "X" as const, taxRegime: "new" as const, departmentId: randomUUID(),
+      pensionScheme: "NPS" as const, stateCode: "KA",
+    };
+    const read = <T>(fn: (tx: typeof db) => Promise<T>) =>
+      runWithTenant(tenant, () => db.transaction((tx) => fn(tx as unknown as typeof db)));
+    const q = async <T>(query: ReturnType<typeof sql>) => Array.from((await read((tx) => tx.execute(query))) as unknown as Iterable<T>);
+    await read(async (tx) => {
+      await tx.execute(sql`INSERT INTO payroll.dearness_allowance_rates (tenant_id, effective_from, rate_bps) VALUES (${tenant}::uuid, ${"2026-01-01"}::date, 5000)`);
+    });
+    (fetchPayrollInput as ReturnType<typeof vi.fn>).mockImplementation(async (_t: string, month: string) => ({ month, employees: [employee], lopDays: {} }));
+    const queue = new MemoryQueue();
+    registerPayrollConsumers(queue);
+    const publish = async (topic: string, payload: Record<string, unknown>, actorId = ACTOR) => {
+      await queue.publish(topic, { messageId: randomUUID(), type: topic, tenantId: tenant, actorId, correlationId: randomUUID(), schemaVersion: "1.0", payload: { tenantId: tenant, ...payload } });
+      await queue.drain();
+    };
+    const runId = randomUUID();
+    await publish(COMMANDS.runCreate, { id: runId, runNo: `RUN-UP-${runId.slice(0, 8)}`, month: RUN_MONTH });
+    expect(queue.dlq, JSON.stringify(queue.dlq)).toHaveLength(0);
+    const slip = (await q<{ id: string }>(sql`SELECT id::text FROM payroll.payroll_slips WHERE run_id = ${runId}::uuid`))[0]!;
+    await read((tx) => tx.execute(sql`INSERT INTO statutory.payroll_ups_pool (tenant_id, slip_id, employee_id, run_id, pension_base_minor, contrib_pct, contrib_minor, period, created_by, updated_by)
+      VALUES (${tenant}::uuid, ${slip.id}::uuid, ${employee.id}::uuid, ${runId}::uuid, 3000000, 8.5, 255000, ${RUN_MONTH}, ${ACTOR}::uuid, ${ACTOR}::uuid)`));
+    const pool = async () => (await q<{ n: number }>(sql`SELECT COUNT(*)::int AS n FROM statutory.payroll_ups_pool WHERE run_id = ${runId}::uuid`))[0]!.n;
+    return { tenant, runId, slipId: slip.id, publish, queue, q, read, pool };
+  }
+
+  it("a run sent back loses its ups_pool rows, and the audit lists them", async () => {
+    const t = await computedRunWithPoolRow();
+    expect(await t.pool()).toBe(1);
+    await t.publish(COMMANDS.runReject, { id: t.runId, rejectedBy: ADMIN, reason: "recompute after the UPS rate fix" }, ADMIN);
+    expect(t.queue.dlq, JSON.stringify(t.queue.dlq)).toHaveLength(0);
+    expect(await t.pool()).toBe(0);
+    const audits = await t.q<{ payload: Record<string, any> }>(sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"action"} = ${"reject"} AND payload->>${"resourceId"} = ${t.runId}`);
+    expect(audits).toHaveLength(1);
+    // NPS + TDS + UPS pool rows of the one slip
+    expect(audits[0]!.payload.counts.statutoryRows).toBe(3);
+    const removedAudit = await t.q<{ payload: Record<string, any> }>(sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND payload->>${"action"} = ${"statutory_rows_removed"} AND payload::text LIKE ${"%" + t.runId + "%"}`);
+    expect(JSON.stringify(removedAudit.map((r) => r.payload))).toContain("UPS_POOL");
+  });
+
+  it("the excluded-slip removal (deleteLedgerRowsForSlipTx) clears the slip's ups_pool row and counts it", async () => {
+    const t = await computedRunWithPoolRow();
+    const removed = await t.read((tx) => deleteLedgerRowsForSlipTx(tx, t.slipId, t.tenant));
+    expect(removed.counts.ups_pool).toBe(1);
+    expect(removed.rows.some((r) => JSON.stringify(r).includes("UPS_POOL"))).toBe(true);
+    expect(await t.pool()).toBe(0);
   });
 });

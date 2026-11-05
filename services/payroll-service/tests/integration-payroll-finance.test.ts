@@ -100,6 +100,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   sumEmployerChargesByRunTx: vi.fn(async () => ({ edliMinor: 7500n, epfAdminMinor: 7500n, upsPoolMinor: 0n })),
   // UAT P3 b19 D-10: employee shares for the employeeDeductionsMinor split (none in this suite).
   sumEmployeeStatutoryByRunTx: vi.fn(async () => ({ tdsMinor: 0n, gpfMinor: 0n, npsMinor: 0n, pfMinor: 0n, esiMinor: 0n })),
+  // Defence-in-depth EPS block check in the runApprove consumer (no unrecorded members here).
+  epsUnrecordedEmployeeIdsByRunTx: vi.fn(async () => []),
   insertPf: vi.fn(async () => undefined),
   insertEsi: vi.fn(async () => undefined),
   insertTds: vi.fn(async () => undefined),
@@ -178,7 +180,8 @@ beforeEach(() => {
   enqueuedMessages.length = 0;
   markProcessedMock.mockResolvedValue(true);
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
-    await cb({});
+    // The runApprove consumer reads the tenant EPS policy (no settings row -> advisory) under the run lock.
+    await cb({ execute: vi.fn().mockResolvedValue([]) });
   });
 });
 

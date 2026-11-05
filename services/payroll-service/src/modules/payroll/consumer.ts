@@ -1212,6 +1212,15 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const tdsItems = tdsReviewOf(slips);
       const unackedTds = unacknowledgedTds(tdsItems, p.tdsAcknowledgements ?? []);
       if (unackedTds.length > 0) throw new NonRetryableError(`${unacknowledgedTdsCode(unackedTds)}: ${unacknowledgedTdsMessage(unackedTds)}`);
+      // Defence in depth (PR #2458 delta review): the tenant policy "block" for unrecorded EPS eligibility is
+      // re-asserted under the run lock, as approveRun already answered 409 for it synchronously.
+      if ((await resolveEpsUnrecordedPolicy(tx as unknown as typeof db, p.tenantId)) === "block") {
+        const epsIds = await statutoryRepo.epsUnrecordedEmployeeIdsByRunTx(tx as never, p.id, p.tenantId);
+        if (epsIds.length > 0) {
+          const noOf = new Map(slips.map((sl) => [sl.employeeId, sl.employeeNo]));
+          throw new NonRetryableError(`${EPS_ELIGIBILITY_UNRECORDED}: EPS eligibility is not recorded for ${epsIds.length} EPF member(s): ${epsIds.slice(0, 20).map((e) => noOf.get(e) ?? e).join(", ")}`);
+        }
+      }
       // Review SF5: an excluded Rs 0-basic slip leaves the run -- status
       // "excluded" (not in any bank file: PAYABLE_SLIP_STATUSES is an
       // allow-list; never marked paid), one audit event per slip.
