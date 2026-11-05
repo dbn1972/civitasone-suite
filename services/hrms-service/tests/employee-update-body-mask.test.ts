@@ -74,3 +74,22 @@ describe("updateEmployeeBody -- same statutory validation as create (PR #2465 re
     if (r.success) expect(r.data).toMatchObject({ mobile: "9876543210", bankIfsc: "HDFC0001234", uanNumber: "123456789012", gstin: "27AAPFU0939F1ZV" });
   });
 });
+
+describe("updateEmployeeBody -- blank clears an optional identifier (EditEmployeeForm), bad values still fail", () => {
+  it.each(["mobile", "bankIfsc", "uanNumber"])("%s: \"\" (and whitespace) becomes null so the field can be cleared", (field) => {
+    for (const blank of ["", "   "]) {
+      const r = updateEmployeeBody.safeParse({ [field]: blank });
+      expect(r.success).toBe(true);
+      if (r.success) expect((r.data as Record<string, unknown>)[field]).toBeNull();
+    }
+  });
+  it.each([["mobile", "12345"], ["bankIfsc", "NOTANIFSC"], ["uanNumber", "12345"]])("%s: a non-empty bad value is still rejected", (field, value) => {
+    expect(updateEmployeeBody.safeParse({ [field]: value }).success).toBe(false);
+  });
+  it("omitted stays undefined (not cleared)", () => {
+    const r = updateEmployeeBody.parse({ email: "a@example.gov.in" });
+    expect(r.mobile).toBeUndefined();
+    expect(r.bankIfsc).toBeUndefined();
+    expect(r.uanNumber).toBeUndefined();
+  });
+});

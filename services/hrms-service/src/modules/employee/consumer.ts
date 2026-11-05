@@ -433,10 +433,10 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.employeeUpdate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string;
-      mobile?: string; email?: string;
-      bankAccountNo?: string; bankIfsc?: string;
+      mobile?: string | null; email?: string;
+      bankAccountNo?: string; bankIfsc?: string | null;
       basicMinor?: string; payStructureId?: string; managerId?: string;
-      esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      esicIpNumber?: string; uanNumber?: string | null; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
       // GAP-HR-EMPLOYEES-DETAIL-EDIT-03
       reason?: string;
       // GAP-HR-EMPLOYEES-NEW-01
@@ -545,8 +545,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.bankAccountNo !== undefined) sensitiveOldNew.bankAccountNo = { old: maskValue(emp.bankAccountNo ?? undefined), new: maskValue(p.bankAccountNo) };
       // Owner decision 3 (2026-10-14): an IFSC is a public branch code -- stored in full
       // in the audit diff (the account number above stays masked).
-      if (p.bankIfsc !== undefined) sensitiveOldNew.bankIfsc = { old: emp.bankIfsc ?? undefined, new: p.bankIfsc };
-      if (p.uanNumber !== undefined) sensitiveOldNew.uanNumber = { old: maskValue(emp.uanNumber ?? undefined), new: maskValue(p.uanNumber) };
+      if (p.bankIfsc !== undefined) sensitiveOldNew.bankIfsc = { old: emp.bankIfsc ?? undefined, new: p.bankIfsc ?? undefined };
+      if (p.uanNumber !== undefined) sensitiveOldNew.uanNumber = { old: maskValue(emp.uanNumber ?? undefined), new: maskValue(p.uanNumber ?? undefined) };
       if (p.esicIpNumber !== undefined) sensitiveOldNew.esicIpNumber = { old: maskValue(emp.esicIpNumber ?? undefined), new: maskValue(p.esicIpNumber) };
       if (p.pran !== undefined) sensitiveOldNew.pran = { old: maskValue(emp.pran ?? undefined), new: maskValue(p.pran) };
       await audit(tx, msg, "update", "employee", p.id, {

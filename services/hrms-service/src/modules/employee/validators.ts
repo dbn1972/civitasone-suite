@@ -183,11 +183,17 @@ export type LoginLinkBody = z.infer<typeof loginLinkBody>;
 const noMaskChar = (v: string) => !v.includes("*");
 const MASK_CHAR_MESSAGE = "must not contain '*' -- this looks like a masked placeholder, not a real value";
 
+/**
+ * EditEmployeeForm sends "" to CLEAR an optional identifier. Blank means "remove it" (stored as NULL);
+ * any non-blank value is still fully validated (TE-05), so a bad value stays a 400.
+ */
+const emptyToNull = (v: unknown): unknown => (typeof v === "string" && v.trim() === "" ? null : v);
+
 export const updateEmployeeBody = z.object({
-  mobile:         z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIndianMobile).optional(),
+  mobile:         z.preprocess(emptyToNull, z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIndianMobile).nullable()).optional(),
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
-  bankIfsc:       z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIfsc).optional(),
+  bankIfsc:       z.preprocess(emptyToNull, z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIfsc).nullable()).optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-04: basic pay is NOT editable on this generic
   // profile route. It is money that feeds every payslip, and this path has no
   // maker-checker, no effective date and no arrears handling; payroll's salary
@@ -197,7 +203,7 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.undefined({ message: "Basic pay cannot be changed here. Use a salary revision in Payroll, which is approved, effective-dated and audited." }).optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
-  uanNumber:      z.string().max(12).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zUan).optional(),
+  uanNumber:      z.preprocess(emptyToNull, z.string().max(12).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zUan).nullable()).optional(),
   esicIpNumber:   z.string().max(17).optional(),
   pran:           z.string().max(12).optional(),
   gstin:          z.string().max(15).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zGstin).optional(),

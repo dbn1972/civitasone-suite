@@ -173,3 +173,29 @@ describe("withIdempotency failure modes (PR #2465 blocker 2)", () => {
     expect(next).toEqual({ value: { id: 1 }, replayed: false });
   });
 });
+
+describe("withIdempotency: hash write fails after the answer was stored (PR #2465 delta)", () => {
+  it("drops the stored answer too, releases the key, and neither replays nor wedges", async () => {
+    class HashLongFails extends MemoryCache {
+      failHash = true;
+      async set(key: string, value: string, ttl: number): Promise<void> {
+        // the 24h hash write (after the lease write) fails
+        if (this.failHash && key.endsWith(":hash") && ttl > 1000) throw new Error("redis went away");
+        return super.set(key, value, ttl);
+      }
+    }
+    const store = new HashLongFails();
+    let runs = 0;
+    const first = await withIdempotency(store, { ...base, key: "h1", body: { a: 1 }, onStoreError: () => undefined }, async () => ({ id: ++runs }));
+    expect(first).toEqual({ value: { id: 1 }, replayed: false });
+    const k = `idem:test.create:t1:u1:${createHash("sha256").update("h1").digest("hex")}`;
+    expect(await store.get(`${k}:resp`)).toBeNull();
+    expect(await store.get(`${k}:hash`)).toBeNull();
+    // Retry (store healthy again): not a replay of a half-stored state, not a 409; it runs and stores normally.
+    store.failHash = false;
+    const retry = await withIdempotency(store, { ...base, key: "h1", body: { a: 1 }, waitMs: 30, pollMs: 5 }, async () => ({ id: ++runs }));
+    expect(retry).toEqual({ value: { id: 2 }, replayed: false });
+    const again = await withIdempotency(store, { ...base, key: "h1", body: { a: 1 } }, async () => ({ id: ++runs }));
+    expect(again).toEqual({ value: { id: 2 }, replayed: true });
+  });
+});

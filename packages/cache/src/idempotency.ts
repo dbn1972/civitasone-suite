@@ -140,7 +140,9 @@ export async function withIdempotency<T>(store: CacheStore, opts: IdempotencyOpt
       await store.set(hashKey, bodyHash, ttl);
     } catch (err) {
       reportStoreError(err);
-      // No stored answer: release so a retry re-runs (the consumer dedupe drops the duplicate).
+      // No complete stored state: drop the answer too (a half-stored answer must not be replayed
+      // against a missing hash) and release the key so a retry re-runs (consumer dedupe drops the duplicate).
+      await store.del(respKey).catch(() => undefined);
       await store.del(hashKey).catch(() => undefined);
       await store.del(claimKey).catch(() => undefined);
     }
