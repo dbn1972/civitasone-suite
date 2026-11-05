@@ -70,7 +70,7 @@ export function RunApprovalReviewPanel({ runId }: { runId: string }) {
         {tds.length > 0 && (
           <>
             <h4 style={{ margin: "12px 0 6px", fontSize: 14 }}>{t("tdsHeading")}</h4>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+            <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 13 }}>
               {tds.map((i) => (
                 <li key={`${i.employeeId}-${i.kind}`}>
                   {t(`tdsKind.${i.kind}`, { employee: i.employeeNo, months: i.presumedMonths, amount: formatMinorString(i.amountMinor) })}

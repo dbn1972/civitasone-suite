@@ -84,6 +84,9 @@ export default defineConfig({
       // on arrears, PT-on-gross resolver, unrecorded FY months, pensioner estimate,
       // arrears review / zero-basic approval helpers, recovery trimming, pension lines.
       "tests/quality-program/L10-domain-correctness/payroll-statutory-mutants.test.ts",
+      // Bundle 17-19 (#2458, #2459) + bundle 16 run lifecycle: EPS eligibility, EPF EDLI / A/c 2, UPS pool, s.192 true-up,
+      // TDS cap and deduction share, TDS / net-pay approval review, run state machine.
+      "tests/quality-program/L10-domain-correctness/payroll-b17-19-mutants.test.ts",
       // Targets the maker-checker SoD guard (was entirely NoCoverage), the
       // three-way positivity guard and the tolerance boundaries.
       "tests/quality-program/L10-domain-correctness/payments-domain-mutants.test.ts",

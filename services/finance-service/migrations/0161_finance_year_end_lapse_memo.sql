@@ -67,21 +67,33 @@ CREATE TABLE IF NOT EXISTS gl.depreciation_memo (
   PRIMARY KEY (tenant_id, asset_id, period, dep_book)
 );
 
+-- RLS (same file as the CREATE TABLE, house style: hrms 0135_audit_hr_action_log.sql).
+ALTER TABLE gl.finance_year_end_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gl.finance_year_end_runs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON gl.finance_year_end_runs;
+CREATE POLICY tenant_isolation_policy ON gl.finance_year_end_runs
+  USING (tenant_id = budget.current_tenant_id()) WITH CHECK (tenant_id = budget.current_tenant_id());
+
+-- RLS (same file as the CREATE TABLE, house style: hrms 0135_audit_hr_action_log.sql).
+ALTER TABLE budget.finance_budget_lapses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget.finance_budget_lapses FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON budget.finance_budget_lapses;
+CREATE POLICY tenant_isolation_policy ON budget.finance_budget_lapses
+  USING (tenant_id = budget.current_tenant_id()) WITH CHECK (tenant_id = budget.current_tenant_id());
+
+-- RLS (same file as the CREATE TABLE, house style: hrms 0135_audit_hr_action_log.sql).
+ALTER TABLE gl.depreciation_memo ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gl.depreciation_memo FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON gl.depreciation_memo;
+CREATE POLICY tenant_isolation_policy ON gl.depreciation_memo
+  USING (tenant_id = budget.current_tenant_id()) WITH CHECK (tenant_id = budget.current_tenant_id());
+
 DO $$
-DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['gl.finance_year_end_runs', 'budget.finance_budget_lapses', 'gl.depreciation_memo'] LOOP
-    EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', t);
-    EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', t);
-    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_policy ON %s', t);
-    EXECUTE format('CREATE POLICY tenant_isolation_policy ON %s USING (tenant_id = budget.current_tenant_id()) WITH CHECK (tenant_id = budget.current_tenant_id())', t);
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finance_svc') THEN
-      EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %s TO finance_svc', t);
-    END IF;
-  END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finance_svc') THEN
     GRANT USAGE ON SCHEMA gl TO finance_svc;
     GRANT USAGE ON SCHEMA budget TO finance_svc;
+    GRANT SELECT, INSERT, UPDATE ON gl.finance_year_end_runs, budget.finance_budget_lapses, gl.depreciation_memo TO finance_svc;
     -- the year-end close replaces its own (source = fy_close) rows when it is re-run
     GRANT SELECT, INSERT, UPDATE, DELETE ON gl.finance_opening_balances TO finance_svc;
   END IF;

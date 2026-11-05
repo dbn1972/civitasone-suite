@@ -447,7 +447,7 @@ export function PayrollRunActions({
                   </fieldset>
                 )}
                 {tdsInfo.length > 0 && (
-                  <ul aria-label={tr("tdsInfoHeading")} style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 13 }}>
+                  <ul aria-label={tr("tdsInfoHeading")} style={{ margin: "0 0 10px", paddingInlineStart: 18, fontSize: 13 }}>
                     {tdsInfo.map((i) => <li key={`${i.employeeId}-${i.kind}`}>{tdsText(i)}</li>)}
                   </ul>
                 )}

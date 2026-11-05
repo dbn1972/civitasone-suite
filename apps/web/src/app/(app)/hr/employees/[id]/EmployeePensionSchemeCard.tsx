@@ -185,7 +185,7 @@ export function EmployeePensionSchemeCard(props: {
       {decided.length > 0 && (
         <>
           <h3 style={{ margin: "14px 0 6px", fontSize: 14 }}>{t("historyTitle")}</h3>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+          <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 13 }}>
             {decided.map((c) => (
               <li key={c.id}>
                 {t("changeLine", { from: schemeLabel(c.fromScheme), to: schemeLabel(c.toScheme), date: day(c.effectiveFrom) })} — {t(`status.${c.status}`)}
