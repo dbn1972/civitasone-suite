@@ -12,7 +12,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { renderInvoicePdf, InvoiceSupplierNotConfiguredError } from "./pdf.js";
-import { resolveDocIdentity, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { resolveDocIdentity, DocumentUnavailableError } from "@civitasone/render/official";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
@@ -118,7 +118,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
       bytes = await renderInvoicePdf(detail, { recipient: await resolveDocIdentity(ctx.tenantId) });
     } catch (err) {
       if (err instanceof InvoiceSupplierNotConfiguredError) throw new HttpError(422, err.code, err.message);
-      if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+      if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
       throw err;
     }
     return reply

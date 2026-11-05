@@ -18,7 +18,7 @@ import { COMMANDS } from "../../topics.js";
 import { presignedGetUrl } from "@civitasone/storage";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { DocumentNotIssuableError } from "@civitasone/render/official";
+import { DocumentNotIssuableError, DocumentUnavailableError } from "@civitasone/render/official";
 import { loadForm16Extras, renderForm16Html, resolveForm16Deductor } from "./form16-document.js";
 import { form12baPdfRoutes } from "./form12ba-pdf-route.js";
 
@@ -187,6 +187,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
         .header("x-dsc-signed", String(dscSigned))
         .send(pdfBuffer);
     } catch (err) {
+      if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
       if (err instanceof DocumentNotIssuableError) {
         throw new HttpError(422, err.code, err.message);
       }

@@ -17,14 +17,14 @@ import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 import { loadSlipDocument, slipDocQuerySchema, slipPdfBytes } from "./routes.js";
-import { PdfRendererUnavailableError } from "@civitasone/render/official";
+import { DocumentUnavailableError } from "@civitasone/render/official";
 
 /** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
 async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }

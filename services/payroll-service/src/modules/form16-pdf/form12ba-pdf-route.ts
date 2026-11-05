@@ -14,7 +14,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
-  DocumentNotIssuableError, OfficialPdf, formatDateIst, formatMinorIndian, maskPanForPrint, PdfRendererUnavailableError } from "@civitasone/render/official";
+  DocumentNotIssuableError, OfficialPdf, formatDateIst, formatMinorIndian, maskPanForPrint, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf, isRouteStaff } from "../../shared/employee-scope.js";
 import { scopedRead } from "../../shared/db.js";
@@ -31,7 +31,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }
@@ -208,6 +208,7 @@ export async function form12baPdfRoutes(app: FastifyInstance): Promise<void> {
     let employer: Form16Deductor;
     try { employer = await resolveForm16Deductor(ctx.tenantId); }
     catch (err) {
+      if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
       if (err instanceof DocumentNotIssuableError) throw new HttpError(422, "FORM12BA_EMPLOYER_NOT_CONFIGURED", err.message.replace("Form 16", "Form 12BA"));
       throw err;
     }

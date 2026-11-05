@@ -11,7 +11,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveDocIdentity, resolveSignatories, toMinor, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { resolveDocIdentity, resolveSignatories, toMinor, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "../gl/repo.js";
 import * as budgetRepo from "../budget/repo.js";
@@ -22,7 +22,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }
@@ -60,7 +60,7 @@ async function voucherPdf(tenantId: string, id: string): Promise<{ pdf: Buffer; 
     approvedAt: posted ? iso(journal.updatedAt) : null,
     system: !MANUAL_TYPES.has(journal.type ?? "journal"),
   };
-  const issuer = await resolveDocIdentity(tenantId);
+  const issuer = await pdfOr503(() => resolveDocIdentity(tenantId));
   return { pdf: Buffer.from(await renderVoucherPdf(model, issuer)), voucherNo: journal.voucherNo };
 }
 
@@ -107,7 +107,7 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
         "the sanction order cannot be issued: the approving officer has no name on record. Link the officer login to an HRMS employee record (or an identity profile) and try again.");
     }
     const head = await budgetRepo.findHeadById(row.headId);
-    const issuer = await resolveDocIdentity(ctx.tenantId);
+    const issuer = await pdfOr503(() => resolveDocIdentity(ctx.tenantId));
     const pdf = await pdfOr503(() => renderSanctionOrderPdf({
       sanctionNo: row.sanctionNo,
       purpose: row.purpose,

@@ -89,10 +89,10 @@ describe("document identity", () => {
     const d = docIdentityFromTenant({ name: "UAT Org", settings: { documentIdentity: { ministry: "Ministry of X", tan: "delx12345a", gstin: "07AAAAA0000A1Z5" } } });
     expect(d).toMatchObject({ orgName: "UAT Org", ministry: "Ministry of X", tan: "DELX12345A", gstin: "07AAAAA0000A1Z5", stateCode: "07", pan: null });
   });
-  it("fails open to empty identity when tenant-service is down", async () => {
+  it("fails CLOSED when tenant-service is down (503-class TENANT_IDENTITY_UNAVAILABLE, not an empty identity; see identity.test.ts)", async () => {
     resetDocIdentityCache();
-    const d = await resolveDocIdentity("11111111-1111-1111-1111-111111111111", async () => { throw new Error("down"); });
-    expect(d.orgName).toBeNull();
+    await expect(resolveDocIdentity("11111111-1111-1111-1111-111111111111", async () => { throw new Error("down"); }))
+      .rejects.toMatchObject({ code: "TENANT_IDENTITY_UNAVAILABLE" });
   });
   it("signatories: HRMS name + designation, identity name as fallback", async () => {
     const a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

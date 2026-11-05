@@ -10,7 +10,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveDocIdentity, resolveSignatories, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { resolveDocIdentity, resolveSignatories, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "../po/queries.js";
 import * as grnQueries from "../grn/queries.js";
@@ -22,7 +22,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }
@@ -41,7 +41,7 @@ async function poPdf(tenantId: string, id: string): Promise<{ pdf: Buffer; poNo:
   const vendor = typeof po.vendorId === "string" ? await getVendor(po.vendorId, tenantId) : null;
   const model = poDocModel(po, vendor ? { gstin: vendor.gstin ?? null, address: (vendor as { address?: string | null }).address ?? null } : null);
   const [buyer, people] = await Promise.all([
-    resolveDocIdentity(tenantId),
+    pdfOr503(() => resolveDocIdentity(tenantId)),
     resolveSignatories(tenantId, [typeof po.createdBy === "string" ? po.createdBy : null]),
   ]);
   const signatory = typeof po.createdBy === "string" ? people.get(po.createdBy) ?? null : null;
@@ -94,7 +94,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
     };
     const receivedById = typeof grn.createdBy === "string" ? grn.createdBy : null;
     const inspectorId = insp?.inspectorId ?? null;
-    const [buyer, people] = await Promise.all([resolveDocIdentity(ctx.tenantId), resolveSignatories(ctx.tenantId, [receivedById, inspectorId])]);
+    const [buyer, people] = await Promise.all([pdfOr503(() => resolveDocIdentity(ctx.tenantId)), resolveSignatories(ctx.tenantId, [receivedById, inspectorId])]);
     const pdf = await pdfOr503(() => renderGrnPdf(model, buyer, receivedById ? people.get(receivedById) ?? null : null, inspectorId ? people.get(inspectorId) ?? null : null));
     return reply.header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="GRN-${fileSafe(model.grnNo || id.slice(0, 8))}.pdf"`).send(Buffer.from(pdf));

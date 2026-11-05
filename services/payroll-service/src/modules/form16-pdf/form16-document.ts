@@ -32,11 +32,14 @@ function real(v: string | null | undefined): string | null {
 /**
  * The deductor printed on Form 16 / 12BA. Sources, first match wins per field: the tenant document
  * identity (tenant-service settings.documentIdentity: orgName, tan, pan, address), the payroll
- * letterhead (organisation name, address), then the deploy-level EMPLOYER_* values already present
+ * letterhead (organisation name, address), then (single-tenant deployments only) the deploy-level EMPLOYER_* values already present
  * in the built form. Throws DocumentNotIssuableError listing what is missing.
  */
-export async function resolveForm16Deductor(tenantId: string, built?: { name: string; tan: string; pan: string }): Promise<Form16Deductor> {
+export async function resolveForm16Deductor(tenantId: string, builtForm?: { name: string; tan: string; pan: string }): Promise<Form16Deductor> {
   const ident = await resolveDocIdentity(tenantId);
+  // The deploy-level EMPLOYER_* values are one deductor's: honoured only on an explicitly single-tenant
+  // deployment (PAYROLL_DEDUCTOR_ENV_FALLBACK=single-tenant), never as a cross-tenant fallback.
+  const built = process.env.PAYROLL_DEDUCTOR_ENV_FALLBACK === "single-tenant" ? builtForm : undefined;
   let letterhead: Awaited<ReturnType<typeof loadLetterhead>> = null;
   try { letterhead = await loadLetterhead(tenantId); } catch { letterhead = null; }
   const name = real(ident.orgName) ?? real(letterhead?.orgName) ?? real(built?.name);

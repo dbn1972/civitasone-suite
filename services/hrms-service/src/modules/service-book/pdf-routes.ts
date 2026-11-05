@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  OfficialPdf, formatDateIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, PdfRendererUnavailableError } from "@civitasone/render/official";
+  OfficialPdf, formatDateIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertCanReadEmployee, READER_ROLES } from "./routes.js";
@@ -16,7 +16,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }
@@ -123,7 +123,7 @@ export async function serviceBookPdfRoutes(app: FastifyInstance): Promise<void> 
     }
     const people = await resolveSignatories(ctx.tenantId, rows.flatMap((r) => [r.recordedBy, r.attestedBy]));
     const get = (a: string | null) => (a ? people.get(a) ?? null : null);
-    const issuer = await resolveDocIdentity(ctx.tenantId);
+    const issuer = await pdfOr503(() => resolveDocIdentity(ctx.tenantId));
     const pdf = await pdfOr503(() => renderServiceBookPdf({
       employee: { name, employeeNo, designation, department, joiningDate: emp?.joiningDate ?? null, status: emp?.status ?? null },
       entries: rows.map((r) => ({

@@ -98,7 +98,8 @@ describe("Form 16", () => {
   const built = { name: "<EMPLOYER NAME — configure EMPLOYER_NAME>", tan: "<TAN — configure EMPLOYER_TAN>", pan: "<PAN — configure EMPLOYER_PAN>" };
 
   it("refuses to issue with placeholder employer details", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })));
+    // tenant-service answers but the tenant has no documentIdentity (a tenant-service failure is a 503: form16-deductor-fail-closed.test.ts)
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ data: { settings: {} } }) })));
     await expect(resolveForm16Deductor("aaaaaaaa-0000-4000-8000-000000000001", built)).rejects.toMatchObject({
       code: "FORM16_EMPLOYER_NOT_CONFIGURED", missing: ["employer name", "TAN", "PAN"],
     });

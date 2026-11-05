@@ -13,7 +13,8 @@ export {
   OfficialPdf, PdfRendererUnavailableError, esc as escapeHtml, type OfficialPdfOptions, type DocIssuer, type TableColumn, type TableSpec, type SignatureBlock, type FieldRow, type Align,
 } from "./pdf-builder.js";
 export {
-  resolveDocIdentity, resolveSignatories, docIdentityFromTenant, resetDocIdentityCache, DocumentNotIssuableError,
+  resolveDocIdentity, resolveSignatories, TenantIdentityUnavailableError, docIdentityFromTenant, resetDocIdentityCache, DocumentNotIssuableError,
   EMPTY_DOC_IDENTITY, DOC_IDENTITY_SETTING, type DocIdentity, type Signatory,
 } from "./identity.js";
+export { DocumentUnavailableError } from "./unavailable.js";
 export { gstSplit, gstStateCode, placeOfSupplyLabel, GST_STATE_NAMES, type GstSplit } from "./gst.js";

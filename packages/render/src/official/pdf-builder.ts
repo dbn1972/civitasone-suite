@@ -9,6 +9,7 @@
  * layer in logical order (copy and search return "कार्यालय", not the glyph order). The
  * earlier pdf-lib text drawing dropped GPOS offsets and is gone.
  */
+import { DocumentUnavailableError } from "./unavailable.js";
 import { renderPdf } from "../pdf.js";
 import { DOC_FONT, DOC_FONT_STACK, docFontBytes, docFontFaceCss, docFontUnicodeRange } from "./fonts.js";
 import { formatDateTimeIst } from "./format.js";
@@ -63,10 +64,9 @@ export interface SignatureBlock {
 export interface FieldRow { label: string; value: string }
 
 /** Chromium could not be started: no issuable PDF can be produced (callers answer 503). */
-export class PdfRendererUnavailableError extends Error {
-  readonly code = "PDF_RENDERER_UNAVAILABLE";
+export class PdfRendererUnavailableError extends DocumentUnavailableError {
   constructor() {
-    super("PDF rendering engine (Chromium) is unavailable");
+    super("PDF_RENDERER_UNAVAILABLE", "PDF rendering engine (Chromium) is unavailable");
     this.name = "PdfRendererUnavailableError";
   }
 }

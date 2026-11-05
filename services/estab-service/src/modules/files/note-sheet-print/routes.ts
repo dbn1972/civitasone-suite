@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { OfficialPdf, formatDateIst, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { OfficialPdf, formatDateIst, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../../shared/context.js";
 import { sqlClient } from "../../../shared/db.js";
 import * as queries from "../queries.js";
@@ -11,7 +11,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }

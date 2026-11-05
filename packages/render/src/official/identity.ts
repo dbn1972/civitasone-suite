@@ -8,9 +8,24 @@
  *   resolveSignatories(tenantId, actorIds) - officer name and designation for actor ids (HRMS
  *     employee linked to the login; identity-service display name as the fallback).
  *
- * Both fail OPEN to "unknown" (null / no entry). A document that must name its issuer or signatory
- * then refuses to generate (see requireIssuer) instead of printing a placeholder.
+ * resolveDocIdentity fails CLOSED: tenant-service down / timeout / non-2xx / unreadable body throws
+ * TenantIdentityUnavailableError (code TENANT_IDENTITY_UNAVAILABLE; callers answer 503), so an official
+ * document is never issued with a blank issuer or with another tenant's identity. There is no env or
+ * cross-tenant fallback in this package (so no flag here; the payroll deductor has its own explicit
+ * single-tenant flag, PAYROLL_DEDUCTOR_ENV_FALLBACK=single-tenant). A SUCCESSFUL read of a tenant with no
+ * documentIdentity is a normal empty identity: the document that must name its issuer then refuses with its
+ * own not-configured 422. resolveSignatories still fails open to "unknown" (no entry): a document that must
+ * name a signatory refuses instead of printing a placeholder.
  */
+import { DocumentUnavailableError } from "./unavailable.js";
+
+/** tenant-service could not be read, so the issuing authority is unknown (fail closed; callers answer 503). */
+export class TenantIdentityUnavailableError extends DocumentUnavailableError {
+  constructor(reason: string) {
+    super("TENANT_IDENTITY_UNAVAILABLE", `The organisation identity could not be read from tenant-service (${reason}); try again shortly.`);
+    this.name = "TenantIdentityUnavailableError";
+  }
+}
 
 export interface DocIdentity {
   /** Organisation / office name ("Office of the Commissioner, ..."). */
@@ -71,21 +86,25 @@ function internalHeaders(tenantId: string): Record<string, string> {
 const identityCache = new Map<string, { value: DocIdentity; at: number }>();
 const IDENTITY_TTL_MS = 60_000;
 
-/** The tenant document identity; EMPTY_DOC_IDENTITY when tenant-service cannot be read. */
+/** The tenant document identity; throws TenantIdentityUnavailableError when tenant-service cannot be read. */
 export async function resolveDocIdentity(tenantId: string, fetchImpl: FetchLike = fetch as unknown as FetchLike): Promise<DocIdentity> {
   const hit = identityCache.get(tenantId);
   if (hit && Date.now() - hit.at < IDENTITY_TTL_MS) return hit.value;
   const base = (process.env.TENANT_SERVICE_URL ?? "http://127.0.0.1:3002").replace(/\/$/, "");
+  let res: Awaited<ReturnType<FetchLike>>;
   try {
-    const res = await fetchImpl(`${base}/v1/tenants/${encodeURIComponent(tenantId)}`, { headers: internalHeaders(tenantId), signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return EMPTY_DOC_IDENTITY;
-    const body = (await res.json()) as { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } };
-    const value = docIdentityFromTenant(body.data ?? body);
-    identityCache.set(tenantId, { value, at: Date.now() });
-    return value;
-  } catch {
-    return EMPTY_DOC_IDENTITY;
+    res = await fetchImpl(`${base}/v1/tenants/${encodeURIComponent(tenantId)}`, { headers: internalHeaders(tenantId), signal: AbortSignal.timeout(3000) });
+  } catch (err) {
+    throw new TenantIdentityUnavailableError(err instanceof Error ? err.message : "request failed");
   }
+  if (!res.ok) throw new TenantIdentityUnavailableError("non-2xx response");
+  let body: { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } } | null;
+  try { body = (await res.json()) as typeof body; } catch { throw new TenantIdentityUnavailableError("unreadable response body"); }
+  const tenant = body?.data ?? body;
+  if (!tenant || typeof tenant !== "object") throw new TenantIdentityUnavailableError("response is not a tenant record");
+  const value = docIdentityFromTenant(tenant);
+  identityCache.set(tenantId, { value, at: Date.now() });
+  return value;
 }
 
 /** Test hook. */

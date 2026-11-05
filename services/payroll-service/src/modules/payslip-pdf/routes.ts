@@ -11,7 +11,7 @@ import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { maskLast4, maskPan } from "../../shared/pii-mask.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
-import { resolveDocIdentity, PdfRendererUnavailableError } from "@civitasone/render/official";
+import { resolveDocIdentity, DocumentUnavailableError } from "@civitasone/render/official";
 import { renderPayslipPdf, type PayslipDocInput } from "./payslip-document.js";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -20,7 +20,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }

@@ -11,7 +11,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  OfficialPdf, formatDateTimeIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, PdfRendererUnavailableError } from "@civitasone/render/official";
+  OfficialPdf, formatDateTimeIst, resolveDocIdentity, resolveSignatories, type DocIdentity, type Signatory, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 
@@ -20,7 +20,7 @@ async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
   try {
     return await render();
   } catch (err) {
-    if (err instanceof PdfRendererUnavailableError) throw new HttpError(503, err.code, err.message);
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
     throw err;
   }
 }
@@ -95,7 +95,7 @@ export async function minutesPdfRoutes(app: FastifyInstance, readRoles: readonly
     if (!row) throw new HttpError(404, "MINUTES_NOT_FOUND", "minutes not found");
     const people = await resolveSignatories(ctx.tenantId, [meeting.chairpersonId, meeting.secretaryId, row.createdBy, row.approvedBy]);
     const get = (id: string | null | undefined) => (id ? people.get(id) ?? null : null);
-    const issuer = await resolveDocIdentity(ctx.tenantId);
+    const issuer = await pdfOr503(() => resolveDocIdentity(ctx.tenantId));
     const pdf = await pdfOr503(() => renderMinutesPdf({
       meetingNumber: meeting.meetingNumber, title: meeting.title, scheduledAt: iso(meeting.scheduledAt), venue: meeting.venue,
       fileReference: meeting.fileReference, status: row.status, content: row.content,
