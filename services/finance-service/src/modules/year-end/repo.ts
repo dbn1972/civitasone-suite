@@ -17,8 +17,8 @@ import { DomainError } from "../masters/domain.js";
 import { openPeriodsOfYear } from "../approvals/domain.js";
 import { isCarryForwardHead, rollForward, toDrCr, lapseRow, lapseTotals, monthsOfFy, type HeadMovement, type LapseRow } from "./domain.js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Tx = any;
+/** The caller transaction, typed as the outbox helper takes it (raw SQL via execute, plus enqueue). */
+export type Tx = Parameters<typeof enqueue>[0];
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => (Array.isArray(r) ? r : ((r as { rows?: Row[] })?.rows ?? [])) as Row[];
 const big = (v: unknown): bigint => (v === null || v === undefined ? 0n : BigInt(String(v)));

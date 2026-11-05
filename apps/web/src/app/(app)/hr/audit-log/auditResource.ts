@@ -94,6 +94,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_flex_plan",
   "payroll_input",
   "payroll_off_cycle_run",
+  "payroll_opening_ytd", // b19-pay opening YTD (enter / approve) audit
   "payroll_pay_group",
   "payroll_pay_group_member",
   "payroll_pay_group_settings",

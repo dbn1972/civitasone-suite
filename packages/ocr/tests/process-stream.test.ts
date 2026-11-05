@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OcrChain } from "../src/chain.js";
 import { OcrInputError } from "../src/errors.js";
 import { DEFAULT_MAX_IMAGE_SIZE, DEFAULT_MAX_PIXELS, PdfSource } from "../src/preprocess/index.js";
-import { processDocument, processDocumentStream, type ProcessedPage } from "../src/process.js";
+import { DEFAULT_PAGE_CONCURRENCY, processDocument, processDocumentStream, type ProcessedPage } from "../src/process.js";
 import { fakeProvider, pageResult, syntheticTextPng } from "./helpers.js";
 
 const NO_ORIENT = { orientationDetector: null } as const;
@@ -165,7 +165,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
   // timing assumption: the gate releases the moment the overlap happens, so on a healthy run it costs nothing.
   // 10 s was shorter than what a starved shared CI runner (2 vitest workers + turbo fan-out) needs to render
   // and preprocess a second page, which left max() at 1 although the pipeline overlaps correctly.
-  const OVERLAP_CAP_MS = 60_000;
+  const OVERLAP_CAP_MS = 100_000;
 
   /** Chain whose OCR takes a while and records the max number of pages in OCR at once. */
   function slowChain(delays: (n: number) => number, waitForOverlap = false) {
@@ -187,8 +187,11 @@ describe("pageConcurrency: bounded window, results in page order", () => {
   }
 
   it("default window is 2: OCR overlaps (pool is used again) but never exceeds the window; order is preserved even when page 1 is slowest", async () => {
-    // Deterministic overlap: page 1's OCR does not finish until page 2's OCR has STARTED (OVERLAP_CAP_MS safety cap). A fixed
-    // sleep raced the page-2 render on a loaded host. If pages stop overlapping, page 1 times out and max() stays 1.
+    // Deterministic overlap: page 1's OCR does not finish until page 2's OCR has STARTED -- a latch released by the page-2
+    // stub itself, never by a clock. OVERLAP_CAP_MS is only a failure bound for a pipeline that never overlaps (it sits
+    // below this test's own timeout so that failure is an assertion, not a vitest timeout). The configured window is
+    // asserted first: a serial default (DEFAULT_PAGE_CONCURRENCY = 1) fails immediately instead of waiting out the bound.
+    expect(DEFAULT_PAGE_CONCURRENCY).toBe(2);
     let page2Started!: () => void;
     const page2 = new Promise<void>((r) => { page2Started = r; });
     let active = 0;
@@ -209,7 +212,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
     expect(order).toEqual([1, 2, 3, 4, 5]);
     expect(out.result.pages.map((p) => p.pageNumber)).toEqual([1, 2, 3, 4, 5]);
     expect(max()).toBe(2);
-  }, 120_000);
+  }, 150_000);
 
   it("pageConcurrency 1 is strictly sequential; 3 never exceeds 3; invalid values clamp to 1", async () => {
     for (const [conc, lo, hi] of [[1, 1, 1], [3, 2, 3], [0, 1, 1], [-4, 1, 1]] as const) {

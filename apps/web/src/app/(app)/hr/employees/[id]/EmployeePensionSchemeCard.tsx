@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, Modal } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { rupeesInputToMinorNumber } from "@/lib/money";
 
 // NONE: apprentices / consultants (delta review SF3); the server checks the eligibility matrix.
 const SCHEMES = ["GPF", "NPS", "EPF", "UPS", "NONE"] as const;
@@ -95,7 +96,7 @@ export function EmployeePensionSchemeCard(props: {
     if (override.trim() !== "" && override.trim().length < 20) { setFormError(t("overrideTooShort")); return; }
     const epf = scheme === "EPF" ? {
       ...(firstJoined ? { epfFirstJoinedOn: firstJoined } : {}),
-      ...(joiningWage.trim() !== "" ? { epfJoiningWageMinor: Math.round(Number(joiningWage.trim()) * 100) } : {}),
+      ...(joiningWage.trim() !== "" ? { epfJoiningWageMinor: rupeesInputToMinorNumber(joiningWage) } : {}),
       ...(jointOption ? { epfVoluntaryJointOption: true } : {}),
       ...(epsMember !== "" ? { epsMember: epsMember === "yes" } : {}),
     } : {};
