@@ -11,6 +11,8 @@
  *   - Keycloak plumbing roles (default-roles-*, offline_access, uma_authorization) are never shown.
  */
 
+import { defaultRecordT, type RecordT } from "./messages";
+
 export type PersonRef = { name: string; designation: string | null };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,10 +42,10 @@ export function idTail(id: string): string {
 }
 
 /** "Name not available (ID ending 0d88)" -- the only text an unresolved person or record ever renders. */
-export function unresolvedLabel(id: string | null | undefined): string {
+export function unresolvedLabel(id: string | null | undefined, t: RecordT = defaultRecordT): string {
   const v = (id ?? "").trim();
   if (!v) return "—";
-  return `Name not available (ID ending ${idTail(v)})`;
+  return t("unresolved", { tail: idTail(v) });
 }
 
 /** "Asha Rao, Section Officer" / "Asha Rao". */
@@ -61,14 +63,15 @@ export function personLabel(
   people: ReadonlyMap<string, PersonRef> | undefined,
   id: string | null | undefined,
   sentName?: string | null,
+  t: RecordT = defaultRecordT,
 ): string {
   const key = (id ?? "").trim();
   const hit = key ? people?.get(key) : undefined;
   if (hit) return formatPerson(hit);
   if (isRealName(sentName)) return sentName.trim();
   // A source that sent the UUID itself as the "name".
-  if (!key && isUuid(sentName)) return unresolvedLabel(sentName);
-  return key ? unresolvedLabel(key) : "—";
+  if (!key && isUuid(sentName)) return unresolvedLabel(sentName, t);
+  return key ? unresolvedLabel(key, t) : "—";
 }
 
 /** The label for a vendor / named-record reference: resolved name, else a real sent name, else unresolved. */
@@ -76,13 +79,14 @@ export function nameLabel(
   names: ReadonlyMap<string, string> | undefined,
   id: string | null | undefined,
   sentName?: string | null,
+  t: RecordT = defaultRecordT,
 ): string {
   const key = (id ?? "").trim();
   const hit = key ? names?.get(key) : undefined;
   if (hit && isRealName(hit)) return hit;
   if (isRealName(sentName)) return sentName.trim();
-  if (!key && isUuid(sentName)) return unresolvedLabel(sentName);
-  return key ? unresolvedLabel(key) : "—";
+  if (!key && isUuid(sentName)) return unresolvedLabel(sentName, t);
+  return key ? unresolvedLabel(key, t) : "—";
 }
 
 /**

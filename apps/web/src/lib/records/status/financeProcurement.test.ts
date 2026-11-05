@@ -48,9 +48,10 @@ describe("indent status rule (procurement-service indent/domain VALID_TRANSITION
 });
 
 describe("PO status rule (procurement-service po/domain VALID_TRANSITIONS)", () => {
-  it("the eOffice note is raisable only while draft or pending", () => {
+  it("the eOffice note is raisable only on a draft PO; a pending PO is already awaiting its approval", () => {
     expect(canRaiseForApproval(PO_STATUS_RULE, "draft")).toBe(true);
-    expect(canRaiseForApproval(PO_STATUS_RULE, "pending")).toBe(true);
+    expect(canRaiseForApproval(PO_STATUS_RULE, "pending")).toBe(false);
+    expect(isAwaitingDecision(PO_STATUS_RULE, "pending")).toBe(true);
     for (const s of ["approved", "dispatched", "closed", "cancelled"]) expect(canRaiseForApproval(PO_STATUS_RULE, s)).toBe(false);
   });
   it("closed and cancelled are final and not amendable", () => {

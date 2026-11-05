@@ -5,8 +5,9 @@
  * quoted remark. Actor text is ALWAYS a resolved label (lib/records/labels personLabel) -- this component never
  * receives or prints an id. An empty trail says so in one line instead of disappearing.
  */
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { formatIndianDateTime } from "@/lib/formatters";
+import { defaultRecordT, useRecordT, type RecordT } from "@/lib/records/messages";
 
 export type TrailEntry = {
   /** Resolved "Name, Designation" (or the honest "Name not available ..."). */
@@ -18,30 +19,39 @@ export type TrailEntry = {
   key?: string;
 };
 
-const ACTION_LABEL: Record<string, string> = {
-  created: "Created",
-  submitted: "Submitted",
-  submit: "Submitted",
-  approved: "Approved",
-  approve: "Approved",
-  rejected: "Rejected",
-  reject: "Rejected",
-  returned: "Returned for correction",
-  return: "Returned for correction",
-  sent_back: "Returned for correction",
-  forwarded: "Forwarded",
-  forward: "Forwarded",
-  claimed: "Taken up",
-  cancelled: "Cancelled",
-  closed: "Closed",
-  start: "Submitted",
+/** Action codes (and their spellings) -> the recordUi `action.<code>` message. */
+const ACTION_KEY: Record<string, string> = {
+  created: "created",
+  submitted: "submitted",
+  submit: "submitted",
+  start: "submitted",
+  approved: "approved",
+  approve: "approved",
+  rejected: "rejected",
+  reject: "rejected",
+  returned: "returned",
+  return: "returned",
+  sent_back: "returned",
+  forwarded: "forwarded",
+  forward: "forwarded",
+  claimed: "claimed",
+  cancelled: "cancelled",
+  closed: "closed",
+  lodged: "lodged",
+  raised: "raised",
+  passed_for_payment: "passed_for_payment",
 };
 
-/** "approved" -> "Approved", "sent_back" -> "Returned for correction", unknown codes sentence-cased. */
-export function trailActionLabel(action: string | null | undefined): string {
+/**
+ * "approved" -> "Approved" / "अनुमोदित", "sent_back" -> "Returned for correction", unknown codes sentence-cased.
+ * `t` is the recordUi translator (English when omitted).
+ */
+export function trailActionLabel(action: string | null | undefined, t: RecordT = defaultRecordT): string {
   const key = (action ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   if (!key) return "—";
-  return ACTION_LABEL[key] ?? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+  const known = ACTION_KEY[key];
+  if (known && t.has(`action.${known}`)) return t(`action.${known}`);
+  return key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
 }
 
 /** null/undefined = no time recorded (line omitted); a given but empty/unparseable value reads "—", never raw text. */
@@ -53,30 +63,35 @@ function when(at: string | null | undefined): string | null {
 
 export function ApprovalTrail({
   entries,
-  title = "Approval trail",
-  emptyText = "No approval actions recorded yet.",
+  title,
+  emptyText,
   footer,
-  byText = "by",
-  actionText = trailActionLabel,
+  byText,
+  actionText,
 }: {
   entries: ReadonlyArray<TrailEntry>;
   title?: string;
   emptyText?: string;
   footer?: ReactNode;
-  /** Localised connector between action and actor (default "by"). */
+  /** Override of the connector between action and actor (default: recordUi `trailBy`, localised). */
   byText?: string;
-  /** Localised action label (default: trailActionLabel, English). */
+  /** Override of the action label (default: trailActionLabel via recordUi `action.*`, localised). */
   actionText?: (action: string) => string;
 }) {
-  const headingId = "approval-trail-heading";
+  const t = useRecordT();
+  const headingId = `${useId()}-approval-trail-heading`;
+  const shownTitle = title ?? t("trailTitle");
+  const shownEmpty = emptyText ?? t("trailEmpty");
+  const shownBy = byText ?? t("trailBy");
+  const label = actionText ?? ((a: string) => trailActionLabel(a, t));
   return (
     <section className="card" aria-labelledby={headingId} style={{ marginTop: 18 }}>
       <div className="card-h">
-        <h2 id={headingId} style={{ fontSize: 15, margin: 0 }}>{title}</h2>
+        <h2 id={headingId} style={{ fontSize: 15, margin: 0 }}>{shownTitle}</h2>
       </div>
       <div className="pad">
         {entries.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{emptyText}</p>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{shownEmpty}</p>
         ) : (
           <ol className="tl" style={{ margin: 0 }}>
             {entries.map((e, i) => {
@@ -86,8 +101,8 @@ export function ApprovalTrail({
                   <div className="tl-dot" />
                   <div className="tl-body">
                     <div className="tl-title">
-                      <strong>{actionText(e.action)}</strong>
-                      <span style={{ color: "var(--ink2)" }}> {byText} </span>
+                      <strong>{label(e.action)}</strong>
+                      <span style={{ color: "var(--ink2)" }}> {shownBy} </span>
                       <span>{e.actor}</span>
                     </div>
                     {at ? <div className="tl-sub">{at}</div> : null}

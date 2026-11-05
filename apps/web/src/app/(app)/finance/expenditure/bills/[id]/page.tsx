@@ -8,6 +8,7 @@ import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { resolveRecordRefs } from "@/lib/records/recordRefs";
 import { resolveLinkedRecord, type LinkedRecord } from "@/lib/records/linkedRecords";
 import { nameLabel, personLabel } from "@/lib/records/labels";
+import { getRecordT } from "@/lib/records/messages.server";
 import { isTerminalStatus, outcomeLine } from "@/lib/records/statusActions";
 import { BILL_STATUS_RULE } from "@/lib/records/status/bill";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
@@ -28,6 +29,7 @@ function RefLink({ link: r }: { link: LinkedRecord | null }) {
 export default async function BillDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const t = await getTranslations("expenditureBillDetail");
+  const rt = await getRecordT();
   const result = await getFinanceBillById(params.id);
   const { data: bill } = result;
 
@@ -58,26 +60,26 @@ export default async function BillDetailPage(props: { params: Promise<{ id: stri
     resolveLinkedRecord("po", bill.poRef, bill.poNumber),
     resolveLinkedRecord("grn", bill.grnRef),
   ]);
-  const vendorLabel = nameLabel(refs.vendors, bill.vendorId, bill.vendor);
-  const lodgedBy = bill.createdBy ? personLabel(refs.people, bill.createdBy) : null;
-  const passedBy = bill.passedBy ? personLabel(refs.people, bill.passedBy) : null;
+  const vendorLabel = nameLabel(refs.vendors, bill.vendorId, bill.vendor, rt);
+  const lodgedBy = bill.createdBy ? personLabel(refs.people, bill.createdBy, undefined, rt) : null;
+  const passedBy = bill.passedBy ? personLabel(refs.people, bill.passedBy, undefined, rt) : null;
   const finished = isTerminalStatus(BILL_STATUS_RULE, bill.status);
 
   return (
     <>
       <RecordHeader
-        kind="Bill"
+        kind={t("recordKind")}
         recordNo={bill.billNo}
         status={bill.status}
         amountMinor={bill.amount}
         amountLabel={t("amount")}
         parties={[
-          { label: "Payee", value: vendorLabel },
-          lodgedBy ? { label: "Lodged by", value: lodgedBy } : null,
+          { label: t("payee"), value: vendorLabel },
+          lodgedBy ? { label: t("lodgedBy"), value: lodgedBy } : null,
         ]}
-        outcome={finished ? outcomeLine({ status: bill.status, by: bill.status === "paid" ? null : passedBy }) : null}
+        outcome={finished ? outcomeLine({ status: bill.status, by: bill.status === "paid" ? null : passedBy }, rt) : null}
         back="/finance/expenditure/bills"
-        backLabel="Bills"
+        backLabel={t("backBills")}
         primaryAction={
           finished ? undefined : (
             <BillPassPayActions
@@ -120,8 +122,8 @@ export default async function BillDetailPage(props: { params: Promise<{ id: stri
 
       <ApprovalTrail
         entries={[
-          lodgedBy ? { key: "lodged", actor: lodgedBy, action: "Lodged" } : null,
-          passedBy ? { key: "passed", actor: passedBy, action: "Passed for payment" } : null,
+          lodgedBy ? { key: "lodged", actor: lodgedBy, action: "lodged" } : null,
+          passedBy ? { key: "passed", actor: passedBy, action: "passed_for_payment" } : null,
         ].filter((e): e is NonNullable<typeof e> => e !== null)}
       />
 

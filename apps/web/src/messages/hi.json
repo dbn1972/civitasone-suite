@@ -3595,7 +3595,11 @@
     "areaBill": "बिल का विवरण",
     "cannotPassOwn": "आपने यह बिल दर्ज किया है, इसलिए इसे कोई अन्य अधिकारी पारित करे।",
     "cannotReleaseLodged": "आपने यह बिल दर्ज किया है, इसलिए इसका भुगतान कोई अन्य अधिकारी जारी करे।",
-    "cannotReleasePassed": "आपने यह बिल पारित किया है, इसलिए इसका भुगतान कोई अन्य अधिकारी जारी करे।"
+    "cannotReleasePassed": "आपने यह बिल पारित किया है, इसलिए इसका भुगतान कोई अन्य अधिकारी जारी करे।",
+    "recordKind": "बिल",
+    "payee": "प्राप्तकर्ता",
+    "lodgedBy": "दर्ज करने वाला अधिकारी",
+    "backBills": "बिल"
   },
   "expenditureBillLineItemsTable": {
     "colDescription": "विवरण",
@@ -18476,6 +18480,70 @@
         "name": "थीम",
         "summary": "आपके कार्यालय के लिए एप्लिकेशन का रूप: रंग, लोगो और ब्रांडिंग।"
       }
+    }
+  },
+  "recordUi": {
+    "status": "स्थिति",
+    "amount": "राशि",
+    "summary": "{kind} सारांश",
+    "unnumbered": "{kind} (संख्या अभी आवंटित नहीं)",
+    "trailTitle": "अनुमोदन का क्रम",
+    "trailEmpty": "अभी तक कोई अनुमोदन कार्रवाई दर्ज नहीं है।",
+    "trailBy": "—",
+    "unresolved": "नाम उपलब्ध नहीं (ID के अंत में {tail})",
+    "thisStatus": "यह स्थिति",
+    "outcome": "{status}।",
+    "outcomeBy": "{status} — {by} द्वारा।",
+    "outcomeOn": "{status} — {date} को।",
+    "outcomeByOn": "{status} — {by} द्वारा, {date} को।",
+    "raiseAwaiting": "यह अभिलेख पहले से ही निर्णय की प्रतीक्षा में है ({status})।",
+    "raiseBlocked": "{status} स्थिति वाले अभिलेख के लिए अनुमोदन नहीं भेजा जा सकता।",
+    "legend": "<mark>*</mark><sr> (तारांकन)</sr> से चिह्नित फ़ील्ड आवश्यक हैं।",
+    "legendOptional": "अन्य फ़ील्ड वैकल्पिक हैं।",
+    "fieldRequired": "{label} आवश्यक है।",
+    "fieldRequiredGeneric": "यह फ़ील्ड आवश्यक है।",
+    "dateLabel": "तारीख",
+    "dateEnter": "{label} DD-MM-YYYY रूप में दर्ज करें।",
+    "dateNotReal": "{value} वास्तविक तारीख नहीं है। दिन और महीना जाँचें।",
+    "dateFormat": "{label} DD-MM-YYYY रूप में दर्ज करें, जैसे 04-11-2026।",
+    "dateBefore": "{label} {date} से पहले की नहीं हो सकती।",
+    "dateAfter": "{label} {date} के बाद की नहीं हो सकती।",
+    "action": {
+      "created": "बनाया गया",
+      "submitted": "प्रस्तुत किया गया",
+      "approved": "अनुमोदित",
+      "rejected": "अस्वीकृत",
+      "returned": "सुधार के लिए लौटाया गया",
+      "forwarded": "अग्रेषित",
+      "claimed": "कार्यभार में लिया गया",
+      "cancelled": "रद्द",
+      "closed": "बंद",
+      "lodged": "दर्ज किया गया",
+      "raised": "दर्ज किया गया",
+      "passed_for_payment": "भुगतान हेतु पारित"
+    },
+    "outcomeVerb": {
+      "approved": "अनुमोदित",
+      "sanctioned": "स्वीकृत",
+      "rejected": "अस्वीकृत",
+      "cancelled": "रद्द",
+      "closed": "बंद",
+      "completed": "पूर्ण",
+      "terminated": "समाप्त",
+      "dropped": "निरस्त",
+      "withdrawn": "वापस लिया गया",
+      "expired": "अवधि समाप्त",
+      "paid": "भुगतान किया गया",
+      "passed": "पारित",
+      "disposed": "निस्तारित",
+      "condemned": "अनुपयोगी घोषित",
+      "written_off": "बट्टे खाते में डाला गया",
+      "converted": "क्रय आदेश में परिवर्तित",
+      "fulfilled": "पूर्ण किया गया",
+      "issued": "जारी",
+      "penalty_imposed": "दंड लगाया गया",
+      "exonerated": "दोषमुक्त",
+      "finalised": "अंतिम रूप दिया गया"
     }
   }
 }

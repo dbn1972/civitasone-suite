@@ -106,6 +106,13 @@ export function AccountCombobox({ id, accounts, value, onChange, "aria-label": a
   }
 
   const activeCode = open ? flat[active]?.code : undefined;
+  // Keep the keyboard-highlighted option visible inside the 280px list (a real chart of accounts is longer).
+  useEffect(() => {
+    if (!activeCode) return;
+    const el = document.getElementById(optId(activeCode));
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- optId is a pure function of listId.
+  }, [activeCode]);
   return (
     <div ref={wrapRef} style={{ position: "relative", minWidth: 0 }}>
       <input

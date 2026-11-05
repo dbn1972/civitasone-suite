@@ -5,6 +5,7 @@
  * become 11 Feb; these helpers never guess the order: day first, always.
  */
 import { isRealCalendarDate } from "@/lib/calendarDate";
+import { defaultRecordT, type RecordT } from "@/lib/records/messages";
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -41,16 +42,16 @@ export function parseIndianDateText(text: string | null | undefined): string | n
 
 export type DateTextRules = { required?: boolean; min?: string; max?: string; label?: string };
 
-/** The inline message for a typed date, or undefined when it is acceptable. */
-export function dateTextError(text: string, rules: DateTextRules = {}): string | undefined {
+/** The inline message for a typed date, or undefined when it is acceptable. `t` is the recordUi translator. */
+export function dateTextError(text: string, rules: DateTextRules = {}, t: RecordT = defaultRecordT): string | undefined {
   const v = text.trim();
-  const label = rules.label?.trim() || "Date";
-  if (!v) return rules.required ? `Enter the ${label.toLowerCase()} as DD-MM-YYYY.` : undefined;
+  const label = rules.label?.trim() || t("dateLabel");
+  if (!v) return rules.required ? t("dateEnter", { label: label.toLowerCase() }) : undefined;
   const iso = parseIndianDateText(v);
   if (!iso) {
-    return /^\d{2}-\d{2}-\d{4}$/.test(v) ? `${v} is not a real date. Check the day and month.` : `Enter the ${label.toLowerCase()} as DD-MM-YYYY, for example 04-11-2026.`;
+    return /^\d{2}-\d{2}-\d{4}$/.test(v) ? t("dateNotReal", { value: v }) : t("dateFormat", { label: label.toLowerCase() });
   }
-  if (rules.min && iso < rules.min) return `${label} cannot be before ${isoToIndianText(rules.min)}.`;
-  if (rules.max && iso > rules.max) return `${label} cannot be after ${isoToIndianText(rules.max)}.`;
+  if (rules.min && iso < rules.min) return t("dateBefore", { label, date: isoToIndianText(rules.min) });
+  if (rules.max && iso > rules.max) return t("dateAfter", { label, date: isoToIndianText(rules.max) });
   return undefined;
 }

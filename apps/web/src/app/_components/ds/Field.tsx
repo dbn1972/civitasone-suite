@@ -3,6 +3,7 @@
 import { createContext, useContext, useId, useState } from "react";
 import type { FocusEvent, FormEvent, ReactNode } from "react";
 import { dateTextError, maskIndianDateText } from "@/lib/indianDate";
+import { useRecordT } from "@/lib/records/messages";
 import { formErrorStyle, formLabelStyle, formRequiredMarkStyle } from "./_formControlStyle";
 
 export interface FieldContextValue {
@@ -110,6 +111,7 @@ export function Field({
   className,
   style,
 }: FieldProps) {
+  const t = useRecordT();
   const autoId = useId();
   const controlId = id ?? autoId;
   const errorId = `${controlId}-error`;
@@ -130,9 +132,9 @@ export function Field({
     const plainLabel = typeof label === "string" ? label : undefined;
     if (el instanceof HTMLElement && el.dataset.dateInput !== undefined) {
       // Capture handlers run before DateInput masks the keystroke: check the masked text the officer will see.
-      return dateTextError(maskIndianDateText(value), { required, label: plainLabel, min: el.dataset.min, max: el.dataset.max });
+      return dateTextError(maskIndianDateText(value), { required, label: plainLabel, min: el.dataset.min, max: el.dataset.max }, t);
     }
-    if (required && !value.trim()) return requiredMessage ?? (plainLabel ? `${plainLabel} is required.` : "This field is required.");
+    if (required && !value.trim()) return requiredMessage ?? (plainLabel ? t("fieldRequired", { label: plainLabel }) : t("fieldRequiredGeneric"));
     return undefined;
   }
 

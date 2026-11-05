@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import { PageHeader } from "./PageHeader";
 import { StatusPill } from "./StatusPill";
 import { formatMoney } from "@/lib/formatters";
+import { useRecordT } from "@/lib/records/messages";
 
 export type RecordParty = { label: string; value: ReactNode };
 
@@ -40,17 +41,18 @@ export interface RecordHeaderProps {
   back?: string;
   backLabel?: string;
   help?: string;
-  /** Localised "Status" label (default English). */
+  /** Override of the "Status" label (default: recordUi `status`, localised). */
   statusText?: string;
-  /** Localised heading when no number is allocated yet (default "<kind> (number not yet allocated)"). */
+  /** Override of the heading when no number is allocated yet (default: recordUi `unnumbered`, localised). */
   unnumberedTitle?: string;
 }
 
 export function RecordHeader({
-  kind, recordNo, subtitle, status, statusLabel, amountMinor, amountLabel = "Amount",
+  kind, recordNo, subtitle, status, statusLabel, amountMinor, amountLabel,
   parties = [], primaryAction, secondaryActions, outcome, back, backLabel, help,
-  statusText = "Status", unnumberedTitle,
+  statusText, unnumberedTitle,
 }: RecordHeaderProps) {
+  const t = useRecordT();
   const no = recordNo && recordNo.trim() ? recordNo.trim() : null;
   const shownParties = parties.filter((p): p is RecordParty => Boolean(p));
   const hasAmount = amountMinor !== null && amountMinor !== undefined && amountMinor !== "";
@@ -63,7 +65,7 @@ export function RecordHeader({
   return (
     <header data-record-header="" style={{ marginBottom: 14 }}>
       <PageHeader
-        title={no ? <>{kind} <span className="mono">{no}</span></> : (unnumberedTitle ?? `${kind} (number not yet allocated)`)}
+        title={no ? <>{kind} <span className="mono">{no}</span></> : (unnumberedTitle ?? t("unnumbered", { kind }))}
         subtitle={subtitle}
         back={back}
         backLabel={backLabel}
@@ -71,18 +73,18 @@ export function RecordHeader({
         actions={actions}
       />
       <dl
-        aria-label={`${kind} summary`}
+        aria-label={t("summary", { kind })}
         style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 20px", margin: "6px 0 0", fontSize: 13 }}
       >
         {status ? (
           <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-            <dt style={{ color: "var(--ink2)" }}>{statusText}</dt>
+            <dt style={{ color: "var(--ink2)" }}>{statusText ?? t("status")}</dt>
             <dd style={{ margin: 0 }}><StatusPill status={status} {...(statusLabel ? { label: statusLabel } : {})} /></dd>
           </div>
         ) : null}
         {hasAmount ? (
           <div style={{ display: "inline-flex", gap: 6, alignItems: "baseline" }}>
-            <dt style={{ color: "var(--ink2)" }}>{amountLabel}</dt>
+            <dt style={{ color: "var(--ink2)" }}>{amountLabel ?? t("amount")}</dt>
             <dd style={{ margin: 0, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{formatMoney(amountMinor)}</dd>
           </div>
         ) : null}

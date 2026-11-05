@@ -1,4 +1,5 @@
 import { formatIndianDate } from "@/lib/formatters";
+import { defaultRecordT, type RecordT } from "./messages";
 
 /**
  * UX-R5 / DS-3 (status-aware actions): the shared core every record module uses to decide which actions fit a
@@ -43,49 +44,53 @@ export function canRaiseForApproval(rule: StatusRule, status: string | null | un
   return !rule.terminal.includes(s) && !(rule.awaiting ?? []).includes(s);
 }
 
-const OUTCOME_VERB: Record<string, string> = {
-  approved: "Approved",
-  sanctioned: "Sanctioned",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
-  canceled: "Cancelled",
-  closed: "Closed",
-  completed: "Completed",
-  terminated: "Terminated",
-  dropped: "Dropped",
-  withdrawn: "Withdrawn",
-  expired: "Expired",
-  paid: "Paid",
-  passed: "Passed",
-  disposed: "Disposed",
-  condemned: "Condemned",
-  written_off: "Written off",
-  converted: "Converted to purchase order",
-  fulfilled: "Fulfilled",
-  issued: "Issued",
-  penalty_imposed: "Penalty imposed",
-  exonerated: "Exonerated",
-  finalised: "Finalised",
-  finalized: "Finalised",
-};
+/** Statuses that read as a named outcome verb (recordUi `outcomeVerb.<code>`). */
+const OUTCOME_CODES = new Set([
+  "approved", "sanctioned", "rejected", "cancelled", "closed", "completed", "terminated", "dropped", "withdrawn",
+  "expired", "paid", "passed", "disposed", "condemned", "written_off", "converted", "fulfilled", "issued",
+  "penalty_imposed", "exonerated", "finalised",
+]);
+const OUTCOME_ALIAS: Record<string, string> = { canceled: "cancelled", finalized: "finalised" };
+
+function sentenceCase(code: string): string {
+  return code ? code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, " ") : "";
+}
+
+/** The outcome verb for a status code in the request locale; an unlisted code reads sentence-cased. */
+export function outcomeVerb(status: string | null | undefined, t: RecordT = defaultRecordT): string {
+  const raw = normStatus(status);
+  const s = OUTCOME_ALIAS[raw] ?? raw;
+  if (!s) return t("outcomeVerb.closed");
+  return OUTCOME_CODES.has(s) ? t(`outcomeVerb.${s}`) : sentenceCase(s);
+}
 
 /**
  * The outcome sentence shown in place of lifecycle actions on a finished record:
  * "Approved by N. Gupta, DDO on 30 Oct 2026". Parts that are unknown are left out (never invented).
  */
-export function outcomeLine(args: { status: string | null | undefined; by?: string | null; at?: string | null }): string {
-  const s = normStatus(args.status);
-  const verb = OUTCOME_VERB[s] ?? (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "Closed");
-  const by = args.by && args.by.trim() && args.by.trim() !== "—" ? ` by ${args.by.trim()}` : "";
+export function outcomeLine(
+  args: { status: string | null | undefined; by?: string | null; at?: string | null },
+  t: RecordT = defaultRecordT,
+): string {
+  const status = outcomeVerb(args.status, t);
+  const by = args.by && args.by.trim() && args.by.trim() !== "—" ? args.by.trim() : "";
   const date = args.at ? formatIndianDate(args.at) : "";
-  const on = date && date !== "—" ? ` on ${date}` : "";
-  return `${verb}${by}${on}.`;
+  const on = date && date !== "—" ? date : "";
+  if (by && on) return t("outcomeByOn", { status, by, date: on });
+  if (by) return t("outcomeBy", { status, by });
+  if (on) return t("outcomeOn", { status, date: on });
+  return t("outcome", { status });
 }
 
 /** Why the approval action is not offered, for the disabled-state reason line. */
-export function raiseBlockedReason(rule: StatusRule, status: string | null | undefined, statusLabel?: string): string | null {
+export function raiseBlockedReason(
+  rule: StatusRule,
+  status: string | null | undefined,
+  statusLabel?: string,
+  t: RecordT = defaultRecordT,
+): string | null {
   if (canRaiseForApproval(rule, status)) return null;
-  const label = statusLabel ?? (normStatus(status).replace(/_/g, " ") || "this status");
-  if (isAwaitingDecision(rule, status)) return `This record is already awaiting a decision (${label}).`;
-  return `No approval can be raised for a record that is ${label}.`;
+  const label = statusLabel ?? (normStatus(status).replace(/_/g, " ") || t("thisStatus"));
+  if (isAwaitingDecision(rule, status)) return t("raiseAwaiting", { status: label });
+  return t("raiseBlocked", { status: label });
 }

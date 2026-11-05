@@ -12,6 +12,7 @@ import { CaseActions } from "./_components/CaseActions";
 import { isCaseOwner } from "./_components/caseActions";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { humanizeStatus } from "@/lib/formatters";
+import { getRecordT } from "@/lib/records/messages.server";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
@@ -47,6 +48,7 @@ export default async function DisciplinaryCaseDetailPage(
   const searchParams = await props.searchParams;
   const params = await props.params;
   const t = await getTranslations("disciplinaryDetail");
+  const rt = await getRecordT();
   // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance
   // so Back returns to it instead of dropping the officer out to the full
   // disciplinary register. Only that one exact value is honoured, and it maps
@@ -155,14 +157,14 @@ export default async function DisciplinaryCaseDetailPage(
     people: [dcase.createdBy, dcase.updatedBy, dcase.inquiryOfficerId, ...events.map((e) => e.actorId)],
   });
   const inquiryOfficerLabel = dcase.inquiryOfficerId || inquiryOfficerName !== "—"
-    ? personLabel(refs.people, dcase.inquiryOfficerId, inquiryOfficerName !== "—" ? inquiryOfficerName : null)
+    ? personLabel(refs.people, dcase.inquiryOfficerId, inquiryOfficerName !== "—" ? inquiryOfficerName : null, rt)
     : "—";
 
   // GAP-HR-DISCIPLINARY-DETAIL-03 + UX-R5: the status history as a noting-style trail -- who, what, when, remark.
   const trail: TrailEntry[] = events.map((e) => ({
     key: e.id,
-    actor: personLabel(refs.people, e.actorId),
-    action: humanizeStatus(e.action),
+    actor: personLabel(refs.people, e.actorId, undefined, rt),
+    action: e.action,
     at: e.occurredAt,
     remarks: e.notes ?? (e.fromStatus ? `${humanizeStatus(e.fromStatus)} → ${humanizeStatus(e.toStatus)}` : humanizeStatus(e.toStatus)),
   }));
@@ -174,7 +176,7 @@ export default async function DisciplinaryCaseDetailPage(
   const outcomeDate = formatIndianDate(dcase.closedAt ?? dcase.updatedAt);
   const outcome = raiseState === "finished"
     ? (dcase.updatedBy
-      ? t("outcomeBy", { status: statusLabel, by: personLabel(refs.people, dcase.updatedBy), date: outcomeDate })
+      ? t("outcomeBy", { status: statusLabel, by: personLabel(refs.people, dcase.updatedBy, undefined, rt), date: outcomeDate })
       : t("outcomeNoActor", { status: statusLabel, date: outcomeDate }))
     : null;
   const raiseReason = raiseState === "raisable" ? null

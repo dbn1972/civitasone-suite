@@ -68,11 +68,18 @@ describe("PODetailPage — DETAIL-01 single approval path", () => {
   });
 
   it("D4c #19: the optional eOffice note is labelled as never approving or releasing the PO", async () => {
-    mockLoad.mockResolvedValue({ data: po({ status: "pending" }), source: "api" });
+    mockLoad.mockResolvedValue({ data: po({ status: "draft" }), source: "api" });
     render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByTestId("raise-eoffice")).toBeInTheDocument();
     expect(screen.getByTestId("eoffice-optional-note")).toHaveTextContent(/does not approve or release this PO/);
     expect(screen.getAllByText(/workflow inbox/i).length).toBeGreaterThan(0);
+  });
+
+  // UX-R5: a pending PO is already in its approval (no pending -> pending transition); raising would open a second eOffice file.
+  it("does NOT offer the eOffice raise on a pending PO", async () => {
+    mockLoad.mockResolvedValue({ data: po({ status: "pending" }), source: "api" });
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
+    expect(screen.queryByTestId("raise-eoffice")).not.toBeInTheDocument();
   });
 
   it("DOES render the approval-raise control for a draft PO", async () => {

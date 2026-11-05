@@ -18,7 +18,7 @@ const READER_ROLES = [...PROC_ROLES, "audit_officer"];
  * UX-R5: who may resolve vendor ids to NAMES ONLY (no PAN/GSTIN/bank) -- the register readers plus the officers
  * whose record screens show a vendor (bills and payments, contracts, assets, the department administrator).
  */
-const VENDOR_NAME_ROLES = [...READER_ROLES, "finance_officer", "finance_admin", "accounts_officer", "ddo", "contract_manager", "legal_officer", "asset_manager", "store_keeper", "tenant_admin"];
+const VENDOR_NAME_ROLES = [...READER_ROLES, "finance_officer", "finance_admin", "accounts_officer", "ddo", "contract_manager", "legal_officer", "asset_manager", "asset_admin", "store_keeper", "tenant_admin"];
 
 /** UAT Phase 2 C7: ?ids=<uuid>,<uuid>… (at most 100) for the internal vendor-name lookup. */
 const vendorNamesQuery = z.object({

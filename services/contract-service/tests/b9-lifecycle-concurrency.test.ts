@@ -278,6 +278,36 @@ describe("B9-contract consumer: milestone / bond transitions serialise on their 
     expect(await events(EVENTS.milestoneCompleted, "milestoneId", mid)).toBe(1);
   });
 
+  // UX-R5: the synchronous 409 CONTRACT_CLOSED is check-then-act; the consumers re-assert under the contract lock.
+  it("a milestone command queued before a terminate is refused (NonRetryable CONTRACT_CLOSED) once the terminate wins the lock", async () => {
+    const cid = await seed("active");
+    const mid = await seedMilestone(cid);
+    const [term, complete] = await race(
+      lockContract(cid),
+      () => run(COMMANDS.contractTerminate, CHECKER, { id: cid, tenantId: TENANT, reason: "vendor default" }),
+      () => run(COMMANDS.milestoneComplete, CHECKER, { contractId: cid, milestoneId: mid, tenantId: TENANT, achievedDate: "2026-08-15" }),
+    );
+    expect(term.ok).toBe(true);
+    expectRejected(complete, "CONTRACT_CLOSED");
+    const [m] = await inTenant((tx) => tx.select().from(contractMilestones).where(eq(contractMilestones.id, mid)));
+    expect(m?.status).toBe("pending");
+    expect(await events(EVENTS.milestoneCompleted, "milestoneId", mid)).toBe(0);
+  });
+
+  for (const status of ["terminated", "closed"]) {
+    for (const [name, topic] of [["complete", COMMANDS.milestoneComplete], ["mark-late", COMMANDS.milestoneMarkLate]] as const) {
+      it(`milestone ${name} on a ${status} contract is refused and changes nothing`, async () => {
+        const cid = await seed(status);
+        const mid = await seedMilestone(cid);
+        const out = await run(topic, CHECKER, { contractId: cid, milestoneId: mid, tenantId: TENANT, achievedDate: "2026-10-01" });
+        expectRejected(out, "CONTRACT_CLOSED");
+        const [m] = await inTenant((tx) => tx.select().from(contractMilestones).where(eq(contractMilestones.id, mid)));
+        expect(m?.status).toBe("pending");
+        expect(await events(EVENTS.milestoneCompleted, "milestoneId", mid)).toBe(0);
+      });
+    }
+  }
+
   it("release + claim on the same held bond: exactly one applies", async () => {
     const cid = await seed("active");
     const bid = await seedBond(cid);

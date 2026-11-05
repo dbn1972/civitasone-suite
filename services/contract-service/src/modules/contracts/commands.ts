@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { resolvePoRef, ProcurementUnavailableError } from "../../shared/procurement-client.js";
-import { assertDistinctMakerChecker, assertCanAmend, assertTransitionAllowed, DomainError, type ContractStatus } from "./domain.js";
+import { assertDistinctMakerChecker, assertCanAmend, assertTransitionAllowed, DomainError, FINISHED_CONTRACT_STATUSES, type ContractStatus } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
   ActivateContractBody, CloseContractBody, TerminateContractBody,
@@ -57,7 +57,7 @@ function assertTransition409(contract: { status: string | null }, to: ContractSt
  * longer be completed or marked late. Refused synchronously (409 CONTRACT_CLOSED) so the screen never queues a
  * command the record can no longer take.
  */
-export const FINISHED_CONTRACT_STATUSES: readonly string[] = ["closed", "terminated"];
+export { FINISHED_CONTRACT_STATUSES };
 export function assertContractOpen(contract: { status: string | null }): void {
   if (FINISHED_CONTRACT_STATUSES.includes(contract.status ?? "")) {
     throw new HttpError(409, "CONTRACT_CLOSED", `a ${contract.status} contract takes no further milestone changes`);

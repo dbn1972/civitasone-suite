@@ -3580,7 +3580,11 @@
     "areaBill": "bill details",
     "cannotPassOwn": "You lodged this bill, so another officer must pass it.",
     "cannotReleaseLodged": "You lodged this bill, so another officer must release its payment.",
-    "cannotReleasePassed": "You passed this bill, so another officer must release its payment."
+    "cannotReleasePassed": "You passed this bill, so another officer must release its payment.",
+    "recordKind": "Bill",
+    "payee": "Payee",
+    "lodgedBy": "Lodged by",
+    "backBills": "Bills"
   },
   "expenditureBillLineItemsTable": {
     "colDescription": "Description",
@@ -18497,6 +18501,70 @@
         "name": "Themes",
         "summary": "The look of the application for your office: colours, logo and branding."
       }
+    }
+  },
+  "recordUi": {
+    "status": "Status",
+    "amount": "Amount",
+    "summary": "{kind} summary",
+    "unnumbered": "{kind} (number not yet allocated)",
+    "trailTitle": "Approval trail",
+    "trailEmpty": "No approval actions recorded yet.",
+    "trailBy": "by",
+    "unresolved": "Name not available (ID ending {tail})",
+    "thisStatus": "this status",
+    "outcome": "{status}.",
+    "outcomeBy": "{status} by {by}.",
+    "outcomeOn": "{status} on {date}.",
+    "outcomeByOn": "{status} by {by} on {date}.",
+    "raiseAwaiting": "This record is already awaiting a decision ({status}).",
+    "raiseBlocked": "No approval can be raised for a record that is {status}.",
+    "legend": "Fields marked <mark>*</mark><sr> with an asterisk</sr> are required.",
+    "legendOptional": "Other fields are optional.",
+    "fieldRequired": "{label} is required.",
+    "fieldRequiredGeneric": "This field is required.",
+    "dateLabel": "Date",
+    "dateEnter": "Enter the {label} as DD-MM-YYYY.",
+    "dateNotReal": "{value} is not a real date. Check the day and month.",
+    "dateFormat": "Enter the {label} as DD-MM-YYYY, for example 04-11-2026.",
+    "dateBefore": "{label} cannot be before {date}.",
+    "dateAfter": "{label} cannot be after {date}.",
+    "action": {
+      "created": "Created",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "returned": "Returned for correction",
+      "forwarded": "Forwarded",
+      "claimed": "Taken up",
+      "cancelled": "Cancelled",
+      "closed": "Closed",
+      "lodged": "Lodged",
+      "raised": "Raised",
+      "passed_for_payment": "Passed for payment"
+    },
+    "outcomeVerb": {
+      "approved": "Approved",
+      "sanctioned": "Sanctioned",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "closed": "Closed",
+      "completed": "Completed",
+      "terminated": "Terminated",
+      "dropped": "Dropped",
+      "withdrawn": "Withdrawn",
+      "expired": "Expired",
+      "paid": "Paid",
+      "passed": "Passed",
+      "disposed": "Disposed",
+      "condemned": "Condemned",
+      "written_off": "Written off",
+      "converted": "Converted to purchase order",
+      "fulfilled": "Fulfilled",
+      "issued": "Issued",
+      "penalty_imposed": "Penalty imposed",
+      "exonerated": "Exonerated",
+      "finalised": "Finalised"
     }
   }
 }
