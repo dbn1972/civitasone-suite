@@ -51,7 +51,7 @@ export function AskCivitasOne() {
     // Return focus to the control that opened the panel (WCAG 2.4.3).
     // Below 480 px the header trigger is hidden (Ask lives in the Account menu),
     // so fall back to the account button.
-    const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-ask-trigger]")).find((el) => el.getClientRects().length > 0);
+    const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-ask-trigger]")).find((el) => getComputedStyle(el).display !== "none");
     (visible ?? document.querySelector<HTMLElement>(".tb-account"))?.focus();
   }, []);
 
