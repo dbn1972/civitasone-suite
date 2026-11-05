@@ -706,9 +706,13 @@ export const SanctionDetailSchema = SanctionSummarySchema.extend({
   remarks: z.string().optional(),
   approvalTrail: z.array(z.object({
     actor: z.string(),
+    // UX-R5: the actor id behind `actor` (optional for older servers).
+    actorId: z.string().optional(),
     action: z.string(),
     timestamp: z.string(),
   })).default([]),
+  // UX-R5: the maker id behind `sanctionedBy` (optional for older servers).
+  sanctionedById: z.string().optional(),
   // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: an eOffice file is deciding this sanction
   // (set on submit-approval, cleared by the decision). Optional for older servers.
   efileInFlight: z.boolean().optional(),
@@ -758,6 +762,8 @@ export const BillDetailSchema = BillSummarySchema.extend({
   grnRef: z.string().optional(),
   invoiceNo: z.string().optional(),
   paymentRef: z.string().optional(),
+  // UX-R5: the payee id behind `vendor` (optional for older servers).
+  vendorId: z.string().optional(),
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: who lodged the bill and (while it is passed) who passed it, so the page can
   // withhold the maker-checker actions the server would refuse. User ids, never names; the server stays the authority.
   createdBy: z.string().optional(),

@@ -3,7 +3,9 @@
  * Paginated, filterable chronological service record using ServiceBookView.
  */
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, Field, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, SummaryStrip, Card, Field, LoadErrorState } from "../../../_components/ds";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
+import { isRealName, personLabel } from "@/lib/records/labels";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
@@ -109,7 +111,14 @@ export default async function ServiceBookPage(
   const page = isHr ? parsePage(searchParams?.page) : 1;
   const { data, source, status, errorMessage } = isHr ? await getData(empId, page) : await getMyData();
   const errored = source === "error";
-  const { items, total, hasMore, employeesTotal, transfersTotal, promotionsTotal } = data;
+  const { items: rawItems, total, hasMore, employeesTotal, transfersTotal, promotionsTotal } = data;
+  // UX-R5 (names, not ids): an entry the API sent without an employee name is named through the shared,
+  // tenant-scoped resolver -- one batched call, only when needed -- never shown as the raw employee id.
+  const unnamed = rawItems.filter((e) => !isRealName(e.employee) && e.employeeId).map((e) => e.employeeId as string);
+  const refs = unnamed.length ? await resolveRecordRefs({ people: unnamed }) : null;
+  const items = refs
+    ? rawItems.map((e) => (isRealName(e.employee) || !e.employeeId ? e : { ...e, employee: personLabel(refs.people, e.employeeId) }))
+    : rawItems;
 
   // Prev/next links for the server pages, keeping the employee scope; page 1 has no ?page= at all.
   const pageHref = (target: number): string => {
@@ -148,14 +157,16 @@ export default async function ServiceBookPage(
       />
       <DataSourceBadge source={source} />
 
-      <StatGrid>
-        <StatCard icon="📒" iconBg="var(--infobg)" label={t("statTotalEntriesLabel")} value={errored ? null : total} />
-        {isHr && (
-          <StatCard icon="👥" iconBg="var(--bg)" label={t("statEmployeesLabel")} value={errored ? null : employeesTotal} />
-        )}
-        <StatCard icon="🔄" iconBg="var(--warnbg)" label={t("statTransfersLabel")} value={errored ? null : transfersTotal} />
-        <StatCard icon="📈" iconBg="var(--goodbg)" label={t("statPromotionsLabel")} value={errored ? null : promotionsTotal} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: a slim summary strip instead of the tall KPI card row, so the register starts above the fold. */}
+      <SummaryStrip
+        ariaLabel={t("cardTitle")}
+        items={[
+          { key: "total", label: t("statTotalEntriesLabel"), value: errored ? "—" : total },
+          isHr ? { key: "employees", label: t("statEmployeesLabel"), value: errored ? "—" : employeesTotal } : null,
+          { key: "transfers", label: t("statTransfersLabel"), value: errored ? "—" : transfersTotal },
+          { key: "promotions", label: t("statPromotionsLabel"), value: errored ? "—" : promotionsTotal },
+        ]}
+      />
 
       {/* GAP-HR-SERVICE-BOOK-04: employee search-select (replaces the free-text filter): re-scopes the whole page via ?empId=. */}
       {isHr && (

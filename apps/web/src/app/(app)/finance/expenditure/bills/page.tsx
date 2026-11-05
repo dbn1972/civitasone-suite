@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
+import { PageHeader, SummaryStrip, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceBills } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { billStats } from "@/lib/finance/expenditureStats";
@@ -33,12 +33,16 @@ export default async function BillsPage() {
         }
       />
 
-      <StatGrid>
-        <StatCard icon="🧮" tone="info" label={t("statInProcess")} value={failed ? null : stats.inProcess} />
-        <StatCard icon="⏱" tone="warn" label={t("statTotal")} value={failed ? null : bills.length} />
-        <StatCard icon="💸" tone="info" label={t("statValueInPipeline")} value={failed ? null : formatMoney(stats.pipelineValue)} />
-        <StatCard icon="✅" tone="good" label={t("statPaidAllTime")} value={failed ? null : formatMoney(stats.paidAllTime)} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: slim summary strip; a failed load reads "—", never a fabricated 0. */}
+      <SummaryStrip
+        ariaLabel="Bills summary"
+        items={[
+          { label: t("statInProcess"), value: failed ? "—" : stats.inProcess, tone: "info" },
+          { label: t("statTotal"), value: failed ? "—" : bills.length },
+          { label: t("statValueInPipeline"), value: failed ? "—" : formatMoney(stats.pipelineValue), tone: "warn" },
+          { label: t("statPaidAllTime"), value: failed ? "—" : formatMoney(stats.paidAllTime), tone: "good" },
+        ]}
+      />
 
       {/* UX-012: the data-source badge now lives inside BillsTable, driven by
           the same useSeededResource call that produces its rows — not a

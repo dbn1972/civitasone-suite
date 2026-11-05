@@ -310,6 +310,8 @@ export async function getBillDetail(id: string, tenantId: string) {
     id: row.id,
     billNo: row.billNo,
     vendor: vendorName ?? UNKNOWN_VENDOR,
+    // UX-R5 (names, not ids): the payee id, so the web resolver can name a vendor this lookup could not.
+    vendorId: row.vendorId,
     // H3: string to avoid 2^53 precision loss on large government bill amounts.
     amount: netMinor.toString(),
     amountDisplay: formatMinor(netMinor),

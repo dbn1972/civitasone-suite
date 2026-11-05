@@ -76,8 +76,8 @@ describe("expenditure stat cards mean what they say", () => {
       source: "api",
     });
     render(await BillsPage());
-    expect(screen.getByText("statValueInPipeline").closest(".stat")).toHaveTextContent("₹100.00");
-    expect(screen.getByText("statPaidAllTime").closest(".stat")).toHaveTextContent("₹50.00");
+    expect(screen.getByText("statValueInPipeline").closest("li")).toHaveTextContent("₹100.00");
+    expect(screen.getByText("statPaidAllTime").closest("li")).toHaveTextContent("₹50.00");
     expect(screen.queryByText("statPaidMtd")).not.toBeInTheDocument();
   });
 

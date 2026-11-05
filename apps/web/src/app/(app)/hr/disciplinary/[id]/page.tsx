@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
-import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
+import { PageHeader, Card, EmptyState, LoadErrorState, RecordHeader, DetailList, ApprovalTrail, type TrailEntry } from "@/app/_components/ds";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
+import { personLabel } from "@/lib/records/labels";
+import { disciplinaryRaiseState } from "@/lib/records/status/disciplinary";
+import { formatIndianDate } from "@/lib/formatters";
 import { getDisciplinaryCaseById, getDisciplinaryCaseEvents, getEmployeeById } from "@/app/_data/loaders";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
@@ -9,6 +12,7 @@ import { CaseActions } from "./_components/CaseActions";
 import { isCaseOwner } from "./_components/caseActions";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { humanizeStatus } from "@/lib/formatters";
+import { getRecordT } from "@/lib/records/messages.server";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
@@ -44,6 +48,7 @@ export default async function DisciplinaryCaseDetailPage(
   const searchParams = await props.searchParams;
   const params = await props.params;
   const t = await getTranslations("disciplinaryDetail");
+  const rt = await getRecordT();
   // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance
   // so Back returns to it instead of dropping the officer out to the full
   // disciplinary register. Only that one exact value is honoured, and it maps
@@ -145,20 +150,39 @@ export default async function DisciplinaryCaseDetailPage(
     : humanizeStatus(finding);
   const penaltyTypeLabel = penaltyType === "—" ? "—" : humanizeStatus(penaltyType);
 
-  // GAP-HR-DISCIPLINARY-DETAIL-03: status-history timeline from the
-  // existing (previously never called from the web app) events route.
-  // LifecycleTimeline's `type` enum has no disciplinary-specific values, so
-  // every entry uses "other" -- still gives a correctly-ordered, correctly-
-  // labelled history; only the per-type icon/colour differentiation is
-  // unavailable without extending that shared component, which is out of
-  // scope for this fix.
-  const timelineEvents: LifecycleEvent[] = (eventsResult.data ?? []).map((e) => ({
-    id: e.id,
-    type: "other",
-    date: e.occurredAt,
-    title: humanizeStatus(e.action),
-    detail: e.notes ?? (e.fromStatus ? `${humanizeStatus(e.fromStatus)} → ${humanizeStatus(e.toStatus)}` : humanizeStatus(e.toStatus)),
+  // UX-R5 (names, not ids): one batched, tenant-scoped lookup for every officer on this case -- the maker,
+  // the inquiry officer and each actor in the status history (all held as actor ids / JWT subs).
+  const events = eventsResult.data ?? [];
+  const refs = await resolveRecordRefs({
+    people: [dcase.createdBy, dcase.updatedBy, dcase.inquiryOfficerId, ...events.map((e) => e.actorId)],
+  });
+  const inquiryOfficerLabel = dcase.inquiryOfficerId || inquiryOfficerName !== "—"
+    ? personLabel(refs.people, dcase.inquiryOfficerId, inquiryOfficerName !== "—" ? inquiryOfficerName : null, rt)
+    : "—";
+
+  // GAP-HR-DISCIPLINARY-DETAIL-03 + UX-R5: the status history as a noting-style trail -- who, what, when, remark.
+  const trail: TrailEntry[] = events.map((e) => ({
+    key: e.id,
+    actor: personLabel(refs.people, e.actorId, undefined, rt),
+    action: e.action,
+    at: e.occurredAt,
+    remarks: e.notes ?? (e.fromStatus ? `${humanizeStatus(e.fromStatus)} → ${humanizeStatus(e.toStatus)}` : humanizeStatus(e.toStatus)),
   }));
+
+  // UX-R5 / DS-3: "Raise for approval" only where the state machine allows submit_for_approval; a closed or
+  // dropped case shows its outcome instead.
+  const statusLabel = humanizeStatus(status_);
+  const raiseState = disciplinaryRaiseState(status_, proceedingType);
+  const outcomeDate = formatIndianDate(dcase.closedAt ?? dcase.updatedAt);
+  const outcome = raiseState === "finished"
+    ? (dcase.updatedBy
+      ? t("outcomeBy", { status: statusLabel, by: personLabel(refs.people, dcase.updatedBy, undefined, rt), date: outcomeDate })
+      : t("outcomeNoActor", { status: statusLabel, date: outcomeDate }))
+    : null;
+  const raiseReason = raiseState === "raisable" ? null
+    : raiseState === "awaiting" ? t("raiseAwaiting")
+    : outcome ?? t("raiseBlocked", { status: statusLabel.toLowerCase() });
+  const employeeLabel = employeeName ? (employeeNo ? `${employeeName} (${employeeNo})` : employeeName) : null;
 
   return (
     <div className="page-main wrap">
@@ -168,11 +192,19 @@ export default async function DisciplinaryCaseDetailPage(
         <span aria-current="page">{caseLabel}</span>
       </nav>
 
-      <PageHeader
-        title={t("title", { caseLabel })}
+      <RecordHeader
+        kind={t("recordKind")}
+        recordNo={caseLabel}
         subtitle={proceedingType !== "—" ? t("subtitleProceeding", { proceedingType: proceedingTypeLabel }) : undefined}
-        back={backHref} backLabel={backLabel}
-        actions={<StatusPill status={status_} label={humanizeStatus(status_)} />}
+        back={backHref}
+        backLabel={backLabel}
+        status={status_}
+        statusLabel={statusLabel}
+        parties={[
+          employeeLabel ? { label: t("fieldEmployee"), value: employeeLabel } : null,
+          inquiryOfficerLabel !== "—" ? { label: t("fieldInquiryOfficer"), value: inquiryOfficerLabel } : null,
+        ]}
+        outcome={outcome}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
 
@@ -201,51 +233,35 @@ export default async function DisciplinaryCaseDetailPage(
         </p>
       </div>
 
-      <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statStatus")} value={humanizeStatus(status_)} />
-        <StatCard icon="⚖️" iconBg="var(--primary-soft)" label={t("statProceeding")} value={proceedingTypeLabel} />
-        <StatCard icon="🔎" iconBg="var(--warnbg)" label={t("statFinding")} value={findingLabel} />
-        <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statPenalty")} value={penaltyTypeLabel} />
-      </StatGrid>
-
       <Card title={t("cardTitle")} padding>
-        <div className="fields">
-          <div className="field"><span className="label">{t("fieldCaseNo")}</span><span className="mono">{caseNo}</span></div>
-          {/* GAP-HR-DISCIPLINARY-DETAIL-03: "case against", IO, and charge
-              memo ref/date -- present in the API response all along
-              (DisciplinaryCaseDetailSchema), just never rendered here. */}
-          <div className="field">
-            <span className="label">{t("fieldEmployee")}</span>
-            {employeeName ? (
-              <Link href={`/hr/employees/${dcase.employeeId}`}>
-                {employeeNo ? `${employeeName} (${employeeNo})` : employeeName}
-              </Link>
-            ) : <span>—</span>}
-          </div>
-          <div className="field"><span className="label">{t("fieldProceedingType")}</span><span>{proceedingTypeLabel}</span></div>
-          <div className="field"><span className="label">{t("fieldInquiryOfficer")}</span><span>{inquiryOfficerName}</span></div>
-          <div className="field"><span className="label">{t("fieldChargeMemoRef")}</span><span className="mono">{chargeMemoRef}</span></div>
-          <div className="field"><span className="label">{t("fieldChargeMemoDate")}</span><span>{chargeMemoDate}</span></div>
-          <div className="field"><span className="label">{t("fieldFinding")}</span><span>{findingLabel}</span></div>
-          <div className="field"><span className="label">{t("fieldPenalty")}</span><span>{penaltyTypeLabel}</span></div>
-          <div className="field"><span className="label">{t("fieldStatus")}</span><StatusPill status={status_} label={humanizeStatus(status_)} /></div>
-          {allegation !== "—" && (
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">{t("fieldAllegation")}</span>
-              <span style={{ whiteSpace: "pre-wrap" }}>{allegation}</span>
-            </div>
-          )}
-        </div>
+        {/* GAP-HR-DISCIPLINARY-DETAIL-03 + UX-R5: case against, IO, charge memo -- as a DetailList (no glued labels). */}
+        <DetailList
+          ariaLabel={t("cardTitle")}
+          items={[
+            { label: t("fieldCaseNo"), value: caseNo !== "—" ? caseNo : null, mono: true },
+            {
+              label: t("fieldEmployee"),
+              value: employeeLabel ? <Link href={`/hr/employees/${dcase.employeeId}`}>{employeeLabel}</Link> : null,
+            },
+            { label: t("fieldProceedingType"), value: proceedingTypeLabel !== "—" ? proceedingTypeLabel : null },
+            { label: t("fieldInquiryOfficer"), value: inquiryOfficerLabel !== "—" ? inquiryOfficerLabel : null },
+            { label: t("fieldChargeMemoRef"), value: chargeMemoRef !== "—" ? chargeMemoRef : null, mono: true },
+            { label: t("fieldChargeMemoDate"), value: chargeMemoDate !== "—" ? formatIndianDate(chargeMemoDate) : null },
+            { label: t("fieldFinding"), value: findingLabel !== "—" ? findingLabel : null },
+            { label: t("fieldPenalty"), value: penaltyTypeLabel !== "—" ? penaltyTypeLabel : null },
+            allegation !== "—" ? { label: t("fieldAllegation"), value: <span style={{ whiteSpace: "pre-wrap" }}>{allegation}</span>, wide: true } : null,
+          ]}
+        />
       </Card>
 
-      {/* GAP-HR-DISCIPLINARY-DETAIL-03: status-history timeline. */}
-      <Card title={t("statusHistoryTitle")} padding>
-        {eventsResult.source === "error" ? (
+      {/* GAP-HR-DISCIPLINARY-DETAIL-03 + UX-R5: status history as a named, remark-bearing trail. */}
+      {eventsResult.source === "error" ? (
+        <Card title={t("statusHistoryTitle")} padding>
           <p style={{ fontSize: "0.8125rem", color: "var(--mut)" }}>{t("statusHistoryErrorMessage")}</p>
-        ) : (
-          <LifecycleTimeline events={timelineEvents} />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <ApprovalTrail title={t("statusHistoryTitle")} entries={trail} emptyText={t("trailEmpty")} />
+      )}
 
       {/* GAP-HR-DISCIPLINARY-DETAIL-06: state-machine actions. Ownership
           (creator / assigned inquiry officer) mirrors the backend's
@@ -270,6 +286,8 @@ export default async function DisciplinaryCaseDetailPage(
         classification="secret"
         defaultApprovalChain="file_noting"
         notifyPath={`/api/proxy/v1/hrms/disciplinary/${params.id}/submit-approval`}
+        statusAllowsRaise={raiseState === "raisable"}
+        outcome={raiseReason}
       />
     </div>
   );

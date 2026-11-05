@@ -34,12 +34,28 @@ describe("billPassBlockedReason (GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-02)", () =
 });
 
 describe("BillPassPayActions", () => {
-  it("disables Pass bill for a paid bill and for a mismatched one", () => {
-    const { unmount } = renderActions("paid", "matched");
-    expect(screen.getByRole("button", { name: "Pass bill" })).toBeDisabled();
-    unmount();
+  it("disables Pass bill for a mismatched bill", () => {
     renderActions("pending", "unmatched");
     expect(screen.getByRole("button", { name: "Pass bill" })).toBeDisabled();
+  });
+
+  // UX-R5: only the action that fits the status is offered -- no disabled "Pass bill" on a bill already passed or paid.
+  it("offers no Pass bill once the bill is passed, paid or rejected", () => {
+    for (const status of ["passed", "paid", "rejected"]) {
+      const { unmount } = renderActions(status, "matched");
+      expect(screen.queryByRole("button", { name: "Pass bill" })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("a passed bill offers Release payment (and no Pass bill); a pending bill offers Pass bill (and no Release payment)", () => {
+    const { unmount } = renderActions("passed", "matched");
+    expect(screen.getByRole("link", { name: "Release payment" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pass bill" })).not.toBeInTheDocument();
+    unmount();
+    renderActions("pending", "matched");
+    expect(screen.getByRole("button", { name: "Pass bill" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
   });
 
   it("enables Pass bill and sends the reason as `notes` (what approveBillBody accepts)", async () => {
@@ -105,9 +121,9 @@ describe("BillPassPayActions maker-checker gating", () => {
     expect(screen.getByRole("button", { name: "Pass bill" })).toBeEnabled();
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
-  it("keeps Pass bill (disabled with its reason) on a bill that is no longer awaiting a pass, even for the lodger", () => {
+  it("offers no Pass bill (and no own-bill note) on a bill that is no longer awaiting a pass, even for the lodger", () => {
     renderActions("paid", "matched", { viewerId: LODGER, createdBy: LODGER });
-    expect(screen.getByRole("button", { name: "Pass bill" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Pass bill" })).not.toBeInTheDocument();
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 

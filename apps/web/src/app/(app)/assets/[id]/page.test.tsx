@@ -2,13 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const getAssetByIdMock = vi.fn();
-vi.mock("../../../_data/loaders", () => ({ getAssetById: (id: string) => getAssetByIdMock(id) }));
+const getAssetLocationsMock = vi.fn();
+vi.mock("../../../_data/loaders", () => ({
+  getAssetById: (id: string) => getAssetByIdMock(id),
+  getAssetLocations: () => getAssetLocationsMock(),
+}));
 const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 vi.mock("../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));
 vi.mock("./AssetDetailActions", () => ({ AssetDetailActions: () => <div data-testid="actions" /> }));
 vi.mock("./AssetFinancialActions", () => ({ AssetFinancialActions: () => <div data-testid="financial" /> }));
-vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: { notifyPath?: string }) => <div data-testid="eoffice" data-notify={p.notifyPath ?? ""} /> }));
+vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: { notifyPath?: string; statusAllowsRaise?: boolean }) => <div data-testid="eoffice" data-notify={p.notifyPath ?? ""} data-allows={String(p.statusAllowsRaise)} /> }));
 
 import AssetDetailPage from "./page";
 
@@ -66,7 +70,7 @@ describe("AssetDetailPage sub-fetch failures", () => {
     unmount();
     getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: "Old store room" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
     render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
-    expect(screen.getByText("Old store room")).toBeInTheDocument();
+    expect(screen.getAllByText("Old store room").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Old store room" })).not.toBeInTheDocument();
   });
 
@@ -135,5 +139,53 @@ describe("AssetDetailPage status scope and lifecycle", () => {
     load({ barcode: "AST-1-BC" });
     render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
     expect(screen.getByText("Tagged", { selector: ".t" }).closest("li")?.className).toBe("done");
+  });
+});
+
+// UX-R5 (names, not ids) + DS-3 (status-aware actions)
+describe("AssetDetailPage record trust (UX-R5)", () => {
+  const LOC = "82310d88-a7e7-440d-9c1b-7a2d4f6e0d88";
+  beforeEach(() => {
+    getAssetByIdMock.mockReset();
+    getAssetLocationsMock.mockReset();
+    rolesMock.mockReturnValue(["asset_manager"]);
+  });
+  const parts = { depreciation: "api", maintenance: "api" };
+
+  it("resolves a location UUID (written by a transfer) to the location name", async () => {
+    getAssetLocationsMock.mockResolvedValue({ data: [{ id: LOC, code: "BLK-A", name: "Block A, Ground floor", parentId: null }], source: "api" });
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: LOC, locationId: LOC }, source: "api", parts });
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
+    expect(screen.getByRole("link", { name: "Block A, Ground floor" })).toHaveAttribute("href", "/assets/locations");
+    expect(document.body.textContent).not.toContain(LOC);
+  });
+
+  it("an unresolvable location id reads as an honest label, never the UUID", async () => {
+    getAssetLocationsMock.mockResolvedValue({ data: [], source: "api" });
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: LOC }, source: "api", parts });
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
+    expect(screen.getAllByText("Name not available (ID ending 0d88)").length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain(LOC);
+  });
+
+  it("does not load the location register when the asset already has a readable location", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: "Block A", locationId: "loc-1" }, source: "api", parts });
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
+    expect(getAssetLocationsMock).not.toHaveBeenCalled();
+  });
+
+  it("a disposed asset shows its outcome and no action cards", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, status: "disposed" }, source: "api", parts });
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
+    expect(screen.getByText("Disposed.")).toBeInTheDocument();
+    expect(screen.queryByTestId("eoffice")).not.toBeInTheDocument();
+  });
+
+  it("an active asset may raise a disposal; the header carries code, status and book value", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: ASSET, source: "api", parts });
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "a1" }) }));
+    expect(screen.getByTestId("eoffice")).toHaveAttribute("data-allows", "true");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Asset AST-1");
+    expect(screen.getAllByText("₹40,000.00").length).toBeGreaterThan(0);
   });
 });

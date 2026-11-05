@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Segmented, EmptyState, StatCard, StatGrid } from "../../../_components/ds";
+import { DataTable, Segmented, EmptyState, SummaryStrip } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatMoney } from "@/lib/formatters";
@@ -82,12 +82,16 @@ export function AssetsTable({ assets, source = "api", cacheKey = "assets.registe
 
   return (
     <>
-      <StatGrid>
-        <StatCard icon="🖥️" tone="warn" label={typeFilter === "fixed" ? "Fixed Assets" : "Assets"} value={unknown ? null : stats.count.toLocaleString("en-IN")} />
-        <StatCard icon="✅" tone="info" label="Active / in use" value={unknown || noRows ? null : `${stats.activePct}%`} />
-        <StatCard icon="💰" tone="good" label="Gross Block" value={unknown || noRows ? null : formatMoney(stats.grossBlock)} />
-        <StatCard icon="📉" tone="warn" label="Net Book Value" value={unknown || noRows ? null : formatMoney(stats.netBlock)} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: slim summary strip in place of the KPI card row (the register starts above the fold). */}
+      <SummaryStrip
+        ariaLabel="Asset register summary"
+        items={[
+          { key: "count", label: typeFilter === "fixed" ? "Fixed Assets" : "Assets", value: unknown ? "—" : stats.count.toLocaleString("en-IN") },
+          { key: "active", label: "Active / in use", value: unknown || noRows ? "—" : `${stats.activePct}%` },
+          { key: "gross", label: "Gross Block", value: unknown || noRows ? "—" : formatMoney(stats.grossBlock) },
+          { key: "net", label: "Net Book Value", value: unknown || noRows ? "—" : formatMoney(stats.netBlock) },
+        ]}
+      />
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">
           <h3>{heading}</h3>

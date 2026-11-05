@@ -301,13 +301,15 @@ export async function getSanctionDetail(id: string, tenantId: string) {  const r
   // []. "approved" is the terminal state the R11 maker-checker /approve (or the
   // eOffice decision) sets; "cancelled" is a reject. A still-pending sanction
   // has only the create event. Line items have no backing table, so stay [].
-  const approvalTrail: Array<{ action: string; actor: string; timestamp: string }> = [
-    { action: "created", actor: makerName, timestamp: new Date(row.createdAt as unknown as string).toISOString() },
+  // UX-R5 (names, not ids): each trail step also carries the actor id, so the web resolver can add the
+  // designation ("Asha Rao, Section Officer") and say "Name not available (ID ending ...)" when no name exists.
+  const approvalTrail: Array<{ action: string; actor: string; actorId?: string; timestamp: string }> = [
+    { action: "created", actor: makerName, ...(row.createdBy ? { actorId: row.createdBy } : {}), timestamp: new Date(row.createdAt as unknown as string).toISOString() },
   ];
   if (row.status === "approved") {
-    approvalTrail.push({ action: "approved", actor: checkerName, timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
+    approvalTrail.push({ action: "approved", actor: checkerName, ...(row.updatedBy ? { actorId: row.updatedBy } : {}), timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
   } else if (row.status === "cancelled") {
-    approvalTrail.push({ action: "rejected", actor: checkerName, timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
+    approvalTrail.push({ action: "rejected", actor: checkerName, ...(row.updatedBy ? { actorId: row.updatedBy } : {}), timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
   }
   return {
     id: row.id,
@@ -316,6 +318,8 @@ export async function getSanctionDetail(id: string, tenantId: string) {  const r
     // H3: string to avoid 2^53 precision loss on large government sanction amounts.
     amount: row.amountMinor.toString(),
     sanctionedBy: makerName,
+    // UX-R5: the maker id behind sanctionedBy (see approvalTrail above).
+    ...(row.createdBy ? { sanctionedById: row.createdBy } : {}),
     date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapSanctionStatus(row.status),
     majorHead: head?.code ?? row.headId,

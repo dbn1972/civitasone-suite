@@ -7,6 +7,17 @@ vi.mock("@/app/_data/apiClient", async () => {
   return { ...actual, fetchJson: (...args: unknown[]) => fetchJsonMock(...args) };
 });
 
+const { MAKER, CHECKER } = vi.hoisted(() => ({ MAKER: "22222222-0000-4000-8000-000000000001", CHECKER: "22222222-0000-4000-8000-000000000002" }));
+vi.mock("@/lib/records/recordRefs", () => ({
+  resolveRecordRefs: async () => ({
+    people: new Map([
+      [MAKER, { name: "Ram Kumar", designation: "Junior Engineer" }],
+      [CHECKER, { name: "B. Officer", designation: "Head of Procurement" }],
+    ]),
+    vendors: new Map(),
+  }),
+}));
+
 import IndentDetailPage from "./page";
 
 /**
@@ -117,5 +128,29 @@ describe("IndentDetailPage", () => {
     render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.getByText("Approval trail")).toBeInTheDocument();
     expect(screen.queryByText(/approval trail could not be loaded/i)).toBeNull();
+  });
+});
+
+describe("IndentDetailPage record template (UX-R5)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  it("names the requester and approver with designation, uses DetailList, never an id or Unknown user", async () => {
+    route({
+      ...BASE, status: "rejected", requestedBy: undefined, createdBy: MAKER,
+      approvalTrail: [{ actor: "Unknown user", actorId: CHECKER, action: "Rejected", timestamp: "2026-09-02T04:00:00Z", remarks: "No budget" }],
+    });
+    const { container } = render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
+    expect(screen.getAllByText("Ram Kumar, Junior Engineer").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("B. Officer, Head of Procurement").length).toBeGreaterThan(0);
+    expect(container.querySelector("dl[data-detail-list]")).not.toBeNull();
+    expect(container.textContent).not.toMatch(/Unknown user/);
+    expect(container.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/i);
+  });
+
+  it("a rejected indent shows its outcome and offers no next-step action", async () => {
+    route({ ...BASE, status: "rejected", approvalTrail: [{ actor: "B. Officer", actorId: CHECKER, action: "Rejected", timestamp: "2026-09-02T04:00:00Z" }] });
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
+    expect(screen.getByText("Rejected by B. Officer, Head of Procurement on 02 Sep 2026.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Create purchase order|View in approvals|Create tender/ })).not.toBeInTheDocument();
   });
 });
