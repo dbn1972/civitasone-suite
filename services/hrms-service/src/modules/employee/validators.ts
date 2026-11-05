@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
+import {
+  zTrimmedText, zTrimmedCode, zIsoDate, DATE_WINDOWS, istToday, checkAgeAtJoining, fieldIssue, FIELD_CODES,
+  zAadhaarMasked, zIfsc, zUan, zGstin, zIndianMobile, boundedMinorNumber,
+} from "@civitasone/schemas/validators";
 import { EMPLOYEE_STATUSES, employeeStatusEnum, isEmployeeStatus } from "./status.js";
 
 // GET /v1/hrms/employees query params: standard pagination plus an optional
@@ -67,25 +71,32 @@ export const WORK_STATE_CODES = [
 ] as const;
 const workStateCode = z.string().trim().toUpperCase().refine((c) => (WORK_STATE_CODES as readonly string[]).includes(c), "must be an Indian state / UT code, e.g. MH");
 
+// UAT T-EDGE bundle 21 (TE-01 / TE-05 / TE-06 / TE-07): real calendar dates in a plausible
+// range, trimmed non-blank name and employee number (so the duplicate check sees the stored
+// value), statutory identifiers checked (Aadhaar Verhoeff + stored masked, IFSC, UAN, GSTIN
+// checksum, Indian mobile) and basic pay bounded -- all refused here with a field code
+// instead of a 500 (impossible dates, 1e19 basic) or a stored bad value.
 export const createEmployeeBody = z.object({
-  employeeNo:    z.string().min(1).max(32),
-  fullName:      z.string().min(1).max(256),
+  employeeNo:    zTrimmedCode(32, "employee number"),
+  fullName:      zTrimmedText(256, { label: "full name" }),
   departmentId:  z.string().uuid(),
   designationId: z.string().uuid(),
-  dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
-  dateOfBirth:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateOfJoining: zIsoDate({ window: () => DATE_WINDOWS.dateOfJoining(istToday()), label: "date of joining" }),
+  dateOfBirth:   zIsoDate({ label: "date of birth" }).optional(),
   gender:        z.enum(["male", "female", "other"]).optional(),
   pan:           z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "must be a valid PAN (AAAAA9999A)").optional(),
-  aadhaarRef:    z.string().optional(),
-  mobile:        z.string().max(20).optional(),
+  // Full 12-digit Aadhaar (Verhoeff-checked) or the masked form; only the masked form
+  // XXXX-XXXX-1234 is stored (the column is also sealed at rest, see schema.ts).
+  aadhaarRef:    zAadhaarMasked.optional(),
+  mobile:        zIndianMobile.optional(),
   email:         z.string().email().optional(),
   bankAccountNo: z.string().optional(),
-  bankIfsc:      z.string().max(16).optional(),
+  bankIfsc:      zIfsc.optional(),
   // Any code; membership (canonical category / tenant type-master / legacy) is
   // enforced at the route via assertKnownEngagementType so tenant-defined types
   // are accepted and typos rejected (a static enum would reject valid tenant codes).
   employeeType:  z.string().min(1).max(32).default("permanent"),
-  basicMinor:    z.number().int().nonnegative().default(0),
+  basicMinor:    z.number().int().nonnegative().superRefine(boundedMinorNumber).default(0),
   currency:      z.string().length(3).default("INR"),
   payStructureId: z.string().uuid().optional(),
   // ERP org-structure refs (cross-service)
@@ -95,9 +106,9 @@ export const createEmployeeBody = z.object({
   workStateCode:  workStateCode.optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
-  uanNumber:      z.string().max(12).optional(),
+  uanNumber:      zUan.optional(),
   pran:           z.string().max(12).optional(),
-  gstin:          z.string().max(15).optional(),
+  gstin:          zGstin.optional(),
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
@@ -111,6 +122,16 @@ export const createEmployeeBody = z.object({
   maritalStatus: z.enum(MARITAL_STATUSES).optional(),
   bloodGroup:    z.enum(BLOOD_GROUPS).optional(),
   shift:         z.enum(SHIFTS).optional(),
+}).superRefine((v, ctx) => {
+  // TE-07 (E05): a date of birth after the date of joining, or an age outside 18-70 on it.
+  if (v.dateOfBirth && v.dateOfJoining) {
+    if (v.dateOfBirth >= v.dateOfJoining) {
+      fieldIssue(ctx, FIELD_CODES.DATE_ORDER, "date of birth must be before the date of joining", ["dateOfBirth"]);
+      return;
+    }
+    const age = checkAgeAtJoining(v.dateOfBirth, v.dateOfJoining);
+    if (age) fieldIssue(ctx, age.code, age.message, ["dateOfBirth"]);
+  }
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 
@@ -162,11 +183,17 @@ export type LoginLinkBody = z.infer<typeof loginLinkBody>;
 const noMaskChar = (v: string) => !v.includes("*");
 const MASK_CHAR_MESSAGE = "must not contain '*' -- this looks like a masked placeholder, not a real value";
 
+/**
+ * EditEmployeeForm sends "" to CLEAR an optional identifier. Blank means "remove it" (stored as NULL);
+ * any non-blank value is still fully validated (TE-05), so a bad value stays a 400.
+ */
+const emptyToNull = (v: unknown): unknown => (typeof v === "string" && v.trim() === "" ? null : v);
+
 export const updateEmployeeBody = z.object({
-  mobile:         z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
+  mobile:         z.preprocess(emptyToNull, z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIndianMobile).nullable()).optional(),
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
-  bankIfsc:       z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
+  bankIfsc:       z.preprocess(emptyToNull, z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIfsc).nullable()).optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-04: basic pay is NOT editable on this generic
   // profile route. It is money that feeds every payslip, and this path has no
   // maker-checker, no effective date and no arrears handling; payroll's salary
@@ -176,10 +203,10 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.undefined({ message: "Basic pay cannot be changed here. Use a salary revision in Payroll, which is approved, effective-dated and audited." }).optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
-  uanNumber:      z.string().max(12).optional(),
+  uanNumber:      z.preprocess(emptyToNull, z.string().max(12).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zUan).nullable()).optional(),
   esicIpNumber:   z.string().max(17).optional(),
   pran:           z.string().max(12).optional(),
-  gstin:          z.string().max(15).optional(),
+  gstin:          z.string().max(15).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zGstin).optional(),
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),

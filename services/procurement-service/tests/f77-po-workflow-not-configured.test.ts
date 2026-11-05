@@ -17,6 +17,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const TENANT = "11111111-eeee-4000-8000-0000000000f7";
 const ACTOR = randomUUID();
@@ -26,7 +27,7 @@ const VENDOR = randomUUID();
 
 function poBody() {
   return {
-    vendorId: VENDOR, indentRef: `procurement_indent:${randomUUID()}`,
+    vendorId: VENDOR, indentRef: INDENT_REF,
     gemOrderRef: "GEM/TEST/BASIS", // D4c #28: no empanelment record -> needs a GeM/tender basis
     items: [{ itemCode: "IC-1", description: "Widget", quantity: 1, unit: "nos", unitPriceMinor: 100 }],
   };
@@ -55,6 +56,9 @@ async function clean() {
   }));
 }
 
+// UAT T-EDGE b21 (TE-04 P08): a PO must cite a real approved indent, checked before 202.
+let INDENT_REF = "";
+beforeAll(async () => { INDENT_REF = await seedApprovedIndent(TENANT); });
 beforeAll(async () => {
   await clean();
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

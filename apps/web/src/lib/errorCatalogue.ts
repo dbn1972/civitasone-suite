@@ -553,6 +553,87 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["back", "help"],
   },
+  // ── UAT T-EDGE bundle 21 (appended) ─────────────────────────────────────────
+  // web middleware: an API call after the session has expired (401, no redirect). TE-10.
+  SESSION_EXPIRED: {
+    en: { what: "Your session has expired.", next: "Sign in again — your entries on this page are kept." },
+    hi: { what: "आपका सत्र समाप्त हो गया है।", next: "दोबारा साइन इन करें — इस पेज पर भरी गई जानकारी सुरक्षित है।" },
+    actions: ["signin"],
+    serverSide: true,
+  },
+  // workflow-service / finance-service: the losing checker of a parallel approval (TE-08). The
+  // decider name, when the answer carries it, is added by lib/validationCopy.ts.
+  TASK_ALREADY_DECIDED: {
+    en: { what: "Another officer has already decided this.", next: "Your decision was not recorded. Refresh to see the latest status." },
+    hi: { what: "किसी दूसरे अधिकारी ने इस पर पहले ही निर्णय ले लिया है।", next: "आपका निर्णय दर्ज नहीं किया गया। नवीनतम स्थिति देखने के लिए पेज रीफ़्रेश करें।" },
+    actions: ["back", "help"],
+  },
+  // X-Idempotency-Key reused with different details / still processing (TE-09).
+  IDEMPOTENCY_KEY_REUSED: {
+    en: { what: "This looks like a repeat of an earlier submission, but with different details.", next: "Refresh the page, check whether the first one was saved, then submit again." },
+    hi: { what: "यह किसी पिछले अनुरोध की पुनरावृत्ति लगती है, पर इसके विवरण अलग हैं।", next: "पेज रीफ़्रेश करें, देखें कि पहला अनुरोध सहेजा गया या नहीं, फिर दोबारा जमा करें।" },
+    actions: ["back", "help"],
+  },
+  IDEMPOTENCY_IN_PROGRESS: {
+    en: { what: "Your earlier submission is still being processed.", next: "Wait a moment, then check the list before you submit again." },
+    hi: { what: "आपका पिछला अनुरोध अभी संसाधित हो रहा है।", next: "थोड़ी देर रुकें, फिर दोबारा जमा करने से पहले सूची देखें।" },
+    actions: ["retry", "help"],
+  },
+  // procurement-service PO create: the cited indent (TE-04 P08).
+  INDENT_NOT_FOUND: {
+    en: { what: "The indent on this purchase order was not found.", next: "Choose an existing, approved indent, then submit again." },
+    hi: { what: "इस क्रय आदेश में दिया गया मांग-पत्र नहीं मिला।", next: "कोई मौजूदा, अनुमोदित मांग-पत्र चुनें, फिर दोबारा जमा करें।" },
+    actions: ["retry", "help"],
+  },
+  INDENT_NOT_APPROVED: {
+    en: { what: "The indent on this purchase order is not approved yet.", next: "Wait for the indent to be approved, or choose an approved indent." },
+    hi: { what: "इस क्रय आदेश का मांग-पत्र अभी अनुमोदित नहीं है।", next: "मांग-पत्र के अनुमोदन की प्रतीक्षा करें, या कोई अनुमोदित मांग-पत्र चुनें।" },
+    actions: ["back", "help"],
+  },
+  INDENT_BUDGET_EXCEEDED: {
+    en: { what: "This order is more than the indent still allows.", next: "Reduce the quantity or price, or raise a new indent for the rest." },
+    hi: { what: "यह आदेश मांग-पत्र में बची राशि से अधिक है।", next: "मात्रा या मूल्य कम करें, या शेष के लिए नया मांग-पत्र बनाएँ।" },
+    actions: ["retry", "help"],
+  },
+  // procurement-service GRN create: a line that is not on the PO (TE-04).
+  PO_LINE_NOT_FOUND: {
+    en: { what: "A line on this goods receipt is not on the purchase order.", next: "Choose the lines from the purchase order, then submit again." },
+    hi: { what: "इस माल प्राप्ति की एक पंक्ति क्रय आदेश में नहीं है।", next: "क्रय आदेश की पंक्तियाँ चुनें, फिर दोबारा जमा करें।" },
+    actions: ["retry", "help"],
+  },
+  // finance-service budget allocation (TE-04 BA09) and journal (TE-07 J16).
+  HEAD_NOT_FOUND: {
+    en: { what: "The budget head was not found.", next: "Choose an existing budget head, then save again." },
+    hi: { what: "बजट शीर्ष नहीं मिला।", next: "कोई मौजूदा बजट शीर्ष चुनें, फिर दोबारा सहेजें।" },
+    actions: ["retry", "help"],
+  },
+  ALLOCATION_BELOW_COMMITTED: {
+    en: { what: "The allocation cannot be lower than what is already committed or spent on this head.", next: "Enter a higher amount, or release the commitments first." },
+    hi: { what: "आवंटन इस शीर्ष पर पहले से प्रतिबद्ध या खर्च राशि से कम नहीं हो सकता।", next: "अधिक राशि दर्ज करें, या पहले प्रतिबद्धताएँ मुक्त करें।" },
+    actions: ["retry", "help"],
+  },
+  UNKNOWN_ACCOUNT_CODE: {
+    en: { what: "One or more account codes are not in the chart of accounts.", next: "Correct the highlighted account codes, then submit again." },
+    hi: { what: "एक या अधिक खाता कोड लेखा-सूची में नहीं हैं।", next: "चिह्नित खाता कोड ठीक करें, फिर दोबारा जमा करें।" },
+    actions: ["retry", "help"],
+  },
+  // hrms-service leave apply: the dates cross the end of the allocation leave year (TE-03 L06).
+  LEAVE_OUTSIDE_ALLOCATION_PERIOD: {
+    en: { what: "These dates run past the end of the leave year of this leave balance.", next: "Apply for the days in each leave year separately." },
+    hi: { what: "ये तारीखें इस अवकाश शेष के अवकाश वर्ष की सीमा से बाहर जाती हैं।", next: "हर अवकाश वर्ष के दिनों के लिए अलग-अलग आवेदन करें।" },
+    actions: ["retry", "help"],
+  },
+  // finance-service vendor bill: the head-of-account master data (TE-11), now checked before 202.
+  HOA_EMPTY: {
+    en: { what: "This budget head has no head-of-account code yet, so a bill cannot be booked to it.", next: "Ask the finance administrator to set its head-of-account code in the chart of accounts, then submit again." },
+    hi: { what: "इस बजट शीर्ष का लेखा शीर्ष कोड अभी तय नहीं है, इसलिए इस पर बिल दर्ज नहीं किया जा सकता।", next: "वित्त प्रशासक से लेखा-सूची में इसका लेखा शीर्ष कोड तय करवाएँ, फिर दोबारा जमा करें।" },
+    actions: ["back", "help"],
+  },
+  HOA_UNKNOWN_MAJOR_HEAD: {
+    en: { what: "The major head of this budget head is not in the major-head master.", next: "Ask the finance administrator to add the major head or correct the head-of-account code, then submit again." },
+    hi: { what: "इस बजट शीर्ष का मुख्य शीर्ष, मुख्य शीर्ष सूची में नहीं है।", next: "वित्त प्रशासक से मुख्य शीर्ष जुड़वाएँ या लेखा शीर्ष कोड ठीक करवाएँ, फिर दोबारा जमा करें।" },
+    actions: ["back", "help"],
+  },
 };
 
 /**

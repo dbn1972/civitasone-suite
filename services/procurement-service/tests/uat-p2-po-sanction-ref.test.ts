@@ -16,6 +16,7 @@ import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
 import { assertSanctionRefPresent, poTotalMinor } from "../src/modules/po/domain.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const TENANT = "11111111-eeee-4000-8000-0000000000c2";
 const ACTOR = randomUUID();
@@ -26,7 +27,7 @@ const SANCTION = randomUUID();
 
 function poBody(unitPriceMinor: number, sanctionRef?: string) {
   return {
-    vendorId: VENDOR, indentRef: `procurement_indent:${randomUUID()}`,
+    vendorId: VENDOR, indentRef: INDENT_REF,
     gemOrderRef: "GEM/TEST/BASIS",
     ...(sanctionRef ? { sanctionRef } : {}),
     items: [{ itemCode: "L2-ITM-1", description: "Paper", quantity: 4, unit: "nos", unitPriceMinor }],
@@ -48,6 +49,9 @@ async function clean() {
   }));
 }
 
+// UAT T-EDGE b21 (TE-04 P08): a PO must cite a real approved indent, checked before 202.
+let INDENT_REF = "";
+beforeAll(async () => { INDENT_REF = await seedApprovedIndent(TENANT); });
 beforeAll(async () => {
   await clean();
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

@@ -201,8 +201,8 @@ SELECT
       await tx.unsafe(`
 INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000009', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '${clId}', '2024-25', 30, 25, now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '${elId}', '2024-25', 15, 13, now(), now(), '${A}', '${A}', 1)
+  ('eeeeeeee-0001-0000-0000-000000000009', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '${clId}', '2026-27', 30, 25, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '${elId}', '2026-27', 15, 13, now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- created_by/updated_by on these two are the *applicant* employee, not the

@@ -16,7 +16,8 @@
     "./validate": "./dist/validate.js",
     "./plugin": "./dist/plugin.js",
     "./module-manifest": "./dist/module-manifest.js",
-    "./module-resolver": "./dist/module-resolver.js"
+    "./module-resolver": "./dist/module-resolver.js",
+    "./validators": "./dist/validators.js"
   },
   "scripts": {
     "build": "tsc",

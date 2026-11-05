@@ -29,7 +29,12 @@ function isFrameworkClientError(err: unknown): boolean {
 export function registerSchemaErrorHandler(app: AppLike, HttpErrorClass?: HttpErrorCtor, opts: SchemaErrorHandlerOptions = {}): void {
   const shared = createFastifyErrorHandler((err) => {
     if (HttpErrorClass && err instanceof HttpErrorClass) {
-      return { status: err.status, code: err.code, message: err.message };
+      const extra = err as unknown as { fieldErrors?: unknown; details?: unknown };
+      return {
+        status: err.status, code: err.code, message: err.message,
+        ...(Array.isArray(extra.fieldErrors) ? { fieldErrors: extra.fieldErrors as { field: string; message: string; code?: string }[] } : {}),
+        ...(extra.details && typeof extra.details === "object" ? { details: extra.details as Record<string, unknown> } : {}),
+      };
     }
     return isHttpError(err) ? err : null;
   });

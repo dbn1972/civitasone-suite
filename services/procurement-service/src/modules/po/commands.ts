@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -7,7 +8,8 @@ import type { CreatePoBody, GemOrderBody, DispatchBody, RejectPoBody } from "./v
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createPo(ctx: RequestContext, body: CreatePoBody): Promise<Accepted> {
-  const id = randomUUID();
+  // UAT T-EDGE TE-09: id (and messageId) from the X-Idempotency-Key when sent (meeting pattern).
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.poCreate, {
     messageId: id, type: COMMANDS.poCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

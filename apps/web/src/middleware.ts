@@ -208,7 +208,25 @@ async function forgetThenContinue(req: NextRequest): Promise<NextResponse> {
   return buildNextResponse(req);
 }
 
+/**
+ * A browser navigation (address bar, plain link such as a file download, form post) cannot render a
+ * JSON body, so it keeps the redirect to the sign-in page even under /api/. fetch()/XHR callers send
+ * Sec-Fetch-Mode: cors|same-origin (or an Accept that does not prefer HTML) and get the JSON 401.
+ */
+function isBrowserNavigation(req: NextRequest): boolean {
+  const mode = req.headers.get("sec-fetch-mode");
+  if (mode) return mode === "navigate";
+  return (req.headers.get("accept") ?? "").includes("text/html");
+}
+
 function loginRedirect(req: NextRequest): NextResponse {
+  // UAT T-EDGE TE-10 / TE-14: an API call with no live session used to get a 307 to the
+  // sign-in page, which fetch() followed (a POST then ended in 405), so the form said "a
+  // problem on our side". API calls now get a JSON 401 SESSION_EXPIRED the page can explain
+  // ("Your session has expired. Sign in again ..."), with the typed entries kept.
+  if (req.nextUrl.pathname.startsWith("/api/") && !isBrowserNavigation(req)) {
+    return NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
+  }
   const login = new URL(defaultLoginPath(), req.url);
   login.searchParams.set("next", req.nextUrl.pathname);
   return NextResponse.redirect(login);
@@ -221,7 +239,7 @@ function loginRedirect(req: NextRequest): NextResponse {
 function sessionExpiredResponse(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
   let res: NextResponse;
-  if (pathname.startsWith("/api/")) {
+  if (pathname.startsWith("/api/") && !isBrowserNavigation(req)) {
     res = NextResponse.json({ code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." }, { status: 401 });
   } else {
     const login = new URL(defaultLoginPath(), req.url);

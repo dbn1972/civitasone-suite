@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { ZodError } from "zod";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import { resolveServiceContext, AuthContextError } from "@civitasone/auth/context";
 import { requirePermission } from "@civitasone/auth/permissions";
 import { hasAnyRole } from "@civitasone/auth";
@@ -11,7 +12,9 @@ export class HttpError extends Error {
     public code: string,
     message: string,
     /** Optional per-field messages, sent in the same `fieldErrors` shape as a validation failure. */
-    public fieldErrors?: { field: string; message: string }[],
+    public fieldErrors?: { field: string; message: string; code?: string }[],
+    /** UAT T-EDGE b21: optional structured fields merged into the body (e.g. who already decided). */
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -77,11 +80,12 @@ export function financeErrorHandler(err: unknown, req: FastifyRequest, reply: Fa
       message: "invalid request",
       correlationId,
       retryable: false,
-      fieldErrors: zodErr.issues?.map((i) => ({ field: i.path.join("."), message: i.message })) ?? [],
+      fieldErrors: zodErr.issues ? zodFieldErrors(zodErr.issues) : [],
     });
   }
   if (err instanceof HttpError) {
     return reply.code(err.status).send({
+      ...(err.details ?? {}),
       code: err.code, message: err.message, correlationId, retryable: false,
       ...(err.fieldErrors?.length ? { fieldErrors: err.fieldErrors } : {}),
     });

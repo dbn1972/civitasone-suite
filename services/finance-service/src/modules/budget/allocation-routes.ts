@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
+import { zFyLabel, boundedMinorBigint } from "@civitasone/schemas/validators";
+import { idempotentId } from "@civitasone/auth";
+import { idempotentCreate } from "../../shared/idempotency.js";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -22,7 +25,8 @@ const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
 // accepts string | safe-integer number | bigint and rejects unsafe (>2^53)
 // numbers, forcing those onto the string path instead of silently losing
 // precision.
-const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
+// UAT T-EDGE TE-04 (BA06): a 1e20 allocation was 202-accepted and dead-lettered (bigint overflow).
+const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative().superRefine(boundedMinorBigint));
 const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
 
 // BUG FIX (misleading dead flag): `enforce` used to be accepted here (and
@@ -40,11 +44,36 @@ const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
 // this platform's compliance model (GFR Rule 10 re-appropriation is the
 // correct, audited way to move headroom between heads). DB column dropped in
 // migrations/0067_drop_allocation_enforce.sql.
+// UAT T-EDGE TE-07 (BA07): the FY must be a real "YYYY-YY" label with consecutive years (2031-99 was written).
 const setAllocBody = z.object({
   headId: z.string().uuid(),
-  fy: z.string().regex(/^\d{4}-\d{2}$/),
+  fy: zFyLabel,
   allocatedMinor: moneyMinorFieldNonNeg,
 });
+
+/**
+ * UAT T-EDGE TE-04: rules the allocation upsert consumer would otherwise fail on AFTER a 202
+ * (dead-lettered, the maker never told), checked here from finance data: the head must exist
+ * in this tenant (BA09), and a lowered allocation may not drop below what is already
+ * committed + spent on the head for that FY (the chk_allocation_no_overcommit CHECK).
+ */
+async function assertAllocationAcceptable(tenantId: string, body: { headId: string; fy: string; allocatedMinor: bigint }): Promise<void> {
+  const heads = await findHeadLabels(tenantId, [body.headId]);
+  if (!heads.has(body.headId)) {
+    throw new HttpError(422, "HEAD_NOT_FOUND", "the budget head was not found", [
+      { field: "headId", message: "Choose an existing budget head.", code: "HEAD_NOT_FOUND" },
+    ]);
+  }
+  const current = await allocRepo.findAllocation(tenantId, body.headId, body.fy);
+  if (current) {
+    const used = BigInt(current.committedMinor) + BigInt(current.actualMinor);
+    if (body.allocatedMinor < used) {
+      throw new HttpError(422, "ALLOCATION_BELOW_COMMITTED", `the allocation cannot be lower than the ${used} paise already committed or spent on this head in ${body.fy}`, [
+        { field: "allocatedMinor", message: "This is less than what is already committed or spent on this head.", code: "ALLOCATION_BELOW_COMMITTED" },
+      ]);
+    }
+  }
+}
 
 const reapprBody = z.object({
   fy: z.string().regex(/^\d{4}-\d{2}$/),
@@ -59,13 +88,18 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = setAllocBody.parse(req.body);
-    const id = randomUUID();
-    await queue.publish(COMMANDS.budgetAllocationUpsert, {
-      messageId: id, type: COMMANDS.budgetAllocationUpsert,
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, ...body },
+    await assertAllocationAcceptable(ctx.tenantId, body);
+    // UAT T-EDGE TE-09: one upsert per X-Idempotency-Key (same body replays, other body 422).
+    const data = await idempotentCreate(ctx, "finance.budget-allocation.upsert", body, async () => {
+      const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
+      await queue.publish(COMMANDS.budgetAllocationUpsert, {
+        messageId: id, type: COMMANDS.budgetAllocationUpsert,
+        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+        payload: { id, tenantId: ctx.tenantId, ...body },
+      });
+      return { id, status: "accepted" };
     });
-    return reply.code(202).send({ data: { id, status: "accepted" } });
+    return reply.code(202).send({ data });
   });
 
   app.get("/v1/finance/budget-allocations", async (req, reply) => {

@@ -3322,7 +3322,7 @@
     "storedEncrypted": "(एन्क्रिप्टेड रूप में संग्रहीत)",
     "panPlaceholder": "ABCDE1234F",
     "aadhaarRefLabel": "आधार संदर्भ",
-    "aadhaarHint": "(अंतिम 4 अंक या मास्क्ड संदर्भ)",
+    "aadhaarHint": "(पूरा 12 अंकों का नंबर; केवल अंतिम 4 अंक रखे जाते हैं)",
     "aadhaarPlaceholder": "XXXX XXXX 1234",
     "bankAccountNoLabel": "बैंक खाता संख्या",
     "bankAccountPlaceholder": "खाता संख्या",

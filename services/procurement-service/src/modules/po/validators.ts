@@ -1,11 +1,15 @@
 import { z } from "zod";
+import { zTrimmedText, zTrimmedCode, zIsoDate, DATE_WINDOWS, istToday, yearsFromEnv, boundedMinorNumber } from "@civitasone/schemas/validators";
+
+/** PO delivery date window: today .. PO_DELIVERY_MAX_YEARS (default 3) years ahead (TE-01 P01/P02, TE-07 P03). */
+export const poDeliveryWindow = () => DATE_WINDOWS.upcoming(istToday(), yearsFromEnv("PO_DELIVERY_MAX_YEARS", 3));
 
 const poItemSchema = z.object({
-  itemCode:       z.string().min(1).max(64),
-  description:    z.string().min(1).max(500),
-  quantity:       z.number().int().positive(),
-  unit:           z.string().min(1).max(32).default("nos"),
-  unitPriceMinor: z.number().int().nonnegative(),
+  itemCode:       zTrimmedCode(64, "item code"),
+  description:    zTrimmedText(500, { label: "item description" }),
+  quantity:       z.number().int().positive().max(1_000_000_000),
+  unit:           zTrimmedText(32, { label: "unit" }).default("nos"),
+  unitPriceMinor: z.number().int().nonnegative().superRefine(boundedMinorNumber),
   itemType:       z.enum(["consumable", "fixed_asset", "service"]).default("consumable"),
 });
 
@@ -16,7 +20,7 @@ export const createPoBody = z.object({
   // for backward compatibility with older callers that still send one.
   poNo:            z.string().min(1).max(64).optional(),
   vendorId:        z.string().uuid(),
-  indentRef:       z.string().min(1),
+  indentRef:       zTrimmedText(128, { label: "indent reference" }),
   sanctionRef:     z.string().optional(),
   rateContractRef: z.string().optional(),
   // D4c #28: required (one of the two) only when the vendor has NO empanelment
@@ -25,7 +29,7 @@ export const createPoBody = z.object({
   gemOrderRef:     z.string().trim().max(128).optional(),
   // SVC-046: supply Purchase Order (default) vs service / work order.
   orderType:       z.enum(["supply", "service", "work"]).default("supply"),
-  deliveryDate:    z.string().optional(),
+  deliveryDate:    zIsoDate({ window: poDeliveryWindow, label: "delivery date" }).optional(),
   items:           z.array(poItemSchema).min(1),
 });
 export type CreatePoBody = z.infer<typeof createPoBody>;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
+import { zIsoDate, istToday, addYears, yearsFromEnv } from "@civitasone/schemas/validators";
 import { REIMBURSEMENT_ATTACHMENT_MAX, revisionSanityIssue } from "./fin03-domain.js";
 
 export const createStructureBody = z.object({
@@ -280,7 +281,9 @@ export const reimbursementRejectBody = z.object({
 // mirrors createArrearBody/computeBonusBody/createReimbursementBody above.
 export const createSalaryRevisionBody = z.object({
   employeeId:    z.string().uuid(),
-  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // UAT T-EDGE TE-01 / TE-07 (S01-S04): a real date, at most SALARY_REVISION_MAX_PAST_YEARS (default 5,
+  // pay-commission arrears) back and SALARY_REVISION_MAX_FUTURE_YEARS (default 1) ahead.
+  effectiveDate: zIsoDate({ label: "effective date", window: () => ({ min: addYears(istToday(), -yearsFromEnv("SALARY_REVISION_MAX_PAST_YEARS", 5)), max: addYears(istToday(), yearsFromEnv("SALARY_REVISION_MAX_FUTURE_YEARS", 1)) }) }),
   // .safe(): these arrive as JSON numbers (doubles); one above 2^53-1 paise would already have been
   // rounded by JSON.parse, so it is refused rather than stored as a different amount.
   oldBasicMinor: z.number().int().safe().nonnegative(),
