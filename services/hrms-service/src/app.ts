@@ -76,6 +76,7 @@ import { interviewScoringRoutes } from "./modules/recruitment/interview-scoring-
 import { interviewPanelRoutes } from "./modules/recruitment/panel-routes.js";
 import { leaveCancelRoutes } from "./modules/leave/cancel-route.js";
 import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
+import { leaveYearEndRoutes } from "./modules/leave/year-end-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
 import { applyPostingRoutes } from "./modules/workforce-core/apply-posting/routes.js";
@@ -264,6 +265,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(policyAdminRoutes);
     await app.register(policySettingsRoutes);
     await app.register(leaveCancelRoutes);
+    // UAT T-PERIOD D-14: leave year-end dry run.
+    await app.register(leaveYearEndRoutes);
     await app.register(compOffRoutes);
   }
   // attendance

@@ -2161,7 +2161,8 @@
       "DDO_INACTIVE": "That DDO is inactive. Pick an active DDO.",
       "DUPLICATE_RUN_FOR_PERIOD": "A run already exists for this pay group and month.",
       "PAY_GROUP_INACTIVE": "A selected pay group is inactive. Reactivate it or pick another.",
-      "PAY_GROUP_NOT_FOUND": "A selected pay group no longer exists. Refresh the page and try again."
+      "PAY_GROUP_NOT_FOUND": "A selected pay group no longer exists. Refresh the page and try again.",
+      "TAX_CONFIG_MISSING": "No income-tax slab configuration exists for this month's financial year. Configure the tax slabs for that year before creating the run."
     }
   },
   "createSalaryRevisionForm": {
@@ -2893,7 +2894,10 @@
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Generate EPFO ECR file?",
     "confirmLabel": "Confirm & Download",
-    "confirmDescription": "Generate and download the EPFO Electronic Challan cum Return for period <strong>{month}</strong>."
+    "confirmDescription": "Generate and download the EPFO Electronic Challan cum Return for period <strong>{month}</strong>.",
+    "errors": {
+      "UAN_MISSING": "ECR not generated. These EPF members have no valid 12-digit UAN: {employees}. Record their UAN in the employee record and try again."
+    }
   },
   "employeeDetail": {
     "notFoundTitle": "Employee Profile",
@@ -5679,6 +5683,7 @@
     "statTotalGrossPeriod": "Total Gross, all paid runs ({period})",
     "runApproval": {
       "summaryTitle": "Arrears in this run",
+      "reviewTitle": "Review before approval",
       "summaryTotal": "{count, plural, one {# employee is} other {# employees are}} paid arrears totalling {amount}.",
       "summaryNeedReview": "{count, plural, one {# needs} other {# need}} an acknowledgement before approval (arrears above the review threshold).",
       "zeroBasicSummary": "{count, plural, one {# slip has} other {# slips have}} no basic pay (HRMS basic missing) and must be fixed or excluded before approval.",
@@ -5694,8 +5699,24 @@
       "arrearsHeading": "Arrears above the review threshold",
       "arrearsAcknowledge": "I have checked the arrears of {amount} for {employee}",
       "reviewNoteLabel": "Review note (recorded with each exclusion and acknowledgement)",
-      "reviewIncomplete": "Exclude every slip with no basic pay, acknowledge every arrears line listed, and enter a review note of at least 10 characters.",
-      "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again."
+      "reviewIncomplete": "Exclude every slip with no basic pay, acknowledge every arrears line and every slip that pays nothing, and enter a review note of at least 10 characters.",
+      "reviewLoadFailed": "Could not load the items to review. Close this dialog and try again.",
+      "netPaySummary": "{count, plural, one {# slip pays} other {# slips pay}} nothing (net pay Rs 0 or less, or deductions above gross) and must be acknowledged before approval.",
+      "netPayHeading": "Slips that pay nothing",
+      "netPayAcknowledge": "I have checked {employee}: gross {gross}, deductions {deductions}, net {net}",
+      "tdsHeading": "Income-tax (TDS) items",
+      "tdsInfoHeading": "TDS items for information",
+      "tdsAcknowledge": "I have checked the TDS of {employee}",
+      "tdsUnrecoverable": "This cannot be recovered through payroll this FY -- collect separately or adjust before Form 16.",
+      "tdsKind": {
+        "presumed_months": "{employee}: {months} earlier month(s) with no slip and no opening YTD -- salary estimated and TDS presumed deducted. Enter the opening YTD to replace the estimate.",
+        "excess": "{employee}: TDS deducted this year exceeds the estimated tax by {amount}; no TDS this month (refundable through the income-tax return).",
+        "shortfall": "{employee}: {amount} of TDS not deducted this month (deduction limit, Code on Wages 2019 s.18(2)).",
+        "recovery_deferred": "{employee}: {amount} of loan / arrear recovery deferred to keep deductions within the limit (Code on Wages 2019 s.18(2))."
+      },
+      "epsUnrecordedHeading": "EPS eligibility not recorded",
+      "epsUnrecordedAdvisory": "These EPF members are treated as EPS members because their first EPF joining date, joining wage, joint option or EPS membership is not recorded in HRMS. Record it before the next run.",
+      "epsUnrecordedBlock": "Approval is blocked until EPS eligibility is recorded in HRMS for these EPF members (first EPF joining date, joining wage, joint option or EPS membership); then recompute the run."
     },
     "runErrors": {
       "RUN_NOT_READY_FOR_APPROVAL": "This run cannot be approved yet. Its pay slips are still being calculated, or the calculation did not finish. Approve it once its status is Ready for approval.",
@@ -18492,5 +18513,129 @@
         "summary": "The look of the application for your office: colours, logo and branding."
       }
     }
+  },
+  "pensionSchemeChange": {
+    "error": {
+      "PENSION_SCHEME_UNCHANGED": "The employee is already on this pension scheme from that date.",
+      "PENSION_SCHEME_CHANGE_PENDING": "A pension scheme change for this employee is already waiting for approval.",
+      "PENSION_SCHEME_CHANGE_NOT_PENDING": "This request has already been approved or rejected.",
+      "PENSION_SCHEME_EFFECTIVE_BEFORE_JOINING": "The effective date cannot be before the employee's joining month.",
+      "PENSION_SCHEME_EFFECTIVE_NOT_AFTER_LAST": "The effective date must be after the last approved pension scheme change.",
+      "UAN_REQUIRED": "An EPF member needs a valid 12-digit UAN. Record the UAN or enter it with the request.",
+      "MAKER_CHECKER_VIOLATION": "A different person must approve or reject this change. You cannot decide your own request.",
+      "EMPLOYEE_EXITED": "The pension scheme of an employee who has left cannot be changed.",
+      "REASON_REQUIRED": "Enter a reason of at least 10 characters.",
+      "generic": "The pension scheme change could not be saved. Try again.",
+      "PENSION_SCHEME_NOT_ALLOWED": "This pension scheme change is not allowed for this employee (contract and PSU staff: EPF only; regular staff who joined before 2004: GPF; others: NPS or UPS, with UPS chosen once). A super administrator can record an exception with a reason.",
+      "PENSION_SCHEME_OVERRIDE_FORBIDDEN": "Only a super administrator can record a pension scheme change outside the eligibility rules.",
+      "EPF_JOINING_WAGE_RECORDED": "The EPF joining wage is already recorded for this employee and cannot be changed by a request."
+    },
+    "title": "Pension scheme",
+    "currentLabel": "Current scheme",
+    "notRecorded": "Not recorded",
+    "uanMissingWarning": "EPF member without a valid 12-digit UAN: the EPFO ECR cannot be generated until it is recorded.",
+    "changeButton": "Change pension scheme",
+    "dialogTitle": "Change pension scheme",
+    "dialogHelp": "The new scheme applies from the 1st of the month you choose. Salary slips already computed are not changed; any difference is reported for review. A different HR administrator must approve the change.",
+    "schemeLabel": "New scheme",
+    "effectiveMonthLabel": "Effective from (month)",
+    "reasonLabel": "Reason",
+    "uanLabel": "UAN (12 digits)",
+    "submitButton": "Request change",
+    "cancelButton": "Cancel",
+    "submitted": "Change requested. A different HR administrator must approve it.",
+    "pendingTitle": "Change waiting for approval",
+    "changeLine": "{from} to {to} from {date}",
+    "reasonText": "Reason: {reason}",
+    "decisionNoteLabel": "Note (required to reject)",
+    "approveButton": "Approve",
+    "rejectButton": "Reject",
+    "approved": "Change approved.",
+    "rejected": "Change rejected.",
+    "historyTitle": "History",
+    "monthRequired": "Choose the month the new scheme starts.",
+    "uanInvalid": "The UAN must be exactly 12 digits.",
+    "rejectNoteRequired": "Enter a note of at least 3 characters to reject.",
+    "loadError": "The pension scheme history could not be loaded.",
+    "schemes": {
+      "GPF": "GPF (General Provident Fund)",
+      "NPS": "NPS (National Pension System)",
+      "EPF": "EPF (Employees' Provident Fund)",
+      "UPS": "UPS (Unified Pension Scheme)",
+      "NONE": "No pension scheme"
+    },
+    "status": {
+      "pending": "pending",
+      "approved": "approved",
+      "rejected": "rejected"
+    },
+    "membershipTitle": "EPF membership details (optional)",
+    "membershipHelp": "Used to decide EPS membership. Record what is known from the UAN history; leave the rest blank.",
+    "firstJoinedLabel": "First joined EPF on (from the UAN history)",
+    "joiningWageLabel": "EPF wages at first joining (Rs, Basic + DA)",
+    "jointOptionLabel": "Member by joint option (para 26(6); wages above Rs 15,000 at joining)",
+    "epsMemberLabel": "EPS membership",
+    "epsMemberUnknown": "Not recorded (decided from the details above)",
+    "epsMemberYes": "EPS member",
+    "epsMemberNo": "Not an EPS member",
+    "overrideLabel": "Override reason (super administrator only; for a change outside the eligibility rules)",
+    "overrideTooShort": "An override reason needs at least 20 characters.",
+    "joiningWageInvalid": "Enter the joining wage in rupees, e.g. 15000."
+  },
+  "openingYtd": {
+    "title": "Opening year-to-date (TDS)",
+    "intro": "Salary paid and TDS deducted before payroll went live here, or by a previous employer (Form 12B). Approved records are used as actual figures for income-tax (s.192); without one, TDS for earlier months is presumed and each pay run needs an acknowledgement.",
+    "empty": "No opening year-to-date recorded.",
+    "loadError": "Could not load the opening year-to-date.",
+    "colFy": "Financial year",
+    "colSource": "Source",
+    "colSalary": "Salary",
+    "colTds": "TDS",
+    "colStatus": "Status",
+    "sourcePreGoLive": "Before go-live (this employer)",
+    "sourcePriorEmployer": "Previous employer (Form 12B)",
+    "sourcePreGoLiveMonths": "Before go-live ({months} months)",
+    "sourcePriorEmployerName": "Previous employer: {name}",
+    "status": {
+      "pending": "Pending approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "superseded": "Superseded by a correction"
+    },
+    "addButton": "Add opening year-to-date",
+    "dialogTitle": "Opening year-to-date",
+    "dialogHelp": "Enter the figures from the legacy payroll / Form 12B. A payroll administrator other than you must approve them.",
+    "fyLabel": "Financial year (YYYY-YY)",
+    "sourceLabel": "Source",
+    "monthsLabel": "Months covered (1 to 11)",
+    "nameLabel": "Previous employer name",
+    "tanLabel": "Previous employer TAN (optional)",
+    "salaryLabel": "Salary paid (Rs)",
+    "tdsLabel": "TDS deducted (Rs)",
+    "noteLabel": "Note (source of the figures)",
+    "submitButton": "Submit for approval",
+    "cancelButton": "Cancel",
+    "approveButton": "Approve {fy}",
+    "rejectButton": "Reject {fy}",
+    "decisionNoteLabel": "Decision note (at least 10 characters)",
+    "fyInvalid": "Enter the financial year as YYYY-YY, e.g. 2026-27.",
+    "amountInvalid": "Enter the salary and TDS in rupees, up to 2 decimals.",
+    "monthsInvalid": "Enter the number of months covered, 1 to 11.",
+    "nameRequired": "Enter the previous employer name.",
+    "noteRequired": "Enter a note of at least 10 characters.",
+    "decisionNoteRequired": "Enter a decision note of at least 10 characters.",
+    "submitted": "Submitted for approval.",
+    "approved": "Approved.",
+    "rejected": "Rejected.",
+    "error": {
+      "OPENING_YTD_EXISTS": "An opening year-to-date for this year and source already exists. Reject it first to replace it.",
+      "OPENING_YTD_DECIDED": "This record has already been decided.",
+      "MAKER_CHECKER_VIOLATION": "Someone other than the officer who entered it must approve or reject it.",
+      "OPENING_YTD_PENDING": "A record for this year and source is already waiting for approval.",
+      "OPENING_YTD_SUPERSEDE_INVALID": "Only an approved record of the same year, source and employer can be corrected.",
+      "generic": "Could not save. Try again."
+    },
+    "correctButton": "Correct {fy}",
+    "correctHelp": "Enter the corrected figures. They replace the approved record once another payroll administrator approves them; the old record is kept."
   }
 }

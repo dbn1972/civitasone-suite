@@ -122,6 +122,8 @@ function wholeRupees(minor: number): number {
 type Form16PartBOnWire = { [K in Exclude<keyof Form16PartBMinor, "regime">]: number } & { regime: Form16PartBMinor["regime"] };
 
 type AnnexureIIRow = { employeeId: string; pan: string; name: string } & Form16PartBOnWire;
+/** Delta review B2: one row per previous employer (Form 12B) of a deductee, beside Annexure II (whose rows stay flat paise). */
+type AnnexureIIPrevEmployerRow = { employeeId: string; name: string; tan: string | null; salaryMinor: number; tdsMinor: number };
 
 function partBOnWire(p: Form16PartBMinor): Form16PartBOnWire {
   const { regime, ...amounts } = p;
@@ -150,7 +152,10 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   // Restrict to disbursed/approved runs so we only report deposited TDS.
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
-  const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const validRunIds = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed" || r.status === "paid").map((r) => r.id));
+  // PR #2459 review SF3: a failed / draft / processing run never counts, even
+  // when the quarter has no approved run (same rule as challan-routes.ts).
+  const nonFinalRunIds = new Set(runs.filter((r) => !validRunIds.has(r.id)).map((r) => r.id));
 
   const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
@@ -160,6 +165,7 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   // figure the UI shows could drift from the stored deductions.
   const byEmp = new Map<string, { tdsMinor: bigint; periods: Set<string> }>();
   for (const t of tdsRows) {
+    if (nonFinalRunIds.has(t.runId)) continue;
     if (validRunIds.size > 0 && !validRunIds.has(t.runId)) continue;
     const e = byEmp.get(t.employeeId) ?? { tdsMinor: 0n, periods: new Set<string>() };
     e.tdsMinor += BigInt(t.tdsMinor);
@@ -276,13 +282,14 @@ async function buildForm24Q(
   // restricted to approved/disbursed runs.
   const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
-  const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed" || r.status === "paid").map((r) => r.id));
+  const challanNonFinalRunIds = new Set(challanRuns.filter((r) => !challanValidRunIds.has(r.id)).map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months), notExcludedSlip(payrollTds.slipId))));
   const challanBigs = months.map((month) => ({
     month,
     minor: challanTdsRows
-      .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
+      .filter((t) => t.period === month && !challanNonFinalRunIds.has(t.runId) && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
       .reduce((s, t) => s + BigInt(t.tdsMinor), 0n),
   }));
   const challans = challanBigs.map(({ month, minor }) => {
@@ -292,17 +299,23 @@ async function buildForm24Q(
 
   // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
   let annexureII: AnnexureIIRow[] | undefined;
+  let annexureIIPrevEmployers: AnnexureIIPrevEmployerRow[] | undefined;
   if (q === "Q4") {
     annexureII = [];
+    annexureIIPrevEmployers = [];
     for (const d of deductees) {
       try {
-        const { form16: f16, partBMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
+        const { form16: f16, partBMinor, prevEmployersMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
         annexureII.push({
           employeeId: d.employeeId,
           pan: f16.form16PartA.deductee.pan,
           name: f16.form16PartA.deductee.name,
           ...partBOnWire(partBMinor),
         });
+        // Delta review B2: previous employers (Form 12B) of the approved opening YTD.
+        for (const pe of prevEmployersMinor) {
+          annexureIIPrevEmployers.push({ employeeId: d.employeeId, name: pe.name, tan: pe.tan, salaryMinor: minorToNumber(pe.salaryMinor), tdsMinor: minorToNumber(pe.tdsMinor) });
+        }
       } catch (err) {
         // M4: never silently drop a deductee because HRMS is down — fail the export.
         if (err instanceof HrmsUnavailableError) {
@@ -347,6 +360,7 @@ async function buildForm24Q(
     totalTdsDeductedMinor,
     totalTdsDepositedMinor,
     ...(annexureII ? { annexureII } : {}),
+    ...(annexureIIPrevEmployers ? { annexureIIPrevEmployers } : {}),
     reconciliation: {
       matched: reconciled,
       perPeriod: reconciliation.map(reconciliationOnWire),

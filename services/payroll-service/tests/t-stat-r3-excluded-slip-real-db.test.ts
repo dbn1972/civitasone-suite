@@ -159,7 +159,8 @@ describe("T-STAT D-B1 (B): ledger rows still attached to an excluded slip are ig
     });
     vi.mocked(fetchPayrollInput).mockResolvedValue({
       month: "2026-08", lopDays: {}, overtimeHours: {},
-      employees: [[excl, "R3B-EXCL"], [paid, "R3B-PAID"]].map(([id, no]) => ({ id, employeeNo: no, fullName: `Name ${no}`, uan: `UAN-${no}`, pran: `PRAN-${no}`, pan: null, basicMinor: "2000000" })),
+      // UAT b18 D3: the ECR now refuses a non-12-digit UAN, so the fixture UANs are real-shaped.
+      employees: [[excl, "R3B-EXCL", "300000000001"], [paid, "R3B-PAID", "300000000002"]].map(([id, no, uan]) => ({ id, employeeNo: no, fullName: `Name ${no}`, uan, pran: `PRAN-${no}`, pan: null, basicMinor: "2000000" })),
     } as never);
     vi.mocked(fetchEmployeeSummaries).mockResolvedValue(new Map([[excl, { fullName: "Name R3B-EXCL", employeeNo: "R3B-EXCL" }], [paid, { fullName: "Name R3B-PAID", employeeNo: "R3B-PAID" }]]) as never);
   });
@@ -197,8 +198,8 @@ describe("T-STAT D-B1 (B): ledger rows still attached to an excluded slip are ig
     const auth = { authorization: `Bearer ${signToken({ sub: approver, tid: tenant, roles: ["super_admin"], sid: "r3" }, SECRET, 3600)}` };
     const ecr = await app.inject({ method: "GET", url: "/v1/payroll/statutory/ecr?month=2026-08", headers: auth });
     expect(ecr.statusCode).toBe(200);
-    expect(ecr.body).toContain("UAN-R3B-PAID");
-    expect(ecr.body).not.toContain("UAN-R3B-EXCL");
+    expect(ecr.body).toContain("300000000002");
+    expect(ecr.body).not.toContain("300000000001");
     const nps = await app.inject({ method: "GET", url: "/v1/payroll/statutory/nps-scf?month=2026-08", headers: auth });
     expect(nps.statusCode).toBe(200);
     expect(nps.body).toContain("PRAN-R3B-PAID");

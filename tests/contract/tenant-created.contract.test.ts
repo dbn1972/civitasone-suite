@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { tenantTenantCreated } from "../../packages/events/src/contracts/index.js";
 import { tenantCreatedEventPayload } from "../../services/tenant-service/src/modules/tenant/events.js";
 import { resolveTenantCreated } from "../../services/admin-service/src/modules/tenants/tenant-created.js";
+import { CONSUMED_EVENTS as POLICY_CONSUMED } from "../../services/policy-service/src/topics.js";
 
 const ROOT = process.cwd();
 const T = "353c0e2c-aab9-4a64-8e05-9503f6973020";
@@ -46,5 +47,24 @@ describe("tenant.tenant.created contract (tenant-service -> admin-service)", () 
     const consumer = readFileSync(join(ROOT, "services/admin-service/src/modules/tenants/consumer.ts"), "utf8");
     expect(consumer).toMatch(/"tenant\.tenant\.created"/);
     expect(consumer).toMatch(/resolveTenantCreated\(/);
+  });
+});
+
+// POLICY-SEED-1 (UAT bundle 17): policy-service provisions the standard approve grants for every new tenant.
+describe("tenant.tenant.created contract (tenant-service -> policy-service)", () => {
+  it("policy-service is a declared consumer and subscribes through the contract reader", () => {
+    expect(tenantTenantCreated.consumers).toContain("policy-service");
+    expect(POLICY_CONSUMED.tenantCreated).toBe(tenantTenantCreated.topic);
+    const consumer = readFileSync(join(ROOT, "services/policy-service/src/modules/tenant-provision/consumer.ts"), "utf8");
+    expect(consumer).toMatch(/subscribe<TenantCreatedEvent>\(CONSUMED_EVENTS\.tenantCreated/);
+    expect(consumer).toMatch(/tenantTenantCreated\.validate\(/);
+    expect(consumer).toMatch(/runWithTenant\(tenantId,/);
+    const worker = readFileSync(join(ROOT, "services/policy-service/src/worker.ts"), "utf8");
+    expect(worker).toMatch(/registerTenantProvisionConsumers\(queue\)/);
+  });
+
+  it("the producer payload is accepted by the policy-service contract check (both wire versions)", () => {
+    expect(tenantTenantCreated.validate(tenantCreatedEventPayload(VIEW))).toEqual({ ok: true });
+    expect(tenantTenantCreated.validate({ tenantId: T, plan: "govt" })).toEqual({ ok: true });
   });
 });

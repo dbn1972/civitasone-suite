@@ -117,6 +117,10 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   hasChildHeadsTx: (...args: any[]) => hasChildHeadsTxMock(...args),
 }));
 
+// UAT T-PERIOD D-04: the payroll settlement branch reads the tenant accounting basis.
+vi.mock("../src/modules/approvals/repo.js", () => ({
+  loadSettingsTx: vi.fn(async () => ({ accountingBasis: "cash" })),
+}));
 vi.mock("../src/modules/period-close/repo.js", () => ({
   getPeriodStatusTx: (...args: any[]) => getPeriodStatusTxMock(...args),
 }));

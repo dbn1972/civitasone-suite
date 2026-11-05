@@ -150,8 +150,9 @@ describe("mixed-profile salary run", () => {
     expect(by["PP-A"]).toMatchObject({ pay_profile: "deputation_parent_scale", basic_minor: "4490000", gpf_minor: "696000", nps_employee_minor: "0" });
     expect(comp("PP-A", "DEP_ALLOW")).toBe(449000);
     expect(comp("PP-A", "HRA")).toBe(898000);
-    // 3 LOP days of 30 reduce Basic + DA + DEP_ALLOW pro rata: (44,900 + 24,695 + 4,490) x 3/30 = 7,408.50 -> 7,409
-    expect(comp("PP-A", "LOP")).toBe(740900);
+    // 3 LOP days of 30 reduce Basic + DA + DEP_ALLOW + HRA pro rata (UAT L2-N5: HRA too):
+    // (44,900 + 24,695 + 4,490 + 8,980) x 3/30 = 8,306.50 -> 8,307
+    expect(comp("PP-A", "LOP")).toBe(830700);
     expect(by["PP-A"]!.profile_snapshot).toMatchObject({ deputationId: DEP_ID, direction: "in", allowanceBasis: "computed", allowanceRule: { rateBps: "1000", capMinor: "900000" } });
 
     // Option B: post basic, no allowance, employee's own NPS
@@ -159,7 +160,7 @@ describe("mixed-profile salary run", () => {
     expect(comp("PP-B", "DEP_ALLOW")).toBeUndefined();
 
     // consolidated: 30,000 pro-rated 27/30 days, no DA/HRA/TA, EPF on the ceiling, no LOP line
-    expect(by["PP-C"]).toMatchObject({ pay_profile: "consolidated_contract", basic_minor: "2700000", gross_minor: "2700000", pf_employee_minor: "180000", nps_employee_minor: "0", pf_wage_minor: "2700000" });
+    expect(by["PP-C"]).toMatchObject({ pay_profile: "consolidated_contract", basic_minor: "2700000", gross_minor: "2700000", pf_employee_minor: "180000", nps_employee_minor: "0", pf_wage_minor: "1500000" }); // UAT b18 D6: the capped wage the 12% was computed on
     expect((by["PP-C"]!.components as Array<{ code: string }>).map((c) => c.code)).toEqual(["BASIC"]);
     expect(by["PP-C"]!.profile_snapshot).toMatchObject({ profile: "consolidated_contract", consolidatedMonthlyMinor: "3000000" });
 

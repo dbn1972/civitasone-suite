@@ -26,6 +26,11 @@ export interface PayComponent {
   name: string;
   type: "earning" | "deduction";
   amountMinor: bigint;
+  /** UAT L2-N5: on the LOP line only -- the loss-of-pay days it recovers and the days of the month. */
+  lopDays?: number;
+  daysInMonth?: number;
+  /** Review SF2: of lopDays, the days the employee was NOT in service (before joining / after leaving) -- never NCP days. */
+  notInServiceDays?: number;
 }
 
 /** Raw structure component as configured (fixed amount OR percentage of basic). */
@@ -37,7 +42,12 @@ export interface RawComponent {
   pctOfBasic?: number | null; // e.g. 10 => 10% of basic
 }
 
-export type PensionScheme = "GPF" | "NPS" | "EPF";
+/**
+ * UAT b18 D1: UPS (Unified Pension Scheme, an option under NPS for central
+ * government staff from 2025-04-01) is computed like NPS on Basic + DA but
+ * with the UPS employer share (UPS_ER_BPS below).
+ */
+export type PensionScheme = "GPF" | "NPS" | "EPF" | "UPS" | "NONE";
 export type CityClass = "X" | "Y" | "Z";
 
 export interface SlipInput {
@@ -63,6 +73,13 @@ export interface SlipInput {
   statutoryPf?: boolean;
   statutoryEsi?: boolean;
   statutoryNps?: boolean;
+  /**
+   * Review SF1 (EPS 1995 para 6A): false for an EPF member who is not an EPS
+   * member -- EPS = 0 and the whole employer 12% goes to EPF (A/c 1). Default
+   * true: omitting it computes exactly what computeSlip always has. See
+   * epsEligibility() for the rule.
+   */
+  epsEligible?: boolean;
   /** Income-tax regime + FY start year for monthly TDS (defaults: new / 2025). */
   taxRegime?: Regime;
   fyStartYear?: number;
@@ -97,6 +114,12 @@ export interface SlipInput {
    */
   fyPaidToDate?: { grossMinor: bigint; months: number; unrecordedMonths?: number; unrecordedLopMinor?: bigint };
   /**
+   * PR #2459 delta review SF1: the caller (the run) already decided which
+   * months are presumed -- opening YTD coverage, previous employer, go-live
+   * boundary -- so a declared previous-employer salary does not zero them again.
+   */
+  presumedMonthsAuthoritative?: boolean;
+  /**
    * T-STAT M-NPS (F04): the Basic + DA part of the arrears paid on this slip
    * (a recovery counts negative). Added to the NPS base only: NPS employee 10%
    * / employer 14% fall on arrears of pay and DA as on pay itself.
@@ -114,6 +137,21 @@ export interface SlipInput {
    * remainder is reported as `recoveryCarryForwardMinor` to be recovered later.
    */
   protectedNetFloorMinor?: bigint;
+  /**
+   * UAT T-PERIOD D-02b: the ceiling on the TOTAL deductions of a slip, as a
+   * share (basis points, 1..10000) of the wages earned in the month (gross
+   * less loss of pay): Code on Wages 2019 s.18(2), 50% -- income-tax is an
+   * authorised deduction within the limit. Order: statutory deductions
+   * (pension / PF / ESI, PT, fixed deductions, then TDS up to what is left)
+   * first, then recoveries (loan EMI, arrear recovery), which are deferred
+   * (`recoveryCarryForwardMinor`). TDS not deducted is `tdsShortfallMinor`:
+   * re-spread by the next true-up inside the FY, NOT recoverable in the last
+   * FY month or the separation month. Omitted: 10000 (no ceiling beyond the
+   * protected-net floor -- also the tenant value when
+   * payroll_settings.deduction_cap_applies is false). Tenant value:
+   * payroll.payroll_settings.max_deduction_share_bps (migration 0165).
+   */
+  maxDeductionShareBps?: number;
   /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
   ltcExemptTotalMinor?: bigint;
   /**
@@ -262,6 +300,17 @@ export interface SlipResult {
   negativeNet: boolean;
   /** P3: recovery (LOP/EMI/arrears) deferred because it would breach the net floor. */
   recoveryCarryForwardMinor: bigint;
+  /**
+   * UAT T-PERIOD D-02b (s.192): the FY tax liability this system has to
+   * deduct (the annual tax less the part presumed deducted for in-service
+   * months with no slip here), the TDS already deducted above it (excess:
+   * nothing more is deducted; the employee claims the refund in the return),
+   * and the TDS not deducted this month because of the net-pay cap. 0n when
+   * there is no run context (preview callers).
+   */
+  tdsLiabilityMinor: bigint;
+  tdsExcessMinor: bigint;
+  tdsShortfallMinor: bigint;
 }
 
 /**
@@ -287,6 +336,11 @@ export interface StatutoryConfig {
   sec80cCapMinor: bigint;     // Chapter VI-A Sec 80C cap, paise (₹1,50,000 = 15_000_000n)
   sec80dCapMinor: bigint;     // Chapter VI-A Sec 80D cap, paise (₹75,000 = 7_500_000n)
   sec80ccd1bCapMinor: bigint; // Chapter VI-A Sec 80CCD(1B) cap (NPS additional), paise (₹50,000 = 5_000_000n) — DOM-034
+  // UAT b18 D5 (migration 0162): employer-only EPFO charges, never deducted from the employee.
+  edliRateBps: bigint;        // EDLI contribution (A/c 21), e.g. 50n = 0.5% of EDLI wages
+  edliWageCapMinor: bigint;   // EDLI wage ceiling, paise (₹15,000 = 1_500_000n) -> max ₹75 per member
+  epfAdminRateBps: bigint;    // EPF administrative charges (A/c 2), e.g. 50n = 0.5% of EPF wages
+  epfAdminMinMinor: bigint;   // A/c 2 statutory minimum per establishment per wage month, paise (₹500 = 50_000n)
 }
 
 /** The exact values that were hardcoded pre-DOM-008 — never change silently. */
@@ -301,6 +355,10 @@ export const DEFAULT_STATUTORY_CONFIG: StatutoryConfig = {
   sec80cCapMinor: 15_000_000n,
   sec80dCapMinor: 7_500_000n,
   sec80ccd1bCapMinor: 5_000_000n,
+  edliRateBps: 50n,
+  edliWageCapMinor: 1_500_000n,
+  epfAdminRateBps: 50n,
+  epfAdminMinMinor: 50_000n,
 };
 
 /** A `statutory.statutory_config` row as loaded from the DB; `tenantId: null` means platform default (DB sentinel zero-UUID mapped to null at the repo boundary). */
@@ -331,16 +389,135 @@ export function resolveStatutoryConfig(rows: StatutoryConfigRow[], tenantId: str
   const {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
     esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
+    edliRateBps, edliWageCapMinor, epfAdminRateBps, epfAdminMinMinor,
   } = picked;
   return {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
     esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
+    edliRateBps, edliWageCapMinor, epfAdminRateBps, epfAdminMinMinor,
   };
+}
+
+/** Employer-only EPFO charges on one EPF member slip (UAT b18 D5 / D6). */
+export interface EpfEmployerCharges {
+  /** The EPF wage the 12% was actually computed on: min(Basic + DA, PF wage ceiling). */
+  pfWageMinor: bigint;
+  /** EDLI wages: min(Basic + DA, EDLI wage ceiling). */
+  edliWageMinor: bigint;
+  /** Employer EDLI contribution (A/c 21): EDLI rate x EDLI wages, rounded to the rupee. */
+  edliMinor: bigint;
+  /** Employer EPF administrative charges (A/c 2) for this member before the establishment minimum. */
+  epfAdminMinor: bigint;
+}
+
+/**
+ * UAT b18 D5 / D6: the EPF wage actually used, and the employer EDLI and EPF
+ * admin charges, for an EPF member whose Basic + DA (pension base) is
+ * `pensionBaseMinor`. Pure. Kept OUT of computeSlip so its result (and the
+ * legacy-oracle proof of it) is unchanged: these are employer cost lines, they
+ * never touch gross, deductions or net pay. The A/c 2 statutory minimum applies
+ * per establishment per month, so it is applied on the period summary
+ * (epfAdminChargeForPeriod), not per member.
+ */
+/** EPS 1995 para 6A (GSR 609(E), 22.08.2014): the 01.09.2014 cut-off and the EPS wage ceiling (Rs 15,000, statutory, not the configurable PF ceiling). */
+export const EPS_CUTOFF_DATE = "2014-09-01";
+export const EPS_WAGE_CEILING_MINOR = 1_500_000n;
+
+export interface EpsMembershipFacts {
+  /** Date the member first joined EPF anywhere (via the UAN); null = this joining date. */
+  firstJoinedOn?: string | null;
+  /** Member by joint option under para 26(6) EPF Scheme (wages above the ceiling at joining). */
+  voluntaryJointOption?: boolean | null;
+  /** Explicit EPS membership recorded by HR; null = derived. */
+  epsMember?: boolean | null;
+  /** EPF wages (Basic + DA, paise) at first joining EPF, stamped once at enrolment / hire; null = not recorded. */
+  joiningWageMinor?: string | number | bigint | null;
+  /**
+   * Delta review SF1: the member was 58 or older before the wage month began
+   * (HRMS computes it per month from the DOB; the DOB itself is never sent).
+   */
+  ageCutoffReached?: boolean | null;
+}
+
+export interface EpsDecision {
+  eligible: boolean;
+  /** false = no recorded fact decides it; the member is treated as an EPS member and the run raises EPS_ELIGIBILITY_UNRECORDED. */
+  recorded: boolean;
+}
+
+/**
+ * Review SF1 + delta-review blocker (ERP-head decision 2026-11-05): is this EPF
+ * member an EPS member for the wage month? Decided ONLY from recorded facts --
+ * para 6A tests the wages at FIRST joining EPF, once, and an EPS member stays
+ * one when pay later crosses the ceiling, so the current month's wage is never
+ * looked at. Pure. In order:
+ *   - aged 58 before the month began            -> not eligible (EPS stops at 58;
+ *     the birthday month counts in full -- EPFO pro-rates it, not modelled)
+ *   - explicit epsMember                         -> as recorded
+ *   - para 26(6) joint-option member             -> not eligible
+ *   - first in EPF (recorded date, else this joining date) before 01.09.2014 -> eligible
+ *   - joining wage recorded                       -> eligible iff <= Rs 15,000
+ *   - nothing recorded                            -> ELIGIBLE (the pre-PR behaviour),
+ *     recorded: false -- the run flags it (EPS_ELIGIBILITY_UNRECORDED). EPS paid
+ *     in error can be moved to A/c 1 on the employer's request; EPS withheld in
+ *     error costs the member pension service.
+ */
+export function epsEligibility(facts: EpsMembershipFacts, dateOfJoining: string): EpsDecision {
+  if (facts.ageCutoffReached) return { eligible: false, recorded: true };
+  if (facts.epsMember != null) return { eligible: facts.epsMember, recorded: true };
+  if (facts.voluntaryJointOption) return { eligible: false, recorded: true };
+  const first = facts.firstJoinedOn ?? dateOfJoining;
+  if (first < EPS_CUTOFF_DATE) return { eligible: true, recorded: true };
+  if (facts.joiningWageMinor != null) return { eligible: BigInt(facts.joiningWageMinor) <= EPS_WAGE_CEILING_MINOR, recorded: true };
+  return { eligible: true, recorded: false };
+}
+
+/** Delta review: what the tenant does with EPF members whose EPS eligibility is unrecorded. */
+export type EpsUnrecordedPolicy = "advisory" | "block";
+export const EPS_ELIGIBILITY_UNRECORDED = "EPS_ELIGIBILITY_UNRECORDED";
+
+export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig): EpfEmployerCharges {
+  const base = pensionBaseMinor > 0n ? pensionBaseMinor : 0n;
+  const pfWageMinor = base > cfg.pfWageCapMinor ? cfg.pfWageCapMinor : base;
+  const edliWageMinor = base > cfg.edliWageCapMinor ? cfg.edliWageCapMinor : base;
+  return {
+    pfWageMinor,
+    edliWageMinor,
+    edliMinor: roundRupee((edliWageMinor * cfg.edliRateBps) / 10000n),
+    epfAdminMinor: roundRupee((pfWageMinor * cfg.epfAdminRateBps) / 10000n),
+  };
+}
+
+/**
+ * A/c 2 for a wage month: the sum of the per-member admin charges, raised to
+ * the configured statutory minimum when the establishment has at least one
+ * EPF member that month (no members: nothing is due).
+ */
+export function epfAdminChargeForPeriod(sumMemberAdminMinor: bigint, memberCount: number, cfg: StatutoryConfig): bigint {
+  if (memberCount <= 0) return 0n;
+  return sumMemberAdminMinor < cfg.epfAdminMinMinor ? cfg.epfAdminMinMinor : sumMemberAdminMinor;
 }
 
 const GPF_PCT     = 10n;
 const NPS_EMP_PCT = 10n;
 const NPS_ER_PCT  = 14n;
+/**
+ * UAT b18 D1: UPS contributions on Basic + DA, per the UPS notification of
+ * 24 Jan 2025: employee 10%; Government 18.5% = 10% to the employee's
+ * INDIVIDUAL corpus (npsEmployerMinor, the PRAN ledger) + 8.5% to the POOL
+ * corpus. ERP-head decision 2026-11-05 (PR #2458): the 8.5% pool share is not
+ * credited to the individual account, so it is NOT part of npsEmployerMinor;
+ * upsPoolShareMinor() computes it and payroll books it as its own statutory
+ * row (statutory.payroll_ups_pool) and its own GL accrual line.
+ */
+const UPS_EMP_PCT = 10n;
+const UPS_ER_INDIVIDUAL_PCT = 10n;
+export const UPS_POOL_BPS = 850n;
+
+/** The Government 8.5% UPS pool corpus share on the UPS pension base (Basic + DA), rounded to the rupee. */
+export function upsPoolShareMinor(pensionBaseMinor: bigint): bigint {
+  return pensionBaseMinor > 0n ? roundRupee((pensionBaseMinor * UPS_POOL_BPS) / 10000n) : 0n;
+}
 const GRATUITY_CAP = 200_000_000n; // 20 lakh INR
 
 /** Round a paise amount to the nearest whole rupee (round-half-up). */
@@ -389,6 +566,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     rawComponents = [],
     statutoryPf = true,
     statutoryEsi = true,
+    epsEligible = true,
     taxRegime = "new",
     fyStartYear = 2025,
     declaration = {},
@@ -397,6 +575,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     fyPaidToDate,
     arrearPensionBaseMinor = 0n,
     protectedNetFloorMinor = 0n,
+    maxDeductionShareBps = 10000,
     ltcExemptTotalMinor = 0n,
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
     taxTenantId = PLATFORM_DEFAULT_TENANT_ID,
@@ -483,7 +662,7 @@ export function computeSlip(input: SlipInput): SlipResult {
 
   // T-STAT M-NPS: NPS also falls on the Basic + DA part of arrears.
   const npsBaseRaw = pensionBase + arrearPensionBaseMinor;
-  const npsPensionBaseMinor = pensionScheme === "NPS" ? (npsBaseRaw > 0n ? npsBaseRaw : 0n) : 0n;
+  const npsPensionBaseMinor = pensionScheme === "NPS" || pensionScheme === "UPS" ? (npsBaseRaw > 0n ? npsBaseRaw : 0n) : 0n;
   if (pensionScheme === "GPF") {
     gpfMinor = pct(pensionBase, GPF_PCT);
   } else if (pensionScheme === "NPS") {
@@ -496,13 +675,20 @@ export function computeSlip(input: SlipInput): SlipResult {
     // no longer suppresses a scheme-driven contribution.)
     npsEmployeeMinor = pct(npsPensionBaseMinor, NPS_EMP_PCT);
     npsEmployerMinor = pct(npsPensionBaseMinor, NPS_ER_PCT);
+  } else if (pensionScheme === "NONE") {
+    // Review SF6: apprentices / consultants -- no pension scheme, no deduction.
+  } else if (pensionScheme === "UPS") {
+    // UAT b18 D1: UPS is an option under NPS -- same base, same PRAN/CRA
+    // ledger, the higher UPS Government share.
+    npsEmployeeMinor = pct(npsPensionBaseMinor, UPS_EMP_PCT);
+    npsEmployerMinor = pct(npsPensionBaseMinor, UPS_ER_INDIVIDUAL_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
     const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
     pfEmployeeMinor = pct(pfWage, statutoryConfig.pfRatePct);
     pfEmployerMinor = pct(pfWage, statutoryConfig.pfRatePct);
     const epsWage   = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
-    epsMinor        = roundRupee((epsWage * statutoryConfig.epsRateBps) / 10000n);
+    epsMinor        = epsEligible ? roundRupee((epsWage * statutoryConfig.epsRateBps) / 10000n) : 0n;
     if (epsMinor > statutoryConfig.epsCapMinor) epsMinor = statutoryConfig.epsCapMinor;
     epfEmployerMinor = pfEmployerMinor - epsMinor;
   }
@@ -531,7 +717,7 @@ export function computeSlip(input: SlipInput): SlipResult {
   const projected = fyPaidToDate != null && monthsRemaining != null;
   const remaining = BigInt(monthsRemaining != null && monthsRemaining > 1 ? monthsRemaining : 1);
   const declaredPrevSalary = (declaration.prevEmployerSalaryMinor ?? 0n) > 0n;
-  const unrecorded = projected && !declaredPrevSalary ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
+  const unrecorded = projected && (!declaredPrevSalary || input.presumedMonthsAuthoritative === true) ? BigInt(Math.max(0, fyPaidToDate.unrecordedMonths ?? 0)) : 0n;
   const unrecordedLop = unrecorded > 0n ? (fyPaidToDate?.unrecordedLopMinor ?? 0n) : 0n;
   const annualGross = projected
     ? fyPaidToDate.grossMinor + regularGrossMinor * unrecorded - unrecordedLop
@@ -577,12 +763,18 @@ export function computeSlip(input: SlipInput): SlipResult {
   // (e.g. a preview/estimate with no run context), so it is fixed for
   // consistency: round-half-up via tax/engine.ts's own divRoundBig, not a
   // flat truncate.
-  const tdsMinor = monthsRemaining != null
-    ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
-    : roundRupee(divRoundBig(annualTaxMinor, 12n));                              // flat /12 fallback
-
-  // Statutory pension/insurance/tax deductions are never floored.
-  const statutoryDeductions = pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;
+  //
+  // UAT T-PERIOD D-02b: in-service months with no slip here are in the
+  // estimate at the regular pay (T-STAT F02 / SF1), so the TDS deducted for
+  // them -- outside this system -- is presumed at the same monthly rate
+  // (s192MonthlyTds). The run previously took the WHOLE year tax from the few
+  // months recorded here: March TDS Rs 2,70,847 on gross Rs 2,31,428.
+  const s192 = monthsRemaining != null
+    ? s192MonthlyTds({                                                             // Sec 192 true-up
+      annualTaxMinor, tdsDeductedMinor: tdsYtdMinor ?? 0n, monthsRemaining,
+      presumedMonths: unrecorded, fyMonths,
+    })
+    : { tdsMinor: roundRupee(divRoundBig(annualTaxMinor, 12n)), liabilityMinor: 0n, excessMinor: 0n }; // flat /12 fallback
 
   // Split ad-hoc deductions into recovery (floor-capped) and fixed (e.g. PT, and
   // any structure-defined deduction). Fixed deductions are not subject to the floor.
@@ -593,13 +785,30 @@ export function computeSlip(input: SlipInput): SlipResult {
     .filter((d) => !RECOVERY_CODES.has(d.code))
     .reduce((s, d) => s + d.amountMinor, 0n);
 
+  // UAT T-PERIOD D-02b: TDS never exceeds the salary of the month left after
+  // the pension / PF / ESI contributions, PT and other fixed deductions and
+  // loss of pay, less the protected-net floor, nor takes the deductions above
+  // the configured share of gross. Whole rupees, rounded down.
+  const otherStatutoryMinor = pfEmployeeMinor + esiMinor + gpfMinor + npsEmployeeMinor;
+  // Loss of pay is pay not earned, not a deduction from it: the share is of
+  // the salary earned this month (gross less LOP).
+  const tdsCapMinor = tdsCapForMonthMinor({
+    grossMinor: grossMinor - lopMinor, otherDeductionsMinor: otherStatutoryMinor + fixedAdHoc,
+    protectedNetFloorMinor, maxDeductionShareBps,
+  });
+  const tdsMinor = s192.tdsMinor > tdsCapMinor ? tdsCapMinor : s192.tdsMinor;
+  const tdsShortfallMinor = s192.tdsMinor - tdsMinor;
+
+  // Statutory pension/insurance/tax deductions are never floored.
+  const statutoryDeductions = otherStatutoryMinor + tdsMinor;
+
   // Headroom available for recovery after gross less all non-recovery deductions,
   // keeping net at or above the protected floor.
   const nonRecovery   = statutoryDeductions + fixedAdHoc;
   const headroom      = grossMinor - nonRecovery - protectedNetFloorMinor;
   const recoveryCap   = headroom < 0n ? 0n : headroom;
-  const recoveryApplied = recoveryRequested > recoveryCap ? recoveryCap : recoveryRequested;
-  const recoveryCarryForwardMinor = recoveryRequested - recoveryApplied;
+  let recoveryApplied = recoveryRequested > recoveryCap ? recoveryCap : recoveryRequested;
+  let recoveryCarryForwardMinor = recoveryRequested - recoveryApplied;
 
   // If recovery was capped, scale down the recovery deduction line items so the
   // persisted slip reflects what was actually withheld (carry the remainder).
@@ -622,6 +831,41 @@ export function computeSlip(input: SlipInput): SlipResult {
     }
   }
 
+  // UAT T-PERIOD D-02b review (PR #2459): the deduction share ceiling binds the
+  // recoveries too -- loan EMI / arrear recovery used to be limited only by the
+  // protected-net floor, so deductions could reach 96.6% of gross. Statutory
+  // deductions (TDS within its own cap), PT and fixed deductions come first;
+  // EMI / arrear recovery take only what is left inside maxDeductionShareBps of
+  // the salary earned (gross less the loss of pay applied), largest line
+  // trimmed first, the rest carried forward. LOP is pay not earned, not a
+  // deduction, so it is never trimmed here. With the default 10000 bps this is
+  // a no-op (the floor headroom above is already within it).
+  {
+    const lopApplied = deductions.filter((d) => d.code === "LOP").reduce((s, d) => s + d.amountMinor, 0n);
+    const shareBps = BigInt(Math.min(10000, Math.max(0, Math.trunc(maxDeductionShareBps))));
+    const shareCeiling = ((grossMinor - lopApplied) * shareBps) / 10000n;
+    const allowedRaw = shareCeiling - nonRecovery;
+    const allowedOther = allowedRaw > 0n ? allowedRaw : 0n;
+    const otherLines = deductions.filter((d) => RECOVERY_CODES.has(d.code) && d.code !== "LOP")
+      .sort((a, b) => (a.amountMinor < b.amountMinor ? 1 : -1));
+    const otherApplied = otherLines.reduce((s, d) => s + d.amountMinor, 0n);
+    if (otherApplied > allowedOther) {
+      let excess = otherApplied - allowedOther;
+      recoveryApplied -= excess;
+      recoveryCarryForwardMinor += excess;
+      for (const line of otherLines) {
+        if (excess <= 0n) break;
+        const trim = line.amountMinor < excess ? line.amountMinor : excess;
+        line.amountMinor -= trim;
+        excess -= trim;
+      }
+      for (let i = deductions.length - 1; i >= 0; i--) {
+        const d = deductions[i]!;
+        if (RECOVERY_CODES.has(d.code) && d.code !== "LOP" && d.amountMinor === 0n) deductions.splice(i, 1);
+      }
+    }
+  }
+
   const totalDeductions = nonRecovery + recoveryApplied;
   const netRaw          = grossMinor - totalDeductions;
   // With the floor enforced, netRaw can still legitimately be 0 (no floor + full
@@ -638,7 +882,55 @@ export function computeSlip(input: SlipInput): SlipResult {
     pfEmployeeMinor, pfEmployerMinor, epsMinor, epfEmployerMinor,
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
     gpfMinor, npsEmployeeMinor, npsEmployerMinor, npsPensionBaseMinor, annualTaxableMinor, negativeNet,
+    tdsLiabilityMinor: s192.liabilityMinor, tdsExcessMinor: s192.excessMinor, tdsShortfallMinor,
   };
+}
+
+/**
+ * UAT T-PERIOD D-02b -- the s.192 monthly TDS (Income-tax Act s.192(1), (3)):
+ *   liability   = annual tax on the FY estimate, less the TDS presumed
+ *                 deducted for `presumedMonths` (in-service months with no
+ *                 slip here, estimated at the regular pay) at the average
+ *                 monthly rate: annual tax x presumed / fyMonths;
+ *   monthly TDS = max(0, (liability - TDS deducted so far) / months remaining),
+ *                 the whole balance in the last month (March);
+ *   excess      = TDS deducted so far above the liability (no further TDS;
+ *                 s.192(3) only allows adjusting it within the FY -- the
+ *                 employee claims any refund in the return).
+ * TDS deducted so far includes previous-employer TDS declared (Form 12B);
+ * a declared previous salary replaces the presumed months (presumedMonths 0).
+ * Pure.
+ */
+export function s192MonthlyTds(i: {
+  annualTaxMinor: bigint; tdsDeductedMinor: bigint; monthsRemaining: number;
+  presumedMonths?: bigint; fyMonths?: bigint;
+}): { tdsMinor: bigint; liabilityMinor: bigint; excessMinor: bigint } {
+  const fyMonths = i.fyMonths != null && i.fyMonths > 0n ? i.fyMonths : 12n;
+  const presumedRaw = i.presumedMonths != null && i.presumedMonths > 0n ? i.presumedMonths : 0n;
+  const presumed = presumedRaw > fyMonths ? fyMonths : presumedRaw;
+  const annual = i.annualTaxMinor > 0n ? i.annualTaxMinor : 0n;
+  // s.288B: the presumed amount is a whole rupee too.
+  const presumedTds = presumed > 0n ? roundRupee(divRoundBig(annual * presumed, fyMonths)) : 0n;
+  const liabilityMinor = annual - presumedTds;
+  const excessMinor = i.tdsDeductedMinor > liabilityMinor ? i.tdsDeductedMinor - liabilityMinor : 0n;
+  // PR #2459 review: TDS is rounded to the nearest rupee (s.288B) -- the
+  // last-month balance (trueUpTdsMinor m = 1) used to carry paise (33,855.67).
+  return { tdsMinor: roundRupee(trueUpTdsMinor(liabilityMinor, i.tdsDeductedMinor, i.monthsRemaining)), liabilityMinor, excessMinor };
+}
+
+/**
+ * UAT T-PERIOD D-02b: the most TDS a slip can carry -- the salary earned in
+ * the month (`grossMinor`: gross less loss of pay) less the other deductions
+ * (pension / PF / ESI, PT, fixed deductions) and the protected-net floor, and
+ * no more than leaves all deductions within `maxDeductionShareBps` of it.
+ * Never negative; whole rupees, rounded down. Pure.
+ */
+export function tdsCapForMonthMinor(i: { grossMinor: bigint; otherDeductionsMinor: bigint; protectedNetFloorMinor?: bigint; maxDeductionShareBps?: number }): bigint {
+  const bps = BigInt(Math.min(10000, Math.max(0, Math.trunc(i.maxDeductionShareBps ?? 10000))));
+  const byFloor = i.grossMinor - i.otherDeductionsMinor - (i.protectedNetFloorMinor ?? 0n);
+  const byShare = (i.grossMinor * bps) / 10000n - i.otherDeductionsMinor;
+  const cap = byFloor < byShare ? byFloor : byShare;
+  return cap > 0n ? (cap / 100n) * 100n : 0n;
 }
 
 /**
@@ -749,6 +1041,146 @@ export function arrearsReviewMessage(employees: ArrearsReviewEmployee[]): string
   const more = employees.length > 20 ? ", ..." : "";
   return `${employees.length} employee(s) have arrears above the review threshold: ${sample}${more}. `
     + "Check them and approve with arrearsAcknowledgements [{ employeeId, reason }] for each of them";
+}
+
+/**
+ * UAT T-PERIOD D-02b (PR #2459 review, ERP-head decision 2026-11-05): default
+ * ceiling on a slip total deductions, as a share of the wages earned: 50%,
+ * Code on Wages 2019 s.18(2) (which repealed the Payment of Wages Act; under
+ * both, income-tax is an authorised deduction inside the limit). Tenant
+ * settings payroll.payroll_settings.max_deduction_share_bps and
+ * deduction_cap_applies (false: 10000, net-pay floor + acknowledgements only --
+ * applicability to regular government servants under FR/SR / CCS awaits legal).
+ */
+export const DEFAULT_MAX_DEDUCTION_SHARE_BPS = 5000;
+
+/** The ceiling to apply for a tenant: none (10000) when the wage-law cap does not apply. */
+export function effectiveDeductionShareBps(settings: { maxDeductionShareBps: number; deductionCapApplies: boolean }): number {
+  return settings.deductionCapApplies ? settings.maxDeductionShareBps : 10000;
+}
+
+/**
+ * PR #2459 review B1 (ERP-head decision 2026-11-05): TDS for in-service FY
+ * months with no slip here may only be PRESUMED for months before the later
+ * of the tenant payroll go-live date and the employee first slip in this
+ * system, and only when no approved opening YTD exists for the FY (the
+ * opening YTD is authoritative). A gap AFTER that boundary (a skipped or
+ * withheld month) is neither estimated nor presumed: no income, 0 TDS.
+ * Months are YYYY-MM. Pure.
+ */
+export function presumptionBoundaryMonth(goLiveDate: string | null | undefined, firstSlipMonth: string | null | undefined, runMonth: string): string {
+  const first = firstSlipMonth && firstSlipMonth < runMonth ? firstSlipMonth : runMonth;
+  const live = goLiveDate ? goLiveDate.slice(0, 7) : null;
+  return live && live > first ? live : first;
+}
+
+/** The month after a YYYY-MM month. Pure. */
+export function nextMonthOf(month: string): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+export function splitUnrecordedMonths(unrecorded: readonly string[], boundaryMonth: string, hasOpeningYtd: boolean): { presumed: string[]; gaps: string[] } {
+  if (hasOpeningYtd) return { presumed: [], gaps: [...unrecorded] };
+  return { presumed: unrecorded.filter((m) => m < boundaryMonth), gaps: unrecorded.filter((m) => m >= boundaryMonth) };
+}
+
+/** PR #2459 review B2: the TDS signals a run must show its approver. */
+export const UNRECORDED_FY_MONTHS_ESTIMATED = "UNRECORDED_FY_MONTHS_ESTIMATED";
+export const TDS_SHORTFALL_UNRECOVERABLE = "TDS_SHORTFALL_UNRECOVERABLE";
+
+export type TdsReviewKind = "presumed_months" | "excess" | "shortfall" | "recovery_deferred";
+export interface TdsReviewItem {
+  employeeId: string; employeeNo: string; kind: TdsReviewKind;
+  amountMinor: bigint; presumedMonths: number; finalMonth: boolean; requiresAck: boolean;
+}
+
+/**
+ * The per-employee TDS / deduction signals of a run, from the slip columns
+ * (migration 0165). Acknowledgement is required for presumed months and for a
+ * TDS shortfall in the last FY month or the separation month (no later
+ * true-up exists); an excess and a recovery deferral are shown only. Pure.
+ */
+export function tdsReviewOf(slips: Array<{ employeeId: string; employeeNo: string; status?: string | null; tdsPresumedMonths?: number | null; tdsExcessMinor?: bigint | null; tdsShortfallMinor?: bigint | null; tdsShortfallFinal?: boolean | null; recoveryDeferredMinor?: bigint | null }>): TdsReviewItem[] {
+  const out: TdsReviewItem[] = [];
+  for (const sl of slips) {
+    if (sl.status === "excluded") continue;
+    const base = { employeeId: sl.employeeId, employeeNo: sl.employeeNo };
+    if ((sl.tdsPresumedMonths ?? 0) > 0) out.push({ ...base, kind: "presumed_months", amountMinor: 0n, presumedMonths: sl.tdsPresumedMonths ?? 0, finalMonth: false, requiresAck: true });
+    if ((sl.tdsExcessMinor ?? 0n) > 0n) out.push({ ...base, kind: "excess", amountMinor: sl.tdsExcessMinor ?? 0n, presumedMonths: 0, finalMonth: false, requiresAck: false });
+    if ((sl.tdsShortfallMinor ?? 0n) > 0n) out.push({ ...base, kind: "shortfall", amountMinor: sl.tdsShortfallMinor ?? 0n, presumedMonths: 0, finalMonth: sl.tdsShortfallFinal === true, requiresAck: sl.tdsShortfallFinal === true });
+    if ((sl.recoveryDeferredMinor ?? 0n) > 0n) out.push({ ...base, kind: "recovery_deferred", amountMinor: sl.recoveryDeferredMinor ?? 0n, presumedMonths: 0, finalMonth: false, requiresAck: false });
+  }
+  out.sort((a, b) => a.employeeNo.localeCompare(b.employeeNo) || a.kind.localeCompare(b.kind));
+  return out;
+}
+
+/** An explicit, reasoned acknowledgement of one employee TDS review items. */
+export interface TdsAcknowledgement { employeeId: string; reason: string }
+
+/** The items needing acknowledgement that are not acknowledged (non-blank reason). Pure. */
+export function unacknowledgedTds(items: TdsReviewItem[], acks: TdsAcknowledgement[] = []): TdsReviewItem[] {
+  const acked = new Set(acks.filter((a) => a.reason.trim().length > 0).map((a) => a.employeeId));
+  return items.filter((i) => i.requiresAck && !acked.has(i.employeeId));
+}
+
+/** The plain-language text of one TDS review item (also the run warning text). */
+export function tdsReviewText(i: TdsReviewItem): string {
+  const rs = `Rs ${(i.amountMinor / 100n).toString()}`;
+  switch (i.kind) {
+    case "presumed_months":
+      return `${i.employeeNo}: ${i.presumedMonths} earlier FY month(s) have no slip and no opening YTD; their salary is estimated and their TDS PRESUMED deducted at the average rate. Enter the opening YTD (salary and TDS before go-live / previous employer) to replace the estimate`;
+    case "excess":
+      return `${i.employeeNo}: TDS deducted this FY exceeds the estimated liability by ${rs}; no TDS is deducted this month. The excess is refundable to the employee through the income-tax return`;
+    case "shortfall":
+      return i.finalMonth
+        ? `${i.employeeNo}: ${rs} of TDS cannot be deducted within the deduction limit (Code on Wages 2019 s.18(2)) and cannot be recovered through payroll this FY -- collect separately or adjust before Form 16`
+        : `${i.employeeNo}: ${rs} of TDS is not deducted this month (deduction limit, Code on Wages 2019 s.18(2)); the next month s.192 true-up recomputes it over the months left in the FY, within the same limit`;
+    case "recovery_deferred":
+      return `${i.employeeNo}: ${rs} of loan / arrear recovery is deferred to keep total deductions within the limit`;
+  }
+}
+
+export function unacknowledgedTdsCode(items: TdsReviewItem[]): string {
+  return items.some((i) => i.kind === "presumed_months") ? UNRECORDED_FY_MONTHS_ESTIMATED : TDS_SHORTFALL_UNRECOVERABLE;
+}
+
+export function unacknowledgedTdsMessage(items: TdsReviewItem[]): string {
+  const sample = items.slice(0, 10).map(tdsReviewText).join("; ");
+  const more = items.length > 10 ? "; ..." : "";
+  return `${items.length} TDS item(s) need an acknowledgement before approval: ${sample}${more}. Approve with tdsAcknowledgements [{ employeeId, reason }] for each employee`;
+}
+
+/** UAT T-PERIOD D-02b: approval refused while a slip pays nothing (or less than nothing). */
+export const NET_PAY_NON_POSITIVE = "NET_PAY_NON_POSITIVE";
+
+/** An explicit, reasoned acknowledgement of one slip with net pay <= 0 on approval. */
+export interface NetPayAcknowledgement { employeeId: string; reason: string }
+
+/**
+ * UAT T-PERIOD D-02b: the slips of a run whose net pay is <= 0 or whose
+ * deductions exceed the gross -- an employee who would be paid nothing. The
+ * T-PERIOD March run was approved and disbursed with one (TDS Rs 2,70,847 on
+ * gross Rs 2,31,428, net Rs 0). Rs 0-basic slips (their own ZERO_BASIC guard)
+ * and excluded slips are not listed. Pure.
+ */
+export function nonPositiveNetSlipsOf<T extends { employeeId: string; basicMinor: bigint; grossMinor: bigint; totalDeductionsMinor: bigint; netPayMinor: bigint; status?: string | null; components?: Array<{ code: string }> | null }>(slips: T[]): T[] {
+  const zeroBasic = new Set(zeroBasicSlipsOf(slips).map((sl) => sl.employeeId));
+  return slips.filter((sl) => sl.status !== "excluded" && !zeroBasic.has(sl.employeeId)
+    && (sl.netPayMinor <= 0n || sl.totalDeductionsMinor > sl.grossMinor));
+}
+
+/** Non-positive-net slips not acknowledged (with a non-blank reason). Pure. */
+export function unacknowledgedNonPositiveNet<T extends { employeeId: string }>(slips: T[], acks: NetPayAcknowledgement[] = []): T[] {
+  const acked = new Set(acks.filter((a) => a.reason.trim().length > 0).map((a) => a.employeeId));
+  return slips.filter((sl) => !acked.has(sl.employeeId));
+}
+
+export function nonPositiveNetMessage(slips: Array<{ employeeNo: string; grossMinor: bigint; totalDeductionsMinor: bigint; netPayMinor: bigint }>): string {
+  const sample = slips.slice(0, 20).map((sl) => `${sl.employeeNo} (gross Rs ${(sl.grossMinor / 100n).toString()}, deductions Rs ${(sl.totalDeductionsMinor / 100n).toString()}, net Rs ${(sl.netPayMinor / 100n).toString()})`).join(", ");
+  const more = slips.length > 20 ? ", ..." : "";
+  return `${slips.length} slip(s) in this run pay nothing (net pay <= 0 or deductions above gross): ${sample}${more}. `
+    + "Correct the deductions and re-run, or approve with netPayAcknowledgements [{ employeeId, reason }] for each of them";
 }
 
 /** Exclusions that do not name a Rs 0-basic slip of the run. Pure. */

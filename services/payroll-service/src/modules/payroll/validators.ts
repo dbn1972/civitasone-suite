@@ -82,6 +82,10 @@ export const approveRunBody = runActionBody.extend({
   zeroBasicExclusions: z.array(employeeReason).max(5000).optional(),
   /** Review SF4: acknowledgement of each employee whose arrears exceed the review threshold. */
   arrearsAcknowledgements: z.array(employeeReason).max(5000).optional(),
+  /** UAT T-PERIOD D-02b: acknowledgement of each slip with net pay <= 0 / deductions above gross. */
+  netPayAcknowledgements: z.array(employeeReason).max(5000).optional(),
+  /** PR #2459 review B2: acknowledgement of each employee with presumed TDS months / an unrecoverable TDS shortfall. */
+  tdsAcknowledgements: z.array(employeeReason).max(5000).optional(),
 });
 
 /** Review SF4 / SF5: GET /v1/payroll/runs/:id/approval-review (money as paise digit strings). */
@@ -96,6 +100,25 @@ export const runApprovalReviewResponse = z.object({
       arrearsMinor: z.string().regex(/^\d+$/), regularGrossMinor: z.string().regex(/^-?\d+$/),
       requiresReview: z.boolean(),
     })),
+  }),
+  /** UAT T-PERIOD D-02b: slips that pay nothing (net <= 0 or deductions above gross); each needs an acknowledgement. */
+  nonPositiveNet: z.array(z.object({
+    employeeId: z.string(), employeeNo: z.string(),
+    grossMinor: z.string().regex(/^-?\d+$/), totalDeductionsMinor: z.string().regex(/^-?\d+$/),
+    netPayMinor: z.string().regex(/^-?\d+$/), tdsMinor: z.string().regex(/^-?\d+$/),
+  })),
+  /** PR #2459 review B2: TDS signals (presumed months, excess, shortfall, deferred recovery) with the text the approver reads. */
+  tds: z.array(z.object({
+    employeeId: z.string(), employeeNo: z.string(),
+    kind: z.enum(["presumed_months", "excess", "shortfall", "recovery_deferred"]),
+    amountMinor: z.string().regex(/^\d+$/), presumedMonths: z.number().int().nonnegative(),
+    finalMonth: z.boolean(), requiresAck: z.boolean(), message: z.string(),
+  })),
+  // Delta review: EPF members whose EPS eligibility is not recorded (treated
+  // as EPS members); with policy "block" approval is refused until recorded.
+  epsUnrecorded: z.object({
+    policy: z.enum(["advisory", "block"]),
+    employees: z.array(z.object({ employeeId: z.string(), employeeNo: z.string() })),
   }),
 });
 export type RunApprovalReview = z.infer<typeof runApprovalReviewResponse>;
@@ -317,6 +340,22 @@ export const updateSettingsBody = z.object({
   // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant maker != checker switch for
   // salary revisions (default ON when never set).
   salaryRevisionSecondApprover: z.boolean().optional(),
+  // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): ceiling on a slip
+  // total deductions, TDS and recoveries included, as a share of the wages
+  // earned (bps). Omitted keeps the stored value (default 5000 = 50%, Code on
+  // Wages 2019 s.18(2)).
+  maxDeductionShareBps: z.number().int().min(1000).max(10000).optional(),
+  // Whether that wage-law ceiling applies to the tenant (default true). For
+  // regular government servants (FR/SR, CCS) legal confirmation is awaited;
+  // false leaves the protected-net floor and the approval acknowledgements.
+  deductionCapApplies: z.boolean().optional(),
+  // The payroll go-live date: TDS is presumed only for months before it (and
+  // before the employee first slip) when no opening YTD exists. null clears it.
+  payrollGoLiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  // Delta review (ERP-head decision 2026-11-05): "advisory" (default) lists EPF
+  // members with no recorded EPS eligibility on the approval review; "block"
+  // refuses run approval until it is recorded. Optional: omitted keeps it.
+  epsUnrecordedPolicy: z.enum(["advisory", "block"]).optional(),
 }).refine(
   (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
     || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,

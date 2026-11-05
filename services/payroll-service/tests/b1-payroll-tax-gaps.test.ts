@@ -309,7 +309,8 @@ describe("GAP-PAYROLL-STATUTORY-PF-02: ECR export is audited", () => {
       { id: "s1", grossMinor: 2000000n, basicMinor: 1500000n, components: [], employeeNo: "E1" },
       { id: "s2", grossMinor: 2000000n, basicMinor: 1500000n, components: [], employeeNo: "E2" },
     ]);
-    mockFetchPayrollInput.mockResolvedValue({ employees: [{ id: "e1", uan: "100", fullName: "A" }, { id: "e2", uan: "200", fullName: "B" }] });
+    // UAT b18 D3: 12-digit UANs (the ECR refuses an invalid one).
+    mockFetchPayrollInput.mockResolvedValue({ employees: [{ id: "e1", uan: "100000000100", fullName: "A" }, { id: "e2", uan: "100000000200", fullName: "B" }] });
     const r = await app.inject({
       method: "GET", url: "/v1/payroll/statutory/ecr?month=2026-08",
       headers: { authorization: `Bearer ${tok(MAKER)}` },

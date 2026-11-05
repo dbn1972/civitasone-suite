@@ -152,6 +152,14 @@ export const DEFAULT_POLICY: EngagementPolicy = {
 };
 
 /**
+ * UAT b18 D7: the legacy "contract" code used to resolve to DEFAULT_POLICY,
+ * i.e. NPS-eligible (statutoryNps true), while the canonical "contractual"
+ * category is not. Owner decision 2026-11-05: contract staff are EPF members,
+ * never NPS. Everything else stays as permissive as DEFAULT_POLICY.
+ */
+export const LEGACY_CONTRACT_POLICY: EngagementPolicy = { ...DEFAULT_POLICY, statutoryNps: false };
+
+/**
  * Does attendance / approved-LOP-leave absence drive SALARY Loss-of-Pay for this
  * engagement policy? True only for payroll-salaried types on a muster
  * (`muster_lop`). Consultants (invoice-billed), third-party staff (agency-paid),
@@ -233,7 +241,7 @@ export function buildTypeCategoryResolver(tenantTypes: PolicyRow[], canonical: P
     // No tenant row → treat the code itself as a canonical category, else default.
     const c = byCategory.get(typeCode);
     if (c) return { category: typeCode, policy: toPolicy(c) };
-    return { category: "legacy", policy: DEFAULT_POLICY };
+    return { category: "legacy", policy: typeCode.trim().toLowerCase() === "contract" ? LEGACY_CONTRACT_POLICY : DEFAULT_POLICY };
   };
 }
 

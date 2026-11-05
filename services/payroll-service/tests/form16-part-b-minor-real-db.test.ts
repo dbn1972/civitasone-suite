@@ -106,7 +106,8 @@ async function seedEmployee(opts: {
 function expectTiedToRupeeView(form16: Form16, partBMinor: Record<string, unknown>) {
   const partB = form16.form16PartB as unknown as Record<string, unknown>;
   const keys = Object.keys(partBMinor).filter((k) => k !== "regime");
-  expect(keys).toHaveLength(20);
+  // PR #2459 delta review B2: + preGoLiveSalaryMinor / preGoLiveTdsMinor (approved opening YTD; 0 here)
+  expect(keys).toHaveLength(22);
   for (const k of keys) {
     const rupeeKey = k.replace(/Minor$/, "");
     expect(partB, rupeeKey).toHaveProperty(rupeeKey);
@@ -148,6 +149,8 @@ describe("GAP-PAYROLL-RETURNS-06: buildForm16WithMinor on a real DB", () => {
         prevEmployerTdsMinor: 0n,
         balanceTaxPayableMinor: 6_250_000n,
         refundDueMinor: 0n,
+        preGoLiveSalaryMinor: 0n,
+        preGoLiveTdsMinor: 0n,
         regime: "new",
       });
       expectTiedToRupeeView(form16, partBMinor as unknown as Record<string, unknown>);
@@ -205,6 +208,8 @@ describe("GAP-PAYROLL-RETURNS-06: buildForm16WithMinor on a real DB", () => {
         prevEmployerTdsMinor: 0n,
         balanceTaxPayableMinor: 7_163_000n,
         refundDueMinor: 0n,
+        preGoLiveSalaryMinor: 0n,
+        preGoLiveTdsMinor: 0n,
         regime: "old",
       });
       expectTiedToRupeeView(form16, partBMinor as unknown as Record<string, unknown>);

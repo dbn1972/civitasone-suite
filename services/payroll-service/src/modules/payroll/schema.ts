@@ -79,7 +79,7 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   totalDeductionsMinor:  bigint("total_deductions_minor", { mode: "bigint" }).notNull().default(0n),
   netPayMinor:           bigint("net_pay_minor", { mode: "bigint" }).notNull().default(0n),
   currency:              char("currency", { length: 3 }).notNull().default("INR"),
-  components:            jsonb("components").$type<Array<{ code: string; name: string; type: string; amountMinor: number }>>().notNull().default([]),
+  components:            jsonb("components").$type<Array<{ code: string; name: string; type: string; amountMinor: number; lopDays?: number; daysInMonth?: number }>>().notNull().default([]),
   pfEmployeeMinor:       bigint("pf_employee_minor", { mode: "bigint" }).notNull().default(0n),
   pfEmployerMinor:       bigint("pf_employer_minor", { mode: "bigint" }).notNull().default(0n),
   gpfMinor:              bigint("gpf_minor", { mode: "bigint" }).notNull().default(0n),
@@ -93,12 +93,52 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   payProfile:            varchar("pay_profile", { length: 32 }),
   profileSnapshot:       jsonb("profile_snapshot").$type<Record<string, unknown>>(),
   pfWageMinor:           bigint("pf_wage_minor", { mode: "bigint" }),
+  // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): the TDS signals the
+  // approver must see -- presumed months, excess, capped shortfall (final: the
+  // last FY / separation month, not recoverable by payroll), deferred recovery.
+  tdsPresumedMonths:     integer("tds_presumed_months").notNull().default(0),
+  tdsExcessMinor:        bigint("tds_excess_minor", { mode: "bigint" }).notNull().default(0n),
+  tdsShortfallMinor:     bigint("tds_shortfall_minor", { mode: "bigint" }).notNull().default(0n),
+  tdsShortfallFinal:     boolean("tds_shortfall_final").notNull().default(false),
+  recoveryDeferredMinor: bigint("recovery_deferred_minor", { mode: "bigint" }).notNull().default(0n),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:             uuid("created_by").notNull(),
   updatedBy:             uuid("updated_by").notNull(),
   version:               integer("version").notNull().default(1),
 });
+
+/**
+ * PR #2459 review B1 (migration 0165): the opening year-to-date of an employee
+ * for an FY -- salary paid and TDS deducted by this employer before go-live
+ * (pre_go_live, months covered) or by a previous employer (prior_employer,
+ * Form 12B). Maker-checker; only approved rows feed the s.192 projection, as
+ * authoritative figures (no presumption once one exists).
+ */
+export const payrollOpeningYtd = payrollSchema.table("payroll_opening_ytd", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  tenantId:          uuid("tenant_id").notNull(),
+  employeeId:        uuid("employee_id").notNull(),
+  fy:                char("fy", { length: 7 }).notNull(),
+  source:            varchar("source", { length: 16 }).notNull(),
+  months:            integer("months").notNull().default(0),
+  salaryMinor:       bigint("salary_minor", { mode: "bigint" }).notNull().default(0n),
+  tdsMinor:          bigint("tds_minor", { mode: "bigint" }).notNull().default(0n),
+  priorEmployerName: text("prior_employer_name"),
+  priorEmployerTan:  varchar("prior_employer_tan", { length: 10 }),
+  note:              text("note").notNull(),
+  status:            varchar("status", { length: 16 }).notNull().default("pending"),
+  /** Delta review SF2: the approved version this one corrects (superseded on approval, kept). */
+  supersedesId:      uuid("supersedes_id"),
+  enteredBy:         uuid("entered_by").notNull(),
+  approvedBy:        uuid("approved_by"),
+  decidedAt:         timestamp("decided_at", { withTimezone: true }),
+  decisionNote:      text("decision_note"),
+  createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:           integer("version").notNull().default(1),
+});
+export type OpeningYtdRow = typeof payrollOpeningYtd.$inferSelect;
 
 /** DDO (Drawing & Disbursing Officer) registry — a run is scoped to one DDO. */
 export const payrollDdos = payrollSchema.table("payroll_ddos", {

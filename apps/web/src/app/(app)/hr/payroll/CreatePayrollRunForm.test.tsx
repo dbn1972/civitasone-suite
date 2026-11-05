@@ -237,6 +237,7 @@ describe("CreatePayrollRunForm — Run for picker", () => {
     ["NO_ACTIVE_PAY_GROUPS", 422, "no active pay groups"],
     ["DDO_INACTIVE", 409, "DDO is inactive"],
     ["DUPLICATE_RUN_FOR_PERIOD", 409, "run already exists"],
+    ["TAX_CONFIG_MISSING", 422, "No income-tax slab configuration"],
   ])("explains %s in plain words, never the code", async (code, status, fragment) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code, message: `${code}: raw` }), { status, headers: { "content-type": "application/json" } }),

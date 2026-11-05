@@ -24,6 +24,8 @@ import * as allocRepo from "../budget/allocation-repo.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
 import type { Deduction, PaymentRow } from "./schema.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
+import { clearGrniTx } from "../gl/grni-clearing.js";
+import { loadSettingsTx } from "../approvals/repo.js";
 import { postCashBook } from "../../shared/cashbook.js";
 import type { JournalLine } from "../gl/schema.js";
 
@@ -413,6 +415,13 @@ export function registerPaymentsConsumers(queue: Queue): void {
           tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           sourceKey: `bill:${p.id}`, type: "bill", postingDate: billDate, lines,
         });
+        // UAT L2-N6 review: on the ACCRUAL basis a bill drafted from an accepted GRN also clears the GRNI its stock
+        // receipt credited (Dr GRNI / Cr this bill head, for the stocked value) -- see gl/grni-clearing.ts. Cash basis
+        // (the default): nothing; the bill alone books the expenditure against the budget head.
+        const grnId = bill.grnRef?.startsWith("procurement_grn:") ? bill.grnRef.slice("procurement_grn:".length) : null;
+        if (grnId && (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], p.tenantId)).accountingBasis === "accrual") {
+          await clearGrniTx(tx, { tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId }, grnId);
+        }
       }
       // C6 FIX (NEW-001): the audit trail now names WHICH stage was approved and
       // what it advanced to (a CAG audit asks "who passed which stage, when").

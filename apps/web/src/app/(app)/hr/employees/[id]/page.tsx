@@ -4,12 +4,14 @@ import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../.
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
-import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES, MEDICAL_INSURANCE_EDIT_ROLES, MEDICAL_INSURANCE_READ_ROLES, MEDICAL_INSURANCE_REVEAL_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES, EMPLOYEE_LOGIN_LINK_ROLES, PENSION_SCHEME_CHECKER_ROLES, MEDICAL_INSURANCE_EDIT_ROLES, MEDICAL_INSURANCE_READ_ROLES, MEDICAL_INSURANCE_REVEAL_ROLES, PAYROLL_STAFF_ROLES, OPENING_YTD_CHECKER_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
 import { EmployeeLoginLinkCard } from "./EmployeeLoginLinkCard";
+import { EmployeePensionSchemeCard, type SchemeChange } from "./EmployeePensionSchemeCard";
+import { EmployeeOpeningYtdCard } from "./EmployeeOpeningYtdCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
@@ -251,6 +253,16 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles
   // that may read it, so everyone else never meets a 403 card.
   const payGroupResult = roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? await getEmployeePayGroup(params.id) : null;
+  // UAT b18: pension scheme change history (hrms READER_ROLES include every HR staff role).
+  const schemeChanges = canAdminister
+    ? await fetchJson<unknown, SchemeChange[] | null>(`/api/v1/hrms/employees/${params.id}/pension-scheme-changes`, null, {
+        telemetryKey: "hr.emp.pension_scheme_changes",
+        mapResponse: (p) => {
+          const arr = (p as { data?: unknown } | null)?.data;
+          return Array.isArray(arr) ? (arr as SchemeChange[]) : null;
+        },
+      })
+    : null;
 
   // Medical insurance: card number / scheme id arrive masked for every viewer
   // here; the reveal tier (hr_admin / super_admin) gets the audited reveal, the
@@ -568,6 +580,27 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
         </MedicalInsuranceCard>
       )}
       {canLinkLogin && <EmployeeLoginLinkCard employeeId={params.id} />}
+      {/* UAT b18: pension scheme change (maker: HR staff; checker: HR admin tier). */}
+      {canAdminister && (
+        <EmployeePensionSchemeCard
+          employeeId={params.id}
+          currentScheme={employee.pensionScheme}
+          incomplete={employee.statutoryIncomplete}
+          canRequest={!exited}
+          canDecide={roles.some((r) => PENSION_SCHEME_CHECKER_ROLES.includes(r))}
+          initialChanges={schemeChanges && schemeChanges.source !== "error" ? (schemeChanges.data ?? []) : null}
+          canOverride={roles.includes("super_admin")}
+        />
+      )}
+
+      {/* PR #2459 review B1: opening YTD (pre-go-live / previous employer) for s.192 TDS. Maker: payroll staff; checker: payroll admin. */}
+      {roles.some((r) => PAYROLL_STAFF_ROLES.includes(r)) && (
+        <EmployeeOpeningYtdCard
+          employeeId={params.id}
+          canEnter={roles.some((r) => PAYROLL_STAFF_ROLES.includes(r))}
+          canDecide={roles.some((r) => OPENING_YTD_CHECKER_ROLES.includes(r))}
+        />
+      )}
 
       {scannedDocs && <ScannedDocumentsSection result={scannedDocs} backHref="/hr/employees" />}
 

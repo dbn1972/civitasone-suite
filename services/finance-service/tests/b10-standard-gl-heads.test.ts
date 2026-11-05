@@ -12,7 +12,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { standardGlHeads, missingStandardHeads, BILL_HEAD_HOA } from "../src/modules/gl/standard-heads.js";
+import { standardGlHeads, missingStandardHeads, BILL_HEAD_HOA, accrualStoresHeads } from "../src/modules/gl/standard-heads.js";
 import { natureOf } from "../src/modules/financial-statements/routes.js";
 import { parseHoA } from "../src/shared/hoa.js";
 
@@ -38,6 +38,9 @@ const ENV_USE: Record<string, Nature> = {
   FINANCE_GAIN_LOSS_CODE: "expense", FINANCE_DEP_EXPENSE_CODE: "expense", FINANCE_STAT_DEP_EXPENSE_CODE: "expense",
   FINANCE_IMPAIRMENT_CODE: "expense", FINANCE_TDS_EXPENSE_CODE: "expense",
   FINANCE_GRN_BILL_HEAD_CODE: "expense", WORKS_FINANCE_BILL_HEAD_CODE: "expense",
+  // UAT L2-N6: stock receipts / issues (gl/inventory-movement.ts)
+  FINANCE_STORES_INVENTORY_CODE: "asset", FINANCE_STORES_CONSUMPTION_CODE: "expense",
+  FINANCE_GRNI_CODE: "liability", FINANCE_STORES_SUSPENSE_CODE: "liability",
 };
 /** Literal `accountCode: "1234"` legs (payroll accrual, integrations/consumer.ts). */
 const LITERAL_USE: Record<string, Nature> = { "5001": "expense", "5002": "expense", "2101": "liability", "2102": "liability", "2103": "liability" };
@@ -91,14 +94,16 @@ describe("standard GL heads", () => {
   });
 
   it("cover every default account code a posting path resolves by code", () => {
-    const codes = new Set(standardGlHeads().map((h) => h.code));
+    // UAT L2-N6 review: the stores heads are seeded for ACCRUAL tenants only (accrualStoresHeads, added by the
+    // backfill per accounting basis) -- they still have to be declared there.
+    const codes = new Set([...standardGlHeads(), ...accrualStoresHeads()].map((h) => h.code));
     const uses = defaultUses();
     expect(uses.length).toBeGreaterThan(25); // the scan really saw the posting modules
     expect(uses.filter((u) => !codes.has(u.code)).map((u) => u.source)).toEqual([]);
   });
 
   it("every scanned code has a declared use, and the seeded head has that nature (classification AND statements)", () => {
-    const byCode = new Map(standardGlHeads().map((h) => [h.code, h]));
+    const byCode = new Map([...standardGlHeads(), ...accrualStoresHeads()].map((h) => [h.code, h]));
     const problems: string[] = [];
     for (const u of defaultUses()) {
       if (!u.use) { problems.push(`${u.source}: use not declared in ENV_USE / LITERAL_USE`); continue; }

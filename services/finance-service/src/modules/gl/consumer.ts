@@ -18,8 +18,15 @@ import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
 import { validateOrgAssignmentTx } from "../org-structure/domain.js";
 import { refusalCode } from "./refusal.js";
+import { parseInventoryMovement, accrualJournal, grnIdOf, INVENTORY_MOVEMENT_TYPE, type InventoryMovementJournal } from "./inventory-movement.js";
+import { recordStoresMovementTx } from "./stores-memo.js";
+import { clearGrniTx } from "./grni-clearing.js";
+import { loadSettingsTx } from "../approvals/repo.js";
+import { payrollAccrualJournalCommand, payrollAccrualVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
+import { pino } from "pino";
 
 const AUDIT_TOPIC = "audit.event.record";
+const log = pino({ name: "finance:gl-consumer" });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -496,6 +503,62 @@ export function registerGlConsumers(queue: Queue): void {
       return;
     }
 
+    // The inventory-service movement shape carries no `lines`; a balanced journal of the same type built in finance
+    // (the GRNI clearing, gl/grni-clearing.ts) takes the generic path below.
+    if (raw.type === INVENTORY_MOVEMENT_TYPE && !Array.isArray(raw.lines)) {
+      // UAT L2-N6 (+ review): inventory-service stock receipt / issue -- see gl/inventory-movement.ts. Per the tenant
+      // accounting basis (gl.finance_settings, default cash): cash records the stores memorandum and posts NO journal;
+      // accrual posts the stores journal (and clears GRNI once the GRN bill is passed). Idempotent by movement id /
+      // deterministic journal id, NOT by the inbox: the inbox mark is recorded but does not gate the work, so the
+      // dead letters the old generic path refused (and inbox-marked) -- outbox e6932aac -- can be re-driven.
+      let j: InventoryMovementJournal | undefined;
+      try {
+        const m = parseInventoryMovement(raw, new Date().toISOString().slice(0, 10));
+        await db.transaction(async (tx) => {
+          await markProcessed(tx, msg.messageId);
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          if (basis === "cash") {
+            const recorded = await recordStoresMovementTx(tx, msg.tenantId, m, "cash", null, msg.actorId);
+            log.info({ tenantId: msg.tenantId, movementId: m.movementId, kind: m.kind, amountMinor: m.totalMinor, recorded }, "inventory movement recorded in the stores memorandum (cash basis: no GL journal)");
+            return;
+          }
+          j = accrualJournal(m);
+          const journal = j;
+          await postJournal(tx, msg, {
+            id: journal.id, tenantId: msg.tenantId, voucherNo: journal.voucherNo,
+            type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
+          });
+          await recordStoresMovementTx(tx, msg.tenantId, m, "accrual", journal.id, msg.actorId);
+          for (const code of journal.warnings) {
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "finance", action: "warning", resourceType: "journal", resourceId: journal.id, outcome: "success", code, movementId: m.movementId },
+            });
+          }
+          const grnId = grnIdOf(m);
+          if (grnId) await clearGrniTx(tx, msg, grnId);
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "InventoryMovementPayloadError") {
+          captureError(err, { service: "finance-service", alert: "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost, type: INVENTORY_MOVEMENT_TYPE, tenantId: msg.tenantId });
+          throw new NonRetryableError(err.message);
+        }
+        // Unknown stores head, closed period, ... : finance.gl.rejected + dead-letter. Not inbox-marked: no producer
+        // re-sends a movement, the dead letter is the recovery path once the chart / period is fixed.
+        const rejected = j as InventoryMovementJournal | undefined;
+        await rejectRefusal(msg, err, {
+          journalId: rejected?.id, voucherNo: rejected?.voucherNo, type: INVENTORY_MOVEMENT_TYPE,
+          ...(rejected ? { sourceRef: rejected.sourceRef, source: rejected.source } : {}),
+        }, false);
+      }
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+      await cache.invalidateResource(msg.tenantId, "dashboard");
+      await cache.invalidateResource(msg.tenantId, "accounts");
+      return;
+    }
+
     const p = raw as StandardJournal;
     try {
       await db.transaction(async (tx) => {
@@ -746,12 +809,7 @@ export function registerGlConsumers(queue: Queue): void {
    * per-tenant Chart of Accounts (unknown codes emit finance.gl.rejected).
    */
   queue.subscribe(CONSUMED_EVENTS.payrollRunDisbursed, async (msg) => {
-    const p = msg.payload as {
-      runId: string;
-      month: string;
-      totalNetMinor: string;
-      messageId?: string;
-    };
+    const p = msg.payload as PayrollRunDisbursedPayload & { messageId?: string };
 
     const PAYABLE_HEAD = process.env["PAYROLL_GL_NET_PAYABLE_HEAD"] ?? "2101";
     const BANK_HEAD = process.env["PAYROLL_GL_BANK_HEAD"] ?? "1101";
@@ -759,7 +817,6 @@ export function registerGlConsumers(queue: Queue): void {
     // Deterministic id keyed off the run so an outbox redelivery hits the
     // journal PK and no-ops (mirrors the GL spine).
     const journalId = deterministicId(`payroll_settlement:${p.runId}`);
-    const today = new Date().toISOString().slice(0, 10);
     // H3: paise as bigint — no Number() on aggregate paise.
     const net = BigInt(p.totalNetMinor);
 
@@ -774,6 +831,30 @@ export function registerGlConsumers(queue: Queue): void {
       try {
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
+          // UAT T-PERIOD D-04 (ERP-head decision 2026-11-05): the settlement is
+          // dated the payment date (IST; was the UTC date of consumption). On a
+          // cash basis the salary accrual, deferred from approval, posts here on
+          // the same payment date -- March pay disbursed on 1 April is new-FY
+          // expenditure. On an accrual basis it is posted here (pay-month end)
+          // only if it never was (basis switched after approval, review SF4).
+          // Same deterministic journal id as the approval path and a voucher
+          // check (runs accrued before this build), so never twice.
+          const basis = (await loadSettingsTx(tx as unknown as Parameters<typeof loadSettingsTx>[0], msg.tenantId)).accountingBasis;
+          const dates = postingDatesOnDisbursal(basis, p, new Date());
+          const today = dates.settlementDate;
+          if (dates.accrualDate !== null && p.totalGrossMinor != null) {
+            const accrual = { ...p, totalGrossMinor: p.totalGrossMinor } as PayrollRunApprovedPayload;
+            const accrualId = deterministicId(`payroll_accrual:${p.runId}`);
+            const already = (await repo.findJournalByIdTx(tx, accrualId))
+              ?? (await repo.findJournalByVoucherNoTx(tx, msg.tenantId, payrollAccrualVoucherNo(p)));
+            if (!already) {
+              await enqueue(tx, {
+                topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: payrollAccrualJournalCommand(accrual, accrualId, msg.tenantId, dates.accrualDate),
+              });
+            }
+          }
 
           // Validate both head codes exist in COA for this tenant
           const resolvedLines: JournalLine[] = [];

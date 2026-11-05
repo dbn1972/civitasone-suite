@@ -59,10 +59,14 @@ async function tdsDeductedMinor(tenantId: string, period: string): Promise<bigin
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
   const valid = new Set(runs.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  // UAT T-PERIOD D-11: a FAILED run never deducted anything -- any TDS row it
+  // left is not counted, even when the month has no finalised run.
+  const failed = new Set(runs.filter((r) => r.status === "failed").map((r) => r.id));
   const rows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, tenantId), eq(payrollTds.period, period), notExcludedSlip(payrollTds.slipId))));
   let sum = 0n;
   for (const t of rows) {
+    if (failed.has(t.runId)) continue;
     if (valid.size > 0 && !valid.has(t.runId)) continue;
     sum += BigInt(t.tdsMinor);
   }
@@ -82,14 +86,28 @@ async function tdsDepositedMinor(tenantId: string, period: string, formType: str
 
 /**
  * H2: true when a payroll run exists for the period but is NOT yet finalised
- * (draft/processing/computed/failed). Such a period has deducted==0 only because the run
- * has not produced/approved its TDS rows yet — it is NOT "no liability". The 24Q
- * gate must block it (pending_finalisation) rather than green-light it as matched.
+ * (draft/processing/computed). Such a period has
+ * deducted==0 only because the run has not produced/approved its TDS rows yet
+ * -- it is NOT "no liability". The 24Q gate must block it (pending_finalisation)
+ * rather than green-light it as matched.
+ *
+ * UAT T-PERIOD D-11: a FAILED run is terminal -- it never deducts, cannot be
+ * approved, and a new run for the month is allowed beside it -- so it does NOT
+ * keep the month pending. It used to, for ever: January 2027 (two runs failed
+ * on a missing DA rate, then a disbursed run) stayed pending_finalisation and
+ * the 24Q GET answered 409 until force-filed.
  */
+export const NON_FINAL_RUN_STATUSES: ReadonlySet<string> = new Set(["draft", "processing", "computed"]);
+
+/** Pure: whether any of the month runs is still in flight (failed runs excluded). */
+export function periodHasNonFinalRun(runs: ReadonlyArray<{ status: string }>): boolean {
+  return runs.some((r) => NON_FINAL_RUN_STATUSES.has(r.status));
+}
+
 async function hasNonFinalRun(tenantId: string, period: string): Promise<boolean> {
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, period))));
-  return runs.some((r) => r.status === "draft" || r.status === "processing" || r.status === "computed" || r.status === "failed");
+  return periodHasNonFinalRun(runs);
 }
 
 export interface Reconciliation {
@@ -116,7 +134,7 @@ export async function reconcilePeriod(tenantId: string, period: string, formType
       eq(payrollTdsChallan.formType, formType),
     )));
   const variance = deposited - deducted;
-  // H2: a period with a non-finalised run (draft/processing/failed) has
+  // H2: a period with a non-finalised run (draft/processing; not failed) has
   // deducted==0 only because TDS is not approved yet — that is NOT "no
   // liability". Surface it as pending_finalisation and do NOT mark it matched,
   // so the 24Q gate blocks it.

@@ -38,6 +38,7 @@ const settingsBody = z.object({
   debtLoanLiabilityHeadId: z.string().uuid().nullable().optional(),
   debtInterestExpenseHeadId: z.string().uuid().nullable().optional(),
   debtBankHeadId: z.string().uuid().nullable().optional(),
+  accountingBasis: z.enum(["cash", "accrual"]).optional(),
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
 }).refine((b) => Object.entries(b).some(([k, v]) => k !== "reason" && v !== undefined), { message: "no setting supplied" });
 

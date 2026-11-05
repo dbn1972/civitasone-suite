@@ -12,15 +12,20 @@ import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from ".
 import { headObject } from "@civitasone/storage";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
-import { audit, resolveArrearsReviewThresholdBps } from "./consumer.js";
+import { audit, resolveArrearsReviewThresholdBps, resolveEpsUnrecordedPolicy } from "./consumer.js";
+import { epsUnrecordedEmployeeIdsByRun } from "../statutory/repo.js";
+import { EPS_ELIGIBILITY_UNRECORDED } from "./domain.js";
 import { MAKER_CHECKER_VIOLATION, runMakerCheckerDenial, type RunMakerCheckerAction } from "./run-maker-checker.js";
 import {
   unexcludedZeroBasicSlips, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion,
   invalidZeroBasicExclusions, INVALID_ZERO_BASIC_EXCLUSION, arrearsReviewOf, unacknowledgedArrears, arrearsReviewMessage,
   ARREARS_REVIEW_REQUIRED, slipsCarryArrears, type ArrearsAcknowledgement,
   runActionDenial, stuckRunHours, type RunLifecycleAction,
+  nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement,
+  tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement,
 } from "./domain.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
+import { assertTaxConfigForRun } from "../tax/config-check.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -100,6 +105,17 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
       throw new HttpError(400, "STRUCTURE_NOT_FOUND", `payroll structure ${body.structureId} does not exist for this tenant`);
     }
   }
+  // UAT b18 D2: refuse a run for an FY with no tax slab config up front (422
+  // TAX_CONFIG_MISSING) instead of letting every slip fail during compute.
+  // Before the pay-group branch so every run type and scope is covered.
+  // ERP-head decision 2026-11-05: new-regime slabs always; old-regime slabs
+  // only when someone in the run opted for the old regime (config-check.ts).
+  await assertTaxConfigForRun(ctx.tenantId, {
+    month: body.month, runType: body.runType ?? "regular",
+    ...(body.departmentId ? { departmentId: body.departmentId } : {}),
+    ...(body.payGroupId ? { payGroupId: body.payGroupId } : {}),
+    ...(body.payGroupIds ? { payGroupIds: body.payGroupIds } : {}),
+  });
   // GAP-PAYROLL-PAY-GROUPS-03: pay-group runs (one run per group, members only).
   if (isPayGroupRun(body)) {
     const r = await createPayGroupRuns(ctx, body);
@@ -280,7 +296,7 @@ function runCommandMessageId(ctx: RequestContext, action: RunLifecycleAction, ru
  * reason. 409 ZERO_BASIC_SLIPS names them. The consumer re-asserts the rule
  * inside the approval transaction.
  */
-async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusions: ZeroBasicExclusion[], acks: ArrearsAcknowledgement[]): Promise<void> {
+async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusions: ZeroBasicExclusion[], acks: ArrearsAcknowledgement[], netAcks: NetPayAcknowledgement[] = [], tdsAcks: TdsAcknowledgement[] = []): Promise<void> {
   const slips = await scopedRead((tx) => repo.listSlipsByRunTx(tx, id, ctx.tenantId));
   const zero = zeroBasicSlipsOf(slips);
   // Review SF5: an exclusion may only name a Rs 0-basic slip of this run.
@@ -291,6 +307,24 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
   }
   const blocking = unexcludedZeroBasicSlips(zero, exclusions);
   if (blocking.length > 0) throw new HttpError(409, ZERO_BASIC_SLIPS, zeroBasicSlipsMessage(blocking));
+  // UAT T-PERIOD D-02b: a slip that pays nothing (net <= 0, or deductions above
+  // gross) needs an explicit, reasoned acknowledgement -- the March run that
+  // paid TP-EMP-01 Rs 0 was approved and disbursed with no warning.
+  const unackedNet = unacknowledgedNonPositiveNet(nonPositiveNetSlipsOf(slips), netAcks);
+  if (unackedNet.length > 0) throw new HttpError(409, NET_PAY_NON_POSITIVE, nonPositiveNetMessage(unackedNet));
+  // PR #2459 review B2: presumed TDS months (409 UNRECORDED_FY_MONTHS_ESTIMATED)
+  // and a TDS shortfall payroll can no longer recover (409 TDS_SHORTFALL_UNRECOVERABLE).
+  const unackedTds = unacknowledgedTds(tdsReviewOf(slips), tdsAcks);
+  if (unackedTds.length > 0) throw new HttpError(409, unacknowledgedTdsCode(unackedTds), unacknowledgedTdsMessage(unackedTds));
+  // Delta review (ERP-head decision 2026-11-05): with the tenant policy
+  // "block", unrecorded EPS eligibility stops approval (advisory: only listed).
+  if ((await scopedRead((tx) => resolveEpsUnrecordedPolicy(tx as unknown as typeof db, ctx.tenantId))) === "block") {
+    const ids = await epsUnrecordedEmployeeIdsByRun(id, ctx.tenantId);
+    if (ids.length > 0) {
+      const noOf = new Map(slips.map((sl) => [sl.employeeId, sl.employeeNo]));
+      throw new HttpError(409, EPS_ELIGIBILITY_UNRECORDED, `EPS eligibility is not recorded for ${ids.length} EPF member(s): ${ids.slice(0, 20).map((e) => noOf.get(e) ?? e).join(", ")}. Record the first EPF joining date, joining wage, joint option or EPS membership in HRMS, then recompute.`);
+    }
+  }
   // Review SF4: large back-dated arrears need an explicit acknowledgement.
   if (!slipsCarryArrears(slips)) return;
   const threshold = await scopedRead((tx) => resolveArrearsReviewThresholdBps(tx as unknown as typeof db, ctx.tenantId));
@@ -298,10 +332,10 @@ async function assertApprovalReviewed(ctx: RequestContext, id: string, exclusion
   if (unacked.length > 0) throw new HttpError(409, ARREARS_REVIEW_REQUIRED, arrearsReviewMessage(unacked));
 }
 
-export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = [], arrearsAcknowledgements: ArrearsAcknowledgement[] = []): Promise<Accepted> {
+export async function approveRun(ctx: RequestContext, id: string, reason?: string, zeroBasicExclusions: ZeroBasicExclusion[] = [], arrearsAcknowledgements: ArrearsAcknowledgement[] = [], netPayAcknowledgements: NetPayAcknowledgement[] = [], tdsAcknowledgements: TdsAcknowledgement[] = []): Promise<Accepted> {
   await assertRunMakerChecker(ctx, "approve", id, reason);
   await assertRunActionAllowed(ctx, "approve", id);
-  await assertApprovalReviewed(ctx, id, zeroBasicExclusions, arrearsAcknowledgements);
+  await assertApprovalReviewed(ctx, id, zeroBasicExclusions, arrearsAcknowledgements, netPayAcknowledgements, tdsAcknowledgements);
   await queue.publish(COMMANDS.runApprove, {
     messageId: runCommandMessageId(ctx, "approve", id),
     type: COMMANDS.runApprove,
@@ -310,6 +344,8 @@ export async function approveRun(ctx: RequestContext, id: string, reason?: strin
       id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}),
       ...(zeroBasicExclusions.length > 0 ? { zeroBasicExclusions } : {}),
       ...(arrearsAcknowledgements.length > 0 ? { arrearsAcknowledgements } : {}),
+      ...(netPayAcknowledgements.length > 0 ? { netPayAcknowledgements } : {}),
+      ...(tdsAcknowledgements.length > 0 ? { tdsAcknowledgements } : {}),
     },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));

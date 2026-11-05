@@ -7,6 +7,7 @@ import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { defaultPensionScheme } from "./pension-scheme.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
@@ -65,6 +66,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       managerId?: string;
       legalEntityId?: string; costCenterId?: string; locationId?: string;
       esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      pensionScheme?: string;
       // GAP-HR-EMPLOYEES-IMPORT-02: set only by POST /v1/hrms/employees/bulk.
       importBatchId?: string;
     };
@@ -95,6 +97,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,
           departmentId: p.departmentId, designationId: p.designationId,
           dateOfJoining: p.dateOfJoining, employeeType: p.employeeType as "permanent",
+          // UAT b18 D1: same hire rule as the single-row create (commands.ts).
+          pensionScheme: p.pensionScheme ?? defaultPensionScheme({ dateOfJoining: p.dateOfJoining, employeeType: p.employeeType }),
           basicMinor: BigInt(p.basicMinor), currency: p.currency as "INR", status: "probation",
           dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null, pan: p.pan ?? null,
           aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,

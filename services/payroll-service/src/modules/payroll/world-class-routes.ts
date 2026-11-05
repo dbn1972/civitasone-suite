@@ -29,7 +29,10 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/payroll/arrears", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const rows = await repo.listArrears(ctx.tenantId);
+    // PR #2459 delta review B3: ?employeeId= shows one employee arrears, incl. an
+    // outstanding recovery carried forward by the deduction limit (source carry_forward).
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query ?? {});
+    const rows = await repo.listArrears(ctx.tenantId, q.employeeId);
     return reply.send({ data: rows });
   });
 
@@ -299,12 +302,12 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       SELECT protected_net_floor_minor, updated_at, salary_revision_second_approver,
              subsistence_initial_pct_bps, subsistence_review_after_days,
              subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
-             flex_election_maker_checker
+             flex_election_maker_checker, max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live
       FROM payroll.payroll_settings
       WHERE tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
     `))) as unknown as Array<{
-      flex_election_maker_checker: boolean;
+      flex_election_maker_checker: boolean; max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null;
       protected_net_floor_minor: string; updated_at: string; salary_revision_second_approver: boolean;
       subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
       subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
@@ -322,6 +325,11 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       subsistenceRevisedMaxPctBps: s ? Number(s.subsistence_revised_max_pct_bps) : 7500,
       // GAP-PAYROLL-FLEX-BENEFITS-05: default ON when the tenant has no row.
       flexElectionMakerChecker: s ? s.flex_election_maker_checker : true,
+      // UAT T-PERIOD D-02b / PR #2459 review: deduction ceiling (bps of wages earned;
+      // default 50%, Code on Wages 2019 s.18(2)), whether it applies, payroll go-live.
+      maxDeductionShareBps: s ? Number(s.max_deduction_share_bps) : 5000,
+      deductionCapApplies: s ? s.deduction_cap_applies !== false : true,
+      payrollGoLiveDate: s?.go_live ?? null,
     });
   });
 

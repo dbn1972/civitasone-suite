@@ -343,6 +343,31 @@ describe("GET /v1/payroll/slips/:id/pdf — Happy path", () => {
     expect(res.body).toContain("NPS (Employer 14%)");
   });
 
+  it("200 — a UPS slip is labelled UPS: Government 10% individual + 8.5% pool, never NPS 14% (review SF7)", async () => {
+    H.scopedReadMock.mockImplementation(async () => {
+      callCount++;
+      // Basic + DA Rs 50,000: employee 10% Rs 5,000, Government individual 10% Rs 5,000, pool 8.5% Rs 4,250.
+      if (callCount === 1) return [makeSlip({ npsEmployeeMinor: 500000n, npsEmployerMinor: 500000n, gpfMinor: 0n, pfEmployeeMinor: 0n, pfEmployerMinor: 0n })];
+      if (callCount === 2) return [makeRun()];
+      if (callCount === 3) return [{ contribMinor: 425000n }];
+      return [];
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${SLIP_ID}/pdf`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("UPS (Employee 10%)");
+    expect(res.body).toContain("UPS (Government 10% + pool 8.5%)");
+    expect(res.body).not.toContain("NPS (Employer 14%)");
+    expect(res.body).toMatch(/UPS \(Government 10% \+ pool 8\.5%\)<\/td><td class="amount">[^<]*9,250/);
+  });
+
   it("200 — renders PF + ESI rows when no pension scheme rows", async () => {
     H.scopedReadMock.mockImplementation(async () => {
       callCount++;

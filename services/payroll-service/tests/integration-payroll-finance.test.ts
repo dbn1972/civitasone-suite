@@ -96,6 +96,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   sumEmployerContribByRun: (...args: any[]) => sumEmployerContribByRunMock(...args),
   // Same nested-transaction deadlock fix as listSlipsByRunTx above.
   sumEmployerContribByRunTx: (...args: any[]) => sumEmployerContribByRunMock(...args),
+  // UAT b18: EDLI / EPF admin / UPS pool accrued as their own lines.
+  sumEmployerChargesByRunTx: vi.fn(async () => ({ edliMinor: 7500n, epfAdminMinor: 7500n, upsPoolMinor: 0n })),
   insertPf: vi.fn(async () => undefined),
   insertEsi: vi.fn(async () => undefined),
   insertTds: vi.fn(async () => undefined),
@@ -240,6 +242,8 @@ describe("payroll.run.approve → payroll.run.approved event", () => {
     expect(payload.totalGrossMinor).toBe("5000000");
     expect(payload.totalNetMinor).toBe("4500000");
     expect(payload.totalEmployerContribMinor).toBe("180000");
+    // UAT b18: separate, additive EPFO charge fields (never folded into the employer total).
+    expect(payload).toMatchObject({ totalEdliMinor: "7500", totalEpfAdminMinor: "7500", totalUpsPoolMinor: "0" });
     await q.stop();
   });
 

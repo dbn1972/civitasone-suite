@@ -5,9 +5,29 @@ import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
 import {
-  hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions,
+  hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions, hrmsPensionSchemeChanges,
   type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
 } from "./schema.js";
+
+/**
+ * UAT b18 D1: every APPROVED pension scheme change of a tenant, grouped by
+ * employee -- the history the payroll-input feed resolves the scheme in effect
+ * for a month from (pension-scheme.ts schemeForMonth). One query per feed.
+ */
+export async function listApprovedPensionSchemeChanges(tenantId: string): Promise<Map<string, Array<{ fromScheme: string; toScheme: string; effectiveFrom: string }>>> {
+  const rows = await scopedRead((tx) => tx.select({
+    employeeId: hrmsPensionSchemeChanges.employeeId, fromScheme: hrmsPensionSchemeChanges.fromScheme,
+    toScheme: hrmsPensionSchemeChanges.toScheme, effectiveFrom: hrmsPensionSchemeChanges.effectiveFrom,
+  }).from(hrmsPensionSchemeChanges)
+    .where(and(eq(hrmsPensionSchemeChanges.tenantId, tenantId), eq(hrmsPensionSchemeChanges.status, "approved"))));
+  const out = new Map<string, Array<{ fromScheme: string; toScheme: string; effectiveFrom: string }>>();
+  for (const r of rows ?? []) {
+    const list = out.get(r.employeeId) ?? [];
+    list.push({ fromScheme: r.fromScheme, toScheme: r.toScheme, effectiveFrom: r.effectiveFrom });
+    out.set(r.employeeId, list);
+  }
+  return out;
+}
 
 const log = pino({ name: "employee-repo", serializers: SAFE_LOG_SERIALIZERS });
 

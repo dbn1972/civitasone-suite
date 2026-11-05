@@ -15,7 +15,7 @@
  * 2xxx liability, 4xxx income (4200 gain/loss on disposal is an expense head), 5xxx/6xxx expense.
  */
 import { financeHeads } from "../budget/schema.js";
-import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET } from "./system-heads.js";
+import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE } from "./system-heads.js";
 
 export type StandardGlHead = {
   code: string; name: string; classification: string;
@@ -83,6 +83,25 @@ export function standardGlHeads(): StandardGlHead[] {
     seen.add(h.code);
     return true;
   });
+}
+
+/**
+ * UAT L2-N6 review: the stores heads only an ACCRUAL-basis tenant posts to (gl/inventory-movement.ts). Never seeded at
+ * provisioning (a new tenant is cash basis); scripts/backfill-standard-gl-heads.ts adds them for accrual tenants only.
+ */
+export function accrualStoresHeads(): StandardGlHead[] {
+  return [
+    { code: STORES_INVENTORY, name: "Stores / Inventory", classification: "asset" },
+    { code: GRNI, name: "Goods Received Not Invoiced (GRNI)", classification: "liability" },
+    { code: STORES_SUSPENSE, name: "Stores Receipts Suspense", classification: "liability" },
+    { code: STORES_CONSUMPTION, name: "Stores Consumed", classification: "expense" },
+  ];
+}
+
+/** The accrual stores heads absent from `existing` (pure). */
+export function missingAccrualStoresHeads(existing: Iterable<string>): StandardGlHead[] {
+  const have = new Set(existing);
+  return accrualStoresHeads().filter((h) => !have.has(h.code));
 }
 
 /** The standard heads absent from `existing` (pure; drives the backfill's --dry-run plan). */

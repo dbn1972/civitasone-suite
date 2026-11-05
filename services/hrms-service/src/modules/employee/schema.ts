@@ -65,6 +65,12 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   payStructureId:   uuid("pay_structure_id"),
   pensionScheme:    varchar("pension_scheme", { length: 8 }).notNull().default("NPS"),
+  // UAT b18 SF1 (migration 0262): EPF membership facts for EPS eligibility.
+  epfFirstJoinedOn:        date("epf_first_joined_on"),
+  epfVoluntaryJointOption: boolean("epf_voluntary_joint_option").notNull().default(false),
+  epsMember:               boolean("eps_member"),
+  // Delta review (migration 0263): EPF wages at first joining EPF, stamped once.
+  epfJoiningWageMinor:     bigint("epf_joining_wage_minor", { mode: "bigint" }),
   // Statutory identifiers (DIC): EPFO UAN is above; ESIC Insured-Person no. + NPS PRAN.
   esicIpNumber:     varchar("esic_ip_number", { length: 17 }),
   pran:             varchar("pran", { length: 12 }),
@@ -201,4 +207,39 @@ export const hrmsProbationExtensions = employeeSchema.table("hrms_probation_exte
 export type ProbationExtensionRow = typeof hrmsProbationExtensions.$inferSelect;
 export type ProbationExtensionInsert = typeof hrmsProbationExtensions.$inferInsert;
 
-export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses, hrmsProbationExtensions };
+/**
+ * UAT b18 D1 (migration 0261): maker-checker, effective-dated pension scheme
+ * changes. See pension-scheme-routes.ts.
+ */
+export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_scheme_changes", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  fromScheme:    varchar("from_scheme", { length: 8 }).notNull(),
+  toScheme:      varchar("to_scheme", { length: 8 }).notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  reason:        text("reason").notNull(),
+  uanNumber:     varchar("uan_number", { length: 12 }),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  // change (maker-checker request) | initial | correction (history backfill rows)
+  kind:          varchar("kind", { length: 16 }).notNull().default("change"),
+  requestedBy:   uuid("requested_by").notNull(),
+  decidedBy:     uuid("decided_by"),
+  decidedAt:     timestamp("decided_at", { withTimezone: true }),
+  decisionNote:  text("decision_note"),
+  appliedAt:     timestamp("applied_at", { withTimezone: true }),
+  // migration 0262 (review SF1 / SF5)
+  overrideReason:          text("override_reason"),
+  epfFirstJoinedOn:        date("epf_first_joined_on"),
+  epfVoluntaryJointOption: boolean("epf_voluntary_joint_option"),
+  epsMember:               boolean("eps_member"),
+  epfJoiningWageMinor:     bigint("epf_joining_wage_minor", { mode: "bigint" }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  updatedBy:     uuid("updated_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+export type PensionSchemeChangeRow = typeof hrmsPensionSchemeChanges.$inferSelect;
+
+export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses, hrmsProbationExtensions, hrmsPensionSchemeChanges };
