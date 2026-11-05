@@ -159,8 +159,13 @@ describe("Cross-service chain 3: audit.para.pending_recovery → finance records
     expect(ap.resourceType).toBe("finance_audit_para");
 
     // The finance audit-paras row the consumer "would write".
-    const recovery = harness.inserts.find((i) => i.row.status === "pending_recovery");
+    // The para enters the register as `open` (the only status the 0036 CHECK allows for a new
+    // para; `pending_recovery` is audit-service vocabulary). Identify the row by its para_no.
+    const recovery = harness.inserts.find(
+      (i) => i.row.paraNo === "AUDIT-55555555-0001-4000-8000-000000000001",
+    );
     expect(recovery, "expected a finance_audit_paras recovery row to be written").toBeDefined();
+    expect(recovery!.row.status).toBe("open");
     expect(recovery!.row.dept).toBe("Public Works Dept");
     expect(recovery!.row.moneyValueMinor).toBe(250000n);
     expect(String(recovery!.row.paraNo)).toContain("AUDIT-");
