@@ -83,7 +83,7 @@ export default async function WorkflowHubPage() {
         <LinkTiles
           columns="four"
           tiles={[
-            { title: "My tasks", href: "/workflow/my-tasks", description: "Your task inbox — claim, approve, return or reject" },
+            { title: "Approvals", href: "/approvals", description: "Every item waiting for your decision, from every module" },
             { title: "Instances", href: "/workflow/list", description: "Running & completed process instances" },
             { title: "Approval workflows", href: "/workflow/definitions", description: "Process definitions, versions and graphs" },
             { title: "My delegations", href: "/workflow/delegations", description: "Hand a role to a colleague for up to 90 days, and revoke it" },
