@@ -878,6 +878,34 @@ describe("default PDF path + Form 12BA PDF route (review)", () => {
     }
   });
 
+  it("503 TENANT_IDENTITY_UNAVAILABLE when the tenant identity cannot be read (fails closed, nothing renders)", async () => {
+    const { resetTenantDocIdentityCache } = await import("../src/modules/deductor-config/tenant-identity.js");
+    const { resetDocIdentityCache } = await import("@civitasone/render/official");
+    resetTenantDocIdentityCache(); resetDocIdentityCache();
+    // The deductor would be valid from the deployment env, but the tenant-service read fails: no 12BA is issued.
+    vi.stubEnv("PAYROLL_DEDUCTOR_ENV_FALLBACK", "single-tenant");
+    vi.stubEnv("EMPLOYER_NAME", "Directorate of Treasuries and Accounts");
+    vi.stubEnv("EMPLOYER_TAN", "BLRD54321E");
+    vi.stubEnv("EMPLOYER_PAN", "AAAGD5432L");
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: unknown) => {
+      if (String(input).includes("/v1/tenants/")) return new Response("{}", { status: 503 });
+      return realFetch(input as never, init as never);
+    }));
+    try {
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba/pdf?employeeId=${EMPLOYEE_ID}&fy=2025-26`, headers: { authorization: `Bearer ${adminToken()}` } });
+      await app.close();
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("TENANT_IDENTITY_UNAVAILABLE");
+      expect(res.headers["content-type"]).not.toBe("application/pdf");
+      expect(res.body).not.toContain("BLRD54321E");
+    } finally {
+      vi.unstubAllGlobals(); vi.unstubAllEnvs();
+      resetTenantDocIdentityCache(); resetDocIdentityCache();
+    }
+  });
+
   it("400 for a malformed FY", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba/pdf?employeeId=${EMPLOYEE_ID}&fy=2025`, headers: { authorization: `Bearer ${adminToken()}` } });

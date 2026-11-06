@@ -25,6 +25,7 @@ import { buildForm16, parseFy } from "../tax/form16.js";
 import { fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { loadLetterhead } from "../letterhead/routes.js";
 import { resolveForm16Deductor, type Form16Deductor } from "./form16-document.js";
+import { requireDeductor } from "../deductor-config/repo.js";
 
 /** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
 async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
@@ -206,8 +207,13 @@ export async function form12baPdfRoutes(app: FastifyInstance): Promise<void> {
     catch (e) { throw new HttpError(400, "VALIDATION_FAILED", (e as Error).message); }
 
     let employer: Form16Deductor;
-    try { employer = await resolveForm16Deductor(ctx.tenantId); }
-    catch (err) {
+    try {
+      // Same gate as the JSON Form 12BA and Form 24Q / 26Q: a tenant-service failure is 503
+      // TENANT_IDENTITY_UNAVAILABLE and an invalid / placeholder deductor is refused before anything renders.
+      await requireDeductor(ctx.tenantId, "Form 12BA");
+      employer = await resolveForm16Deductor(ctx.tenantId);
+    } catch (err) {
+      if (err instanceof HttpError && err.code === "FORM16_EMPLOYER_NOT_CONFIGURED") throw new HttpError(422, "FORM12BA_EMPLOYER_NOT_CONFIGURED", err.message);
       if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
       if (err instanceof DocumentNotIssuableError) throw new HttpError(422, "FORM12BA_EMPLOYER_NOT_CONFIGURED", err.message.replace("Form 16", "Form 12BA"));
       throw err;
