@@ -4,6 +4,13 @@ Status: DESIGN for review. No code. Branch `design/tenant-profile-switch`, base 
 Constraint: parallel work, OFF the UAT server until the 18-20 Nov screen sign-off. Everything below ships behind `TENANT_PROFILES_ENABLED` (default false), so a merge after sign-off still changes nothing until the flag is turned on.
 Paths are under `services/` unless they start with `apps/` or `packages/`. "Wired" means a live caller was found in source; "unwired" means none was.
 
+## Owner decisions (2026-11-06)
+
+1. `govt_small_office` budget control is **mandatory** from day one.
+2. Profile is a sub-level of edition. PSU, private, NGO and cooperative behave exactly as today until each has its own design.
+3. A cash-to-accrual switch may take effect **only from a financial-year start (1 April)**. A mid-year effective date is refused.
+4. Existing tenants keep `2202` as the default bill head, unchanged. A new `govt_small_office` tenant has **no default bill head**: it chooses its major head in the setup wizard.
+
 ## 0. Findings that change the brief
 
 1. **`small_office` is the MSME edition, not a government one.** `POST /v1/tenant/msme-onboard` hard-codes `edition: "small_office"` (tenant-service/src/modules/tenant/routes.ts:224-299). The live tenant DB has 12 `govt` and 12 `small_office` tenants. A government small office therefore cannot be a new edition value. It is a profile inside edition `govt`. The CHECK in migration 0034 stays untouched.
@@ -86,7 +93,7 @@ Codes obey the existing nature rules (head-nature.ts: 1 asset, 2/3 liability or 
 |---|---|
 | Budget control: tighten (off to advisory to mandatory) | Direct, audited |
 | Budget control: relax (mandatory to advisory/off, advisory to off) | Maker-checker. Add `budgetControl` to `isRelaxingControl` (domain.ts:47) as a `settings_relax` |
-| Accounting basis | Unchanged: maker-checker (domain.ts:49). Proposed addition: effective only from the start of a financial year |
+| Accounting basis | Unchanged: maker-checker (domain.ts:49). Owner decision 3: the effective date must be 1 April; a mid-year date is refused (`BASIS_SWITCH_MID_YEAR`) |
 | COA template, before any posting | Direct, admin-only; add-only re-seed |
 | COA template, after first posting | **Refused** (`COA_TEMPLATE_LOCKED`). Heads never move or rename; extra heads are added through the normal head-creation screen |
 | Profile within the same family (`govt_dept` and `govt_small_office`) | Maker-checker, new kind `profile_change` (needs the `finance_change_requests_kind_check` update, as migration 0161 did). Bundle changes are additive; removal is the existing 409-if-depended-on rule |
@@ -111,7 +118,7 @@ Target: a block or tehsil office, sub-registrar or district-level section; 15-60
 
 Excluded: recruitment, career (done by the parent department), workforce_core, smarttransfer, revenue, contract, works, project, grant, citizen, crm, helpdesk, knowledge, inspection, telephony, meeting, court, visitor, billing, field. Optional add-ons via one-click bundles: `revenue` (fee-collecting offices), `citizen`+`helpdesk`, `works`.
 
-**Setup defaults.** Financial year 1 April (org-structure/schema.ts:36). INR. Cash basis. Budget mandatory. Maker-checker on (SETTINGS_DEFAULTS). Two pay groups: gazetted and non-gazetted (pay-group-domain.ts:15). Default pension scheme NPS; GPF for employees recruited before 2004. COA `govt` plus `office-pack`. A "quick allotment" form creates `finance_budgets` rows per head. Worked example: Office of the Block Development and Panchayat Officer, Sohna (Gurugram, Haryana); DDO `HRGGN04217` (matches PFMS_DDO_REGEX, shared/pfms.ts:14); PAO Gurugram; treasury Gurugram. FY 2026-27 allotment (rupees): 5001 Salary Expense 1,84,00,000; 5002 Employer Contributions 18,40,000; 5410 Office Expenses 6,50,000; 5420 Travel Expenses 2,40,000; 5430 Contingent Expenditure 3,00,000; 5440 Repairs and Maintenance 4,20,000; 5460 Electricity, Water and Telephone 5,10,000; 2202 default bill head 1,00,000 (rename to a department head is a follow-up).
+**Setup defaults.** Financial year 1 April (org-structure/schema.ts:36). INR. Cash basis. Budget mandatory. Maker-checker on (SETTINGS_DEFAULTS). Two pay groups: gazetted and non-gazetted (pay-group-domain.ts:15). Default pension scheme NPS; GPF for employees recruited before 2004. COA `govt` plus `office-pack`. The wizard step also asks for the bill major head (no default; owner decision 4). A "quick allotment" form creates `finance_budgets` rows per head. Worked example: Office of the Block Development and Panchayat Officer, Sohna (Gurugram, Haryana); DDO `HRGGN04217` (matches PFMS_DDO_REGEX, shared/pfms.ts:14); PAO Gurugram; treasury Gurugram. FY 2026-27 allotment (rupees): 5001 Salary Expense 1,84,00,000; 5002 Employer Contributions 18,40,000; 5410 Office Expenses 6,50,000; 5420 Travel Expenses 2,40,000; 5430 Contingent Expenditure 3,00,000; 5440 Repairs and Maintenance 4,20,000; 5460 Electricity, Water and Telephone 5,10,000; the major head chosen in the wizard (for example 2515 Other Rural Development Programmes) 1,00,000.
 
 **DDO and IFMS: what really exists.**
 - Wired: DDO master and sync (finance `/v1/finance/ddo`, masters/routes.ts:176; masters/consumer.ts ddo_sync); `ddoCode` on org-structure (schema.ts:33); a required, regex-checked `ddoCode` on payment commands (payments/validators.ts:5,31,61); payroll `payroll_ddos` (migration 0014) with the pay-group DDO active check (pay-group-commands.ts:109-111); bill approval requires the DDO in the master (payments/consumer.ts:178).
@@ -146,7 +153,7 @@ About 17 dev-days. S0 to S3 are the critical path. Migration numbers are the nex
 
 **Re-test before UAT (after sign-off).** Full finance UAT T-PERIOD regression for a govt tenant (bill pass, payments, payroll accrual, year end, period reopen) with the flag off, then on; the backfill dry-run parity on a UAT DB copy; a 48 h module-guard `shadow` soak for a small office tenant; the setup wizard e2e and axe checks for the new step; a gitleaks run per commit.
 
-**Risks.** (1) A missed enforcement point leaves a hard refusal in advisory mode; mitigated by the central mode helper and the call-site grep test. (2) A cash-to-accrual switch mid-year distorts statements. (3) Commercial bills fail on HoA/DDO until S4's skip. (4) Bundles do nothing in enforcement `off`. (5) The `2202 General Education` default is wrong for non-education offices; touching it for govt would break "unchanged", so it is deferred. (6) Event ordering: `onboarded` can arrive before settings exist; inserts are idempotent and tested. (7) Off mode stops utilisation tracking; the UI must say so.
+**Risks.** (1) A missed enforcement point leaves a hard refusal in advisory mode; mitigated by the central mode helper and the call-site grep test. (2) A cash-to-accrual switch mid-year distorts statements. (3) Commercial bills fail on HoA/DDO until S4's skip. (4) Bundles do nothing in enforcement `off`. (5) Owner decision 4: existing tenants keep `2202`; `govt_small_office` has no default bill head, so the wizard must set it before the first bill (GRN and works bills are refused with `NO_DEFAULT_BILL_HEAD` until then). (6) Event ordering: `onboarded` can arrive before settings exist; inserts are idempotent and tested. (7) Off mode stops utilisation tracking; the UI must say so.
 
 ## 8. Out of scope: follow-on designs this switch enables
 - **Section 8**: FCRA and fund accounting, 12A/80G, nonprofit statements, grant utilisation.
