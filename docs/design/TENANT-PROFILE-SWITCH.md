@@ -8,7 +8,7 @@ Paths are under `services/` unless they start with `apps/` or `packages/`. "Wire
 
 1. `govt_small_office` budget control is **mandatory** from day one.
 2. Profile is a sub-level of edition. PSU, private, NGO and cooperative behave exactly as today until each has its own design.
-3. A cash-to-accrual switch may take effect **only from a financial-year start (1 April)**. A mid-year effective date is refused.
+3. A cash-to-accrual switch may take effect **only from a financial-year start (1 April)**, and is **approved ahead and applied on 1 April**: it can be approved at any time of the year, with the next 1 April as its effective date. It is stored as pending (`pending_accounting_basis`, `pending_basis_effective_from` on `gl.finance_settings`) and applied automatically at the FY rollover, in the fiscal-year activation and the year-end close, with no new scheduler. A mid-year effective date is refused; an approval that arrives on or after its date is stale and must be raised again.
 4. Existing tenants keep `2202` as the default bill head, unchanged. A new `govt_small_office` tenant has **no default bill head**: it chooses its major head in the setup wizard.
 
 ## 0. Findings that change the brief
@@ -93,7 +93,7 @@ Codes obey the existing nature rules (head-nature.ts: 1 asset, 2/3 liability or 
 |---|---|
 | Budget control: tighten (off to advisory to mandatory) | Direct, audited |
 | Budget control: relax (mandatory to advisory/off, advisory to off) | Maker-checker. Add `budgetControl` to `isRelaxingControl` (domain.ts:47) as a `settings_relax` |
-| Accounting basis | Unchanged: maker-checker (domain.ts:49). Owner decision 3: the effective date must be 1 April; a mid-year date is refused (`BASIS_SWITCH_MID_YEAR`) |
+| Accounting basis | Unchanged: maker-checker (domain.ts:49). Owner decision 3: maker-checker as today; the effective date is the next 1 April (default), a mid-year date is refused (`BASIS_SWITCH_MID_YEAR`), and the approved switch waits as pending until the FY rollover applies it |
 | COA template, before any posting | Direct, admin-only; add-only re-seed |
 | COA template, after first posting | **Refused** (`COA_TEMPLATE_LOCKED`). Heads never move or rename; extra heads are added through the normal head-creation screen |
 | Profile within the same family (`govt_dept` and `govt_small_office`) | Maker-checker, new kind `profile_change` (needs the `finance_change_requests_kind_check` update, as migration 0161 did). Bundle changes are additive; removal is the existing 409-if-depended-on rule |
