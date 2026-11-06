@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb, date } from "drizzle-orm/pg-core";
 
 const glSchema = pgSchema("gl");
 
@@ -14,6 +14,14 @@ export const financeSettings = glSchema.table("finance_settings", {
   debtBankHeadId:                      uuid("debt_bank_head_id"),
   // UAT L2-N6 review: cash (default, government) | accrual. Migration 0160.
   accountingBasis:                     varchar("accounting_basis", { length: 8 }).notNull().default("cash"),
+  // Tenant-type profile switch (migration 0162): mandatory (default) | advisory | off.
+  budgetControl:                       varchar("budget_control", { length: 10 }).notNull().default("mandatory"),
+  // govt (default) | commercial | nonprofit. Fixed at provisioning; refused once postings exist.
+  coaTemplate:                         varchar("coa_template", { length: 12 }).notNull().default("govt"),
+  profileCode:                         varchar("profile_code", { length: 32 }).notNull().default("govt_dept"),
+  // An approved basis switch waiting for the next 1 April (migration 0162); both NULL when nothing is pending.
+  pendingAccountingBasis:              varchar("pending_accounting_basis", { length: 8 }),
+  pendingBasisEffectiveFrom:           date("pending_basis_effective_from"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

@@ -12,7 +12,7 @@ import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery, reje
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
-import { assertProvisionHttp } from "../budget/provision.js";
+import { assertProvisionHttp, attachBudgetWarnings } from "../budget/provision.js";
 import { assertFiscalYearActiveHttp } from "./fy-guard.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -88,7 +88,7 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     // UAT T-PERIOD D-07 / D-03: not into a financial year that is not active yet, and no debit to an expenditure head
     // without a budget provision for the year (GFR). The posting consumer re-checks both at posting time.
     await assertFiscalYearActiveHttp(ctx.tenantId, body.postingDate);
-    await assertProvisionHttp(ctx.tenantId, body.lines.filter((l) => BigInt(l.debitMinor) > 0n).map((l) => String(l.accountCode)), body.postingDate, body.type, "lines");
+    attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, body.lines.filter((l) => BigInt(l.debitMinor) > 0n).map((l) => String(l.accountCode)), body.postingDate, body.type, "lines"));
     // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / GAP-FINANCE-JOURNAL-ENTRY-06 (same check, built by two clusters; one kept): a typed voucher number must be unique per tenant. The UNIQUE(tenant_id,
     // voucher_no) index stays the authority for a true race (the consumer would dead-letter the loser), but a plain
     // duplicate is answered here, as a field error on voucherNo, instead of a 202 followed by a silently dropped
@@ -135,7 +135,7 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
       await assertPeriodAcceptsPosting(ctx.tenantId, String(draft.postingDate), draft.type);
       await assertFiscalYearActiveHttp(ctx.tenantId, String(draft.postingDate));
       const draftLines = (Array.isArray(draft.lines) ? draft.lines : []) as Array<{ accountCode: string; debitMinor: string | number }>;
-      await assertProvisionHttp(ctx.tenantId, draftLines.filter((l) => BigInt(l.debitMinor ?? 0) > 0n).map((l) => String(l.accountCode)), String(draft.postingDate), draft.type, "lines");
+      attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, draftLines.filter((l) => BigInt(l.debitMinor ?? 0) > 0n).map((l) => String(l.accountCode)), String(draft.postingDate), draft.type, "lines"));
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
   });

@@ -21,6 +21,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { TenantView } from "./domain.js";
 import { tierFor, loadPlacementPolicyConfig } from "./placement-policy.js";
+import { resolveProfileCode } from "./profile.js";
 
 export type OnboardTenantBody = {
   name: string;
@@ -31,6 +32,8 @@ export type OnboardTenantBody = {
   adminEmail: string;
   adminName: string;
   settings?: Record<string, unknown>;
+  /** Profile inside the edition; absent = the edition default. */
+  profile?: string | undefined;
 };
 
 export type OnboardAccepted = {
@@ -54,6 +57,7 @@ export async function createTenantPipeline(
 
   // ── Tenant_Placement_Policy: resolve the initial Isolation_Tier from edition ─
   const decision = tierFor(body.edition, loadPlacementPolicyConfig());
+  const profileCode = resolveProfileCode(body.edition, body.profile);
 
   // ── Step 1: prime the read-your-writes cache so GET is consistent ──────────
   const projected: TenantView = {
@@ -62,6 +66,7 @@ export async function createTenantPipeline(
     name: body.name,
     domain: body.domain,
     edition: body.edition,
+    profileCode,
     status: "draft",
     region: body.region,
     residency: body.residency,
@@ -87,6 +92,7 @@ export async function createTenantPipeline(
       name: body.name,
       domain: body.domain,
       edition: body.edition,
+      profileCode,
       status: "draft",
       region: body.region,
       residency: body.residency,
@@ -113,6 +119,7 @@ export async function createTenantPipeline(
       adminEmail: body.adminEmail,
       adminName: body.adminName,
       edition: body.edition,
+      profileCode,
     },
   });
 
