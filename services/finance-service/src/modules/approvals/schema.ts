@@ -14,6 +14,11 @@ export const financeSettings = glSchema.table("finance_settings", {
   debtBankHeadId:                      uuid("debt_bank_head_id"),
   // UAT L2-N6 review: cash (default, government) | accrual. Migration 0160.
   accountingBasis:                     varchar("accounting_basis", { length: 8 }).notNull().default("cash"),
+  // Tenant-type profile switch (migration 0162): mandatory (default) | advisory | off.
+  budgetControl:                       varchar("budget_control", { length: 10 }).notNull().default("mandatory"),
+  // govt (default) | commercial | nonprofit. Fixed at provisioning; refused once postings exist.
+  coaTemplate:                         varchar("coa_template", { length: 12 }).notNull().default("govt"),
+  profileCode:                         varchar("profile_code", { length: 32 }).notNull().default("govt_dept"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

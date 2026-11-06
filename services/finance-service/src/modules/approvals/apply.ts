@@ -15,6 +15,10 @@ import { assertOpeningBalancesBalanced, DomainError } from "../masters/domain.js
 import { assertFiscalYearActivationAllowed } from "./domain.js";
 import { loadSettingsTx } from "./repo.js";
 import { financeSettings } from "./schema.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
+import { financeJournals } from "../gl/schema.js";
+import { todayIST } from "../../shared/ist-date.js";
+import { assertBasisSwitchApplicable } from "./domain.js";
 import type { FinanceSettings } from "./domain.js";
 
 /** An open tenant transaction (what db.transaction hands its callback). */
@@ -165,10 +169,16 @@ export async function applyHoaChange(
 
 /** Upsert the per-tenant settings (shared by the direct update and the approved settings_relax request). */
 export async function applySettingsChange(
-  tx: Tx, meta: ActorMeta, p: { changes: Partial<FinanceSettings>; reason: string; requestId?: string },
+  tx: Tx, meta: ActorMeta, p: { changes: Partial<FinanceSettings>; reason: string; requestId?: string; accountingBasisEffectiveFrom?: string | undefined },
 ): Promise<void> {
   const before = await loadSettingsTx(tx, meta.tenantId);
   const after = { ...before, ...p.changes };
+  // Owner decision 3: apply a basis switch only at a financial-year start, with nothing yet posted from that date.
+  if (tenantProfilesEnabled() && p.changes.accountingBasis !== undefined && p.changes.accountingBasis !== before.accountingBasis) {
+    const [last] = await tx.select({ d: sql<string | null>`max(${financeJournals.postingDate})::text` }).from(financeJournals)
+      .where(and(eq(financeJournals.tenantId, meta.tenantId), eq(financeJournals.status, "posted")));
+    assertBasisSwitchApplicable(String(p.accountingBasisEffectiveFrom ?? ""), todayIST(), last?.d ?? null);
+  }
   await tx.insert(financeSettings).values({ tenantId: meta.tenantId, ...after, updatedBy: meta.actorId })
     .onConflictDoUpdate({
       target: financeSettings.tenantId,

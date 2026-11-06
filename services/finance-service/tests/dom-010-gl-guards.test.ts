@@ -74,7 +74,8 @@ const {
   getPeriodStatusTxMock,
   nextVoucherNoMock,
 } = vi.hoisted(() => {
-  const _mockTx = { execute: vi.fn(async () => []) };
+  // Tenant-type profile switch: the GL budget block reads gl.finance_settings.budget_control; no settings row = mandatory.
+  const _mockTx = { execute: vi.fn(async () => []), select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) })) };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
     mockTx: _mockTx,
