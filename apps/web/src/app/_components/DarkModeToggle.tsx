@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useShellT } from "./useShellT";
 
 type Theme = "light" | "dark" | "system";
 
@@ -26,6 +27,7 @@ function writeStored(v: Theme): void {
 }
 
 export function DarkModeToggle() {
+  const t = useShellT("appNav");
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
@@ -62,17 +64,19 @@ export function DarkModeToggle() {
   };
 
   const icon = theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "💻";
-  const label = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System";
-  const nextLabel = theme === "dark" ? "System" : theme === "light" ? "Dark" : "Light";
+  const themeName = (v: string) =>
+    v === "dark" ? t("topbar.themeDark", "Dark") : v === "light" ? t("topbar.themeLight", "Light") : t("topbar.themeSystem", "System");
+  const label = themeName(theme);
+  const nextLabel = themeName(theme === "dark" ? "system" : theme === "light" ? "dark" : "light");
 
   return (
     <button
       onClick={cycle}
       type="button"
       className="iconbtn"
-      title={`Theme: ${label}`}
+      title={t("topbar.themeTitle", "Theme: {current}", { current: label })}
       // UAT-P2-D3 (A11Y-11): the name was the emoji ("sun"); say the state and the action.
-      aria-label={`Theme: ${label}. Switch to ${nextLabel}`}
+      aria-label={t("topbar.themeLabel", "Theme: {current}. Switch to {next}", { current: label, next: nextLabel })}
       style={{ position: "relative" }}
     >
       <span aria-hidden="true">{icon}</span>

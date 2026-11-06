@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { KeyboardShortcuts } from "../KeyboardShortcuts";
-import { WhatsNewBanner } from "../WhatsNewBanner";
 import { FeedbackWidget } from "../FeedbackWidget";
 import { AskCivitasOne } from "../AskCivitasOne";
 import { RouteProgress } from "../RouteProgress";
@@ -30,8 +29,19 @@ export function AppShell({ children, crumb, enabledModules, userName, userRole, 
       <RouteProgress />
       <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} roles={roles} />
       <div className="main">
-        <TopBar crumb={crumb ?? <AutoBreadcrumb />} userName={userName} languageToggle={<HeaderLanguageToggle />} />
-        <WhatsNewBanner />
+        <TopBar
+          crumb={crumb ?? <AutoBreadcrumb />}
+          userName={userName}
+          languageToggle={<HeaderLanguageToggle />}
+          roles={roles}
+          enabledModules={enabledModules}
+        />
+        {/*
+          UAT-P3 (DASH-02): the "New: Module configuration + offline sync"
+          what-is-new banner was removed from the shell. It sat on every page
+          and every print, stacked with the tour and the setup card; release
+          notes stay under Help.
+        */}
         <main id="main" tabIndex={-1} className="wrap">
           {children}
           {/* UAT-P2-D4 (GLB-01): inline at the end of the content, never floating over it. */}
@@ -41,6 +51,7 @@ export function AppShell({ children, crumb, enabledModules, userName, userRole, 
       </div>
       <PageTitleSync />
       <KeyboardShortcuts />
+      {/* Panel host only: the trigger is in the top bar (UAT-P3 DS-3). */}
       <AskCivitasOne />
     </div>
   );

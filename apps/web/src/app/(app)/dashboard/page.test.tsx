@@ -9,8 +9,15 @@ vi.mock("@/lib/auth/roleGuard", async (orig) => {
   return { ...actual, getSessionRoles: () => getSessionRolesMock() };
 });
 
+// The self-service card filters by tenant modules; never hit the real loader here.
+const getEnabledModulesMock = vi.fn(async () => null as string[] | null);
+vi.mock("@/lib/moduleVisibility", () => ({ getEnabledModules: () => getEnabledModulesMock() }));
+
 // Child components are "use client" and tested on their own; stub them so this
 // test isolates the page's module-tile and empty-state logic.
+vi.mock("./SelfServiceCard", () => ({
+  SelfServiceCard: (p: { enabledModules?: string[] | null }) => <div data-testid="self-service" data-mods={JSON.stringify(p.enabledModules ?? null)} />,
+}));
 vi.mock("./FirstRunTour", () => ({ FirstRunTour: () => null }));
 vi.mock("../../_components/ActivationTracker", () => ({ ActivationTracker: () => null }));
 vi.mock("./RoleCommandCenter", () => ({ RoleCommandCenter: () => null }));
@@ -63,5 +70,16 @@ describe("DashboardPage module visibility", () => {
     expect(screen.getByText(enMessages.home.sessionUnreadable)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: enMessages.home.signInAgain })).toHaveAttribute("href", "/auth/login");
     expect(screen.queryByText(enMessages.home.noModules)).not.toBeInTheDocument();
+  });
+
+  it("passes the tenant module list to the employee self-service card (PR #2461 should-fix 2)", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    getEnabledModulesMock.mockResolvedValue(["smart-transfer"]);
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>{await DashboardPage()}</NextIntlClientProvider>,
+    );
+    const card = container.querySelector("[data-testid='self-service']");
+    expect(card).not.toBeNull();
+    expect(JSON.parse(card!.getAttribute("data-mods")!)).toEqual(["smart-transfer"]);
   });
 });

@@ -91,7 +91,7 @@ export default async function LocationDetailPage(
     <div className="page-main wrap">
       <PageHeader title={location.name} subtitle={t("subtitle")} back="/hr/locations" backLabel={t("backLabel")} help="hr" />
 
-      <nav aria-label={t("breadcrumbLabel")} style={{ marginBottom: 12, fontSize: 13 }}>
+      <nav aria-label={t("breadcrumbLabel")} data-dup-crumb style={{ marginBottom: 12, fontSize: 13 }}>
         <ol style={{ display: "flex", flexWrap: "wrap", gap: 6, listStyle: "none", margin: 0, padding: 0 }}>
           <li><Link href="/hr/locations">{t("breadcrumbRoot")}</Link></li>
           {ancestors.map((a) => (

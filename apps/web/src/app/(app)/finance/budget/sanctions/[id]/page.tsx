@@ -49,7 +49,7 @@ export default async function SanctionDetailPage(props: { params: Promise<{ id: 
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/finance">Finance</a> <span aria-hidden="true">›</span>{" "}
         <a href="/finance/budget/sanctions">Sanctions</a> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{sanction.sanctionNo}</span>

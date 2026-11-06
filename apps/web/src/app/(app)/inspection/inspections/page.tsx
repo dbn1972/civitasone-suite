@@ -76,11 +76,6 @@ export default async function Page(
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
-        <Link href="/inspection" className="lnk">Inspection</Link>
-        <span aria-hidden style={{ margin: "0 7px" }}>/</span>
-        <span aria-current="page">Inspections</span>
-      </nav>
       <PageHeader title="Inspections" back="/inspection" />
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "inspections" })} backHref="/inspection" />

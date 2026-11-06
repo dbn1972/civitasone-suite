@@ -6,9 +6,12 @@ import { useMenuKeyboard } from "./ds/useMenuKeyboard";
 import { DarkModeToggle } from "./DarkModeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { performLogout } from "@/lib/sync/logout";
+import { useShellT } from "./useShellT";
+import { ASK_OPEN_EVENT } from "./AskCivitasOne";
 
 /** Account avatar with preferences (dark mode, language) and sign-out. */
 export function AccountMenu({ name = "User" }: { name?: string }) {
+  const t = useShellT("appNav");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -32,7 +35,8 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-label="Account menu"
+        aria-label={t("topbar.accountMenu", "Account menu")}
+        className="tb-account"
         style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
       >
         <Avatar name={name} color="#4f46e5" size="sm" />
@@ -42,12 +46,13 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
           ref={menuRef}
           id={menuId}
           role="menu"
-          aria-label="Account menu"
+          aria-label={t("topbar.accountMenu", "Account menu")}
           style={{
             position: "absolute",
             right: 0,
             top: "calc(100% + 8px)",
             minWidth: 220,
+            maxWidth: "calc(100vw - 24px)",
             background: "var(--panel, #fff)",
             border: "1px solid var(--line, rgba(0,0,0,0.1))",
             borderRadius: 10,
@@ -62,8 +67,8 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
           </div>
 
           {/* Preferences section */}
-          <div style={{ padding: "4px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--mut, #667085)", marginTop: 2 }}>
-            Preferences
+          <div style={{ padding: "4px 10px", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--mut, #667085)", marginTop: 2 }}>
+            {t("topbar.preferences", "Preferences")}
           </div>
 
           {/* Dark mode toggle row */}
@@ -72,7 +77,7 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
             aria-labelledby={`${menuId}-appearance`}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 6, fontSize: 13 }}
           >
-            <span id={`${menuId}-appearance`}>Appearance</span>
+            <span id={`${menuId}-appearance`}>{t("topbar.appearance", "Appearance")}</span>
             <DarkModeToggle />
           </div>
 
@@ -82,11 +87,24 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
             aria-labelledby={`${menuId}-language`}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 6, fontSize: 13, marginBottom: 4 }}
           >
-            <span id={`${menuId}-language`}>Language</span>
+            <span id={`${menuId}-language`}>{t("topbar.language", "Language")}</span>
             <LanguageSwitcher />
           </div>
 
           <div style={{ borderTop: "1px solid var(--line, #eee)", marginTop: 4, paddingTop: 4 }}>
+            {/* Phones (< 480 px): the header Ask button is hidden to make room for the language toggle. */}
+            <button
+              type="button"
+              role="menuitem"
+              className="am-ask"
+              onClick={() => {
+                close();
+                window.dispatchEvent(new CustomEvent(ASK_OPEN_EVENT));
+              }}
+              style={{ width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: "inherit" }}
+            >
+              {t("topbar.askMenu", "Ask CivitasOne")}
+            </button>
             <button
               type="button"
               role="menuitem"
@@ -104,7 +122,7 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
                 color: "#dc2626",
               }}
             >
-              {busy ? "Signing out…" : "Sign out"}
+              {busy ? t("topbar.signingOut", "Signing out…") : t("topbar.signOut", "Sign out")}
             </button>
           </div>
         </div>
