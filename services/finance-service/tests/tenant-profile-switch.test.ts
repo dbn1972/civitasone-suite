@@ -6,18 +6,19 @@
  *   - the column defaults of migration 0162 give an existing row the same values;
  *   - mandatory refuses exactly as before; the govt COA seed is byte-identical to the fixture captured from origin/main.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeSettings } from "../src/modules/approvals/schema.js";
 import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
 import {
   SETTINGS_DEFAULTS, isRelaxingControl, toBudgetControl, toCoaTemplate,
-  assertBasisEffectiveFromFormat, assertBasisSwitchApplicable, BUDGET_CONTROLS, type BudgetControl,
+  resolveBasisEffectiveFrom, assertBasisSwitchApprovable, nextAprilFirst, BUDGET_CONTROLS, type BudgetControl,
 } from "../src/modules/approvals/domain.js";
+import { applySettingsChange, applyPendingBasisSwitchTx, applyFiscalYearActivation } from "../src/modules/approvals/apply.js";
 import { loadSettingsTx } from "../src/modules/approvals/repo.js";
 import { provisionAction, assertProvisionTx, loadBudgetControlTx, attachBudgetWarnings, NO_BUDGET_PROVISION } from "../src/modules/budget/provision.js";
 import { standardGlHeads, accrualStoresHeads, BILL_HEAD_HOA } from "../src/modules/gl/standard-heads.js";
@@ -71,18 +72,92 @@ describe("S2: finance settings defaults (existing tenants unchanged)", () => {
   });
 });
 
-describe("S2: owner decision 3, accounting basis changes only from 1 April", () => {
-  it("requires an effective date and refuses anything that is not a 1 April", () => {
-    expect(() => assertBasisEffectiveFromFormat(undefined)).toThrow(/BASIS_EFFECTIVE_FROM_REQUIRED/);
-    expect(() => assertBasisEffectiveFromFormat("2027-04-01")).not.toThrow();
-    for (const d of ["2026-11-15", "2027-01-01", "2027-04-02", "2027-03-31"]) expect(() => assertBasisEffectiveFromFormat(d), d).toThrow(/BASIS_SWITCH_MID_YEAR/);
+describe("S2: owner decision 3, approve ahead and apply on the next 1 April (pure rules)", () => {
+  it("the effective date is the next 1 April; a mid-year date or any other 1 April is refused", () => {
+    expect(nextAprilFirst("2027-03-20")).toBe("2027-04-01");
+    expect(nextAprilFirst("2026-10-15")).toBe("2027-04-01");
+    expect(nextAprilFirst("2027-04-01")).toBe("2028-04-01");
+    expect(resolveBasisEffectiveFrom(undefined, "2026-10-15")).toBe("2027-04-01");
+    expect(resolveBasisEffectiveFrom("2027-04-01", "2026-10-15")).toBe("2027-04-01");
+    for (const d of ["2026-11-15", "2027-01-01", "2027-04-02", "2027-03-31"]) expect(() => resolveBasisEffectiveFrom(d, "2026-10-15"), d).toThrow(/BASIS_SWITCH_MID_YEAR/);
+    expect(() => resolveBasisEffectiveFrom("2028-04-01", "2026-10-15")).toThrow(/BASIS_SWITCH_DATE/);
+    expect(() => resolveBasisEffectiveFrom("2026-04-01", "2026-10-15")).toThrow(/BASIS_SWITCH_DATE/);
   });
-  it("applies only on or after the effective date, and only while nothing is posted from that date", () => {
-    expect(() => assertBasisSwitchApplicable("2027-04-01", "2027-03-30", "2027-03-28")).toThrow(/BASIS_SWITCH_NOT_YET_EFFECTIVE/);
-    expect(() => assertBasisSwitchApplicable("2027-04-01", "2027-04-01", "2027-03-31")).not.toThrow();
-    expect(() => assertBasisSwitchApplicable("2027-04-01", "2027-04-01", null)).not.toThrow();
-    expect(() => assertBasisSwitchApplicable("2027-04-01", "2027-04-20", "2027-04-09")).toThrow(/BASIS_SWITCH_MID_YEAR/);
-    expect(() => assertBasisSwitchApplicable("2027-04-01", "2027-04-20", "2027-04-01")).toThrow(/BASIS_SWITCH_MID_YEAR/);
+  it("an approval that arrives on or after the effective date is stale", () => {
+    expect(() => assertBasisSwitchApprovable("2027-04-01", "2027-03-31")).not.toThrow();
+    expect(() => assertBasisSwitchApprovable("2027-04-01", "2027-04-01")).toThrow(/BASIS_SWITCH_STALE/);
+    expect(() => assertBasisSwitchApprovable("2027-04-01", "2027-06-10")).toThrow(/BASIS_SWITCH_STALE/);
+    expect(() => assertBasisSwitchApprovable("2027-01-01", "2026-10-15")).toThrow(/BASIS_SWITCH_MID_YEAR/);
+  });
+});
+
+describe("S2: pending accounting-basis switch, applied at the FY rollover (disposable Postgres)", () => {
+  const meta = (t: string) => ({ tenantId: t, actorId: ACTOR, correlationId: `corr-${t.slice(0, 8)}` });
+  const read = (t: string) => scoped(t, (tx) => loadSettingsTx(tx, t));
+  const request = (t: string, todayIst: string, effective: string | undefined) => scoped(t, (tx) => applySettingsChange(tx, meta(t), {
+    changes: { accountingBasis: "accrual" }, reason: "Move to accrual books for the new financial year", accountingBasisEffectiveFrom: effective, todayIst,
+  }));
+  const rollover = (t: string, date: string) => scoped(t, (tx) => applyPendingBasisSwitchTx(tx, meta(t), date));
+  const prev = process.env.TENANT_PROFILES_ENABLED;
+  beforeAll(() => { process.env.TENANT_PROFILES_ENABLED = "true"; });
+  afterAll(() => { if (prev === undefined) delete process.env.TENANT_PROFILES_ENABLED; else process.env.TENANT_PROFILES_ENABLED = prev; });
+
+  it("approved in March: stored as pending, still cash, applied on 1 April", async () => {
+    const t = randomUUID();
+    await request(t, "2027-03-20", "2027-04-01");
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingAccountingBasis: "accrual", pendingBasisEffectiveFrom: "2027-04-01" });
+    expect(await rollover(t, "2027-03-31")).toBe(false);
+    expect((await read(t)).accountingBasis).toBe("cash");
+    expect(await rollover(t, "2027-04-01")).toBe(true);
+    expect(await read(t)).toMatchObject({ accountingBasis: "accrual", pendingAccountingBasis: null, pendingBasisEffectiveFrom: null });
+    expect(await rollover(t, "2027-04-01")).toBe(false); // idempotent
+  });
+  it("approved in October: waits for the next 1 April (no date given defaults to it)", async () => {
+    const t = randomUUID();
+    await request(t, "2026-10-15", resolveBasisEffectiveFrom(undefined, "2026-10-15"));
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingBasisEffectiveFrom: "2027-04-01" });
+    expect(await rollover(t, "2026-11-30")).toBe(false);
+    expect(await rollover(t, "2027-01-15")).toBe(false);
+    expect((await read(t)).accountingBasis).toBe("cash");
+    expect(await rollover(t, "2027-04-01")).toBe(true);
+    expect((await read(t)).accountingBasis).toBe("accrual");
+  });
+  it("a mid-year effective date is refused and nothing is stored", async () => {
+    const t = randomUUID();
+    expect(() => resolveBasisEffectiveFrom("2027-01-01", "2026-10-15")).toThrow(/BASIS_SWITCH_MID_YEAR/);
+    await expect(request(t, "2026-10-15", "2027-01-01")).rejects.toThrow(/BASIS_SWITCH_MID_YEAR/);
+    expect((await read(t)).pendingAccountingBasis).toBeNull();
+  });
+  it("a stale approval is refused and the basis stays", async () => {
+    const t = randomUUID();
+    await expect(request(t, "2027-04-01", "2027-04-01")).rejects.toThrow(/BASIS_SWITCH_STALE/);
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingAccountingBasis: null });
+  });
+  it("switching back to the current basis cancels a pending switch", async () => {
+    const t = randomUUID();
+    await request(t, "2026-10-15", "2027-04-01");
+    await scoped(t, (tx) => applySettingsChange(tx, meta(t), { changes: { accountingBasis: "cash" }, reason: "Stay on cash books for now", todayIst: "2026-11-02" }));
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingAccountingBasis: null, pendingBasisEffectiveFrom: null });
+  });
+  it("the FY activation (the 1 April rollover) applies it", async () => {
+    const t = randomUUID();
+    await scoped(t, (tx) => tx.insert(financeSettings).values({ tenantId: t, blockFyActivationOpenPeriods: false, requireOpeningBalancesForActivation: false, updatedBy: ACTOR }));
+    await scoped(t, async (tx) => {
+      await tx.execute(sql`INSERT INTO gl.finance_fiscal_years (tenant_id, code, label, start_date, end_date, status, created_by)
+        VALUES (${t}::uuid, '2026-27', 'FY 2026-27', '2026-04-01', '2027-03-31', 'active', ${ACTOR}::uuid),
+               (${t}::uuid, '2027-28', 'FY 2027-28', '2027-04-01', '2028-03-31', 'draft', ${ACTOR}::uuid)`);
+    });
+    await request(t, "2027-03-20", "2027-04-01");
+    await scoped(t, (tx) => applyFiscalYearActivation(tx, meta(t), { code: "2027-28", reason: "Rollover to FY 2027-28" }));
+    expect(await read(t)).toMatchObject({ accountingBasis: "accrual", pendingAccountingBasis: null });
+  });
+  it("with the flag off the old behaviour stands: the switch is immediate, no date, nothing pending", async () => {
+    delete process.env.TENANT_PROFILES_ENABLED;
+    try {
+      const t = randomUUID();
+      await scoped(t, (tx) => applySettingsChange(tx, meta(t), { changes: { accountingBasis: "accrual" }, reason: "Move to accrual books now" }));
+      expect(await read(t)).toMatchObject({ accountingBasis: "accrual", pendingAccountingBasis: null });
+    } finally { process.env.TENANT_PROFILES_ENABLED = "true"; }
   });
 });
 

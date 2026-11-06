@@ -15,8 +15,9 @@ import * as commands from "./commands.js";
 import { submitChangeRequest } from "./commands.js";
 import { scopedRead } from "../../shared/db.js";
 import type { FinanceSettings } from "./domain.js";
+import { todayIST } from "../../shared/ist-date.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
-import { assertBasisEffectiveFromFormat, BUDGET_CONTROLS, alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl } from "./domain.js";
+import { resolveBasisEffectiveFrom, BUDGET_CONTROLS, alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl } from "./domain.js";
 import type { ChangeRequestRow } from "./schema.js";
 import { assertPeriodFyOpenHttp } from "../period-close/routes.js";
 
@@ -43,7 +44,7 @@ const settingsBody = z.object({
   accountingBasis: z.enum(["cash", "accrual"]).optional(),
   // Tenant-type profile switch. coaTemplate and profileCode are deliberately NOT settable here.
   budgetControl: z.enum(BUDGET_CONTROLS).optional(),
-  // Owner decision 3: required (and must be a 1 April) when the accounting basis changes and profiles are enabled.
+  // Owner decision 3: optional; when profiles are enabled it must be the next 1 April (default), applied at the FY rollover.
   accountingBasisEffectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
 }).refine((b) => Object.entries(b).some(([k, v]) => k !== "reason" && v !== undefined), { message: "no setting supplied" });
@@ -75,14 +76,15 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
 
     // Owner decision 3 (2026-11-06): a basis switch takes effect only from 1 April. Gated by TENANT_PROFILES_ENABLED so
     // the UAT server behaves as before until the owner turns profiles on.
+    let resolvedBasisFrom: string | undefined;
     const basisSwitch = defined.accountingBasis !== undefined && defined.accountingBasis !== current.accountingBasis;
     if (basisSwitch && tenantProfilesEnabled()) {
-      try { assertBasisEffectiveFromFormat(accountingBasisEffectiveFrom); } catch (err) {
+      try { resolvedBasisFrom = resolveBasisEffectiveFrom(accountingBasisEffectiveFrom, todayIST()); } catch (err) {
         if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
         throw err;
       }
     }
-    const requestExtras = basisSwitch && tenantProfilesEnabled() ? { accountingBasisEffectiveFrom } : {};
+    const requestExtras = basisSwitch && tenantProfilesEnabled() ? { accountingBasisEffectiveFrom: resolvedBasisFrom } : {};
 
     // GL heads: the merged set must be all-or-none and valid (exist, right type, distinct).
     const merged = { ...current, ...defined };

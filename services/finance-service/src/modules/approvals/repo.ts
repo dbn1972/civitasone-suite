@@ -23,6 +23,8 @@ function toSettings(row: typeof financeSettings.$inferSelect | undefined): Finan
     budgetControl: toBudgetControl(row.budgetControl),
     coaTemplate: toCoaTemplate(row.coaTemplate),
     profileCode: row.profileCode || SETTINGS_DEFAULTS.profileCode,
+    pendingAccountingBasis: row.pendingAccountingBasis === "accrual" ? "accrual" : row.pendingAccountingBasis === "cash" ? "cash" : null,
+    pendingBasisEffectiveFrom: row.pendingBasisEffectiveFrom ?? null,
   };
 }
 

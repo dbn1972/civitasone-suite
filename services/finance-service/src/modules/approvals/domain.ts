@@ -36,6 +36,9 @@ export type FinanceSettings = {
   coaTemplate: CoaTemplate;
   /** The tenant profile the settings were seeded from. Informational. */
   profileCode: string;
+  /** An approved switch of the accounting basis, applied automatically at the FY rollover on `pendingBasisEffectiveFrom` (a 1 April). */
+  pendingAccountingBasis: AccountingBasis | null;
+  pendingBasisEffectiveFrom: string | null;
 };
 
 export type AccountingBasis = "cash" | "accrual";
@@ -54,6 +57,8 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   budgetControl: "mandatory",
   coaTemplate: "govt",
   profileCode: "govt_dept",
+  pendingAccountingBasis: null,
+  pendingBasisEffectiveFrom: null,
 };
 
 const BUDGET_CONTROL_RANK: Record<BudgetControl, number> = { off: 0, advisory: 1, mandatory: 2 };
@@ -67,30 +72,37 @@ export function toCoaTemplate(v: unknown): CoaTemplate {
   return (COA_TEMPLATES as readonly string[]).includes(v as string) ? (v as CoaTemplate) : "govt";
 }
 
-/**
- * Owner decision 3 (2026-11-06): an accounting-basis switch may take effect ONLY from a financial-year start (1 April).
- * Format check, run when the request is made. Only enforced while TENANT_PROFILES_ENABLED is on.
- */
-export function assertBasisEffectiveFromFormat(effectiveFrom: string | undefined): void {
-  if (!effectiveFrom) {
-    throw new DomainError("BASIS_EFFECTIVE_FROM_REQUIRED", "give the date the new accounting basis takes effect: the first day of a financial year (1 April)");
-  }
-  if (!/^\d{4}-04-01$/.test(effectiveFrom)) {
-    throw new DomainError("BASIS_SWITCH_MID_YEAR", `an accounting basis can change only from the start of a financial year (1 April); ${effectiveFrom} is mid-year`);
-  }
+/** The next 1 April strictly after `todayIst` (YYYY-MM-DD): the only date an accounting-basis switch can take effect. */
+export function nextAprilFirst(todayIst: string): string {
+  const y = Number(todayIst.slice(0, 4));
+  return todayIst < `${y}-04-01` ? `${y}-04-01` : `${y + 1}-04-01`;
 }
 
 /**
- * Run when the switch is applied (the request is approved): the effective date has been reached and nothing has been
- * posted on or after it, so no posting of the new year was booked on the old basis. `lastPostingDate` is YYYY-MM-DD or null.
+ * Owner decision 3 (2026-11-06, amended): an accounting-basis switch is approved at any time and takes effect on the
+ * NEXT 1 April, applied automatically at the FY rollover (see applyPendingBasisSwitchTx). Run when the request is made.
+ * No date given = the next 1 April. A date that is not a 1 April is mid-year; a 1 April that is not the next one is refused.
+ * Only enforced while TENANT_PROFILES_ENABLED is on. Returns the effective date.
  */
-export function assertBasisSwitchApplicable(effectiveFrom: string, todayIst: string, lastPostingDate: string | null): void {
-  assertBasisEffectiveFromFormat(effectiveFrom);
-  if (todayIst < effectiveFrom) {
-    throw new DomainError("BASIS_SWITCH_NOT_YET_EFFECTIVE", `the new accounting basis takes effect on ${effectiveFrom}; approve it on or after that date`);
+export function resolveBasisEffectiveFrom(effectiveFrom: string | undefined, todayIst: string): string {
+  const next = nextAprilFirst(todayIst);
+  if (!effectiveFrom) return next;
+  if (!/^\d{4}-04-01$/.test(effectiveFrom)) {
+    throw new DomainError("BASIS_SWITCH_MID_YEAR", `an accounting basis can change only from the start of a financial year (1 April); ${effectiveFrom} is mid-year`);
   }
-  if (lastPostingDate !== null && lastPostingDate >= effectiveFrom) {
-    throw new DomainError("BASIS_SWITCH_MID_YEAR", `journals are already posted on or after ${effectiveFrom}; the basis can no longer change from that date`);
+  if (effectiveFrom !== next) {
+    throw new DomainError("BASIS_SWITCH_DATE", `the switch can take effect only on the next 1 April (${next}); ${effectiveFrom} is not it`);
+  }
+  return effectiveFrom;
+}
+
+/** Run when the request is approved: an approval that arrives on or after its effective date is stale and must be raised again. */
+export function assertBasisSwitchApprovable(effectiveFrom: string, todayIst: string): void {
+  if (!/^\d{4}-04-01$/.test(effectiveFrom)) {
+    throw new DomainError("BASIS_SWITCH_MID_YEAR", `an accounting basis can change only from the start of a financial year (1 April); ${effectiveFrom || "no date"} is mid-year`);
+  }
+  if (todayIst >= effectiveFrom) {
+    throw new DomainError("BASIS_SWITCH_STALE", `the request was for ${effectiveFrom}, which has been reached; raise the request again for the next 1 April`);
   }
 }
 
