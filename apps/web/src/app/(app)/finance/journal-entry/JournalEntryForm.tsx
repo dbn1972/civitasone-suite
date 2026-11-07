@@ -6,7 +6,8 @@ import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { parseMinorOrZero } from "@/lib/money";
-import { Alert, Button, ConfirmDialog, EmptyState, HelpTip } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog, DateInput, EmptyState, Field, HelpTip, Input, RequiredLegend, Textarea } from "@/app/_components/ds";
+import { AccountCombobox } from "./AccountCombobox";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -79,23 +80,26 @@ function amountPreview(val: string) {
   return <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block" }}>= {formatMoney(minor)}</span>;
 }
 
-const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as const;
-const TYPE_LABEL: Record<string, string> = { asset: "Assets", liability: "Liabilities", equity: "Equity", income: "Income", expense: "Expenses" };
+// GAP-FINANCE-JOURNAL-ENTRY-04: grouping/filtering now lives with the searchable head-of-account combobox.
+export { accountGroups } from "./AccountCombobox";
 
 /**
- * GAP-FINANCE-JOURNAL-ENTRY-04: postable accounts grouped by type (assets,
- * liabilities, ...) and narrowed by the text filter. The account already
- * chosen on a line is always kept so a filter never blanks a selection.
+ * UX-R2: the live difference and the reason Post is disabled. `diffPaise` = debit - credit.
+ * "Difference ₹5,000.00 Dr" means debit is ahead (a credit is missing), "Cr" the reverse.
  */
-export function accountGroups(accounts: AccountSummary[], filter: string, selectedCode: string) {
-  const q = filter.trim().toLowerCase();
-  const shown = accounts.filter(
-    (a) => !q || a.code === selectedCode || a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
-  );
-  const types = [...TYPE_ORDER, ...Array.from(new Set(shown.map((a) => String(a.type)))).filter((t) => !(TYPE_ORDER as readonly string[]).includes(t))];
-  return types
-    .map((type) => ({ type, label: TYPE_LABEL[type] ?? type, accounts: shown.filter((a) => String(a.type) === type) }))
-    .filter((g) => g.accounts.length > 0);
+export function balanceStatus(totalDebitPaise: bigint, totalCreditPaise: bigint): { balanced: boolean; difference: string | null; reason: string | null } {
+  const diff = totalDebitPaise - totalCreditPaise;
+  if (totalDebitPaise > 0n && diff === 0n) return { balanced: true, difference: null, reason: null };
+  if (totalDebitPaise === 0n && totalCreditPaise === 0n) {
+    return { balanced: false, difference: null, reason: "Enter the debit and credit amounts. Debit and credit must be equal before you can submit." };
+  }
+  if (diff === 0n) {
+    return { balanced: false, difference: null, reason: "Enter at least one debit and matching credit before you can submit." };
+  }
+  const abs = diff < 0n ? -diff : diff;
+  const side = diff > 0n ? "Dr" : "Cr";
+  const fix = diff > 0n ? `Add a credit of ${formatMoney(abs)}` : `Add a debit of ${formatMoney(abs)}`;
+  return { balanced: false, difference: `${formatMoney(abs)} ${side}`, reason: `Debit and credit must be equal before you can submit. ${fix} or correct an amount.` };
 }
 
 type FieldErrors = {
@@ -126,8 +130,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     emptyLine(defaultCredit),
   ]);
   const [errors, setErrors] = useState<FieldErrors>({});
-  // GAP-FINANCE-JOURNAL-ENTRY-04: a long chart of accounts needs a text filter.
-  const [accountFilter, setAccountFilter] = useState("");
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -183,6 +185,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   const totalCreditPaise = lines.reduce((s, l) => s + paiseOf(l.credit), 0n);
   const diffPaise = totalDebitPaise - totalCreditPaise;
   const balanced = totalDebitPaise > 0n && diffPaise === 0n;
+  const balanceInfo = balanceStatus(totalDebitPaise, totalCreditPaise);
 
   const dateCheck = periods === undefined ? null : checkPostingDate(postingDate, periods);
 
@@ -368,43 +371,28 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   }
 
   /* ── render ─────────────────────────────────────────────────── */
+  const voucherErr = errors.voucherNo ?? formError.fieldError("voucherNo") ?? undefined;
+  const dateErr = errors.postingDate ?? formError.fieldError("postingDate") ?? undefined;
+  const narrationErr = errors.narration ?? formError.fieldError("narration") ?? undefined;
+  const lineCols = "32px minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) 44px";
   return (
     <form className="fields jv-form" onSubmit={handleSubmit} noValidate aria-describedby={message ? errId : undefined}>
-      {/* ── header fields ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <div className="field">
-          <label className="label" htmlFor="jv-voucher">
-            Voucher Number
-            <HelpTip term="Voucher">{explain("Voucher")}</HelpTip>
-          </label>
-          <input
-            id="jv-voucher"
-            className="input"
-            placeholder="Leave blank to auto-number"
-            maxLength={VOUCHER_NO_MAX}
-            value={voucherNo}
-            onChange={(e) => setVoucherNo(e.target.value)}
-            aria-invalid={errors.voucherNo || formError.fieldError("voucherNo") ? true : undefined}
-            aria-describedby={errors.voucherNo ? "jv-voucher-err" : formError.fieldError("voucherNo") ? "jv-voucher-srv-err" : undefined}
-          />
-          <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block", marginTop: 2 }}>
-            Optional. If left blank, a gapless voucher number is allocated when the entry is approved.
-          </span>
-          {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
-          {formError.fieldError("voucherNo") && <span id="jv-voucher-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="jv-date">Posting Date</label>
-          <input
-            id="jv-date"
-            className="input"
-            type="date"
-            value={postingDate}
-            onChange={(e) => setPostingDate(e.target.value)}
-            aria-invalid={errors.postingDate || formError.fieldError("postingDate") ? true : undefined}
-            aria-describedby={errors.postingDate ? "jv-date-err" : formError.fieldError("postingDate") ? "jv-date-srv-err" : undefined}
-          />
-          {dateCheck && !errors.postingDate && (
+      <RequiredLegend />
+      {/* ── header fields (UX-R2: fits 1366 px; narration is the widest field, on its own row) ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "12px 16px" }}>
+        <Field
+          id="jv-voucher"
+          className="field"
+          label={<>Voucher Number<HelpTip term="Voucher">{explain("Voucher")}</HelpTip></>}
+          hint="Optional. If left blank, a gapless voucher number is allocated when the entry is approved."
+          error={voucherErr}
+          validate={(v) => (v.trim() ? voucherNoError(v) ?? undefined : undefined)}
+        >
+          <Input placeholder="Leave blank to auto-number" maxLength={VOUCHER_NO_MAX} value={voucherNo} onChange={(e) => setVoucherNo(e.target.value)} />
+        </Field>
+        <Field id="jv-date" className="field" label="Posting Date" required hint="DD-MM-YYYY" error={dateErr}>
+          <DateInput value={postingDate} onChange={setPostingDate} />
+          {dateCheck && !dateErr && (
             <span
               role="status"
               style={{
@@ -419,98 +407,63 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
               {dateCheck.kind === "unverified" && `Closed-period status could not be loaded, so ${dateCheck.period} is unverified. The server still blocks closed periods.`}
             </span>
           )}
-          {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
-          {formError.fieldError("postingDate") && <span id="jv-date-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
-        </div>
-      </div>
-
-      <div className="field">
-        <label className="label" htmlFor="jv-narration">Narration</label>
-        <input
+        </Field>
+        <Field
           id="jv-narration"
-          className="input"
-          placeholder="Brief description of the transaction"
-          value={narration}
-          onChange={(e) => setNarration(e.target.value)}
-          aria-invalid={errors.narration ? true : undefined}
-          aria-describedby={errors.narration ? "jv-narration-err" : undefined}
-        />
-        {errors.narration && <span id="jv-narration-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.narration}</span>}
-        {formError.fieldError("narration") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("narration")}</span>}
+          className="field"
+          label="Narration"
+          required
+          requiredMessage="Narration is required."
+          hint="Appears on the ledger and in the voucher print."
+          error={narrationErr}
+          style={{ gridColumn: "1 / -1" }}
+        >
+          <Textarea rows={2} placeholder="Brief description of the transaction" value={narration} onChange={(e) => setNarration(e.target.value)} />
+        </Field>
       </div>
 
       {/* ── journal lines ── */}
-      <fieldset style={{ marginTop: "16px", border: 0, padding: 0, margin: 0 }}>
-        <legend className="label" style={{ marginBottom: "6px", padding: 0 }}>
+      <fieldset style={{ marginTop: "16px", border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+        <legend className="label" style={{ marginBottom: "6px", padding: 0, fontWeight: 600 }}>
           Journal Lines
           <HelpTip term="Double-entry">
             Every entry has two sides — money going out (debit) and money coming in (credit). The two sides must add up to the same total before you can post.
           </HelpTip>
         </legend>
 
-        <div className="field" style={{ marginBottom: 8 }}>
-          <label className="label" htmlFor="jv-account-filter">Filter accounts</label>
-          <input
-            id="jv-account-filter"
-            className="input"
-            type="search"
-            placeholder="Type a code or name, e.g. cash"
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-          />
-        </div>
-
         {/* header row */}
         <div
+          aria-hidden="true"
           style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr auto",
-            gap: "8px",
-            fontSize: "0.75rem",
-            color: "var(--ink2)",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            marginBottom: "4px",
+            display: "grid", gridTemplateColumns: lineCols, gap: "8px", fontSize: "0.75rem", color: "var(--ink2)",
+            fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px",
           }}
         >
-          <span>Account Code</span>
-          <span>Debit (₹)</span>
-          <span>Credit (₹)</span>
+          <span>#</span>
+          <span>Head of account (code · name)</span>
+          <span style={{ textAlign: "right" }}>Debit (₹)</span>
+          <span style={{ textAlign: "right" }}>Credit (₹)</span>
           <span />
         </div>
 
         {lines.map((line, idx) => {
           const lineErr = errors.lines?.[line.id];
+          const lineErrId = `jv-line-${line.id}-err`;
           return (
           <div
             key={line.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr auto",
-              gap: "8px",
-              marginBottom: lineErr ? "2px" : "6px",
-              alignItems: "center",
-            }}
+            style={{ display: "grid", gridTemplateColumns: lineCols, gap: "8px", marginBottom: lineErr ? "2px" : "6px", alignItems: "start" }}
           >
-            <select
-              className="input"
+            <span style={{ paddingTop: 12, fontSize: 13, color: "var(--ink2)", fontVariantNumeric: "tabular-nums" }}>{idx + 1}</span>
+            <AccountCombobox
+              id={`jv-account-${line.id}`}
+              accounts={accounts}
               value={line.accountCode}
-              onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
-              aria-label={`Account code, line ${idx + 1}`}
-              aria-invalid={lineErr ? true : undefined}
-            >
-              <option value="">— select account —</option>
-              {accountGroups(accounts, accountFilter, line.accountCode).map((g) => (
-                <optgroup key={g.type} label={g.label}>
-                  {g.accounts.map((a) => (
-                    <option key={a.code} value={a.code}>
-                      {a.code} — {a.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+              onChange={(code) => updateLine(line.id, "accountCode", code)}
+              aria-label={`Head of account, line ${idx + 1}`}
+              invalid={Boolean(lineErr)}
+              describedBy={lineErr ? lineErrId : undefined}
+            />
             <div>
               <input
                 className="input"
@@ -522,6 +475,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
                 onChange={(e) => updateLine(line.id, "debit", e.target.value)}
                 aria-label={`Debit amount, line ${idx + 1}`}
                 aria-invalid={parseMinorOrZero(line.debit) === null ? true : undefined}
+                style={{ textAlign: "right", width: "100%", boxSizing: "border-box" }}
               />
               {amountPreview(line.debit)}
             </div>
@@ -536,6 +490,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
                 onChange={(e) => updateLine(line.id, "credit", e.target.value)}
                 aria-label={`Credit amount, line ${idx + 1}`}
                 aria-invalid={parseMinorOrZero(line.credit) === null ? true : undefined}
+                style={{ textAlign: "right", width: "100%", boxSizing: "border-box" }}
               />
               {amountPreview(line.credit)}
             </div>
@@ -551,79 +506,75 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
               ×
             </Button>
             {lineErr && (
-              <span role="alert" style={{ fontSize: "0.75rem", color: "var(--bad)", display: "block", gridColumn: "1 / -1", marginBottom: 4 }}>
+              <span id={lineErrId} role="alert" style={{ fontSize: "0.75rem", color: "var(--bad)", display: "block", gridColumn: "2 / -1", marginBottom: 4 }}>
                 {lineErr}
               </span>
             )}
           </div>
         );})}
 
-        <Button
-          type="button"
-          onClick={addLine}
-          style={{ marginTop: "4px", minHeight: 44 }}
-        >
+        <Button type="button" onClick={addLine} style={{ marginTop: "4px", minHeight: 44 }}>
           + Add Line
         </Button>
       </fieldset>
 
-      {/* ── totals ── */}
+      {/* ── sticky totals bar (UX-R2): totals, live difference, and the one action with its reason ── */}
       <div
+        data-jv-totals=""
         style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr 1fr auto",
-          gap: "8px",
-          marginTop: "8px",
-          padding: "8px 0",
-          borderTop: "1px solid var(--line2, var(--line))",
-          fontWeight: 600,
-          fontSize: "0.9rem",
-          alignItems: "center",
+          position: "sticky", bottom: 0, zIndex: 5, background: "var(--panel)",
+          borderTop: "1px solid var(--line2, var(--line))", marginTop: 8, padding: "10px 0",
+          display: "grid", gap: 6,
         }}
       >
-        <span style={{ color: "var(--ink2)" }}>Totals</span>
-        {/* Zero-total color: var(--mut) measured 4.2:1 against this totals
-            row's actual background (var(--line) / --line) -- just under 4.5:1,
-            since --mut was tuned for white/near-white. var(--ink2) reaches
-            6.5:1 here. UX-005 tranche 5. */}
-        <span className="num" style={{ color: totalDebitPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
-          {formatMoney(totalDebitPaise)}
-        </span>
-        <span className="num" style={{ color: totalCreditPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
-          {formatMoney(totalCreditPaise)}
-        </span>
-        <span
-          role="status"
-          aria-live="polite"
-          style={{
-            fontSize: "0.78rem",
-            color: balanced ? "var(--good)" : totalDebitPaise === 0n ? "var(--mut)" : "var(--bad)",
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {balanced ? (
-            <><span aria-hidden="true">✓ </span>Balanced</>
-          ) : totalDebitPaise === 0n ? (
-            "Not started"
-          ) : (
-            <><span aria-hidden="true">✗ </span>Out of balance</>
-          )}
-        </span>
+        <div style={{ display: "grid", gridTemplateColumns: lineCols, gap: "8px", alignItems: "center", fontWeight: 600, fontSize: "0.9rem" }}>
+          <span />
+          <span style={{ color: "var(--ink2)" }}>Totals</span>
+          {/* Zero-total color: var(--ink2) keeps >= 4.5:1 on this bar (UX-005 tranche 5). */}
+          <span className="num" style={{ textAlign: "right", color: totalDebitPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
+            {formatMoney(totalDebitPaise)}
+          </span>
+          <span className="num" style={{ textAlign: "right", color: totalCreditPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
+            {formatMoney(totalCreditPaise)}
+          </span>
+          <span />
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 16px", justifyContent: "space-between" }}>
+          <span
+            role="status"
+            aria-live="polite"
+            style={{
+              fontSize: "0.85rem",
+              color: balanced ? "var(--good)" : totalDebitPaise === 0n && totalCreditPaise === 0n ? "var(--ink2)" : "var(--bad)",
+              fontWeight: 700,
+            }}
+          >
+            {balanced ? (
+              <><span aria-hidden="true">✓ </span>Balanced</>
+            ) : balanceInfo.difference ? (
+              <><span aria-hidden="true">✗ </span>Out of balance · Difference <span data-jv-difference="">{balanceInfo.difference}</span></>
+            ) : (
+              "Not started"
+            )}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {balanceInfo.reason ? (
+              <span id="jv-submit-reason" style={{ fontSize: "0.8rem", color: "var(--ink2)", maxWidth: 520 }}>{balanceInfo.reason}</span>
+            ) : null}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={status === "submitting" || !balanced}
+              aria-describedby={balanceInfo.reason ? "jv-submit-reason" : undefined}
+              style={{ minHeight: 44 }}
+            >
+              {status === "submitting" ? "Submitting…" : "Post Journal Entry"}
+            </Button>
+          </span>
+        </div>
       </div>
 
       {errors.balance && <p role="alert" style={{ fontSize: "0.75rem", color: "var(--bad)", display: "block", marginTop: 4 }}>{errors.balance}</p>}
-
-      {/* ── actions ── */}
-      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-        <Button
-          type="submit"
-          disabled={status === "submitting"}
-          style={{ minHeight: 44 }}
-        >
-          {status === "submitting" ? "Submitting…" : "Post Journal Entry"}
-        </Button>
-      </div>
 
       {/* ── feedback ── */}
       {message && (

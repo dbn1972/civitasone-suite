@@ -4,6 +4,7 @@ import { testDbHostPort } from "../../vitest.testdb";
 
 export default defineConfig({
   test: {
+    setupFiles: ["../../packages/render/test-support/tenant-identity-setup.ts"],
     ...sharedTestTimeouts,
     // Several real-DB test files here (municipal-challan-integration,
     // recon-db, recon-idempotency-db, rls-isolation, distribution-lock-race,

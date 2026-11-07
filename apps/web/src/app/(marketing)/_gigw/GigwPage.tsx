@@ -1,57 +1,43 @@
 /**
- * UAT-P2-D3 (A11Y-19, GIGW 3.0 mandatory compliance pages): shared layout for
- * the public accessibility statement, screen-reader access and website
- * policies pages. DEFERRED-content: every section whose text the department
- * must supply renders a clearly marked "[Content pending]" placeholder with
- * data-deferred-content, never invented policy text.
+ * Shared layout for the GIGW 3.0 public pages (UAT gigw-content): one h1,
+ * an optional intro, one <section> per h2, and the GIGW "Last reviewed" note
+ * at the end of every page.
  */
 import type { ReactNode } from "react";
 
 export interface GigwSection {
   id: string;
   heading: string;
-  /** Real content, when it exists; otherwise the section is a marked placeholder. */
-  body?: ReactNode;
+  body: ReactNode;
 }
 
 export function GigwPage({
   title,
   intro,
-  pendingNotice,
-  pendingSection,
   sections,
-  children,
+  reviewed,
 }: {
   title: string;
   intro?: string;
-  /** Page-level notice (pending content or standard wording); omitted for fully factual pages. */
-  pendingNotice?: string;
-  pendingSection: string;
   sections: GigwSection[];
-  children?: ReactNode;
+  /** "Last reviewed: <date>" (GIGW review date), already translated. */
+  reviewed: string;
 }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-      {intro ? <p className="mt-4 text-gray-700">{intro}</p> : null}
-      {pendingNotice ? (
-        <p role="note" data-deferred-content="page" className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          {pendingNotice}
-        </p>
-      ) : null}
-      {children}
+      {intro ? <p className="mt-4 text-lg text-gray-700">{intro}</p> : null}
       {sections.map((s) => (
         <section key={s.id} aria-labelledby={`gigw-${s.id}`} className="mt-8">
           <h2 id={`gigw-${s.id}`} className="text-xl font-semibold text-gray-900">
             {s.heading}
           </h2>
-          {s.body ?? (
-            <p data-deferred-content={s.id} className="mt-2 text-gray-700">
-              {pendingSection}
-            </p>
-          )}
+          {s.body}
         </section>
       ))}
+      <p data-gigw-reviewed="" className="mt-12 border-t border-gray-200 pt-4 text-sm text-gray-600">
+        {reviewed}
+      </p>
     </div>
   );
 }

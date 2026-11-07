@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, SummaryStrip, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -159,12 +159,16 @@ export default async function DisciplinaryListPage(
         }
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
-      <StatGrid>
-<StatCard icon="⚖️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : major + minor} />
-        <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statMajor")} value={errored ? null : major} />
-        <StatCard icon="🟡" iconBg="var(--warnbg)" label={t("statMinor")} value={errored ? null : minor} />
-        <StatCard icon="📋" iconBg="var(--bg)" label={t("statOpen")} value={errored ? null : open} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: slim summary strip in place of the KPI card row (the register starts above the fold). */}
+      <SummaryStrip
+        ariaLabel={t("statTotal")}
+        items={[
+          { key: "total", label: t("statTotal"), value: errored ? "—" : major + minor },
+          { key: "major", label: t("statMajor"), value: errored ? "—" : major, tone: "bad" },
+          { key: "minor", label: t("statMinor"), value: errored ? "—" : minor, tone: "warn" },
+          { key: "open", label: t("statOpen"), value: errored ? "—" : open },
+        ]}
+      />
       {/* GAP-HR-DISCIPLINARY-01 (PII/DPDP): purpose/confidentiality notice
           above the table -- mirrors the styling of the existing DPDP notice
           in citizen/grievances/new/page.tsx. */}

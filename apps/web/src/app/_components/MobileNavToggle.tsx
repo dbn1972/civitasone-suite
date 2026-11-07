@@ -3,8 +3,10 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { useShellT } from "./useShellT";
 
 export function MobileNavToggle() {
+  const t = useShellT("appNav");
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -46,7 +48,7 @@ export function MobileNavToggle() {
       <button
         ref={buttonRef}
         className="mob-menu-btn"
-        aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+        aria-label={open ? t("topbar.closeNav", "Close navigation menu") : t("topbar.openNav", "Open navigation menu")}
         aria-expanded={open}
         aria-controls="app-sidebar"
         onClick={toggle}

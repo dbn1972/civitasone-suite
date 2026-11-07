@@ -119,10 +119,11 @@ describe("DisciplinaryPage", () => {
     const ui = await DisciplinaryPage({});
     render(ui);
 
-    const openCard = screen.getByText("Active / Open").closest(".stat");
-    expect(openCard!.querySelector(".val")?.textContent).toBe("5");
-    const majorCard = screen.getByText("Major (Vigilance)").closest(".stat");
-    expect(majorCard!.querySelector(".val")?.textContent).toBe("12");
+    // UX-R5 / DS-7: the counts now live in the slim summary strip (one <li> per count).
+    const openItem = screen.getByText("Active / Open").closest("li");
+    expect(openItem!.querySelector("strong")?.textContent).toBe("5");
+    const majorItem = screen.getByText("Major (Vigilance)").closest("li");
+    expect(majorItem!.querySelector("strong")?.textContent).toBe("12");
   });
 
   it("UAT J11 / D7: the register offers Open case to an HR role-holder", async () => {

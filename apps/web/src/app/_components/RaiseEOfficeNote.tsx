@@ -72,6 +72,15 @@ export type RaiseEOfficeNoteProps = {
    * behind a dead file. Default off, so the other pages keep today's behaviour.
    */
   allowRaiseAfterTerminal?: boolean;
+  /**
+   * UX-R5 / DS-3 (status-aware actions): false when the record status does not allow raising it for approval
+   * (approved, dropped, terminated ...). The "Raise for approval" control is then never offered -- a linked file
+   * is still shown with its status -- and `outcome` (or a neutral reason) is shown instead. Default true, so
+   * callers that do not pass it behave as before. Derive it from lib/records/statusActions (canRaiseForApproval).
+   */
+  statusAllowsRaise?: boolean;
+  /** The outcome / reason line shown when `statusAllowsRaise` is false ("Approved by N. Gupta, DDO on 30 Oct 2026."). */
+  outcome?: React.ReactNode;
 };
 
 export type LinkedFile = {
@@ -97,6 +106,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     amountMinor, defaultApprovalChain = "estab.generic.standard",
     classification: classificationProp = "confidential", priority = "normal",
     notifyPath, notifyWithFileNo = false, onLinkedFileChange, allowRaiseAfterTerminal = false,
+    statusAllowsRaise = true, outcome,
   } = props;
 
   const tm = useTranslations("pqbMoney");
@@ -161,7 +171,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   // is not on the HR directory's list; it uses the payroll lookup), or say there is none.
   const directory = employeeDirectoryForRoles(useSessionIdentity().roles);
 
-  const raisable = !file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status));
+  const raisable = statusAllowsRaise && (!file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status)));
 
   const submit = useCallback(async () => {
     setError("");
@@ -243,12 +253,17 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
               </Button>
             ) : null}
           </span>
-        ) : (
+        ) : raisable ? (
           <Button variant="primary" onClick={() => setOpen((v) => !v)}>
             {open ? "Cancel" : "Raise for approval"}
           </Button>
-        )}
+        ) : null}
       </div>
+      {!statusAllowsRaise && !loading ? (
+        <p className="pad" data-testid="eoffice-outcome" style={{ margin: 0, fontSize: "0.8125rem", color: "var(--ink2)", paddingBottom: 12 }}>
+          {outcome ?? "No approval can be raised for a record in this status."}
+        </p>
+      ) : null}
 
       <div role="status" aria-live="polite">
         {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.8125rem", paddingBottom: 0 }}>{message}</p> : null}

@@ -191,7 +191,10 @@ describe("GlobalSearch", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText("Search is temporarily unavailable")).toBeInTheDocument();
+      // UAT-P3 (NAV-01): the record half says it is down and offers a retry;
+      // the page index (tested below) keeps answering.
+      expect(screen.getByText("Record search unavailable — try again.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     });
   });
 
@@ -325,7 +328,7 @@ describe("GlobalSearch", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText("Unable to reach search service")).toBeInTheDocument();
+      expect(screen.getByText("Record search unavailable — try again.")).toBeInTheDocument();
     });
   });
 
@@ -342,10 +345,12 @@ describe("GlobalSearch", () => {
 
     const dialog = screen.getByRole("dialog");
 
-    // Go to first, second, then wrap to first
-    fireEvent.keyDown(dialog, { key: "ArrowDown" }); // index 0
-    fireEvent.keyDown(dialog, { key: "ArrowDown" }); // index 1
-    fireEvent.keyDown(dialog, { key: "ArrowDown" }); // wraps to 0
+    // UAT-P3: the list now holds the record hits AND the matching pages
+    // ("bill" also matches the Billing / Bills pages), so walk past the
+    // last option of the whole list and check it wraps to the first.
+    const optionCount = screen.getAllByRole("option").length;
+    expect(optionCount).toBeGreaterThan(2);
+    for (let i = 0; i <= optionCount; i++) fireEvent.keyDown(dialog, { key: "ArrowDown" }); // 0 .. last, then wraps to 0
 
     const firstOption = screen.getByText("Electricity Bill Q4").closest("[role='option']");
     expect(firstOption).toHaveAttribute("aria-selected", "true");

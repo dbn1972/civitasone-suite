@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PageHeader, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { getInspectionAssignments } from "../_data/loaders";
 import { AssignmentListItemSchema } from "../_data/loaders";
@@ -40,11 +39,6 @@ export default async function Page() {
   const canCreate = hasAnyRole(getSessionRoles(), [...ASSIGNMENT_CREATE_ROLES]);
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
-        <Link href="/inspection" className="lnk">Inspection</Link>
-        <span aria-hidden style={{ margin: "0 7px" }}>/</span>
-        <span aria-current="page">Assignments</span>
-      </nav>
       <PageHeader title="Assignments" back="/inspection" />
       {/* GAP-INSPECTION-ASSIGNMENTS-06: do not show the create form when the
           list failed to load (a failed page is not a safe place to accept a

@@ -55,11 +55,14 @@ export function ContractLifecycleActions({
   status,
   roles,
   isMaker,
+  inline = false,
 }: {
   contractId: string;
   status: string;
   roles: string[];
   isMaker: boolean;
+  /** UX-R5: render just the buttons (record header primary-action slot), no card; nothing when no action fits. */
+  inline?: boolean;
 }) {
   const t = useTranslations("contractLifecycle");
   const router = useRouter();
@@ -100,6 +103,43 @@ export function ContractLifecycleActions({
     } finally {
       setBusy(false);
     }
+  }
+
+  const dialog = active ? (
+    <ConfirmDialog
+      open
+      title={t(`actions.${active}.title`)}
+      description={t(`actions.${active}.description`)}
+      confirmLabel={t(`actions.${active}.confirm`)}
+      danger={active === "terminate"}
+      requireReason={active === "terminate"}
+      optionalReason={active !== "terminate"}
+      {...(active === "terminate" ? { minReasonLength: 5 } : {})}
+      maxReasonLength={500}
+      reasonLabel={active === "terminate" ? t("reasonLabel") : t("noteLabel")}
+      busy={busy}
+      errorMessage={error}
+      onConfirm={(text) => { void submit(text); }}
+      onCancel={() => { if (!busy) setActive(null); }}
+    />
+  ) : null;
+
+  if (inline) {
+    if (actions.length === 0 && !notice) return null;
+    // One primary (approve / activate / close), terminate is the danger secondary, in the header action slot.
+    const main = actions.find((a) => a !== "terminate");
+    return (
+      <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        {notice ? <span role="status" style={{ fontSize: 13, color: "var(--good)" }}>{notice}</span> : null}
+        {actions.filter((a) => a === "terminate").map((a) => (
+          <Button key={a} variant="danger" onClick={() => { setError(""); setNotice(""); setActive(a); }}>{t(`actions.${a}.label`)}</Button>
+        ))}
+        {main ? (
+          <Button variant="primary" onClick={() => { setError(""); setNotice(""); setActive(main); }}>{t(`actions.${main}.label`)}</Button>
+        ) : null}
+        {dialog}
+      </span>
+    );
   }
 
   return (
@@ -146,7 +186,7 @@ export function ContractLifecycleActions({
  * (display only; contract-service re-checks role and maker-checker) and hides
  * the panel until the session has answered.
  */
-export function ContractLifecycleSection({ contractId, status, createdBy }: { contractId: string; status: string; createdBy: string | null }) {
+export function ContractLifecycleSection({ contractId, status, createdBy, inline = false }: { contractId: string; status: string; createdBy: string | null; inline?: boolean }) {
   const session = useSessionIdentity();
   if (!session.loaded) return null;
   return (
@@ -155,6 +195,7 @@ export function ContractLifecycleSection({ contractId, status, createdBy }: { co
       status={status}
       roles={[...session.roles]}
       isMaker={!!createdBy && session.userId === createdBy}
+      inline={inline}
     />
   );
 }

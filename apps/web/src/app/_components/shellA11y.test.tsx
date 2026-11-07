@@ -205,14 +205,14 @@ describe("GIGW footer / contentinfo (A11Y-20, DEFERRED-content)", () => {
     delete process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT;
   });
 
-  it("renders a contentinfo landmark with the compliance links and marked placeholders", async () => {
+  it("renders a contentinfo landmark with the compliance links and the demonstration defaults", async () => {
     const { container } = withIntl(<AppFooter />);
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     for (const l of GIGW_FOOTER_LINKS) {
       expect(screen.getByRole("link", { name: (enMessages.shell as Record<string, string>)[l.key] })).toHaveAttribute("href", l.href);
     }
-    expect(container.querySelector('[data-deferred-content="owner"]')).toHaveTextContent("[Content to be supplied");
-    expect(container.querySelector('[data-deferred-content="last-updated"]')).not.toBeNull();
+    expect(container.querySelector('[data-gigw-default="NEXT_PUBLIC_GIGW_OWNER"]')).toHaveTextContent("CivitasOne Demonstration Department (UAT)");
+    expect(container.querySelector('[data-gigw-unset="NEXT_PUBLIC_BUILD_TIME"]')).not.toBeNull();
     expect(await axeViolations(container)).toEqual([]);
   });
 
@@ -221,7 +221,7 @@ describe("GIGW footer / contentinfo (A11Y-20, DEFERRED-content)", () => {
     process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT = "2026-11-03";
     withIntl(<AppFooter />, "hi");
     expect(screen.getByText(/Department of Example/)).toBeInTheDocument();
-    expect(screen.getByText(/अंतिम अद्यतन: 03 Nov 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/अंतिम अद्यतन: 3 नवंबर 2026/)).toBeInTheDocument();
   });
 
   it("every new shell / gigw string has a Hindi translation", () => {

@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Field, Input, Select } from "@/app/_components/ds";
+import { Button, DateInput, Field, Input, RequiredLegend, Select } from "@/app/_components/ds";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { minorToRupeesInput } from "@/lib/money";
 import { RemoteSearchSelect, type RemoteOption, type RemoteSearchState } from "../../_components/RemoteSearchSelect";
@@ -323,8 +323,10 @@ export function CreatePOForm() {
 
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 820 }} noValidate>
+      {/* UX-R5 form-field standard: label above, "* required" legend, inline validation on blur, DD-MM-YYYY dates. */}
+      <RequiredLegend />
       <div className="fields">
-        <Field id="po-vendor" label="Vendor *">
+        <Field id="po-vendor" label="Vendor" required validate={() => (vendor ? undefined : "Choose the vendor this order is placed with.")}>
           <RemoteSearchSelect
             inputId="po-vendor"
             value={vendor}
@@ -336,7 +338,7 @@ export function CreatePOForm() {
           />
         </Field>
 
-        <Field id="po-indent" label="Source indent (approved) *">
+        <Field id="po-indent" label="Source indent (approved)" required validate={() => (indent ? undefined : "Choose the approved indent this order is raised against.")}>
           <RemoteSearchSelect
             inputId="po-indent"
             value={indent}
@@ -383,13 +385,8 @@ export function CreatePOForm() {
           </fieldset>
         ) : null}
 
-        <Field label="Delivery date">
-          <Input
-            type="date"
-            value={deliveryDate}
-            min={today}
-            onChange={(e) => setDeliveryDate(e.target.value)}
-          />
+        <Field id="po-delivery" label="Delivery date" hint="DD-MM-YYYY, today or later.">
+          <DateInput value={deliveryDate} min={today} onChange={setDeliveryDate} />
         </Field>
       </div>
 

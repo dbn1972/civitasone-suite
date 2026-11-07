@@ -1,125 +1,68 @@
-import Link from "next/link";
-import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../_components/ds";
+import { getTranslations } from "next-intl/server";
+import { PageHeader } from "../../_components/ds";
 import { RefreshErrorState } from "../../_components/ds/RefreshErrorState";
-import { getMyApprovals } from "../../_data/loaders";
-import { ApprovalsTable } from "./_components/ApprovalsTable";
-import { isTaskOverdue, countOverdue } from "./_components/overdue";
+import { humanErrorFromFailure } from "@/lib/messages";
+import { loadInbox } from "./_data/inboxData";
+import { INBOX_TABS, MODULE_REF_TYPES, isModuleKey, type InboxTab, type ModuleKey } from "./_lib/inboxModel";
+import { ApprovalsInbox } from "./_components/ApprovalsInbox";
+import { InboxTabs } from "./_components/InboxTabs";
 
-const PAGE_SIZE = 15;
+export const dynamic = "force-dynamic";
 
-type SearchParams = { page?: string | string[] };
+type SearchParams = { tab?: string | string[]; module?: string | string[]; task?: string | string[]; q?: string | string[] };
 
-function parsePage(raw: string | string[] | undefined): number {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
-}
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function MyApprovalsPage(
-  props: {
-    searchParams?: Promise<SearchParams>;
-  }
-) {
-  const searchParams = await props.searchParams;
-  const page = parsePage(searchParams?.page);
-  const { data, source } = await getMyApprovals(page, PAGE_SIZE);
-  const failed = source === "error";
-  const approvals = data.items;
+/**
+ * UX R1: the ONE approvals inbox. /workflow/my-tasks, /procurement/approvals, /hr/leave/approvals
+ * and /estab/approvals now 308 here (next.config.mjs), the module queues as ?module= filters.
+ * Deep link: ?task=<id> opens that task in the decision panel.
+ */
+export default async function ApprovalsPage(props: { searchParams?: Promise<SearchParams> }) {
+  const sp = (await props.searchParams) ?? {};
+  const tabRaw = one(sp.tab);
+  const tab: InboxTab = (INBOX_TABS as readonly string[]).includes(tabRaw ?? "") ? (tabRaw as InboxTab) : "waiting";
+  const moduleRaw = one(sp.module);
+  const module: ModuleKey | "all" = isModuleKey(moduleRaw) ? moduleRaw : "all";
+  const q = (one(sp.q) ?? "").trim().slice(0, 100);
+  const taskRaw = one(sp.task);
+  const task = taskRaw && UUID_RE.test(taskRaw) ? taskRaw : null;
+  const refTypes = module !== "all" && module !== "other" ? MODULE_REF_TYPES[module] : undefined;
 
-  const now = Date.now();
-  // GAP-APPROVALS-HOME-01: the Pending stat is the WHOLE pending count the API
-  // reports, not just this page's length (which silently capped it). When the
-  // service omits a total we fall back to the loaded count (and only then is it
-  // page-bounded).
-  const pending = data.total ?? approvals.length;
-  // GAP-APPROVALS-HOME-06: Overdue/Due-soon are computed from the loaded rows
-  // with the SAME shared helper the table uses, so the tiles and the red rows
-  // can never disagree. They describe the loaded page; the notice below makes
-  // the "first N of M" scope explicit.
-  const overdue = countOverdue(approvals, now);
-  const dueSoon = approvals.filter(
-    (a) => !isTaskOverdue(a.dueDate, now) && a.dueDate !== null && new Date(a.dueDate).getTime() - now <= 7 * 86400000,
-  ).length;
-  const modules = new Set(approvals.map((a) => a.module));
+  const t = await getTranslations("approvalsInbox");
+  const data = await loadInbox(tab, { ...(refTypes ? { refTypes } : {}), ...(q ? { q } : {}) });
+  const failed = data.source === "error";
+  const area = t("loadErrorArea");
 
-  const loadedUpTo = (page - 1) * PAGE_SIZE + approvals.length;
-  const total = data.total;
-  const hasPrev = page > 1;
-  const hasNext = data.hasMore;
-  const showScopeNotice = !failed && total !== null && total > approvals.length;
+  const tabLabels = { nav: t("tabsLabel"), waiting: t("tabs.waiting"), sent: t("tabs.sent"), done: t("tabs.done") };
 
   return (
     <>
-      <PageHeader
-        title="My Approvals"
-        subtitle="All pending items requiring your action across modules."
-        back="/dashboard"
-        backLabel="Dashboard"
-        help="approvals"
-        actions={failed ? <DataSourceBadge source={source} /> : null}
-      />
-
-      <StatGrid>
-        {/* On a failed load a hard 0 reads as "nothing to do" next to an error
-            card — gate every tile to "—" instead (GAP-APPROVALS-HOME-03). */}
-        <StatCard icon="⏳" tone="info" label="Pending" value={failed ? null : pending} />
-        <StatCard icon="⚠️" tone="bad" label="Overdue" value={failed ? null : overdue} />
-        <StatCard icon="📋" tone="neutral" label="Modules" value={failed ? null : modules.size} />
-        {/* GAP-APPROVALS-HOME-06: a distinct metric, not a duplicate of Pending. */}
-        <StatCard icon="📅" tone="warn" label="Due within 7 days" value={failed ? null : dueSoon} />
-      </StatGrid>
-
-      <Card title="Pending Approvals">
-        {failed ? (
-          <RefreshErrorState
-            error={{
-              what: "We couldn't load your approvals.",
-              next: "The workflow service didn't respond. Try again in a moment.",
-              actions: ["retry", "back"],
-            }}
-            backHref="/dashboard"
-            source={{ area: "approvals" }}
-          />
-        ) : approvals.length === 0 ? (
-          <EmptyState
-            icon="✅"
-            title="No pending approvals"
-            message="You're all caught up. No items need your attention right now."
-          />
-        ) : (
-          <>
-            {showScopeNotice && (
-              <p role="status" style={{ fontSize: 13, color: "var(--mut)", marginBottom: 8 }}>
-                Showing {(page - 1) * PAGE_SIZE + 1}–{loadedUpTo} of {total}.
-              </p>
-            )}
-            <ApprovalsTable key={page} initialData={approvals} source={source} page={page} />
-            {(hasPrev || hasNext) && (
-              <nav
-                aria-label="Approvals pages"
-                style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", marginTop: 12 }}
-              >
-                {hasPrev ? (
-                  <Link href={`/approvals?page=${page - 1}`} className="btn ghost">
-                    ← Previous
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                <span style={{ fontSize: 13, color: "var(--mut)" }}>Page {page}</span>
-                {hasNext ? (
-                  <Link href={`/approvals?page=${page + 1}`} className="btn ghost">
-                    Next →
-                  </Link>
-                ) : (
-                  <span />
-                )}
-              </nav>
-            )}
-          </>
-        )}
-      </Card>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/dashboard" help="approvals" />
+      {failed ? (
+        <>
+        <InboxTabs tab={tab} counts={null} module={module} labels={tabLabels} />
+        <RefreshErrorState
+          error={humanErrorFromFailure({ ...(data.status !== undefined ? { status: data.status } : {}), kind: "load", area })}
+          backHref="/dashboard"
+          source={{ ...(data.status !== undefined ? { status: data.status } : {}), area }}
+        />
+        </>
+      ) : (
+        <ApprovalsInbox
+          key={`${tab}:${module}:${q}`}
+          tab={tab}
+          tasks={data.tasks}
+          summaries={data.summaries}
+          counts={data.counts}
+          total={data.total}
+          initialModule={module}
+          initialTaskId={task}
+          serverQuery={q}
+          tabLabels={tabLabels}
+        />
+      )}
     </>
   );
 }

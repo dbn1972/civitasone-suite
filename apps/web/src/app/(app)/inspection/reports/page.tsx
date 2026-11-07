@@ -45,11 +45,6 @@ export default async function InspectionReportsPage(props: { searchParams?: Prom
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
-        <Link href="/inspection" className="lnk">{t("breadcrumbInspection")}</Link>
-        <span aria-hidden style={{ margin: "0 7px" }}>/</span>
-        <span aria-current="page">{t("title")}</span>
-      </nav>
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

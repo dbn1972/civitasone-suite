@@ -42,8 +42,8 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     const headers = req.headers as Record<string, string>;
     const tenantId = headers["x-tenant-id"] ?? "";
     if (!tenantId) return reply.code(400).send({ code: "MISSING_TENANT" });
-    const users = await repo.findByTenantId(tenantId, 2000, 0);
-    return reply.send(users.map((u) => ({ id: u.id, name: u.name })));
+    // UX-R5: keyed by identity id AND Keycloak sub (peer services store the JWT sub as created_by).
+    return reply.send(await repo.summariesByTenant(tenantId, 2000));
   });
 
   /**

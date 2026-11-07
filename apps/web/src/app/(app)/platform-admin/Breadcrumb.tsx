@@ -11,7 +11,7 @@ const cur: CSSProperties = { color: "var(--ink2)", fontWeight: 600 };
 /** Accessible breadcrumb trail for platform-admin pages. */
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (
-    <nav aria-label="Breadcrumb" style={nav}>
+    <nav aria-label="Breadcrumb" data-dup-crumb style={nav}>
       <ol style={ol}>
         {items.map((c, i) => {
           const last = i === items.length - 1;

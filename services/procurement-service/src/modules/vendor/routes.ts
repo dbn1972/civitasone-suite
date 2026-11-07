@@ -14,6 +14,11 @@ import type { RequestContext } from "@civitasone/types";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer"];
+/**
+ * UX-R5: who may resolve vendor ids to NAMES ONLY (no PAN/GSTIN/bank) -- the register readers plus the officers
+ * whose record screens show a vendor (bills and payments, contracts, assets, the department administrator).
+ */
+const VENDOR_NAME_ROLES = [...READER_ROLES, "finance_officer", "finance_admin", "accounts_officer", "ddo", "contract_manager", "legal_officer", "asset_manager", "asset_admin", "store_keeper", "tenant_admin"];
 
 /** UAT Phase 2 C7: ?ids=<uuid>,<uuid>… (at most 100) for the internal vendor-name lookup. */
 const vendorNamesQuery = z.object({
@@ -139,6 +144,16 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/internal/vendor-names", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["service_account"]);
+    const { ids } = vendorNamesQuery.parse(req.query);
+    return reply.send({ data: await queries.vendorNamesByIds(ctx.tenantId, ids) });
+  });
+
+  // UX-R5 (names, not ids): the user-facing twin of internal/vendor-names, so record screens (bill, PO, contract)
+  // show the vendor name instead of "Unknown vendor" or a UUID. Gate: VENDOR_NAME_ROLES (names only); returns
+  // {id, name} only (no PAN/GSTIN/bank), tenant-scoped by ctx.tenantId.
+  app.get("/v1/procurement/vendors/names", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, VENDOR_NAME_ROLES);
     const { ids } = vendorNamesQuery.parse(req.query);
     return reply.send({ data: await queries.vendorNamesByIds(ctx.tenantId, ids) });
   });

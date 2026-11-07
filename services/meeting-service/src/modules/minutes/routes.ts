@@ -54,6 +54,7 @@ import {
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
+import { minutesPdfRoutes } from "./minutes-pdf.js";
 
 // ─── RBAC (mirrors meeting-core / committee role sets) ───────────────────────
 // Read access for all meeting governance roles within the tenant.
@@ -134,6 +135,9 @@ async function loadMeetingRefOr404(tenantId: string, meetingId: string) {
 }
 
 export async function minutesRoutes(app: FastifyInstance): Promise<void> {
+  // UAT ux-docs: the minutes as an issuable PDF (names, rendered Markdown, IST).
+  await minutesPdfRoutes(app, READ_ROLES);
+
   // ── Create the minutes draft for a meeting (Req 7.1, 7.2) ────────────────
   app.post("/v1/meetings/:meetingId/minutes", async (req, reply) => {
     const ctx = resolveContext(req);

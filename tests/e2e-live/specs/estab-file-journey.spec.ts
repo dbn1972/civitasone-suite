@@ -81,21 +81,20 @@ test.describe("Establishment — File Journey (Live)", () => {
 
     // 4. Login as approver (same super_admin session — see file header) and
     // approve the pending noting from the approvals queue.
-    await page.goto("/estab/approvals");
+    // UX R1: /estab/approvals now 308s to the approvals inbox filtered to Establishment.
+    await page.goto("/approvals?module=estab");
     await page.waitForLoadState("networkidle");
 
-    const approveButton = page.getByRole("button", { name: "Approve & e-Sign" }).first();
-    if (await approveButton.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await approveButton.click();
-      const dialog = await page.getByRole("alertdialog").first();
-      await expect(dialog).toBeVisible({ timeout: 10_000 });
-      const reasonField = dialog.locator("textarea, input").first();
-      if (await reasonField.isVisible().catch(() => false)) {
-        await reasonField.fill("Approved via E2E journey test.");
+    const firstItem = page.locator("tbody button").first();
+    if (await firstItem.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await firstItem.click();
+      const approveButton = page.getByRole("button", { name: "Approve", exact: true });
+      if (await approveButton.isEnabled({ timeout: 10_000 }).catch(() => false)) {
+        await page.getByLabel("Remarks").fill("Approved via E2E journey test.");
+        await approveButton.click();
+        await page.getByRole("button", { name: "Confirm" }).click();
+        await expect(page.getByText(/^Approved: /).first()).toBeVisible({ timeout: 15_000 });
       }
-      const confirmButton = dialog.getByRole("button", { name: "Approve & e-Sign" });
-      await confirmButton.click();
-      await expect(page.getByText(/Approved at|Final approval/)).toBeVisible({ timeout: 15_000 });
     }
 
     // 5. Verify the file detail page reflects the noting/movement state.

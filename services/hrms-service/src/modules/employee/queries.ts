@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { maskValue } from "../../shared/pii-mask.js";
@@ -311,4 +311,34 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
       },
     };
   });
+}
+
+export type OfficerRef = { id: string; name: string; designation: string | null };
+
+/**
+ * UX-R5 (names, not ids): "Name, Designation" for the ids a record screen holds (an employee id or a login
+ * user ref). Answered under the id asked for; an employee-id match wins over a user-ref match; ids that match
+ * nothing are omitted (the web shows an honest "Name not available"). Name and designation only.
+ */
+export async function officersByIds(tenantId: string, ids: string[]): Promise<OfficerRef[]> {
+  const rows = await repo.findByIdsOrUserRefs(tenantId, ids);
+  if (rows.length === 0) return [];
+  const desigIds = [...new Set(rows.map((r) => r.designationId))];
+  const desigs = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id, name: hrmsDesignations.name }).from(hrmsDesignations)
+    .where(and(eq(hrmsDesignations.tenantId, tenantId), inArray(hrmsDesignations.id, desigIds))));
+  return officerEntriesFor(ids, rows, new Map(desigs.map((d) => [d.id, d.name])));
+}
+
+/** Pure keying for officersByIds (exported for tests). */
+export function officerEntriesFor(
+  ids: readonly string[],
+  rows: ReadonlyArray<{ id: string; userRef: string | null; fullName: string; designationId: string }>,
+  designationById: ReadonlyMap<string, string>,
+): OfficerRef[] {
+  const wanted = new Set(ids);
+  const out = new Map<string, OfficerRef>();
+  const entry = (key: string, r: (typeof rows)[number]): OfficerRef => ({ id: key, name: r.fullName, designation: designationById.get(r.designationId) ?? null });
+  for (const r of rows) if (wanted.has(r.id)) out.set(r.id, entry(r.id, r));
+  for (const r of rows) if (r.userRef && wanted.has(r.userRef) && !out.has(r.userRef)) out.set(r.userRef, entry(r.userRef, r));
+  return [...out.values()];
 }
