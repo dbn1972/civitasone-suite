@@ -441,8 +441,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
         >
           <span>#</span>
           <span>Head of account (code · name)</span>
-          <span style={{ textAlign: "right" }}>Debit (₹)</span>
-          <span style={{ textAlign: "right" }}>Credit (₹)</span>
+          <span style={{ textAlign: "end" }}>Debit (₹)</span>
+          <span style={{ textAlign: "end" }}>Credit (₹)</span>
           <span />
         </div>
 
@@ -475,7 +475,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
                 onChange={(e) => updateLine(line.id, "debit", e.target.value)}
                 aria-label={`Debit amount, line ${idx + 1}`}
                 aria-invalid={parseMinorOrZero(line.debit) === null ? true : undefined}
-                style={{ textAlign: "right", width: "100%", boxSizing: "border-box" }}
+                style={{ textAlign: "end", width: "100%", boxSizing: "border-box" }}
               />
               {amountPreview(line.debit)}
             </div>
@@ -490,7 +490,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
                 onChange={(e) => updateLine(line.id, "credit", e.target.value)}
                 aria-label={`Credit amount, line ${idx + 1}`}
                 aria-invalid={parseMinorOrZero(line.credit) === null ? true : undefined}
-                style={{ textAlign: "right", width: "100%", boxSizing: "border-box" }}
+                style={{ textAlign: "end", width: "100%", boxSizing: "border-box" }}
               />
               {amountPreview(line.credit)}
             </div>
@@ -531,10 +531,10 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
           <span />
           <span style={{ color: "var(--ink2)" }}>Totals</span>
           {/* Zero-total color: var(--ink2) keeps >= 4.5:1 on this bar (UX-005 tranche 5). */}
-          <span className="num" style={{ textAlign: "right", color: totalDebitPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
+          <span className="num" style={{ textAlign: "end", color: totalDebitPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
             {formatMoney(totalDebitPaise)}
           </span>
-          <span className="num" style={{ textAlign: "right", color: totalCreditPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
+          <span className="num" style={{ textAlign: "end", color: totalCreditPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
             {formatMoney(totalCreditPaise)}
           </span>
           <span />

@@ -101,7 +101,7 @@ export function AccountMenu({ name = "User" }: { name?: string }) {
                 close();
                 window.dispatchEvent(new CustomEvent(ASK_OPEN_EVENT));
               }}
-              style={{ width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: "inherit" }}
+              style={{ width: "100%", textAlign: "start", padding: "8px 10px", fontSize: 13, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: "inherit" }}
             >
               {t("topbar.askMenu", "Ask CivitasOne")}
             </button>

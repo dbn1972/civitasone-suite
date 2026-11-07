@@ -302,6 +302,17 @@
     },
     {
       "module": "admin",
+      "screen": "/admin/invoices/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "admin",
       "screen": "/admin/invoices",
       "loaders": [
         "getSAInvoices"
@@ -1007,17 +1018,13 @@
     {
       "module": "approvals",
       "screen": "/approvals",
-      "loaders": [
-        "getMyApprovals"
-      ],
-      "apiPaths": [
-        "/api/v1/workflow/tasks"
-      ],
-      "upstream": "workflow → /v1/workflow/tasks",
-      "routeHandler": "/v1/workflow/tasks",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "assets",
@@ -1030,6 +1037,21 @@
       ],
       "upstream": "asset → /v1/assets/assets/:param",
       "routeHandler": "/v1/assets/assets/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/[id]",
+      "loaders": [
+        "getAssetLocations"
+      ],
+      "apiPaths": [
+        "/api/v1/asset/locations"
+      ],
+      "upstream": "asset → /v1/assets/locations",
+      "routeHandler": "/v1/assets/locations",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -1934,17 +1956,13 @@
     {
       "module": "citizen",
       "screen": "/citizen/notices",
-      "loaders": [
-        "getCitizenNotices"
-      ],
-      "apiPaths": [
-        "/api/v1/citizen/notices"
-      ],
-      "upstream": "citizen → /v1/citizen/notices",
-      "routeHandler": "/v1/citizen/notices",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "citizen",
@@ -2094,21 +2112,6 @@
       ],
       "upstream": "contract → /v1/contract/contracts/:param",
       "routeHandler": "/v1/contract/contracts/:id",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "contracts",
-      "screen": "/contracts/[id]",
-      "loaders": [
-        "getVendorOptions"
-      ],
-      "apiPaths": [
-        "/api/v1/procurement/vendors"
-      ],
-      "upstream": "procurement → /v1/procurement/vendors",
-      "routeHandler": "/v1/procurement/vendors",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -3917,6 +3920,17 @@
     },
     {
       "module": "finance",
+      "screen": "/finance/accounting/journal-approvals",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "finance",
       "screen": "/finance/accounting/vouchers/new",
       "loaders": [],
       "apiPaths": [],
@@ -3970,6 +3984,17 @@
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/allocation/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "finance",
@@ -4056,6 +4081,17 @@
     {
       "module": "finance",
       "screen": "/finance/budget/fund-releases",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/lapse-statement",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -4239,6 +4275,21 @@
       ],
       "upstream": "finance → /v1/finance/dashboard",
       "routeHandler": "/v1/finance/dashboard",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/dashboard",
+      "loaders": [
+        "getFinanceSanctionsSummary"
+      ],
+      "apiPaths": [
+        "/api/v1/finance/sanctions/summary"
+      ],
+      "upstream": "finance → /v1/finance/sanctions/summary",
+      "routeHandler": "/v1/finance/sanctions/summary",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -6428,13 +6479,17 @@
     {
       "module": "hr",
       "screen": "/hr/medical",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getMyProfile"
+      ],
+      "apiPaths": [
+        "/api/v1/hrms/me/profile"
+      ],
+      "upstream": "hrms → /v1/hrms/me/profile",
+      "routeHandler": "/v1/hrms/me/profile",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "hr",
@@ -7821,6 +7876,39 @@
       "detail": "navigation hub — no data loader"
     },
     {
+      "module": "inspection",
+      "screen": "/inspection/reports/[id]",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection/reports/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection/reports",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
       "module": "install",
       "screen": "/install/console",
       "loaders": [
@@ -8561,6 +8649,17 @@
     },
     {
       "module": "legal",
+      "screen": "/legal/advocates",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "legal",
       "screen": "/legal/cases/[id]",
       "loaders": [
         "getLegalCaseById"
@@ -8807,6 +8906,17 @@
     {
       "module": "locations",
       "screen": "/locations",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/parcels/[id]",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -9218,6 +9328,21 @@
     },
     {
       "module": "platform-admin",
+      "screen": "/platform-admin/billing",
+      "loaders": [
+        "getPendingDowngradeRequests"
+      ],
+      "apiPaths": [
+        "/api/v1/tenant/subscription/downgrade-requests/pending"
+      ],
+      "upstream": "tenant-singular → /v1/tenant/subscription/downgrade-requests/pending",
+      "routeHandler": "/v1/tenant/subscription/downgrade-requests/pending",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "platform-admin",
       "screen": "/platform-admin/org-config",
       "loaders": [
         "getOrgHierarchyLevels"
@@ -9584,32 +9709,13 @@
     {
       "module": "procurement",
       "screen": "/procurement/emd-bg",
-      "loaders": [
-        "getProcurementEMD"
-      ],
-      "apiPaths": [
-        "/api/v1/procurement/emd"
-      ],
-      "upstream": "procurement → /v1/procurement/emd",
-      "routeHandler": "/v1/procurement/emd",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/emd-bg",
-      "loaders": [
-        "getProcurementPBG"
-      ],
-      "apiPaths": [
-        "/api/v1/procurement/pbg"
-      ],
-      "upstream": "procurement → /v1/procurement/pbg",
-      "routeHandler": "/v1/procurement/pbg",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "procurement",
@@ -9730,13 +9836,17 @@
     {
       "module": "procurement",
       "screen": "/procurement/grn",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementGRNSummary"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/grns/summary"
+      ],
+      "upstream": "procurement → /v1/procurement/grns/summary",
+      "routeHandler": "/v1/procurement/grns/summary",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -9767,13 +9877,17 @@
     {
       "module": "procurement",
       "screen": "/procurement/indents",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getProcurementIndentSummary"
+      ],
+      "apiPaths": [
+        "/api/v1/procurement/indents/summary"
+      ],
+      "upstream": "procurement → /v1/procurement/indents/summary",
+      "routeHandler": "/v1/procurement/indents/summary",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -10939,6 +11053,17 @@
     },
     {
       "module": "tenant",
+      "screen": "/tenant/code-lists/[code]",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "tenant",
       "screen": "/tenant/code-lists",
       "loaders": [],
       "apiPaths": [],
@@ -11198,6 +11323,21 @@
     },
     {
       "module": "tenant-admin",
+      "screen": "/tenant-admin/data-export",
+      "loaders": [
+        "getExportableModules"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/data-export/modules"
+      ],
+      "upstream": "admin → /v1/admin/data-export/modules",
+      "routeHandler": "/v1/admin/data-export/modules",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
       "screen": "/tenant-admin/domain",
       "loaders": [
         "getCustomDomains"
@@ -11346,13 +11486,13 @@
       "module": "tenant-admin",
       "screen": "/tenant-admin/plans",
       "loaders": [
-        "getPlansData"
+        "getDowngradeRequests"
       ],
       "apiPaths": [
-        "/api/v1/billing/plans"
+        "/api/v1/tenant/subscription/downgrade-requests"
       ],
-      "upstream": "billing → /v1/billing/plans",
-      "routeHandler": "/v1/billing/plans",
+      "upstream": "tenant-singular → /v1/tenant/subscription/downgrade-requests",
+      "routeHandler": "/v1/tenant/subscription/downgrade-requests",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -11529,6 +11669,21 @@
       ],
       "upstream": "billing → /v1/billing/subscriptions",
       "routeHandler": "/v1/billing/subscriptions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/subscription",
+      "loaders": [
+        "getTenantInvoices"
+      ],
+      "apiPaths": [
+        "/api/v1/billing/invoices"
+      ],
+      "upstream": "billing → /v1/billing/invoices",
+      "routeHandler": "/v1/billing/invoices",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -12182,15 +12337,15 @@
     }
   ],
   "counts": {
-    "totalPages": 886,
-    "wired": 383,
+    "totalPages": 897,
+    "wired": 386,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 585,
+    "noLoader": 595,
     "fabricatedData": 0
   },
   "linkAudit": {
-    "total": 1693,
+    "total": 1808,
     "dead": []
   }
 }

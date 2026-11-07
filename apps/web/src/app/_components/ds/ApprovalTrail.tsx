@@ -107,7 +107,7 @@ export function ApprovalTrail({
                     </div>
                     {at ? <div className="tl-sub">{at}</div> : null}
                     {e.remarks && e.remarks.trim() ? (
-                      <blockquote style={{ margin: "4px 0 0", paddingLeft: 10, borderLeft: "3px solid var(--line)", fontSize: 13, color: "var(--ink)" }}>
+                      <blockquote style={{ margin: "4px 0 0", paddingInlineStart: 10, borderInlineStart: "3px solid var(--line)", fontSize: 13, color: "var(--ink)" }}>
                         {e.remarks.trim()}
                       </blockquote>
                     ) : null}

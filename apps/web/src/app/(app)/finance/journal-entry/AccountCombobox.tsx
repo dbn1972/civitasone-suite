@@ -146,7 +146,7 @@ export function AccountCombobox({ id, accounts, value, onChange, "aria-label": a
           role="listbox"
           aria-label={`${ariaLabel}: matching heads of account`}
           style={{
-            position: "absolute", zIndex: 30, top: "100%", left: 0, right: 0, marginTop: 2,
+            position: "absolute", zIndex: 30, top: "100%", insetInlineStart: 0, insetInlineEnd: 0, marginTop: 2,
             maxHeight: 280, overflowY: "auto", background: "var(--panel)", border: "1px solid var(--control-border, var(--line))",
             borderRadius: 10, boxShadow: "0 8px 24px rgba(15, 23, 42, 0.12)", fontSize: 13,
           }}
