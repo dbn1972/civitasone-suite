@@ -14,7 +14,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { scoped } from "./_tenant.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
-import { financeHeads } from "../src/modules/budget/schema.js";
+import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { periodPostingRefusal, voucherNeedsAllocation } from "../src/modules/gl/posting-rules.js";
 import { COMMANDS } from "../src/topics.js";
@@ -56,10 +56,16 @@ beforeAll(async () => {
   // UAT T-EDGE b21 (J16): a journal line must name an account in the chart of accounts, so
   // the codes these journals use exist for both tenants.
   for (const tenant of [T, OTHER]) {
-    await scoped(tenant, (tx) => tx.insert(financeHeads).values([
+    const heads = await scoped(tenant, (tx) => tx.insert(financeHeads).values([
       { tenantId: tenant, code: "5100", name: "Expenditure", level: 2, createdBy: MAKER, updatedBy: MAKER },
       { tenantId: tenant, code: "1100", name: "Bank", level: 2, createdBy: MAKER, updatedBy: MAKER },
-    ]));
+    ]).returning());
+    // UAT T-PERIOD D-03 (bundle 20): a debit to an expenditure head needs a budget provision for the FY it is
+    // dated in, so the expenditure head carries one for both financial years these journals fall in.
+    const exp = heads.find((h) => h.code === "5100")!;
+    await scoped(tenant, (tx) => tx.insert(financeBudgets).values(
+      ["2025-26", "2026-27"].map((fy) => ({ tenantId: tenant, headId: exp.id, fy, beMinor: 100000000n, reMinor: 100000000n, createdBy: MAKER, updatedBy: MAKER })),
+    ));
   }
 });
 afterAll(async () => {

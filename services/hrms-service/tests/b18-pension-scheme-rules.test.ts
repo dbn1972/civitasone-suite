@@ -133,7 +133,8 @@ describe("D3: UAN", () => {
     expect(createEmployeeBody.parse({ ...base, uanNumber: "100200300400" }).uanNumber).toBe("100200300400");
     expect(createEmployeeBody.parse({ ...base, uanNumber: "" }).uanNumber).toBeUndefined();
     expect(updateEmployeeBody.safeParse({ uanNumber: "UAN-1" }).success).toBe(false);
-    expect(updateEmployeeBody.parse({ uanNumber: "" }).uanNumber).toBe("");
+    // PR #2465: a blank UAN on update is normalised to null (clears the stored value); bundle 20 passed "" through.
+    expect(updateEmployeeBody.parse({ uanNumber: "" }).uanNumber).toBeNull();
   });
   it("create accepts an explicit scheme (UPS option); update refuses any scheme", () => {
     const base = { employeeNo: "E1", fullName: "A", departmentId: "11111111-1111-4111-8111-111111111111", designationId: "11111111-1111-4111-8111-111111111112", dateOfJoining: "2026-10-28" };
