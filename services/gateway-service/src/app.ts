@@ -30,6 +30,7 @@ import { jwtEdgeVerify } from "./jwt-edge.js";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
 import { isInternalServicePath } from "./internal-path.js";
+import { checkBodyContentType, UNSUPPORTED_MEDIA_RESPONSE } from "./content-type-guard.js";
 import {
   BILLING_WEBHOOK_PREFIX,
   TELEPHONY_WEBHOOK_PREFIX,
@@ -480,8 +481,28 @@ export async function buildApp(): Promise<FastifyInstance> {
     // from internal peers (the web tier): an external caller hitting the gateway directly cannot choose its own IP.
     // Deliberately not `true`. (Same list as hrms-service's INTERNAL_PROXY_TRUST.)
     trustProxy: "loopback,linklocal,uniquelocal",
+    // Fastify 4 defaults this to true and truncates the route path at `;`, so `/a/..;/b` is
+    // routed upstream-side as `/a/..`. The edge refuses `;` in paths (path-guard.ts); this
+    // keeps the gateway's own router consistent with that (and is the Fastify 5 default).
+    useSemicolonDelimiter: false,
     genReqId: (req) =>
       (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+  });
+
+  // Content-Type allow-list for body methods. Registered first so every route (proxy, ops,
+  // webhooks) is covered; see content-type-guard.ts.
+  app.addHook("onRequest", async (req, reply) => {
+    const verdict = checkBodyContentType(req.method, req.headers["content-type"], req.url, [
+      BILLING_WEBHOOK_PREFIX,
+      TELEPHONY_WEBHOOK_PREFIX,
+    ]);
+    if (!verdict.ok) {
+      req.log.warn(
+        { correlationId: req.id, reason: verdict.reason },
+        "rejected unsupported content-type",
+      );
+      return reply.code(415).send({ ...UNSUPPORTED_MEDIA_RESPONSE, correlationId: req.id });
+    }
   });
 
   // SEC: CORS must fail closed in production. If CORS_ORIGIN is unset in prod we
