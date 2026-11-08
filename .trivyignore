@@ -64,17 +64,13 @@ CVE-2026-25223 exp:2027-01-31
 CVE-2026-47219 exp:2027-01-31
 CVE-2026-39356 exp:2027-01-31
 
-# next 14.2.35 -> needs >=15.5.24, 10 GHSAs incl. 2 critical RCEs (SEC-018)
-CVE-2026-75604 exp:2026-11-08
-GHSA-2xp9-vwfh-vxw4 exp:2026-11-08
-CVE-2026-44573 exp:2026-11-08
-CVE-2026-44578 exp:2026-11-08
-CVE-2026-64641 exp:2026-11-08
-CVE-2026-64645 exp:2026-11-08
-CVE-2026-64649 exp:2026-11-08
-GHSA-8h8q-6873-q5fj exp:2026-11-08
-GHSA-h25m-26qc-wcjf exp:2026-11-08
-GHSA-q4gf-8mx6-v5v3 exp:2026-11-08
+# next: the 10 ignores that lived here (CVE-2026-75604, GHSA-2xp9-vwfh-vxw4, CVE-2026-44573,
+# CVE-2026-44578, CVE-2026-64641, CVE-2026-64645, CVE-2026-64649, GHSA-8h8q-6873-q5fj,
+# GHSA-h25m-26qc-wcjf, GHSA-q4gf-8mx6-v5v3) were written for next 14.2.35. apps/web has pinned
+# next 15.5.28 since #2175 (apps/web/package.json:34, pnpm-lock.yaml:11913), which is at or past
+# the fixed version of every one of them (highest fix: 15.5.24), so none applies and Trivy no
+# longer reports any of them. Removed rather than re-dated: an ignore for a patched version only
+# hides a future regression. Re-add (with an evidence comment) only if next is downgraded.
 
 CVE-2026-76169 exp:2027-01-31
 CVE-2026-84428 exp:2027-01-31
