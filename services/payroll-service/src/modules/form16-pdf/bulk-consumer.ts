@@ -153,7 +153,7 @@ export function registerForm16BulkConsumers(queue: Queue): void {
 
           // b. Render HTML → PDF
           reasonCode = "RENDERER_UNAVAILABLE";
-          const pdfResult = await renderPdf({ html, format: "A4" });
+          const pdfResult = await renderPdf({ html, format: "A4", isolate: true });
           if (pdfResult.mode === "html-only") {
             throw new Error("PDF renderer unavailable (Chromium not found)");
           }

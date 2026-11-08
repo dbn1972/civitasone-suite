@@ -35,6 +35,13 @@ export interface PdfRenderOptions {
   displayHeaderFooter?: boolean | undefined;
   /** Use the CSS @page size instead of `format` (official documents set A4 in CSS). */
   preferCSSPageSize?: boolean | undefined;
+  /**
+   * Render in an isolated context: JavaScript off and every non-inline request (http, https, file, ...) aborted.
+   * Used by the official issued documents (static HTML with inline fonts and images), where a missed escape must
+   * not run code or reach internal hosts. Default false: the renderer behaves as it always did (script on, network
+   * allowed, waits for the network to settle), which other callers and the report-service probe rely on.
+   */
+  isolate?: boolean | undefined;
 }
 
 export interface PdfRenderResult {
@@ -133,10 +140,14 @@ async function chromiumPdf(opts: PdfRenderOptions): Promise<Buffer> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const browser = await sharedBrowser();
-    // Official documents are static HTML with inline fonts and images: no script, no network (a missed escape in
-    // a template can then neither run code nor reach internal hosts or local files).
-    ctx = await browser.newContext({ javaScriptEnabled: false, acceptDownloads: false });
-    await ctx.route("**/*", (route) => (INLINE_URL.test(route.request().url()) ? route.continue() : route.abort()));
+    if (opts.isolate) {
+      // Official documents are static HTML with inline fonts and images: no script, no network (a missed escape in
+      // a template can then neither run code nor reach internal hosts or local files).
+      ctx = await browser.newContext({ javaScriptEnabled: false, acceptDownloads: false });
+      await ctx.route("**/*", (route) => (INLINE_URL.test(route.request().url()) ? route.continue() : route.abort()));
+    } else {
+      ctx = await browser.newContext();
+    }
     const page = await ctx.newPage();
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`PDF render timed out after ${renderTimeoutMs()} ms`)), renderTimeoutMs());
@@ -151,7 +162,7 @@ async function chromiumPdf(opts: PdfRenderOptions): Promise<Buffer> {
 }
 
 async function renderPage(page: PwPage, opts: PdfRenderOptions): Promise<Buffer> {
-  await page.setContent(opts.html, { waitUntil: "load" });
+  await page.setContent(opts.html, { waitUntil: opts.isolate ? "load" : "networkidle" });
   // Inline @font-face (data: URIs) must be decoded before printing.
   await page.evaluate(() => (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready.then(() => true));
   const pdf = await page.pdf({

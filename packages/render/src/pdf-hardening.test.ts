@@ -33,7 +33,7 @@ describe("renderPdf hardening", () => {
   });
 
   it("does not run page script", async () => {
-    const r = await renderPdf({ html: "<html><head><title>STATIC-TITLE</title></head><body><script>document.title='SCRIPT-RAN'</script></body></html>" });
+    const r = await renderPdf({ html: "<html><head><title>STATIC-TITLE</title></head><body><script>document.title='SCRIPT-RAN'</script></body></html>", isolate: true });
     expect(r.mode).toBe("playwright");
     expect(hasTitle(r.buffer, "STATIC-TITLE")).toBe(true);
     expect(hasTitle(r.buffer, "SCRIPT-RAN")).toBe(false);
@@ -41,9 +41,16 @@ describe("renderPdf hardening", () => {
 
   it("does not fetch http resources (image, stylesheet) during a render", async () => {
     hits = 0;
-    const r = await renderPdf({ html: `<html><head><link rel="stylesheet" href="http://127.0.0.1:${port}/a.css"></head><body><img src="http://127.0.0.1:${port}/b.png"><p>x</p></body></html>` });
+    const r = await renderPdf({ html: `<html><head><link rel="stylesheet" href="http://127.0.0.1:${port}/a.css"></head><body><img src="http://127.0.0.1:${port}/b.png"><p>x</p></body></html>`, isolate: true });
     expect(r.mode).toBe("playwright");
     expect(hits).toBe(0);
+  });
+
+  it("without isolate (the default) the renderer still loads http resources, as it always did", async () => {
+    hits = 0;
+    const r = await renderPdf({ html: `<html><body><img src="http://127.0.0.1:${port}/c.png"><p>y</p></body></html>` });
+    expect(r.mode).toBe("playwright");
+    expect(hits).toBeGreaterThan(0);
   });
 
   it("a render that exceeds RENDER_PDF_TIMEOUT_MS is torn down and the slot is freed for the next render", async () => {

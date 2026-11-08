@@ -271,6 +271,7 @@ export class OfficialPdf {
     const result = await renderPdf({
       html: this.toHtml(),
       preferCSSPageSize: true,
+      isolate: true,
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
       footerTemplate: this.footerTemplate(),

@@ -105,7 +105,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // ─── PDF output ──────────────────────────────────────────────────
-      const pdfResult = await renderPdf({ html, format: "A4" });
+      const pdfResult = await renderPdf({ html, format: "A4", isolate: true });
 
       // If renderer fell back to HTML mode (Playwright unavailable) → 503
       if (pdfResult.mode === "html-only") {
@@ -153,7 +153,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       } else {
         // No DSC available → re-render with watermark
         const watermarkedHtml = addUnsignedWatermark(html);
-        const watermarkedResult = await renderPdf({ html: watermarkedHtml, format: "A4" });
+        const watermarkedResult = await renderPdf({ html: watermarkedHtml, format: "A4", isolate: true });
         if (watermarkedResult.mode === "html-only") {
           throw new HttpError(503, "PDF_RENDERER_UNAVAILABLE", "PDF rendering engine (Chromium) is unavailable");
         }
