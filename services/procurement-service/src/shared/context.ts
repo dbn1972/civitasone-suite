@@ -5,7 +5,13 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    /** Optional per-field messages (UAT T-EDGE b21), sent as `fieldErrors` like a validation failure. */
+    public fieldErrors?: { field: string; message: string; code?: string }[],
+  ) {
     super(message);
   }
 }

@@ -6,12 +6,14 @@
  */
 import { describe, it, expect } from "vitest";
 import { postJournalBody } from "../src/modules/gl/validators.js";
+// UAT T-EDGE b21: the posting date must be in the posting window, so today.
+import { istToday } from "@civitasone/schemas/validators";
 
 const lines = [
   { accountCode: "0001", debitMinor: 50000, creditMinor: 0 },
   { accountCode: "0002", debitMinor: 0, creditMinor: 50000 },
 ];
-const base = { voucherNo: "VCH-1", type: "journal" as const, postingDate: "2024-07-01", lines };
+const base = { voucherNo: "VCH-1", type: "journal" as const, postingDate: istToday(), lines };
 
 describe("postJournalBody -- NUL bytes", () => {
   it("accepts a normal journal", () => {

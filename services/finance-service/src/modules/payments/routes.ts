@@ -20,6 +20,32 @@ import { fetchUserNames } from "../../shared/identity-client.js";
 import { actorsQuery } from "./validators.js";
 import { assertProvisionHttp } from "../budget/provision.js";
 import { todayIST } from "../../shared/ist-date.js";
+import { idempotentCreate } from "../../shared/idempotency.js";
+import { findHeadByIdAndTenant } from "../budget/repo.js";
+import { assertValidHoAWithMaster } from "../hoa/domain.js";
+import { HoaError } from "../../shared/hoa.js";
+
+/**
+ * UAT T-EDGE TE-11 / TE-04: every vendor bill on a head with no head-of-account code (HOA_EMPTY) or
+ * whose major head is missing from the master (HOA_UNKNOWN_MAJOR_HEAD) was 202-accepted and then
+ * refused by the worker (finance.bill.rejected) -- the maker saw nothing. The same checks the
+ * bill consumer runs are made here first, so the answer is an immediate 422 on headId. The
+ * consumer keeps its own check (the master can change in between).
+ */
+async function assertBillHeadUsable(tenantId: string, headId: string): Promise<void> {
+  const head = await findHeadByIdAndTenant(headId, tenantId);
+  if (!head) {
+    throw new HttpError(422, "HEAD_NOT_FOUND", "the budget head was not found", [{ field: "headId", message: "Choose an existing budget head.", code: "HEAD_NOT_FOUND" }]);
+  }
+  try {
+    await assertValidHoAWithMaster(head.hoaCode);
+  } catch (err) {
+    if (err instanceof HoaError) {
+      throw new HttpError(422, err.code, err.message, [{ field: "headId", message: "This head has no valid head-of-account code yet. Ask the finance administrator to set it in the chart of accounts.", code: err.code }]);
+    }
+    throw err;
+  }
+}
 
 /**
  * UAT W8-D (P7): POST/DELETE /v1/finance/bills/sample-data are a developer "try it" aid
@@ -186,7 +212,9 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     // found is tolerated (bills.vendor_id has no FK yet; see migration 0065).
     const vendor = await mastersRepo.getVendorById(ctx.tenantId, body.vendorId);
     if (vendor && !vendor.isActive) throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated; reactivate it before lodging bills");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createBill(ctx, body));
+    await assertBillHeadUsable(ctx.tenantId, body.headId);
+    // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, () => commands.createBill(ctx, body)));
   });
 
   // Sample data ("try it"): add clearly-marked [SAMPLE] bills, or clear them.
@@ -261,7 +289,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     }
     // UAT T-PERIOD D-03 (GFR): no payment against a head that has no budget provision for the FY it is charged to.
     if (bill) await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.initiatePayment(ctx, body));
+    // UAT T-EDGE TE-09: one payment per X-Idempotency-Key (same body replays, other body 422).
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.payment.initiate", body, () => commands.initiatePayment(ctx, body)));
   });
 
   app.get("/v1/finance/payments/:id", async (req, reply) => {

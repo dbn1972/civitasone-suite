@@ -18,6 +18,7 @@ import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
 import { rupeesFromMinor, sanctionIdFromRef } from "../src/modules/po/finance-budget-client.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const TENANT = "11111111-eeee-4000-8000-0000000000b3";
 const ACTOR = randomUUID();
@@ -27,7 +28,7 @@ const VENDOR = randomUUID();
 const SANCTION = randomUUID();
 
 const body = (unitPriceMinor: number) => ({
-  vendorId: VENDOR, indentRef: `procurement_indent:${randomUUID()}`, gemOrderRef: "GEM/TEST/BASIS",
+  vendorId: VENDOR, indentRef: INDENT_REF, gemOrderRef: "GEM/TEST/BASIS",
   sanctionRef: `finance_sanction:${SANCTION}`,
   items: [{ itemCode: "L2-ITM-1", description: "Paper", quantity: 4, unit: "nos", unitPriceMinor }],
 });
@@ -53,6 +54,9 @@ function stubServices(finance: Answer) {
 async function clean() {
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(procurementVendors).where(eq(procurementVendors.tenantId, TENANT))));
 }
+// UAT T-EDGE b21 (TE-04 P08): a PO must cite a real approved indent, checked before 202.
+let INDENT_REF = "";
+beforeAll(async () => { INDENT_REF = await seedApprovedIndent(TENANT); });
 beforeAll(async () => {
   await clean();
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(procurementVendors).values({ id: VENDOR, tenantId: TENANT, name: "B3 Co", vendorType: "registered", createdBy: ACTOR, updatedBy: ACTOR })));

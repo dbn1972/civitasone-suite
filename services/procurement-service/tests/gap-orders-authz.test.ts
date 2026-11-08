@@ -9,10 +9,11 @@
  * and an authorised procurement officer is accepted (202). The companion web
  * fix hides "+ New PO" from roles outside PROCUREMENT_WRITE_ROLES.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-6666-4000-8000-000000000099";
@@ -30,6 +31,8 @@ const VALID_PO_BODY = {
 };
 
 afterAll(async () => { await sqlClient.end(); });
+// UAT T-EDGE b21 (TE-04 P08): the cited indent must exist and be approved (checked before 202).
+beforeAll(async () => { await seedApprovedIndent(TENANT, "33333333-3333-4000-8000-000000000001"); });
 
 describe("POST /v1/procurement/pos — role gate (GAP-PROCUREMENT-ORDERS-03)", () => {
   it("403 FORBIDDEN for a non-procurement (citizen) role", async () => {

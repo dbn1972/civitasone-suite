@@ -15,6 +15,7 @@ import * as indentRepo from "../indent/repo.js";
 import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 import { closeWorkflowForRef } from "../../shared/workflow-close.js";
+import { notifyMakerOfRefusal } from "../../shared/refusal-notify.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -481,4 +482,9 @@ async function audit(
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "procurement", action, resourceType, resourceId, outcome: "success", ...(extra ? { details: extra } : {}) },
   });
+  // UAT T-EDGE TE-04: every worker-side refusal of a PO (rejected_*) is also told to the
+  // maker, who was answered 202 and would otherwise never learn it was not saved.
+  if (action.startsWith("rejected_")) {
+    await notifyMakerOfRefusal(tx, msg, { resourceType, resourceId, action, link: "/procurement/purchase-orders" });
+  }
 }

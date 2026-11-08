@@ -48,6 +48,18 @@ export async function instanceSummaries(
   return out;
 }
 
+/**
+ * UAT T-EDGE TE-08: who decided a completed task, and when (for the 409 TASK_ALREADY_DECIDED
+ * the losing checker of a parallel approval now gets). Tenant-scoped; null when not found.
+ */
+export async function findDecisionById(id: string, tenantId: string): Promise<{ completedBy: string | null; decision: string | null; updatedAt: Date | null } | null> {
+  const rows = await scopedRead((tx) => tx.select({ tenantId: tasks.tenantId, completedBy: tasks.completedBy, decision: tasks.decision, updatedAt: tasks.updatedAt })
+    .from(tasks).where(eq(tasks.id, id)).limit(1));
+  const row = rows[0];
+  if (!row || row.tenantId !== tenantId) return null;
+  return { completedBy: row.completedBy ?? null, decision: row.decision ?? null, updatedAt: row.updatedAt ?? null };
+}
+
 export async function findById(id: string, tenantId: string): Promise<TaskView | null> {
   const rows = await scopedRead((tx) => tx.select().from(tasks).where(eq(tasks.id, id)).limit(1));
   const row = rows[0];

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -26,7 +27,10 @@ export async function createIndent(ctx: RequestContext, body: CreateIndentBody):
     }
   }
 
-  const id = randomUUID();
+  // UAT T-EDGE TE-09: with an X-Idempotency-Key the indent id (and the messageId) is
+  // derived from it, the meeting-service pattern, so a duplicate delivery is dropped by
+  // the consumer (markProcessed) and only one indent is written.
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.indentCreate, {
     messageId: id, type: COMMANDS.indentCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

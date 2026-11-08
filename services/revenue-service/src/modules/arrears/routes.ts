@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { ZodError } from "zod";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import * as commands from "./commands.js";
@@ -33,7 +34,9 @@ function withLegacyFlag<T extends { demandId?: string | null }>(row: T): T & { l
 export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
-      return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: error.message } });
+      // UAT T-EDGE TE-12 (R04-R06): the raw zod issue JSON used to be the message. Plain text
+      // now, with per-field codes (validators.ts FIELD_CODES) the web maps to en/hi copy.
+      return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: "invalid request", fieldErrors: zodFieldErrors(error.issues) } });
     }
     if (error instanceof HttpError) {
       return reply.code(error.status).send({ error: { code: error.code, message: error.message } });

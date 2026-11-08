@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema, LeaveRequestPageSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { eq } from "drizzle-orm";
@@ -18,6 +19,8 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { fetchOpenTaskRefIds } from "../../shared/workflow-client.js";
 import { assertDayPartAllowed, assertSufficientLeaveBalance, blockingOverlaps, effectiveBalanceDays, DomainError } from "./domain.js";
+import { allocationPeriodRefusal } from "./allocation-period.js";
+import { idempotentCreate } from "../../shared/idempotency.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -81,6 +84,11 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
   const balance = effectiveBalanceDays(alloc);
   const violation = (code: string, message: string): LeaveEvaluation =>
     ({ computedDays: null, warnings: [], violations: [{ code, message }], holidaysInRange: [], balance });
+  // UAT T-EDGE TE-03 (L06): one allocation is one leave year; a request crossing its end
+  // (31 Mar -> 1 Apr on a 2026-27 allocation) is refused with the boundary instead of
+  // debiting next-year days from this year.
+  const outsidePeriod = allocationPeriodRefusal(alloc.fy, body.fromDate, body.toDate);
+  if (outsidePeriod) return violation("LEAVE_OUTSIDE_ALLOCATION_PERIOD", outsidePeriod);
   const types = await repo.listLeaveTypesByTenant(tenantId);
   const lt = types.find((t) => t.id === body.leaveTypeId);
   if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
@@ -293,20 +301,27 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
-    // BUG-1 fix: persist/debit the validated computed day count, not the raw
-    // client-submitted one, when the CCS rules engine actually ran for this code.
-    const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
-    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
+    // UAT T-EDGE TE-09: one application per X-Idempotency-Key (same body replays the first
+    // answer, another body is a 422). The rules run inside, so a replay is not refused as an
+    // overlap with the application it created itself.
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "hrms.leave.apply", body, async () => {
+      const computedDays = await enforceCcsLeaveRules(ctx, body, req);
+      // BUG-1 fix: persist/debit the validated computed day count, not the raw
+      // client-submitted one, when the CCS rules engine actually ran for this code.
+      const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
+      return commands.applyLeave(ctx, applyBody);
+    }));
   });
 
   app.post("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
-    const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
-    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "hrms.leave.apply", body, async () => {
+      const computedDays = await enforceCcsLeaveRules(ctx, body, req);
+      const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
+      return commands.applyLeave(ctx, applyBody);
+    }));
   });
 
   // GAP-HR-LEAVE-APPLY-01: read-only preview of what a submit would actually
@@ -549,7 +564,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {

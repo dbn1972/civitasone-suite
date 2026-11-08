@@ -15,6 +15,7 @@ import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
 import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
+import { fetchUserDisplayName } from "../../shared/identity-client.js";
 
 /**
  * UAT follow-up (F108, security): a task with no roleRef used to be completable
@@ -56,6 +57,24 @@ function today(): string {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
+/**
+ * UAT T-EDGE TE-08: the losing checker of a parallel approval was told 202 "accepted". A task that
+ * is already decided is now a synchronous 409 TASK_ALREADY_DECIDED that names who decided it and
+ * how (the web shows it in en/hi). The consumer lock stays the final guard for a true race (and
+ * now tells the late checker too, see tasks/consumer.ts notifyLateDecision).
+ */
+export async function taskAlreadyDecided(tenantId: string, taskId: string, decision: string | null | undefined): Promise<HttpError> {
+  const row = await repo.findDecisionById(taskId, tenantId);
+  const deciderId = row?.completedBy ?? null;
+  const name = deciderId ? await fetchUserDisplayName(tenantId, deciderId) : null;
+  const how = row?.decision ?? decision ?? "completed";
+  return new HttpError(409, "TASK_ALREADY_DECIDED", `this task was already decided (${how})${name ? ` by ${name}` : ""}`, {
+    decision: how,
+    decidedBy: deciderId ? { id: deciderId, name } : null,
+    decidedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+  });
+}
+
 export async function completeTask(
   ctx: RequestContext,
   taskId: string,
@@ -64,18 +83,6 @@ export async function completeTask(
 ): Promise<Accepted> {
   const existing = await repo.findById(taskId, ctx.tenantId);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
-  if (existing.status === "completed") throw new HttpError(409, "CONFLICT", "task already completed");
-  // Gap 1 — a call task is a system wait task held until its child instance
-  // completes; it is auto-resolved by the engine, never by a human.
-  if (existing.isCall) throw new HttpError(409, "CALL_TASK", "this is a sub-workflow call task; it completes when its child instance finishes");
-
-  // P0-2 — a task may only be completed while its instance is active. Suspended
-  // or cancelled instances block task completion (409); resuming re-enables it.
-  // This is the friendly pre-check; the consumer re-checks under the row lock.
-  const lifecycleInstance = await instanceRepo.findById(existing.instanceId, ctx.tenantId);
-  if (lifecycleInstance && lifecycleInstance.status !== "active") {
-    throw new HttpError(409, "INSTANCE_NOT_ACTIVE", `instance is ${lifecycleInstance.status}; tasks cannot be completed`);
-  }
 
   const isSuperAdmin = ctx.roles.includes("super_admin");
   let sodOverride = false;
@@ -139,6 +146,24 @@ export async function completeTask(
   ) {
     throw new HttpError(403, "NOT_ASSIGNEE", "this task is assigned to another user");
   }
+
+  // BLOCKER 1 (PR #2465 review): the already-decided 409 names who decided, so it must sit BEHIND the
+  // role-on-task, F108 and assignee gates above - a caller who fails them gets 403/404, never the decider.
+  // It still precedes the call-task / instance-active checks and SoD (a decided task's instance is usually
+  // no longer active, and the decider would trip SOD_REPEAT_ACTOR on their own completed task).
+  if (existing.status === "completed") throw await taskAlreadyDecided(ctx.tenantId, taskId, existing.decision);
+  // Gap 1 — a call task is a system wait task held until its child instance
+  // completes; it is auto-resolved by the engine, never by a human.
+  if (existing.isCall) throw new HttpError(409, "CALL_TASK", "this is a sub-workflow call task; it completes when its child instance finishes");
+
+  // P0-2 — a task may only be completed while its instance is active. Suspended
+  // or cancelled instances block task completion (409); resuming re-enables it.
+  // This is the friendly pre-check; the consumer re-checks under the row lock.
+  const lifecycleInstance = await instanceRepo.findById(existing.instanceId, ctx.tenantId);
+  if (lifecycleInstance && lifecycleInstance.status !== "active") {
+    throw new HttpError(409, "INSTANCE_NOT_ACTIVE", `instance is ${lifecycleInstance.status}; tasks cannot be completed`);
+  }
+
 
   // Segregation of duties (NON-AUTHORITATIVE fast-fail for UX only):
   //  (a) submitter may not approve their own request (self-approval);

@@ -8,7 +8,8 @@ export const apiErrorSchema = z.object({
   detail: z.string().optional(),
   correlationId: z.string(),
   retryable: z.boolean(),
-  fieldErrors: z.array(z.object({ field: z.string(), message: z.string() })).optional(),
+  // `code`: stable field-level code (validators.ts FIELD_CODES) the web maps to en/hi copy.
+  fieldErrors: z.array(z.object({ field: z.string(), message: z.string(), code: z.string().optional() })).optional(),
 });
 
 export const paginationSchema = z.object({

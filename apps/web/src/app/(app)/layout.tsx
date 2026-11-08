@@ -8,6 +8,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { AppShell, ToastProvider } from "../_components/ds";
 import { humanizeStatus } from "@/lib/formatters";
 import { SessionTimeoutWarning } from "../_components/session/SessionTimeoutWarning";
+import { SessionExpiredNotice } from "../_components/session/SessionExpiredNotice";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin:    "Super Admin",
@@ -74,6 +75,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <ToastProvider>
       <SyncProvider />
       <SessionTimeoutWarning />
+      <SessionExpiredNotice />
       <AppShell enabledModules={enabledModules} userName={userName} userRole={userRole} roles={roles}>{children}</AppShell>
     </ToastProvider>
   );

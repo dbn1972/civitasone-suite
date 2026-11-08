@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
+import { zIsoDate, zTrimmedCode, DATE_WINDOWS, istToday, yearsFromEnv, boundedMinorBigint } from "@civitasone/schemas/validators";
 import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
 
 const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
@@ -15,8 +16,12 @@ const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 a
 // canonical @civitasone/schemas/money decoder — accepts string | safe-integer
 // number | bigint and rejects unsafe (>2^53) numbers, forcing those onto the
 // string path instead of silently losing precision.
-const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
-const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
+// UAT T-EDGE TE-07: bounded to the sane maximum (packages/schemas validators.ts moneyMaxMinor).
+const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive().superRefine(boundedMinorBigint));
+const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative().superRefine(boundedMinorBigint));
+
+/** UAT T-EDGE (B07/B08): a vendor bill date is a real date, not in the future, at most BILL_DATE_MAX_PAST_YEARS (default 2) back. */
+export const billDateWindow = () => DATE_WINDOWS.happened(istToday(), yearsFromEnv("BILL_DATE_MAX_PAST_YEARS", 2));
 
 const deduction = z.object({
   type:        z.string().min(1),
@@ -25,7 +30,8 @@ const deduction = z.object({
 });
 
 export const createBillBody = z.object({
-  billNo:      z.string().min(1).max(64),
+  // UAT T-EDGE (B09): trimmed, never blank.
+  billNo:      zTrimmedCode(64, "bill number"),
   vendorId:    z.string().uuid(),
   headId:      z.string().uuid(),
   ddoCode:     ddoCodeField,
@@ -40,7 +46,7 @@ export const createBillBody = z.object({
   deductions:  z.array(deduction).default([]),
   poRef:       z.string().optional(),
   grnRef:      z.string().optional(),
-  billDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "billDate must be YYYY-MM-DD").optional(),
+  billDate:    zIsoDate({ window: billDateWindow, label: "bill date" }).optional(),
 });
 export type CreateBillBody = z.infer<typeof createBillBody>;
 
