@@ -11,7 +11,7 @@
 // moment any of those features is introduced. Remove it (and the ignores) with the
 // Fastify 5 upgrade.
 //
-// RULES (services/*/src and packages/*/src, tests excluded):
+// RULES (every src dir under services/** and packages/**, tests excluded):
 //   1. a Fastify route-options `schema:` key -- i.e. an object literal passed directly
 //      to .get/.post/.put/.patch/.delete/.head/.options/.all/.route(...) containing
 //      `schema:` (or shorthand `schema`). Zod objects that merely happen to be NAMED
@@ -152,16 +152,29 @@ export function checkSource(src) {
   return out;
 }
 
-function main() {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+/** Every `src` dir at any depth under `base` (e.g. services/adapters/india-post/apt-adapter/src), skipping node_modules/dist. */
+export function findSrcDirs(base, out = []) {
+  if (!existsSync(base)) return out;
+  for (const ent of readdirSync(base, { withFileTypes: true })) {
+    if (!ent.isDirectory() || ent.name === "node_modules" || ent.name === "dist" || ent.name.startsWith(".")) continue;
+    const p = join(base, ent.name);
+    if (ent.name === "src") out.push(p);
+    else findSrcDirs(p, out);
+  }
+  return out;
+}
+
+export function collectFiles(root) {
   const files = [];
   for (const group of ["services", "packages"]) {
-    const base = join(root, group);
-    if (!existsSync(base)) continue;
-    for (const ent of readdirSync(base, { withFileTypes: true })) {
-      if (ent.isDirectory()) walk(join(base, ent.name, "src"), files);
-    }
+    for (const dir of findSrcDirs(join(root, group))) walk(dir, files);
   }
+  return files;
+}
+
+function main() {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const files = collectFiles(root);
   let bad = 0;
   for (const f of files) {
     for (const v of checkSource(readFileSync(f, "utf8"))) {

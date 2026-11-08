@@ -5,8 +5,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // @ts-expect-error -- plain .mjs script, no type declarations
-import { checkSource } from "../../scripts/ci/fastify-unused-features-guard.mjs";
+import { checkSource, collectFiles } from "../../scripts/ci/fastify-unused-features-guard.mjs";
 
 const rules = (src: string) => (checkSource(src) as Array<{ rule: string }>).map((v) => v.rule);
 
@@ -46,5 +49,20 @@ describe("fastify-unused-features-guard", () => {
   it("passes on the real tree", () => {
     const out = execFileSync("node", ["scripts/ci/fastify-unused-features-guard.mjs"], { encoding: "utf8" });
     expect(out).toContain("fastify-unused-features-guard: OK");
+  });
+  it("scans nested adapter src dirs (services/adapters/<x>/<y>/src) and skips node_modules/dist", () => {
+    const root = mkdtempSync(join(tmpdir(), "fastify-guard-"));
+    try {
+      const nested = join(root, "services", "adapters", "india-post", "apt-adapter", "src");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(join(nested, "server.ts"), "app.setNotFoundHandler(h);\n");
+      mkdirSync(join(root, "services", "adapters", "india-post", "apt-adapter", "node_modules", "x", "src"), { recursive: true });
+      writeFileSync(join(root, "services", "adapters", "india-post", "apt-adapter", "node_modules", "x", "src", "a.ts"), "x\n");
+      mkdirSync(join(root, "packages", "p", "dist", "src"), { recursive: true });
+      writeFileSync(join(root, "packages", "p", "dist", "src", "b.ts"), "x\n");
+      expect(collectFiles(root)).toEqual([join(nested, "server.ts")]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
