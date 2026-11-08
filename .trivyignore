@@ -44,14 +44,25 @@
 # Corrected in cve-allowlist.json's reason text in this same fixup; the
 # remediation path (SEC-018, same expiry) is unchanged.
 
-# fastify 4.29.1 -> needs >=5.7.2 (SEC-018, tied to REL-016)
-CVE-2026-25223 exp:2026-11-08
-
-# find-my-way 8.2.2 -> needs >=9.7.0, depends on fastify's major (SEC-018)
-CVE-2026-47219 exp:2026-11-08
-
-# drizzle-orm 0.30.10 -> needs >=0.45.2 (SEC-018, tied to REL-016)
-CVE-2026-39356 exp:2026-11-08
+# ── NOT AFFECTED (security assessment, owner-approved 2026-11-08) ───────────────────────────────
+# Re-dated exp:2027-01-31. Remove with the Fastify 5 / drizzle-orm upgrade (SEC-018, REL-016).
+#
+# fastify 4.29.1 (fix needs >=5): CVE-2026-25223, CVE-2026-76169, CVE-2026-84428, CVE-2026-84469,
+# CVE-2026-84504. Not affected: the vulnerable code paths are Fastify route-schema validation,
+# `$async` schema validation and a custom setNotFoundHandler; this code base uses none of them
+# (no route `schema:` options, no `$async`, no `setNotFoundHandler`). Enforced going forward by
+# scripts/ci/fastify-unused-features-guard.mjs (CI step "Fastify unused-features guard"), which
+# fails the build if any is introduced. 4.29.1 is the last 4.x release (no backport).
+#
+# drizzle-orm 0.30.10 (fix needs >=0.45.2): CVE-2026-39356. Not affected: the exploit needs
+# attacker-controlled input in sql.identifier(); the only sql.identifier in the code base is in
+# packages/numbering/src/allocate.ts:43-48 and is regex-gated to a safe identifier shape.
+#
+# find-my-way 8.2.2 (fix needs >=9.7.0): CVE-2026-47219. Not affected: HTTP/2 only; no service
+# runs Fastify over HTTP/2.
+CVE-2026-25223 exp:2027-01-31
+CVE-2026-47219 exp:2027-01-31
+CVE-2026-39356 exp:2027-01-31
 
 # next 14.2.35 -> needs >=15.5.24, 10 GHSAs incl. 2 critical RCEs (SEC-018)
 CVE-2026-75604 exp:2026-11-08
@@ -65,13 +76,10 @@ GHSA-8h8q-6873-q5fj exp:2026-11-08
 GHSA-h25m-26qc-wcjf exp:2026-11-08
 GHSA-q4gf-8mx6-v5v3 exp:2026-11-08
 
-# fastify 4.28.1/4.29.1 -> fixed only in >=5.12.2; re-verified 2026-10-07 via npm
-# registry that 4.29.1 is the last 4.x release (no backport), so no non-major
-# fix exists (SEC-018, tied to REL-016). Same expiry as the entries above.
-CVE-2026-76169 exp:2026-11-08
-CVE-2026-84428 exp:2026-11-08
-CVE-2026-84469 exp:2026-11-08
-CVE-2026-84504 exp:2026-11-08
+CVE-2026-76169 exp:2027-01-31
+CVE-2026-84428 exp:2027-01-31
+CVE-2026-84469 exp:2027-01-31
+CVE-2026-84504 exp:2027-01-31
 
 # 2026-10-07: removed the brace-expansion/browserslist/fast-uri/js-yaml entries
 # (exp 2026-10-09). They were already cleared by version-scoped pnpm.overrides
