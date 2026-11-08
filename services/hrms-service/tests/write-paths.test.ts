@@ -331,12 +331,14 @@ describe("CCS leave apply (CQRS) + approve authz", () => {
   beforeAll(async () => {
     await runWithTenant(TENANT, () => db.transaction(async (tx) => {
       await tx.insert(hrmsLeaveTypes).values({ id: ltId, tenantId: TENANT, code: "CL", name: "Casual Leave", maxDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
-      await tx.insert(hrmsLeaveAllocs).values({ id: allocId, tenantId: TENANT, employeeId: empLeave, leaveTypeId: ltId, fy: "2024-25", totalDays: 8, balanceDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
+      await tx.insert(hrmsLeaveAllocs).values({ id: allocId, tenantId: TENANT, employeeId: empLeave, leaveTypeId: ltId, fy: "2026-27", totalDays: 8, balanceDays: 8, createdBy: ACTOR, updatedBy: ACTOR });
     }));
   });
+  // UAT T-EDGE b21: leave dates must be within a year back / two years ahead and inside the
+  // allocation leave year, so a Mon-Tue in FY 2026-27 on a 2026-27 allocation.
   it("apply returns 202 (CQRS accepted)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/leave-applications", headers: { ...HR, ...CT },
-      payload: { employeeId: empLeave, leaveTypeId: ltId, allocId, fromDate: "2024-07-01", toDate: "2024-07-02", daysApplied: 2, reason: "personal" } });
+      payload: { employeeId: empLeave, leaveTypeId: ltId, allocId, fromDate: "2027-01-04", toDate: "2027-01-05", daysApplied: 2, reason: "personal" } });
     expect(r.statusCode).toBe(202);
     expect(r.json().status).toBe("accepted");
   });

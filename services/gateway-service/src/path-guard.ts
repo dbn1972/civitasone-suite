@@ -56,6 +56,13 @@ export type CanonicalPath =
  */
 const MAX_DECODE_PASSES = 3;
 
+/** Longest request path (excluding the query string) the edge will route. */
+export const MAX_PATH_LENGTH = 2048;
+
+/** C0 controls (incl. NUL, TAB, CR, LF) and DEL. */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
 /** Decode to a fixed point. Returns null when the encoding is malformed. */
 function decodeToFixedPoint(raw: string): string | null {
   let current = raw;
@@ -83,10 +90,27 @@ function decodeToFixedPoint(raw: string): string | null {
  * encoded-slash smuggling as well as dot segments.
  */
 export function canonicalisePath(rawUrl: string): CanonicalPath {
+  // The query string is split off FIRST and is never inspected below: `%25`, `;` and long
+  // values are legitimate there (e.g. `?q=100%25` as a LIKE-wildcard escape).
   const rawPath = rawUrl.split("?")[0] ?? "/";
 
+  // ── Parser-differential rejections (raw path) ────────────────────────────────────
+  // Fastify 4 truncates a path at `;` (useSemicolonDelimiter) and decodes once, while this
+  // module decodes to a fixed point: `/public/..;/x` and `/public%252fx` therefore look
+  // public here and different upstream. Refuse the shapes outright.
+  if (rawPath.length > MAX_PATH_LENGTH) return { ok: false, reason: "path_too_long" };
+  if (CONTROL_CHARS.test(rawPath)) return { ok: false, reason: "control_char" };
+  if (rawPath.includes(";")) return { ok: false, reason: "semicolon" };
+  if (/%00/.test(rawPath)) return { ok: false, reason: "null_byte" };
+
   const decoded = decodeToFixedPoint(rawPath);
-  if (decoded === null) return { ok: false, reason: "malformed_encoding" };
+  if (decoded === null) {
+    // `a%25b` decodes to `a%b`, whose second pass is malformed: still a double encoding.
+    return { ok: false, reason: /%25/.test(rawPath) ? "double_encoding" : "malformed_encoding" };
+  }
+
+  // Control characters that only appear after decoding (%0a, %09, %0d, %1b ...).
+  if (CONTROL_CHARS.test(decoded)) return { ok: false, reason: "control_char" };
 
   // Backslash: Windows-style separator that some parsers and many upstream frameworks
   // treat as "/". The WHATWG URL parser converts it outright for special schemes.
@@ -113,6 +137,15 @@ export function canonicalisePath(rawUrl: string): CanonicalPath {
    * thing that can. Refusing it keeps the guarantee absolute instead of probabilistic.
    */
   if (/%2f/i.test(rawPath)) return { ok: false, reason: "encoded_slash" };
+
+  /**
+   * Double encoding. A literal `%` in a path segment is `%25`, and decoding it once more
+   * is exactly the step on which this module and a single-decode upstream disagree
+   * (`%252f` is "%2f" upstream, "/" here). Every path parameter in this API is a uuid, a
+   * slug or a hex key, so a legitimate client never sends one. Checked after the segment
+   * rules so double-encoded dot segments keep their more specific `dot_segment` reason.
+   */
+  if (/%25/.test(rawPath)) return { ok: false, reason: "double_encoding" };
 
   // Every check passed, so the decoded form has the same segment structure as the raw one.
   return { ok: true, pathname: decoded };

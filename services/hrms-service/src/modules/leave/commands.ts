@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -65,7 +66,8 @@ export async function allocateLeave(ctx: RequestContext, body: AllocateLeaveBody
 }
 
 export async function applyLeave(ctx: RequestContext, body: ApplyLeaveBody): Promise<Accepted> {
-  const id = randomUUID();
+  // UAT T-EDGE TE-09: id (and messageId) from the X-Idempotency-Key when sent (meeting pattern).
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.leaveApply, {
     messageId: id, type: COMMANDS.leaveApply,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

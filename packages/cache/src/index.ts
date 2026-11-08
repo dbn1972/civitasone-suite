@@ -591,6 +591,15 @@ function markInvalidated(key: string): void {
   _inflight.delete(key);
 }
 
+// UAT T-EDGE bundle 21 (TE-09): X-Idempotency-Key handling for create commands.
+export * from "./idempotency.js";
+
+let _idempotencyStore: CacheStore | null = null;
+/** Process-wide store for X-Idempotency-Key state (REDIS_URL, or memory with CACHE_DRIVER=memory). */
+export function idempotencyStore(): CacheStore {
+  return (_idempotencyStore ??= defaultStore());
+}
+
 function markResourceInvalidated(prefix: string): void {
   if (_inflight.size === 0) return;
   _resourceEpoch++;

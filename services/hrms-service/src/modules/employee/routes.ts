@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -384,7 +385,8 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    // UAT T-EDGE b21: field codes (DATE_INVALID, AADHAAR_INVALID ...) travel with each field.
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {

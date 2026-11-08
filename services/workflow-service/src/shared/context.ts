@@ -5,7 +5,13 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    /** UAT T-EDGE b21: optional structured fields merged into the body (e.g. who already decided a task). */
+    public details?: Record<string, unknown>,
+  ) {
     super(message);
   }
 }

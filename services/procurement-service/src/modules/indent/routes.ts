@@ -1,7 +1,9 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
+import { idempotentCreate, isLikelyDuplicate, type DuplicateWarning } from "../../shared/idempotency.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createIndentBody, approveIndentBody, rejectIndentBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
@@ -11,12 +13,31 @@ import { searchQuerySchema } from "../../shared/search.js";
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 
+/** 202 for an indent create, with an optional duplicate warning (TE-09). */
+const indentAcceptedSchema = acceptedResponseSchema.extend({
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
+});
+
 export async function indentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/indents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createIndentBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createIndent(ctx, body));
+    // UAT T-EDGE TE-09: the same X-Idempotency-Key + body creates ONE indent and the
+    // retry gets the first answer back; the same key with another body is a 422. Without a
+    // key, the same maker sending the same purpose and items in the same minute still gets
+    // the indent (a genuine repeat is allowed) but with a POSSIBLE_DUPLICATE warning.
+    const accepted = await idempotentCreate(ctx, "procurement.indent.create", body, async () => {
+      const duplicate = await isLikelyDuplicate(ctx, "procurement.indent.create", {
+        purpose: body.purpose.toLowerCase(), department: body.department.toLowerCase(),
+        items: body.items.map((i) => [i.itemCode, i.quantity, i.unitPriceMinor]),
+      });
+      const warnings: DuplicateWarning[] = duplicate
+        ? [{ code: "POSSIBLE_DUPLICATE", message: "you submitted an indent with the same purpose and items a moment ago; check the indent list before submitting again" }]
+        : [];
+      return { ...(await commands.createIndent(ctx, body)), ...(warnings.length ? { warnings } : {}) };
+    });
+    return sendAccepted(reply, indentAcceptedSchema, accepted);
   });
 
   app.patch("/v1/procurement/indents/:id/approve", async (req, reply) => {
@@ -97,11 +118,11 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {
-    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false, ...(err.fieldErrors?.length ? { fieldErrors: err.fieldErrors } : {}) });
     return;
   }
   req.log.error({ err }, "unhandled error");

@@ -270,8 +270,11 @@ describe("#2464 review blocker 1: a closed financial year takes no reopen and no
 
   it("posting into any month of a closed FY is refused FY_CLOSED (route and consumer), also when only its year-end close has run", async () => {
     await fyRow(DIRECT, "2023-24", "closed");
+    // The route's schema (PR #2465, posting-date window) refuses a date before 2025-04-01 with 400 DATE_TOO_EARLY before the
+    // FY rule runs, so the route is exercised with a closed FY inside the window; the consumer (no schema) keeps the 2023-24 case.
+    await fyRow(DIRECT, "2025-26", "closed");
     const res = await call("POST", "/v1/finance/journals", { ...as(DIRECT, OFFICER, ["finance_officer"]), "x-idempotency-key": randomUUID() },
-      { type: "receipt", postingDate: "2023-07-10", lines: [{ accountCode: "1100", debitMinor: "500", creditMinor: "0" }, { accountCode: "4100", debitMinor: "0", creditMinor: "500" }] });
+      { type: "receipt", postingDate: "2025-07-10", lines: [{ accountCode: "1100", debitMinor: "500", creditMinor: "0" }, { accountCode: "4100", debitMinor: "0", creditMinor: "500" }] });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("FY_CLOSED");
     const a = randomUUID();

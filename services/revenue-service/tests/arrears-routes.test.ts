@@ -485,3 +485,22 @@ describe("decide a waiver (POST and PATCH both accepted)", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+
+// ── UAT T-EDGE bundle 21: POST /v1/revenue/demand-notices boundary checks ──────
+describe("POST /v1/revenue/demand-notices -- real dates and a non-blank notice number (TE-01/06/12)", () => {
+  const body = (over: Record<string, unknown>) => ({ assesseeId: ASSESSEE_ID, noticeNo: "DN-B21-1", servedOn: "2026-08-01", ...over });
+  it.each([
+    ["R01 served on 2026-02-29", { servedOn: "2026-02-29" }, "servedOn", "DATE_INVALID"],
+    ["R02 served on 2026-04-31", { servedOn: "2026-04-31" }, "servedOn", "DATE_INVALID"],
+    ["served on 1990-01-01", { servedOn: "1990-01-01" }, "servedOn", "DATE_TOO_EARLY"],
+    ["R07 notice no of 4 spaces", { noticeNo: "    " }, "noticeNo", "TEXT_BLANK"],
+  ])("%s -> 400 with a field code and a plain message (not raw zod JSON)", async (_l, over, field, code) => {
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/demand-notices", headers: AUTH, payload: body(over) });
+    expect(res.statusCode).toBe(400);
+    const err = res.json().error as { code: string; message: string; fieldErrors: Array<{ field: string; code?: string }> };
+    expect(err.code).toBe("VALIDATION_FAILED");
+    expect(err.message).toBe("invalid request");
+    expect(err.fieldErrors.find((f) => f.field === field)?.code).toBe(code);
+  });
+});

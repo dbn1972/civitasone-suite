@@ -3554,7 +3554,7 @@
     "storedEncrypted": "(stored encrypted)",
     "panPlaceholder": "ABCDE1234F",
     "aadhaarRefLabel": "Aadhaar Reference",
-    "aadhaarHint": "(last 4 digits or masked ref)",
+    "aadhaarHint": "(full 12-digit number; only the last 4 digits are kept)",
     "aadhaarPlaceholder": "XXXX XXXX 1234",
     "bankAccountNoLabel": "Bank Account No",
     "bankAccountPlaceholder": "Account number",

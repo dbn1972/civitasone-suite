@@ -1,12 +1,22 @@
 import { z } from "zod";
+import { zTrimmedText, zTrimmedCode, zIsoDate, DATE_WINDOWS, istToday, yearsFromEnv, fieldIssue, FIELD_CODES } from "@civitasone/schemas/validators";
+
+/** GRN received date: never in the future, at most GRN_RECEIVED_MAX_PAST_YEARS (default 1) back (TE-01 G01, TE-07 G02/G03). */
+export const grnReceivedWindow = () => DATE_WINDOWS.happened(istToday(), yearsFromEnv("GRN_RECEIVED_MAX_PAST_YEARS", 1));
 
 const grnItemSchema = z.object({
-  poItemRef:   z.string().min(1),
-  itemCode:    z.string().min(1).max(64),
+  poItemRef:   zTrimmedText(128, { label: "PO line" }),
+  itemCode:    zTrimmedCode(64, "item code"),
   orderedQty:  z.number().int().nonnegative(),
-  receivedQty: z.number().int().nonnegative(),
-  acceptedQty: z.number().int().nonnegative(),
-  unit:        z.string().min(1).max(32).default("nos"),
+  receivedQty: z.number().int().nonnegative().max(1_000_000_000),
+  acceptedQty: z.number().int().nonnegative().max(1_000_000_000),
+  unit:        zTrimmedText(32, { label: "unit" }).default("nos"),
+}).superRefine((v, ctx) => {
+  // UAT T-EDGE TE-04 (G05): accepted more than received was 202-accepted and then
+  // dead-lettered by the worker (assertQtyValid). Refused here, on the field.
+  if (v.acceptedQty > v.receivedQty) {
+    fieldIssue(ctx, FIELD_CODES.ACCEPTED_EXCEEDS_RECEIVED, `accepted quantity ${v.acceptedQty} is more than the received quantity ${v.receivedQty}`, ["acceptedQty"]);
+  }
 });
 
 // DOM-002 — GRN creation is now a receive-only step: it records what was
@@ -26,7 +36,7 @@ export const createGrnBody = z.object({
   grnNo:        z.string().max(64).optional(),
   poRef:        z.string().min(1),
   vendorId:     z.string().uuid(),
-  receivedDate: z.string().optional(),
+  receivedDate: zIsoDate({ window: grnReceivedWindow, label: "received date" }).optional(),
   notes:        z.string().max(500).optional(),
   // UAT b10 F95: the inventory store the goods are received into. Carried on procurement.grn.accepted so
   // inventory-service can post the stock receipt (it has no other way to know the store).
