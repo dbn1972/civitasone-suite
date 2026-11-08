@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
 import type { HumanError } from "@/lib/messages";
+import { isUuid, unresolvedLabel, type PersonRef } from "@/lib/records/labels";
 import {
   fmtTime,
   humanize,
@@ -59,6 +60,8 @@ type Props = {
   activeVotesSource: Src;
   /** GAP-MEETING-MEETINGS-MEETINGID-03: session-derived permissions. */
   viewerPermissions: ViewerPermissions;
+  /** UX-R5 (names, not ids): participant employee ids resolved server-side to name + designation. */
+  people?: Record<string, PersonRef>;
 };
 
 const labelStyle: React.CSSProperties = {
@@ -216,6 +219,7 @@ export function MeetingConsole({
   initialActiveVotes,
   activeVotesSource,
   viewerPermissions,
+  people = {},
 }: Props) {
   const router = useRouter();
   const tl = useTranslations("meetingLifecycle");
@@ -737,19 +741,24 @@ export function MeetingConsole({
                     return (
                       <tr key={p.participantId}>
                         <td>
-                          {p.displayName ? (
-                            <>
-                              <div style={{ fontWeight: 600 }}>{p.displayName}</div>
-                              <div style={{ ...monoStyle, fontSize: 12, color: "var(--ink2)" }}>
-                                {p.designation ? `${p.designation} · ` : ""}
-                                {p.employeeId || p.participantId}
+                          {(() => {
+                            // UX-R5: a name and designation, never a raw participant / employee UUID.
+                            const ref = p.employeeId ? people[p.employeeId] : undefined;
+                            const name = p.displayName || ref?.name || null;
+                            const designation = p.designation || ref?.designation || null;
+                            const empNo = p.employeeId && !isUuid(p.employeeId) ? p.employeeId : null;
+                            const sub = [designation, empNo].filter(Boolean).join(" · ");
+                            return name ? (
+                              <>
+                                <div style={{ fontWeight: 600 }}>{name}</div>
+                                {sub ? <div style={{ fontSize: 12, color: "var(--ink2)" }}>{sub}</div> : null}
+                              </>
+                            ) : (
+                              <div style={{ fontWeight: 600, fontSize: 12.5 }}>
+                                {empNo ?? unresolvedLabel(p.employeeId || p.participantId)}
                               </div>
-                            </>
-                          ) : (
-                            <div style={{ fontWeight: 600, ...monoStyle, fontSize: 12.5 }}>
-                              {p.employeeId || p.participantId}
-                            </div>
-                          )}
+                            );
+                          })()}
                           {p.isMandatory && (
                             <span style={{ fontSize: 11, color: "var(--warn)" }}>Mandatory</span>
                           )}

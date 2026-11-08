@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { isClosedStatus } from "@/lib/estab/sla";
-import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
+import { loadMaps, loadOperatorRoster, resolveLabel, type OfficerMaps } from "./OfficerName";
 import { NOTE_SIGN_RECORDS_COPY } from "../../_shared/signatureCopy";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -71,20 +71,18 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
-        if (!res.ok) return;
-        const body = (await res.json()) as { data?: Operator[] } | Operator[];
-        const list = (Array.isArray(body) ? body : (body.data ?? [])).filter((o) => o.active);
-        if (!active) return;
+      // UX-R5 perf: the roster read is shared with loadMaps() (one request per page, not two in series), and the
+      // name maps load alongside it. A failed roster leaves the picker optional; manual UUID entry still works.
+      const [roster, maps] = await Promise.all([loadOperatorRoster(), loadMaps().catch(() => null)]);
+      if (!active) return;
+      if (roster) {
+        const list = (roster as unknown as Operator[]).filter((o) => o.active);
         setOperators(list);
         if (list.length > 0 && list[0]) setToOfficer(list[0].employeeId);
-      } catch {
-        /* picker is optional; manual UUID entry still works */
       }
-      // GAP-ESTAB-FILES-DETAIL-07: load the shared name maps (cached, shared
-      // with OfficerName instances on this page) so operatorLabel shows names.
-      try { if (active) setOfficerMaps(await loadMaps()); } catch { /* degrade */ }
+      // GAP-ESTAB-FILES-DETAIL-07: the shared name maps (cached, shared with OfficerName instances on this
+      // page) so operatorLabel shows names.
+      if (maps) setOfficerMaps(maps);
     })();
     return () => {
       active = false;

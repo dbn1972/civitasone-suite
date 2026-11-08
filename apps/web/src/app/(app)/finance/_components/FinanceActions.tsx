@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ActionButton, useToast } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { BILL_PASSABLE, BILL_PAYABLE } from "@/lib/records/status/bill";
 
 /**
  * Plain-language failure message for a failed finance maker-checker command.
@@ -151,15 +152,18 @@ export function BillPassPayActions({
   const router = useRouter();
   const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
-  const canPay = s === "passed"; // finance-service emits "passed" (a pass maps approved -> passed)
+  // Only the action that fits the status is offered (UX-R5): pass while the bill awaits pre-audit, release once passed.
+  // "submitted" is the legacy spelling of a bill awaiting pre-audit.
+  const canPay = (BILL_PAYABLE as readonly string[]).includes(s);
+  const passable = (BILL_PASSABLE as readonly string[]).includes(s) || s === "submitted";
   const passBlocked = billPassBlockedReason(status, threeWayMatch);
   const passConflict = billSodConflict("pass", viewerId, createdBy, passedBy);
   const releaseConflict = billSodConflict("release", viewerId, createdBy, passedBy);
   return (
     <>
-      {canPass && passBlocked === null && passConflict ? (
+      {canPass && passable && passBlocked === null && passConflict ? (
         <span role="note" style={SOD_NOTE_STYLE}>{t("cannotPassOwn")}</span>
-      ) : canPass ? (<>
+      ) : canPass && passable ? (<>
       <span title={passBlocked ?? undefined}>
         <ActionButton
           label="Pass bill"

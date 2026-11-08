@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
   { href: "/contact", label: "Contact" },
+  { href: "/sandbox", label: "Try Sandbox" },
 ] as const;
 
 export function MobileNav() {

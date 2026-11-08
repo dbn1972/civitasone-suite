@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getAssetById } from "../../../_data/loaders";
-import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { getAssetById, getAssetLocations } from "../../../_data/loaders";
+import { PageHeader, EmptyState, DataTable, RefreshErrorState, RecordHeader, DetailList } from "../../../_components/ds";
+import { assetLocationIdToResolve, assetLocationLabel } from "./assetLocation";
+import { assetCanRaiseDisposal, assetIsFinished, assetRaiseBlockedReason } from "@/lib/records/status/asset";
+import { outcomeLine } from "@/lib/records/statusActions";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { AssetDetailActions } from "./AssetDetailActions";
@@ -70,17 +73,36 @@ export default async function AssetDetailPage(props: { params: Promise<{ id: str
   }));
 
   const tGl = await getTranslations("assetsGl");
+  // UX-R5 (names, not ids): resolve a location id (a transfer stores the destination id in `location`) against
+  // the tenant functional-location register -- only when the asset does not already carry a readable name.
+  const locationIdToResolve = assetLocationIdToResolve(asset);
+  const locationNames = new Map<string, string>();
+  if (locationIdToResolve) {
+    const locs = await getAssetLocations();
+    for (const l of locs.data) locationNames.set(l.id, l.name);
+  }
+  const location = assetLocationLabel(asset, locationNames);
+  const finished = assetIsFinished(asset.status);
   const journal = journalState(asset.glPostStatus);
   const rejection = journal === "failed" ? rejectionNote(asset.glPostError) : null;
 
   return (
     <>
       {anyFailed && <DataSourceBadge source="error" />}
-      <PageHeader
-        title={`${asset.assetCode} · ${asset.name}`}
+      <RecordHeader
+        kind="Asset"
+        recordNo={asset.assetCode}
+        subtitle={asset.name}
         back="/assets/list"
         backLabel="Asset Register"
-        actions={<StatusPill status={asset.status.replace(/_/g, " ")} label={asset.status.replace(/_/g, " ")} />}
+        status={asset.status}
+        amountMinor={asset.currentValue}
+        amountLabel="Book value"
+        parties={[
+          location ? { label: "Location", value: location.label } : null,
+          asset.category ? { label: "Category", value: asset.category } : null,
+        ]}
+        outcome={finished ? outcomeLine({ status: asset.status }) : null}
       />
       {/* Impairment / revaluation need their own GL accounts; the banner shows when they are not set up. */}
       {scope === "full" ? <AccountingBanner areas={["impairment", "revaluation"]} /> : null}
@@ -92,20 +114,31 @@ export default async function AssetDetailPage(props: { params: Promise<{ id: str
           ) : null}
           <div className="card">
             <div className="card-h"><h3>Details</h3></div>
-            <div className="fields">
-              <div className="fld"><div className="l">Category</div><div className="v">{asset.category}</div></div>
-              <div className="fld"><div className="l">Location</div><div className="v">{asset.locationId ? <Link href="/assets/locations">{asset.location ?? "View location"}</Link> : (asset.location ?? "—")}</div></div>
-              <div className="fld"><div className="l">Serial No / Barcode</div><div className="v">{asset.serialNo ?? asset.barcode ?? "—"}</div></div>
-              <div className="fld"><div className="l">Acquired</div><div className="v">{formatIndianDate(asset.purchaseDate)}</div></div>
-              <div className="fld"><div className="l">Purchase cost</div><div className="v">{formatMoney(asset.purchaseCost)}</div></div>
-              <div className="fld"><div className="l">Custodian</div><div className="v">{asset.assignedTo ?? "—"}</div></div>
-              <div className="fld">
-                <div className="l">{tGl("journal")}</div>
-                <div className="v">
-                  {journal === "none" ? "—" : <span className={`pill ${journalTone(journal)}`}>{tGl(journalKey(journal))}</span>}
-                  {rejection ? <p role="alert" style={{ fontSize: 12, margin: "6px 0 0", whiteSpace: "normal" }}>{tGl(rejection.key, { reason: rejection.reason })}</p> : null}
-                </div>
-              </div>
+            <div className="pad">
+              <DetailList
+                ariaLabel="Asset details"
+                columns={1}
+                items={[
+                  { label: "Category", value: asset.category },
+                  {
+                    label: "Location",
+                    value: location ? (location.linked ? <Link href="/assets/locations">{location.label}</Link> : location.label) : null,
+                  },
+                  { label: "Serial No / Barcode", value: asset.serialNo ?? asset.barcode ?? null, mono: true },
+                  { label: "Acquired", value: formatIndianDate(asset.purchaseDate) },
+                  { label: "Purchase cost", value: formatMoney(asset.purchaseCost) },
+                  { label: "Custodian", value: asset.assignedTo ?? null },
+                  {
+                    label: tGl("journal"),
+                    value: journal === "none" ? null : (
+                      <>
+                        <span className={`pill ${journalTone(journal)}`}>{tGl(journalKey(journal))}</span>
+                        {rejection ? <p role="alert" style={{ fontSize: 12, margin: "6px 0 0", whiteSpace: "normal" }}>{tGl(rejection.key, { reason: rejection.reason })}</p> : null}
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </div>
           </div>
           <div className="card">
@@ -175,6 +208,8 @@ export default async function AssetDetailPage(props: { params: Promise<{ id: str
         dept={asset.department ?? "Assets"}
         amountMinor={asset.currentValue}
         defaultApprovalChain="file_noting"
+        statusAllowsRaise={assetCanRaiseDisposal(asset.status)}
+        outcome={assetRaiseBlockedReason(asset.status)}
       />
       ) : null}
     </>

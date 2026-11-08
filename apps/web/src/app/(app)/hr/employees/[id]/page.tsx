@@ -14,12 +14,8 @@ import { EmployeePensionSchemeCard, type SchemeChange } from "./EmployeePensionS
 import { EmployeeOpeningYtdCard } from "./EmployeeOpeningYtdCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
-import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
-import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { getTranslations } from "next-intl/server";
-import { getMedicalInsurance } from "../../medical/_components/insuranceData";
-import { MedicalInsuranceCard } from "../../medical/_components/MedicalInsuranceCard";
-import { MedicalInsuranceForm } from "../../medical/_components/MedicalInsuranceForm";
+import { DeferredMedicalInsurance, DeferredScannedDocuments } from "./DeferredSections";
 
 // GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
 // resolution to GET /v1/hrms/lifecycle/transfers|promotions -- real,
@@ -38,6 +34,8 @@ import { MedicalInsuranceForm } from "../../medical/_components/MedicalInsurance
 async function getCostCenterName(id: string): Promise<string | null> {
   const r = await fetchJson<unknown, string | null>("/api/v1/finance/cost-centers", null, {
     telemetryKey: "hr.employee.costcentre",
+    // UX-R5 perf: a finance master that rarely changes -- cache it instead of re-reading the whole list per profile view.
+    revalidateSeconds: 300,
     mapResponse: (p) => {
       const rows = (p as { data?: { id: string; name?: string; code?: string }[] } | null)?.data;
       const row = rows?.find((x) => x.id === id);
@@ -164,15 +162,15 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // post-edit arrivals only) and says the change may still be settling,
   // because the write is applied asynchronously.
   const justUpdated = searchParams?.updated === "1";
-  const { data: employee, source, status, errorMessage } = justUpdated
-    ? await getEmployeeById(params.id, { fresh: true })
-    : await getEmployeeById(params.id);
+  // UX-R5 perf (S-11): the record and the two message bundles load together, not one after another.
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: tEdit reuses the edit route's own translated label
+  // (`employeeEdit.editButton`) rather than inventing a second copy of the same string under a different key.
+  const [{ data: employee, source, status, errorMessage }, t, tEdit] = await Promise.all([
+    justUpdated ? getEmployeeById(params.id, { fresh: true }) : getEmployeeById(params.id),
+    getTranslations("employeeDetail"),
+    getTranslations("employeeEdit"),
+  ]);
   const errored = source === "error";
-  const t = await getTranslations("employeeDetail");
-  // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: this reuses the edit route's own
-  // translated label (`employeeEdit.editButton`) rather than inventing a
-  // second copy of the same string under a different key.
-  const tEdit = await getTranslations("employeeEdit");
 
   // GAP-HR-EMPLOYEES-DETAIL-07: a real 404 (nonexistent/deleted id) used to
   // fall into the same branch as a 500/network failure, showing "We
@@ -246,23 +244,8 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   const revealFor = (field: string, label: string, canReveal: boolean) => ({
     canReveal, resourceType: "employee" as const, resourceId: params.id, field, label, revealPath: "v1/hrms/pii/reveal",
   });
-  const costCenterName = canAdminister && employee.costCenterId ? await getCostCenterName(employee.costCenterId) : null;
   // GAP-ADMIN-BULK-SCAN-02: scanned records on the personnel file (hrms-service gates the read to these same HR roles).
-  const scannedDocs = canAdminister ? await getEmployeeScannedDocuments(params.id) : null;
-
-  // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles
-  // that may read it, so everyone else never meets a 403 card.
-  const payGroupResult = roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? await getEmployeePayGroup(params.id) : null;
-  // UAT b18: pension scheme change history (hrms READER_ROLES include every HR staff role).
-  const schemeChanges = canAdminister
-    ? await fetchJson<unknown, SchemeChange[] | null>(`/api/v1/hrms/employees/${params.id}/pension-scheme-changes`, null, {
-        telemetryKey: "hr.emp.pension_scheme_changes",
-        mapResponse: (p) => {
-          const arr = (p as { data?: unknown } | null)?.data;
-          return Array.isArray(arr) ? (arr as SchemeChange[]) : null;
-        },
-      })
-    : null;
+  const showScannedDocs = canAdminister;
 
   // Medical insurance: card number / scheme id arrive masked for every viewer
   // here; the reveal tier (hr_admin / super_admin) gets the audited reveal, the
@@ -270,7 +253,32 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // fetched for roles the backend admits, so nobody else meets a 403 card.
   const canEditInsurance = roles.some((r) => MEDICAL_INSURANCE_EDIT_ROLES.includes(r));
   const canRevealInsurance = roles.some((r) => MEDICAL_INSURANCE_REVEAL_ROLES.includes(r));
-  const insuranceResult = roles.some((r) => MEDICAL_INSURANCE_READ_ROLES.includes(r)) ? await getMedicalInsurance(params.id) : null;
+  const showInsurance = roles.some((r) => MEDICAL_INSURANCE_READ_ROLES.includes(r));
+
+  // UX-R5 perf (S-11, measured 9.3-11.4 s on UAT): these reads used to run one after another (cost centre ->
+  // scanned documents -> pay group -> insurance -> lifecycle). They are independent, so they now run together.
+  // The two that publish a DPDP audit-on-read and wait 4.5-5.3 s for the broker (scanned documents, medical
+  // insurance) are below the fold and load in the browser after the page (DeferredSections.tsx) -- the
+  // profile no longer waits for them at all.
+  // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles that may read it, so everyone
+  // else never meets a 403 card. Lifecycle lists are HR-staff-only on the backend (hrms-service lifecycle
+  // HR_ROLES), so only those roles ask: everyone else would just collect a 403 and a permanent, misleading
+  // "history unavailable".
+  const [costCenterName, payGroupResult, lifecycle, schemeChanges] = await Promise.all([
+    canAdminister && employee.costCenterId ? getCostCenterName(employee.costCenterId) : Promise.resolve(null),
+    roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? getEmployeePayGroup(params.id) : Promise.resolve(null),
+    canAdminister ? getLifecycleEvents(params.id) : Promise.resolve<LifecycleResult>({ events: [], unavailable: false }),
+    // UAT b18: pension scheme change history (hrms READER_ROLES include every HR staff role).
+    canAdminister
+      ? fetchJson<unknown, SchemeChange[] | null>(`/api/v1/hrms/employees/${params.id}/pension-scheme-changes`, null, {
+          telemetryKey: "hr.emp.pension_scheme_changes",
+          mapResponse: (p) => {
+            const arr = (p as { data?: unknown } | null)?.data;
+            return Array.isArray(arr) ? (arr as SchemeChange[]) : null;
+          },
+        })
+      : Promise.resolve(null),
+  ]);
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
@@ -292,11 +300,6 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
     });
   }
 
-  // Fetch additional lifecycle events (best-effort). The transfer / promotion /
-  // deputation lists are HR-staff-only on the backend (hrms-service
-  // lifecycle HR_ROLES), so only those roles ask: everyone else would just
-  // collect a 403 and a permanent, misleading "history unavailable".
-  const lifecycle: LifecycleResult = canAdminister ? await getLifecycleEvents(params.id) : { events: [], unavailable: false };
   const allEvents = [...baseEvents, ...lifecycle.events];
 
   return (
@@ -572,13 +575,7 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
       )}
 
       {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
-      {insuranceResult && (
-        <MedicalInsuranceCard result={insuranceResult} canReveal={canRevealInsurance}>
-          {canEditInsurance && insuranceResult.source !== "error" && (
-            <MedicalInsuranceForm employeeId={params.id} initial={insuranceResult.data} />
-          )}
-        </MedicalInsuranceCard>
-      )}
+      {showInsurance && <DeferredMedicalInsurance employeeId={params.id} canReveal={canRevealInsurance} canEdit={canEditInsurance} />}
       {canLinkLogin && <EmployeeLoginLinkCard employeeId={params.id} />}
       {/* UAT b18: pension scheme change (maker: HR staff; checker: HR admin tier). */}
       {canAdminister && (
@@ -602,7 +599,7 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
         />
       )}
 
-      {scannedDocs && <ScannedDocumentsSection result={scannedDocs} backHref="/hr/employees" />}
+      {showScannedDocs && <DeferredScannedDocuments employeeId={params.id} backHref="/hr/employees" />}
 
       {/* Lifecycle Timeline */}
       <Card title={t("lifecycleTitle")}>

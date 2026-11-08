@@ -46,7 +46,7 @@ export default async function InspectionReportPage(props: { params: Promise<{ id
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb style={{ fontSize: 13, marginBottom: 8 }}>
         <Link href="/inspection" className="lnk">{t("breadcrumbInspection")}</Link>
         <span aria-hidden style={{ margin: "0 7px" }}>/</span>
         <Link href="/inspection/reports" className="lnk">{t("title")}</Link>

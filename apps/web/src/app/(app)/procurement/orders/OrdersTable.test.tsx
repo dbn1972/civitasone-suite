@@ -74,7 +74,7 @@ describe("OrdersTable — committed value (GAP-PROCUREMENT-ORDERS-02)", () => {
     render(<OrdersTable orders={mockData as never} source="api" />);
     // Only the approved PO (₹1,00,000) is committed, not the cancelled/draft ones.
     const committedLabel = screen.getByText("Committed value");
-    const card = committedLabel.closest(".stat") as HTMLElement;
+    const card = committedLabel.closest("li") as HTMLElement;
     expect(within(card).getByText("₹1,00,000.00")).toBeInTheDocument();
     // Would be ₹3,00,000.00 if draft/cancelled were wrongly included.
     expect(within(card).queryByText("₹3,00,000.00")).not.toBeInTheDocument();
@@ -89,9 +89,9 @@ describe("OrdersTable — committed value (GAP-PROCUREMENT-ORDERS-02)", () => {
       order({ id: "c", status: "pending", amount: LAKH }),
     ];
     render(<OrdersTable orders={mockData as never} source="api" />);
-    const committed = screen.getByText("Committed value").closest(".stat") as HTMLElement;
+    const committed = screen.getByText("Committed value").closest("li") as HTMLElement;
     expect(within(committed).getByText("₹1,00,000.00")).toBeInTheDocument();
-    const completed = screen.getByText("Completed (closed) value").closest(".stat") as HTMLElement;
+    const completed = screen.getByText("Completed (closed) value").closest("li") as HTMLElement;
     expect(within(completed).getByText("₹2,00,000.00")).toBeInTheDocument();
   });
 
@@ -179,7 +179,7 @@ describe("OrdersTable — opens narrowed from a dashboard drill-through (GAP-PRO
     expect(screen.getByText("No matching purchase orders")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Approved \(0\)/ })).toHaveAttribute("aria-selected", "true");
     // The overall stat still counts every PO (the filter only narrows the table).
-    expect(screen.getByText("Total POs").closest(".stat")).toHaveTextContent("1");
+    expect(screen.getByText("Total POs").closest("li")).toHaveTextContent("1");
   });
 });
 

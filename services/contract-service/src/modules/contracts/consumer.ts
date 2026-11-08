@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition, DomainError } from "./domain.js";
+import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition, DomainError, FINISHED_CONTRACT_STATUSES } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -219,8 +219,11 @@ export function registerContractConsumers(rawQueue: Queue): void {
     const p = msg.payload as { contractId: string; milestoneId: string; tenantId: string; achievedDate: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.contractId);
+      // UX-R5: read under the contract row lock and re-assert it is still open -- the synchronous 409 in commands.ts
+      // is check-then-act, so a milestone queued just before a terminate / close must not still be applied.
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.contractId);
       if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
+      if (FINISHED_CONTRACT_STATUSES.includes(contract.status ?? "")) throw new NonRetryableError(`CONTRACT_CLOSED: a ${contract.status} contract takes no further milestone changes`);
       const milestone = await repo.findMilestoneByIdForUpdateTx(tx, p.milestoneId, p.contractId, p.tenantId); // B9: no double completion
       if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;
@@ -252,8 +255,11 @@ export function registerContractConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const contract = await repo.findContractByIdTx(tx, p.contractId);
+      // UX-R5: read under the contract row lock and re-assert it is still open -- the synchronous 409 in commands.ts
+      // is check-then-act, so a milestone queued just before a terminate / close must not still be applied.
+      const contract = await repo.findContractByIdForUpdateTx(tx, p.contractId);
       if (!contract || contract.tenantId !== p.tenantId) throw new NonRetryableError(`CONTRACT_NOT_FOUND: ${p.contractId}`);
+      if (FINISHED_CONTRACT_STATUSES.includes(contract.status ?? "")) throw new NonRetryableError(`CONTRACT_CLOSED: a ${contract.status} contract takes no further milestone changes`);
       const milestone = await repo.findMilestoneByIdForUpdateTx(tx, p.milestoneId, p.contractId, p.tenantId); // B9: no double completion
       if (!milestone) throw new NonRetryableError(`MILESTONE_NOT_FOUND: ${p.milestoneId}`);
       if (milestone.status === "completed" || milestone.status === "completed_late") return;

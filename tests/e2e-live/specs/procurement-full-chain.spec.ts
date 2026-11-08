@@ -101,20 +101,25 @@ test.describe("Procurement — Full Chain incl. SRN (Live)", () => {
     const poId = page.url().split("/").pop() as string;
     expect(poId).toBeTruthy();
 
-    // 3. Approve the PO via the workflow approvals queue.
+    // 3. Approve the PO from the approvals inbox (UX R1: /procurement/approvals now 308s to
+    // /approvals?module=procurement; rows are named by the PO number, decisions are in the panel).
+    const poRes = await page.request.get(`/api/proxy/v1/procurement/pos/${poId}`);
+    expect(poRes.ok()).toBeTruthy();
+    const poBody = (await poRes.json()) as { data?: { poNo?: string }; poNo?: string };
+    const poNo = poBody.data?.poNo ?? poBody.poNo ?? "";
+    expect(poNo).toBeTruthy();
+    const openPo = page.getByRole("button", { name: `Open: Approve purchase order ${poNo}` });
     await expect(async () => {
-      await page.goto("/procurement/approvals");
+      await page.goto("/approvals?module=procurement");
       await page.waitForLoadState("networkidle");
-      const poLink = page.locator(`a[href="/procurement/orders/${poId}"]`);
-      await expect(poLink).toBeVisible({ timeout: 10_000 });
+      await expect(openPo).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 30_000, intervals: [2_000, 3_000, 5_000] });
 
-    const approveRow = page.locator("tr", { has: page.locator(`a[href="/procurement/orders/${poId}"]`) });
-    await approveRow.getByRole("button", { name: "Approve" }).click();
-    const approveDialog = page.getByRole("alertdialog");
-    await expect(approveDialog).toBeVisible({ timeout: 10_000 });
-    await approveDialog.getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Approved via workflow.")).toBeVisible({ timeout: 15_000 });
+    await openPo.click();
+    const panel = page.getByRole("region", { name: `Approve purchase order ${poNo}` });
+    await panel.getByRole("button", { name: "Approve", exact: true }).click();
+    await panel.getByRole("button", { name: "Confirm" }).click();
+    await expect(page.getByText(`Approved: Approve purchase order ${poNo}.`).first()).toBeVisible({ timeout: 15_000 });
 
     // 4. Dispatch the PO to the vendor (only enabled once approved).
     await expect(async () => {

@@ -148,6 +148,16 @@ export async function listPageAfterId(tenantId: string, afterId: string | null, 
  * the same "only these columns ever leave this route" guarantee covers
  * both paths.
  */
+/**
+ * UX-R5: employees of THIS tenant whose id or login user ref is one of `ids` (name + designation only are read
+ * by the caller). Both predicates sit under tenant_id = tenantId, so another tenant row never matches.
+ */
+export async function findByIdsOrUserRefs(tenantId: string, ids: string[]): Promise<EmployeeRow[]> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, tenantId), or(inArray(hrmsEmployees.id, ids), inArray(hrmsEmployees.userRef, ids)))));
+}
+
 export async function listByIds(tenantId: string, ids: string[], managerId?: string): Promise<EmployeeRow[]> {
   if (ids.length === 0) return [];
   const conditions = [eq(hrmsEmployees.tenantId, tenantId), inArray(hrmsEmployees.id, ids)];

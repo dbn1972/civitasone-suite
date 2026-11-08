@@ -42,10 +42,11 @@ test.describe('Procurement', () => {
     await expect(page.getByRole('heading', { name: /orders/i }).first()).toBeVisible();
   });
 
-  test('approvals page renders workflow panel', async ({ page }) => {
+  // UX R1: the procurement queue is now the Procurement filter of the one approvals inbox (308).
+  test('approvals queue opens the approvals inbox filtered to procurement', async ({ page }) => {
     await page.goto('/procurement/approvals');
+    await expect(page).toHaveURL(/\/approvals\?module=procurement$/);
     await expect(page.getByRole('heading', { name: /approval/i }).first()).toBeVisible();
-    await expect(page.getByText('Workflow approval queue')).toBeVisible();
   });
 
   test('GRN page loads without error', async ({ page }) => {

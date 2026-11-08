@@ -1,112 +1,59 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { OfficialPdf, formatDateIst, DocumentUnavailableError } from "@civitasone/render/official";
 import { resolveContext, requireRole, HttpError } from "../../../shared/context.js";
 import { sqlClient } from "../../../shared/db.js";
 import * as queries from "../queries.js";
 import type { FileDetailDto } from "../queries.js";
 
+/** UAT ux-docs: no Chromium, no issuable PDF - 503, never an HTML file served as a PDF. */
+async function pdfOr503<T>(render: () => Promise<T>): Promise<T> {
+  try {
+    return await render();
+  } catch (err) {
+    if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
+    throw err;
+  }
+}
+
+
 const READER_ROLES = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin", "audit_officer"];
 
-function fmtDate(iso: string): string {
-  try { return new Date(iso).toLocaleDateString("en-IN"); } catch { return iso; }
-}
-
-/** Wrap a string to fit `maxWidth` at `size` for the given font. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const out: string[] = [];
-  for (const rawLine of text.split(/\r?\n/)) {
-    let line = "";
-    for (const word of rawLine.split(/\s+/)) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, size) > maxWidth && line) {
-        out.push(line);
-        line = word;
-      } else {
-        line = candidate;
-      }
-    }
-    out.push(line);
-  }
-  return out;
-}
-
-async function buildNoteSheetPdf(file: FileDetailDto, headerOrg: string): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-  const PAGE_W = 595, PAGE_H = 842, MARGIN = 50;
-  const contentW = PAGE_W - MARGIN * 2;
-  let page: PDFPage = doc.addPage([PAGE_W, PAGE_H]);
-  let y = PAGE_H - MARGIN;
-
-  const ensure = (needed: number) => {
-    if (y - needed < MARGIN) {
-      page = doc.addPage([PAGE_W, PAGE_H]);
-      y = PAGE_H - MARGIN;
-    }
-  };
-  const line = (text: string, opts: { size?: number; font?: PDFFont; color?: ReturnType<typeof rgb>; indent?: number } = {}) => {
-    const size = opts.size ?? 10;
-    const f = opts.font ?? font;
-    const x = MARGIN + (opts.indent ?? 0);
-    for (const l of wrapText(text, f, size, contentW - (opts.indent ?? 0))) {
-      ensure(size + 4);
-      page.drawText(l, { x, y: y - size, size, font: f, color: opts.color ?? rgb(0.1, 0.1, 0.1) });
-      y -= size + 4;
-    }
-  };
-  const gap = (h: number) => { y -= h; };
-
-  // Header
-  const title = `${headerOrg} — Note Sheet`;
-  ensure(22);
-  page.drawText(title.length > 70 ? title.slice(0, 70) : title, {
-    x: MARGIN, y: y - 16, size: 16, font: bold, color: rgb(0.06, 0.2, 0.45),
+/**
+ * UAT ux-docs: the note sheet is laid out by the shared OfficialPdf builder, so it embeds
+ * Noto Sans Devanagari (Hindi notings print; the old standard Helvetica could not encode
+ * Devanagari at all) and dates print in IST.
+ */
+export async function buildNoteSheetPdf(file: FileDetailDto, headerOrg: string, generatedAt?: Date): Promise<Uint8Array> {
+  const pdf = await OfficialPdf.create({
+    title: `Note sheet ${file.fileNo}`,
+    lang: "bilingual",
+    footerNote: `Note sheet · File No. ${file.fileNo} · System-generated note sheet — official record`,
+    ...(generatedAt ? { generatedAt } : {}),
   });
-  y -= 28;
-  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 1, color: rgb(0.7, 0.7, 0.7) });
-  gap(14);
-
-  // Meta
-  line(`File No: ${file.fileNo}`, { font: bold, size: 11 });
-  line(`Subject: ${file.subject}`);
-  line(`Department: ${file.dept}`);
-  if (file.dakNo) line(`DAK No: ${file.dakNo}`);
-  if (file.dueBy) line(`SLA Due: ${fmtDate(file.dueBy)}`);
-  gap(10);
-
-  // Notings
-  line("Noting", { font: bold, size: 12, color: rgb(0.06, 0.2, 0.45) });
-  gap(4);
+  pdf.letterhead({ orgName: headerOrg });
+  pdf.title("Note Sheet", "टिप्पणी पृष्ठ");
+  pdf.fields([
+    { label: "File No", value: file.fileNo },
+    { label: "Department", value: file.dept },
+    { label: "Subject", value: file.subject },
+    ...(file.dakNo ? [{ label: "DAK No", value: file.dakNo }] : []),
+    ...(file.dueBy ? [{ label: "SLA Due", value: formatDateIst(file.dueBy) }] : []),
+  ], 1);
+  pdf.heading("Noting / टिप्पणी");
   if (file.noteSheets.length === 0) {
-    line("No notes recorded.", { color: rgb(0.5, 0.5, 0.5) });
+    pdf.paragraph("No notes recorded.", { muted: true });
   } else {
     file.noteSheets.forEach((n, i) => {
       const ext = n as { noteType?: string; noteStatus?: string; eSigned?: boolean; signatureRef?: string };
       const isGreen = ext.noteType === "green" || ext.eSigned;
-      gap(6);
-      ensure(16);
-      // marker bar (green/yellow)
-      page.drawRectangle({
-        x: MARGIN, y: y - 12, width: 3, height: 14,
-        color: isGreen ? rgb(0.13, 0.55, 0.27) : rgb(0.85, 0.65, 0.05),
-      });
-      line(`${i + 1}. ${n.author}  ·  ${ext.noteType ?? "yellow"}  ·  ${ext.noteStatus ?? ""}${isGreen ? "  ·  e-Signed" : ""}`,
-        { font: bold, size: 10, indent: 10 });
-      line(n.content, { indent: 10 });
-      if (ext.signatureRef) line(`DSC: ${ext.signatureRef}`, { size: 8, color: rgb(0.45, 0.45, 0.45), indent: 10 });
+      const meta = [n.author, `${isGreen ? "green" : (ext.noteType ?? "yellow")} note`, ext.noteStatus ?? "", isGreen && ext.eSigned ? "e-Signed" : ""].filter(Boolean).join("  ·  ");
+      pdf.paragraph(meta, { prefix: `${i + 1}.`, bold: true, gapAfter: 1 });
+      pdf.paragraph(n.content, { indent: 18 });
+      if (ext.signatureRef) pdf.paragraph(`DSC: ${ext.signatureRef}`, { indent: 18, size: 8, muted: true });
     });
   }
-
-  gap(20);
-  ensure(14);
-  page.drawText("System-generated note sheet — official record.", {
-    x: MARGIN, y: y - 9, size: 8, font, color: rgb(0.5, 0.5, 0.5),
-  });
-
-  return doc.save();
+  return pdf.save();
 }
 
 export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> {
@@ -129,7 +76,7 @@ export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> 
     }
     const headerOrg = orgName || file.dept || "Office Note Sheet";
 
-    const pdf = await buildNoteSheetPdf(file, headerOrg);
+    const pdf = await pdfOr503(() => buildNoteSheetPdf(file, headerOrg));
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `inline; filename="note-sheet-${file.fileNo.replace(/[^\w.-]+/g, "_")}.pdf"`)

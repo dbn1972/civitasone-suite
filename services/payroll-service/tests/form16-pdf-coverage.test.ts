@@ -8,6 +8,13 @@
  * - GET /v1/payroll/tax/form16/bulk-download (happy path, 400, 401, 403, 404)
  */
 import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
+
+// UAT ux-docs: Form 16 is issued only with a configured deductor (else 422
+// FORM16_EMPLOYER_NOT_CONFIGURED). These scenarios run with one configured.
+const EMPLOYER_ENV = { EMPLOYER_NAME: "Test Employer Office", EMPLOYER_TAN: "DELT12345A", EMPLOYER_PAN: "AAATT1234A" } as const;
+const savedEmployerEnv: Record<string, string | undefined> = {};
+beforeAll(() => { for (const [k, v] of Object.entries(EMPLOYER_ENV)) { savedEmployerEnv[k] = process.env[k]; process.env[k] = v; } });
+afterAll(() => { for (const k of Object.keys(EMPLOYER_ENV)) { if (savedEmployerEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEmployerEnv[k]; } });
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { randomUUID } from "node:crypto";

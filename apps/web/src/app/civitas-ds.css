@@ -43,59 +43,64 @@
   --bad:#b42318; --badbg:#fef3f2; --badbd:#fecdca;
   --info:#175cd3; --infobg:#eff8ff; --infobd:#b2ddff;
   --r:14px; --r-sm:10px;
+  /* UAT-P3 (DS-2 / DS-11): type and shape scale. 12 px is the floor for any
+     visible text (sort glyphs, pills, micro-labels, avatar initials were
+     10-11.5 px). Radii: 6 / 10 / 14 / pill. Guarded by topBarFit.test.ts. */
+  --fs-min:12px; --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:16px; --fs-xl:20px; --fs-2xl:25px;
+  --r-xs:6px; --r-pill:999px;
   --sh:0 1px 2px rgba(16,24,40,.05); --sh-md:0 1px 3px rgba(16,24,40,.06),0 8px 24px -12px rgba(16,24,40,.14);
   --sh-lg:0 12px 32px -10px rgba(16,24,40,.20);
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 }
 body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.45}
 a{color:inherit;text-decoration:none}
-::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#d0d5dd;border-radius:8px}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#d0d5dd;border-radius:var(--r-sm)}
 
 /* ---------------- WEB SHELL ---------------- */
 .app{display:flex;min-height:100vh}
 .sb{width:256px;flex:0 0 256px;background:var(--panel);border-inline-end:1px solid var(--line);
   display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
 .sb-brand{display:flex;align-items:center;gap:11px;padding:18px 18px 12px}
-.sb-logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:#fff;font-size:18px;
+.sb-logo{width:36px;height:36px;border-radius:var(--r-sm);display:grid;place-items:center;color:#fff;font-size:18px;
   background:linear-gradient(135deg,var(--primary),#34d399);box-shadow:0 6px 14px -6px var(--primary)}
-.sb-bn{font-weight:750;font-size:15px;letter-spacing:-.2px}
-.sb-bs{font-size:11px;color:var(--mut);margin-top:-2px}
+.sb-bn{font-weight:750;font-size:var(--fs-lg);letter-spacing:-.2px}
+.sb-bs{font-size:var(--fs-xs);color:var(--mut);margin-top:-2px}
 .sb-nav{flex:1;overflow:auto;padding:6px 12px}
-.sb-grp{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:14px 10px 6px}
+.sb-grp{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:14px 10px 6px}
 /* UAT-P2-D3 (A11Y-17): the collapsible group toggles were 15px tall; 28px minimum target. */
 button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
-.sb-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:var(--ink2);
-  font-size:13.5px;font-weight:550;margin-bottom:2px;transition:.12s}
-.sb-item .i{width:18px;text-align:center;font-size:15px}
+.sb-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:var(--r-sm);color:var(--ink2);
+  font-size:var(--fs-md);font-weight:550;margin-bottom:2px;transition:.12s}
+.sb-item .i{width:18px;text-align:center;font-size:var(--fs-lg)}
 .sb-item:hover{background:var(--line2);color:var(--ink)}
 .sb-item.on{background:var(--primary-soft);color:var(--primary-d);font-weight:650}
 .sb-item.on .i{filter:none}
 .sb-foot{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
-.sb-foot .nm{font-size:13px;font-weight:650}.sb-foot .rl{font-size:11px;color:var(--mut)}
+.sb-foot .nm{font-size:var(--fs-sm);font-weight:650}.sb-foot .rl{font-size:var(--fs-xs);color:var(--mut)}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .tb{height:64px;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:16px;padding:0 26px;position:sticky;top:0;z-index:8}
-.tb .crumb{font-size:13px;color:var(--ink2)}.tb .crumb b{color:var(--ink)}.tb .crumb i{color:#cdd2dc;font-style:normal;margin:0 7px}
+.tb .crumb{font-size:var(--fs-sm);color:var(--ink2)}.tb .crumb b{color:var(--ink)}.tb .crumb i{color:#cdd2dc;font-style:normal;margin:0 7px}
 .tb-search{flex:1;max-width:380px;display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);
-  border-radius:10px;padding:9px 13px;color:var(--mut)}
-.tb-search input{border:0;background:transparent;width:100%;font-size:13.5px;color:var(--ink)}
+  border-radius:var(--r-sm);padding:9px 13px;color:var(--mut)}
+.tb-search input{border:0;background:transparent;width:100%;font-size:var(--fs-md);color:var(--ink)}
 .tb-search input:focus{outline:none}
 .tb-actions{margin-inline-start:auto;display:flex;align-items:center;gap:10px}
-.iconbtn{position:relative;width:40px;height:40px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-size:16px}
+.iconbtn{position:relative;width:40px;height:40px;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);cursor:pointer;font-size:var(--fs-lg)}
 .iconbtn .dot{position:absolute;top:9px;right:10px;width:8px;height:8px;background:var(--rose);border-radius:50%;border:2px solid #fff}
 
 .wrap{padding:24px 28px 48px;max-width:1340px;width:100%}
 .ph{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px;flex-wrap:wrap}
-.ph h1,.ph [data-skeleton-heading]{font-size:25px;font-weight:780;letter-spacing:-.5px}
-.ph .sub{color:var(--ink2);font-size:14px;margin-top:5px}
+.ph h1,.ph [data-skeleton-heading]{font-size:var(--fs-2xl);font-weight:780;letter-spacing:-.5px}
+.ph .sub{color:var(--ink2);font-size:var(--fs-md);margin-top:5px}
 .ph-act{display:flex;gap:10px;flex-wrap:wrap}
-.back{display:inline-flex;align-items:center;gap:5px;color:var(--ink2);font-size:13px;font-weight:600;margin-bottom:8px}
+.back{display:inline-flex;align-items:center;gap:5px;color:var(--ink2);font-size:var(--fs-sm);font-weight:600;margin-bottom:8px}
 .back:hover{color:var(--primary-d)}
 
 /* buttons */
 /* UX-008 tranche 2 review follow-up: base .btn had no justify-content, defaulting to flex-start. Invisible for the fleet-wide auto-width case, but for the handful of buttons stretched wider than their content (e.g. a width:100% modal-close button, a minWidth reset-zoom button) the raw <button> elements this tranche converted used to center via the native UA button default -- the new flex layout left-aligned instead. Centering here restores that for every width-constrained .btn; content-sized buttons (the fleet-wide majority) are unaffected since there is no extra space to redistribute. One known exception: menu-item-style .btn rows that set width:100% + textAlign (which flex ignores) to fake left alignment -- see grants/applications/FilterButton.tsx -- now render centered too; flagged separately, not fixed here. */
-.btn{border:0;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:.12s}
+.btn{border:0;border-radius:var(--r-sm);padding:10px 16px;font-size:var(--fs-md);font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:.12s}
 .btn.primary{background:var(--primary);color:var(--on-primary);box-shadow:0 8px 16px -8px var(--primary)}
 .btn.primary:hover{background:var(--primary-d)}
 .btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
@@ -107,7 +112,7 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
    but still-branded filled action, distinct from ghost's outlined look. */
 .btn.secondary{background:var(--primary-soft);color:var(--primary-d)}
 .btn.secondary:hover{background:var(--primary-soft-hover)}
-.btn.sm{padding:7px 12px;font-size:12.5px}
+.btn.sm{padding:7px 12px;font-size:var(--fs-sm)}
 /* GAP-RECRUITMENT-TALENT-POOL-07: 44px touch target without per-call inline styles */
 .btn.btn-tall{min-height:44px;box-sizing:border-box}
 /* GAP-HR-SHIFT-REQUESTS-04: compact .btn.sm on fine pointers (mouse) keeps dense tables ~36px per row; touch devices
@@ -120,15 +125,15 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* segmented */
-.seg{display:inline-flex;background:var(--line2);border-radius:10px;padding:3px;font-size:12.5px;gap:2px}
-.seg span{padding:6px 13px;border-radius:7px;color:var(--ink2);cursor:pointer;font-weight:600}
+.seg{display:inline-flex;background:var(--line2);border-radius:var(--r-sm);padding:3px;font-size:var(--fs-sm);gap:2px}
+.seg span{padding:6px 13px;border-radius:var(--r-sm);color:var(--ink2);cursor:pointer;font-weight:600}
 .seg .on{background:#fff;color:var(--ink);box-shadow:var(--sh)}
 
 /* cards & grid */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-md);overflow:hidden}
 .card-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
-.card-h h2{font-size:15px;font-weight:700}
-.card-h .lnk{color:var(--primary-d);font-size:12.5px;font-weight:650}
+.card-h h2{font-size:var(--fs-lg);font-weight:700}
+.card-h .lnk{color:var(--primary-d);font-size:var(--fs-sm);font-weight:650}
 .pad{padding:18px}
 .grid{display:grid;gap:18px}
 .g-4{grid-template-columns:repeat(4,1fr)}
@@ -141,22 +146,22 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
 .g-main{grid-template-columns:1fr 360px;align-items:start}
 .g-main-l{grid-template-columns:300px 1fr;align-items:start}
 @media(max-width:1080px){.g-4{grid-template-columns:repeat(2,1fr)}.g-main,.g-main-l,.g-3,.g-2{grid-template-columns:1fr}}
-@media(max-width:768px){.sb{position:fixed;top:0;left:0;z-index:40;height:100dvh;overflow-y:auto;transform:translateX(-100%);transition:transform .22s ease,visibility 0s linear .22s;visibility:hidden}.app.nav-open .sb{transform:translateX(0);visibility:visible;transition:transform .22s ease,visibility 0s}.mob-overlay{display:block !important}.wrap{padding:16px 16px 40px}.tb-search{display:none}.mob-menu-btn{display:flex !important}}
+@media(max-width:768px){.sb{position:fixed;top:0;left:0;z-index:40;height:100dvh;overflow-y:auto;transform:translateX(-100%);transition:transform .22s ease,visibility 0s linear .22s;visibility:hidden}.app.nav-open .sb{transform:translateX(0);visibility:visible;transition:transform .22s ease,visibility 0s}.mob-overlay{display:block !important}.wrap{padding:16px 16px 40px}.mob-menu-btn{display:flex !important}}
 .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:39;cursor:pointer}
-.mob-menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--line);border-radius:10px;background:transparent;cursor:pointer;font-size:18px;flex-shrink:0}
+.mob-menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--line);border-radius:var(--r-sm);background:transparent;cursor:pointer;font-size:18px;flex-shrink:0}
 
 /* stat */
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh-md)}
 .stat .top{display:flex;justify-content:space-between;align-items:flex-start}
-.stat .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:19px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
-.stat .lab{font-size:12.5px;color:var(--ink2);font-weight:600;margin-top:14px}
-.stat .val{font-size:27px;font-weight:780;letter-spacing:-.6px;margin-top:2px}
-.stat .delta{font-size:12px;font-weight:650;margin-top:6px;display:inline-flex;gap:4px;align-items:center}
+.stat .ic{width:42px;height:42px;border-radius:var(--r-sm);display:grid;place-items:center;font-size:var(--fs-xl);line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+.stat .lab{font-size:var(--fs-sm);color:var(--ink2);font-weight:600;margin-top:14px}
+.stat .val{font-size:var(--fs-2xl);font-weight:780;letter-spacing:-.6px;margin-top:2px}
+.stat .delta{font-size:var(--fs-xs);font-weight:650;margin-top:6px;display:inline-flex;gap:4px;align-items:center}
 .up{color:var(--good)}.down{color:var(--bad)}
 .spark{margin-top:10px}
 
 /* pills */
-.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:650;border:1px solid transparent}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--r-pill);font-size:var(--fs-xs);font-weight:650;border:1px solid transparent}
 .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
 .pill.good{background:var(--goodbg);color:var(--good);border-color:var(--goodbd)}
 .pill.warn{background:var(--warnbg);color:var(--warn);border-color:var(--warnbd)}
@@ -172,8 +177,8 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
    11-column contacts list) stays readable on a phone without horizontal
    scrolling for every field. Additive: no existing table passes the flag. */
 @media(max-width:640px){.tbl .dt-hide-mobile{display:none}}
-.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
-.tbl th{text-align:left;color:var(--ink2);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
+.tbl th{text-align:left;color:var(--ink2);font-weight:600;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.03em;
   padding:11px 18px;background:var(--bg);border-bottom:1px solid var(--line)}
 .tbl td{padding:13px 18px;border-bottom:1px solid var(--line2)}
 .tbl tr:last-child td{border-bottom:0}
@@ -182,13 +187,13 @@ button.sb-grp{min-height:28px;padding-block:6px;box-sizing:border-box}
 tr.clickable:hover{background:var(--primary-soft)!important}
 .kb-card.clickable:hover{border-color:var(--primary);box-shadow:var(--sh-md)}
 .tbl .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12.5px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:var(--fs-sm)}
 .prefrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2)}
 .prefrow:last-child{border-bottom:0}
 .prefrow span:last-child{text-align:right;color:var(--ink2)}
 .alert{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:18px;background:#fff;box-shadow:var(--sh-md)}
-.alert strong{display:block;font-size:14px;margin-bottom:4px}
-.alert p{font-size:13.5px;color:var(--ink2);margin:0}
+.alert strong{display:block;font-size:var(--fs-md);margin-bottom:4px}
+.alert p{font-size:var(--fs-md);color:var(--ink2);margin:0}
 .alert.bad{background:var(--badbg);border-color:var(--badbd);color:var(--bad)}
 .alert.bad p{color:#7a271a}
 .alert.warn{background:var(--warnbg);border-color:var(--warnbd);color:var(--warn)}
@@ -197,16 +202,16 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .alert.good p{color:#14532d}
 
 /* avatar */
-.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12.5px;font-weight:700;flex:0 0 auto}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:var(--fs-sm);font-weight:700;flex:0 0 auto}
 .av.lg{width:64px;height:64px;font-size:22px}
 .av.xl{width:84px;height:84px;font-size:28px}
-.av.sm{width:28px;height:28px;font-size:11px}
+.av.sm{width:28px;height:28px;font-size:var(--fs-xs)}
 .who{display:flex;align-items:center;gap:11px}
-.who .nm{font-weight:650;font-size:13.5px}.who .ml{font-size:12px;color:var(--mut)}
+.who .nm{font-weight:650;font-size:var(--fs-md)}.who .ml{font-size:var(--fs-xs);color:var(--mut)}
 
 /* progress */
-.bar{height:8px;background:var(--line2);border-radius:6px;overflow:hidden}
-.bar i{display:block;height:100%;border-radius:6px;background:var(--primary)}
+.bar{height:8px;background:var(--line2);border-radius:var(--r-xs);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:var(--r-xs);background:var(--primary)}
 
 /* timeline / stepper */
 .tl{list-style:none}
@@ -215,27 +220,27 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .tl li::before{content:"";position:absolute;left:-7px;top:1px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--mut)}
 .tl li.done::before{background:var(--primary);border-color:var(--primary)}
 .tl li.cur::before{background:#fff;border-color:var(--primary);box-shadow:0 0 0 4px var(--primary-soft)}
-.tl .t{font-size:13.5px;font-weight:650}.tl .m{font-size:12px;color:var(--ink2);margin-top:1px}.tl .d{font-size:11.5px;color:var(--mut);margin-top:2px}
+.tl .t{font-size:var(--fs-md);font-weight:650}.tl .m{font-size:var(--fs-xs);color:var(--ink2);margin-top:1px}.tl .d{font-size:var(--fs-xs);color:var(--mut);margin-top:2px}
 
 /* kanban */
 .kb{display:grid;grid-template-columns:repeat(var(--cols,5),minmax(220px,1fr));gap:14px;overflow:auto;padding-bottom:6px}
-.kb-col{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:220px}
-.kb-h{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 10px;font-size:12.5px;font-weight:700}
-.kb-h .cnt{background:#fff;border:1px solid var(--line);border-radius:20px;padding:1px 9px;font-size:11px;color:var(--ink2)}
-.kb-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px;box-shadow:var(--sh);cursor:grab}
+.kb-col{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px;min-width:220px}
+.kb-h{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 10px;font-size:var(--fs-sm);font-weight:700}
+.kb-h .cnt{background:#fff;border:1px solid var(--line);border-radius:var(--r-pill);padding:1px 9px;font-size:var(--fs-xs);color:var(--ink2)}
+.kb-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:11px;margin-bottom:9px;box-shadow:var(--sh);cursor:grab}
 .kb-card:hover{box-shadow:var(--sh-md)}
-.kb-card .tt{font-size:13px;font-weight:650}.kb-card .mt{font-size:11.5px;color:var(--mut);margin-top:3px}
+.kb-card .tt{font-size:var(--fs-sm);font-weight:650}.kb-card .mt{font-size:var(--fs-xs);color:var(--mut);margin-top:3px}
 .kb-card .ft{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
 
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(26,1fr);gap:4px}
 .heat i{aspect-ratio:1;border-radius:3px;background:var(--line2)}
-.legend{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mut)}
+.legend{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--mut)}
 .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
 
 /* org tree */
 .org{display:flex;flex-direction:column;align-items:center;gap:0}
-.org .node{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:var(--sh-md);
+.org .node{background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 16px;box-shadow:var(--sh-md);
   display:flex;align-items:center;gap:10px;min-width:190px}
 .org .row{display:flex;gap:22px;justify-content:center;position:relative;padding-top:26px}
 .org .row::before{content:"";position:absolute;top:0;left:50%;width:2px;height:26px;background:var(--line)}
@@ -243,7 +248,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 
 /* tabs */
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 4px}
-.tabs span{padding:11px 14px;font-size:13.5px;font-weight:600;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer}
+.tabs span{padding:11px 14px;font-size:var(--fs-md);font-weight:600;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer}
 .tabs .on{color:var(--primary-d);border-color:var(--primary)}
 
 /* subnav: a bounded strip of real cross-page navigation links (<a> hrefs to
@@ -251,8 +256,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    Deliberately NOT `.tabs`: that component is a role="tablist" client-side
    content-switcher for panels within one page, and using tablist/tab roles
    on real navigation would be an ARIA misuse. See estab/list/page.tsx. */
-.subnav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px;margin-bottom:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
-.subnav a{padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--ink2);text-decoration:none;white-space:nowrap}
+.subnav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px;margin-bottom:18px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel)}
+.subnav a{padding:7px 12px;border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:600;color:var(--ink2);text-decoration:none;white-space:nowrap}
 .subnav a:hover,.subnav a:focus-visible{background:var(--line2);color:var(--ink)}
 
 /* misc */
@@ -261,12 +266,12 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .li:last-child{border-bottom:0}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
 .fld{background:var(--panel);padding:13px 16px}
-.fld .l{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
-.fld .v{display:block;font-size:14px;font-weight:600;margin-top:3px}.field{background:var(--panel);padding:13px 16px}.field .lbl{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}.field .val{display:block;font-size:14px;font-weight:600;margin-top:3px}
+.fld .l{display:block;font-size:var(--fs-xs);color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.fld .v{display:block;font-size:var(--fs-md);font-weight:600;margin-top:3px}.field{background:var(--panel);padding:13px 16px}.field .lbl{display:block;font-size:var(--fs-xs);color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}.field .val{display:block;font-size:var(--fs-md);font-weight:600;margin-top:3px}
 .donut-wrap{display:flex;align-items:center;gap:16px}
-.chip{display:inline-flex;align-items:center;gap:6px;background:var(--line2);border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--line2);border-radius:var(--r-sm);padding:6px 11px;font-size:var(--fs-sm);font-weight:600;color:var(--ink2)}
 /* GAP-HR-EMPLOYEES-08: link-style filter chip; the active one is driven by aria-current so server-rendered tab rows need no inline styles. */
-.chip-link{text-decoration:none;border:1px solid var(--line);border-radius:20px;background:var(--bg2)}
+.chip-link{text-decoration:none;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--bg2)}
 .chip-link[aria-current="page"]{background:var(--primary);color:var(--panel,#fff);border-color:var(--primary)}
 /* GAP-HR-EMPLOYEES-08: wrapper for a row of filter chips (replaces the inline flex style on the row/nav). */
 .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
@@ -275,57 +280,57 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .mobile{display:grid;place-items:center;min-height:100vh;background:#0b1220;padding:26px}
 .phone{width:390px;height:844px;background:var(--bg);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;
   box-shadow:0 50px 90px -25px rgba(0,0,0,.7),0 0 0 12px #11151f,0 0 0 14px #2a2f3c}
-.sbar{display:flex;justify-content:space-between;align-items:center;padding:14px 30px 4px;font-size:12px;font-weight:650;color:#fff;position:absolute;top:0;left:0;right:0;z-index:4}
+.sbar{display:flex;justify-content:space-between;align-items:center;padding:14px 30px 4px;font-size:var(--fs-xs);font-weight:650;color:#fff;position:absolute;top:0;left:0;right:0;z-index:4}
 .mh{padding:42px 20px 20px;color:#fff;background:linear-gradient(140deg,var(--primary),#0b815a)}
 .mh.indigo{background:linear-gradient(140deg,#6366f1,#4f46e5)}
 .mh-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.mh-top .t{font-size:17px;font-weight:700}
-.mh-greet{font-size:13px;opacity:.9}.mh-name{font-size:22px;font-weight:780;margin-top:1px}
-.mh-av{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:700;font-size:14px}
+.mh-top .t{font-size:var(--fs-lg);font-weight:700}
+.mh-greet{font-size:var(--fs-sm);opacity:.9}.mh-name{font-size:22px;font-weight:780;margin-top:1px}
+.mh-av{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:700;font-size:var(--fs-md)}
 .mbody{flex:1;overflow:auto;padding:16px 16px 96px}
-.mcard{background:#fff;border-radius:18px;padding:16px;box-shadow:var(--sh-md);margin-bottom:14px}
+.mcard{background:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--sh-md);margin-bottom:14px}
 .mc-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.mc-h b{font-size:14.5px}.mc-h a{font-size:12px;color:var(--primary-d);font-weight:650}
+.mc-h b{font-size:var(--fs-md)}.mc-h a{font-size:var(--fs-xs);color:var(--primary-d);font-weight:650}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.mtile{background:#fff;border-radius:16px;padding:15px;box-shadow:var(--sh-md)}
-.mtile .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:18px;margin-bottom:10px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
-.mtile .v{font-size:21px;font-weight:780;letter-spacing:-.4px}
-.mtile .l{font-size:12px;color:var(--ink2);font-weight:550;margin-top:1px}
+.mtile{background:#fff;border-radius:var(--r);padding:15px;box-shadow:var(--sh-md)}
+.mtile .ic{width:38px;height:38px;border-radius:var(--r-sm);display:grid;place-items:center;font-size:18px;margin-bottom:10px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+.mtile .v{font-size:var(--fs-xl);font-weight:780;letter-spacing:-.4px}
+.mtile .l{font-size:var(--fs-xs);color:var(--ink2);font-weight:550;margin-top:1px}
 /* Navigation tile (HR hub): a destination label, not a metric -- smaller title and a compact icon chip (GAP-HR-HOME-03). */
-.mtile.nav .v{font-size:15px;font-weight:650;letter-spacing:-.1px}
-.mtile.nav .ic{width:32px;height:32px;border-radius:9px;font-size:16px;margin-bottom:8px;background:var(--line2,#f1f5f9)}
+.mtile.nav .v{font-size:var(--fs-lg);font-weight:650;letter-spacing:-.1px}
+.mtile.nav .ic{width:32px;height:32px;border-radius:var(--r-sm);font-size:var(--fs-lg);margin-bottom:8px;background:var(--line2,#f1f5f9)}
 /* Help Centre guide tile icon chip — token-based soft-brand background so it
    follows the theme instead of a hard-coded #eef2ff (GAP-HELP-HOME-05). */
 .mtile .ic.brand{background:var(--primary-soft)}
 .mqa{display:flex;gap:10px;overflow:auto;padding:2px 0 4px}
 .mqa a{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:7px;width:70px}
-.mqa .b{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:var(--sh-md)}
-.mqa small{font-size:11px;color:var(--ink2);font-weight:600;text-align:center}
+.mqa .b{width:54px;height:54px;border-radius:var(--r);display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:var(--sh-md)}
+.mqa small{font-size:var(--fs-xs);color:var(--ink2);font-weight:600;text-align:center}
 .mrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2)}
 .mrow:last-child{border-bottom:0}
-.mrow .tx{flex:1;min-width:0}.mrow .tt{font-size:13.5px;font-weight:650}.mrow .ss{font-size:12px;color:var(--mut)}
+.mrow .tx{flex:1;min-width:0}.mrow .tt{font-size:var(--fs-md);font-weight:650}.mrow .ss{font-size:var(--fs-xs);color:var(--mut)}
 .mbig{font-size:34px;font-weight:800;letter-spacing:-1px}
 .mclock{text-align:center;padding:8px 0}
 .mclock .time{font-size:40px;font-weight:800;letter-spacing:-1.5px}
-.mclock .date{color:var(--ink2);font-size:13px;margin-top:2px}
+.mclock .date{color:var(--ink2);font-size:var(--fs-sm);margin-top:2px}
 .mcheck{width:160px;height:160px;border-radius:50%;margin:18px auto;display:grid;place-items:center;color:#fff;
   background:linear-gradient(140deg,var(--primary),#0b815a);box-shadow:0 18px 36px -12px var(--primary);font-weight:750}
-.mcheck .big{font-size:22px}.mcheck .sm{font-size:12px;opacity:.9;margin-top:3px}
+.mcheck .big{font-size:22px}.mcheck .sm{font-size:var(--fs-xs);opacity:.9;margin-top:3px}
 .mnav{position:absolute;bottom:0;left:0;right:0;height:76px;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
   border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:0 10px 16px}
-.mnav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--mut);font-size:19px}
-.mnav a small{font-size:9.5px;font-weight:650}
+.mnav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--mut);font-size:var(--fs-xl)}
+.mnav a small{font-size:var(--fs-xs);font-weight:650}
 .mnav a.on{color:var(--primary-d)}
-.mfab{width:52px;height:52px;border-radius:17px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:26px;margin-top:-24px;box-shadow:0 12px 22px -8px var(--primary)}
+.mfab{width:52px;height:52px;border-radius:var(--r);background:var(--primary);color:#fff;display:grid;place-items:center;font-size:var(--fs-2xl);margin-top:-24px;box-shadow:0 12px 22px -8px var(--primary)}
 .mactions{position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;gap:10px;padding:14px 16px 24px}
-.mbtn{flex:1;border:0;border-radius:14px;padding:15px;font-size:14.5px;font-weight:700;cursor:pointer}
+.mbtn{flex:1;border:0;border-radius:var(--r);padding:15px;font-size:var(--fs-md);font-weight:700;cursor:pointer}
 .mbtn.primary{background:var(--primary);color:#fff}.mbtn.ghost{flex:0 0 96px;background:var(--bg);border:1px solid var(--line)}
-.mseg{display:flex;background:var(--line2);border-radius:11px;padding:3px;margin-bottom:14px}
-.mseg span{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:12.5px;font-weight:650;color:var(--ink2)}
+.mseg{display:flex;background:var(--line2);border-radius:var(--r-sm);padding:3px;margin-bottom:14px}
+.mseg span{flex:1;text-align:center;padding:8px;border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:650;color:var(--ink2)}
 .mseg .on{background:#fff;color:var(--ink);box-shadow:var(--sh)}
 .mstep{display:flex;justify-content:space-between;margin-bottom:14px}
 .mstep .s{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--mut)}
-.mstep .s small{font-size:9.5px;font-weight:650}
+.mstep .s small{font-size:var(--fs-xs);font-weight:650}
 .mstep .s .d{width:13px;height:13px;border-radius:50%;background:#e3e6ec}
 .mstep .s.done .d,.mstep .s.cur .d{background:var(--primary)}
 .mstep .s.cur .d{box-shadow:0 0 0 4px var(--primary-soft)}
@@ -333,12 +338,12 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* ===== Empty states ===== */
 .empty-state{text-align:center;padding:52px 22px;color:var(--mut)}
 .empty-state .ic{font-size:42px;margin-bottom:12px}
-.empty-state h3{font-size:15.5px;color:var(--ink);font-weight:750}
-.empty-state p{font-size:13px;margin:6px 0 16px}
+.empty-state h3{font-size:var(--fs-lg);color:var(--ink);font-weight:750}
+.empty-state p{font-size:var(--fs-sm);margin:6px 0 16px}
 .gx-empty{display:none;text-align:center;padding:70px 20px;color:#8b93b5}
 .gx-empty .ic{font-size:48px;margin-bottom:14px}
-.gx-empty h4{font-size:17px;color:#e7e9f5;font-weight:750}
-.gx-empty p{font-size:13.5px;margin-top:6px}
+.gx-empty h4{font-size:var(--fs-lg);color:#e7e9f5;font-weight:750}
+.gx-empty p{font-size:var(--fs-md);margin-top:6px}
 
 /* ===== Salary-slip detail (GAP-PAYROLL-SALARY-SLIPS-DETAIL-04) =====
    The slip's earnings/deductions tables used a fixed 1fr 1fr grid with no
@@ -352,7 +357,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 
 /* ===== Print states ===== */
 .lt-section{margin-bottom:28px}
-.lt-section-hd{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2,#667085);margin:0 0 12px;padding:0 0 6px;border-bottom:1px solid var(--line,#e5e7eb)}
+.lt-section-hd{font-size:var(--fs-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2,#667085);margin:0 0 12px;padding:0 0 6px;border-bottom:1px solid var(--line,#e5e7eb)}
 
 /* Finance print header (PrintHeader.tsx): screen-hidden, print-visible. */
 .fin-print-header{display:none}
@@ -369,7 +374,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   .btn{display:none!important}
   .card{box-shadow:none!important;border:1px solid #d0d5dd!important;break-inside:avoid}
   .stat{box-shadow:none!important;border:1px solid #d0d5dd!important}
-  .ph h1,.ph [data-skeleton-heading]{font-size:20px}
+  .ph h1,.ph [data-skeleton-heading]{font-size:var(--fs-xl)}
   a[href]::after{content:""!important}
   .gx-head,.gh,.tg,.fchips,.gsearch,.hr-sec{display:none!important}
   .thumb iframe{transform:none}
@@ -439,22 +444,22 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 :focus-visible{
   outline:2px solid var(--focus-ring);
   outline-offset:2px;
-  border-radius:4px;
+  border-radius:var(--r-xs);
 }
 /* The TopBar search is a styled wrapper around a borderless input; surface the
    ring on the wrapper when the inner input is focused via keyboard. */
-.tb-search:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:10px}
+.tb-search:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:var(--r-sm)}
 
 /* Same pattern for the DataTable filter input (.dt-filter input:focus:none
    below) — without this, filtering a table with the keyboard leaves focus
    with no visible indicator at all. */
-.dt-filter:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:10px}
+.dt-filter:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:var(--r-sm)}
 
 /* Skip-to-content link — visually hidden until focused. */
 .skip-link{
   position:absolute;left:12px;top:-60px;z-index:1000;
-  background:var(--primary);color:#fff;font-size:13.5px;font-weight:650;
-  padding:10px 16px;border-radius:10px;box-shadow:var(--sh-md);
+  background:var(--primary);color:#fff;font-size:var(--fs-md);font-weight:650;
+  padding:10px 16px;border-radius:var(--r-sm);box-shadow:var(--sh-md);
   transition:top .15s ease;
 }
 .skip-link:focus{top:12px;outline:2px solid #fff;outline-offset:2px}
@@ -478,7 +483,7 @@ form.fields.jv-form>*{min-width:0}
 /* UAT-P2-D3 (A11Y-17): breadcrumb links get a usable target height. */
 .tb .crumb a{display:inline-block;padding-block:4px}
 /* UAT-P2-D3 (A11Y-20, GIGW): shell footer (contentinfo) + visible language toggle. */
-.app-foot{border-top:1px solid var(--footer-line);padding:14px 24px 96px;font-size:12.5px;background:var(--footer-bg);color:var(--footer-ink)}
+.app-foot{border-top:1px solid var(--footer-line);padding:14px 24px 96px;font-size:var(--fs-sm);background:var(--footer-bg);color:var(--footer-ink)}
 .app-foot-owner{margin:0 0 6px}
 .app-foot-links{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;margin:0;padding:0}
 .app-foot-links a{color:var(--footer-link);display:inline-block;padding-block:4px;text-decoration:underline}
@@ -501,7 +506,53 @@ form.fields.jv-form>*{min-width:0}
 [data-color-scheme="light"]{--footer-bg:#f9fafb; --footer-ink:#475467; --footer-heading:#101828; --footer-link:#00439c; --footer-link-hover:#101828; --footer-line:#eaecf0; --footer-focus:#4f46e5;
   --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#5d6679; --muted:#5d6679; --line:#eaecf0; --line2:#f2f4f7;
   color:var(--ink)}
-.tb-lang{min-height:36px;padding:6px 10px;font-size:13px}
+.tb-lang{min-height:36px;padding:6px 10px;font-size:var(--fs-sm)}
+/* ── UAT-P3 DS-1: the top bar fits a 320-390 px phone ─────────────────────
+   It was 13-56 px wider than the screen at 360/390 (fixed 26 px padding, a
+   breadcrumb that could not shrink, the actions pushed off-screen), which
+   panned every page sideways (147 of 158 phone FAILs). Now: the crumb
+   shrinks with an ellipsis and shows only the current page on phones, search
+   is a 44 px icon button, the language toggle shrinks to a 44 px अ / A button
+   below 480 px (Ask moves into the Account menu there), and Ask is a header
+   button above that. topBarFit.test.ts + the
+   Playwright overflow test (tests/e2e/shell-overflow.spec.ts) guard this. */
+.tb .crumb{flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tb .crumb .auto-crumb{min-width:0;flex-wrap:nowrap;overflow:hidden}
+.tb .crumb .auto-crumb li{flex:0 0 auto;min-width:0}
+.tb .crumb .auto-crumb li:last-child{flex:0 1 auto;overflow:hidden}
+.tb .crumb .auto-crumb li:last-child b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-search{min-width:0}
+.tb-actions{flex:0 0 auto}
+.iconbtn.tb-ask{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;padding:0 12px;color:var(--ink);font-size:var(--fs-md);background:var(--panel)}
+.tb-account{flex:0 0 auto}
+@media(max-width:768px){
+  .tb{padding:0 12px;gap:8px}
+  .tb .crumb .auto-crumb li:not(:last-child){display:none}
+  .tb-search{flex:0 0 44px;width:44px;height:44px;padding:0;justify-content:center;max-width:none;margin-inline-start:auto}
+  .tb-search .tb-search-label,.tb-search kbd{display:none}
+  .tb-actions{gap:6px;margin-inline-start:0}
+  .iconbtn.tb-ask{width:44px;min-width:44px;padding:0}
+  .tb-ask .tb-ask-label{display:none}
+  .mob-menu-btn{width:44px;height:44px}
+}
+@media(max-width:480px){
+  .tb{padding:0 8px;gap:6px}
+  /* GIGW 3.0: the language option stays visible on every page. It takes the
+     place Ask had (Ask moves into the Account menu), so the width budget is
+     unchanged: a 44 px compact अ / A button. */
+  .iconbtn.tb-ask{display:none}
+  .tb-lang-slot .tb-lang{min-width:44px;min-height:44px;padding:0;justify-content:center}
+  .tb-lang .tb-lang-long{display:none}
+  .tb-lang .tb-lang-short{display:inline;font-size:var(--fs-lg);font-weight:700}
+  .am-ask{display:block}
+}
+.tb-lang .tb-lang-short{display:none}
+.am-ask{display:none}
+/* UAT-P3 (NAV-05): one breadcrumb. The top bar trail (AutoBreadcrumb) is the
+   breadcrumb; an in-page trail that only repeats it is opted out in source with
+   data-dup-crumb (explicit, language-independent; a trail that adds context is
+   never hidden by accident). Back links (no aria-current) stay. */
+#main nav[data-dup-crumb]{display:none}
 @media(max-width:768px){.app-foot{padding:14px 16px 96px}}
 
 /* Screen-reader-only utility (visible to AT, hidden visually). */
@@ -519,7 +570,7 @@ form.fields.jv-form>*{min-width:0}
    ============================================================ */
 .tbl th.sortable{cursor:pointer;user-select:none}
 .tbl th.sortable:hover{color:var(--ink)}
-.tbl th.sortable .sort-ind{margin-inline-start:5px;opacity:.55;font-size:10px}
+.tbl th.sortable .sort-ind{margin-inline-start:5px;opacity:.55;font-size:var(--fs-xs)}
 .tbl th[aria-sort="ascending"] .sort-ind,
 .tbl th[aria-sort="descending"] .sort-ind{opacity:1;color:var(--primary-d)}
 .tbl tbody tr.row-link:focus-within{
@@ -527,10 +578,10 @@ form.fields.jv-form>*{min-width:0}
 }
 .dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .dt-filter{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--control-border);
-  border-radius:10px;padding:8px 12px;min-width:240px}
-.dt-filter input{border:0;background:transparent;width:100%;font-size:13px;color:var(--ink)}
+  border-radius:var(--r-sm);padding:8px 12px;min-width:240px}
+.dt-filter input{border:0;background:transparent;width:100%;font-size:var(--fs-sm);color:var(--ink)}
 .dt-filter input:focus{outline:none}
-.dt-pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--ink2)}
+.dt-pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-sm);color:var(--ink2)}
 /* .btn:disabled generalized above (UX-008 tranche 2) now covers this case */
 
 /* ============================================================
@@ -541,14 +592,14 @@ form.fields.jv-form>*{min-width:0}
 @keyframes cd-fade{from{opacity:0}to{opacity:1}}
 .cd-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
   box-shadow:var(--sh-lg);max-width:440px;width:100%;padding:22px}
-.cd-title{font-size:17px;font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
-.cd-desc{color:var(--ink2);font-size:13.5px;line-height:1.5}
+.cd-title{font-size:var(--fs-lg);font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
+.cd-desc{color:var(--ink2);font-size:var(--fs-md);line-height:1.5}
 .cd-field{margin-top:14px;display:flex;flex-direction:column;gap:6px}
-.cd-field label{font-size:12.5px;font-weight:650;color:var(--ink2)}
-.cd-field input,.cd-field textarea{border:1px solid var(--control-border);border-radius:10px;padding:9px 12px;
-  font-size:13.5px;color:var(--ink);background:#fff;font-family:inherit}
+.cd-field label{font-size:var(--fs-sm);font-weight:650;color:var(--ink2)}
+.cd-field input,.cd-field textarea{border:1px solid var(--control-border);border-radius:var(--r-sm);padding:9px 12px;
+  font-size:var(--fs-md);color:var(--ink);background:#fff;font-family:inherit}
 .cd-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
-.cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}
+.cd-error{color:var(--bad);font-size:var(--fs-sm);margin-top:6px}
 .btn.danger{background:var(--bad);color:var(--on-bad);box-shadow:0 8px 16px -8px var(--bad)}
 
 /* ============================================================
@@ -564,7 +615,7 @@ form.fields.jv-form>*{min-width:0}
   box-shadow:var(--sh-lg);max-width:440px;width:100%;padding:22px}
 .modal-panel--sm{max-width:360px}
 .modal-panel--lg{max-width:640px}
-.modal-title{font-size:17px;font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
+.modal-title{font-size:var(--fs-lg);font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
 .btn.danger:hover{background:var(--bad-d)}
 
 
@@ -585,16 +636,16 @@ form.fields.jv-form>*{min-width:0}
      this whole block is scoped to the opt-in class. */
   .tbl--stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .tbl--stack,.tbl--stack tbody,.tbl--stack tr{display:block;width:100%}
-  .tbl--stack tr{border:1px solid var(--line2);border-radius:8px;padding:4px 12px;margin-bottom:10px}
+  .tbl--stack tr{border:1px solid var(--line2);border-radius:var(--r-sm);padding:4px 12px;margin-bottom:10px}
   .tbl--stack td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
     padding:8px 2px;border-bottom:1px solid var(--line2);text-align:end}
   .tbl--stack tr:last-child,.tbl--stack td{border-bottom:1px solid var(--line2)}
   .tbl--stack tr td:last-child{border-bottom:0}
-  .tbl--stack td[data-label]::before{content:attr(data-label);font-weight:600;font-size:11px;
+  .tbl--stack td[data-label]::before{content:attr(data-label);font-weight:600;font-size:var(--fs-xs);
     text-transform:uppercase;letter-spacing:.03em;color:var(--ink2);text-align:start;margin-inline-end:auto}
 }
 @media(max-width:480px){
-  .ph h1,.ph [data-skeleton-heading]{font-size:20px;letter-spacing:-.3px}
+  .ph h1,.ph [data-skeleton-heading]{font-size:var(--fs-xl);letter-spacing:-.3px}
   .stat .val{font-size:22px}
 }
 
@@ -617,7 +668,7 @@ form.fields.jv-form>*{min-width:0}
    readable; 44px min-height on the input for touch targets. */
 .ta-lbl {
   display: block;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 650;
   color: var(--ink2);
   margin-bottom: 6px;
@@ -627,9 +678,9 @@ form.fields.jv-form>*{min-width:0}
   padding: 9px;
   margin-bottom: 12px;
   min-height: 44px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--line);
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-family: inherit;
   color: var(--ink);
   background: var(--surface, #fff);
@@ -640,7 +691,7 @@ form.fields.jv-form>*{min-width:0}
 }
 .ta-field-err {
   color: var(--bad);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   margin: -8px 0 12px;
 }
 .ta-field-ok {
@@ -654,12 +705,12 @@ form.fields.jv-form>*{min-width:0}
   margin: 0 0 8px;
 }
 .ta-hint {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink2);
   margin: 0 0 6px;
 }
 .ta-muted-sm {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink2);
 }
 .ta-scope-row {
@@ -667,14 +718,14 @@ form.fields.jv-form>*{min-width:0}
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .ta-key-code {
   display: block;
   overflow-wrap: anywhere;
   background: var(--surface-2, var(--surface, #f8fafc));
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--line);
 }
 .ta-key-copy-btn {
@@ -687,7 +738,7 @@ form.fields.jv-form>*{min-width:0}
   padding-top: 8px;
 }
 .ta-key-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 .ta-action-row {
@@ -696,7 +747,7 @@ form.fields.jv-form>*{min-width:0}
 }
 .ta-msg-err {
   color: var(--bad);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 0 16px 16px;
 }
 
@@ -715,7 +766,7 @@ form.fields.jv-form>*{min-width:0}
   width: 220px;
   flex-shrink: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .masters-content {
@@ -737,7 +788,7 @@ form.fields.jv-form>*{min-width:0}
    colour in dark mode. @keyframes sk-shimmer lives in globals-animations.css.
    Reduced motion: the shimmer stops and the block stays a flat placeholder. */
 .skeleton{
-  display:block;min-height:16px;border-radius:6px;
+  display:block;min-height:16px;border-radius:var(--r-xs);
   background-color:var(--line2);
   background-image:linear-gradient(90deg,var(--line2) 0%,var(--line) 35%,var(--line2) 70%);
   background-size:200% 100%;
@@ -767,5 +818,5 @@ form.fields.jv-form>*{min-width:0}
 .wf-fig--warn{color:var(--warn)}
 .wf-fig--bad{color:var(--bad)}
 .wf-fig--muted{color:var(--muted)}
-.wf-fig-label{font-size:12px;color:var(--muted)}
+.wf-fig-label{font-size:var(--fs-xs);color:var(--muted)}
 .wf-table{margin-top:12px}

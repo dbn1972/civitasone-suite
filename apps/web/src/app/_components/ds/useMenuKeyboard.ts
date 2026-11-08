@@ -16,8 +16,21 @@ const FOCUSABLE =
 
 export function menuItems(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.getAttribute("aria-hidden") !== "true",
+    (el) => el.getAttribute("aria-hidden") !== "true" && !isHiddenByStyle(el, container),
   );
+}
+
+/**
+ * True when the item or an ancestor inside the menu is display:none (or
+ * visibility:hidden), e.g. the phone-only Ask row above 480 px. Uses computed
+ * style rather than layout boxes so it also works in jsdom (inline styles).
+ */
+function isHiddenByStyle(el: HTMLElement, container: HTMLElement): boolean {
+  for (let node: HTMLElement | null = el; node && node !== container.parentElement; node = node.parentElement) {
+    const cs = getComputedStyle(node);
+    if (cs.display === "none" || cs.visibility === "hidden") return true;
+  }
+  return false;
 }
 
 export function useMenuKeyboard(

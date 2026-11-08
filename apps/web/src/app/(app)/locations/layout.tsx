@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { LOCATION_VIEW_ROLES } from "@/lib/auth/navRoles";
 import { ModuleGate } from "../ModuleGate";
 
 // GAP2-LOCATIONS-HOME-02: the /locations segment (hub + geofences,
@@ -13,16 +14,6 @@ import { ModuleGate } from "../ModuleGate";
 // instead of being shown a hub whose calls will 403. The service remains the
 // real authority; this is defence-in-depth + honest UX. Child routes
 // (infrastructure/land-records) gate more strictly server-side still.
-const LOCATION_VIEW_ROLES = [
-  "location_user",
-  "location_admin",
-  "super_admin",
-  "admin",
-  "hr_admin",
-  "hr_officer",
-  "manager",
-  "employee",
-];
 
 export default function LocationsLayout({ children }: { children: ReactNode }) {
   requireAnyRole(LOCATION_VIEW_ROLES);

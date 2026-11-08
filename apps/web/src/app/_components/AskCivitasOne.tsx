@@ -1,63 +1,59 @@
 "use client";
 
 /**
- * AskCivitasOne — floating chat bubble trigger for the AI assistant.
- * Positioned at bottom-right, above the FeedbackWidget.
- * Opens the AskCivitasOnePanel on click.
+ * AskCivitasOne: the AI assistant.
+ *
+ * UAT-P3 (DS-3 / DS-10): the trigger used to be a floating button fixed at the
+ * bottom-right of every page. It covered tiles, KPI cards and the last table
+ * column (46 overlap hits), and in Hindi it was pushed off-screen at 360 px.
+ * The trigger now sits in the top bar (AskCivitasOneTrigger, rendered by
+ * TopBar). The panel host (AskCivitasOne) stays mounted once in AppShell,
+ * outside the header, and opens on the ASK_OPEN_EVENT the trigger dispatches.
  */
-import { useCallback, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useCallback, useEffect, useState } from "react";
+import { MessageCircle } from "lucide-react";
 import { AskCivitasOnePanel } from "./AskCivitasOnePanel";
+import { useShellT } from "./useShellT";
 
+export const ASK_OPEN_EVENT = "civitas:ask-open";
+
+/** Header button that opens the assistant panel. */
+export function AskCivitasOneTrigger() {
+  const t = useShellT("assistant");
+  const label = t("title", "Ask CivitasOne");
+  return (
+    <button
+      type="button"
+      className="iconbtn tb-ask"
+      data-ask-trigger=""
+      aria-label={label}
+      title={label}
+      onClick={() => window.dispatchEvent(new CustomEvent(ASK_OPEN_EVENT))}
+    >
+      <MessageCircle aria-hidden="true" size={18} />
+      <span className="tb-ask-label">{t("trigger", "Ask")}</span>
+    </button>
+  );
+}
+
+/** Panel host: mounted once by AppShell; opens when the header trigger asks. */
 export function AskCivitasOne() {
-  const t = useTranslations("assistant");
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleOpen = useCallback(() => setIsOpen(true), []);
-  const handleClose = useCallback(() => setIsOpen(false), []);
+  useEffect(() => {
+    const open = () => setIsOpen(true);
+    window.addEventListener(ASK_OPEN_EVENT, open);
+    return () => window.removeEventListener(ASK_OPEN_EVENT, open);
+  }, []);
 
-  return (
-    <>
-      {/* Trigger button */}
-      {!isOpen && (
-        <button
-          type="button"
-          onClick={handleOpen}
-          aria-label={t("title")}
-          title={t("title")}
-          style={{
-            position: "fixed",
-            bottom: 90,
-            right: 24,
-            zIndex: 1100,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "10px 16px",
-            background: "#2563eb",
-            color: "#fff",
-            border: "none",
-            borderRadius: 24,
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)",
-            transition: "transform 0.15s ease, box-shadow 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-          }}
-        >
-          <span style={{ fontSize: 16 }}>💬</span>
-          <span>{t("trigger")}</span>
-        </button>
-      )}
+  const handleClose = useCallback(() => {
+    setIsOpen(false);
+    // Return focus to the control that opened the panel (WCAG 2.4.3).
+    // Below 480 px the header trigger is hidden (Ask lives in the Account menu),
+    // so fall back to the account button.
+    const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-ask-trigger]")).find((el) => getComputedStyle(el).display !== "none");
+    (visible ?? document.querySelector<HTMLElement>(".tb-account"))?.focus();
+  }, []);
 
-      {/* Chat panel */}
-      {isOpen && <AskCivitasOnePanel onClose={handleClose} />}
-    </>
-  );
+  return isOpen ? <AskCivitasOnePanel onClose={handleClose} /> : null;
 }

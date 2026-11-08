@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, SummaryStrip, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getProcurementIndents, getProcurementIndentSummary } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -149,16 +149,20 @@ export default async function IndentsPage(
           </>
         }
       />
-      <StatGrid>
-        <StatCard icon="📋" tone="info" label={summary ? "Total indents" : "On this page"} value={stat(allCount)} hint={summary ? "All indents matching the search" : "Indents in the current page of results"} />
-        <StatCard icon="⏳" tone="warn" label="Pending Approval" value={stat(countOf("pending_approval"))} href={statusHref("pending_approval")} />
-        {/* GAP-PROCUREMENT-INDENTS-03: Tender Required is the actionable state — surface it next to Pending Approval and link to the filtered list. */}
-        <StatCard icon="📣" tone="warn" label="Tender Required" value={stat(countOf("tender_required"))} href={statusHref("tender_required")} hint="Indents awaiting a tender to be floated" />
-        <StatCard icon="✅" tone="good" label="Approved" value={stat(countOf("approved"))} href={statusHref("approved")} />
-        <StatCard icon="📦" tone="info" label="Converted to PO" value={stat(countOf("converted_to_po"))} href={statusHref("converted_to_po")} />
-        <StatCard icon="📝" tone="neutral" label="Draft" value={stat(countOf("draft"))} href={statusHref("draft")} />
-        <StatCard icon="🚫" tone="bad" label="Rejected" value={stat(countOf("rejected"))} href={statusHref("rejected")} />
-      </StatGrid>
+      {/* UX-R5 / DS-7: one slim strip of filter links instead of seven KPI cards, so the register starts above the fold.
+          GAP-PROCUREMENT-INDENTS-03: Tender Required (the actionable state) sits next to Pending Approval. */}
+      <SummaryStrip
+        ariaLabel="Indents summary"
+        items={[
+          { key: "total", label: <span title={summary ? "All indents matching the search" : "Indents in the current page of results"}>{summary ? "Total indents" : "On this page"}</span>, value: stat(allCount) ?? "—" },
+          { label: "Pending Approval", value: stat(countOf("pending_approval")) ?? "—", href: statusHref("pending_approval"), tone: "warn" },
+          { key: "tender", label: <span title="Indents awaiting a tender to be floated">Tender Required</span>, value: stat(countOf("tender_required")) ?? "—", href: statusHref("tender_required"), tone: "warn" },
+          { label: "Approved", value: stat(countOf("approved")) ?? "—", href: statusHref("approved"), tone: "good" },
+          { label: "Converted to PO", value: stat(countOf("converted_to_po")) ?? "—", href: statusHref("converted_to_po") },
+          { label: "Draft", value: stat(countOf("draft")) ?? "—", href: statusHref("draft") },
+          { label: "Rejected", value: stat(countOf("rejected")) ?? "—", href: statusHref("rejected"), tone: "bad" },
+        ]}
+      />
       <Card title={statusFilter ? `Indents — ${statusFilters.map((s) => STATUS_LABELS[s] ?? s).join(", ")}` : "All indents"}>
         {errored ? (
           // GAP-PROCUREMENT-INDENTS-02: a real retry (RefreshErrorState re-runs

@@ -122,7 +122,9 @@ describe("GET /v1/payroll/slips/:id against real Postgres (REGRESSION: bigint co
         headers: { authorization: `Bearer ${token}` },
       });
       const allowed = await app.inject({
-        method: "GET", url: `/v1/payroll/slips/${slipId}/${route}`,
+        // UAT ux-docs: /pdf and /download now return a real PDF; the HTML print these
+        // masking assertions read is ?format=html.
+        method: "GET", url: `/v1/payroll/slips/${slipId}/${route}?format=html`,
         headers: { authorization: `Bearer ${token}` },
       });
       await app.close();

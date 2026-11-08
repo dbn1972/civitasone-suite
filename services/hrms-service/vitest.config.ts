@@ -20,6 +20,7 @@ function readPiiKey(): string {
 
 export default defineConfig({
   test: {
+    setupFiles: ["../../packages/render/test-support/tenant-identity-setup.ts"],
     ...sharedTestTimeouts,
     // These three are manual live-stack UAT scripts, not unit/integration
     // tests: they fetch() real HTTP servers on 127.0.0.1:3012/3013

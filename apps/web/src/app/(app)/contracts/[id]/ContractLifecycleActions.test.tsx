@@ -81,3 +81,17 @@ describe("contract action rules", () => {
     expect(contractActionsFor("active", ["finance_admin"], true)).toEqual(["close"]);
   });
 });
+
+describe("ContractLifecycleActions inline (record header slot, UX-R5)", () => {
+  it("renders one primary action plus terminate, without the card", () => {
+    renderIt({ inline: true, status: "active" });
+    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /terminate/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing inline on a terminated contract", () => {
+    const { container } = renderIt({ inline: true, status: "terminated" });
+    expect(container.textContent).toBe("");
+  });
+});

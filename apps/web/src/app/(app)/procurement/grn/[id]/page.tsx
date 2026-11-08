@@ -10,6 +10,7 @@ import { InspectGrnForm } from "./InspectGrnForm";
 import { getInventoryStoreOptions } from "../../../inventory/_data";
 import { grnStatusLabel } from "../statusLabels";
 import { parsePoRef } from "../poRef";
+import { PrintButton } from "../../../../_components/PrintButton";
 
 
 // Req 1.2 — GRN partial-delivery amendment. Only editable while `draft` or
@@ -28,7 +29,7 @@ function canInspectGrn(status: string): boolean {
 
 type ItemRow = Record<string, unknown> & {
   itemCode: string;
-  poItemRef: string;
+  poNo: string;
   orderedQty: string;
   receivedQty: string;
   acceptedQty: string;
@@ -37,7 +38,7 @@ type ItemRow = Record<string, unknown> & {
 
 const ITEM_COLUMNS: { key: keyof ItemRow; label: string; align?: "left" | "right" }[] = [
   { key: "itemCode", label: "Item code" },
-  { key: "poItemRef", label: "PO item ref" },
+  { key: "poNo", label: "Purchase order" },
   { key: "orderedQty", label: "Ordered", align: "right" },
   { key: "receivedQty", label: "Received", align: "right" },
   { key: "acceptedQty", label: "Accepted", align: "right" },
@@ -71,7 +72,8 @@ export default async function GRNDetailPage(props: { params: Promise<{ id: strin
 
   const itemRows: ItemRow[] = grn.items.map((item) => ({
     itemCode: item.itemCode,
-    poItemRef: item.poItemRef,
+    // UAT ux-docs: the PO reference NUMBER, never the internal PO line id.
+    poNo: grn.poNo ?? "—",
     orderedQty: String(item.orderedQty),
     receivedQty: String(item.receivedQty),
     acceptedQty: String(item.acceptedQty),
@@ -117,6 +119,10 @@ export default async function GRNDetailPage(props: { params: Promise<{ id: strin
               <StatusPill status="pending" label="Match pending inspection" />
             )}
             <StatusPill status={grn.status} label={grnStatusLabel(grn.status)} />
+            <PrintButton label="Print" title={`GRN ${grn.grnNo}`} />
+            <a href={`/api/proxy/v1/procurement/grns/${params.id}/pdf`} target="_blank" rel="noopener noreferrer" className="btn ghost no-print">
+              GRN (PDF)
+            </a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
