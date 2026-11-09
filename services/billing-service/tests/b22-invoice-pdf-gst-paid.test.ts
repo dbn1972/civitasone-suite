@@ -20,7 +20,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { billingPayments } from "../src/modules/payments/schema.js";
 import { registerInvoicesConsumers } from "../src/modules/invoices/consumer.js";
 import { renderInvoicePdf, type InvoicePdfModel } from "../src/modules/invoices/pdf.js";
-import { assertGstIssuable, invoiceSupplierGstinFromEnv } from "../src/modules/invoices/domain.js";
+import { assertGstIssuable, invoiceSupplierGstinFromEnv, validateGstSplit, splitIntraStateTax } from "../src/modules/invoices/domain.js";
 
 const { buildApp } = await import("../src/app.js");
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -258,5 +258,126 @@ describe("legacy PATCH /pay: payable-state guard and payments row", () => {
     await drain();
     expect((await row(id)).status).toBe("paid");
     expect((await payments(id)).map((p) => p.amountMinor)).toEqual([30000n]);
+  });
+});
+
+describe("review fixes: concurrent settlement, state rule, odd paise, nil-tax bill of supply, non-retryable", () => {
+  const takePayments = async (id: string) => asTenant(async (tx) => {
+    const rows = await tx.select().from(billingPayments).where(eq(billingPayments.invoiceId, id));
+    await tx.delete(billingPayments).where(eq(billingPayments.invoiceId, id));
+    return rows;
+  });
+  const paidEventsFor = async (id: string) => (await asTenant((tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T), eq(outboxMessages.topic, "billing.invoice.paid")))))
+    .filter((m) => (m.payload as { invoiceId: string }).invoiceId === id);
+  const issuedBill = async (period: string, amountMinor = 50000) => {
+    const id = await create(period, [{ description: "Training day", amountMinor }]);
+    expect((await issue(id)).statusCode).toBe(202);
+    await drain();
+    return id;
+  };
+  const pay = (id: string) => app.inject({ method: "PATCH", url: `/v1/billing/invoices/${id}/pay`, headers: tok });
+  const receipt = (id: string, amountMinor: number) => app.inject({
+    method: "POST", url: "/v1/billing/payments", headers: tok,
+    payload: { tenantId: T, invoiceId: id, amountMinor, method: "neft", gateway: "offline" },
+  });
+
+  it("two pays in parallel: exactly one payments row, one invoice.paid, paid_minor = total (repeated on 8 bills)", async () => {
+    for (let i = 0; i < 8; i++) {
+      const id = await issuedBill(`2028-${String(i + 1).padStart(2, "0")}`);
+      const [a, b] = await Promise.all([pay(id), pay(id)]);
+      expect([a.statusCode, b.statusCode].every((c) => c === 202 || c === 409)).toBe(true);
+      await drain();
+      const r = await row(id);
+      expect(r.status).toBe("paid");
+      expect(r.paidMinor).toBe(50000n);
+      const ps = await takePayments(id);
+      expect(ps).toHaveLength(1);
+      expect(ps[0]!.amountMinor).toBe(50000n);
+      expect(await paidEventsFor(id)).toHaveLength(1);
+    }
+  });
+
+  it("a pay racing a partial receipt never overpays or overwrites it: the rows always add up to paid_minor <= total", async () => {
+    for (let i = 0; i < 8; i++) {
+      const id = await issuedBill(`2029-${String(i + 1).padStart(2, "0")}`);
+      await Promise.all([pay(id), receipt(id, 30000)]);
+      await drain();
+      const r = await row(id);
+      const ps = await takePayments(id);
+      const sum = ps.reduce((a, p) => a + p.amountMinor, 0n);
+      expect(r.paidMinor).toBe(sum);
+      expect(r.paidMinor <= 50000n).toBe(true);
+      expect(ps.length).toBeGreaterThanOrEqual(1);
+      expect(ps.length).toBeLessThanOrEqual(2);
+      expect((await paidEventsFor(id)).length).toBe(r.status === "paid" ? 1 : 0);
+    }
+  });
+
+  it("a pay after a partial receipt settles the CURRENT balance, not the total on top of it", async () => {
+    const id = await issuedBill("2030-01");
+    const msg = { messageId: randomUUID(), type: "billing.invoice.pay", tenantId: T, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload: { id } };
+    // another writer lands a partial receipt first; the pay command (which would settle 50,000) must not overwrite it
+    await asTenant((tx) => tx.update(billingInvoices).set({ status: "partially_paid", paidMinor: 20000n }).where(eq(billingInvoices.id, id)));
+    await (queue as unknown as { publish(t: string, m: unknown): Promise<void> }).publish("billing.invoice.pay", msg);
+    await drain();
+    const r = await row(id);
+    expect(r.paidMinor).toBe(50000n); // settled the CURRENT balance (30,000), not a stale 50,000 on top of 20,000
+    expect((await takePayments(id)).map((p) => p.amountMinor)).toEqual([30000n]);
+    expect(await paidEventsFor(id)).toHaveLength(1);
+  });
+
+  it("a DomainError in a consumer is dead-lettered at once, not retried", async () => {
+    const { MemoryQueue } = await import("@civitasone/queue");
+    const q = new MemoryQueue({ maxAttempts: 3 });
+    registerInvoicesConsumers(q);
+    await q.start();
+    const id = await create("2031-01", [{ description: "Training day", amountMinor: 50000 }]); // a draft: not payable
+    await q.publish("billing.invoice.pay", { messageId: randomUUID(), type: "billing.invoice.pay", tenantId: T, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload: { id } });
+    await q.drain();
+    await q.stop();
+    expect(q.dlq).toHaveLength(1);
+    expect(q.dlq[0]!.error).toMatch(/^INVOICE_NOT_PAYABLE:/); // the NonRetryable wrapper's message; a retried raw error would not carry the code prefix
+  });
+
+  it("issue enforces the intra-/inter-state head rule, not just the sum (422 GST_SPLIT_INVALID)", async () => {
+    // supplier Haryana (06), place of supply Delhi (07) = inter-state, but the bill was split CGST/SGST. The create schema
+    // already applies validateGstSplit, so build the bad row directly to exercise the issue-time check.
+    const bad = randomUUID();
+    await asTenant((tx) => tx.insert(billingInvoices).values({
+      id: bad, tenantId: T, periodMonth: "2031-03", status: "draft", totalMinor: 236000n, taxMinor: 36000n, supplierGstin: HARYANA_GSTIN,
+      recipientGstin: "07AABCD5678B1Z2", placeOfSupply: "07", cgstMinor: 18000n, sgstMinor: 18000n, igstMinor: 0n, createdBy: ACTOR, updatedBy: ACTOR,
+    }));
+    const r = await issue(bad);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("GST_SPLIT_INVALID");
+    expect(r.json().message).toMatch(/inter-state/);
+  });
+});
+
+describe("odd-paise tax and nil-tax bill of supply (pure)", () => {
+  const base = { supplierGstin: HARYANA_GSTIN, recipientGstin: RECIPIENT, placeOfSupply: "06", igstMinor: 0n };
+  it("an odd intra-state tax splits CGST rounded down, SGST rounded up; anything else is refused with the exact figures", () => {
+    expect(splitIntraStateTax(1801n)).toEqual({ cgstMinor: 900n, sgstMinor: 901n });
+    expect(validateGstSplit({ ...base, cgstMinor: 900n, sgstMinor: 901n }, 1801n)).toBeNull();
+    const msg = validateGstSplit({ ...base, cgstMinor: 901n, sgstMinor: 900n }, 1801n);
+    expect(msg).toMatch(/odd and cannot be split equally: use CGST 900 and SGST 901/);
+    expect(validateGstSplit({ ...base, cgstMinor: 900n, sgstMinor: 900n }, 1800n)).toBeNull();
+    expect(validateGstSplit({ ...base, cgstMinor: 1000n, sgstMinor: 800n }, 1800n)).toMatch(/must be equal \(900 paise each/);
+  });
+
+  it("a registered supplier's nil-tax bill prints as BILL OF SUPPLY with the supplier GSTIN, no tax heads, no reverse-charge line", async () => {
+    const m: InvoicePdfModel = {
+      invoiceNumber: "INV-2627-000020", periodMonth: "2027-01", status: "issued", issuedAt: "2026-11-09T00:00:00.000Z",
+      supplierGstin: HARYANA_GSTIN, recipientGstin: null, placeOfSupply: null,
+      taxMinor: "0", cgstMinor: "0", sgstMinor: "0", igstMinor: "0", totalMinor: "50000", paidMinor: "0", outstandingMinor: "50000",
+      items: [{ description: "Training day", kind: "line", quantity: "1", amountMinor: "50000", hsnSac: null }],
+    };
+    const flat = await pdfFlatText(await renderInvoicePdf(m, { supplier: SUPPLIER }, AT));
+    expect(flat).toContain("BILL OF SUPPLY");
+    expect(flat).not.toContain("TAX INVOICE");
+    expect(flat).toContain(`Supplier GSTIN ${HARYANA_GSTIN}`);
+    expect(flat).not.toContain("CGST");
+    expect(flat).not.toContain("reverse charge");
+    expect(flat).toContain("Total 500.00");
   });
 });

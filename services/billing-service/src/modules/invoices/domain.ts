@@ -147,16 +147,38 @@ export function validateGstSplit(g: GstDetail, taxMinor: bigint): string | null 
   if (!GSTIN_RE.test(g.supplierGstin)) return "supplier GSTIN is not a valid 15-character GSTIN";
   if (!GSTIN_RE.test(g.recipientGstin)) return "recipient GSTIN is not a valid 15-character GSTIN";
   if (!/^[0-9]{2}$/.test(g.placeOfSupply)) return "place of supply must be a two-digit GST state code";
+  return validateGstHeads(g, taxMinor);
+}
+
+/** B22: the intra-/inter-state head rule alone (no recipient GSTIN needed: a B2C bill has none). */
+export function validateGstHeads(
+  g: { supplierGstin: string; placeOfSupply: string; cgstMinor: bigint; sgstMinor: bigint; igstMinor: bigint },
+  taxMinor: bigint,
+): string | null {
   if (g.cgstMinor < 0n || g.sgstMinor < 0n || g.igstMinor < 0n) return "tax components cannot be negative";
   if (g.cgstMinor + g.sgstMinor + g.igstMinor !== taxMinor) return "CGST + SGST + IGST must equal the invoice tax lines";
   const intraState = g.supplierGstin.slice(0, 2) === g.placeOfSupply;
   if (intraState) {
     if (g.igstMinor !== 0n) return "intra-state supply is CGST + SGST only; IGST must be zero";
-    if (g.cgstMinor !== g.sgstMinor) return "CGST and SGST must be equal";
+    const { cgstMinor: wantC, sgstMinor: wantS } = splitIntraStateTax(taxMinor);
+    if (taxMinor % 2n === 1n) {
+      // An odd total cannot split equally. Standard split: CGST takes the half rounded down, SGST the half rounded up.
+      if (g.cgstMinor !== wantC || g.sgstMinor !== wantS) {
+        return `the intra-state tax of ${taxMinor} paise is odd and cannot be split equally: use CGST ${wantC} and SGST ${wantS} paise (CGST rounded down, SGST rounded up)`;
+      }
+    } else if (g.cgstMinor !== g.sgstMinor) {
+      return `CGST and SGST must be equal (${wantC} paise each for tax of ${taxMinor} paise)`;
+    }
   } else if (g.cgstMinor !== 0n || g.sgstMinor !== 0n) {
     return "inter-state supply is IGST only; CGST and SGST must be zero";
   }
   return null;
+}
+
+/** The intra-state CGST/SGST split of a total tax: equal halves; an odd paisa goes to SGST (CGST rounded down). */
+export function splitIntraStateTax(taxMinor: bigint): { cgstMinor: bigint; sgstMinor: bigint } {
+  const c = taxMinor / 2n;
+  return { cgstMinor: c, sgstMinor: taxMinor - c };
 }
 
 /**
@@ -175,7 +197,7 @@ export function invoiceSupplierGstinFromEnv(): string | null {
  * Returns the supplier GSTIN the bill is issued under (its own, else the configured one, else null = bill of supply).
  */
 export function assertGstIssuable(
-  inv: { supplierGstin: string | null; taxMinor: bigint; cgstMinor: bigint; sgstMinor: bigint; igstMinor: bigint },
+  inv: { supplierGstin: string | null; placeOfSupply?: string | null; taxMinor: bigint; cgstMinor: bigint; sgstMinor: bigint; igstMinor: bigint },
   configuredGstin: string | null,
 ): string | null {
   const supplier = inv.supplierGstin ?? configuredGstin;
@@ -191,6 +213,12 @@ export function assertGstIssuable(
       "GST_SPLIT_MISSING",
       "this bill charges tax but its CGST/SGST/IGST split does not add up to the tax lines: create it with the gst block (supplier and recipient GSTIN, place of supply, split)",
     );
+  }
+  // The intra-/inter-state rule (CGST = SGST and no IGST within the supplier's state, IGST only outside it), from the
+  // supplier state code against the place of supply. The recipient GSTIN is not required (a B2C bill has none).
+  if (inv.placeOfSupply && inv.supplierGstin) {
+    const err = validateGstHeads({ supplierGstin: inv.supplierGstin, placeOfSupply: inv.placeOfSupply, cgstMinor: inv.cgstMinor, sgstMinor: inv.sgstMinor, igstMinor: inv.igstMinor }, inv.taxMinor);
+    if (err) throw new DomainError("GST_SPLIT_INVALID", err);
   }
   return supplier;
 }

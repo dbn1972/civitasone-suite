@@ -118,7 +118,10 @@ export async function renderInvoicePdf(
 ): Promise<Uint8Array> {
   const supplier = parties.supplier ?? invoiceSupplierFromEnv();
   if (!supplier.name) throw new InvoiceSupplierNotConfiguredError();
-  const registered = !!(m.supplierGstin && m.supplierGstin.length > 0);
+  const hasGstin = !!(m.supplierGstin && m.supplierGstin.length > 0);
+  // CGST Rule 46 / Rule 49: a tax invoice is for a taxable supply. A registered supplier's nil-tax (exempt / nil-rated)
+  // supply is made on a bill of supply, which still carries the supplier GSTIN. So: tax invoice = GSTIN and tax > 0.
+  const registered = hasGstin && toMinor(m.taxMinor) > 0n;
   const pdf = await OfficialPdf.create({
     title: `${registered ? "Tax Invoice" : "Bill of Supply"} ${m.invoiceNumber ?? ""}`.trim(),
     lang: "bilingual",
@@ -184,7 +187,9 @@ export async function renderInvoicePdf(
       footRows: [["Total", formatMinorIndian(total)], ["Paid", formatMinorIndian(paid)], ["Outstanding", formatMinorIndian(outstanding)]],
     });
     pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
-    pdf.note(tax > 0n
+    pdf.note(hasGstin
+      ? "This is a bill of supply: the supply carries no tax, so no GST is charged on it."
+      : tax > 0n
       ? "The supplier GSTIN is not on record: this is a bill of supply. The tax shown was recorded on the invoice before GST registration was enforced at issue; it is not a GST charge and carries no input tax credit."
       : "The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
   }
