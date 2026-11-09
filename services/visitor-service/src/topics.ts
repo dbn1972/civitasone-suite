@@ -92,6 +92,7 @@ export const COMMANDS = {
   // Location / Area (reference/config data — queue-first CQRS, Task Q-95.1)
   locationCreate:               "visitor.location.create",
   areaCreate:                   "visitor.area.create",
+  gateCreate:                   "visitor.gate.create",
 
   // DPDP (Task Q-95.2)
   dpdpErasureRequest:           "visitor.dpdp.erasure_request",
@@ -180,6 +181,7 @@ export const EVENTS = {
   // Location / Area lifecycle
   locationCreated:              "visitor.location.created",
   areaCreated:                  "visitor.area.created",
+  gateCreated:                  "visitor.gate.created",
 
   // DPDP lifecycle
   dpdpErasureAccepted:          "visitor.dpdp.erasure_accepted",

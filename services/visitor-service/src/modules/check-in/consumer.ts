@@ -23,10 +23,12 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import { incrementPiiDecryptSkipped } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
+import { decryptPii, PiiDecryptError } from "../../shared/pii-crypto.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { domainRejectionSafe } from "../../shared/domain-rejection.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -105,6 +107,9 @@ interface ScanBlacklistMatchPayload {
   deviceId: string;
   idDocumentType?: string | null;
 }
+
+/** Visit requests already reported as undecryptable by this process (bounded; log-once guard). */
+const undecryptableLogged = new Set<string>();
 
 export function registerCheckInConsumers(queue: Queue): void {
   // Domain rejections are permanent -> dead-letter on first attempt (not 5x retried).
@@ -707,16 +712,40 @@ export function registerCheckInConsumers(queue: Queue): void {
 
       for (const pass of overstayedPasses) {
         // Look up the visit request for visitor/host info
+        // B23: visitorName is selected as the RAW stored envelope (mapWith(String) bypasses encryptedText's
+        // driver decrypt) and opened per row below. Decrypting inside the driver mapping threw
+        // PiiDecryptError for one row the keyring cannot open (rows sealed under a retired key), which rolled
+        // back the whole batch, retried 5x and dead-lettered every 10 minutes - and raised no overstay alert
+        // for any visitor of that tenant.
         const visitRows = await tx
           .select({
-            visitorName: visitRequests.visitorName,
-            visitorPhone: visitRequests.visitorPhone,
+            visitorName: sql<string>`${visitRequests.visitorName}`.mapWith(String),
             hostEmployeeId: visitRequests.hostEmployeeId,
           })
           .from(visitRequests)
           .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
           .limit(1);
-        const visit = visitRows[0];
+        const stored = visitRows[0];
+        let visit: { visitorName: string; hostEmployeeId: string } | undefined;
+        if (stored) {
+          try {
+            visit = { visitorName: decryptPii(stored.visitorName), hostEmployeeId: stored.hostEmployeeId };
+          } catch (err) {
+            if (!(err instanceof PiiDecryptError)) throw err;
+            // Skip this pass: count it (alert on any increase) and log once per process per visit request
+            // (ids only, never the value) so a stale row is not re-logged every cycle.
+            incrementPiiDecryptSkipped("visitor-service", "visit_request");
+            if (!undecryptableLogged.has(pass.visitRequestId)) {
+              if (undecryptableLogged.size >= 10_000) undecryptableLogged.clear();
+              undecryptableLogged.add(pass.visitRequestId);
+              log.error(
+                { tenantId: msg.tenantId, visitRequestId: pass.visitRequestId, passId: pass.passId, event: "overstay_pii_decrypt_skipped" },
+                "overstay detect: visit request PII cannot be decrypted (key mismatch); pass skipped, needs data repair",
+              );
+            }
+            continue;
+          }
+        }
 
         // Outbox: overstayAlerted event (Requirement 6.3)
         await enqueue(tx, {
