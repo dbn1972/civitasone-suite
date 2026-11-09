@@ -11593,6 +11593,8 @@
     "addParticipant": "Add participant",
     "addCommitteeMembers": "Add committee members",
     "participantsSubmitted": "Participants submitted. They appear in the roster in a moment.",
+    "participantAlreadyAdded": "This person is already on the roster.",
+    "participantsUnconfirmed": "Could not confirm the participants were added. Refresh the page to check the roster.",
     "participantsAdded": "Participants added. They appear in the roster in a moment.",
     "committeeAlreadyAdded": "Every active committee member is already on the roster.",
     "actions": {

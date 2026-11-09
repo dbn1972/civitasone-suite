@@ -5,7 +5,7 @@
  * employee add, both via POST /participants.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import en from "@/messages/en.json";
 
@@ -153,5 +153,25 @@ describe("MeetingConsole — add participants (M2)", () => {
     expect(addParticipantsMock).toHaveBeenCalledWith("m1", [{ employeeId: E3, role: "secretary" }]);
     expect(await screen.findByText(/submitted/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add committee members/i })).toBeDisabled();
+  });
+
+  it("gives up after 30 s when the roster never reflects the add: buttons re-enabled, notice shown, polling stops", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      listParticipantEmployeeIdsMock.mockResolvedValue([E1]); // never gains E3
+      listCommitteeMembersMock.mockResolvedValue([{ employeeId: E3, role: "secretary" }]);
+      render(<MeetingConsole {...props()} />);
+      fireEvent.click(screen.getByRole("button", { name: /add committee members/i }));
+      await waitFor(() => expect(addParticipantsMock).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByRole("button", { name: /add committee members/i })).toBeDisabled());
+      await act(async () => { await vi.advanceTimersByTimeAsync(31000); });
+      expect(screen.getByRole("button", { name: /add committee members/i })).not.toBeDisabled();
+      expect(screen.getByText(/could not confirm/i)).toBeInTheDocument();
+      const calls = listParticipantEmployeeIdsMock.mock.calls.length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+      expect(listParticipantEmployeeIdsMock.mock.calls.length).toBe(calls);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

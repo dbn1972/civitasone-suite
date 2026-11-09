@@ -390,22 +390,41 @@ export function MeetingConsole({
   const [newParticipantId, setNewParticipantId] = useState<string | null>(null);
   const [newParticipantRole, setNewParticipantRole] = useState<ParticipantRole>("member");
   // Employee ids submitted but not yet on the roster: keeps "Add" disabled so a second click cannot
-  // resubmit a batch the consumer would reject. Polls the roster; gives up after 30 s.
+  // resubmit a batch the consumer would reject. The effect is keyed on awaitingIds ONLY (a fresh array
+  // per submit), so the 30 s deadline is fixed at submit time and polling results cannot restart it.
+  // Polls GET /participants, the same source the dedupe uses.
   const [awaitingIds, setAwaitingIds] = useState<string[]>([]);
+  const refreshAttendanceRef = useRef(refreshAttendance);
+  refreshAttendanceRef.current = refreshAttendance;
   useEffect(() => {
     if (awaitingIds.length === 0) return;
-    const onRoster = new Set((attendance?.participants ?? []).map((p) => p.employeeId));
-    if (awaitingIds.every((id) => onRoster.has(id))) {
+    let stopped = false;
+    const poll = setInterval(() => {
+      void listParticipantEmployeeIds(meeting.id)
+        .then((ids) => {
+          if (stopped) return;
+          const onRoster = new Set(ids);
+          if (awaitingIds.every((id) => onRoster.has(id))) {
+            stopped = true;
+            setAwaitingIds([]);
+            void refreshAttendanceRef.current();
+          }
+        })
+        .catch(() => { /* keep polling until the deadline */ });
+    }, 3000);
+    const giveUp = setTimeout(() => {
+      stopped = true;
       setAwaitingIds([]);
-      return;
-    }
-    const poll = setInterval(() => void refreshAttendance(), 3000);
-    const giveUp = setTimeout(() => setAwaitingIds([]), 30000);
+      setToast(null);
+      setError(tl("participantsUnconfirmed"));
+    }, 30000);
     return () => {
+      stopped = true;
       clearInterval(poll);
       clearTimeout(giveUp);
     };
-  }, [awaitingIds, attendance, refreshAttendance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingIds, meeting.id]);
   async function onAddParticipant() {
     if (!newParticipantId) return;
     setBusy("participants:add");
@@ -413,7 +432,7 @@ export function MeetingConsole({
     setToast(null);
     try {
       if ((await listParticipantEmployeeIds(meeting.id)).includes(newParticipantId)) {
-        setToast(tl("committeeAlreadyAdded"));
+        setToast(tl("participantAlreadyAdded"));
         return;
       }
       await addParticipants(meeting.id, [{ employeeId: newParticipantId, role: newParticipantRole }]);
