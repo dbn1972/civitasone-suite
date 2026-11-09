@@ -141,6 +141,37 @@ describe("name correction -- route guards", () => {
   });
 });
 
+describe("name correction -- separation of duties", () => {
+  it("an HR officer cannot correct their OWN name: 403 SELF_CORRECTION_NOT_ALLOWED, nothing queued", async () => {
+    const emp = await seedEmployee("confirmed", "Rekha Sharma");
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(hrmsEmployees).set({ userRef: ACTOR }).where(eq(hrmsEmployees.id, emp))));
+    const publish = vi.spyOn(queue, "publish");
+    const r = await patch(emp, { fullName: "Rekha Verma", reason: "Name changed after marriage" });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("SELF_CORRECTION_NOT_ALLOWED");
+    expect(publish).not.toHaveBeenCalled();
+    publish.mockRestore();
+    // other fields on their own record are still editable by them (only the name is SoD-gated)
+    expect((await patch(emp, { mobile: "9876543210" })).statusCode).toBe(202);
+    await drain();
+    expect(await nameOf(emp)).toBe("Rekha Sharma");
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(hrmsEmployees).set({ userRef: null }).where(eq(hrmsEmployees.id, emp))));
+  });
+
+  it("the consumer refuses a stale self-correction command too", async () => {
+    const emp = await seedEmployee("confirmed", "Rekha Sharma");
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(hrmsEmployees).set({ userRef: ACTOR }).where(eq(hrmsEmployees.id, emp))));
+    await queue.publish(COMMANDS.employeeUpdate, {
+      messageId: randomUUID(), type: COMMANDS.employeeUpdate, tenantId: TENANT, actorId: ACTOR,
+      correlationId: "c", schemaVersion: "1.0",
+      payload: { id: emp, tenantId: TENANT, fullName: "Rekha Verma", reason: "Name changed after marriage" },
+    });
+    await drain();
+    expect(await nameOf(emp)).toBe("Rekha Sharma");
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(hrmsEmployees).set({ userRef: null }).where(eq(hrmsEmployees.id, emp))));
+  });
+});
+
 describe("name correction -- applied, audited, copies", () => {
   it("trims, applies, writes one correct_name audit with old/new/reason, and refreshes live copies only", async () => {
     const emp = await seedEmployee("confirmed", "Sunita Devi");
@@ -185,6 +216,30 @@ describe("name correction -- applied, audited, copies", () => {
 
     const entries = await q<{ full_name: string }>(sql`SELECT full_name FROM seniority.hrms_seniority_list_entries WHERE tenant_id = ${TENANT}::uuid AND employee_id = ${emp}::uuid`);
     expect(entries[0]!.full_name).toBe("Sunita Devi");
+  });
+
+  it("another tenant's card / due-list row carrying the SAME employee id is never touched", async () => {
+    const emp = await seedEmployee("confirmed", "Sunita Devi");
+    const OTHER = randomUUID();
+    const otherCard = randomUUID();
+    const asOther = <T,>(query: ReturnType<typeof sql>) => runWithTenant(OTHER, () => db.transaction((tx) => tx.execute(query))) as unknown as Promise<T[]>;
+    await asOther(sql`INSERT INTO hrms.id_cards (id, tenant_id, holder_name, designation, department, employee_id, card_number, valid_until, status, qr_payload, issued_by)
+      VALUES (${otherCard}::uuid, ${OTHER}::uuid, 'Sunita Devi', 'SO', 'Estab', ${emp}::uuid, ${"DIC/X/" + otherCard.slice(0, 6)}, '2030-12-31', 'active', 'qr', ${ACTOR}::uuid)`);
+    await asOther(sql`INSERT INTO scheduler.hrms_due_list (tenant_id, list_kind, run_date, employee_id, employee_no, full_name, due_date, days_remaining)
+      VALUES (${OTHER}::uuid, 'probation', CURRENT_DATE, ${emp}::uuid, 'X', 'Sunita Devi', CURRENT_DATE + 20, 20)`);
+    try {
+      const r = await patch(emp, { fullName: "Sunita Kumari", reason: "Name changed after marriage" });
+      expect(r.statusCode).toBe(202);
+      await drain();
+      expect(await nameOf(emp)).toBe("Sunita Kumari");
+      const card = await asOther<{ holder_name: string }>(sql`SELECT holder_name FROM hrms.id_cards WHERE id = ${otherCard}::uuid`);
+      const due = await asOther<{ full_name: string }>(sql`SELECT full_name FROM scheduler.hrms_due_list WHERE tenant_id = ${OTHER}::uuid AND employee_id = ${emp}::uuid`);
+      expect(card[0]!.holder_name).toBe("Sunita Devi");
+      expect(due[0]!.full_name).toBe("Sunita Devi");
+    } finally {
+      await asOther(sql`DELETE FROM hrms.id_cards WHERE tenant_id = ${OTHER}::uuid`);
+      await asOther(sql`DELETE FROM scheduler.hrms_due_list WHERE tenant_id = ${OTHER}::uuid`);
+    }
   });
 
   it("an unchanged name is not a correction: no reason needed, no audit, no write", async () => {

@@ -348,6 +348,15 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     }
     // UAT b23: name correction needs a reason; an unchanged name is dropped (not a correction).
     if (body.fullName !== undefined && body.fullName === emp.fullName) delete body.fullName;
+    // Separation of duties: nobody corrects their own name, whatever their HR role. Direct login link
+    // first; resolveEmployeeForActor (verified-email bootstrap link) second, best effort.
+    if (body.fullName !== undefined) {
+      let isSelf = emp.userRef != null && emp.userRef === ctx.actorId;
+      if (!isSelf) {
+        try { isSelf = (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id === emp.id; } catch { /* ambiguity etc.: the direct link check above stands */ }
+      }
+      if (isSelf) throw new HttpError(403, "SELF_CORRECTION_NOT_ALLOWED", "You cannot correct your own name. Ask another HR officer to do it.");
+    }
     if (body.fullName !== undefined && !body.reason) {
       throw new HttpError(400, "REASON_REQUIRED", NAME_CORRECTION_REASON_MESSAGE);
     }

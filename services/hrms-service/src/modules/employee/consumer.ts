@@ -494,6 +494,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       // exited block above already ran, so a separated employee never reaches this point.
       const newName = p.fullName !== undefined && p.fullName !== emp.fullName ? p.fullName : undefined;
       if (newName !== undefined) {
+        if (emp.userRef != null && emp.userRef === msg.actorId) throw new NonRetryableError("[SELF_CORRECTION_NOT_ALLOWED] an employee cannot correct their own name");
         if (!p.reason) throw new NonRetryableError("[REASON_REQUIRED] a reason is required to correct a name");
         patch.fullName = newName; changedFields.push("fullName");
       }
