@@ -144,6 +144,24 @@ export const STANDARD_DEFINITIONS: SeedDefinition[] = [
       { nodeKey: "proc_head", name: "Procurement Head Approval", roleRef: "procurement_admin" },
     ],
   },
+  // B23b-wf: the chain meeting-service/decision/consumer.ts requests (definitionCode
+  // meeting_financial_countersignature, refType meeting_decision, initialTaskName "Counter-signature") for a
+  // financial decision at/above the GFR delegation threshold (Req 11.7 / 20.8). No tenant had it, so once the
+  // ref_type CHECK allowed the instance (migration 0050) it was rejected as unknown_definition (R13) and the
+  // counter-signature could never be given. One node, like the procurement chains: the competent financial
+  // authority is finance_admin (the accounts officer role; it exists in the realm, unlike the finance_approver
+  // used by the older finance chains above). Approving it is terminal. The decision is already `effective` in
+  // meeting-service and dispatchDomainApprove has no meeting_decision entry, so completing the task records the
+  // counter-signature in workflow (inbox, history, audit) with no downstream state change; meeting-service
+  // ignores workflow.task.completed for entities other than minutes / resolution.
+  {
+    code: "meeting_financial_countersignature",
+    name: "Meeting Decision Financial Counter-signature",
+    cluster: "finance",
+    nodes: [
+      { nodeKey: "countersign", name: "Counter-signature", roleRef: "finance_admin" },
+    ],
+  },
   {
     code: "grant_disbursement",
     name: "Grant Disbursement Workflow",

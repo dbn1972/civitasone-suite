@@ -170,7 +170,7 @@ describe("F77 — backfill for existing tenants", () => {
   /** A tenant provisioned before F77: only the original five standard chains. */
   async function legacyTenant(): Promise<string> {
     const tenant = newTenant();
-    const legacy = STANDARD_DEFINITIONS.filter((d) => !d.code.startsWith("procurement_") || d.code === "procurement_approval");
+    const legacy = STANDARD_DEFINITIONS.filter((d) => (!d.code.startsWith("procurement_") && d.code !== "meeting_financial_countersignature") || d.code === "procurement_approval");
     expect(legacy.map((d) => d.code).sort()).toEqual(
       ["file_noting", "finance_approval", "grant_disbursement", "leave_approval", "procurement_approval"],
     );
@@ -182,7 +182,9 @@ describe("F77 — backfill for existing tenants", () => {
     const tenant = await legacyTenant();
     const r = await backfillStandardDefinitions(tenant, { actorId: randomUUID(), dryRun: true, defs: selectDefinitions() });
     // B9-wf1 added the plan / amendment chains to the same catalogue.
+    // B23b-wf added the meeting financial counter-signature chain.
     expect(r.missing.sort()).toEqual([
+      "meeting_financial_countersignature",
       "procurement_indent_approval", "procurement_plan_approval", "procurement_po_amendment_approval", "procurement_po_approval",
     ]);
     expect(r.seeded).toEqual([]);

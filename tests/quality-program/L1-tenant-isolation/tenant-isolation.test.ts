@@ -200,17 +200,27 @@ describe("L1 — Tenant Isolation: Cross-tenant data access", () => {
           currency: "INR",
         }),
       });
-      // Should succeed for T_B (202) — the bill belongs to T_B only
-      expect([202, 400, 403]).toContain(res.status);
+      // The headId above exists in NO tenant. Since bundle 21 the route checks the head (tenant-scoped lookup,
+      // payments/routes.ts assertBillHeadUsable) BEFORE anything is written and answers 422 HEAD_NOT_FOUND;
+      // a stack with a head fixture would answer 202. 400/403 stay valid refusals. A refusal only counts as
+      // isolation together with the checks below (nothing written for either tenant, nothing foreign leaked).
+      expect([202, 400, 403, 422]).toContain(res.status);
+      const raw = await res.text();
+      if (res.status === 422) expect(raw).toContain("HEAD_NOT_FOUND");
+      // The response never names the other tenant.
+      expect(raw).not.toContain(TENANT_A);
 
-      // Now verify T_A cannot see it
-      const check = await apiGet("/api/v1/finance/bills", tokenA);
-      if (check.status === 200) {
-        const bills = Array.isArray(check.body) ? check.body : (check.body as Record<string, unknown>).data;
-        if (Array.isArray(bills)) {
-          const leaked = bills.find((b: Record<string, unknown>) => b.billNo === "ISOLATION-TEST-001");
-          expect(leaked).toBeUndefined();
-        }
+      const billNosOf = (b: unknown): string[] => {
+        const rows = Array.isArray(b) ? b : (b as Record<string, unknown> | null)?.data;
+        return Array.isArray(rows) ? rows.map((r: Record<string, unknown>) => String(r.billNo)) : [];
+      };
+      // T_A never sees the bill (holds for 202 and for refusals).
+      const checkA = await apiGet("/api/v1/finance/bills", tokenA);
+      if (checkA.status === 200) expect(billNosOf(checkA.body)).not.toContain("ISOLATION-TEST-001");
+      // A refused request wrote no row for T_B either; an accepted one (202) belongs to T_B only.
+      if (res.status !== 202) {
+        const checkB = await apiGet("/api/v1/finance/bills", tokenB);
+        if (checkB.status === 200) expect(billNosOf(checkB.body)).not.toContain("ISOLATION-TEST-001");
       }
     });
 
