@@ -10,7 +10,15 @@ export function taskTitle(t: T, row: InboxRow): string {
   if (row.type === "leave") {
     const leaveType = asGiven(f.get("leaveType"));
     const days = Number(f.get("days"));
-    if (leaveType && Number.isFinite(days) && days > 0) return t("taskTitleLeave", { leaveType, days });
+    if (leaveType && Number.isFinite(days) && days > 0) {
+      // W9: the dates make two leave rows from the same person tell apart.
+      const from = asGiven(f.get("fromDate"));
+      const to = asGiven(f.get("toDate"));
+      if (from && to && formatIndianDate(from) !== "\u2014" && formatIndianDate(to) !== "\u2014") {
+        return t("taskTitleLeaveDates", { leaveType, days, from: formatIndianDate(from), to: formatIndianDate(to) });
+      }
+      return t("taskTitleLeave", { leaveType, days });
+    }
   }
   if (row.type === "payrollRun" && !row.reference) {
     const period = asGiven(f.get("payPeriod"));

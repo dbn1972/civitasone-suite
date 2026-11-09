@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 import { tileImgSource } from "@/lib/mapTiles";
-import { clearedSessionCookieSpecs, isSilentRefreshToken, sessionCookieSpecs } from "@/lib/auth/sessionCookies";
+import { clearedSessionCookieSpecs, decodeJwtClaims, isSilentRefreshToken, sessionCookieSpecs } from "@/lib/auth/sessionCookies";
 import { forgetRefreshToken, refreshTokensOnce } from "@/lib/auth/tokenRefresh";
 
 // SEC-029: /api/metrics is public HERE (no session cookie) because a
@@ -62,6 +62,14 @@ const REFRESH_PATH = "/api/auth/refresh";
 // middleware runtime), not in the route handlers' module graph, so it is
 // cleared here, before the handler runs, for every sign-out request.
 const SIGN_OUT_PATHS = new Set(["/logout", "/api/auth/logout"]);
+
+// W7 (C-SESS-COOKIE-002): a cookie that is not even a decodable JWT ("not.a.jwt", truncated,
+// junk) is not a session. isTokenExpired/isTokenExpiringSoon deliberately return false on parse
+// errors, so without this check such a cookie sailed through as "valid" and the dashboard shell
+// rendered with 401s from the gateway. Structure only; the signature stays the gateway's job.
+function isUndecodableToken(token: string): boolean {
+  return decodeJwtClaims(token) === null;
+}
 
 function isTokenExpiringSoon(token: string): boolean {
   try {
@@ -192,14 +200,17 @@ export function middleware(req: NextRequest): NextResponse | Promise<NextRespons
   if (isPublicPath(pathname)) return buildNextResponse(req);
 
   const token = req.cookies.get(COOKIE.ACCESS)?.value;
-  if (token && !isTokenExpiringSoon(token)) return buildNextResponse(req);
+  if (token && !isUndecodableToken(token) && !isTokenExpiringSoon(token)) return buildNextResponse(req);
 
   // A11Y-01: expired / about to expire (or the access cookie already aged out)
   // but the SSO session is still alive -> renew silently instead of dumping the
   // user (and their unsaved form) on the login page.
   if (isSilentRefreshToken(req.cookies.get(COOKIE.REFRESH)?.value)) return refreshSession(req, false);
 
-  if (!token || isTokenExpired(token)) return loginRedirect(req);
+  if (!token) return loginRedirect(req);
+  // A bad cookie is cleared so the browser does not keep replaying it.
+  if (isUndecodableToken(token)) return loginRedirect(req, true);
+  if (isTokenExpired(token)) return loginRedirect(req);
   return buildNextResponse(req);
 }
 
@@ -221,7 +232,13 @@ function isBrowserNavigation(req: NextRequest): boolean {
   return (req.headers.get("accept") ?? "").includes("text/html");
 }
 
-function loginRedirect(req: NextRequest): NextResponse {
+function loginRedirect(req: NextRequest, clearCookies = false): NextResponse {
+  const res = loginRedirectBase(req);
+  if (clearCookies) for (const c of clearedSessionCookieSpecs()) res.cookies.set(c.name, c.value, c.options);
+  return res;
+}
+
+function loginRedirectBase(req: NextRequest): NextResponse {
   // UAT T-EDGE TE-10 / TE-14: an API call with no live session used to get a 307 to the
   // sign-in page, which fetch() followed (a POST then ended in 405), so the form said "a
   // problem on our side". API calls now get a JSON 401 SESSION_EXPIRED the page can explain

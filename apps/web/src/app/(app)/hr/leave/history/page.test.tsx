@@ -101,6 +101,22 @@ describe("LeaveHistoryPage", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
+  it("W8: shows the approver's reason on a rejected application (and none on others)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        { id: "app-3", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", status: "rejected", rejectionReason: "Audit closing week, please reapply after 5 October" },
+        { id: "app-4", leaveType: "Earned Leave", fromDate: "2026-09-08", toDate: "2026-09-09", status: "approved", rejectionReason: "stale" },
+      ]),
+    );
+    await renderPage();
+    await screen.findByText("Casual Leave");
+    const reasons = screen.getAllByTestId("rejection-reason");
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toHaveTextContent("Reason for rejection");
+    expect(reasons[0]).toHaveTextContent("Audit closing week, please reapply after 5 October");
+  });
+
   it("shows an error state instead of a false empty state when the history fetch fails", async () => {
     vi.stubGlobal("fetch", mockFetch([], { appsOk: false }));
     await renderPage();
