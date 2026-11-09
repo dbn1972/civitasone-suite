@@ -313,7 +313,7 @@ export function registerPoConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
 
-  // F102: reject a PO awaiting approval -> cancelled. Reached from the workflow
+  // F102: reject a PO awaiting approval -> rejected (UAT bundle 22 W2; was cancelled). Reached from the workflow
   // inbox reject (payload { id, tenantId, rejectedBy, reason }) and from
   // PATCH /v1/procurement/pos/:id/reject.
   queue.subscribe(COMMANDS.poReject, async (msg) => {
@@ -323,10 +323,10 @@ export function registerPoConsumers(queue: Queue): void {
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
       assertPoRejectable(po.status ?? "draft");
-      assertTransitionAllowed(po.status ?? "draft", "cancelled");
+      assertTransitionAllowed(po.status ?? "draft", "rejected");
       // Version-locked: a concurrent / duplicate reject conflicts and rolls back,
-      // so the release below runs at most once per PO.
-      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "cancelled", updatedBy: msg.actorId });
+      // so the release below runs at most once per PO. UAT bundle 22 (W2): "rejected", with the reason.
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "rejected", rejectionReason: p.reason ?? null, updatedBy: msg.actorId });
       // F102 review: give the PO's reservation back to its indent (reserved at
       // create by reserveIndentBudget, same transaction, tenant-scoped).
       const indentId = po.indentRef.replace(/^.*:/, "");

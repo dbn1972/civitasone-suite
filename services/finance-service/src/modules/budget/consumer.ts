@@ -9,7 +9,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { minorString } from "@civitasone/schemas/money";
-import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, isSanctionAwaitingDecision, DomainError } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { todayIST, currentFyIST } from "../../shared/ist-date.js";
 
@@ -195,9 +195,15 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
+      // UAT bundle 22 (W1): only a sanction still awaiting a decision can be rejected. An approved sanction is
+      // final: a late or racing reject must not flip it to cancelled (it kept approved_by before).
+      if (!isSanctionAwaitingDecision(sanction.status))
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status} (only a pending sanction can be rejected)`);
       assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
-      await repo.updateSanction(tx, p.id, { status: "cancelled", updatedBy: msg.actorId });
-      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "sanction", p.id);
+      // W2: the rejected state, with the checker's reason; one guarded UPDATE so it cannot race an approval.
+      if (!(await repo.rejectSanctionIfPending(tx, p.id, p.tenantId, msg.actorId, p.reason ?? null)))
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} was decided while the rejection ran`);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "sanction", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
@@ -211,7 +217,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       // A decided sanction is never pulled back to pending by a late submit.
-      if (sanction.status === "approved" || sanction.status === "cancelled")
+      if (!isSanctionAwaitingDecision(sanction.status))
         throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status}`);
       // Records that an eOffice file is now deciding this sanction (direct approve is refused meanwhile).
       await repo.updateSanction(tx, p.id, {

@@ -99,6 +99,8 @@ export const financeSanctions = budgetSchema.table("finance_sanctions", {
   // The issued sanction order is signed and dated from these, never from updated_by/updated_at.
   approvedBy:     uuid("approved_by"),
   approvedAt:     timestamp("approved_at", { withTimezone: true }),
+  // UAT bundle 22 (W2, migration 0163): why the checker rejected it, shown to the maker. Set only with status "rejected".
+  rejectionReason: text("rejection_reason"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

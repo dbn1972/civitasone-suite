@@ -629,9 +629,11 @@ describe("sanction with an eOffice file in flight cannot be approved directly (G
   it("an already-approved sanction is not pulled back to pending by a late submit-approval", async () => {
     capture();
     const res = await inject("POST", `/v1/finance/sanctions/${SANCTION_EFILE}/submit-approval`, as(MAKER, ["finance_officer"]), {});
-    expect(res.statusCode).toBe(202);
+    // UAT bundle 22 (W5): refused at the request (409), not accepted (202) and dropped by the worker.
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_STATE_TRANSITION");
     const q = await deliver();
-    expect(q.dlq.length).toBe(1);
+    expect(q.dlq.length).toBe(0);
     expect((await status()).status).toBe("approved");
   });
 });

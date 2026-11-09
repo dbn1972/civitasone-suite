@@ -106,6 +106,21 @@ export async function approveSanctionIfNoEfile(tx: Writer, id: string, tenantId:
   return rows.length > 0;
 }
 
+/**
+ * Race-safe reject: moves a still-pending sanction to rejected (with the reason) ONLY while it is pending.
+ * One guarded UPDATE, so an approval and a rejection racing on the same sanction cannot both win, and an
+ * approved sanction is never changed by a later reject. Returns false when the row is no longer pending.
+ */
+export async function rejectSanctionIfPending(tx: Writer, id: string, tenantId: string, actorId: string, reason: string | null): Promise<boolean> {
+  const rows = await tx.update(financeSanctions)
+    .set({ status: "rejected", updatedBy: actorId, updatedAt: new Date(), rejectionReason: reason, efileSubmittedAt: null })
+    .where(and(
+      eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
+      inArray(financeSanctions.status, ["pending_approval", "draft"]),
+    )).returning({ id: financeSanctions.id });
+  return rows.length > 0;
+}
+
 export async function findSanctionByIdTx(tx: Writer, id: string): Promise<SanctionRow | null> {
   const rows = await (tx as typeof db).select().from(financeSanctions).where(eq(financeSanctions.id, id)).limit(1);
   return rows[0] ?? null;

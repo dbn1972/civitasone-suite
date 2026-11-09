@@ -91,10 +91,10 @@ describe("F102 — inbox reject reaches the indent / PO", () => {
     expect(await closeMessages(id)).toEqual([{ tenantId: TENANT, refType: "procurement_indent", refId: id, decision: "reject", reason: "not justified" }]);
   });
 
-  it("PO: the workflow reject dispatch cancels a draft PO (previously no reject path existed)", async () => {
+  it("PO: the workflow reject dispatch rejects a draft PO (previously no reject path existed)", async () => {
     const id = await seedPo("draft");
     await deliver(COMMANDS.poReject, { id, tenantId: TENANT, rejectedBy: CHECKER, reason: "vendor not eligible" });
-    expect((await po(id))?.status).toBe("cancelled");
+    expect((await po(id))?.status).toBe("rejected");
     expect(await closeMessages(id)).toEqual([{ tenantId: TENANT, refType: "procurement_po", refId: id, decision: "reject", reason: "vendor not eligible" }]);
   });
 
@@ -176,11 +176,11 @@ describe("F102 review — a rejected PO releases its indent commitment exactly o
     return id;
   }
 
-  it("reject -> cancelled gives the PO value back to the indent; a duplicate reject does not release again", async () => {
+  it("reject -> rejected gives the PO value back to the indent; a duplicate reject does not release again", async () => {
     const indentId = await seedApprovedIndent(10_000n, 7_000n);
     const poId = await seedPoAgainst(indentId, 4_000n);
     await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "wrong vendor" });
-    expect((await po(poId))?.status).toBe("cancelled");
+    expect((await po(poId))?.status).toBe("rejected");
     expect((await indent(indentId))?.committedMinor).toBe(3_000n);
 
     await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "again" }); // new messageId, same PO
@@ -198,7 +198,7 @@ describe("F102 review — a rejected PO releases its indent commitment exactly o
     const indentId = await seedApprovedIndent(10_000n, 1_000n);
     const poId = await seedPoAgainst(indentId, 4_000n);
     await deliver(COMMANDS.poReject, { id: poId, tenantId: TENANT, reason: "inconsistent" });
-    expect((await po(poId))?.status).toBe("cancelled");
+    expect((await po(poId))?.status).toBe("rejected");
     expect((await indent(indentId))?.committedMinor).toBe(1_000n);
   });
 });
