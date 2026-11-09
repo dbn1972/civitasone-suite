@@ -184,44 +184,61 @@ describe("L1 — Tenant Isolation: Cross-tenant data access", () => {
   });
 
   describe("Cross-tenant write isolation", () => {
-    it("POST to finance/bills with wrong tenant token → data isolated", async () => {
+    it("POST to finance/bills with tenant B's token and tenant A's headId -> 422 HEAD_NOT_FOUND, nothing written, nothing leaked", async () => {
+      // A REAL head owned by tenant A: reuse the first one in A's chart of accounts, or create one and wait for it.
+      const firstHeadOfA = async (): Promise<string | undefined> => {
+        const r = await apiGet("/api/v1/finance/accounts?limit=5", tokenA);
+        expect(r.status).toBe(200);
+        const rows = (r.body as { data?: Array<{ id: string }> }).data;
+        return Array.isArray(rows) && rows.length > 0 ? rows[0]!.id : undefined;
+      };
+      let headOfA = await firstHeadOfA();
+      if (!headOfA) {
+        const created = await fetch(`${GATEWAY}/api/v1/finance/accounts`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+          body: JSON.stringify({ code: "2217", name: "Urban Development", level: 0, classification: "expense" }),
+        });
+        expect(created.status).toBe(202);
+        for (let i = 0; i < 20 && !headOfA; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          headOfA = await firstHeadOfA();
+        }
+      }
+      expect(headOfA, "tenant A must own a budget head for this test").toBeDefined();
+
       const res = await fetch(`${GATEWAY}/api/v1/finance/bills`, {
         method: "POST",
-        headers: {
-          authorization: `Bearer ${tokenB}`,
-          "content-type": "application/json",
-        },
+        headers: { authorization: `Bearer ${tokenB}`, "content-type": "application/json" },
         body: JSON.stringify({
           billNo: "ISOLATION-TEST-001",
           vendorId: "aaaaaaaa-0000-4000-8000-000000000099",
-          headId: "bbbbbbbb-0000-4000-8000-000000000099",
+          headId: headOfA,
           ddoCode: "DDO999",
           grossMinor: 10000,
           currency: "INR",
         }),
       });
-      // The headId above exists in NO tenant. Since bundle 21 the route checks the head (tenant-scoped lookup,
-      // payments/routes.ts assertBillHeadUsable) BEFORE anything is written and answers 422 HEAD_NOT_FOUND;
-      // a stack with a head fixture would answer 202. 400/403 stay valid refusals. A refusal only counts as
-      // isolation together with the checks below (nothing written for either tenant, nothing foreign leaked).
-      expect([202, 400, 403, 422]).toContain(res.status);
+      // payments/routes.ts assertBillHeadUsable: tenant-scoped head lookup, refused before any write.
+      expect(res.status).toBe(422);
       const raw = await res.text();
-      if (res.status === 422) expect(raw).toContain("HEAD_NOT_FOUND");
-      // The response never names the other tenant.
+      expect(raw).toContain("HEAD_NOT_FOUND");
+      // Same answer as for a head that exists nowhere: nothing about tenant A or its head comes back.
       expect(raw).not.toContain(TENANT_A);
+      expect(raw).not.toContain(headOfA!);
 
       const billNosOf = (b: unknown): string[] => {
         const rows = Array.isArray(b) ? b : (b as Record<string, unknown> | null)?.data;
-        return Array.isArray(rows) ? rows.map((r: Record<string, unknown>) => String(r.billNo)) : [];
+        expect(Array.isArray(rows)).toBe(true);
+        return (rows as Array<Record<string, unknown>>).map((r) => String(r.billNo));
       };
-      // T_A never sees the bill (holds for 202 and for refusals).
+      // No row for either tenant (both list calls must succeed, so this cannot pass vacuously).
       const checkA = await apiGet("/api/v1/finance/bills", tokenA);
-      if (checkA.status === 200) expect(billNosOf(checkA.body)).not.toContain("ISOLATION-TEST-001");
-      // A refused request wrote no row for T_B either; an accepted one (202) belongs to T_B only.
-      if (res.status !== 202) {
-        const checkB = await apiGet("/api/v1/finance/bills", tokenB);
-        if (checkB.status === 200) expect(billNosOf(checkB.body)).not.toContain("ISOLATION-TEST-001");
-      }
+      expect(checkA.status).toBe(200);
+      expect(billNosOf(checkA.body)).not.toContain("ISOLATION-TEST-001");
+      const checkB = await apiGet("/api/v1/finance/bills", tokenB);
+      expect(checkB.status).toBe(200);
+      expect(billNosOf(checkB.body)).not.toContain("ISOLATION-TEST-001");
     });
 
     it("POST to hrms/employees: cross-tenant creation stays isolated", async () => {
