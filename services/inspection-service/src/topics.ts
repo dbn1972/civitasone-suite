@@ -92,6 +92,8 @@ export const COMMANDS = {
   evidenceVerifyIntegrity: "inspection.evidence.verify_integrity",
 
   // ── Execution ────────────────────────────────────────────────────────────
+  /** payload: { inspectionId, entityId, inspectionTypeId, planId?, assignedInspectors } — creates a scheduled inspection (UAT: nothing could create one) */
+  inspectionCreate: "inspection.inspection.create",
   /** payload: { inspectionId, to: InspectionState, remarks? } — validates allowed transitions per state machine */
   inspectionTransition: "inspection.inspection.transition",
   /** payload: { inspectionId, reviewingOfficerId? } — assigns reviewer and transitions to under_review */
@@ -231,6 +233,8 @@ export const EVENTS = {
   tadaClaimPublished: "inspection.tada_claim.published",
 
   // ── Execution ────────────────────────────────────────────────────────────
+  /** payload: { inspectionId, entityId, inspectionTypeId, planId, assignedInspectors, scheduledBy } — fires when an inspection is created in state scheduled */
+  inspectionScheduled: "inspection.inspection.scheduled",
   /** payload: { inspectionId, entityId, inspectorId, startedAt, geoLatitude?, geoLongitude? } — fires on scheduled → in_progress */
   inspectionStarted: "inspection.inspection.started",
   /** payload: { inspectionId, entityId, inspectorId, completedAt, checklistScore? } — fires on in_progress → completed */

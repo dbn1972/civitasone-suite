@@ -10,7 +10,8 @@
  *   - Finalize: reviewing_officer only
  *   - Reads: inspector, reviewing_officer, supervising_officer
  *
- * Endpoints (6):
+ * Endpoints (7):
+ *   POST /v1/inspection/inspections                     — schedule a new inspection
  *   POST /v1/inspection/inspections/:id/transition      — trigger state transition
  *   POST /v1/inspection/inspections/:id/submit-review   — submit for review
  *   POST /v1/inspection/inspections/:id/finalize        — finalize inspection
@@ -23,7 +24,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { randomUUID } from "node:crypto";
+import { findEntityById, findInspectionTypeById } from "../universe/repo.js";
 import {
+  publishInspectionCreate,
   publishInspectionTransition,
   publishInspectionSubmitReview,
   publishInspectionFinalize,
@@ -35,6 +39,9 @@ import {
 } from "./repo.js";
 
 // ─── RBAC role groups ────────────────────────────────────────────────────────
+
+/** Scheduling a new inspection: supervising officers and admins (same group as inspector assignment). */
+const CREATE_ROLES = ["supervising_officer", "inspection_admin", "tenant_admin", "super_admin"];
 
 /** Transition operations: inspectors and reviewing officers. */
 const TRANSITION_ROLES = ["inspector", "reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
@@ -50,6 +57,14 @@ const READ_ROLES = ["inspector", "reviewing_officer", "supervising_officer", "in
 /** Reusable UUID path param schema. */
 const idParam = z.object({
   id: z.string().uuid("id must be a valid UUID"),
+});
+
+/** POST /inspections — schedule a new inspection for a regulated entity. */
+const createSchema = z.object({
+  entityId: z.string().uuid("entityId must be a valid UUID"),
+  inspectionTypeId: z.string().uuid("inspectionTypeId must be a valid UUID"),
+  planId: z.string().uuid("planId must be a valid UUID").optional(),
+  assignedInspectors: z.array(z.string().uuid()).max(50).default([]),
 });
 
 /** POST /inspections/:id/transition — trigger state transition (Req 8.1, 8.7). */
@@ -74,6 +89,29 @@ const listQuerySchema = z.object({
 // ─── Route registration ─────────────────────────────────────────────────────
 
 export async function registerExecutionRoutes(app: FastifyInstance): Promise<void> {
+  // ── POST /v1/inspection/inspections — schedule an inspection ──
+  // Before this route nothing in the service could create an execution.inspections row, so no
+  // inspection could ever be listed, transitioned or reported on through the API.
+  app.post("/v1/inspection/inspections", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CREATE_ROLES);
+    const body = createSchema.parse(req.body);
+    // Tenant-scoped existence reads before publishing; the consumer re-checks inside its tx.
+    if (!(await findEntityById(ctx.tenantId, body.entityId))) throw new HttpError(404, "NOT_FOUND", "regulated entity not found");
+    if (!(await findInspectionTypeById(ctx.tenantId, body.inspectionTypeId))) throw new HttpError(404, "NOT_FOUND", "inspection type not found");
+    const result = await publishInspectionCreate(
+      {
+        inspectionId: randomUUID(),
+        entityId: body.entityId,
+        inspectionTypeId: body.inspectionTypeId,
+        planId: body.planId,
+        assignedInspectors: body.assignedInspectors,
+      },
+      ctx,
+    );
+    return reply.code(202).send({ data: result });
+  });
+
   // ── POST /v1/inspection/inspections/:id/transition (Req 8.1, 8.7, 8.8) ──
   app.post("/v1/inspection/inspections/:id/transition", async (req, reply) => {
     const ctx = resolveContext(req);

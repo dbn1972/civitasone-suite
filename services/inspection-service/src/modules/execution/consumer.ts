@@ -27,12 +27,16 @@ import {
   DomainError,
   type InspectionState,
 } from "./domain.js";
+import { and, eq, isNull } from "drizzle-orm";
+import { regulatedEntities, inspectionTypes } from "../universe/schema.js";
 import {
+  insertInspection,
   updateInspectionState,
   insertHistory,
   findInspectionByIdTx,
 } from "./repo.js";
 import type {
+  InspectionCreatePayload,
   InspectionTransitionPayload,
   InspectionSubmitReviewPayload,
   InspectionFinalizePayload,
@@ -46,6 +50,68 @@ const NOTIFICATION_TOPIC = "notification.send";
 // ── Registration ─────────────────────────────────────────────────────────────
 
 export function registerExecutionConsumers(queue: Queue): void {
+  // ─── inspectionCreate ─────────────────────────────────────────────────────
+  queue.subscribe<InspectionCreatePayload & { tenantId: string }>(
+    COMMANDS.inspectionCreate,
+    async (msg) => {
+      const p = msg.payload;
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+
+        // The route checked these before publishing; re-check inside the tx so a record
+        // removed in between (or a forged command) cannot create an orphan inspection.
+        const entity = await tx.select({ id: regulatedEntities.id }).from(regulatedEntities)
+          .where(and(eq(regulatedEntities.id, p.entityId), eq(regulatedEntities.tenantId, msg.tenantId), isNull(regulatedEntities.deletedAt)))
+          .limit(1);
+        if (!entity[0]) throw new NonRetryableError(`Regulated entity not found: ${p.entityId} (tenant: ${msg.tenantId})`);
+        const type = await tx.select({ id: inspectionTypes.id }).from(inspectionTypes)
+          .where(and(eq(inspectionTypes.id, p.inspectionTypeId), eq(inspectionTypes.tenantId, msg.tenantId)))
+          .limit(1);
+        if (!type[0]) throw new NonRetryableError(`Inspection type not found: ${p.inspectionTypeId} (tenant: ${msg.tenantId})`);
+
+        const created = await insertInspection(tx, {
+          id: p.inspectionId,
+          tenantId: msg.tenantId,
+          entityId: p.entityId,
+          inspectionTypeId: p.inspectionTypeId,
+          planId: p.planId ?? null,
+          assignedInspectors: p.assignedInspectors ?? [],
+          actorId: msg.actorId,
+        });
+        if (!created) return; // already created (redelivery with a fresh message id)
+
+        await enqueue(tx, {
+          topic: EVENTS.inspectionScheduled,
+          eventType: EVENTS.inspectionScheduled,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            inspectionId: created.id,
+            entityId: created.entityId,
+            inspectionTypeId: created.inspectionTypeId,
+            planId: created.planId,
+            assignedInspectors: created.assignedInspectors as string[],
+            scheduledBy: msg.actorId,
+          },
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            action: "inspection.created",
+            resourceType: "inspection",
+            resourceId: created.id,
+            details: { entityId: created.entityId, inspectionTypeId: created.inspectionTypeId, state: "scheduled" },
+          },
+        });
+      });
+    },
+  );
+
   // ─── inspectionTransition ─────────────────────────────────────────────────
   queue.subscribe<InspectionTransitionPayload & { tenantId: string }>(
     COMMANDS.inspectionTransition,

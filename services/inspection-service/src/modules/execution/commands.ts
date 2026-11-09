@@ -14,6 +14,15 @@ import { COMMANDS } from "../../topics.js";
 
 // ── Payload types ─────────────────────────────────────────────────────────────
 
+/** POST /inspections — create a scheduled inspection. `inspectionId` is minted by the route so the 202 can return it. */
+export interface InspectionCreatePayload {
+  inspectionId: string;
+  entityId: string;
+  inspectionTypeId: string;
+  planId?: string | undefined;
+  assignedInspectors: string[];
+}
+
 /** POST /inspections/:id/transition — trigger state transition. */
 export interface InspectionTransitionPayload {
   inspectionId: string;
@@ -47,6 +56,18 @@ function envelope(ctx: RequestContext, type: string, payload: Record<string, unk
 }
 
 // ── Publish functions ─────────────────────────────────────────────────────────
+
+export async function publishInspectionCreate(
+  payload: InspectionCreatePayload,
+  ctx: RequestContext,
+): Promise<{ accepted: true; messageId: string; inspectionId: string }> {
+  const msg = envelope(ctx, COMMANDS.inspectionCreate, {
+    ...payload,
+    tenantId: ctx.tenantId,
+  });
+  await queue.publish(COMMANDS.inspectionCreate, msg);
+  return { accepted: true, messageId: msg.messageId, inspectionId: payload.inspectionId };
+}
 
 export async function publishInspectionTransition(
   payload: InspectionTransitionPayload,
