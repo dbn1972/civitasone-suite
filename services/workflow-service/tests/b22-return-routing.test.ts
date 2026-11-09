@@ -14,6 +14,8 @@ import { registerInstancesConsumers } from "../src/modules/instances/consumer.js
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { listDecisionsForRef } from "../src/modules/history/repo.js";
 import { completeTask } from "../src/modules/tasks/commands.js";
+import { validateGraph } from "../src/modules/definitions/graph.js";
+import { validateGraph as validateDesignerGraph } from "../src/modules/designer/domain.js";
 import { COMMANDS } from "../src/topics.js";
 import { TestQueue, seedDefinition, cleanup, getInstance, tasksFor, historyActions, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
@@ -170,5 +172,74 @@ describe("W6: decision audit events", () => {
     expect(ret?.p.resourceType).toBe("procurement_indent");
     expect(rej?.actor).toBe(CHECKER);
     expect(rej?.p.reason).toBe("Not budgeted for FY 2026-27");
+  });
+});
+
+describe("review fixes: repeat-actor scope, reserved prefix, rework recognition, audit", () => {
+  it("a checker who returned at L1 is still refused at L2 (SOD_REPEAT_ACTOR scope is per node)", async () => {
+    const tenant = newTenant();
+    const A = randomUUID(); const B = randomUUID();
+    const def = await seedDefinition(tenant, [
+      { nodeKey: "l1", name: "Level 1", roleRef: "procurement_officer", sortOrder: 1 },
+      { nodeKey: "l2", name: "Level 2", roleRef: "procurement_admin", sortOrder: 2 },
+    ], [{ fromNode: "l1", toNode: "l2" }]);
+    const refId = randomUUID();
+    const id = randomUUID();
+    await q.deliver(COMMANDS.createInstance, {
+      id, tenantId: tenant, name: "Indent", status: "active", version: 1, initialTaskName: "Start",
+      definitionCode: def.code, refType: "procurement_indent", refId, context: {},
+    }, { tenantId: tenant, actorId: MAKER, messageId: id });
+    await decide((await tasksFor(tenant, id))[0]!, A, "return", "Revise");           // A returns at L1
+    await decide((await tasksFor(tenant, id)).find((t) => t.status === "pending")!, MAKER, "approve"); // resubmit
+    const l1 = (await tasksFor(tenant, id)).find((t) => t.status === "pending")!;
+    expect(l1.node_key).toBe("l1");
+    await decide(l1, A, "approve");        // same node: allowed after resubmission
+    // A approved L1 here, so make the cross-level case explicit with B approving L1 instead:
+    const id2 = randomUUID();
+    await q.deliver(COMMANDS.createInstance, {
+      id: id2, tenantId: tenant, name: "Indent 2", status: "active", version: 1, initialTaskName: "Start",
+      definitionCode: def.code, refType: "procurement_indent", refId: randomUUID(), context: {},
+    }, { tenantId: tenant, actorId: MAKER, messageId: id2 });
+    await decide((await tasksFor(tenant, id2))[0]!, A, "return", "Revise");
+    await decide((await tasksFor(tenant, id2)).find((t) => t.status === "pending")!, MAKER, "approve");
+    await decide((await tasksFor(tenant, id2)).find((t) => t.status === "pending")!, B, "approve");   // B approves L1
+    const l2 = (await tasksFor(tenant, id2)).find((t) => t.status === "pending")!;
+    expect(l2.node_key).toBe("l2");
+    await decide(l2, A, "approve");        // A returned at L1: must be refused at L2
+    expect((await tasksFor(tenant, id2)).find((t) => t.id === l2.id)?.status).toBe("pending");
+    expect((await historyActions(tenant, id2))).toContain("sod_violation");
+  });
+
+  it("the rework: prefix is reserved at definition time", async () => {
+    const bad = [{ nodeKey: "rework:x", name: "Sneaky", roleRef: "procurement_officer", sortOrder: 1 }];
+    expect(validateGraph(bad as never, []).errors.join(" ")).toContain("reserved prefix");
+    const long = [{ nodeKey: "k".repeat(58), name: "Long", sortOrder: 1 }];
+    expect(validateGraph(long as never, []).valid).toBe(false);
+    expect(validateDesignerGraph([{ id: "rework:x", type: "task", label: "Sneaky" } as never], []).valid).toBe(false);
+    await expect(seedDefinition(newTenant(), bad as never, [])).rejects.toThrow(/reserved prefix/);
+  });
+
+  it("a rework:-prefixed task that has a role gets no exemption (maker is still refused self-approval)", async () => {
+    const tenant = newTenant();
+    const id = await startIndentChain(tenant, randomUUID());
+    const first = (await tasksFor(tenant, id))[0]!;
+    const forged = randomUUID();
+    await sqlAsTenant(tenant, sql`INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, role_ref, node_key, ref_type, ref_id, assignee_id, created_by, updated_by, version)
+      VALUES (${forged}, ${tenant}, ${id}, 'Forged', 'pending', 'procurement_officer', 'rework:proc_officer', ${first.ref_type as string}, ${first.ref_id as string}, ${MAKER}, ${MAKER}, ${MAKER}, 1)`);
+    const t = (await tasksFor(tenant, id)).find((x) => x.id === forged)!;
+    await decide(t, MAKER, "approve");
+    expect((await tasksFor(tenant, id)).find((x) => x.id === forged)?.status).toBe("pending");
+    expect(await historyActions(tenant, id)).toContain("sod_violation");
+  });
+
+  it("rework spawn and resubmit each write an audit event", async () => {
+    const tenant = newTenant();
+    const refId = randomUUID();
+    const id = await startIndentChain(tenant, refId);
+    await decide((await tasksFor(tenant, id))[0]!, CHECKER, "return", "Revise");
+    await decide((await tasksFor(tenant, id)).find((t) => t.status === "pending")!, MAKER, "approve");
+    const actions = (await auditFor(tenant, refId)).map((e) => e.p.action);
+    expect(actions).toContain("workflow.task.rework");
+    expect(actions).toContain("workflow.task.resubmit");
   });
 });

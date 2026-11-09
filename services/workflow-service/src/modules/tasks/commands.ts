@@ -17,6 +17,7 @@ import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
 import { fetchUserDisplayName } from "../../shared/identity-client.js";
 import { resolvePeople } from "../../shared/people-client.js";
+import { REWORK_PREFIX, isReworkTask } from "./rework.js";
 
 /**
  * UAT follow-up (F108, security): a task with no roleRef used to be completable
@@ -178,7 +179,8 @@ export async function completeTask(
   // obvious self-approval case early for a friendlier error.
   // W4: the maker's "correct and resubmit" task is not a checker decision, so maker-checker SoD
   // does not apply to it - but it can only be resubmitted (approve), never rejected or returned.
-  const isRework = typeof existing.nodeKey === "string" && existing.nodeKey.startsWith("rework:");
+  // Recognised by role + assignee + prefix, never the key alone (rework.ts).
+  const isRework = isReworkTask(existing, existing.nodeKey?.startsWith(REWORK_PREFIX) ? await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId) : null);
   if (isRework && decision !== "approve") {
     throw new HttpError(422, "REWORK_RESUBMIT_ONLY", "a returned item can only be corrected and resubmitted");
   }
@@ -199,7 +201,7 @@ export async function completeTask(
     // repeat-actor: a prior step completed by the actor directly OR by a
     // delegator the actor is now acting on behalf of (four-eyes via delegation).
     const conflict = priorTasks.some(
-      (t) => t.decision !== "return" && t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
+      (t) => !(t.decision === "return" && t.nodeKey === existing.nodeKey) && t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
     );
     if (conflict) {
       throw new HttpError(403, "SOD_REPEAT_ACTOR", "you already acted on a prior step of this workflow");
@@ -228,7 +230,7 @@ export async function completeTask(
   // documents (or cannot be read: fail closed). Reject/return are not gated.
   // The refusal is audited in the append-only transition history. The consumer
   // re-checks (authoritative for a command that bypassed this route).
-  if (decision === "approve" && !isRework) {
+  if (decision === "approve") {
     const gate = await checkMandatoryDocs(ctx.tenantId, existing);
     if (!gate.ok) {
       await db.transaction(async (tx) => {

@@ -30,6 +30,7 @@ import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
 import { registerCloseByRefConsumer } from "./close-by-ref.js";
 import { isStrictSodRefType } from "./sod.js";
+import { REWORK_PREFIX, isReworkTask } from "./rework.js";
 import type { InstanceRow } from "../instances/schema.js";
 
 const log = pino({ name: "workflow-tasks-consumer", serializers: SAFE_LOG_SERIALIZERS });
@@ -68,7 +69,7 @@ export function registerTasksConsumers(queue: Queue): void {
     // under the instance row lock); the refusal is audited inside it, atomically
     // with markProcessed. A transient "unavailable" result throws so the DLQ
     // policy retries rather than silently dropping or approving.
-    const docGate = (msg.payload.decision ?? "approve") === "approve" && !isReworkNodeKey(msg.payload.nodeKey)
+    const docGate = (msg.payload.decision ?? "approve") === "approve"
       ? await checkMandatoryDocs(msg.tenantId, msg.payload)
       : ({ ok: true } as const);
     if (!docGate.ok && docGate.reason === "unavailable") {
@@ -165,7 +166,9 @@ export function registerTasksConsumers(queue: Queue): void {
       // W4: the maker's "correct and resubmit" task. Completing it is not a checker
       // decision, so it is exempt from maker-checker SoD; it re-opens the approver
       // task at the node the item was returned from.
-      if (instance && isReworkNodeKey(p.nodeKey)) {
+      // Recognised from the LOCKED task row (no role, assigned to the initiator), not the key alone.
+      const lockedForRework = instance && p.nodeKey?.startsWith(REWORK_PREFIX) ? await repo.lockTaskTx(tx, p.id, p.tenantId) : null;
+      if (instance && isReworkTask(lockedForRework, instance)) {
         await handleResubmit(tx, msg, instance, p, decision);
         return;
       }
@@ -180,8 +183,9 @@ export function registerTasksConsumers(queue: Queue): void {
       const strictOverride = sodOverride && instance != null && isStrictSodRefType(instance.refType);
       if ((!sodOverride || strictOverride) && instance) {
         const selfApproval = instance.createdBy === msg.actorId;
-        // A Return is not an approval step: the checker who returned an item may decide it after resubmission.
-        const priorByActor = strictOverride ? [] : (await repo.priorActorTasksTx(tx, p.instanceId, msg.actorId)).filter((t) => t.decision !== "return");
+        // A Return is not an approval step: the checker who returned an item AT THIS NODE may decide it after
+        // resubmission. A return at another (earlier) node still counts: no one may act at two levels.
+        const priorByActor = strictOverride ? [] : (await repo.priorActorTasksTx(tx, p.instanceId, msg.actorId)).filter((t) => !(t.decision === "return" && t.nodeKey === p.nodeKey));
         if (selfApproval || priorByActor.length > 0) {
           await historyRepo.record(tx, {
             tenantId: p.tenantId,
@@ -967,12 +971,6 @@ async function spawnTask(
   });
 }
 
-/** nodeKey prefix of the maker's "correct and resubmit" task raised by a Return (W4). */
-const REWORK_PREFIX = "rework:";
-function isReworkNodeKey(nodeKey: string | null | undefined): boolean {
-  return typeof nodeKey === "string" && nodeKey.startsWith(REWORK_PREFIX);
-}
-
 /**
  * return/rework: send the work back. A prior node (one with an edge into the current node)
  * gets a fresh task. When there is no prior node - the item is returned from the first
@@ -990,11 +988,12 @@ async function handleReturn(
   // Prior node = a node that has an edge INTO the current node.
   const incoming = await defRepo.findEdgesToTx(tx, instance.definitionId!, fromNode);
   const priorKey = incoming[0]?.fromNode;
-  if (!priorKey || priorKey === fromNode) {
+  // An origin key too long for `rework:<key>` (<= 64) cannot be encoded: keep the pre-W4 routing for it.
+  if ((!priorKey || priorKey === fromNode) && `${REWORK_PREFIX}${fromNode}`.length <= 64) {
     await spawnReworkTask(tx, msg, instance, fromNode, p.name);
     return;
   }
-  const node = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, priorKey);
+  const node = await defRepo.findNodeByKeyTx(tx, instance.definitionId!, priorKey ?? fromNode);
   if (!node) return;
   // The decision itself is already recorded as action "return" above; this row is the
   // follow-on assignment, so it must not also read "return" (it showed twice in the trail).
@@ -1011,7 +1010,7 @@ async function spawnReworkTask(tx: Tx, msg: CommandEnvelope, instance: InstanceR
     name: `Correct and resubmit: ${taskName ?? fromNode}`.slice(0, 200),
     status: "pending",
     roleRef: null,
-    nodeKey: `${REWORK_PREFIX}${fromNode}`.slice(0, 64),
+    nodeKey: `${REWORK_PREFIX}${fromNode}`,
     refType: instance.refType,
     refId: instance.refId,
     assigneeId: instance.createdBy,
@@ -1021,8 +1020,17 @@ async function spawnReworkTask(tx: Tx, msg: CommandEnvelope, instance: InstanceR
   });
   await historyRepo.record(tx, {
     tenantId: instance.tenantId, instanceId: instance.id, taskId: newTaskId,
-    fromNode, toNode: `${REWORK_PREFIX}${fromNode}`.slice(0, 64), action: "rework", decision: null, actorId: msg.actorId,
+    fromNode, toNode: `${REWORK_PREFIX}${fromNode}`, action: "rework", decision: null, actorId: msg.actorId,
     detail: { returnedTo: instance.createdBy },
+  });
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "workflow", action: "workflow.task.rework", resourceType: instance.refType ?? "workflow_task",
+      resourceId: instance.refId ?? newTaskId, outcome: "success", taskId: newTaskId, instanceId: instance.id,
+      returnedTo: instance.createdBy,
+    },
   });
   await emit(tx, msg, EVENTS.taskAssigned, {
     taskId: newTaskId, instanceId: instance.id, name: taskName, roleRef: null,
@@ -1054,6 +1062,14 @@ async function handleResubmit(tx: Tx, msg: CommandEnvelope, instance: InstanceRo
   await historyRepo.record(tx, {
     tenantId: p.tenantId, instanceId: p.instanceId, taskId: p.id, fromNode: p.nodeKey ?? null, toNode: origKey,
     action: "resubmit", decision: "approve", actorId: msg.actorId, detail: {},
+  });
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "workflow", action: "workflow.task.resubmit", resourceType: instance.refType ?? "workflow_task",
+      resourceId: instance.refId ?? p.id, outcome: "success", taskId: p.id, instanceId: p.instanceId,
+    },
   });
   await spawnTask(tx, msg, instance, p.nodeKey ?? origKey, node, "resubmitted");
 }
