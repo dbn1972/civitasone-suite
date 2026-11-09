@@ -1,5 +1,6 @@
 // Next 15: cookies() is async. This synchronous helper has many callers, so it uses the
 // supported transitional UnsafeUnwrappedCookies cast (sync access is removed in Next 16).
+import { cachedFetchOptions } from "@/lib/dataCache";
 import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { COOKIE } from "@/lib/auth/config";
 
@@ -81,7 +82,7 @@ export async function getDesignerDefinitions(): Promise<DesignerResult<DesignerD
   try {
     const res = await fetch(`${base}/api/v1/workflow/designer/definitions?pageSize=100`, {
       headers: { "content-type": "application/json", ...auth },
-      next: { revalidate: 30 },
+      next: cachedFetchOptions(30, auth.authorization.slice(7)),
     });
     if (!res.ok) return { data: [], source: "error", status: res.status };
     const raw = await res.json();
@@ -103,7 +104,7 @@ export async function getDesignerDefinitionById(
   try {
     const res = await fetch(`${base}/api/v1/workflow/designer/definitions/${id}`, {
       headers: { "content-type": "application/json", ...auth },
-      next: { revalidate: 10 },
+      next: cachedFetchOptions(10, auth.authorization.slice(7)),
     });
     if (!res.ok) return { data: null, source: "error", status: res.status };
     const raw = await res.json();

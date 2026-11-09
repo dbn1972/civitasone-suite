@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
+import { purgeTenantDataCache } from "@/lib/dataCache";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -89,6 +90,9 @@ async function proxy(req: Request, segments: string[], method: string) {
   } catch {
     return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "upstream service unavailable" }, { status: 502 });
   }
+  // UAT b23 P1/M4: a committed write drops this tenant's cached reads, so the actor and every other
+  // user see the new state on their next load instead of after the revalidate window.
+  if (hasBody && upstream.status < 400) purgeTenantDataCache(token);
   if (NO_BODY_STATUSES.has(upstream.status)) {
     return new NextResponse(null, { status: upstream.status });
   }

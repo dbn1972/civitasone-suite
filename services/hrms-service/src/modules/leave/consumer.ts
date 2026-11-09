@@ -159,6 +159,18 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
             metadata: { reason: "LEAVE_OVERLAP", clashesWith: clashes[0]!.id },
           },
         });
+        // UAT b23 P2: a raced duplicate used to vanish after the 202; tell the applicant, same
+        // shape as the INSUFFICIENT_LEAVE_BALANCE notice below.
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.apply_failed",
+            recipient: p.employeeId,
+            recipientId: p.employeeId,
+            variables: { leaveAppId: p.id, reason: "LEAVE_OVERLAP", fromDate: p.fromDate, toDate: p.toDate },
+          }),
+        });
         return;
       }
       const alloc = await repo.findAllocByIdTx(tx, p.allocId);
