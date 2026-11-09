@@ -722,6 +722,14 @@ export const MEETING_TRANSITION_ROLES = [
   "super_admin",
   "admin",
 ];
+/** M2: add participants -- mirrors participant/routes.ts WRITE_ROLES. */
+export const MEETING_PARTICIPANT_WRITE_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "tenant_admin",
+  "super_admin",
+  "admin",
+];
 export const MEETING_CHECKIN_ROLES = [
   "meeting_admin",
   "committee_secretary",

@@ -145,9 +145,13 @@ export async function createMeeting(
   return out.data ?? {};
 }
 
-/** Committees selectable for the "Committee" field on the create-meeting form. */
+/**
+ * Committees selectable for the "Committee" field on the create-meeting form.
+ * Asks for the service maximum page (limit 200): the list route defaults to 50,
+ * which would silently truncate the picker for a tenant with more committees.
+ */
 export async function listCommittees(): Promise<CommitteeSummary[]> {
-  const out = await get<{ data?: Record<string, unknown>[] }>("v1/meeting/committees");
+  const out = await get<{ data?: Record<string, unknown>[] }>("v1/meeting/committees?limit=200");
   return (out.data ?? []).map((o) => ({
     id: typeof o.id === "string" ? o.id : "",
     name: typeof o.name === "string" ? o.name : "Untitled committee",
@@ -218,12 +222,62 @@ export async function addAgendaItem(
 export async function attendanceCheckIn(
   meetingId: string,
   participantId: string,
-  opts: { mode?: string } = {},
+  opts: { mode?: string; method?: string } = {},
 ): Promise<void> {
+  // meeting-service attendanceCheckInSchema is strict and REQUIRES `method`
+  // (qr|biometric|geo|vc|manual). A secretary ticking someone in on screen is
+  // a manual capture; without it every check-in was a 400 (UAT J14 / M1).
   await send("POST", `v1/meeting/${meetingId}/attendance/check-in`, {
     headers: idempotencyKey(),
-    body: { participantId, ...(opts.mode ? { mode: opts.mode } : {}) },
+    body: { participantId, method: opts.method ?? "manual", ...(opts.mode ? { mode: opts.mode } : {}) },
   });
+}
+
+/** Roles meeting-service accepts on a participant (participant/domain.ts PARTICIPANT_ROLES). */
+export const PARTICIPANT_ROLES = ["member", "chairperson", "secretary", "observer", "presenter"] as const;
+export type ParticipantRole = (typeof PARTICIPANT_ROLES)[number];
+
+/**
+ * UAT J14 / M2: add participants to a meeting (POST /participants batch form,
+ * participantsAddSchema). Requires an idempotency key. `special_invitee` is
+ * deliberately not offered: it needs per-agenda-item scoping.
+ */
+export async function addParticipants(
+  meetingId: string,
+  participants: { employeeId: string; role: ParticipantRole }[],
+): Promise<void> {
+  await send("POST", `v1/meeting/${meetingId}/participants`, {
+    headers: idempotencyKey(),
+    body: { participants },
+  });
+}
+
+/** Employee ids currently on a meeting's roster (fresh read, all pages). */
+export async function listParticipantEmployeeIds(meetingId: string): Promise<string[]> {
+  const ids: string[] = [];
+  for (let offset = 0; offset < 5000; offset += 200) {
+    const out = await get<{ data?: Record<string, unknown>[]; meta?: { total?: number } }>(
+      `v1/meeting/${meetingId}/participants?limit=200&offset=${offset}`,
+    );
+    const rows = out.data ?? [];
+    for (const r of rows) if (typeof r.employeeId === "string") ids.push(r.employeeId);
+    if (rows.length < 200) break;
+  }
+  return ids;
+}
+
+/**
+ * Active members of a committee as { employeeId, role }, for "add the committee
+ * to this meeting". `special_invitee` members are dropped (they need agenda
+ * scoping the service enforces).
+ */
+export async function listCommitteeMembers(
+  committeeId: string,
+): Promise<{ employeeId: string; role: string }[]> {
+  const out = await get<{ data?: Record<string, unknown>[] }>(`v1/meeting/committees/${committeeId}/members`);
+  return (out.data ?? [])
+    .filter((m) => m.status === "active" && typeof m.memberId === "string" && m.role !== "special_invitee")
+    .map((m) => ({ employeeId: m.memberId as string, role: typeof m.role === "string" ? m.role : "member" }));
 }
 
 export async function attendanceCheckOut(

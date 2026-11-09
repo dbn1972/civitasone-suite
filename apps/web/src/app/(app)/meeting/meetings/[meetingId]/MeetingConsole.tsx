@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import type { HumanError } from "@/lib/messages";
 import { isUuid, unresolvedLabel, type PersonRef } from "@/lib/records/labels";
 import {
@@ -35,9 +36,14 @@ import {
   initiateVote,
   transitionMeeting,
   addAgendaItem,
+  addParticipants,
+  listCommitteeMembers,
+  listParticipantEmployeeIds,
   AGENDA_OUTCOME_TYPES,
+  PARTICIPANT_ROLES,
   MeetingTransitionError,
   type AgendaOutcomeType,
+  type ParticipantRole,
 } from "../../_data/client";
 
 type Src = "api" | "error";
@@ -48,6 +54,10 @@ type ViewerPermissions = {
   canCheckIn: boolean;
   canCast: boolean;
   canConclude: boolean;
+  /** M2: may add participants (mirrors meeting-service participant WRITE_ROLES). */
+  canManageParticipants?: boolean;
+  /** Which employee directory the viewer's roles can search; "none" hides the single-add picker. */
+  employeeDirectory?: "hrms" | "payroll" | "none";
 };
 
 type Props = {
@@ -376,6 +386,97 @@ export function MeetingConsole({
     }
   }
 
+  // M2: add participants -- the picked employee, or the meeting committee's active members.
+  const [newParticipantId, setNewParticipantId] = useState<string | null>(null);
+  const [newParticipantRole, setNewParticipantRole] = useState<ParticipantRole>("member");
+  // Employee ids submitted but not yet on the roster: keeps "Add" disabled so a second click cannot
+  // resubmit a batch the consumer would reject. The effect is keyed on awaitingIds ONLY (a fresh array
+  // per submit), so the 30 s deadline is fixed at submit time and polling results cannot restart it.
+  // Polls GET /participants, the same source the dedupe uses.
+  const [awaitingIds, setAwaitingIds] = useState<string[]>([]);
+  const refreshAttendanceRef = useRef(refreshAttendance);
+  refreshAttendanceRef.current = refreshAttendance;
+  useEffect(() => {
+    if (awaitingIds.length === 0) return;
+    let stopped = false;
+    const poll = setInterval(() => {
+      void listParticipantEmployeeIds(meeting.id)
+        .then((ids) => {
+          if (stopped) return;
+          const onRoster = new Set(ids);
+          if (awaitingIds.every((id) => onRoster.has(id))) {
+            stopped = true;
+            setAwaitingIds([]);
+            void refreshAttendanceRef.current();
+          }
+        })
+        .catch(() => { /* keep polling until the deadline */ });
+    }, 3000);
+    const giveUp = setTimeout(() => {
+      stopped = true;
+      setAwaitingIds([]);
+      setToast(null);
+      setError(tl("participantsUnconfirmed"));
+    }, 30000);
+    return () => {
+      stopped = true;
+      clearInterval(poll);
+      clearTimeout(giveUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingIds, meeting.id]);
+  async function onAddParticipant() {
+    if (!newParticipantId) return;
+    setBusy("participants:add");
+    setError(null);
+    setToast(null);
+    try {
+      if ((await listParticipantEmployeeIds(meeting.id)).includes(newParticipantId)) {
+        setToast(tl("participantAlreadyAdded"));
+        return;
+      }
+      await addParticipants(meeting.id, [{ employeeId: newParticipantId, role: newParticipantRole }]);
+      setAwaitingIds([newParticipantId]);
+      setNewParticipantId(null);
+      setToast(tl("participantsSubmitted"));
+      await refreshAttendance();
+    } catch (err) {
+      setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function onAddCommitteeMembers() {
+    if (!meeting.committeeId) return;
+    setBusy("participants:committee");
+    setError(null);
+    setToast(null);
+    try {
+      // Fresh roster, not the held one: the add is asynchronous and the consumer rejects the WHOLE
+      // batch if any employee is already on the meeting.
+      const onRoster = new Set(await listParticipantEmployeeIds(meeting.id));
+      const fresh = (await listCommitteeMembers(meeting.committeeId)).filter((m) => !onRoster.has(m.employeeId));
+      if (fresh.length === 0) {
+        setToast(tl("committeeAlreadyAdded"));
+        return;
+      }
+      await addParticipants(
+        meeting.id,
+        fresh.map((m) => ({
+          employeeId: m.employeeId,
+          role: (PARTICIPANT_ROLES as readonly string[]).includes(m.role) ? (m.role as ParticipantRole) : "member",
+        })),
+      );
+      setAwaitingIds(fresh.map((m) => m.employeeId));
+      setToast(tl("participantsSubmitted"));
+      await refreshAttendance();
+    } catch (err) {
+      setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onCheckIn(participantId: string) {
     setBusy(`checkin:${participantId}`);
     setError(null);
@@ -683,6 +784,37 @@ export function MeetingConsole({
         }
         padding
       >
+        {viewerPermissions.canManageParticipants && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
+            {viewerPermissions.employeeDirectory !== "none" && (<>
+            <div style={{ flex: "1 1 240px" }}>
+              <div style={labelStyle}>{tl("participantEmployee")}</div>
+              <EmployeePicker
+                value={newParticipantId}
+                onChange={(id) => setNewParticipantId(id)}
+                aria-label={tl("participantEmployee")}
+                directory={viewerPermissions.employeeDirectory ?? "hrms"}
+                clearable
+              />
+            </div>
+            <div>
+              <label htmlFor="mtg-participant-role" style={labelStyle}>{tl("participantRole")}</label>
+              <select id="mtg-participant-role" aria-label={tl("participantRole")} style={fieldStyle} value={newParticipantRole}
+                onChange={(e) => setNewParticipantRole(e.target.value as ParticipantRole)}>
+                {PARTICIPANT_ROLES.map((r) => <option key={r} value={r}>{humanize(r)}</option>)}
+              </select>
+            </div>
+            <button type="button" className="btn" disabled={busy !== null || awaitingIds.length > 0 || !newParticipantId} onClick={() => void onAddParticipant()}>
+              {busy === "participants:add" ? "…" : tl("addParticipant")}
+            </button>
+            </>)}
+            {meeting.committeeId && (
+              <button type="button" className="btn ghost" disabled={busy !== null || awaitingIds.length > 0} onClick={() => void onAddCommitteeMembers()}>
+                {busy === "participants:committee" ? "…" : tl("addCommitteeMembers")}
+              </button>
+            )}
+          </div>
+        )}
         {attState === "error" ? (
           <ErrorState error={ATTENDANCE_LOAD_ERROR} onRetry={() => void refreshAttendance()} />
         ) : !attendance || attendance.participants.length === 0 ? (
