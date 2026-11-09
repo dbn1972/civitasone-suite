@@ -978,6 +978,8 @@ export const LeaveRequestDetailSchema = z.object({
   toDate: z.string(),
   days: z.number(),
   reason: z.string().optional(),
+  // W8: the approver's reason, only on rejected rows; absent/null for pre-deploy rejections.
+  rejectionReason: z.string().nullish(),
   approver: z.string().optional(),
   // routing_failed: see hrms-service leave/domain.ts's transition map and
   // leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber — a request
