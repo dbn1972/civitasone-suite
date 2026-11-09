@@ -74,6 +74,8 @@ export function EditEmployeeForm({ employee }: Props) {
   const initialMobile = maskedPhone ? "" : (employee.phone ?? "");
   const initialBankAccountNo = maskedAccount ? "" : ((rec.bankAccountNo as string | undefined) ?? "");
 
+  // UAT b23: HR can correct the name; sent only when changed, always with a reason.
+  const [fullName, setFullName] = useState(employee.name ?? "");
   const [mobile, setMobile] = useState(initialMobile);
   const [email, setEmail] = useState(employee.email ?? "");
   // GAP-HR-SF-06 (EntityPicker) / GAP-HR-EMPLOYEES-DETAIL-EDIT-04: seeded
@@ -120,6 +122,7 @@ export function EditEmployeeForm({ employee }: Props) {
   const [reasonError, setReasonError] = useState<string | undefined>();
 
   const ids = {
+    fullName: `${formId}-fullName`,
     mobile: `${formId}-mobile`,
     email: `${formId}-email`,
     managerId: `${formId}-managerId`,
@@ -159,6 +162,12 @@ export function EditEmployeeForm({ employee }: Props) {
     if (mobileChanged && trimmedMobile && !PHONE_RE.test(trimmedMobile)) errs.mobile = tv("mobileInvalid");
 
     const patch: Record<string, string> = {};
+    const trimmedName = fullName.trim();
+    const initialName = (employee.name ?? "").trim();
+    // A record that already has a blank name (legacy bad data) may still be edited for other fields;
+    // only blanking out a real name is refused.
+    if (trimmedName === "") { if (initialName !== "") errs.fullName = t("nameBlankError"); }
+    else if (trimmedName !== initialName) patch.fullName = trimmedName;
     if (mobileChanged) patch.mobile = trimmedMobile;
     if (trimmedEmail !== (employee.email ?? "")) patch.email = trimmedEmail;
     // Clearing a manager/pay-structure back to "none" is not sent: both are
@@ -246,7 +255,7 @@ export function EditEmployeeForm({ employee }: Props) {
     // salary and statutory credits -- require a typed reason (maker-checker,
     // audit-only per the published decision) before submitting, same as any
     // other sensitive-field change in this app.
-    if (SENSITIVE_FIELDS.some((f) => patch[f] !== undefined)) {
+    if (patch.fullName !== undefined || SENSITIVE_FIELDS.some((f) => patch[f] !== undefined)) {
       setPendingPatch(patch);
       setReasonError(undefined);
       return;
@@ -374,6 +383,16 @@ export function EditEmployeeForm({ employee }: Props) {
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           }}
         >
+          <Field id={ids.fullName} label={t("nameLabel")} error={formError.fieldError("fullName") ?? invalidFields.fullName} hint={t("nameHint")}>
+            <Input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              maxLength={256}
+              autoComplete="off"
+            />
+          </Field>
+
           <MaskedField
             id={ids.mobile}
             label={t("mobileLabel")}
@@ -580,8 +599,8 @@ export function EditEmployeeForm({ employee }: Props) {
 
       <ConfirmDialog
         open={pendingPatch !== null}
-        title={t("sensitiveConfirmTitle")}
-        description={t("sensitiveConfirmDesc")}
+        title={pendingPatch?.fullName !== undefined ? t("nameConfirmTitle") : t("sensitiveConfirmTitle")}
+        description={pendingPatch?.fullName !== undefined ? t("nameConfirmDesc") : t("sensitiveConfirmDesc")}
         requireReason
         reasonLabel={t("sensitiveReasonLabel")}
         minReasonLength={10}

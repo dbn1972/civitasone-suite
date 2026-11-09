@@ -152,6 +152,42 @@ describe("POST /v1/hrms/employees/bulk", () => {
     expect(createPayloads(publishSpy)[0]!.employeeType).toBe("consultant");
   });
 
+  // UAT b23 (items 2-4): bundle 21 hardened POST /v1/hrms/employees only; the bulk path stored the same bad values.
+  it.each([
+    ["whitespace-only full name", { fullName: "     " }, "employees.0.fullName"],
+    ["zero-width-only full name", { fullName: "\u200b\u200b" }, "employees.0.fullName"],
+    ["joining date far in the future", { dateOfJoining: "2999-12-31" }, "employees.0.dateOfJoining"],
+    ["impossible joining date", { dateOfJoining: "2026-02-30" }, "employees.0.dateOfJoining"],
+    ["blank employee number", { employeeNo: "   " }, "employees.0.employeeNo"],
+  ])("400 — %s is rejected with a field error and nothing is queued", async (_label, override, field) => {
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/hrms/employees/bulk",
+      headers: { authorization: `Bearer ${adminTok}` },
+      payload: { employees: [validEmployee(override)] },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain(field);
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("202 — trims the employee number and full name before they are queued", async () => {
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/hrms/employees/bulk",
+      headers: { authorization: `Bearer ${adminTok}` },
+      payload: { employees: [validEmployee({ employeeNo: "  E9002 ", fullName: "  Lakshmi Narayanan  " })] },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+    const c = createPayloads(publishSpy)[0]!;
+    expect(c.employeeNo).toBe("E9002");
+    expect(c.fullName).toBe("Lakshmi Narayanan");
+  });
+
   it("400 — unknown employeeType is rejected via fieldErrors, and nothing is queued", async () => {
     const publishSpy = vi.spyOn(queue, "publish");
     const app: FastifyInstance = await buildApp();
