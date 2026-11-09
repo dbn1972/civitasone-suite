@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const revalidateTag = vi.fn();
 vi.mock("next/cache", () => ({ revalidateTag: (t: string) => revalidateTag(t) }));
 
-import { cachedFetchOptions, capRevalidate, dataCacheTags, purgeTenantDataCache, ALL_TAG } from "./dataCache";
+import { shouldPurgeAfterWrite, cachedFetchOptions, capRevalidate, dataCacheTags, purgeTenantDataCache, ALL_TAG } from "./dataCache";
 
 function jwt(claims: Record<string, unknown>): string {
   const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -45,5 +45,28 @@ describe("web data cache tagging and purge (UAT b23 P1/M4)", () => {
     expect(capRevalidate(3)).toBe(3);
     expect(capRevalidate(600)).toBe(600);
     expect(cachedFetchOptions(60, jwt({ tid: TENANT_A }))).toEqual({ revalidate: 5, tags: [`civ:t:${TENANT_A}`] });
+  });
+});
+
+describe("shouldPurgeAfterWrite allow-list", () => {
+  it("purges for authenticated state-changing writes", () => {
+    expect(shouldPurgeAfterWrite("POST", "v1/procurement/indents/i1/approve")).toBe(true);
+    expect(shouldPurgeAfterWrite("PATCH", "v1/hrms/leave-applications/l1")).toBe(true);
+    expect(shouldPurgeAfterWrite("DELETE", "v1/x/y")).toBe(true);
+    expect(shouldPurgeAfterWrite("POST", "v1/payments/verify")).toBe(true);
+  });
+  it("skips reads, read-only POSTs and public routes", () => {
+    expect(shouldPurgeAfterWrite("GET", "v1/a")).toBe(false);
+    expect(shouldPurgeAfterWrite("POST", "v1/documents/search")).toBe(false);
+    expect(shouldPurgeAfterWrite("POST", "v1/finance/budget/lines/validate")).toBe(false);
+    expect(shouldPurgeAfterWrite("POST", "v1/careers/apply")).toBe(false);
+    expect(shouldPurgeAfterWrite("POST", "identity/auth/login")).toBe(false);
+    expect(shouldPurgeAfterWrite("POST", "v1/crm/public/leads")).toBe(false);
+  });
+  it("a forged-tid token on a public route cannot purge any tenant", () => {
+    revalidateTag.mockReset();
+    const forged = jwt({ tid: TENANT_B });
+    if (shouldPurgeAfterWrite("POST", "v1/crm/public/leads")) purgeTenantDataCache(forged);
+    expect(revalidateTag).not.toHaveBeenCalled();
   });
 });
