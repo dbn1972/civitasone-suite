@@ -710,6 +710,8 @@ export const SanctionDetailSchema = SanctionSummarySchema.extend({
     actorId: z.string().optional(),
     action: z.string(),
     timestamp: z.string(),
+    // UAT bundle 22 (W2): the checker's reason on a rejected step.
+    remarks: z.string().optional(),
   })).default([]),
   // UX-R5: the maker id behind `sanctionedBy` (optional for older servers).
   sanctionedById: z.string().optional(),

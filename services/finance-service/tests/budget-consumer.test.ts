@@ -8,7 +8,7 @@ import { MemoryQueue } from "@civitasone/queue";
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertBudgetMock, findBudgetByIdMock, transferBudgetReMinorGuardedMock,
-  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock, approveSanctionIfNoEfileMock,
+  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock, approveSanctionIfNoEfileMock, rejectSanctionIfPendingMock,
   insertReappropriationMock,
 } = vi.hoisted(() => {
   const _mockTx = { insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) };
@@ -24,6 +24,7 @@ const {
     findSanctionByIdTxMock: vi.fn(async () => null as any),
     updateSanctionMock: vi.fn(async () => undefined),
     approveSanctionIfNoEfileMock: vi.fn(async () => true),
+    rejectSanctionIfPendingMock: vi.fn(async () => true),
     insertReappropriationMock: vi.fn(async () => undefined),
   };
 });
@@ -63,6 +64,7 @@ vi.mock("../src/modules/budget/sanction-control.js", () => ({
 
 vi.mock("../src/modules/budget/repo.js", () => ({
   approveSanctionIfNoEfile: (...a: any[]) => approveSanctionIfNoEfileMock(...a),
+  rejectSanctionIfPending: (...a: any[]) => rejectSanctionIfPendingMock(...a),
   insertBudget: (...a: any[]) => insertBudgetMock(...a),
   findBudgetById: (...a: any[]) => findBudgetByIdMock(...a),
   findBudgetByIdTx: (...a: any[]) => findBudgetByIdMock(...a),
@@ -210,9 +212,10 @@ describe("sanctionReject command", () => {
       id, tenantId: TENANT, reason: "insufficient justification",
     }));
     await settle();
-    expect(updateSanctionMock).toHaveBeenCalledOnce();
-    const [, , patch] = updateSanctionMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(patch.status).toBe("cancelled");
+    // UAT bundle 22 (W1/W2): one guarded UPDATE to "rejected" carrying the reason (was an unguarded "cancelled").
+    expect(rejectSanctionIfPendingMock).toHaveBeenCalledOnce();
+    expect(rejectSanctionIfPendingMock.mock.calls[0]!.slice(1)).toEqual([id, TENANT, ACTOR, "insufficient justification"]);
+    expect(updateSanctionMock).not.toHaveBeenCalled();
     await q.stop();
   });
 });

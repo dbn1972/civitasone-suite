@@ -5,7 +5,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertDistinctMakerChecker, DomainError } from "./domain.js";
+import { assertDistinctMakerChecker, assertTransitionAllowed, DomainError } from "./domain.js";
 import { assertModeAllowedForValue, GfrModeError, type ProcurementMode } from "../gfr/mode-bands.js";
 import type { CreateIndentBody, ApproveIndentBody, RejectIndentBody } from "./validators.js";
 
@@ -39,6 +39,22 @@ export async function createIndent(ctx: RequestContext, body: CreateIndentBody):
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * UAT bundle 22 (W5): refuse a decision the indent's current state forbids (approve after reject, reject after
+ * approve, a second decision) with 409 at the request, instead of accepting it (202) for the worker to drop.
+ * Same rule the consumer applies (assertTransitionAllowed), so a legitimate decision is unaffected.
+ */
+function assertDecisionAllowed(status: string | null, to: "approved" | "rejected"): void {
+  try {
+    assertTransitionAllowed(status ?? "draft", to);
+  } catch (err) {
+    if (err instanceof DomainError) {
+      throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${status ?? "draft"} indent cannot be ${to === "approved" ? "approved" : "rejected"}`);
+    }
+    throw err;
+  }
+}
+
 export async function approveIndent(ctx: RequestContext, id: string, body: ApproveIndentBody): Promise<Accepted> {
   // Segregation of duties (#9): reject self-approval synchronously with 403.
   const indent = await repo.findIndentById(id);
@@ -51,6 +67,7 @@ export async function approveIndent(ctx: RequestContext, id: string, body: Appro
     if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
     throw err;
   }
+  assertDecisionAllowed(indent.status, "approved");
 
   await queue.publish(COMMANDS.indentApprove, {
     messageId: randomUUID(),
@@ -67,6 +84,7 @@ export async function rejectIndent(ctx: RequestContext, id: string, body: Reject
   if (!indent || indent.tenantId !== ctx.tenantId) {
     throw new HttpError(404, "NOT_FOUND", "indent not found");
   }
+  assertDecisionAllowed(indent.status, "rejected");
 
   await queue.publish(COMMANDS.indentReject, {
     messageId: randomUUID(),
