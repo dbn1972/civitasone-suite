@@ -263,6 +263,14 @@
       {
         "name": "observer",
         "description": "Meeting observer: read-only attendee of committee meetings, agenda and attendance (meeting-service, hrms-service)."
+      },
+      {
+        "name": "project_manager",
+        "description": "Project manager: creates and runs projects, reviews DPRs, acts on escalations and board intake (project-service)."
+      },
+      {
+        "name": "project_officer",
+        "description": "Project officer: day-to-day project, progress and evidence entry and board intake (project-service)."
       }
     ]
   },
