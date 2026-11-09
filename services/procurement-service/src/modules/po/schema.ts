@@ -24,6 +24,8 @@ export const procurementPos = poSchema.table("procurement_pos", {
   // D4 (UAT g4-procurement): populated when the PO is closed (PATCH /pos/:id/close). Migration 0046.
   closedAt:        timestamp("closed_at", { withTimezone: true }),
   closureReason:   text("closure_reason"),
+  // UAT bundle 22 (W2, migration 0050): the checker's reason, set only with status "rejected"; shown to the maker.
+  rejectionReason: text("rejection_reason"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

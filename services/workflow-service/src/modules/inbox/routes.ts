@@ -1,3 +1,4 @@
+import { isReworkTask } from "../tasks/rework.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -146,9 +147,11 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
     const assigneeOk = !task.assigneeId || task.assigneeId === ctx.actorId || isAdmin || delegatedFromAssignee;
     const isMaker = instance.createdBy === ctx.actorId || delegations.some((d) => d.delegatorId === instance.createdBy);
     const repeatActor = steps.some((s) => s.status === "completed" && s.id !== task.id
-      && history.some((h) => h.taskId === s.id && h.actorId === ctx.actorId && (h.action === "complete" || h.action === "reject" || h.action === "return")));
+      && history.some((h) => h.taskId === s.id && h.actorId === ctx.actorId && (h.action === "complete" || h.action === "reject" || (h.action === "return" && s.nodeKey !== task.nodeKey))));
     const strict = isStrictSodRefType(instance.refType ?? task.refType);
-    const sodBlock: "maker" | "repeatActor" | null = isMaker && (!isSuperAdmin || strict)
+    // W4: the maker's "correct and resubmit" task is not a checker decision; no maker-checker block applies.
+    const isRework = isReworkTask(task, instance);
+    const sodBlock: "maker" | "repeatActor" | null = isRework ? null : isMaker && (!isSuperAdmin || strict)
       ? "maker"
       : repeatActor && !isSuperAdmin ? "repeatActor" : null;
     const blockedReason: "notPending" | "assignedToOther" | "notYourRole" | null = !pending

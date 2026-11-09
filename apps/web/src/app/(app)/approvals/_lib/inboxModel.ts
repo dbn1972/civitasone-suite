@@ -169,6 +169,22 @@ export function ageDays(iso: string | null | undefined, now: number): number | n
   return Math.max(0, istDay(now) - istDay(t));
 }
 
+/**
+ * W9: the owning module's reference (indent / PO / amendment / plan number) for a viewer who gets no
+ * business summary (the admin bypass and holders of a closed step see workflow facts only). The
+ * procurement modules name their workflow instance "<Workflow name> - <number>" at creation, and the
+ * instance name is a workflow fact that viewer may already read, so the number is taken from there.
+ * Leave and other types are NOT derived (their instance name carries no number).
+ */
+const NAME_REFERENCE_TYPES = new Set<string>(["indent", "purchaseOrder", "poAmendment", "procurementPlan"]);
+export function referenceFromInstanceName(type: string, instanceName: string | null | undefined): string | null {
+  if (!NAME_REFERENCE_TYPES.has(type)) return null;
+  const parts = (instanceName ?? "").split(/\s[\u2014\u2013-]\s/);
+  if (parts.length < 2) return null;
+  const ref = presentable(parts[parts.length - 1]);
+  return ref && ref.length <= 64 ? ref : null;
+}
+
 export type InboxRow = {
   task: InboxTask;
   summary: RefSummary | null;
@@ -185,12 +201,13 @@ export function buildRows(tasks: readonly InboxTask[], summaries: readonly RefSu
   const byRef = new Map(summaries.map((s) => [`${s.refType}:${s.refId}`, s]));
   return tasks.map((task) => {
     const summary = task.refType && task.refId ? byRef.get(`${task.refType}:${task.refId}`) ?? null : null;
+    const type = typeOf(task.refType);
     return {
       task,
       summary,
       module: moduleOf(task.refType),
-      type: typeOf(task.refType),
-      reference: asGiven(summary?.reference),
+      type,
+      reference: asGiven(summary?.reference) ?? referenceFromInstanceName(type, summary?.instanceName ?? task.instanceName),
       amountMinor: summary?.amountMinor ?? null,
       maker: summary?.maker ?? null,
       sla: slaOf(task.dueAt, now),

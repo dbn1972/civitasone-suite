@@ -5144,6 +5144,7 @@
     "chipCancelled": "रद्द",
     "chipRoutingFailed": "ध्यान आवश्यक",
     "routingFailedExplanation": "यह आवेदन अनुमोदन के लिए नहीं भेजा जा सका। आम तौर पर इसका अर्थ है कि आपके लिए कोई अनुमोदक तय नहीं है; अपनी अवकाश अनुमोदन शृंखला जाँचने के लिए अपने एचआर प्रशासक से कहें।",
+    "rejectionReasonLabel": "अस्वीकृति का कारण",
     "cancelBtn": "रद्द करें",
     "cancellingBtn": "रद्द किया जा रहा है…",
     "cancelFailedFallback": "अवकाश आवेदन रद्द नहीं हो सका। पेज रीफ़्रेश करके फिर प्रयास करें।",
@@ -17944,6 +17945,7 @@
       "other": "अनुरोध पर निर्णय"
     },
     "taskTitleLeave": "अवकाश का अनुमोदन: {leaveType}, {days, plural, other {# दिन}}",
+    "taskTitleLeaveDates": "अवकाश का अनुमोदन: {leaveType}, {days, plural, other {# दिन}}, {from} से {to} तक",
     "taskTitleNamed": "निर्णय: {name}",
     "columns": {
       "item": "मामला",

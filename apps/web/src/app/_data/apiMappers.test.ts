@@ -835,7 +835,8 @@ describe("PO status vocabulary (UAT-P1A-02)", () => {
         { id: "3", poNo: "PO/2026/0003", status: "gem_placed" },
       ],
     });
-    expect(result!.map((r) => r.status)).toEqual(["closed", "cancelled", "gem_placed"]);
+    // UAT bundle 22 (W2): a rejected PO stays "rejected" (it used to collapse into "cancelled").
+    expect(result!.map((r) => r.status)).toEqual(["closed", "rejected", "gem_placed"]);
   });
 });
 
@@ -843,5 +844,12 @@ describe("PO detail status (UAT-P1A-02)", () => {
   it("keeps a closed PO closed on the detail page", () => {
     const po = mapProcurementPODetail({ id: "po-1", poNo: "PO/2026/0001", vendor: "V", status: "closed", lineItems: [] });
     expect(po?.status).toBe("closed");
+  });
+
+  it("UAT bundle 22 (W2): a rejected PO is Rejected on the detail page and carries the checker's reason", () => {
+    const po = mapProcurementPODetail({ id: "po-2", poNo: "PO/2026/0041", vendor: "V", status: "rejected", rejectionReason: "rate differs from rate contract RC/2026/114", lineItems: [] });
+    expect(po?.status).toBe("rejected");
+    expect(po?.rejectionReason).toBe("rate differs from rate contract RC/2026/114");
+    expect(mapProcurementPODetail({ id: "po-3", poNo: "PO/2026/0042", vendor: "V", status: "cancelled", lineItems: [] })?.status).toBe("cancelled");
   });
 });

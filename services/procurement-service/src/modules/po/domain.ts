@@ -13,13 +13,15 @@ export class DomainError extends Error {
  */
 export const PO_APPROVAL_DEFINITION_CODE = "procurement_po_approval";
 
-export type PoStatus = "draft" | "pending" | "approved" | "gem_placed" | "dispatched" | "closed" | "cancelled";
+export type PoStatus = "draft" | "pending" | "approved" | "rejected" | "gem_placed" | "dispatched" | "closed" | "cancelled";
 
 const VALID_TRANSITIONS: Record<PoStatus, PoStatus[]> = {
-  // F102: a PO awaits its workflow approval in draft; a reject cancels it.
-  draft:       ["pending", "approved", "cancelled"],
-  pending:     ["approved", "cancelled"],
+  // F102: a PO awaits its workflow approval in draft. UAT bundle 22 (W2): a reject ends it "rejected" (with the
+  // reason), final; "cancelled" stays for the other lifecycle exits. An approved PO is never rejected.
+  draft:       ["pending", "approved", "rejected", "cancelled"],
+  pending:     ["approved", "rejected", "cancelled"],
   approved:    ["dispatched", "closed", "cancelled"],
+  rejected:    [],
   gem_placed:  ["dispatched", "closed"],
   dispatched:  ["closed"],
   closed:      [],

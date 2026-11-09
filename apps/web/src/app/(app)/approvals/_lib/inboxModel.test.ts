@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyFilters, asGiven, buildRows, moduleOf, NO_FILTERS, personLabel, presentable, recordHref, slaOf, sortRows, typeOf,
+  applyFilters, asGiven, buildRows, moduleOf, NO_FILTERS, personLabel, presentable, recordHref, referenceFromInstanceName, slaOf, sortRows, typeOf,
   type InboxTask, type RefSummary,
 } from "./inboxModel";
 
@@ -128,5 +128,29 @@ describe("PR #2460 review", () => {
   it("the age is when the item was raised, not when the current step opened", () => {
     const t = task("a", { createdAt: new Date(NOW).toISOString(), raisedAt: new Date(NOW - 6 * DAY).toISOString() });
     expect(buildRows([t], [], NOW)[0]!.age).toBe(6);
+  });
+});
+
+describe("W9: rows for a viewer with no business summary still carry the item number", () => {
+  it.each([
+    ["indent", "Procurement Indent Approval \u2014 IND/2026/0081", "IND/2026/0081"],
+    ["purchaseOrder", "Procurement PO Approval \u2014 PO/2026/0033", "PO/2026/0033"],
+    ["poAmendment", "PO Amendment #2 Approval \u2014 PO/2026/0033", "PO/2026/0033"],
+    ["procurementPlan", "Annual Procurement Plan Approval \u2014 APP/2026-27/004", "APP/2026-27/004"],
+  ])("%s: number taken from the instance name", (type, name, want) => {
+    expect(referenceFromInstanceName(type, name)).toBe(want);
+  });
+
+  it("does not invent a reference for leave (name carries only an id prefix), a bare name, or a UUID", () => {
+    expect(referenceFromInstanceName("leave", "Leave Approval Workflow \u2014 4f2a9b1c")).toBeNull();
+    expect(referenceFromInstanceName("indent", "Procurement Indent Approval")).toBeNull();
+    expect(referenceFromInstanceName("indent", "Procurement Indent Approval \u2014 3f2a9b1c-0d4e-4f5a-8b6c-7d8e9f0a1b2c")).toBeNull();
+    expect(referenceFromInstanceName("indent", null)).toBeNull();
+  });
+
+  it("buildRows: no summary -> reference from the task's instance name; a business summary still wins", () => {
+    const t = task("w9", { refType: "procurement_indent", instanceName: "Procurement Indent Approval \u2014 IND/2026/0081" });
+    expect(buildRows([t], [], NOW)[0]!.reference).toBe("IND/2026/0081");
+    expect(buildRows([t], [summary(t, { reference: "IND/2026/9999" })], NOW)[0]!.reference).toBe("IND/2026/9999");
   });
 });

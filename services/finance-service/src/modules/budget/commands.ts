@@ -8,7 +8,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
-import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, isSanctionAwaitingDecision, DomainError } from "./domain.js";
 import * as repo from "./repo.js";
 import { readSettings } from "../approvals/repo.js";
 import { submitChangeRequest } from "../approvals/commands.js";
@@ -142,6 +142,11 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
   try {
     assertSanctionApproverDistinct(existing.createdBy, ctx.actorId);
   } catch (err) { toDomain(err, 409); }
+  // UAT bundle 22 (W1/W5): an already decided sanction cannot be rejected. Refuse now (409) instead of
+  // accepting (202) a command the worker would drop, and never let a late reject touch an approved sanction.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be rejected`);
+  }
   await queue.publish(COMMANDS.sanctionReject, {
     messageId: randomUUID(), type: COMMANDS.sanctionReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -161,7 +166,12 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
 export async function submitSanctionForApproval(ctx: RequestContext, id: string, fileNo: string | null = null): Promise<Accepted> {
   // UAT W8-D (P1): the consumer rejects an unknown / foreign sanction (NonRetryableError);
   // say so now (404) instead of 202-accepting a submission that can only fail.
-  if (!(await repo.findSanctionByIdAndTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "sanction not found");
+  const existing = await repo.findSanctionByIdAndTenant(id, ctx.tenantId);
+  if (!existing) throw new HttpError(404, "NOT_FOUND", "sanction not found");
+  // UAT bundle 22 (W5): a decided sanction is not pulled back to pending; the worker would drop it after the 202.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be submitted for approval`);
+  }
   await queue.publish(COMMANDS.sanctionSubmitApproval, {
     messageId: randomUUID(), type: COMMANDS.sanctionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -201,9 +211,10 @@ export async function approveSanction(ctx: RequestContext, id: string, reason?: 
     throw new HttpError(409, "EFILE_IN_FLIGHT",
       `this sanction is awaiting an eOffice decision${existing.efileFileNo ? ` (file ${existing.efileFileNo})` : ""}; it cannot be approved directly`);
   }
-  if (existing.status === "approved") return { id, status: "accepted", correlationId: ctx.correlationId }; // idempotent
-  if (existing.status !== "pending_approval" && existing.status !== "draft") {
-    throw new HttpError(409, "INVALID_SANCTION_STATE", `a ${existing.status} sanction cannot be approved`);
+  // UAT bundle 22 (W5): an already decided sanction (approved, rejected, cancelled, exhausted) cannot be approved
+  // again. 409 now, instead of a 202 for a decision that is then silently ignored.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be approved`);
   }
   // UAT T-EDGE TE-02: the approval is applied HERE, synchronously, in one transaction that locks the head allocation
   // row and checks available = allocation - (approved sanctions + committed + expended). Two approvals racing on one

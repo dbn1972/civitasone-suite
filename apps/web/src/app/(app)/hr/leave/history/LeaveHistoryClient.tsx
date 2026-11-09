@@ -27,6 +27,8 @@ type LeaveApp = {
   daysApplied?: number;
   status: string;
   reason?: string;
+  /** W8: the approver's reason, present when status is rejected. */
+  rejectionReason?: string | null;
 };
 
 type HistoryRow = {
@@ -38,6 +40,7 @@ type HistoryRow = {
   reasonDisplay: string;
   status: string;
   statusDisplay: string;
+  rejectionReason: string | null;
 };
 
 /**
@@ -302,6 +305,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
                 cancelBtnLabel={t("cancelBtn")}
                 cancellingBtnLabel={t("cancellingBtn")}
                 routingFailedExplanation={t("routingFailedExplanation")}
+                rejectionReasonLabel={t("rejectionReasonLabel")}
                 showingOfTotal={apps.length < total ? t("showingOfTotal", { shown: apps.length, total }) : null}
               />
             )
@@ -349,7 +353,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
 function HistoryTable({
   apps, statusLabel, isCancellable, cancelling, onCancelClick, caption,
   colLeaveType, colFrom, colTo, colDays, colReason, colStatus,
-  cancelBtnLabel, cancellingBtnLabel, routingFailedExplanation, showingOfTotal,
+  cancelBtnLabel, cancellingBtnLabel, routingFailedExplanation, rejectionReasonLabel, showingOfTotal,
 }: {
   apps: LeaveApp[];
   statusLabel: Record<string, string>;
@@ -358,7 +362,7 @@ function HistoryTable({
   onCancelClick: (app: LeaveApp) => void;
   caption: string;
   colLeaveType: string; colFrom: string; colTo: string; colDays: string; colReason: string; colStatus: string;
-  cancelBtnLabel: string; cancellingBtnLabel: string; routingFailedExplanation: string;
+  cancelBtnLabel: string; cancellingBtnLabel: string; routingFailedExplanation: string; rejectionReasonLabel: string;
   showingOfTotal: string | null;
 }) {
   const byId = useMemo(() => new Map(apps.map((a) => [a.id, a])), [apps]);
@@ -374,6 +378,7 @@ function HistoryTable({
     reasonDisplay: a.reason ?? "—",
     status: a.status,
     statusDisplay: statusLabel[a.status] ?? humanizeStatus(a.status),
+    rejectionReason: a.status === "rejected" ? (a.rejectionReason?.trim() || null) : null,
   })), [apps, statusLabel]);
 
   return (
@@ -403,6 +408,11 @@ function HistoryTable({
             render: (row) => (
               <>
                 <StatusPill status={row.status} label={row.statusDisplay} />
+                {row.rejectionReason && (
+                  <div data-testid="rejection-reason" style={{ marginTop: 4, fontSize: 12, color: "var(--mut)", maxWidth: 260, overflowWrap: "anywhere" }}>
+                    <span style={{ fontWeight: 600 }}>{rejectionReasonLabel}:</span> {row.rejectionReason}
+                  </div>
+                )}
                 {row.status === "routing_failed" && (
                   <div role="alert" style={{ marginTop: 4, fontSize: 11, color: "var(--bad)", maxWidth: 220 }}>
                     {routingFailedExplanation}

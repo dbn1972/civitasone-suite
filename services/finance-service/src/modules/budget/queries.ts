@@ -304,17 +304,18 @@ export async function getSanctionDetail(id: string, tenantId: string) {  const r
   // maker-create and (once approved) checker-approve the sanction row already
   // records (createdBy/createdAt + updatedBy/updatedAt), instead of a hard-coded
   // []. "approved" is the terminal state the R11 maker-checker /approve (or the
-  // eOffice decision) sets; "cancelled" is a reject. A still-pending sanction
+  // eOffice decision) sets; "rejected" is a reject (older rows: "cancelled"). A still-pending sanction
   // has only the create event. Line items have no backing table, so stay [].
   // UX-R5 (names, not ids): each trail step also carries the actor id, so the web resolver can add the
   // designation ("Asha Rao, Section Officer") and say "Name not available (ID ending ...)" when no name exists.
-  const approvalTrail: Array<{ action: string; actor: string; actorId?: string; timestamp: string }> = [
+  const approvalTrail: Array<{ action: string; actor: string; actorId?: string; timestamp: string; remarks?: string }> = [
     { action: "created", actor: makerName, ...(row.createdBy ? { actorId: row.createdBy } : {}), timestamp: new Date(row.createdAt as unknown as string).toISOString() },
   ];
   if (row.status === "approved") {
     approvalTrail.push({ action: "approved", actor: checkerName, ...(row.updatedBy ? { actorId: row.updatedBy } : {}), timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
-  } else if (row.status === "cancelled") {
-    approvalTrail.push({ action: "rejected", actor: checkerName, ...(row.updatedBy ? { actorId: row.updatedBy } : {}), timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
+  } else if (row.status === "rejected" || row.status === "cancelled") {
+    // UAT bundle 22 (W2): the reason the checker gave travels with the rejected step ("cancelled" = older rows).
+    approvalTrail.push({ action: "rejected", actor: checkerName, ...(row.updatedBy ? { actorId: row.updatedBy } : {}), timestamp: new Date(row.updatedAt as unknown as string).toISOString(), ...(row.rejectionReason ? { remarks: row.rejectionReason } : {}) });
   }
   return {
     id: row.id,
@@ -330,6 +331,7 @@ export async function getSanctionDetail(id: string, tenantId: string) {  const r
     majorHead: head?.code ?? row.headId,
     lineItems: [],
     approvalTrail,
+    ...(row.rejectionReason ? { remarks: row.rejectionReason } : {}),
     efileInFlight: row.efileSubmittedAt != null,
     ...(row.efileFileNo ? { efileFileNo: row.efileFileNo } : {}),
   };

@@ -1147,7 +1147,7 @@ describe("Budget eOffice decision consumers — coverage", () => {
 
     const { updateSanction } = await import("../src/modules/budget/repo.js");
     expect(updateSanction).toHaveBeenCalledWith(
-      expect.anything(), "sanc-002", expect.objectContaining({ status: "cancelled" }),
+      expect.anything(), "sanc-002", expect.objectContaining({ status: "rejected" }),
     );
     await q.stop();
   });

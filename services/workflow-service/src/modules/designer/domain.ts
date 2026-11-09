@@ -1,3 +1,4 @@
+import { REWORK_PREFIX, MAX_REWORKABLE_NODE_KEY, isReservedNodeKey } from "../tasks/rework.js";
 /**
  * BPMN Designer — pure domain logic for graph validation.
  *
@@ -44,6 +45,12 @@ const END_TYPES = new Set(["endEvent"]);
  */
 export function validateGraph(nodes: DesignerNode[], edges: DesignerEdge[]): ValidationResult {
   const violations: Violation[] = [];
+  // W4: `rework:` is reserved for the engine's maker rework task.
+  for (const n of nodes) {
+    if (isReservedNodeKey(n.id) || n.id.length > MAX_REWORKABLE_NODE_KEY) {
+      violations.push({ nodeId: n.id, rule: "reserved_node_key", message: `Node '${n.id}' uses the reserved prefix '${REWORK_PREFIX}' or is longer than ${MAX_REWORKABLE_NODE_KEY} characters` });
+    }
+  }
   const nodeIds = new Set(nodes.map((n) => n.id));
 
   // Rule 1: Every edge references existing nodes
