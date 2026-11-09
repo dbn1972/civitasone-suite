@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray, ne, sql, desc } from "drizzle-orm";
+import { eq, and, or, gte, lte, inArray, ne, sql, desc } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveTenantConfig,
@@ -166,6 +166,20 @@ export async function listAllocsForEmployee(tenantId: string, employeeId: string
 }
 
 /**
+ * Date-range clash predicate shared by the route pre-check and the apply consumer.
+ * Besides the normal overlap test it also matches an active row that STARTS on the same date,
+ * even if that row is malformed (to_date < from_date, pre-validation data): such a row misses the
+ * range test but still collides with ux_leave_apps_active (tenant, employee, from_date, type,
+ * day_part), which used to surface as an async duplicate-key failure after the user saw "submitted".
+ */
+function sameDaysOrSameStart(fromDate: string, toDate: string) {
+  return or(
+    and(lte(hrmsLeaveApps.fromDate, toDate), gte(hrmsLeaveApps.toDate, fromDate)),
+    eq(hrmsLeaveApps.fromDate, fromDate),
+  )!;
+}
+
+/**
  * DEF-LM-002 (T&A-LM-0283): Find leave applications for the same employee whose
  * date range overlaps [fromDate, toDate]. Only ACTIVE applications block a new
  * one — pending (awaiting approval) and approved. Rejected/cancelled/draft
@@ -187,8 +201,7 @@ export async function findOverlappingLeaveApps(
       eq(hrmsLeaveApps.tenantId, tenantId),
       eq(hrmsLeaveApps.employeeId, employeeId),
       inArray(hrmsLeaveApps.status, ["pending", "approved"]),
-      lte(hrmsLeaveApps.fromDate, toDate),
-      gte(hrmsLeaveApps.toDate, fromDate),
+      sameDaysOrSameStart(fromDate, toDate),
     ];
     if (excludeId) conditions.push(ne(hrmsLeaveApps.id, excludeId));
     return tx.select().from(hrmsLeaveApps).where(and(...conditions)).limit(50);
@@ -203,8 +216,7 @@ export async function findOverlappingLeaveAppsTx(
     eq(hrmsLeaveApps.tenantId, tenantId),
     eq(hrmsLeaveApps.employeeId, employeeId),
     inArray(hrmsLeaveApps.status, ["pending", "approved"]),
-    lte(hrmsLeaveApps.fromDate, toDate),
-    gte(hrmsLeaveApps.toDate, fromDate),
+    sameDaysOrSameStart(fromDate, toDate),
   )).limit(50);
 }
 

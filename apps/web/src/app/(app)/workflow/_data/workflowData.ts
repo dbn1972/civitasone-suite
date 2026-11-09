@@ -1,5 +1,6 @@
 // Next 15: cookies() is async. This synchronous helper has many callers, so it uses the
 // supported transitional UnsafeUnwrappedCookies cast (sync access is removed in Next 16).
+import { cachedFetchOptions } from "@/lib/dataCache";
 import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { COOKIE } from "@/lib/auth/config";
 import type {
@@ -75,7 +76,7 @@ async function getJson<T>(
   try {
     const res = await fetch(`${base}${apiPath}`, {
       headers: { "content-type": "application/json", ...auth },
-      next: { revalidate: revalidateSeconds },
+      next: cachedFetchOptions(revalidateSeconds, auth.authorization.slice(7)),
     });
     if (!res.ok) return { data: empty, source: "error", status: res.status };
     const raw = await res.json();

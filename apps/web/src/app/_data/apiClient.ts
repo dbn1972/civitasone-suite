@@ -3,6 +3,7 @@
 import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import type { ZodType, ZodTypeDef } from "zod";
 import { COOKIE } from "@/lib/auth/config";
+import { cachedFetchOptions } from "@/lib/dataCache";
 import { recordLoaderFallback, type LoaderFallbackReason } from "./loaderTelemetry";
 
 export type LoaderSource = "api" | "error";
@@ -204,7 +205,7 @@ export async function fetchJson<TApi, TOutput>(
         "content-type": "application/json",
         ...auth,
       },
-      next: options.revalidateSeconds ? { revalidate: options.revalidateSeconds } : undefined,
+      next: options.revalidateSeconds ? cachedFetchOptions(options.revalidateSeconds, auth.authorization.slice(7)) : undefined,
       cache: options.revalidateSeconds ? undefined : "no-store",
       signal: controller.signal,
     });
