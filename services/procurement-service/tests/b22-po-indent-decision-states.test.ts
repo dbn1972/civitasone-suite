@@ -83,7 +83,7 @@ describe("W2: a rejected PO is Rejected and carries the reason", () => {
     const row = await po(id);
     expect(row?.status).toBe("rejected");
     expect(row?.rejectionReason).toBe(REASON);
-    const view = await getPo(id, TENANT);
+    const view = await runWithTenant(TENANT, () => getPo(id, TENANT)); // a request carries its tenant context; RLS-scoped read
     expect(view?.status).toBe("rejected");
     expect(JSON.stringify(view)).toContain("RC/2026/114");
   });
