@@ -92,10 +92,17 @@ export async function renderXlsx(opts: XlsxRenderOptions): Promise<XlsxRenderRes
 /**
  * Render simple CSV from the same column/row structure.
  */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[-+]?[₹$]?\s?[\d,]+(\.\d+)?%?$/;
+
 export function renderCsv(columns: XlsxColumn[], rows: Record<string, unknown>[]): string {
   const escape = (val: unknown): string => {
-    const s = String(val ?? "");
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    let s = String(val ?? "");
+    // UAT b23: spreadsheet formula injection. A text cell starting = + - @ TAB or CR (an employee called
+    // "=HYPERLINK(...)") would be evaluated when HR opens the export; prefix an apostrophe so it stays text.
+    // Real numbers (typeof number) and formatted plain numbers like "-1,234.50" are left alone.
+    if (typeof val !== "number" && FORMULA_LEAD.test(s) && s !== "-" && !PLAIN_NUMBER.test(s)) s = `'${s}`;
+    if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
       return `"${s.replace(/"/g, '""')}"`;
     }
     return s;

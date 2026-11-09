@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { NonRetryableError, type CommandOutcome, type Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
@@ -437,6 +438,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.employeeUpdate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string;
+      fullName?: string;
       mobile?: string | null; email?: string;
       bankAccountNo?: string; bankIfsc?: string | null;
       basicMinor?: string; payStructureId?: string; managerId?: string;
@@ -488,6 +490,14 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       }
       const patch: Parameters<typeof repo.updateEmployee>[2] = { updatedBy: msg.actorId };
       const changedFields: string[] = [];
+      // UAT b23 name correction. Re-checked here (the route pre-check is only a fast fail): the
+      // exited block above already ran, so a separated employee never reaches this point.
+      const newName = p.fullName !== undefined && p.fullName !== emp.fullName ? p.fullName : undefined;
+      if (newName !== undefined) {
+        if (emp.userRef != null && emp.userRef === msg.actorId) throw new NonRetryableError("[SELF_CORRECTION_NOT_ALLOWED] an employee cannot correct their own name");
+        if (!p.reason) throw new NonRetryableError("[REASON_REQUIRED] a reason is required to correct a name");
+        patch.fullName = newName; changedFields.push("fullName");
+      }
       if (p.mobile      !== undefined) { patch.mobile      = p.mobile; changedFields.push("mobile"); }
       if (p.email       !== undefined) { patch.email       = p.email; changedFields.push("email"); }
       if (p.bankAccountNo !== undefined) { patch.bankAccountNo = p.bankAccountNo; changedFields.push("bankAccountNo"); }
@@ -553,6 +563,20 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.uanNumber !== undefined) sensitiveOldNew.uanNumber = { old: maskValue(emp.uanNumber ?? undefined), new: maskValue(p.uanNumber ?? undefined) };
       if (p.esicIpNumber !== undefined) sensitiveOldNew.esicIpNumber = { old: maskValue(emp.esicIpNumber ?? undefined), new: maskValue(p.esicIpNumber) };
       if (p.pran !== undefined) sensitiveOldNew.pran = { old: maskValue(emp.pran ?? undefined), new: maskValue(p.pran) };
+      if (newName !== undefined) {
+        // Denormalised copies: LIVE credentials / working lists follow the corrected name in the
+        // same transaction -- non-revoked ID cards and the due lists from today on. Historical
+        // artefacts keep the name they were issued/generated with: seniority-list snapshots,
+        // past due-list runs, payslips and the payroll register. Visiting cards read the
+        // employee master unless the holder set a display-name override.
+        await tx.execute(sql`UPDATE hrms.id_cards SET holder_name = ${newName}, updated_at = NOW()
+          WHERE tenant_id = ${p.tenantId} AND employee_id = ${p.id} AND status IN ('draft', 'active', 'suspended')`);
+        await tx.execute(sql`UPDATE scheduler.hrms_due_list SET full_name = ${newName}
+          WHERE tenant_id = ${p.tenantId} AND employee_id = ${p.id} AND run_date >= CURRENT_DATE`);
+        await audit(tx, msg, "correct_name", "employee", p.id, {
+          reason: p.reason, oldValue: emp.fullName, newValue: newName, employeeNo: emp.employeeNo,
+        });
+      }
       await audit(tx, msg, "update", "employee", p.id, {
         changedFields,
         ...(p.reason ? { reason: p.reason } : {}),

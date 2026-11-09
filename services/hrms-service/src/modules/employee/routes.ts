@@ -7,7 +7,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { setEmployeeLoginLink } from "./login-link.js";
@@ -345,6 +345,20 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
     if (isExitedStatus(emp.status)) {
       throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
+    }
+    // UAT b23: name correction needs a reason; an unchanged name is dropped (not a correction).
+    if (body.fullName !== undefined && body.fullName === emp.fullName) delete body.fullName;
+    // Separation of duties: nobody corrects their own name, whatever their HR role. Direct login link
+    // first; resolveEmployeeForActor (verified-email bootstrap link) second, best effort.
+    if (body.fullName !== undefined) {
+      let isSelf = emp.userRef != null && emp.userRef === ctx.actorId;
+      if (!isSelf) {
+        try { isSelf = (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id === emp.id; } catch { /* ambiguity etc.: the direct link check above stands */ }
+      }
+      if (isSelf) throw new HttpError(403, "SELF_CORRECTION_NOT_ALLOWED", "You cannot correct your own name. Ask another HR officer to do it.");
+    }
+    if (body.fullName !== undefined && !body.reason) {
+      throw new HttpError(400, "REASON_REQUIRED", NAME_CORRECTION_REASON_MESSAGE);
     }
     // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: a CHANGED managerId must be a real,
     // serving colleague who does not (transitively) report to this employee --

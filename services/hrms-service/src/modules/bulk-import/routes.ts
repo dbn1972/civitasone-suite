@@ -8,6 +8,7 @@ import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { randomUUID } from "node:crypto";
+import { zTrimmedText, zTrimmedCode, zIsoDate, DATE_WINDOWS, istToday } from "@civitasone/schemas/validators";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { isExitedStatus } from "../employee/status.js";
@@ -18,11 +19,13 @@ const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
 const bulkImportBody = z.object({
   employees: z.array(z.object({
-    employeeNo: z.string().min(1).max(32),
-    fullName: z.string().min(1).max(256),
+    // UAT b23: same trim / non-blank / date-window rules as POST /v1/hrms/employees (bundle 21 fixed
+    // only the single-row create path; the bulk path stored "  " names, padded numbers, year 2999).
+    employeeNo: zTrimmedCode(32, "employee number"),
+    fullName: zTrimmedText(256, { label: "full name" }),
     departmentId: z.string().uuid(),
     designationId: z.string().uuid(),
-    dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateOfJoining: zIsoDate({ window: () => DATE_WINDOWS.dateOfJoining(istToday()), label: "date of joining" }),
     email: z.string().email().optional(),
     mobile: z.string().max(20).optional(),
     gender: z.enum(["male", "female", "other"]).optional(),
@@ -44,7 +47,7 @@ const bulkImportBody = z.object({
     // there is no verified code->id lookup for pay structures in this
     // snapshot (payroll-service's response shape is not confirmable from
     // hrms-service), so guessing at one risked silently mis-assigning pay.
-    managerEmployeeNo: z.string().min(1).max(32).optional(),
+    managerEmployeeNo: zTrimmedCode(32, "manager employee number").optional(),
   })).min(1).max(500),
 });
 
