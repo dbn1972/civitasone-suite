@@ -85,21 +85,7 @@ export function registerExecutionConsumers(queue: Queue): void {
         });
         if (!created) return; // already created (redelivery with a fresh message id)
 
-        await enqueue(tx, {
-          topic: EVENTS.inspectionScheduled,
-          eventType: EVENTS.inspectionScheduled,
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          payload: {
-            inspectionId: created.id,
-            entityId: created.entityId,
-            inspectionTypeId: created.inspectionTypeId,
-            planId: created.planId,
-            assignedInspectors: created.assignedInspectors as string[],
-            scheduledBy: msg.actorId,
-          },
-        });
+        // No domain event: nothing consumes a "scheduled" fact yet (orphan-event contract). The audit record is the trail.
         await enqueue(tx, {
           topic: AUDIT_TOPIC,
           eventType: AUDIT_TOPIC,
