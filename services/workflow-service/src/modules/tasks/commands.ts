@@ -16,6 +16,8 @@ import { checkMandatoryDocs } from "./doc-gate.js";
 import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
 import { fetchUserDisplayName } from "../../shared/identity-client.js";
+import { resolvePeople } from "../../shared/people-client.js";
+import { REWORK_PREFIX, isReworkTask } from "./rework.js";
 
 /**
  * UAT follow-up (F108, security): a task with no roleRef used to be completable
@@ -66,7 +68,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export async function taskAlreadyDecided(tenantId: string, taskId: string, decision: string | null | undefined): Promise<HttpError> {
   const row = await repo.findDecisionById(taskId, tenantId);
   const deciderId = row?.completedBy ?? null;
-  const name = deciderId ? await fetchUserDisplayName(tenantId, deciderId) : null;
+  const name = deciderId ? ((await resolvePeople(tenantId, [deciderId])).get(deciderId)?.name ?? await fetchUserDisplayName(tenantId, deciderId)) : null;
   const how = row?.decision ?? decision ?? "completed";
   return new HttpError(409, "TASK_ALREADY_DECIDED", `this task was already decided (${how})${name ? ` by ${name}` : ""}`, {
     decision: how,
@@ -175,7 +177,16 @@ export async function completeTask(
   // authoritative SoD enforcement now lives inside the consumer transaction
   // under a row lock (see consumer.ts). This block only short-circuits the
   // obvious self-approval case early for a friendlier error.
-  if (!isSuperAdmin) {
+  // W4: the maker's "correct and resubmit" task is not a checker decision, so maker-checker SoD
+  // does not apply to it - but it can only be resubmitted (approve), never rejected or returned.
+  // Recognised by role + assignee + prefix, never the key alone (rework.ts).
+  const isRework = isReworkTask(existing, existing.nodeKey?.startsWith(REWORK_PREFIX) ? await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId) : null);
+  if (isRework && decision !== "approve") {
+    throw new HttpError(422, "REWORK_RESUBMIT_ONLY", "a returned item can only be corrected and resubmitted");
+  }
+  if (isRework) {
+    // fall through: role / assignee gates above already confined this to the maker
+  } else if (!isSuperAdmin) {
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
     // self-approval: by the actor directly, OR via a delegation whose delegator
     // is the submitter (the delegate is standing in for that role).
@@ -190,7 +201,7 @@ export async function completeTask(
     // repeat-actor: a prior step completed by the actor directly OR by a
     // delegator the actor is now acting on behalf of (four-eyes via delegation).
     const conflict = priorTasks.some(
-      (t) => t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
+      (t) => !(t.decision === "return" && t.nodeKey === existing.nodeKey) && t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
     );
     if (conflict) {
       throw new HttpError(403, "SOD_REPEAT_ACTOR", "you already acted on a prior step of this workflow");
