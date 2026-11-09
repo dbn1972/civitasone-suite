@@ -38,6 +38,26 @@ describe("RoleCommandCenter", () => {
     expect(screen.getByText("HR & Payroll Command Center")).toBeInTheDocument();
   });
 
+  // UAT b23: "All approvals" pointed at the /workflow analytics hub.
+  it("UAT b23: All approvals opens the /approvals inbox for a role that can read tasks", () => {
+    getSessionRolesMock.mockReturnValue(["procurement_officer"]);
+    render(<RoleCommandCenter />);
+    expect(screen.getByRole("link", { name: /All approvals/ })).toHaveAttribute("href", "/approvals");
+  });
+
+  it("UAT b23: an analytics-only role (tenant_admin) gets the /workflow hub link", () => {
+    getSessionRolesMock.mockReturnValue(["tenant_admin"]);
+    render(<RoleCommandCenter />);
+    expect(screen.getByRole("link", { name: /All approvals/ })).toHaveAttribute("href", "/workflow");
+  });
+
+  it("UAT b23: All approvals is hidden for a role the inbox would turn away (finance_officer)", () => {
+    getSessionRolesMock.mockReturnValue(["finance_officer"]);
+    render(<RoleCommandCenter />);
+    expect(screen.getByText("Finance Command Center")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /All approvals/ })).not.toBeInTheDocument();
+  });
+
   it("renders nothing when no role matches", () => {
     getSessionRolesMock.mockReturnValue(["citizen"]);
     const { container } = render(<RoleCommandCenter />);

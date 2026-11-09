@@ -63,3 +63,14 @@ export const createAreaBody = z.object({
   active: z.boolean().optional(),
 });
 export type CreateAreaBody = z.infer<typeof createAreaBody>;
+
+export const GATE_TYPES = ["entry", "exit", "entry_exit"] as const;
+
+export const createGateBody = z.object({
+  name: z.string().trim().min(1, "name is required").max(100, "name must be 100 characters or fewer"),
+  gateType: z.enum(GATE_TYPES).optional(),
+  /** Omitted/null = perimeter gate. When set it must be an area of the same location. */
+  areaId: z.string().uuid("invalid areaId").nullish(),
+  active: z.boolean().optional(),
+});
+export type CreateGateBody = z.infer<typeof createGateBody>;

@@ -289,6 +289,7 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: {
       id, tenantId: ctx.tenantId,
+      fullName: body.fullName,
       mobile: body.mobile,
       email: body.email,
       bankAccountNo: body.bankAccountNo,

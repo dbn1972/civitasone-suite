@@ -29,8 +29,9 @@
  */
 import { captureError } from "@civitasone/observability";
 
-// tenantVerified (FQ14): the realm user carries a `tid` attribute equal to the
-// target tenant. Only then may kcUserId be recorded as the identity user's
+// tenantVerified (FQ14): the realm user carries a tenant attribute (`tenantId`, the one
+// the realm's tenant-id-mapper turns into the `tid` claim; `tid` is accepted too) equal to
+// the target tenant. Only then may kcUserId be recorded as the identity user's
 // Keycloak id (users.users.keycloak_user_id).
 export type KcResult = { ok: boolean; skipped?: boolean; reason?: string; kcUserId?: string; tenantVerified?: boolean };
 
@@ -127,19 +128,31 @@ async function findUser(cfg: KcConfig, token: string, tenantId: string, email: s
     { headers: { authorization: `Bearer ${token}` } },
   );
   if (!res.ok) throw new Error(`keycloak user lookup failed: ${res.status}`);
-  const arr = (await res.json()) as Array<{ id: string; enabled: boolean; username?: string; attributes?: { tid?: string[] } }>;
+  const arr = (await res.json()) as Array<{ id: string; enabled: boolean; username?: string; attributes?: KcAttrs }>;
   // Exact-username match, and (when present) tid must match the tenant. Never
   // fall back to a different tenant's record.
   // (Lifecycle actions -- disable, enable, reset -- keep accepting a realm user
   // with no tid, as before: the username is tenant-namespaced. Recording a
   // Keycloak id as an identity mapping additionally requires tenantVerified.)
-  const hit = arr.find((u) => u.username === username && (!u.attributes?.tid || u.attributes.tid.includes(tenantId)));
-  return hit ? { id: hit.id, enabled: hit.enabled, tenantVerified: hasTenantTid(hit.attributes?.tid, tenantId) } : null;
+  const hit = arr.find((u) => u.username === username && (tenantValues(u.attributes).length === 0 || tenantValues(u.attributes).every((t) => t === tenantId)));
+  return hit ? { id: hit.id, enabled: hit.enabled, tenantVerified: hasTenantTid(hit.attributes, tenantId) } : null;
 }
 
-/** FQ14: `tid` is present and equals the tenant (fail closed when absent). */
-function hasTenantTid(tid: string[] | undefined, tenantId: string): boolean {
-  return Array.isArray(tid) && tid.length > 0 && tid.every((t) => t === tenantId);
+type KcAttrs = { tid?: string[]; tenantId?: string[]; identity_user_id?: string[] };
+
+/**
+ * Every tenant value a realm user carries. `tenantId` is the attribute the realm's user
+ * profile declares and the tenant-id-mapper reads; `tid` is what identity-service used to
+ * write alone, and Keycloak's declarative user profile silently dropped it (UAT onboarding gap).
+ */
+function tenantValues(attrs: KcAttrs | undefined): string[] {
+  return [...(attrs?.tenantId ?? []), ...(attrs?.tid ?? [])];
+}
+
+/** FQ14: a tenant attribute is present and ALL values equal the tenant (fail closed when absent or disagreeing). */
+function hasTenantTid(attrs: KcAttrs | undefined, tenantId: string): boolean {
+  const v = tenantValues(attrs);
+  return v.length > 0 && v.every((t) => t === tenantId);
 }
 
 /**
@@ -173,7 +186,7 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
         enabled: true,
         firstName: firstName ?? u.name,
         lastName: rest.join(" "),
-        attributes: { tid: [u.tenantId], identity_user_id: [u.id], email_addr: [u.email] },
+        attributes: { tenantId: [u.tenantId], tid: [u.tenantId], identity_user_id: [u.id], email_addr: [u.email] },
       }),
     });
     if (res.status !== 201 && res.status !== 409) {
@@ -212,10 +225,10 @@ export async function lookupUserId(u: { tenantId: string; email: string; identit
       { headers: { authorization: `Bearer ${token}` } },
     );
     if (!res.ok) throw new Error(`keycloak attribute lookup failed: ${res.status}`);
-    const arr = (await res.json()) as Array<{ id: string; attributes?: { tid?: string[]; identity_user_id?: string[] } }>;
+    const arr = (await res.json()) as Array<{ id: string; attributes?: KcAttrs }>;
     const hits = arr.filter((k) => (k.attributes?.identity_user_id ?? []).includes(u.identityUserId));
     if (hits.length === 1) {
-      return hasTenantTid(hits[0]!.attributes?.tid, u.tenantId)
+      return hasTenantTid(hits[0]!.attributes, u.tenantId)
         ? { ok: true, kcUserId: hits[0]!.id, tenantVerified: true, reason: "identity_user_id attribute" }
         : { ok: true, reason: "tid_missing: realm user has no tid attribute for this tenant" };
     }

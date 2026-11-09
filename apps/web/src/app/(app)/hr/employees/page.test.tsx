@@ -388,3 +388,19 @@ describe("EmployeeDirectoryPage", () => {
     expect(screen.getByRole("navigation", { name: "Filter by status" })).toHaveClass("chip-row");
   });
 });
+
+describe("EmployeeDirectoryPage access (UAT b23)", () => {
+  beforeEach(() => {
+    getEmployeesMock.mockReset();
+    getHRDashboardMock.mockReset();
+    fetchJsonMock.mockReset();
+  });
+
+  it("shows the restricted card, not an empty directory shell, to a plain employee, and loads nothing", async () => {
+    mockRoles = ["employee"];
+    await renderPage();
+    expect(screen.queryByText(/add your first employee/i)).not.toBeInTheDocument();
+    expect(getEmployeesMock).not.toHaveBeenCalled();
+    mockRoles = ["hr_admin"];
+  });
+});

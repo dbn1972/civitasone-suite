@@ -83,12 +83,22 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await tenantTransaction(db, p.tenantId, async (tx) => {
       if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
       assertValidFY(p.fy);
-      await repo.insertBudget(tx as Parameters<typeof repo.insertBudget>[0], {
-        id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
-        beMinor: BigInt(p.beMinor), reMinor: BigInt(p.beMinor),
-        allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
+      // B23: a (tenant, head, fy) duplicate that slips past the route check (two concurrent creates) can never
+      // succeed on retry: refuse it once, as a permanent error, instead of 5 retries into the DLQ.
+      try {
+        await repo.insertBudget(tx as Parameters<typeof repo.insertBudget>[0], {
+          id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
+          beMinor: BigInt(p.beMinor), reMinor: BigInt(p.beMinor),
+          allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        if (e.code === "23505" || e.cause?.code === "23505") {
+          throw new NonRetryableError(`[finance/budget] BUDGET_EXISTS: head ${p.headId} already has a budget for FY ${p.fy}`, err instanceof Error ? err : undefined);
+        }
+        throw err;
+      }
       await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", `${(msg.payload as any).headId}:${(msg.payload as any).fy}`));

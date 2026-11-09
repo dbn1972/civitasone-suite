@@ -27,7 +27,7 @@ function newTenant(): string { const t = randomUUID(); tenants.push(t); return t
  * so a real `application` task cannot be inserted. The web checklist (FN-26)
  * and this gate key off such a refType, so — on the DISPOSABLE test database
  * only — widen the two constraints to also admit "application" (superset of the
- * shipped set incl. migration 0048's procurement_plan / procurement_po_amendment; the
+ * shipped set incl. migrations 0048 and 0050: procurement_plan, procurement_po_amendment, meeting_decision, employee; the
  * production migration is deliberately NOT changed by this fix).
  */
 async function admitApplicationRefType(): Promise<void> {
@@ -40,7 +40,7 @@ async function admitApplicationRefType(): Promise<void> {
       await admin.unsafe(`ALTER TABLE workflow.${table} DROP CONSTRAINT IF EXISTS ${name}`);
       await admin.unsafe(
         `ALTER TABLE workflow.${table} ADD CONSTRAINT ${name} CHECK (ref_type IS NULL OR ref_type IN ` +
-        `('leave_app','payroll_run','procurement_indent','procurement_po','estab_file','asset_disposal','procurement_plan','procurement_po_amendment','application'))`,
+        `('leave_app','payroll_run','procurement_indent','procurement_po','estab_file','asset_disposal','procurement_plan','procurement_po_amendment','meeting_decision','employee','application'))`,
       );
     }
   } finally {

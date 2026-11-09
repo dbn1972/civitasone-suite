@@ -142,3 +142,17 @@ describe("observability — scheduled-job metrics (PERF-011)", () => {
     expect(getScheduledJobRunCount("job.reset", "success")).toBe(0);
   });
 });
+
+describe("observability - pii_decrypt_skipped_total (B23)", () => {
+  it("counts skipped undecryptable rows per service/subject and renders them in the shared metrics", async () => {
+    const m = await import("./index.js");
+    m.resetFailureMetrics();
+    m.incrementPiiDecryptSkipped("visitor-service", "visit_request");
+    m.incrementPiiDecryptSkipped("visitor-service", "visit_request");
+    expect(m.getPiiDecryptSkippedCount("visitor-service", "visit_request")).toBe(2);
+    expect(m.formatSharedMetrics().join("\n")).toContain(
+      'pii_decrypt_skipped_total{service="visitor-service",subject="visit_request"} 2',
+    );
+    m.resetFailureMetrics();
+  });
+});

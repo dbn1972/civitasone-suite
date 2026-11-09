@@ -10,6 +10,7 @@ import {
 } from "../../../_data/loaders";
 import { getSessionName, getSessionRoles } from "../../../../lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
+import { employeeDisplayName, employeeInitials } from "@/lib/employeeName";
 import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour, formatInIST } from "@/lib/formatters";
 import { payrollDaysLeft } from "./payrollDaysLeft";
 import { GreetingHeader } from "./_components/GreetingHeader";
@@ -415,13 +416,15 @@ export default async function HRDashboardPage() {
                   recentEmployees.map((emp, idx) => {
                     const bg = AVATAR_BG[idx % AVATAR_BG.length];
                     const fg = AVATAR_FG[idx % AVATAR_FG.length];
-                    const ini = emp.name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase();
+                    // UAT b23: a blank-name record must still give the link an accessible name.
+                    const shownName = employeeDisplayName(emp.name, emp.employeeNo as string | undefined);
+                    const ini = employeeInitials(emp.name);
                     return (
                       <tr key={emp.id}>
                         <td>
                           <Link href={`/hr/employees/${emp.id}`} className="emp-name-cell">
                             <span className="emp-avatar" style={{ background: bg, color: fg }}>{ini}</span>
-                            <span>{emp.name}</span>
+                            <span>{shownName}</span>
                           </Link>
                         </td>
                         <td className="emp-code">{(emp.employeeNo as string | undefined) ?? "—"}</td>

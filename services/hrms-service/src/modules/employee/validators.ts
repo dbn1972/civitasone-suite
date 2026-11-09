@@ -202,6 +202,10 @@ const MASK_CHAR_MESSAGE = "must not contain '*' -- this looks like a masked plac
 const emptyToNull = (v: unknown): unknown => (typeof v === "string" && v.trim() === "" ? null : v);
 
 export const updateEmployeeBody = z.object({
+  // UAT b23 (name correction): HR can correct the name (marriage, spelling). Trimmed, never blank
+  // (same rule as create); a REASON is mandatory (enforced at the route) and the change is audited
+  // old -> new. employee_no is deliberately NOT correctable here (see PR body).
+  fullName:       zTrimmedText(256, { label: "full name" }).optional(),
   mobile:         z.preprocess(emptyToNull, z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).pipe(zIndianMobile).nullable()).optional(),
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
@@ -245,6 +249,7 @@ export type UpdateEmployeeBody = z.infer<typeof updateEmployeeBody>;
 // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: shared between routes.ts's synchronous
 // pre-check and anything else that needs to know "does this patch change
 // something sensitive enough to require a reason".
+export const NAME_CORRECTION_REASON_MESSAGE = "A reason (at least 10 characters) is required when correcting an employee's name.";
 export const SENSITIVE_UPDATE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
 export const employeeQueryParams = z.object({

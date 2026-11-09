@@ -358,6 +358,13 @@ function formatScheduledJobMetrics(): string[] {
     lines.push(`scheduled_job_duration_ms_sum{job="${job}"} ${h.sum}`);
     lines.push(`scheduled_job_duration_ms_count{job="${job}"} ${h.count}`);
   }
+  lines.push(
+    "# HELP inventory_precheck_failopen_total GRN accepts let through because the inventory pre-check could not be completed, by reason",
+    "# TYPE inventory_precheck_failopen_total counter",
+  );
+  for (const [reason, count] of inventoryPrecheckFailopenTotal) {
+    lines.push(`inventory_precheck_failopen_total{reason="${reason}"} ${count}`);
+  }
   return lines;
 }
 
@@ -386,6 +393,11 @@ const capturedErrorsTotal = new Map<string, number>();       // service -> count
 // procurement-worker's own subscriber queue did not yet exist were silently
 // discarded, with the HTTP layer still reporting 202 Accepted.
 const publishNoSubscribersTotal = new Map<string, number>(); // topic -> count
+// B23: a consumer/worker skipped a row whose at-rest PII envelope no key in its keyring can open
+// (e.g. rows written under a retired key). Keyed `service:subject`. Alert on any increase.
+const piiDecryptSkippedTotal = new Map<string, number>();
+// procurement GRN accept could not consult inventory and let the accept through (fail-open), by reason.
+const inventoryPrecheckFailopenTotal = new Map<string, number>();
 
 /** Increment outbox_relay_failures_total{service}. */
 export function incrementOutboxRelayFailure(service: string): void {
@@ -417,6 +429,28 @@ export function incrementDlqMessage(topic: string, reason: string = "unknown"): 
   dlqTotal.set(key, (dlqTotal.get(key) ?? 0) + 1);
 }
 
+/**
+ * Increment pii_decrypt_skipped_total{service,subject} - a row was skipped (not failed) because its
+ * encrypted PII could not be decrypted. `subject` is a short stable label, e.g. "visit_request".
+ */
+export function incrementPiiDecryptSkipped(service: string, subject: string): void {
+  const key = `${service}:${subject}`;
+  piiDecryptSkippedTotal.set(key, (piiDecryptSkippedTotal.get(key) ?? 0) + 1);
+}
+
+/** Increment inventory_precheck_failopen_total{reason} (reason: unreachable | http_<status> | bad_body). */
+export function incrementInventoryPrecheckFailopen(reason: string): void {
+  inventoryPrecheckFailopenTotal.set(reason, (inventoryPrecheckFailopenTotal.get(reason) ?? 0) + 1);
+}
+
+export function getInventoryPrecheckFailopenCount(reason: string): number {
+  return inventoryPrecheckFailopenTotal.get(reason) ?? 0;
+}
+
+export function getPiiDecryptSkippedCount(service: string, subject: string): number {
+  return piiDecryptSkippedTotal.get(`${service}:${subject}`) ?? 0;
+}
+
 export function getOutboxRelayFailureCount(service: string): number {
   return outboxRelayFailuresTotal.get(service) ?? 0;
 }
@@ -444,6 +478,8 @@ export function resetFailureMetrics(): void {
   dlqTotal.clear();
   capturedErrorsTotal.clear();
   publishNoSubscribersTotal.clear();
+  piiDecryptSkippedTotal.clear();
+  inventoryPrecheckFailopenTotal.clear();
 }
 
 function formatFailureMetrics(): string[] {
@@ -477,6 +513,14 @@ function formatFailureMetrics(): string[] {
   );
   for (const [topic, count] of publishNoSubscribersTotal) {
     lines.push(`publish_no_subscribers_total{topic="${topic}"} ${count}`);
+  }
+  lines.push(
+    "# HELP pii_decrypt_skipped_total Rows skipped because their encrypted PII could not be decrypted, by service and subject",
+    "# TYPE pii_decrypt_skipped_total counter",
+  );
+  for (const [key, count] of piiDecryptSkippedTotal) {
+    const sep = key.indexOf(":");
+    lines.push(`pii_decrypt_skipped_total{service="${key.slice(0, sep)}",subject="${key.slice(sep + 1)}"} ${count}`);
   }
   return lines;
 }

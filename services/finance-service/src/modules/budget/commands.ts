@@ -48,6 +48,17 @@ export async function createBudget(ctx: RequestContext, body: CreateBudgetBody):
       ? { idempotencyKey: `budget-create:${ctx.idempotencyKey}:${body.headId}:${body.fy}:${body.beMinor}`, tenantId: ctx.tenantId }
       : { tenantId: ctx.tenantId },
   );
+  // UAT B23 (DLQ gate): finance_budgets is UNIQUE (tenant_id, head_id, fy). A second budget for a head+FY
+  // that already has one used to be 202-accepted and then died in the worker on the unique index (retried,
+  // then dead-lettered) while the user believed it was created. Refuse it here with a 409 the form can show.
+  // A replay of the SAME idempotent command (the existing row carries this command's id) is still a 202.
+  const existing = await repo.findBudget(body.headId, body.fy, ctx.tenantId);
+  if (existing) {
+    if (existing.id === id) return { id, status: "accepted", correlationId: ctx.correlationId };
+    throw new HttpError(409, "BUDGET_EXISTS", `A budget for this head already exists for FY ${body.fy}. Edit or re-appropriate the existing budget instead.`, [
+      { field: "headId", message: `This head already has a budget for FY ${body.fy}.`, code: "BUDGET_EXISTS" },
+    ], { existingBudgetId: existing.id });
+  }
   await queue.publish(COMMANDS.budgetCreate, {
     messageId: id, type: COMMANDS.budgetCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

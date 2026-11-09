@@ -115,6 +115,36 @@ export async function findInspections(
 // ── Inspection Writes (within transaction) ────────────────────────────────────
 
 /**
+ * Insert a new inspection in state `scheduled`. Idempotent on the caller-minted id
+ * (a redelivered create command is a no-op, returns null).
+ */
+export async function insertInspection(
+  tx: Tx,
+  data: {
+    id: string;
+    tenantId: string;
+    entityId: string;
+    inspectionTypeId: string;
+    planId?: string | null;
+    assignedInspectors: string[];
+    actorId: string;
+  },
+): Promise<InspectionRow | null> {
+  const rows = await tx.insert(inspections).values({
+    id: data.id,
+    tenantId: data.tenantId,
+    entityId: data.entityId,
+    inspectionTypeId: data.inspectionTypeId,
+    planId: data.planId ?? null,
+    state: "scheduled",
+    assignedInspectors: data.assignedInspectors,
+    createdBy: data.actorId,
+    updatedBy: data.actorId,
+  }).onConflictDoNothing({ target: inspections.id }).returning();
+  return rows[0] ?? null;
+}
+
+/**
  * Update inspection state within a transaction.
  *
  * Uses optimistic locking via the version column: the WHERE clause requires

@@ -88,3 +88,34 @@ export async function areaCreate(ctx: RequestContext, locationId: string, input:
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export interface GateCreateInput {
+  name: string;
+  gateType?: "entry" | "exit" | "entry_exit" | undefined;
+  areaId?: string | null | undefined;
+  active?: boolean | undefined;
+}
+
+/** Admin-managed reference data - creates a gate under a location (check-in/out and devices reference it). */
+export async function gateCreate(ctx: RequestContext, locationId: string, input: GateCreateInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.gateCreate, {
+    messageId: id,
+    type: COMMANDS.gateCreate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      id,
+      tenantId: ctx.tenantId,
+      locationId,
+      name: input.name,
+      ...(input.gateType !== undefined ? { gateType: input.gateType } : {}),
+      ...(input.areaId ? { areaId: input.areaId } : {}),
+      ...(input.active !== undefined ? { active: input.active } : {}),
+      createdBy: ctx.actorId,
+    },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

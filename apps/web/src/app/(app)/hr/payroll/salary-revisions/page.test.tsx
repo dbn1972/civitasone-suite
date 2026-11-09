@@ -232,6 +232,25 @@ describe("SalaryRevisionsPage", () => {
     expect(screen.getAllByRole("button", { name: /^Approve the salary revision/ })).toHaveLength(1);
   });
 
+  // UAT b23 P5: the history call is the newest-100 page; an older pending revision is only
+  // reachable through the status filter, which the page must ask for.
+  it("lists a pending revision that is absent from the capped history page", async () => {
+    fetchJsonMock.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith("/api/v1/hrms/employees")
+          ? { data: [[E1, { name: "Asha Rao", employeeNo: "EMP-1" }]], source: "api" }
+          : path.startsWith("/api/v1/payroll/settings")
+            ? { data: true, source: "api" }
+            : path.includes("status=pending")
+              ? { data: [rev({ id: "sr-old-pending", status: "pending", effective_date: "2025-04-01" })], source: "api" }
+              : { data: [rev({ id: "sr-new", status: "approved", effective_date: "2026-10-01" })], source: "api" },
+      ),
+    );
+    await renderPage();
+    expect(fetchJsonMock.mock.calls.some((c) => String(c[0]).includes("/salary-revisions?status=pending"))).toBe(true);
+    expect(screen.getByRole("button", { name: "Approve the salary revision for Asha Rao (EMP-1)" })).toBeInTheDocument();
+  });
+
   it("hr_admin can read the history but gets no approval controls", async () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     mockRevisionsAndNames([rev({ status: "pending" })]);

@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient, scopedRead } from "../src/shared/db.js";
 import { resolveDaRateBps } from "../src/modules/payroll/consumer.js";
-import { seedUatDaRates, STANDARD_DA_SERIES, UAT_DA_ORDER_REF } from "../src/modules/payroll/da-rate-seed.js";
+import { seedUatDaRates, STANDARD_DA_SERIES, daSeedOrderRef } from "../src/modules/payroll/da-rate-seed.js";
 
 const EMPTY = randomUUID();
 const CONFIGURED = randomUUID();
@@ -40,13 +40,15 @@ describe("B10 seedUatDaRates (payroll:seed-uat-da-rates)", () => {
     expect(await daRows(EMPTY)).toEqual([]);
   });
 
-  it("seeds the effective-dated series labelled as UAT seed data; payroll then resolves a rate; re-run is a no-op", async () => {
+  it("seeds the effective-dated series with realistic order text; payroll then resolves a rate; re-run is a no-op", async () => {
     const r = await seedUatDaRates(EMPTY, { actorId: ACTOR });
     expect(r.outcome).toBe("seeded");
     expect(r.inserted).toHaveLength(STANDARD_DA_SERIES.length);
     const rows = await daRows(EMPTY);
     expect(rows.map((x) => [x.effective_from, x.rate_bps])).toEqual(STANDARD_DA_SERIES.map((s) => [s.effectiveFrom, s.rateBps]));
-    expect(rows.every((x) => x.order_ref === UAT_DA_ORDER_REF && /UAT SEED/.test(x.order_ref))).toBe(true);
+    expect(rows.map((x) => x.order_ref)).toEqual(STANDARD_DA_SERIES.map((s) => daSeedOrderRef(s.effectiveFrom)));
+    // owner rule: no test-style text in UAT data
+    expect(rows.every((x) => /Department of Expenditure OM/.test(x.order_ref ?? "") && !/UAT|SEED|test|placeholder/i.test(x.order_ref ?? ""))).toBe(true);
     expect(await rateFor(EMPTY, "2026-10")).toBe(5800n);
     expect(await rateFor(EMPTY, "2024-03")).toBe(5000n);
 

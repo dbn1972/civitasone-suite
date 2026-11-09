@@ -50,6 +50,20 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
+/**
+ * UAT b23 P5: revisions awaiting a second approver, asked of the API by status. Filtering the capped
+ * (newest 100) history client-side lost older pending items; the status filter runs before that cap.
+ */
+async function getPendingData(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/payroll/salary-revisions?status=pending", [], {
+    telemetryKey: "payroll.salary-revisions.pending",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+}
+
 /** Per-tenant maker != checker switch (default ON when the settings cannot be read). */
 async function getSecondApprover(): Promise<boolean> {
   const r = await fetchJson<unknown, boolean>("/api/v1/payroll/settings", true, {
@@ -82,14 +96,18 @@ export default async function SalaryRevisionsPage() {
   }
   const canCreate = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
-  const [{ data: rawItems, source }, secondApprover] = await Promise.all([getData(), canCreate ? getSecondApprover() : Promise.resolve(true)]);
+  const [{ data: rawItems, source }, secondApprover, pendingRes] = await Promise.all([
+    getData(),
+    canCreate ? getSecondApprover() : Promise.resolve(true),
+    canCreate ? getPendingData() : Promise.resolve<LoaderResult<Row[]>>({ data: [], source: "api" }),
+  ]);
   const errored = source === "error";
   // GAP-PAYROLL-SALARY-REVISIONS-03: employee_id used to render as a raw
   // UUID. One batched hrms directory lookup (ids=, 50 per request) for just
   // the employees on this page -- the shared resolver the arrears/bonus/
   // corrections/reimbursements registers use -- instead of pulling the whole
   // directory. Unresolved ids fall back to "Unknown employee" (never an id fragment).
-  const names = await resolveEmployeeNames(rawItems.map((r) => r.employee_id));
+  const names = await resolveEmployeeNames([...rawItems, ...pendingRes.data].map((r) => r.employee_id));
 
   // Every field DataTable sees is a plain serialisable value: DataTable is a
   // "use client" component, so a `render:` function from this Server
@@ -111,17 +129,20 @@ export default async function SalaryRevisionsPage() {
   });
   // GAP-PAYROLL-SALARY-REVISIONS-04: revisions awaiting a second approver.
   // Plain, pre-formatted data (crosses the RSC boundary into PendingRevisions).
-  const pending: PendingRevision[] = items
-    .filter((i) => i.status === "pending")
-    .map((i) => ({
-      id: i.id,
-      employeeLabel: i.employeeLabel,
-      effectiveDate: i.effective_date,
-      typeLabel: i.revisionTypeLabel,
-      oldBasic: formatMoney(i.old_basic_minor),
-      newBasic: formatMoney(i.new_basic_minor),
-      orderNo: i.order_no ?? "—",
-    }));
+  const pending: PendingRevision[] = pendingRes.data
+    .filter((r) => (r.status ?? "approved") === "pending")
+    .map((r) => {
+      const key = revisionTypeListLabelKey(r.revision_type);
+      return {
+        id: r.id,
+        employeeLabel: employeeDisplayLabel(names, r.employee_id, t("unknownEmployee")),
+        effectiveDate: r.effective_date,
+        typeLabel: key ? t(key) : r.revision_type,
+        oldBasic: formatMoney(r.old_basic_minor),
+        newBasic: formatMoney(r.new_basic_minor),
+        orderNo: r.order_no ?? "—",
+      };
+    });
   type Row2 = (typeof items)[number];
 
   const columns: { key: keyof Row2 & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; sortable?: boolean }[] = [
