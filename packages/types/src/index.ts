@@ -3371,3 +3371,5 @@ export type FinanceVendorSummary = {
  * the web form and payroll-service (route + consumer) so they cannot drift.
  */
 export const REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES: readonly string[] = ["medical", "lta", "travel"];
+
+export * from "./gatewayPublic.js";
