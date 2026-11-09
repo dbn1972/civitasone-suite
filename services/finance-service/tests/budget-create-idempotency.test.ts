@@ -7,7 +7,7 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 vi.mock("../src/shared/db.js", () => ({ db: {} }));
 vi.mock("../src/shared/outbox.js", () => ({ enqueue: vi.fn() }));
-vi.mock("../src/modules/budget/repo.js", () => ({ findHeadByIdAndTenant: vi.fn(async () => ({ id: "h", code: "3054", classification: "expense" })) }));
+vi.mock("../src/modules/budget/repo.js", () => ({ findBudget: vi.fn(async () => null), findHeadByIdAndTenant: vi.fn(async () => ({ id: "h", code: "3054", classification: "expense" })) }));
 vi.mock("../src/modules/budget/domain.js", async (orig) => ({ ...(await orig<object>()), assertBudgetableHead: () => undefined }));
 
 import { createBudget } from "../src/modules/budget/commands.js";
