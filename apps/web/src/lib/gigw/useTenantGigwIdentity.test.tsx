@@ -76,4 +76,16 @@ describe("footer owner line reads the tenant at runtime", () => {
       view.unmount();
     }
   });
+
+  it("never shows the build-time owner while the tenant fetch is pending (no flash-and-swap)", async () => {
+    process.env.NEXT_PUBLIC_GIGW_OWNER = "Municipal Corporation of Civitas Nagar";
+    let resolve!: (v: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((r) => { resolve = r; })));
+    renderLine();
+    expect(screen.queryByText(/Civitas Nagar/)).toBeNull();
+    expect(screen.queryByText(/Demonstration/)).toBeNull();
+    resolve({ ok: true, status: 200, json: async () => ({ identity: { department: "Digital India Corporation" } }) });
+    await waitFor(() => expect(screen.getByText(/Digital India Corporation/)).toBeTruthy());
+    expect(screen.queryByText(/Civitas Nagar/)).toBeNull();
+  });
 });

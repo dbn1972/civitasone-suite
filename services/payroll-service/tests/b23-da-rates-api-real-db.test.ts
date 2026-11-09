@@ -18,6 +18,7 @@ import { db, sqlClient, scopedRead } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerDaRateConsumers } from "../src/modules/da-rates/consumer.js";
 import { resolveDaRateBps } from "../src/modules/payroll/consumer.js";
+import { lockDaRates } from "../src/modules/da-rates/rules.js";
 import { runWithTenant } from "@civitasone/db";
 
 const SECRET = process.env.JWT_SECRET as string;
@@ -154,5 +155,54 @@ describe("DA rate admin API (real DB, NOBYPASSRLS)", () => {
     const blocked = await app.inject({ method: "DELETE", url: `/v1/payroll/da-rates/${jan!.id}`, headers: auth(["super_admin"]) });
     expect(blocked.statusCode).toBe(409);
     expect(blocked.json().message).toContain("2026-09");
+  });
+
+  it.each(["computed", "paid", "processing"])("a rate behind a %s run cannot be deleted", async (status) => {
+    const t = randomUUID();
+    try {
+      const a = await post({ effectiveFrom: "2025-04-01", rateBps: 5500, orderRef: ORDER }, ["payroll_admin"], t);
+      expect(a.statusCode).toBe(202);
+      const [rate] = await until(() => rates(t), (r) => r.length >= 1);
+      await q(sql`INSERT INTO payroll.payroll_runs (tenant_id, run_no, month, structure_id, status, created_by, updated_by)
+                  VALUES (${t}::uuid, ${"PR-" + status}, '2025-05', ${randomUUID()}::uuid, ${status}, ${ADMIN}::uuid, ${ADMIN}::uuid)`, t);
+      const res = await app.inject({ method: "DELETE", url: `/v1/payroll/da-rates/${rate!.id}`, headers: auth(["payroll_admin"], t) });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("DA_RATE_IN_USE");
+      expect(await rates(t)).toHaveLength(1);
+      // draft / failed / cancelled runs never priced a payslip: they do not block
+      await q(sql`UPDATE payroll.payroll_runs SET status = 'cancelled' WHERE tenant_id = ${t}::uuid`, t);
+      expect((await app.inject({ method: "DELETE", url: `/v1/payroll/da-rates/${rate!.id}`, headers: auth(["payroll_admin"], t) })).statusCode).toBe(202);
+      await until(() => rates(t), (r) => r.length === 0);
+    } finally {
+      await q(sql`DELETE FROM payroll.payroll_runs WHERE tenant_id = ${t}::uuid`, t);
+      await q(sql`DELETE FROM payroll.dearness_allowance_rates WHERE tenant_id = ${t}::uuid`, t);
+    }
+  });
+
+  it("a delete waits for a run's in-flight DA lookup (advisory lock), then applies", async () => {
+    const t = randomUUID();
+    try {
+      await post({ effectiveFrom: "2025-04-01", rateBps: 5500, orderRef: ORDER }, ["payroll_admin"], t);
+      const [rate] = await until(() => rates(t), (r) => r.length >= 1);
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      let locked!: () => void;
+      const gotLock = new Promise<void>((r) => { locked = r; });
+      // a run's lookup: shared lock held inside its transaction
+      const runTx = runWithTenant(t, () => db.transaction(async (tx) => {
+        await lockDaRates(tx as never, t, "shared");
+        locked();
+        await held;
+      }));
+      await gotLock;
+      expect((await app.inject({ method: "DELETE", url: `/v1/payroll/da-rates/${rate!.id}`, headers: auth(["payroll_admin"], t) })).statusCode).toBe(202);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(await rates(t)).toHaveLength(1); // delete consumer is blocked behind the run's lookup
+      release();
+      await runTx;
+      expect(await until(() => rates(t), (r) => r.length === 0)).toHaveLength(0);
+    } finally {
+      await q(sql`DELETE FROM payroll.dearness_allowance_rates WHERE tenant_id = ${t}::uuid`, t);
+    }
   });
 });

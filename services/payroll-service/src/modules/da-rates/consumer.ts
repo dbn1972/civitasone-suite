@@ -5,7 +5,7 @@ import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { audit } from "../payroll/consumer.js";
 import type { CreateDaRateBody } from "./api.js";
-import { loadDaRates, processedMonthsUsingRate } from "./rules.js";
+import { loadDaRates, lockDaRates, processedMonthsUsingRate } from "./rules.js";
 
 export function registerDaRateConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.daRateCreate, async (msg) => {
@@ -29,6 +29,7 @@ export function registerDaRateConsumers(queue: Queue): void {
     const p = msg.payload as { id: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      await lockDaRates(tx, msg.tenantId, "exclusive");
       const all = await loadDaRates(tx, msg.tenantId);
       const rate = all.find((r) => r.id === p.id);
       if (!rate) throw new NonRetryableError("NOT_FOUND: DA rate not found");

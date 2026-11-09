@@ -28,7 +28,7 @@ export async function loadDaRates(tx: Tx, tenantId: string): Promise<DaRateRow[]
 /**
  * Processed payroll months (YYYY-MM) that resolve their DA from `rate`: months in
  * [rate.effectiveFrom, next rate's effectiveFrom) with a run that is past draft
- * (processing / approved / disbursed). Deleting such a rate would silently
+ * (processing / computed / approved / disbursed / paid; draft, failed and cancelled runs never priced a payslip). Deleting such a rate would silently
  * re-price (or fail) a payroll that has already been run.
  */
 export async function processedMonthsUsingRate(tx: Tx, tenantId: string, rate: DaRateRow, all: DaRateRow[]): Promise<string[]> {
@@ -38,10 +38,20 @@ export async function processedMonthsUsingRate(tx: Tx, tenantId: string, rate: D
   const rows = (await tx.execute(sql`
     SELECT DISTINCT month FROM payroll.payroll_runs
      WHERE tenant_id = ${tenantId}::uuid
-       AND status IN ('processing', 'approved', 'disbursed')
+       AND status IN ('processing', 'computed', 'approved', 'disbursed', 'paid')
        AND month >= ${from}
        AND (${to}::text IS NULL OR month < ${to})
      ORDER BY month
   `)) as unknown as Array<{ month: string }>;
   return rows.map((r) => String(r.month).trim());
+}
+
+/**
+ * Per-tenant advisory lock keyed on the DA series. The delete consumer takes it exclusively; a
+ * payroll run takes it shared while it looks up its DA rate, so a delete cannot interleave with
+ * a run's lookup (transaction-scoped: released at commit / rollback).
+ */
+export async function lockDaRates(tx: Tx, tenantId: string, mode: "shared" | "exclusive"): Promise<void> {
+  if (mode === "shared") await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(hashtextextended(${"da-rate:" + tenantId}, 0))`);
+  else await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"da-rate:" + tenantId}, 0))`);
 }

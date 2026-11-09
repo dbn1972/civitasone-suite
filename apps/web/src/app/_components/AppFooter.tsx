@@ -37,14 +37,18 @@ export function SiteIdentityLine({ className }: { className?: string }) {
   const t = useTranslations("shell");
   const g = useTranslations("gigw");
   // UAT b23: the signed-in tenant's own owner wins; the build-time value is the fallback.
-  const owner = mergeGigwConfig(readGigwConfig(), useTenantGigwIdentity()).department;
+  // The owner stays blank until the tenant fetch settles, so the build-time value never flashes and swaps.
+  const tenant = useTenantGigwIdentity();
+  const owner = mergeGigwConfig(readGigwConfig(), tenant.identity).department;
   const updated = contentLastUpdated(process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT, process.env.NEXT_PUBLIC_BUILD_TIME);
   const locale = useLocale();
   const updatedLabel = updated ? formatGigwDate(updated, locale) : null;
 
   return (
     <p className={className}>
-      {owner ? (
+      {!tenant.settled ? (
+        <span aria-hidden="true" data-gigw-loading="owner">{"\u00a0"}</span>
+      ) : owner ? (
         t("footerOwner", { owner })
       ) : (
         <span data-gigw-default={GIGW_OWNER_CONFIG}>{t("footerOwner", { owner: g("defaultDepartment") })}</span>

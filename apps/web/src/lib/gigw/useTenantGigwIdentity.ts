@@ -38,21 +38,23 @@ export function mergeGigwConfig(buildTime: GigwConfig, tenant: Partial<GigwConfi
   return tenant ? { ...buildTime, ...tenant } : buildTime;
 }
 
-export function useTenantGigwIdentity(): Partial<GigwConfig> | null {
+export function useTenantGigwIdentity(): { identity: Partial<GigwConfig> | null; settled: boolean } {
   const [identity, setIdentity] = useState<Partial<GigwConfig> | null>(null);
+  const [settled, setSettled] = useState(false);
   useEffect(() => {
-    if (typeof fetch !== "function") return;
+    if (typeof fetch !== "function") { setSettled(true); return; }
     const ctl = new AbortController();
     (async () => {
       try {
         const res = await fetch(TENANT_GIGW_IDENTITY_URL, { cache: "no-store", credentials: "same-origin", signal: ctl.signal });
-        if (!res.ok) return;
-        setIdentity(sanitizeTenantGigwIdentity(await res.json()));
+        if (res.ok) setIdentity(sanitizeTenantGigwIdentity(await res.json()));
       } catch {
+        if (ctl.signal.aborted) return;
         /* keep the build-time fallback */
       }
+      if (!ctl.signal.aborted) setSettled(true);
     })();
     return () => ctl.abort();
   }, []);
-  return identity;
+  return { identity, settled };
 }
