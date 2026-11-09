@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, createAreaBody, idParam, DEFAULT_BUSINESS_HOURS } from "./validators.js";
+import { createLocationBody, createAreaBody, createGateBody, idParam, DEFAULT_BUSINESS_HOURS } from "./validators.js";
 import type { BusinessHours } from "./schema.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -67,6 +67,36 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const body = createAreaBody.parse(req.body);
     // Task Q-95.1: queue-first CQRS write, see the POST /locations comment above.
     const accepted = await commands.areaCreate(ctx, id, body);
+    return reply.code(202).send({ data: accepted });
+  });
+
+  app.get("/v1/visitor/locations/:id/gates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = idParam.parse(req.params);
+    const location = await repo.getLocationById(ctx.tenantId, id);
+    if (!location) throw new HttpError(404, "NOT_FOUND", "location not found");
+    const rows = await repo.listGates(ctx.tenantId, id);
+    return reply.send({ data: rows });
+  });
+
+  // B23: no API existed to create a gate, so a tenant without one could not use check-in/out, devices
+  // or any gate flow. Same queue-first convention as locations/areas; the location and (optional) area
+  // are checked here so an unknown reference is a 4xx, not a 202 that dead-letters on the FK.
+  app.post("/v1/visitor/locations/:id/gates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const location = await repo.getLocationById(ctx.tenantId, id);
+    if (!location) throw new HttpError(404, "NOT_FOUND", "location not found");
+    const body = createGateBody.parse(req.body);
+    if (body.areaId) {
+      const area = await repo.getAreaById(ctx.tenantId, body.areaId);
+      if (!area || area.locationId !== id) {
+        throw new HttpError(422, "UNKNOWN_AREA", `area '${body.areaId}' does not exist at this location`);
+      }
+    }
+    const accepted = await commands.gateCreate(ctx, id, body);
     return reply.code(202).send({ data: accepted });
   });
 

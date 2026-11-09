@@ -17,7 +17,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { locations, areas } from "./schema.js";
+import { locations, areas, gates } from "./schema.js";
 import type { BusinessHours } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -44,6 +44,17 @@ export interface AreaCreatePayload {
   securityLevel?: number;
   authorizedApprovers?: string[];
   escortRequired?: boolean;
+  active?: boolean;
+  createdBy: string;
+}
+
+export interface GateCreatePayload {
+  id: string;
+  tenantId: string;
+  locationId: string;
+  name: string;
+  gateType?: "entry" | "exit" | "entry_exit";
+  areaId?: string;
   active?: boolean;
   createdBy: string;
 }
@@ -122,6 +133,34 @@ export function registerLocationConsumers(queue: Queue): void {
       // Areas may be embedded in a future location-detail read — invalidate
       // the parent location's cache entry too, matching the previous
       // repo.ts behavior.
+      await cache.invalidateAfterCommit(tx, cache.makeKey(p.tenantId, RESOURCE, p.locationId));
+    });
+  });
+
+  // ─── gateCreate ────────────────────────────────────────────────────────
+  queue.subscribe<GateCreatePayload>(COMMANDS.gateCreate, async (msg) => {
+    const p = msg.payload;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      const now = new Date();
+      await tx.insert(gates).values({
+        id: p.id,
+        tenantId: p.tenantId,
+        locationId: p.locationId,
+        name: p.name,
+        ...(p.gateType !== undefined ? { gateType: p.gateType } : {}),
+        ...(p.areaId !== undefined ? { areaId: p.areaId } : {}),
+        ...(p.active !== undefined ? { active: p.active } : {}),
+        createdAt: now,
+        updatedAt: now,
+        createdBy: p.createdBy,
+        updatedBy: p.createdBy,
+      });
+
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "gate", resourceId: p.id, outcome: "success" } });
+
       await cache.invalidateAfterCommit(tx, cache.makeKey(p.tenantId, RESOURCE, p.locationId));
     });
   });

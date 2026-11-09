@@ -2,9 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
-  locations, areas, parkingSlots,
+  locations, areas, gates, parkingSlots,
   type LocationRow,
   type AreaRow,
+  type GateRow,
   type ParkingSlotRow,
 } from "./schema.js";
 
@@ -62,4 +63,10 @@ export async function listAreas(tenantId: string, locationId: string): Promise<A
 export async function listParkingSlots(tenantId: string, locationId: string): Promise<ParkingSlotRow[]> {
   return scopedRead((tx) => tx.select().from(parkingSlots)
     .where(and(eq(parkingSlots.tenantId, tenantId), eq(parkingSlots.locationId, locationId))));
+}
+
+export async function listGates(tenantId: string, locationId: string): Promise<GateRow[]> {
+  return scopedRead((tx) => tx.select().from(gates)
+    .where(and(eq(gates.tenantId, tenantId), eq(gates.locationId, locationId)))
+    .orderBy(gates.name));
 }

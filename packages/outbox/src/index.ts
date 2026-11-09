@@ -546,6 +546,16 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
   return inserted.length > 0;
 }
 
+/** Postgres 42P01 (undefined_table), directly or wrapped as `cause` by the driver/ORM. */
+function isUndefinedTable(err: unknown): boolean {
+  let e = err as { code?: unknown; cause?: unknown } | undefined;
+  for (let i = 0; e && i < 4; i++) {
+    if (e.code === "42P01") return true;
+    e = e.cause as typeof e;
+  }
+  return false;
+}
+
 /**
  * G7: Scheduled outbox purge — deletes published outbox rows older than
  * `retentionDays` (default 7). Also purges old inbox/processed entries, and
@@ -610,19 +620,28 @@ export async function purgeOutbox(
   // same retention — without this it grows unbounded for the lifetime of
   // whichever service adopts it, same failure mode this function already
   // exists to prevent for the other two tables.
+  // B23: only a few services provision _inbox.command_results (opt-in by
+  // migration). Elsewhere the DELETE raises 42P01 every cycle and, before this
+  // guard, failed the whole purge ("outbox purge cycle failed") on ~11
+  // services. A missing table means nothing to purge; any other error
+  // still propagates.
   let commandResultsBatchDeleted: number;
-  do {
-    const result = await db.execute(sql`
-      DELETE FROM _inbox.command_results
-      WHERE message_id IN (
-        SELECT message_id FROM _inbox.command_results
-        WHERE occurred_at < ${cutoff}
-        LIMIT ${sql.raw(String(batchSize))}
-      )
-    `);
-    commandResultsBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
-    totalDeleted += commandResultsBatchDeleted;
-  } while (commandResultsBatchDeleted >= batchSize);
+  try {
+    do {
+      const result = await db.execute(sql`
+        DELETE FROM _inbox.command_results
+        WHERE message_id IN (
+          SELECT message_id FROM _inbox.command_results
+          WHERE occurred_at < ${cutoff}
+          LIMIT ${sql.raw(String(batchSize))}
+        )
+      `);
+      commandResultsBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
+      totalDeleted += commandResultsBatchDeleted;
+    } while (commandResultsBatchDeleted >= batchSize);
+  } catch (err) {
+    if (!isUndefinedTable(err)) throw err;
+  }
 
   return totalDeleted;
 }
