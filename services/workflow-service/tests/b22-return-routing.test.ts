@@ -111,6 +111,46 @@ describe("W4: the maker resubmits through the HTTP command path", () => {
   });
 });
 
+describe("W4: the maker's rework approve can only resubmit", () => {
+  it("never approves the item, completes the instance, dispatches the domain approval, or moves past the approver node", async () => {
+    const tenant = newTenant();
+    const refId = randomUUID();
+    const id = await startIndentChain(tenant, refId);
+    await decide((await tasksFor(tenant, id))[0]!, CHECKER, "return", "Revise quantity");
+    const rework = (await tasksFor(tenant, id)).find((t) => t.status === "pending")!;
+    await decide(rework, MAKER, "approve");
+
+    const inst = await getInstance(tenant, id);
+    expect(inst?.status).toBe("active");
+    expect(inst?.current_node).toBe("proc_officer");
+    const pending = (await tasksFor(tenant, id)).filter((t) => t.status === "pending");
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.node_key).toBe("proc_officer");
+    expect(pending[0]!.role_ref).toBe("procurement_officer");
+    expect(pending[0]!.assignee_id).toBeNull();
+    const dispatched = await sqlAsTenant(tenant, sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${tenant} AND topic IN ('procurement.indent.approve','procurement.indent.reject')`);
+    expect(dispatched).toHaveLength(0);
+    // the maker's own resubmit is not an approval: the trail has no "complete" decision
+    const trail = await asTenant(tenant, () => listDecisionsForRef(tenant, "procurement_indent", refId));
+    expect(trail.map((d) => d.action)).toEqual(["return"]);
+
+    // and the maker still cannot approve the re-opened approver task (maker-checker is intact there)
+    await decide(pending[0]!, MAKER, "approve");
+    expect((await getInstance(tenant, id))?.status).toBe("active");
+    expect((await tasksFor(tenant, id)).filter((t) => t.status === "pending")).toHaveLength(1);
+  });
+
+  it("a rework task completed with reject or return through the consumer is blocked, not applied", async () => {
+    const tenant = newTenant();
+    const id = await startIndentChain(tenant, randomUUID());
+    await decide((await tasksFor(tenant, id))[0]!, CHECKER, "return");
+    const rework = (await tasksFor(tenant, id)).find((t) => t.status === "pending")!;
+    await decide(rework, MAKER, "reject");
+    expect((await getInstance(tenant, id))?.status).toBe("active");
+    expect((await tasksFor(tenant, id)).find((t) => t.id === rework.id)?.status).toBe("pending");
+  });
+});
+
 describe("W6: decision audit events", () => {
   it("writes an audit event with actor, action, item ref and reason for return and reject", async () => {
     const tenant = newTenant();

@@ -16,6 +16,7 @@ import { checkMandatoryDocs } from "./doc-gate.js";
 import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
 import { fetchUserDisplayName } from "../../shared/identity-client.js";
+import { resolvePeople } from "../../shared/people-client.js";
 
 /**
  * UAT follow-up (F108, security): a task with no roleRef used to be completable
@@ -66,7 +67,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export async function taskAlreadyDecided(tenantId: string, taskId: string, decision: string | null | undefined): Promise<HttpError> {
   const row = await repo.findDecisionById(taskId, tenantId);
   const deciderId = row?.completedBy ?? null;
-  const name = deciderId ? await fetchUserDisplayName(tenantId, deciderId) : null;
+  const name = deciderId ? ((await resolvePeople(tenantId, [deciderId])).get(deciderId)?.name ?? await fetchUserDisplayName(tenantId, deciderId)) : null;
   const how = row?.decision ?? decision ?? "completed";
   return new HttpError(409, "TASK_ALREADY_DECIDED", `this task was already decided (${how})${name ? ` by ${name}` : ""}`, {
     decision: how,
