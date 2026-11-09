@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
@@ -39,6 +40,9 @@ async function seed(status: string, extra: Partial<typeof financeSanctions.$infe
     headId: HEAD, amountMinor: 250000n, currency: "INR", status, createdBy: MAKER, updatedBy: MAKER, ...extra,
   }));
 }
+// A request carries its tenant in the async context (auth hook); tests that call commands/queries directly must too.
+// Without it the RLS-scoped reads see no rows under a NOBYPASSRLS role (CI), though they do for a superuser.
+const inTenant = <T>(fn: () => Promise<T>) => runWithTenant(TENANT, fn);
 const row = async () => (await scoped(TENANT, (tx) => tx.select().from(financeSanctions).where(eq(financeSanctions.id, SANC))))[0];
 
 async function clean() {
@@ -81,7 +85,7 @@ describe("W1: an approved sanction cannot be changed by a later reject", () => {
 
   it("route: reject on an approved sanction is a 409 INVALID_STATE_TRANSITION, nothing queued", async () => {
     await seed("approved", { approvedBy: CHECKER, approvedAt: new Date(), updatedBy: CHECKER });
-    await expect(commands.rejectSanction(ctxOf(CHECKER_2), SANC, { reason: REASON })).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
+    await expect(inTenant(() => commands.rejectSanction(ctxOf(CHECKER_2), SANC, { reason: REASON }))).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
     expect((await row())?.status).toBe("approved");
   });
 
@@ -113,7 +117,7 @@ describe("W2: a rejected sanction is Rejected and carries the reason", () => {
     expect(r?.status).toBe("rejected");
     expect(r?.rejectionReason).toBe(REASON);
     expect(r?.approvedBy ?? null).toBeNull();
-    const detail = await getSanctionDetail(SANC, TENANT);
+    const detail = await inTenant(() => getSanctionDetail(SANC, TENANT));
     expect(detail?.status).toBe("rejected");
     expect(detail?.remarks).toContain("earmarked for the November payroll");
     expect(detail?.approvalTrail.at(-1)).toMatchObject({ action: "rejected", remarks: REASON });
@@ -123,21 +127,21 @@ describe("W2: a rejected sanction is Rejected and carries the reason", () => {
 describe("W5: a decision the state forbids is refused at the request", () => {
   it("approve after reject: 409 INVALID_STATE_TRANSITION", async () => {
     await seed("rejected", { rejectionReason: REASON, updatedBy: CHECKER });
-    await expect(commands.approveSanction(ctxOf(CHECKER_2), SANC)).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
+    await expect(inTenant(() => commands.approveSanction(ctxOf(CHECKER_2), SANC))).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
     expect((await row())?.status).toBe("rejected");
   });
   it("reject after reject: 409 INVALID_STATE_TRANSITION", async () => {
     await seed("rejected", { rejectionReason: REASON, updatedBy: CHECKER });
-    await expect(commands.rejectSanction(ctxOf(CHECKER_2), SANC, { reason: REASON })).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
+    await expect(inTenant(() => commands.rejectSanction(ctxOf(CHECKER_2), SANC, { reason: REASON }))).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
   });
   it("approve after approve: 409 INVALID_STATE_TRANSITION", async () => {
     await seed("approved", { approvedBy: CHECKER, approvedAt: new Date(), updatedBy: CHECKER });
-    await expect(commands.approveSanction(ctxOf(CHECKER_2), SANC)).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
+    await expect(inTenant(() => commands.approveSanction(ctxOf(CHECKER_2), SANC))).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
   });
   it("a legitimate reject of a pending sanction is accepted and, once the consumer runs it, applied", async () => {
     await seed("pending_approval");
     const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
-    const accepted = await commands.rejectSanction(ctxOf(CHECKER), SANC, { reason: REASON });
+    const accepted = await inTenant(() => commands.rejectSanction(ctxOf(CHECKER), SANC, { reason: REASON }));
     expect(accepted.status).toBe("accepted");
     expect(publish).toHaveBeenCalledTimes(1);
     const [topic, message] = publish.mock.calls[0] as unknown as [string, { messageId: string; actorId: string; payload: Record<string, unknown> }];
