@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const browserFetch = vi.fn();
 vi.mock("@/lib/api/browserClient", () => ({ browserFetch: (...a: unknown[]) => browserFetch(...a) }));
 
-import { attendanceCheckIn, addParticipants, listCommitteeMembers, listCommittees } from "./client";
+import { attendanceCheckIn, addParticipants, listParticipantEmployeeIds, listCommitteeMembers, listCommittees } from "./client";
 
 beforeEach(() => browserFetch.mockReset());
 
@@ -62,5 +62,13 @@ describe("listCommittees", () => {
     browserFetch.mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     await listCommittees();
     expect(browserFetch.mock.calls[0][0]).toBe("v1/meeting/committees?limit=200");
+  });
+});
+
+describe("listParticipantEmployeeIds", () => {
+  it("reads the roster fresh from the participants route", async () => {
+    browserFetch.mockResolvedValue(new Response(JSON.stringify({ data: [{ employeeId: "e1" }, { employeeId: "e2" }] }), { status: 200 }));
+    expect(await listParticipantEmployeeIds("m1")).toEqual(["e1", "e2"]);
+    expect(browserFetch.mock.calls[0][0]).toBe("v1/meeting/m1/participants?limit=200&offset=0");
   });
 });

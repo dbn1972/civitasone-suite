@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { employeeDirectoryForRoles } from "@/lib/employeeDirectory";
 import { PageHeader, RefreshErrorState, EmptyState } from "@/app/_components/ds";
 import {
   getMeeting,
@@ -101,6 +102,8 @@ export default async function MeetingConsolePage(
     canCast: hasAnyRole(sessionRoles, MEETING_CAST_ROLES),
     canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
     canManageParticipants: hasAnyRole(sessionRoles, MEETING_PARTICIPANT_WRITE_ROLES),
+    // The meeting roles are not on hrms-service's directory list; derive which directory (if any) they can search.
+    employeeDirectory: employeeDirectoryForRoles(sessionRoles),
   };
 
   // UX-R5 (names, not ids): participants the attendance feed sends without a display name.

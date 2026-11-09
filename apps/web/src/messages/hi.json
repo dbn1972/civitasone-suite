@@ -11354,6 +11354,7 @@
     "participantRole": "सहभागी की भूमिका",
     "addParticipant": "सहभागी जोड़ें",
     "addCommitteeMembers": "समिति सदस्य जोड़ें",
+    "participantsSubmitted": "सहभागी जमा किए गए। वे कुछ ही क्षणों में सूची में दिखेंगे।",
     "participantsAdded": "सहभागी जोड़े गए। वे कुछ ही क्षणों में सूची में दिखेंगे।",
     "committeeAlreadyAdded": "समिति के सभी सक्रिय सदस्य पहले से सूची में हैं।",
     "actions": {

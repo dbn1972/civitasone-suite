@@ -11592,6 +11592,7 @@
     "participantRole": "Participant role",
     "addParticipant": "Add participant",
     "addCommitteeMembers": "Add committee members",
+    "participantsSubmitted": "Participants submitted. They appear in the roster in a moment.",
     "participantsAdded": "Participants added. They appear in the roster in a moment.",
     "committeeAlreadyAdded": "Every active committee member is already on the roster.",
     "actions": {

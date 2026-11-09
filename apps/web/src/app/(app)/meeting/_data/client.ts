@@ -252,6 +252,20 @@ export async function addParticipants(
   });
 }
 
+/** Employee ids currently on a meeting's roster (fresh read, all pages). */
+export async function listParticipantEmployeeIds(meetingId: string): Promise<string[]> {
+  const ids: string[] = [];
+  for (let offset = 0; offset < 5000; offset += 200) {
+    const out = await get<{ data?: Record<string, unknown>[]; meta?: { total?: number } }>(
+      `v1/meeting/${meetingId}/participants?limit=200&offset=${offset}`,
+    );
+    const rows = out.data ?? [];
+    for (const r of rows) if (typeof r.employeeId === "string") ids.push(r.employeeId);
+    if (rows.length < 200) break;
+  }
+  return ids;
+}
+
 /**
  * Active members of a committee as { employeeId, role }, for "add the committee
  * to this meeting". `special_invitee` members are dropped (they need agenda

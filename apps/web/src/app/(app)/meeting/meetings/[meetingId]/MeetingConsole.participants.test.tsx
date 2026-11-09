@@ -15,13 +15,14 @@ const render = (ui: React.ReactElement) =>
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 vi.mock("@/app/_components/EmployeePicker", () => ({
-  EmployeePicker: (p: { onChange: (id: string | null, o: null) => void }) => (
-    <button type="button" onClick={() => p.onChange("8d1f0a52-6c1e-4b0a-9d0e-2f6d7a3c5b10", null)}>pick-employee</button>
+  EmployeePicker: (p: { onChange: (id: string | null, o: null) => void; directory?: string }) => (
+    <button type="button" data-directory={p.directory} onClick={() => p.onChange("8d1f0a52-6c1e-4b0a-9d0e-2f6d7a3c5b10", null)}>pick-employee</button>
   ),
 }));
 
 const addParticipantsMock = vi.fn();
 const listCommitteeMembersMock = vi.fn();
+const listParticipantEmployeeIdsMock = vi.fn();
 const fetchLiveAttendanceMock = vi.fn();
 vi.mock("../../_data/client", () => ({
   transitionMeeting: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("../../_data/client", () => ({
   initiateVote: vi.fn(),
   addParticipants: (...a: unknown[]) => addParticipantsMock(...a),
   listCommitteeMembers: (...a: unknown[]) => listCommitteeMembersMock(...a),
+  listParticipantEmployeeIds: (...a: unknown[]) => listParticipantEmployeeIdsMock(...a),
 }));
 
 import { MeetingConsole } from "./MeetingConsole";
@@ -57,7 +59,7 @@ function meeting(overrides: Partial<Meeting> = {}): Meeting {
   };
 }
 
-function props(over: Record<string, unknown> = {}, canManageParticipants = true) {
+function props(over: Record<string, unknown> = {}, canManageParticipants = true, employeeDirectory: "hrms" | "payroll" | "none" = "hrms") {
   return {
     meeting: meeting(),
     agenda: [],
@@ -68,7 +70,7 @@ function props(over: Record<string, unknown> = {}, canManageParticipants = true)
     attendanceSource: "api" as const,
     initialActiveVotes: [],
     activeVotesSource: "api" as const,
-    viewerPermissions: { canTransition: true, canCheckIn: true, canCast: true, canConclude: true, canManageParticipants },
+    viewerPermissions: { canTransition: true, canCheckIn: true, canCast: true, canConclude: true, canManageParticipants, employeeDirectory },
     ...over,
   };
 }
@@ -76,6 +78,7 @@ function props(over: Record<string, unknown> = {}, canManageParticipants = true)
 beforeEach(() => {
   addParticipantsMock.mockReset().mockResolvedValue(undefined);
   listCommitteeMembersMock.mockReset();
+  listParticipantEmployeeIdsMock.mockReset().mockResolvedValue([E1]);
   fetchLiveAttendanceMock.mockReset().mockResolvedValue({ participants: [] });
 });
 
@@ -124,5 +127,31 @@ describe("MeetingConsole — add participants (M2)", () => {
     render(<MeetingConsole {...props({}, false)} />);
     expect(screen.queryByRole("button", { name: /add committee members/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "pick-employee" })).not.toBeInTheDocument();
+  });
+
+  it("passes the directory derived from the viewer's roles to the employee picker", () => {
+    render(<MeetingConsole {...props({}, true, "payroll")} />);
+    expect(screen.getByRole("button", { name: "pick-employee" })).toHaveAttribute("data-directory", "payroll");
+  });
+
+  it("hides the single-add picker when the viewer's roles can reach no employee directory, keeping the committee add", () => {
+    render(<MeetingConsole {...props({}, true, "none")} />);
+    expect(screen.queryByRole("button", { name: "pick-employee" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add committee members/i })).toBeInTheDocument();
+  });
+
+  it("diffs against a fresh roster (not the held one) and disables the add until the roster reflects it", async () => {
+    // Held roster has only E1; the server already has E2 too (stale view).
+    listParticipantEmployeeIdsMock.mockResolvedValue([E1, E2]);
+    listCommitteeMembersMock.mockResolvedValue([
+      { employeeId: E2, role: "chairperson" },
+      { employeeId: E3, role: "secretary" },
+    ]);
+    render(<MeetingConsole {...props()} />);
+    fireEvent.click(screen.getByRole("button", { name: /add committee members/i }));
+    await waitFor(() => expect(addParticipantsMock).toHaveBeenCalledTimes(1));
+    expect(addParticipantsMock).toHaveBeenCalledWith("m1", [{ employeeId: E3, role: "secretary" }]);
+    expect(await screen.findByText(/submitted/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add committee members/i })).toBeDisabled();
   });
 });
