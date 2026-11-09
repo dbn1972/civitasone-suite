@@ -113,6 +113,8 @@ describe("bill lifecycle (consumer → DB)", () => {
     await q.publish(COMMANDS.invoiceCreate, envelope(id("inv1"), COMMANDS.invoiceCreate, T1, {
       id: invId, tenantId: T1, periodMonth: "2026-06",
       items: [{ description: "fee", amountMinor: 700000, kind: "line", quantity: 1 }, { description: "gst", amountMinor: 126000, kind: "tax", quantity: 1 }],
+      // B22 D3: this bill charges tax, so it carries the supplier GSTIN and an exact intra-state CGST/SGST split (issue refuses it otherwise).
+      gst: { supplierGstin: "06AAJCC7319K1ZE", recipientGstin: "06AABCD5678B1Z2", placeOfSupply: "06", cgstMinor: "63000", sgstMinor: "63000", igstMinor: "0" },
       taxMinor: totals.taxMinor.toString(), chargesMinor: "0", totalMinor: totals.totalMinor.toString(),
     }));
     await settle();

@@ -153,6 +153,11 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
         },
       });
 
+      await enqueue(tx, {
+        topic: COMMANDS.arLedgerSync, eventType: COMMANDS.arLedgerSync,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { event: "issued", invoiceId: p.invoiceId, totalMinor: amount.toString(), date: p.issuedDate ?? todayIST() },
+      });
       await audit(tx, msg, "billing_invoice_recognized", "billing_invoice", p.invoiceId);
       log.info({ invoiceId: p.invoiceId, amountMinor: amount.toString(), tenantId: msg.tenantId }, "billing invoice recognized in GL");
     });
@@ -198,6 +203,11 @@ export function registerRevenueBillingConsumers(queue: Queue): void {
         },
       });
 
+      await enqueue(tx, {
+        topic: COMMANDS.arLedgerSync, eventType: COMMANDS.arLedgerSync,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { event: "paid", invoiceId: p.invoiceId, totalMinor: amount.toString(), date: p.paidDate ?? todayIST() },
+      });
       await audit(tx, msg, "billing_payment_received", "billing_invoice", p.invoiceId);
       log.info({ invoiceId: p.invoiceId, paidMinor: amount.toString(), tenantId: msg.tenantId }, "billing payment posted to GL");
     });
