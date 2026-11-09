@@ -148,7 +148,9 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
     const repeatActor = steps.some((s) => s.status === "completed" && s.id !== task.id
       && history.some((h) => h.taskId === s.id && h.actorId === ctx.actorId && (h.action === "complete" || h.action === "reject" || h.action === "return")));
     const strict = isStrictSodRefType(instance.refType ?? task.refType);
-    const sodBlock: "maker" | "repeatActor" | null = isMaker && (!isSuperAdmin || strict)
+    // W4: the maker's "correct and resubmit" task is not a checker decision; no maker-checker block applies.
+    const isRework = typeof task.nodeKey === "string" && task.nodeKey.startsWith("rework:");
+    const sodBlock: "maker" | "repeatActor" | null = isRework ? null : isMaker && (!isSuperAdmin || strict)
       ? "maker"
       : repeatActor && !isSuperAdmin ? "repeatActor" : null;
     const blockedReason: "notPending" | "assignedToOther" | "notYourRole" | null = !pending

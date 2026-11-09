@@ -175,7 +175,15 @@ export async function completeTask(
   // authoritative SoD enforcement now lives inside the consumer transaction
   // under a row lock (see consumer.ts). This block only short-circuits the
   // obvious self-approval case early for a friendlier error.
-  if (!isSuperAdmin) {
+  // W4: the maker's "correct and resubmit" task is not a checker decision, so maker-checker SoD
+  // does not apply to it - but it can only be resubmitted (approve), never rejected or returned.
+  const isRework = typeof existing.nodeKey === "string" && existing.nodeKey.startsWith("rework:");
+  if (isRework && decision !== "approve") {
+    throw new HttpError(422, "REWORK_RESUBMIT_ONLY", "a returned item can only be corrected and resubmitted");
+  }
+  if (isRework) {
+    // fall through: role / assignee gates above already confined this to the maker
+  } else if (!isSuperAdmin) {
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
     // self-approval: by the actor directly, OR via a delegation whose delegator
     // is the submitter (the delegate is standing in for that role).
@@ -190,7 +198,7 @@ export async function completeTask(
     // repeat-actor: a prior step completed by the actor directly OR by a
     // delegator the actor is now acting on behalf of (four-eyes via delegation).
     const conflict = priorTasks.some(
-      (t) => t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
+      (t) => t.decision !== "return" && t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
     );
     if (conflict) {
       throw new HttpError(403, "SOD_REPEAT_ACTOR", "you already acted on a prior step of this workflow");
@@ -219,7 +227,7 @@ export async function completeTask(
   // documents (or cannot be read: fail closed). Reject/return are not gated.
   // The refusal is audited in the append-only transition history. The consumer
   // re-checks (authoritative for a command that bypassed this route).
-  if (decision === "approve") {
+  if (decision === "approve" && !isRework) {
     const gate = await checkMandatoryDocs(ctx.tenantId, existing);
     if (!gate.ok) {
       await db.transaction(async (tx) => {

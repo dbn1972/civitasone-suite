@@ -1,7 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { IndentRow } from "./schema.js";
-import { fetchUserSummaries } from "../../shared/identity-client.js";
+import { fetchActorNames, fetchUserSummaries } from "../../shared/identity-client.js";
 import { fetchRefDecisions } from "../../shared/workflow-client.js";
 
 // Bug fix (raw-id-leaked-to-ui): indent.procurement_indents has no
@@ -74,11 +74,11 @@ const TRAIL_ACTIONS: Record<string, string> = { complete: "Approved", reject: "R
 export async function indentApprovalTrail(tenantId: string, indentId: string): Promise<{ available: boolean; entries: ApprovalTrailEntry[] }> {
   const { available, decisions } = await fetchRefDecisions(tenantId, "procurement_indent", indentId);
   if (!available || decisions.length === 0) return { available, entries: [] };
-  const users = await fetchUserSummaries(tenantId);
+  const names = await fetchActorNames(tenantId, decisions.map((d) => d.actorId));
   return {
     available,
     entries: decisions.map((d) => ({
-      actor: users.get(d.actorId)?.name ?? "Unknown user",
+      actor: names.get(d.actorId) ?? "Unknown user",
       action: TRAIL_ACTIONS[d.action] ?? d.action,
       timestamp: d.at,
       ...(d.reason ? { remarks: d.reason } : {}),
