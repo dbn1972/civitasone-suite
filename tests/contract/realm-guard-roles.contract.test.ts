@@ -37,6 +37,8 @@ const GUARDED: Record<string, string> = {
   supervising_officer: "services/inspection-service/src/modules/assignment/routes.ts",
   reviewing_officer: "services/inspection-service/src/modules/dashboard/routes.ts",
   vigilance_officer: "services/audit-service/src/modules/vigilance/routes.ts",
+  project_manager: "services/project-service/src/modules/progress/routes.ts",
+  project_officer: "services/project-service/src/modules/progress/routes.ts",
 };
 
 describe("realm defines every role the UAT journeys need", () => {
