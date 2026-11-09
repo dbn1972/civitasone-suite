@@ -76,6 +76,7 @@ export default async function Page() {
 				{ title: t("incomeTax"), href: "/hr/payroll/income-tax", description: t("incomeTaxDesc") },
 				{ title: t("tdsReturns"), href: "/hr/payroll/returns", description: t("tdsReturnsDesc") },
 				{ title: t("taxConfig"), href: "/hr/payroll/tax-config", description: t("taxConfigDesc") },
+				{ title: t("daRates"), href: "/hr/payroll/da-rates", description: t("daRatesDesc") },
 				{ title: t("salaryRevisions"), href: "/hr/payroll/salary-revisions", description: t("salaryRevisionsDesc") },
 				{ title: t("salaryCorrections"), href: "/hr/payroll/corrections", description: t("salaryCorrectionsDesc") },
 				{ title: t("arrears"), href: "/hr/payroll/arrears", description: t("arrearsDesc") },

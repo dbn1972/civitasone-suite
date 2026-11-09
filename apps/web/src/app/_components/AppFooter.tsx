@@ -9,6 +9,9 @@
  * footer shows the clearly labelled demonstration default
  * (gigw.defaultDepartment), never an invented real department.
  *
+ * UAT b23: when signed in, the owner is the tenant's own (tenant setting
+ * `gigw.identity`, read at runtime); the build-time value is only the fallback.
+ *
  * A-N2 (UAT post-b14): "last updated" is real. It is the build time baked in
  * by next.config.mjs (NEXT_PUBLIC_BUILD_TIME); an owner-set
  * NEXT_PUBLIC_CONTENT_UPDATED_AT still takes precedence.
@@ -17,6 +20,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { contentLastUpdated, formatGigwDate, GIGW_OWNER_CONFIG } from "@/lib/gigw/siteIdentity";
 import { readGigwConfig } from "@/lib/gigw/departmentConfig";
+import { mergeGigwConfig, useTenantGigwIdentity } from "@/lib/gigw/useTenantGigwIdentity";
 
 export const GIGW_FOOTER_LINKS = [
   { href: "/accessibility-statement", key: "footerAccessibility" },
@@ -32,7 +36,8 @@ export const GIGW_FOOTER_LINKS = [
 export function SiteIdentityLine({ className }: { className?: string }) {
   const t = useTranslations("shell");
   const g = useTranslations("gigw");
-  const owner = readGigwConfig().department;
+  // UAT b23: the signed-in tenant's own owner wins; the build-time value is the fallback.
+  const owner = mergeGigwConfig(readGigwConfig(), useTenantGigwIdentity()).department;
   const updated = contentLastUpdated(process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT, process.env.NEXT_PUBLIC_BUILD_TIME);
   const locale = useLocale();
   const updatedLabel = updated ? formatGigwDate(updated, locale) : null;

@@ -10,6 +10,7 @@ import { settingUpsertBody, settingDeleteBody, tenantIdParam, settingKeyParam } 
 import * as commands from "./commands.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { GIGW_IDENTITY_KEY, gigwIdentitySchema, readGigwIdentity } from "./gigw-identity.js";
 
 const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "setting";
@@ -31,6 +32,8 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = settingUpsertBody.parse(req.body);
+    // The GIGW identity is shown to every user of the tenant: validate its shape on write.
+    if (body.key === GIGW_IDENTITY_KEY) body.value = gigwIdentitySchema.parse(body.value);
     const res = await commands.settingUpsert(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);
   });
@@ -58,6 +61,17 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
   // (gateway forwards verbatim). Alias so it resolves instead of 404.
   app.get("/v1/settings", listSettings);
   app.get("/v1/tenant/settings", listSettings);
+
+  // GIGW 3.0 identity of the caller's own tenant (footer owner, contacts). Any signed-in
+  // user of the tenant may read it; it is public-facing data, never cached across tenants.
+  app.get("/v1/tenant/gigw-identity", async (req, reply) => {
+    const ctx = resolveContext(req);
+    if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
+    void reply.header("cache-control", "private, no-store");
+    void reply.header("vary", "Authorization");
+    const row = await repo.findByTenantAndKey(ctx.tenantId, GIGW_IDENTITY_KEY);
+    return reply.send({ identity: row ? readGigwIdentity(row.value) : null });
+  });
 
   // GET specific setting by key (cache-first)
   app.get("/v1/settings/:key", async (req, reply) => {
