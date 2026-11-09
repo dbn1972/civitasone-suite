@@ -14,6 +14,12 @@ export const HR_ADMIN_TIER_ROLES = ["hr_admin", "super_admin"];
 export const HR_MASTERS_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 /** HR staff + manager: approver tier (leave/wfh/shift/travel approve, attendance view). */
 export const HR_STAFF_MANAGER_ROLES = [...HR_STAFF_ROLES, "manager"];
+/**
+ * UAT b23: who may open the /hr/employees directory. hrms-service DIRECTORY_ROLES (employee/routes.ts) is this plus a
+ * bare "employee", but an employee's directory is empty (it is scoped to direct reports), so the page is only an empty
+ * shell with an "add your first employee" prompt for them. Matches the sidebar entry (HR staff + manager) plus payroll staff.
+ */
+export const EMPLOYEE_DIRECTORY_VIEW_ROLES = [...HR_STAFF_ROLES, "manager", "payroll_admin", "payroll_officer"];
 /** HR staff + manager + employee: modules with a self-service half (apar, benefits, regularisation view). */
 export const HR_SELF_SERVICE_ROLES = [...HR_STAFF_MANAGER_ROLES, "employee"];
 /**
@@ -765,6 +771,16 @@ export const WORKFLOW_TASK_ROLES: readonly string[] = [
   "workflow_user", "workflow_admin", "super_admin", "hr_admin", "manager",
   "payroll_admin", "procurement_admin", "procurement_officer",
   "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
+];
+
+/**
+ * UAT b23: roles workflow-service admits on GET /v1/workflow/analytics/summary, the call behind the
+ * /workflow hub. Mirrors `ROLES` in services/workflow-service/src/modules/analytics/routes.ts; keep in sync.
+ * This is NOT the same set as WORKFLOW_TASK_ROLES: an HR, payroll or procurement approver can open the
+ * /approvals inbox but is refused the hub's analytics, so the hub is a dead end for them.
+ */
+export const WORKFLOW_ANALYTICS_ROLES: readonly string[] = [
+  "workflow_user", "workflow_admin", "super_admin", "tenant_admin",
 ];
 
 /**

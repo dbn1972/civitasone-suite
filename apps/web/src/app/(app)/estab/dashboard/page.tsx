@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getSessionRoles, ESTAB_FILE_CREATE_ROLES } from "@/lib/auth/roleGuard";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
@@ -55,7 +56,7 @@ export default async function EstabDashboardPage() {
         actions={
           <>
             <Link href="/estab/dak" className="btn ghost">DAK Registry</Link>
-            <Link href="/estab/files/new" className="btn primary">+ Create File</Link>
+            {getSessionRoles().some((r) => ESTAB_FILE_CREATE_ROLES.includes(r)) ? <Link href="/estab/files/new" className="btn primary">+ Create File</Link> : null}
           </>
         }
       />

@@ -167,6 +167,102 @@
       {
         "name": "works_admin",
         "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "store_officer",
+        "description": "Stores officer: records GRN receipts, issues stock (SRN) and views consumables. Referenced by inventory, procurement (GRN) and estab (consumables) guards."
+      },
+      {
+        "name": "warehouse_officer",
+        "description": "Warehouse officer: receives goods against a GRN and issues stock (SRN). Referenced by procurement GRN and inventory SRN guards."
+      },
+      {
+        "name": "store_keeper",
+        "description": "Store keeper: day-to-day item, batch, cycle-count and stores work in inventory-service."
+      },
+      {
+        "name": "inventory_user",
+        "description": "Inventory user: reads stores and items and maintains item and batch records (inventory-service)."
+      },
+      {
+        "name": "inventory_manager",
+        "description": "Inventory manager: stores, stock adjustments, cycle counts and quality hold release (inventory-service)."
+      },
+      {
+        "name": "inventory_admin",
+        "description": "Inventory administrator: custodians and all inventory configuration (inventory-service)."
+      },
+      {
+        "name": "qc_inspector",
+        "description": "Quality-control inspector: passes or rejects received batches (inventory-service batches)."
+      },
+      {
+        "name": "asset_manager",
+        "description": "Asset manager: asset register, condemnation and asset bulk upload (asset-service, admin-service uploads)."
+      },
+      {
+        "name": "asset_admin",
+        "description": "Asset administrator: asset register administration (asset-service, admin-service uploads)."
+      },
+      {
+        "name": "meeting_admin",
+        "description": "Meeting administrator: assigns and verifies action items and administers meetings (meeting-service)."
+      },
+      {
+        "name": "committee_secretary",
+        "description": "Committee secretary: convenes meetings, records minutes and assigns action items (meeting-service)."
+      },
+      {
+        "name": "committee_chairperson",
+        "description": "Committee chairperson: chairs meetings and verifies action items (meeting-service)."
+      },
+      {
+        "name": "committee_member",
+        "description": "Committee member: attends meetings, votes and updates own action items (meeting-service)."
+      },
+      {
+        "name": "billing_admin",
+        "description": "Billing administrator: invoices, e-invoicing, gateways and GSTN (billing-service)."
+      },
+      {
+        "name": "revenue_officer",
+        "description": "Revenue officer: demands, assessments, arrears and trade licences (revenue-service); parcel records (location-service)."
+      },
+      {
+        "name": "revenue_admin",
+        "description": "Revenue administrator: revenue analytics, arrears recovery notices and settings (revenue-service)."
+      },
+      {
+        "name": "revenue_collector",
+        "description": "Revenue collector: counter collections and assessments (revenue-service)."
+      },
+      {
+        "name": "revenue_analyst",
+        "description": "Revenue analyst: revenue analytics and forecasts (revenue-service)."
+      },
+      {
+        "name": "contract_admin",
+        "description": "Contract administrator: approvals, clauses, e-sign and obligations (contract-service)."
+      },
+      {
+        "name": "supervising_officer",
+        "description": "Supervising officer: assigns and supervises inspections (inspection-service)."
+      },
+      {
+        "name": "reviewing_officer",
+        "description": "Reviewing officer: reviews inspection reports (inspection-service)."
+      },
+      {
+        "name": "vigilance_officer",
+        "description": "Vigilance officer: vigilance cases and investigations (audit-service, hrms-service)."
+      },
+      {
+        "name": "vigilance_admin",
+        "description": "Vigilance administrator: vigilance case administration (audit-service)."
+      },
+      {
+        "name": "observer",
+        "description": "Meeting observer: read-only attendee of committee meetings, agenda and attendance (meeting-service, hrms-service)."
       }
     ]
   },

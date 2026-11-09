@@ -5,6 +5,7 @@ import { DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useTranslations } from "next-intl";
+import { employeeDisplayName } from "@/lib/employeeName";
 
 export type EmpRow = { id: string; employeeNo?: string; name: string; department: string; status: string; dateOfJoining?: string } & Record<string, unknown>;
 
@@ -69,7 +70,8 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<EmpRow>
         columns={columns}
-        rows={rows}
+        // UAT b23: a blank-name record must not give its row link an empty accessible name.
+        rows={rows.map((r) => ({ ...r, name: employeeDisplayName(r.name, r.employeeNo) }))}
         rowLinkKey="id"
         rowLinkPrefix="/hr/employees/"
         caption={t("caption")}

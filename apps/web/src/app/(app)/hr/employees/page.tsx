@@ -6,7 +6,8 @@ import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { humanizeStatus } from "@/lib/formatters";
-import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_DIRECTORY_VIEW_ROLES } from "@/lib/auth/workRoles";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 
 const PAGE_SIZE = 50;
 
@@ -66,6 +67,11 @@ function rosterTotalOf(payload: unknown): number | null {
 }
 
 export default async function EmployeeDirectoryPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  // UAT b23: a plain employee reached this page from the HR hub and got an empty directory with an "add your first
+  // employee" prompt (the backend scopes their list to direct reports). Show the restricted card instead of a shell.
+  if (!getSessionRoles().some((r) => EMPLOYEE_DIRECTORY_VIEW_ROLES.includes(r))) {
+    return <PermissionDenied module="the employee directory" requiredRoles={EMPLOYEE_DIRECTORY_VIEW_ROLES} backHref="/hr" backLabel="HR" />;
+  }
   const searchParams = await props.searchParams;
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
   const typeFilter = searchParams?.type ?? "all";
