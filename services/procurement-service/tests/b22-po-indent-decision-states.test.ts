@@ -156,3 +156,40 @@ describe("W5: indent decisions the state forbids are refused at the request", ()
     expect(publish).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("W5: PO routes refuse a decision the state forbids", () => {
+  const tok = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: CHECKER, tid: TENANT, roles, sid: "s-b22po" }, SECRET)}` });
+  const call = async (url: string, method: "PATCH" | "POST", payload: Record<string, unknown>) => {
+    const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
+    const app = await buildApp();
+    const res = await app.inject({ method, url, headers: tok(["procurement_admin"]), payload });
+    await app.close();
+    return { res, publish };
+  };
+
+  it("reject of an approved or an already rejected PO: 409, nothing queued", async () => {
+    for (const status of ["approved", "rejected"]) {
+      const id = await seedPo(status);
+      const { res, publish } = await call(`/v1/procurement/pos/${id}/reject`, "PATCH", { reason: REASON });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("PO_NOT_AWAITING_APPROVAL");
+      expect(publish).not.toHaveBeenCalled();
+    }
+  });
+  it("submit-approval of a decided PO: 409 INVALID_STATE_TRANSITION, nothing queued", async () => {
+    for (const status of ["approved", "rejected", "cancelled"]) {
+      const id = await seedPo(status);
+      const { res, publish } = await call(`/v1/procurement/pos/${id}/submit-approval`, "POST", {});
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("INVALID_STATE_TRANSITION");
+      expect(publish).not.toHaveBeenCalled();
+    }
+  });
+  it("a legitimate submit-approval and reject of a draft PO are still accepted (202)", async () => {
+    const a = await seedPo("draft");
+    const sub = await call(`/v1/procurement/pos/${a}/submit-approval`, "POST", {});
+    expect(sub.res.statusCode).toBe(202);
+    const rej = await call(`/v1/procurement/pos/${a}/reject`, "PATCH", { reason: REASON });
+    expect(rej.res.statusCode).toBe(202);
+  });
+});

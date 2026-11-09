@@ -85,6 +85,7 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   findSanctionByIdTx: (...a: any[]) => findSanctionByIdTxMock(...a),
   updateSanction: (...a: any[]) => updateSanctionMock(...a),
   approveSanctionIfNoEfile: (...a: any[]) => approveSanctionIfNoEfileMock(...a),
+  rejectSanctionIfPending: async () => true,
   insertReappropriation: (...a: any[]) => insertReappropriationMock(...a),
 }));
 

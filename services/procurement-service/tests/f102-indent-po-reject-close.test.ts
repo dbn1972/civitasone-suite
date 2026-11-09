@@ -91,7 +91,7 @@ describe("F102 — inbox reject reaches the indent / PO", () => {
     expect(await closeMessages(id)).toEqual([{ tenantId: TENANT, refType: "procurement_indent", refId: id, decision: "reject", reason: "not justified" }]);
   });
 
-  it("PO: the workflow reject dispatch cancels a draft PO (previously no reject path existed)", async () => {
+  it("PO: the workflow reject dispatch rejects a draft PO (previously no reject path existed)", async () => {
     const id = await seedPo("draft");
     await deliver(COMMANDS.poReject, { id, tenantId: TENANT, rejectedBy: CHECKER, reason: "vendor not eligible" });
     expect((await po(id))?.status).toBe("rejected");

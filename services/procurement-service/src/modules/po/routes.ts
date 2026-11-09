@@ -12,7 +12,7 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, assertPoRejectable, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertCanDispatch, assertPoRejectable, assertTransitionAllowed, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import { fetchSanctionBalance, rupeesFromMinor } from "./finance-budget-client.js";
 import * as poRepo from "./repo.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
@@ -242,7 +242,16 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
     // UAT W6-A: tenant-scoped existence read; unknown PO answers 404, not 202.
-    if (!(await poRepo.findPoById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    const po = await poRepo.findPoById(id, ctx.tenantId);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    // UAT bundle 22 (W5): a decided (approved / rejected / cancelled ...) or already pending PO cannot be submitted
+    // again; refuse now (409) instead of a 202 the consumer then drops. Same rule the consumer applies.
+    try {
+      assertTransitionAllowed(po.status ?? "draft", "pending");
+    } catch (err) {
+      if (err instanceof PoDomainError) throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${po.status ?? "draft"} purchase order cannot be submitted for approval`);
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitPoForApproval(ctx, id));
   });
 

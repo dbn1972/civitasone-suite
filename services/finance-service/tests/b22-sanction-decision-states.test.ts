@@ -8,7 +8,7 @@
  *
  * Runs the real budget consumers against the test DB via MemoryQueue.
  */
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -20,6 +20,7 @@ import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import * as commands from "../src/modules/budget/commands.js";
 import { getSanctionDetail } from "../src/modules/budget/queries.js";
 import { COMMANDS } from "../src/topics.js";
+import { queue } from "../src/shared/infra.js";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000b2";
 const MAKER = "00000000-aaaa-4000-8000-0000000a0022";
@@ -133,9 +134,19 @@ describe("W5: a decision the state forbids is refused at the request", () => {
     await seed("approved", { approvedBy: CHECKER, approvedAt: new Date(), updatedBy: CHECKER });
     await expect(commands.approveSanction(ctxOf(CHECKER_2), SANC)).rejects.toMatchObject({ status: 409, code: "INVALID_STATE_TRANSITION" });
   });
-  it("a legitimate reject of a pending sanction is still accepted and applied", async () => {
+  it("a legitimate reject of a pending sanction is accepted and, once the consumer runs it, applied", async () => {
     await seed("pending_approval");
+    const publish = vi.spyOn(queue, "publish").mockResolvedValue(undefined as never);
     const accepted = await commands.rejectSanction(ctxOf(CHECKER), SANC, { reason: REASON });
     expect(accepted.status).toBe("accepted");
+    expect(publish).toHaveBeenCalledTimes(1);
+    const [topic, message] = publish.mock.calls[0] as unknown as [string, { messageId: string; actorId: string; payload: Record<string, unknown> }];
+    publish.mockRestore();
+    expect(topic).toBe(COMMANDS.sanctionReject);
+    // drain the very command the route queued through the real consumer
+    await run(topic, MSGS[3]!, message.actorId, message.payload);
+    const r = await row();
+    expect(r?.status).toBe("rejected");
+    expect(r?.rejectionReason).toBe(REASON);
   });
 });
