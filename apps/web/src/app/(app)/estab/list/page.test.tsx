@@ -5,6 +5,11 @@ const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
+let mockRoles: string[] = ["estab_officer"];
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => mockRoles };
+});
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
@@ -114,6 +119,16 @@ describe("EstabFilesListPage", () => {
     const primaryBtns = container.querySelectorAll(".ph .btn.primary");
     expect(primaryBtns.length).toBe(1);
     expect(primaryBtns[0]?.textContent).toContain("Create File");
+  });
+
+  // UAT b23: estab-service refuses POST /v1/estab/files outside ESTAB_FILE_CREATE_ROLES.
+  it("UAT b23: Create File is not offered to a role that cannot create files", async () => {
+    mockRoles = ["employee"];
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
+    const { container } = render(await EstabFilesListPage());
+    mockRoles = ["estab_officer"];
+    expect(container.querySelector('.ph a[href="/estab/files/new"]')).toBeNull();
+    expect(container.querySelector('.ph a[href="/estab/workspace"]')).not.toBeNull();
   });
 
   it("GAP-ESTAB-LIST-05: classification shows capitalised label", async () => {

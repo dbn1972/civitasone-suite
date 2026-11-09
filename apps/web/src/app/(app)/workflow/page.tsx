@@ -3,8 +3,18 @@ import { LinkTiles } from "../../_components/LinkTiles";
 import { getAnalyticsSummary, formatDuration, titleCase, inProgressCount, formatBreachRate } from "./_data/workflowData";
 import { toResourceState } from "../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { redirect } from "next/navigation";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { WORKFLOW_ANALYTICS_ROLES, WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
 
 export default async function WorkflowHubPage() {
+  // UAT b23: the hub's only data call (workflow analytics) is refused for roles outside WORKFLOW_ANALYTICS_ROLES, so
+  // an approver who is not a workflow role (HR, payroll, procurement, estab) used to land on a page of load errors.
+  // Send them to the approvals inbox when they can use it, otherwise back to the dashboard.
+  const sessionRoles = getSessionRoles();
+  if (!sessionRoles.some((r) => WORKFLOW_ANALYTICS_ROLES.includes(r))) {
+    redirect(sessionRoles.some((r) => WORKFLOW_TASK_ROLES.includes(r)) ? "/approvals" : "/dashboard");
+  }
   const result = await getAnalyticsSummary();
   const { data: a } = result;
   const resource = toResourceState(result, (data) => Object.keys(data.instancesByStatus).length === 0 && data.totalInstances === 0);

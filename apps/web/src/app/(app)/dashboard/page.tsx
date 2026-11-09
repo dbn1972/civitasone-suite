@@ -9,6 +9,7 @@ import { visibleModules } from "./visibleModules";
 import { SelfServiceCard } from "./SelfServiceCard";
 import { getTranslations } from "next-intl/server";
 import { getEnabledModules } from "@/lib/moduleVisibility";
+import { WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
 
 export default async function DashboardPage() {
   const t = await getTranslations("home");
@@ -27,7 +28,9 @@ export default async function DashboardPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        actions={<Link href="/workflow" className="btn primary">{t("myApprovals")}</Link>}
+        // UAT b23: /approvals is the working inbox (the /workflow hub is analytics only and refuses most approvers).
+        // Offered only to roles workflow-service lets read tasks; anyone else would land on a redirect.
+        actions={roles.some((r) => WORKFLOW_TASK_ROLES.includes(r)) ? <Link href="/approvals" className="btn primary">{t("myApprovals")}</Link> : undefined}
       />
       {/* UAT-P3 (S-02): employees get their self-service links first. */}
       {roles.includes("employee") ? <SelfServiceCard roles={roles} enabledModules={await getEnabledModules()} /> : null}

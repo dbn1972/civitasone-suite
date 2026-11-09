@@ -62,6 +62,7 @@ const UNIQUE_HR_HUB_HREFS = Array.from(new Set(ALL_HR_HUB_HREFS));
 // The hrefs GAP-HR-HOME-01 hides from a plain "employee" (see
 // hrTileAccess.ts for the evidence behind each one).
 const HIDDEN_FROM_EMPLOYEE = [
+  "/hr/employees", // UAT b23: empty directory shell for an employee (backend scopes the list to direct reports)
   "/hr/advances",
   "/hr/icc",
   "/hr/employee-types",
@@ -167,6 +168,15 @@ describe("hasHrTileAccess", () => {
   it("every override key is a real hub href (guards against a stale or typo'd href)", () => {
     for (const href of Object.keys(HR_TILE_ROLE_OVERRIDES)) {
       expect(UNIQUE_HR_HUB_HREFS, `${href} is not in ALL_HR_HUB_HREFS`).toContain(href);
+    }
+  });
+});
+
+describe("UAT b23: the Employees hub tile matches the directory page gate", () => {
+  it("is hidden from a plain employee and shown to HR staff, managers and payroll staff", () => {
+    expect(hasHrTileAccess("/hr/employees", ["employee"])).toBe(false);
+    for (const r of ["hr_admin", "hr_officer", "super_admin", "manager", "payroll_admin", "payroll_officer"]) {
+      expect(hasHrTileAccess("/hr/employees", [r]), r).toBe(true);
     }
   });
 });

@@ -131,6 +131,14 @@ beforeEach(() => {
 });
 
 describe("HRDashboardPage", () => {
+  // UAT b23: a record with a blank name (TE11040650-E07) rendered a link with no text, so it had no accessible name.
+  it("gives a blank-name employee's link an accessible name (employee number fallback)", async () => {
+    mockedEmp.mockResolvedValue({ data: [{ id: "e7", employeeNo: "TE11040650-E07", name: "", department: "Finance", status: "confirmed" }], source: "api" });
+    render(await HRDashboardPage());
+    const link = screen.getByRole("link", { name: /Unnamed employee \(TE11040650-E07\)/ });
+    expect(link).toHaveAttribute("href", "/hr/employees/e7");
+  });
+
   it("shows real employee rows and no error banner when every loader succeeds", async () => {
     render(await HRDashboardPage());
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();

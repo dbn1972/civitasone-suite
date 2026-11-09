@@ -29,6 +29,7 @@ import {
   PAYROLL_EMPLOYEE_ROLES,
   PAYROLL_SALARY_ADMIN_ROLES,
   REVENUE_ROLES,
+  WORKFLOW_ANALYTICS_ROLES,
   WORKFLOW_TASK_ROLES,
 } from "@/lib/auth/workRoles";
 import { PAYROLL_RUN_READER_ROLES } from "@/lib/auth/payrollRunRoles";
@@ -210,7 +211,8 @@ export const NAV_GROUPS: NavGroupDef[] = [
       { id: "citizen", label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
       { id: "designer", label: "Service Designer", href: "/designer", moduleKey: "designer" },
       // GAP-WORKFLOW-LIST-05 / GAP-WORKFLOW-MY-TASKS-07.
-      { id: "workflow", label: "Workflow", href: "/workflow", moduleKey: "workflow" },
+      // UAT b23: the hub reads workflow analytics (WORKFLOW_ANALYTICS_ROLES); approvers without them use /approvals above.
+      { id: "workflow", label: "Workflow", href: "/workflow", moduleKey: "workflow", rolesAllowed: WORKFLOW_ANALYTICS_ROLES, failClosed: true },
       { id: "visitor", label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { id: "court", label: "Court Mgmt", href: "/court", moduleKey: "court" },
       { id: "inspection", label: "Inspection", href: "/inspection", moduleKey: "inspection", rolesAllowed: INSPECTION_ROLES, failClosed: true },

@@ -1,6 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+// The shared test setup stubs redirect() as a no-op; the real one throws, which is what ends the render.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
+}));
+
+let mockRoles: string[] = ["workflow_user"];
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => mockRoles };
+});
+
 const getAnalyticsSummaryMock = vi.fn();
 vi.mock("./_data/workflowData", () => ({
   getAnalyticsSummary: (...args: unknown[]) => getAnalyticsSummaryMock(...args),
@@ -26,7 +38,23 @@ const MOCK_ANALYTICS = {
 };
 
 describe("WorkflowHubPage", () => {
-  beforeEach(() => getAnalyticsSummaryMock.mockReset());
+  beforeEach(() => {
+    getAnalyticsSummaryMock.mockReset();
+    mockRoles = ["workflow_user"];
+  });
+
+  // UAT b23: the hub's analytics call is refused for roles outside workflow-service's analytics ROLES, so an HR /
+  // procurement / estab approver was left on a page of errors. They go to the approvals inbox instead.
+  it("sends an approver without a workflow analytics role to /approvals", async () => {
+    mockRoles = ["procurement_officer"];
+    await expect(WorkflowHubPage()).rejects.toThrow("REDIRECT:/approvals");
+    expect(getAnalyticsSummaryMock).not.toHaveBeenCalled();
+  });
+
+  it("sends a role that can use neither the hub nor the inbox back to the dashboard", async () => {
+    mockRoles = ["employee"];
+    await expect(WorkflowHubPage()).rejects.toThrow("REDIRECT:/dashboard");
+  });
 
   it("renders real analytics and stat counts on success", async () => {
     getAnalyticsSummaryMock.mockResolvedValue({ data: MOCK_ANALYTICS, source: "api" });

@@ -78,3 +78,19 @@ describe("Establishment hub admin gating (GAP-ESTAB-HOME-04)", () => {
     expect(screen.getByText("Data Migration")).toBeInTheDocument();
   });
 });
+
+describe("Establishment hub New File tile (UAT b23)", () => {
+  beforeEach(() => mockRoles.mockReset());
+
+  it("hides New File from a plain employee (estab-service refuses POST /v1/estab/files)", () => {
+    mockRoles.mockReturnValue(["employee"]);
+    const { container } = render(Page());
+    expect(container.querySelector('a[href="/estab/files/new"]')).toBeNull();
+  });
+
+  it.each(["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"])("shows New File to %s", (role) => {
+    mockRoles.mockReturnValue([role]);
+    const { container } = render(Page());
+    expect(container.querySelector('a[href="/estab/files/new"]')).not.toBeNull();
+  });
+});

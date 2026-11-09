@@ -2,6 +2,7 @@
 
 import { formatDateTimeIST } from "@/lib/formatters";
 import { DataTable, EmptyState } from "../../../_components/ds";
+import { describeOperationsError, operationsSourceLabel } from "@/lib/operationsLabels";
 import type { AdminOperationProcess, AdminOperationScheduler } from "../../../_data/loaders";
 
 function statusClass(status: string): string {
@@ -78,8 +79,8 @@ export function RecentErrorsTable({ errors }: { errors: { source: string; line: 
   return (
     <DataTable<ErrorRow>
       columns={[
-        { key: "source", label: "Source", render: (e) => <span className="mono">{e.source as string}</span> },
-        { key: "line", label: "Redacted error", render: (e) => <span className="mono">{e.line as string}</span> },
+        { key: "source", label: "Source", render: (e) => <span>{operationsSourceLabel(e.source as string)}</span> },
+        { key: "line", label: "Error", render: (e) => <span>{describeOperationsError(e.line as string)}</span> },
       ]}
       rows={errors as ErrorRow[]}
     />

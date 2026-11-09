@@ -52,11 +52,33 @@ describe("DashboardPage module visibility", () => {
     expect(screen.getByRole("link", { name: "Court Mgmt" })).toBeInTheDocument();
   });
 
-  it("GAP-DASHBOARD-HOME-2-03: role-less modules (Reports/Knowledge/Notifications) always show for a signed-in user", async () => {
+  it("GAP-DASHBOARD-HOME-2-03: role-less modules (Knowledge/Notifications) always show for a signed-in user", async () => {
     getSessionRolesMock.mockReturnValue(["court_officer"]);
     await renderDashboard();
-    expect(screen.getByRole("link", { name: "Reports" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
+  });
+
+  // UAT b23: reports/layout.tsx redirects everyone outside REPORTS_READER_ROLES, so the tile was a dead end for them.
+  // (Replaces the Reports half of the GAP-DASHBOARD-HOME-2-03 assertion above, which asserted the dead-end tile.)
+  it("UAT b23: the Reports tile shows only to report readers, not to a plain employee or court officer", async () => {
+    expect(visibleModules(["employee"]).some((m) => m.href === "/reports")).toBe(false);
+    expect(visibleModules(["court_officer"]).some((m) => m.href === "/reports")).toBe(false);
+    for (const r of ["report_user", "report_viewer", "report_admin", "finance_admin", "tenant_admin", "super_admin"]) {
+      expect(visibleModules([r]).some((m) => m.href === "/reports"), r).toBe(true);
+    }
+  });
+
+  // UAT b23: "My approvals" pointed at the /workflow analytics hub (refused for most approvers).
+  it("UAT b23: My approvals opens the /approvals inbox for a role that can read tasks", async () => {
+    getSessionRolesMock.mockReturnValue(["procurement_officer"]);
+    await renderDashboard();
+    expect(screen.getByRole("link", { name: enMessages.home.myApprovals })).toHaveAttribute("href", "/approvals");
+  });
+
+  it("UAT b23: My approvals is not offered to a role the inbox would turn away", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    await renderDashboard();
+    expect(screen.queryByRole("link", { name: enMessages.home.myApprovals })).not.toBeInTheDocument();
   });
 
   it("super_admin sees every module", () => {

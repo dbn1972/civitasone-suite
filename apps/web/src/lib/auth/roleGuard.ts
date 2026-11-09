@@ -560,6 +560,12 @@ export const CDP_STEWARD_ROLES = ["cdp_steward", "cdp_admin", "super_admin"];
 export const ESTAB_ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
 
 /**
+ * UAT b23: roles estab-service admits on POST /v1/estab/files (files/routes.ts ESTAB_ROLES; keep in sync). A plain
+ * employee or any other role is refused with 403, so "New File" / "Create File" must not be offered to them.
+ */
+export const ESTAB_FILE_CREATE_ROLES = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
+
+/**
  * GAP-ESTAB-HOME-04: roles permitted to enrol/manage eOffice file operators.
  * Mirrors estab-service's ADMIN_ROLES in modules/operators/routes.ts
  * (["estab_division_admin", "estab_admin", "super_admin"]). Division admins
