@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
-import { DomainError } from "./domain.js";
+import { DomainError, assertGstIssuable, invoiceSupplierGstinFromEnv } from "./domain.js";
 import {
   generateBody, createInvoiceBody, cancelBody, approveBody,
   idParam, approvalIdParam, tenantParam,
@@ -54,6 +54,14 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const inv = await queries.getInvoiceForPayment(id, ctx.tenantId);
     if (!inv) throw new HttpError(404, "NOT_FOUND", "invoice not found");
+    // B22 D3: refuse synchronously (422) a bill that charges tax with no supplier GSTIN or no GST split, instead of
+    // accepting it (202) and letting the consumer fail with no feedback.
+    try {
+      assertGstIssuable(inv, invoiceSupplierGstinFromEnv());
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+      throw err;
+    }
     return reply.code(202).send(await commands.requestIssue(ctx, id, inv.totalMinor));
   });
 

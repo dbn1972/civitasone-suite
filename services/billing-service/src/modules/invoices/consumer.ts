@@ -11,6 +11,8 @@ import {
   assertCancellable,
   fiscalYearCode,
   formatSeriesInvoiceNumber,
+  assertGstIssuable,
+  invoiceSupplierGstinFromEnv,
   UNREGISTERED_SERIES,
   type LineItemInput,
 } from "./domain.js";
@@ -179,6 +181,15 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
       await repo.updateInvoice(tx, msg.payload.id, {
         status: "paid", paidMinor: inv.totalMinor, paidAt: new Date(), updatedBy: msg.actorId,
       });
+      // B22 D4: full settlement must reach finance like every other path that marks a bill paid (the receipt path in
+      // payments/consumer.ts emits this); without it INV-2627-000001 was paid with no cash-receipt journal.
+      if (inv.status !== "paid") {
+        await enqueue(tx, {
+          topic: EVENTS.invoicePaid, eventType: EVENTS.invoicePaid,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { invoiceId: msg.payload.id, totalMinor: inv.totalMinor.toString() },
+        });
+      }
       await audit(tx, msg, "invoice_pay", msg.payload.id);
     });
     await cache.invalidateResource(msg.tenantId, "invoices");
@@ -194,11 +205,15 @@ async function executeIssue(tx: Tx, invoiceId: string, tenantId: string, actorId
   // F11: the sequential tax-invoice number is allocated here, in the issuing transaction, so
   // the number and the status flip commit (or roll back) together.
   const issuedAt = new Date();
-  const series = inv.supplierGstin ?? UNREGISTERED_SERIES;
+  // B22 D3: no tax without a supplier GSTIN, and a tax bill needs its CGST/SGST/IGST split (the route checks this first
+  // and answers 422; this is the authoritative check inside the issuing transaction).
+  const supplierGstin = assertGstIssuable(inv, invoiceSupplierGstinFromEnv());
+  const series = supplierGstin ?? UNREGISTERED_SERIES;
   const fy = fiscalYearCode(issuedAt);
   const invoiceNo = formatSeriesInvoiceNumber(fy, await repo.allocateSeriesSeq(tx, series, fy));
   await repo.updateInvoice(tx, invoiceId, {
     status: "issued", issuedAt, issuedBy: actorId, updatedBy: actorId, invoiceSeries: series, invoiceNumber: invoiceNo,
+    ...(supplierGstin && !inv.supplierGstin ? { supplierGstin } : {}),
   });
   await enqueue(tx, {
     topic: EVENTS.invoiceIssued, eventType: EVENTS.invoiceIssued,

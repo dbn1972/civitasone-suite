@@ -49,6 +49,10 @@ const journalLine = z.object({
   // caller could post one. Enforced here, at the schema boundary, for every
   // caller.
   { message: "a journal line cannot have both debit and credit positive simultaneously", path: ["creditMinor"] },
+).refine(
+  // B22 D6: a line must move money on one side; 0/0 lines were stored on posted vouchers (CONTRA/2026-27/000010-13).
+  (l) => l.debitMinor > 0n || l.creditMinor > 0n,
+  { message: "a journal line must have a debit or a credit amount greater than zero", path: ["debitMinor"] },
 );
 
 export const postJournalBody = z.object({

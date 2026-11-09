@@ -159,6 +159,42 @@ export function validateGstSplit(g: GstDetail, taxMinor: bigint): string | null 
   return null;
 }
 
+/**
+ * B22 D3: the supplier's GSTIN from deploy configuration (BILLING_SUPPLIER_GSTIN), or null when unset or malformed.
+ * An invoice created without its own `gst` block is issued under this GSTIN.
+ */
+export function invoiceSupplierGstinFromEnv(): string | null {
+  const v = (process.env.BILLING_SUPPLIER_GSTIN ?? "").trim().toUpperCase();
+  return GSTIN_RE.test(v) ? v : null;
+}
+
+/**
+ * B22 D3: the GST rule enforced when a bill is ISSUED. A supplier with no GSTIN is not registered and cannot charge
+ * GST (CGST Act s.9 and s.10; it issues a bill of supply, Rule 49), so a bill with a tax line and no supplier GSTIN
+ * is refused. A bill that does charge tax must carry the CGST/SGST/IGST split and it must add up to the tax lines.
+ * Returns the supplier GSTIN the bill is issued under (its own, else the configured one, else null = bill of supply).
+ */
+export function assertGstIssuable(
+  inv: { supplierGstin: string | null; taxMinor: bigint; cgstMinor: bigint; sgstMinor: bigint; igstMinor: bigint },
+  configuredGstin: string | null,
+): string | null {
+  const supplier = inv.supplierGstin ?? configuredGstin;
+  if (inv.taxMinor <= 0n) return supplier;
+  if (!supplier) {
+    throw new DomainError(
+      "TAX_WITHOUT_SUPPLIER_GSTIN",
+      "this bill charges tax but the supplier has no GSTIN: an unregistered supplier cannot charge GST (issue a bill of supply without tax lines, or set the supplier GSTIN)",
+    );
+  }
+  if (inv.cgstMinor + inv.sgstMinor + inv.igstMinor !== inv.taxMinor) {
+    throw new DomainError(
+      "GST_SPLIT_MISSING",
+      "this bill charges tax but its CGST/SGST/IGST split does not add up to the tax lines: create it with the gst block (supplier and recipient GSTIN, place of supply, split)",
+    );
+  }
+  return supplier;
+}
+
 /** Human invoice number derived from the period and the invoice id (stable, no extra sequence). */
 export function invoiceNumber(periodMonth: string, id: string): string {
   return `INV-${periodMonth.replace("-", "")}-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;

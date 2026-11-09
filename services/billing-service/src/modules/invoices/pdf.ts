@@ -139,21 +139,28 @@ export async function renderInvoicePdf(
   // Rule 46(p): the supplies billed here are not notified for reverse charge.
   if (registered) pdf.paragraph("Whether tax is payable on reverse charge: No", { size: 9.5 });
   const lines = m.items.filter((it) => it.kind !== "tax");
-  const taxable = lines.reduce((a, it) => a + toMinor(it.amountMinor), 0n);
+  // B22 D2: an item's amount is PER UNIT (computeTotals in domain.ts bills amount x quantity), so the printed
+  // amount and the taxable value are amount x quantity. The PDF used to print and sum the bare unit amount
+  // (2 x 1,000.00 showed 1,000.00 and a total of 1,050.00 against a stored 2,410.00).
+  const lineValue = (it: InvoicePdfItem): bigint => toMinor(it.amountMinor) * toMinor(it.quantity);
+  const taxable = lines.reduce((a, it) => a + lineValue(it), 0n);
   pdf.table({
     columns: [
       { header: "S. No.", width: 0.6, align: "center" },
-      { header: "Description", width: 4 },
+      { header: "Description", width: 3.2 },
       { header: "HSN/SAC", width: 1.1 },
-      { header: "Qty", width: 0.7, align: "right" },
-      { header: "Taxable value (₹)", width: 1.6, align: "right" },
+      { header: "Qty", width: 0.6, align: "right" },
+      { header: "Rate (₹)", width: 1.3, align: "right" },
+      { header: "Amount (₹)", width: 1.5, align: "right" },
     ],
-    rows: lines.map((it, i) => [String(i + 1), it.kind === "line" ? it.description : `${it.description} (${it.kind})`, it.hsnSac ?? "—", it.quantity, formatMinorIndian(toMinor(it.amountMinor))]),
+    rows: lines.map((it, i) => [String(i + 1), it.kind === "line" ? it.description : `${it.description} (${it.kind})`, it.hsnSac ?? "—", it.quantity, formatMinorIndian(toMinor(it.amountMinor)), formatMinorIndian(lineValue(it))]),
     emptyText: "No line items.",
   });
+  // The totals printed are the invoice's STORED totals (total, paid, outstanding), never a re-sum of the lines.
+  const total = toMinor(m.totalMinor);
   const cgst = toMinor(m.cgstMinor), sgst = toMinor(m.sgstMinor), igst = toMinor(m.igstMinor), tax = toMinor(m.taxMinor);
+  const paid = toMinor(m.paidMinor), outstanding = toMinor(m.outstandingMinor);
   if (registered) {
-    const total = toMinor(m.totalMinor);
     const rows: string[][] = [["Taxable value", "", formatMinorIndian(taxable)]];
     // Rule 46(k)-(l): rate and amount for each tax head.
     if (cgst > 0n || sgst > 0n) rows.push(["CGST", taxRateLabel(cgst, taxable), formatMinorIndian(cgst)], ["SGST / UTGST", taxRateLabel(sgst, taxable), formatMinorIndian(sgst)]);
@@ -162,20 +169,24 @@ export async function renderInvoicePdf(
     pdf.table({
       columns: [{ header: "Summary", width: 3.4 }, { header: "Rate", width: 0.8, align: "right" }, { header: "₹", width: 1.6, align: "right" }],
       rows,
-      footRows: [["Invoice total", "", formatMinorIndian(total)], ["Paid", "", formatMinorIndian(toMinor(m.paidMinor))], ["Outstanding", "", formatMinorIndian(toMinor(m.outstandingMinor))]],
+      footRows: [["Invoice total", "", formatMinorIndian(total)], ["Paid", "", formatMinorIndian(paid)], ["Outstanding", "", formatMinorIndian(outstanding)]],
     });
     pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
   } else {
-    // Bill of supply: no tax is charged, so no tax heads and the total is the value of supply.
-    const paid = toMinor(m.paidMinor);
-    const outstanding = taxable > paid ? taxable - paid : 0n;
+    // Bill of supply: an unregistered supplier cannot charge GST (CGST Act s.9/s.10; Rule 49), and issue now refuses a
+    // bill that carries tax and no supplier GSTIN (B22 D3). A bill issued before that rule can still hold a tax line:
+    // it is printed as recorded (so the document matches the record and what was paid), never silently dropped.
+    const rows: string[][] = [["Value of supply", formatMinorIndian(taxable)]];
+    if (tax > 0n) rows.push(["Tax as recorded (no supplier GSTIN on record)", formatMinorIndian(tax)]);
     pdf.table({
       columns: [{ header: "Summary", width: 4 }, { header: "₹", width: 1.6, align: "right" }],
-      rows: [["Value of supply", formatMinorIndian(taxable)]],
-      footRows: [["Total", formatMinorIndian(taxable)], ["Paid", formatMinorIndian(paid)], ["Outstanding", formatMinorIndian(outstanding)]],
+      rows,
+      footRows: [["Total", formatMinorIndian(total)], ["Paid", formatMinorIndian(paid)], ["Outstanding", formatMinorIndian(outstanding)]],
     });
-    pdf.paragraph(`Amount in words: ${amountInWordsEn(taxable)}`, { bold: true });
-    pdf.note("The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
+    pdf.paragraph(`Amount in words: ${amountInWordsEn(total)}`, { bold: true });
+    pdf.note(tax > 0n
+      ? "The supplier GSTIN is not on record: this is a bill of supply. The tax shown was recorded on the invoice before GST registration was enforced at issue; it is not a GST charge and carries no input tax credit."
+      : "The supplier is not registered under GST: this is a bill of supply and no GST is charged on it.");
   }
   // Rule 46(q): signature of the supplier or its authorised representative.
   pdf.signatures([{ caption: `For ${supplier.name}`, name: supplier.signatory ?? null, designation: "Authorised Signatory" }]);
