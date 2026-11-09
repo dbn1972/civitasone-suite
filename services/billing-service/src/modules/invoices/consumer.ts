@@ -1,16 +1,22 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as paymentsRepo from "../payments/repo.js";
+import { randomUUID } from "node:crypto";
 import {
   shouldSkipInvoiceGeneration,
+  DomainError,
   assertIssuable,
+  assertPayable,
   assertCancellable,
   fiscalYearCode,
   formatSeriesInvoiceNumber,
+  assertGstIssuable,
+  invoiceSupplierGstinFromEnv,
   UNREGISTERED_SERIES,
   type LineItemInput,
 } from "./domain.js";
@@ -24,8 +30,18 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   // #146 regression fix: run every handler inside the message tenant context so
   // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
   const queue = tenantScoped(rawQueue);
+  // B22: a DomainError (not issuable / not payable / no tax without GSTIN ...) is a permanent business rejection:
+  // dead-letter it at once instead of retrying a handler that can never succeed.
+  const sub: typeof queue.subscribe = (topic, handler) => queue.subscribe(topic, (async (msg: Parameters<typeof handler>[0]) => {
+    try {
+      await handler(msg);
+    } catch (err) {
+      if (err instanceof DomainError) throw new NonRetryableError(`${err.code}: ${err.message}`, err);
+      throw err;
+    }
+  }) as typeof handler);
   // ── legacy usage-based generation (govt-exempt skip) ────────────
-  queue.subscribe<{ id: string; tenantId: string; periodMonth: string; govtExempt: boolean; totalMinor: number }>(
+  sub<{ id: string; tenantId: string; periodMonth: string; govtExempt: boolean; totalMinor: number }>(
     COMMANDS.invoiceGenerate,
     async (msg) => {
       await db.transaction(async (tx) => {
@@ -54,7 +70,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   );
 
   // ── create a draft bill from explicit line items ────────────────
-  queue.subscribe<{
+  sub<{
     id: string; tenantId: string; periodMonth: string; items: LineItemInput[];
     taxMinor: string; chargesMinor: string; totalMinor: string;
     gst?: { supplierGstin: string; recipientGstin: string; placeOfSupply: string; cgstMinor: string; sgstMinor: string; igstMinor: string };
@@ -84,7 +100,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   });
 
   // ── direct issue (below maker-checker threshold) ────────────────
-  queue.subscribe<{ id: string }>(COMMANDS.invoiceIssue, async (msg) => {
+  sub<{ id: string }>(COMMANDS.invoiceIssue, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await executeIssue(tx, msg.payload.id, msg.tenantId, msg.actorId, msg.correlationId);
@@ -94,7 +110,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   });
 
   // ── direct cancel (below maker-checker threshold) ───────────────
-  queue.subscribe<{ id: string; reason: string }>(COMMANDS.invoiceCancel, async (msg) => {
+  sub<{ id: string; reason: string }>(COMMANDS.invoiceCancel, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await executeCancel(tx, msg.payload.id, msg.payload.reason, msg.tenantId, msg.actorId, msg.correlationId);
@@ -104,7 +120,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   });
 
   // ── request issue (maker step) → pending approval ───────────────
-  queue.subscribe<{ approvalId: string; invoiceId: string; action: "issue"; amountMinor: string }>(
+  sub<{ approvalId: string; invoiceId: string; action: "issue"; amountMinor: string }>(
     COMMANDS.invoiceRequestIssue, async (msg) => {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -123,7 +139,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   );
 
   // ── request cancel (maker step) → pending approval ──────────────
-  queue.subscribe<{ approvalId: string; invoiceId: string; action: "cancel"; amountMinor: string; reason: string }>(
+  sub<{ approvalId: string; invoiceId: string; action: "cancel"; amountMinor: string; reason: string }>(
     COMMANDS.invoiceRequestCancel, async (msg) => {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -142,7 +158,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   );
 
   // ── checker decision: approve/reject; on approve, execute action ─
-  queue.subscribe<{ approvalId: string; approve: boolean; reason?: string }>(
+  sub<{ approvalId: string; approve: boolean; reason?: string }>(
     COMMANDS.invoiceApprovalDecide, async (msg) => {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -171,13 +187,36 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   );
 
   // ── direct pay (legacy, full settlement) ────────────────────────
-  queue.subscribe<{ id: string }>(COMMANDS.invoicePay, async (msg) => {
+  sub<{ id: string }>(COMMANDS.invoicePay, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const inv = await repo.findByIdTx(tx, msg.payload.id);
       if (!inv || inv.tenantId !== msg.tenantId) throw new Error(`invoice ${msg.payload.id} not found`);
-      await repo.updateInvoice(tx, msg.payload.id, {
-        status: "paid", paidMinor: inv.totalMinor, paidAt: new Date(), updatedBy: msg.actorId,
+      // B22: same payable-state guard as the receipt route (payments/consumer.ts): only issued / partially_paid.
+      assertPayable(inv.status);
+      // The balance is settled through the receipt route's GUARDED update (state + no-overpayment re-checked in the
+      // UPDATE itself, which waits for a concurrent writer's row lock and re-evaluates). A second pay, or a pay
+      // racing a partial receipt, therefore matches no row and fails instead of overwriting paid_minor and
+      // double-writing the payment row and the invoice.paid event.
+      const settled = inv.totalMinor - inv.paidMinor;
+      const updated = await repo.applyPaymentGuarded(tx, inv.id, settled, msg.actorId);
+      if (!updated) {
+        throw new DomainError("INVOICE_NOT_PAYABLE", `bill ${inv.id} was paid or changed by another request while this settlement ran; nothing was recorded`);
+      }
+      if (settled > 0n) {
+        const paymentId = randomUUID();
+        await paymentsRepo.insertPayment(tx, {
+          id: paymentId, tenantId: inv.tenantId, invoiceId: inv.id, amountMinor: settled, method: "legacy_settlement", status: "completed",
+          receiptNo: `RCPT-${new Date().getUTCFullYear()}-${paymentId.slice(0, 8).toUpperCase()}`,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      }
+      // B22 D4: full settlement must reach finance like every other path that marks a bill paid (the receipt path in
+      // payments/consumer.ts emits this); without it INV-2627-000001 was paid with no cash-receipt journal.
+      await enqueue(tx, {
+        topic: EVENTS.invoicePaid, eventType: EVENTS.invoicePaid,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { invoiceId: msg.payload.id, totalMinor: updated.totalMinor.toString() },
       });
       await audit(tx, msg, "invoice_pay", msg.payload.id);
     });
@@ -194,11 +233,15 @@ async function executeIssue(tx: Tx, invoiceId: string, tenantId: string, actorId
   // F11: the sequential tax-invoice number is allocated here, in the issuing transaction, so
   // the number and the status flip commit (or roll back) together.
   const issuedAt = new Date();
-  const series = inv.supplierGstin ?? UNREGISTERED_SERIES;
+  // B22 D3: no tax without a supplier GSTIN, and a tax bill needs its CGST/SGST/IGST split (the route checks this first
+  // and answers 422; this is the authoritative check inside the issuing transaction).
+  const supplierGstin = assertGstIssuable(inv, invoiceSupplierGstinFromEnv());
+  const series = supplierGstin ?? UNREGISTERED_SERIES;
   const fy = fiscalYearCode(issuedAt);
   const invoiceNo = formatSeriesInvoiceNumber(fy, await repo.allocateSeriesSeq(tx, series, fy));
   await repo.updateInvoice(tx, invoiceId, {
     status: "issued", issuedAt, issuedBy: actorId, updatedBy: actorId, invoiceSeries: series, invoiceNumber: invoiceNo,
+    ...(supplierGstin && !inv.supplierGstin ? { supplierGstin } : {}),
   });
   await enqueue(tx, {
     topic: EVENTS.invoiceIssued, eventType: EVENTS.invoiceIssued,

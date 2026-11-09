@@ -1,6 +1,6 @@
 import type { ApprovalSummary } from "@civitasone/types";
 import { cache } from "../../shared/infra.js";
-import { fetchUserSummaries } from "../../shared/identity-client.js";
+import { fetchActorNames } from "../../shared/identity-client.js";
 import * as repo from "./repo.js";
 import type { IndentRow } from "../indent/schema.js";
 import type { PoRow } from "../po/schema.js";
@@ -99,8 +99,8 @@ export async function resolveApprovalRefs(
   const parentPos = await repo.findPosByIds(tenantId, [...new Set(amendments.map((a) => a.poId))]);
   const poById = new Map([...pos, ...parentPos].map((p) => [p.id, p]));
   const userIds = [...indents.map((i) => i.createdBy), ...pos.map((p) => p.createdBy), ...amendments.map((a) => a.requestedBy)];
-  const users = userIds.length > 0 ? await fetchUserSummaries(tenantId) : new Map<string, { name: string }>();
-  const name = (id: string) => users.get(id)?.name;
+  const users = userIds.length > 0 ? await fetchActorNames(tenantId, userIds) : new Map<string, string>();
+  const name = (id: string) => users.get(id);
 
   const out: ApprovalRefSummary[] = [];
   for (const i of indents) {

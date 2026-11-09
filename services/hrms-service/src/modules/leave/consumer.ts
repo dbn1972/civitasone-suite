@@ -415,7 +415,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       }
       assertLeaveAppStatusTransition(app.status, "rejected");
       employeeId = app.employeeId;
-      await repo.updateLeaveApp(tx, p.id, { status: "rejected", updatedBy: msg.actorId });
+      await repo.updateLeaveApp(tx, p.id, { status: "rejected", rejectionReason: p.reason?.trim() || null, updatedBy: msg.actorId });
       await enqueue(tx, {
         topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

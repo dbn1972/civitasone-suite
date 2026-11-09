@@ -5146,6 +5146,7 @@
     "chipCancelled": "Cancelled",
     "chipRoutingFailed": "Needs attention",
     "routingFailedExplanation": "This request could not be sent for approval. This usually means no approver is set up for you; ask your HR administrator to check your leave approval chain.",
+    "rejectionReasonLabel": "Reason for rejection",
     "cancelBtn": "Cancel",
     "cancellingBtn": "Cancelling…",
     "cancelFailedFallback": "We couldn't cancel the leave request. Refresh the page and try again.",
@@ -18009,6 +18010,7 @@
       "other": "Decide on a request"
     },
     "taskTitleLeave": "Approve leave: {leaveType}, {days, plural, one {# day} other {# days}}",
+    "taskTitleLeaveDates": "Approve leave: {leaveType}, {days, plural, one {# day} other {# days}}, {from} to {to}",
     "taskTitleNamed": "Decide: {name}",
     "columns": {
       "item": "Item",

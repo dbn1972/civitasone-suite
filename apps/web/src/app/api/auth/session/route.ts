@@ -20,6 +20,8 @@ export async function GET() {
   if (!at) return NextResponse.json({ authenticated: false });
 
   const claims = decodeJwtPayload(at);
+  // W7: an undecodable cookie is not a session (the middleware clears it and sends pages to login).
+  if (!claims) return NextResponse.json({ authenticated: false });
   const tenantId = (claims?.tid as string) ?? (claims?.tenantId as string) ?? "";
   const userId = (claims?.sub as string) ?? "";
 

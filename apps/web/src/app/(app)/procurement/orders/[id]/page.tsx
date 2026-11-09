@@ -27,8 +27,11 @@ const AMENDABLE_STATUSES = new Set<string>(PO_AMENDABLE);
 // pending: PO_STATUS_RULE); the service state machine is the authority regardless.
 
 // Plain-language description of where a PO sits in its single release path.
-function approvalSummary(status: string): { label: string; detail: string } {
+function approvalSummary(status: string, rejectionReason?: string): { label: string; detail: string } {
   switch (status) {
+    case "rejected":
+      // UAT bundle 22 (W2): the checker's decision and why, visible to the maker.
+      return { label: "Rejected", detail: `This PO was rejected by its approver and cannot be released or dispatched.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}` };
     case "draft":
     case "pending":
       return { label: "Awaiting approval", detail: "This PO is in the workflow inbox. An approver other than its creator decides it; approval releases it for dispatch." };
@@ -89,7 +92,7 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
   }
 
   const canWrite = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
-  const approval = approvalSummary(po.status);
+  const approval = approvalSummary(po.status, po.rejectionReason);
 
   const lineRows: LineItemRow[] = po.lineItems.map((item) => ({
     itemCode: item.itemCode,

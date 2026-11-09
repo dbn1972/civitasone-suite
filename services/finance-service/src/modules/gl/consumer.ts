@@ -10,6 +10,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances, assertJournalHasAmount, assertNoControlAccounts, DomainError as GlDomainError } from "./domain.js";
+import { assertNoZeroLines, isZeroLine } from "./zero-lines.js";
 import { periodPostingRefusal, voucherNeedsAllocation } from "./posting-rules.js";
 import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
@@ -188,6 +189,9 @@ async function postJournal(
     // empty journal is noise, not corruption.
     return;
   }
+  // B22 D6: a 0/0 line (e.g. the accumulated-depreciation leg of a disposal of an asset with none) moves nothing; do not
+  // store it as a ledger/journal line. Totals and balance are unchanged, so the journal still balances.
+  if (journal.lines.some(isZeroLine)) journal = { ...journal, lines: journal.lines.filter((l) => !isZeroLine(l)) };
   const period = journal.postingDate.slice(0, 7);
   const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
   // DOM-010: fail CLOSED on a period the system does not even recognise (e.g. a malformed/garbled YYYY-MM sliced from a
@@ -723,6 +727,7 @@ export function registerGlConsumers(queue: Queue): void {
         // with nothing to post. See assertJournalHasAmount()'s doc comment
         // (gl/domain.ts).
         assertJournalHasAmount(p.lines);
+        assertNoZeroLines(p.lines); // B22 D6
         // GAP-FINANCE-JOURNAL-ENTRY-04 defense in depth (the route checks too): no
         // manual draft may post to a sub-ledger control account.
         try {

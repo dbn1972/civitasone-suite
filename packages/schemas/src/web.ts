@@ -710,6 +710,8 @@ export const SanctionDetailSchema = SanctionSummarySchema.extend({
     actorId: z.string().optional(),
     action: z.string(),
     timestamp: z.string(),
+    // UAT bundle 22 (W2): the checker's reason on a rejected step.
+    remarks: z.string().optional(),
   })).default([]),
   // UX-R5: the maker id behind `sanctionedBy` (optional for older servers).
   sanctionedById: z.string().optional(),
@@ -978,6 +980,8 @@ export const LeaveRequestDetailSchema = z.object({
   toDate: z.string(),
   days: z.number(),
   reason: z.string().optional(),
+  // W8: the approver's reason, only on rejected rows; absent/null for pre-deploy rejections.
+  rejectionReason: z.string().nullish(),
   approver: z.string().optional(),
   // routing_failed: see hrms-service leave/domain.ts's transition map and
   // leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber — a request

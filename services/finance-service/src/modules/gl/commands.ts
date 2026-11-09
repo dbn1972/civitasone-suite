@@ -3,6 +3,7 @@ import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { assertJournalBalances, assertJournalHasAmount } from "./domain.js";
+import { assertNoZeroLines } from "./zero-lines.js";
 import type { PostJournalBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -32,6 +33,7 @@ export async function createJournal(ctx: RequestContext, body: PostJournalBody):
   // comment (gl/domain.ts) for why a checker must never be asked to approve
   // a draft with nothing to post.
   assertJournalHasAmount(body.lines);
+  assertNoZeroLines(body.lines); // B22 D6
   // EVT-4: stable id from the client idempotency key → double-submit dedupes.
   const id = idempotentId(ctx);
   await queue.publish(COMMANDS.journalCreate, {

@@ -156,6 +156,7 @@ async function toLeaveRequestDetails(tenantId: string, rows: LeaveAppRow[]) {
     days: exactAppliedDays(r),
     dayPart: r.dayPart,
     reason: r.reason ?? undefined,
+    rejectionReason: r.status === "rejected" ? (r.rejectionReason ?? undefined) : undefined,
     approver: r.approvedBy ?? undefined,
     status: mapLeaveStatus(r.status),
     appliedAt: new Date(r.createdAt as unknown as string).toISOString(),

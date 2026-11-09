@@ -1,3 +1,4 @@
+import { REWORK_PREFIX, MAX_REWORKABLE_NODE_KEY, isReservedNodeKey } from "../tasks/rework.js";
 import type { NodeSpec, EdgeSpec } from "./repo.js";
 import { validateCondition } from "../../shared/condition.js";
 
@@ -29,6 +30,11 @@ export interface GraphValidationResult {
 export function validateGraph(nodes: NodeSpec[], edges: EdgeSpec[]): GraphValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  // W4: `rework:` is reserved for the engine's maker rework task; and an origin key must leave room for it.
+  for (const n of nodes) {
+    if (isReservedNodeKey(n.nodeKey)) errors.push(`nodeKey '${n.nodeKey}' uses the reserved prefix '${REWORK_PREFIX}'`);
+    else if (n.nodeKey.length > MAX_REWORKABLE_NODE_KEY) errors.push(`nodeKey '${n.nodeKey}' is longer than ${MAX_REWORKABLE_NODE_KEY} characters`);
+  }
 
   if (nodes.length === 0) {
     errors.push("graph has no nodes");

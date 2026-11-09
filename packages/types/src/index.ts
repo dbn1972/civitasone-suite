@@ -812,7 +812,7 @@ export type SanctionSummary = {
 export type SanctionDetail = SanctionSummary & {
   lineItems: Array<{ description: string; amount: string; head: string }>;
   remarks?: string;
-  approvalTrail: Array<{ actor: string; actorId?: string; action: string; timestamp: string }>;
+  approvalTrail: Array<{ actor: string; actorId?: string; action: string; timestamp: string; remarks?: string }>;
   /** UX-R5: the maker id behind sanctionedBy. */
   sanctionedById?: string;
   /** An eOffice file is deciding this sanction (direct approval is refused meanwhile). */
@@ -1446,7 +1446,7 @@ export type PurchaseOrderListItem = {
   orderDate: string;
   deliveryDate?: string;
   grnStatus?: string;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  status: "draft" | "pending" | "approved" | "rejected" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
 };
 
 export type PODetail = {
@@ -1463,7 +1463,9 @@ export type PODetail = {
   orderDate: string;
   deliveryDate?: string;
   totalAmount: number;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  status: "draft" | "pending" | "approved" | "rejected" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  /** UAT bundle 22 (W2): the checker's reason, present only on a rejected PO. */
+  rejectionReason?: string;
   lineItems: Array<{
     itemCode: string;
     itemName: string;

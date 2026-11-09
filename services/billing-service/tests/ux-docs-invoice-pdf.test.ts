@@ -33,7 +33,7 @@ describe("invoice PDF", () => {
     expect(flat).not.toContain("INR ");
   });
 
-  it("an unregistered supplier issues a bill of supply: no GSTIN blanks, no tax heads, total excludes GST (review)", async () => {
+  it("an unregistered supplier issues a bill of supply: no GSTIN blanks, no tax heads (review)", async () => {
     const flat = await pdfFlatText(await renderInvoicePdf({ ...base, supplierGstin: null, recipientGstin: null, placeOfSupply: null }, { supplier: SUPPLIER }, AT));
     expect(flat).toContain("BILL OF SUPPLY");
     expect(flat).toContain("Supplier GSTIN Not registered under GST");
@@ -42,9 +42,13 @@ describe("invoice PDF", () => {
     expect(flat).not.toContain("CGST");
     expect(flat).not.toContain("SGST");
     expect(flat).not.toContain("IGST");
-    expect(flat).not.toContain("2,950.00");
-    expect(flat).toContain("Total 2,500.00");
-    expect(flat).toContain("Rupees Two Thousand Five Hundred Only");
+    // B22 D2/D3: a bill that predates the issue-time rule (tax recorded, no supplier GSTIN) prints as RECORDED: the
+    // stored total (2,950.00) with the tax shown as a recorded amount, never a re-summed 2,500.00 that disagrees with
+    // the record and what was paid. New bills of this shape are refused at issue (see b22-invoice-pdf-gst-paid.test.ts).
+    expect(flat).toContain("Value of supply 2,500.00");
+    expect(flat).toContain("Tax as recorded");
+    expect(flat).toContain("Total 2,950.00");
+    expect(flat).toContain("Rupees Two Thousand Nine Hundred Fifty Only");
     expect(flat).not.toContain("reverse charge");
   });
 

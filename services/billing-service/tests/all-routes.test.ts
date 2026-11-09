@@ -642,6 +642,8 @@ describe("Invoices Routes", () => {
 
   describe("PATCH /v1/billing/invoices/:id/issue", () => {
     it("returns 202 for valid request", async () => {
+      // B22 D3: a bill that charges tax carries the supplier GSTIN and an exact CGST/SGST split (else 422 at issue).
+      mockState.queryResult = [{ ...SEED_INVOICE, supplierGstin: "06AAJCC7319K1ZE", recipientGstin: "06AABCD5678B1Z2", placeOfSupply: "06", cgstMinor: 9000n, sgstMinor: 9000n }];
       const res = await app.inject({
         method: "PATCH", url: `/v1/billing/invoices/${INVOICE_ID}/issue`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },

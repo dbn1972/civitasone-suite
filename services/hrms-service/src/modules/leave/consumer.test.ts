@@ -495,6 +495,22 @@ describe("leaveReject command", () => {
     await q.stop();
   });
 
+  it("W8: stores the approver's reason on the application row", async () => {
+    const q = await buildQueue();
+    await q.publish(
+      COMMANDS.leaveReject,
+      makeMsg(COMMANDS.leaveReject, {
+        id: "app-2", tenantId: TENANT, rejectedBy: ACTOR, reason: "  Audit closing week, reapply after 5 October ",
+      }),
+    );
+    await settle();
+    const rejectCall = updateLeaveAppMock.mock.calls.find(
+      (c: any[]) => (c[2] as Record<string, unknown>)?.status === "rejected",
+    );
+    expect((rejectCall![2] as Record<string, unknown>).rejectionReason).toBe("Audit closing week, reapply after 5 October");
+    await q.stop();
+  });
+
   it("publishes notification on rejection", async () => {
     const q = await buildQueue();
     await q.publish(

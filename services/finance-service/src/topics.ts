@@ -11,6 +11,8 @@ export const COMMANDS = {
   sanctionSubmitApproval: "finance.sanction.submit_approval",
   // gl
   journalPost:          "finance.gl.post",
+  // B22 D5: billing invoice issued / paid -> the AR sub-ledger (gl.finance_ar_ledger), same event as the 1300 journal.
+  arLedgerSync:         "finance.subledger.ar.sync",
   journalReverse:       "finance.gl.reverse",
   // DOM-024: maker-checker for MANUAL journal entries only. A manual entry
   // (POST /v1/finance/journals) now publishes journalCreate (lands as
