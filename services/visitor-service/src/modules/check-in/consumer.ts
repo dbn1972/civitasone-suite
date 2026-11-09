@@ -109,6 +109,8 @@ interface ScanBlacklistMatchPayload {
 }
 
 /** Visit requests already reported as undecryptable by this process (bounded; log-once guard). */
+/** Shown in overstay alerts when the visitor's name cannot be decrypted. */
+const UNDECRYPTABLE_VISITOR_NAME = "Visitor name unavailable";
 const undecryptableLogged = new Set<string>();
 
 export function registerCheckInConsumers(queue: Queue): void {
@@ -732,18 +734,19 @@ export function registerCheckInConsumers(queue: Queue): void {
             visit = { visitorName: decryptPii(stored.visitorName), hostEmployeeId: stored.hostEmployeeId };
           } catch (err) {
             if (!(err instanceof PiiDecryptError)) throw err;
-            // Skip this pass: count it (alert on any increase) and log once per process per visit request
-            // (ids only, never the value) so a stale row is not re-logged every cycle.
+            // An overstaying visitor must never go silent: still alert, with a placeholder name and the pass +
+            // visit ids. Count it (alert on any increase) and log once per process per visit request (ids only,
+            // never the value) so a stale row is not re-logged every cycle.
             incrementPiiDecryptSkipped("visitor-service", "visit_request");
             if (!undecryptableLogged.has(pass.visitRequestId)) {
               if (undecryptableLogged.size >= 10_000) undecryptableLogged.clear();
               undecryptableLogged.add(pass.visitRequestId);
               log.error(
                 { tenantId: msg.tenantId, visitRequestId: pass.visitRequestId, passId: pass.passId, event: "overstay_pii_decrypt_skipped" },
-                "overstay detect: visit request PII cannot be decrypted (key mismatch); pass skipped, needs data repair",
+                "overstay detect: visit request PII cannot be decrypted (key mismatch); alert raised with a placeholder name; needs data repair",
               );
             }
-            continue;
+            visit = { visitorName: UNDECRYPTABLE_VISITOR_NAME, hostEmployeeId: stored.hostEmployeeId };
           }
         }
 
@@ -756,6 +759,7 @@ export function registerCheckInConsumers(queue: Queue): void {
           correlationId: msg.correlationId,
           payload: {
             passId: pass.passId,
+            visitRequestId: pass.visitRequestId,
             locationId: pass.locationId,
             validUntil: pass.validUntil.toISOString(),
             detectedAt: now.toISOString(),
@@ -780,6 +784,7 @@ export function registerCheckInConsumers(queue: Queue): void {
               variables: {
                 visitorName: visit.visitorName ?? "",
                 passId: pass.passId,
+                visitRequestId: pass.visitRequestId,
                 validUntil: pass.validUntil.toISOString(),
                 detectedAt: now.toISOString(),
               },
@@ -801,6 +806,7 @@ export function registerCheckInConsumers(queue: Queue): void {
             variables: {
               visitorName: visit?.visitorName ?? "",
               passId: pass.passId,
+              visitRequestId: pass.visitRequestId,
               locationId: pass.locationId,
               validUntil: pass.validUntil.toISOString(),
               detectedAt: now.toISOString(),

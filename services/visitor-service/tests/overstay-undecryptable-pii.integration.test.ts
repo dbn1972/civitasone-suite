@@ -7,8 +7,8 @@
  * dead-lettered - every 10 minutes, for months - and no overstay alert for that tenant was ever raised,
  * including for visitors whose rows were fine.
  *
- * Now the envelope is read raw and decrypted per row: an undecryptable row is skipped, counted in
- * pii_decrypt_skipped_total, and logged once; the other overstayed visitors in the batch still alert.
+ * Now the envelope is read raw and decrypted per row: an undecryptable row still raises the overstay alert (placeholder
+ * name, pass + visit ids), is counted in pii_decrypt_skipped_total and logged once.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -73,7 +73,7 @@ afterAll(async () => {
 });
 
 describe("overstayDetect with one undecryptable visit request", () => {
-  it("does not dead-letter, alerts for the decryptable visitor, skips + counts the other", async () => {
+  it("does not dead-letter, and still alerts for BOTH visitors (placeholder name for the undecryptable one)", async () => {
     const q = new MemoryQueue({ maxAttempts: 5 });
     let deliveries = 0;
     const raw = q.subscribe.bind(q);
@@ -93,9 +93,13 @@ describe("overstayDetect with one undecryptable visit request", () => {
 
     const alerts = await runWithTenant(TENANT, () => db.transaction((tx) =>
       tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.topic, EVENTS.overstayAlerted)))));
-    expect(alerts).toHaveLength(1);
-    expect(JSON.stringify(alerts[0]!.payload)).toContain("Suresh Kumar Iyer");
+    expect(alerts).toHaveLength(2);
+    const byVisit = new Map(alerts.map((a) => [(a.payload as { visitRequestId: string }).visitRequestId, a.payload as Record<string, unknown>]));
+    expect(byVisit.get(goodVisit)).toMatchObject({ visitorName: "Suresh Kumar Iyer" });
+    expect(byVisit.get(badVisit)).toMatchObject({ visitorName: "Visitor name unavailable", visitRequestId: badVisit });
+    expect(typeof byVisit.get(badVisit)!.passId).toBe("string");
     expect(JSON.stringify(alerts)).not.toContain("Meenakshi");
+    expect(JSON.stringify(alerts)).not.toContain("enc:v2:");
     expect(getPiiDecryptSkippedCount("visitor-service", "visit_request")).toBe(1);
   });
 });
