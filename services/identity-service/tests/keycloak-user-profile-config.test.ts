@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error plain ESM script helpers, no type declarations
-import { TENANT_ATTRIBUTES, mergeProfile, planUser, withTenantAttributes, tenantFromUsername } from "../../../infra/keycloak/scripts/lib.mjs";
+import { TENANT_ATTRIBUTES, mergeProfile, planUser, withTenantAttributes, tenantFromUsername, maskUsername } from "../../../infra/keycloak/scripts/lib.mjs";
 
 const TENANT = "8dcb509d-5b1e-4c3a-9e0f-2a7d4c6b1f10";
 const OTHER = "11111111-0000-0000-0000-000000000001";
@@ -34,7 +34,7 @@ describe("realm export declares the tenant attributes", () => {
 });
 
 describe("apply-user-profile merge", () => {
-  const existing = { attributes: [{ name: "username" }, { name: "tenantId", permissions: { edit: ["admin"] } }], groups: [{ name: "g" }], unmanagedAttributePolicy: "ENABLED" };
+  const existing = { attributes: [{ name: "username" }, { name: "tenantId", permissions: { view: ["admin"], edit: ["admin"] } }], groups: [{ name: "g" }], unmanagedAttributePolicy: "ENABLED" };
 
   it("adds only the missing attributes and keeps everything else", () => {
     const { profile, added } = mergeProfile(existing);
@@ -43,6 +43,30 @@ describe("apply-user-profile merge", () => {
     expect(profile.groups).toEqual(existing.groups);
     expect(profile.unmanagedAttributePolicy).toBe("ENABLED");
     expect(profile.attributes[1]).toBe(existing.attributes[1]);
+    expect(mergeProfile(existing).tightened).toEqual([]);
+  });
+
+  it("an already-declared tenant attribute that users can view or edit is reported and tightened to admin-only", () => {
+    const loose = {
+      attributes: [
+        { name: "tenantId", permissions: { view: ["admin", "user"], edit: ["admin", "user"] } },
+        { name: "tid", permissions: { view: ["admin"], edit: ["admin", "user"] } },
+        { name: "identity_user_id" },
+        { name: "email_addr", permissions: { view: ["admin"], edit: ["admin"] } },
+        { name: "department", permissions: { view: ["admin", "user"], edit: ["user"] } },
+      ],
+    };
+    const { profile, added, tightened } = mergeProfile(loose);
+    expect(added).toEqual([]);
+    expect(tightened).toEqual(["tenantId", "tid", "identity_user_id"]);
+    const by = (n: string) => profile.attributes.find((a: { name: string }) => a.name === n);
+    for (const n of ["tenantId", "tid", "identity_user_id", "email_addr"]) expect(by(n).permissions).toEqual({ view: ["admin"], edit: ["admin"] });
+    expect(by("department")).toBe(loose.attributes[4]); // unrelated attributes untouched
+    expect(mergeProfile(profile).tightened).toEqual([]); // idempotent
+  });
+
+  it("masks usernames for logs: no tenant id, no full email", () => {
+    expect(maskUsername(`${TENANT}__dm.nashik@maharashtra.gov.in`)).toBe("d***@maharashtra.gov.in");
   });
 
   it("is idempotent: a second run adds nothing", () => {

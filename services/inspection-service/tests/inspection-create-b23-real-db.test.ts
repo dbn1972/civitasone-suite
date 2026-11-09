@@ -17,6 +17,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerExecutionConsumers } from "../src/modules/execution/consumer.js";
 import { inspections } from "../src/modules/execution/schema.js";
 import { regulatedEntities, inspectionTypes } from "../src/modules/universe/schema.js";
+import { inspectionPlans } from "../src/modules/planning/schema.js";
 import { COMMANDS } from "../src/topics.js";
 
 const SECRET = process.env.JWT_SECRET as string;
@@ -24,7 +25,11 @@ const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();
 const ACTOR = randomUUID();
 const INSPECTOR = randomUUID();
-const ids = { entity: randomUUID(), otherEntity: randomUUID(), type: randomUUID() };
+const ids = { entity: randomUUID(), otherEntity: randomUUID(), type: randomUUID(), plan: randomUUID(), otherPlan: randomUUID() };
+const planRow = (id: string, tenantId: string) => ({
+  id, tenantId, name: "Annual Factory Safety Plan 2026-27", periodStart: "2026-04-01", periodEnd: "2027-03-31",
+  entityIds: [], createdBy: ACTOR, updatedBy: ACTOR,
+});
 
 const bearer = (roles: string[], tenantId = TENANT) => ({
   authorization: `Bearer ${signToken({ sub: ACTOR, tid: tenantId, roles, sid: "s-b23" }, SECRET, 3600)}`,
@@ -54,18 +59,22 @@ beforeAll(async () => {
       applicableEntityTypes: ["factory"], requiredCompetencies: [], defaultTemplateIds: [], createdBy: ACTOR, updatedBy: ACTOR,
     });
   });
+  await asTenant(TENANT, async (tx) => { await tx.insert(inspectionPlans).values(planRow(ids.plan, TENANT)); });
   await asTenant(OTHER_TENANT, async (tx) => {
     await tx.insert(regulatedEntities).values(entityRow(ids.otherEntity, OTHER_TENANT, `MH-NSK-${ids.otherEntity.slice(0, 6)}`));
+    await tx.insert(inspectionPlans).values(planRow(ids.otherPlan, OTHER_TENANT));
   });
 });
 
 afterAll(async () => {
   await asTenant(TENANT, async (tx) => {
     await tx.delete(inspections).where(eq(inspections.tenantId, TENANT));
+    await tx.delete(inspectionPlans).where(eq(inspectionPlans.id, ids.plan));
     await tx.delete(inspectionTypes).where(eq(inspectionTypes.id, ids.type));
     await tx.delete(regulatedEntities).where(eq(regulatedEntities.id, ids.entity));
   }).catch(() => undefined);
   await asTenant(OTHER_TENANT, async (tx) => {
+    await tx.delete(inspectionPlans).where(eq(inspectionPlans.id, ids.otherPlan));
     await tx.delete(regulatedEntities).where(eq(regulatedEntities.id, ids.otherEntity));
   }).catch(() => undefined);
   await app.close();
@@ -85,6 +94,8 @@ describe("POST /v1/inspection/inspections", () => {
         { entityId: randomUUID(), inspectionTypeId: ids.type },
         { entityId: ids.otherEntity, inspectionTypeId: ids.type },
         { entityId: ids.entity, inspectionTypeId: randomUUID() },
+        { entityId: ids.entity, inspectionTypeId: ids.type, planId: randomUUID() },
+        { entityId: ids.entity, inspectionTypeId: ids.type, planId: ids.otherPlan }, // another tenant's plan
       ]) {
         const res = await app.inject({ method: "POST", url: "/v1/inspection/inspections", headers: bearer(["supervising_officer"]), payload });
         expect(res.statusCode).toBe(404);
@@ -106,7 +117,7 @@ describe("POST /v1/inspection/inspections", () => {
     try {
       const res = await app.inject({
         method: "POST", url: "/v1/inspection/inspections", headers: bearer(["supervising_officer"]),
-        payload: { entityId: ids.entity, inspectionTypeId: ids.type, assignedInspectors: [INSPECTOR] },
+        payload: { entityId: ids.entity, inspectionTypeId: ids.type, planId: ids.plan, assignedInspectors: [INSPECTOR] },
       });
       expect(res.statusCode).toBe(202);
       published = spy.mock.calls.find(([topic]) => topic === COMMANDS.inspectionCreate)?.[1] as typeof published;
@@ -120,10 +131,10 @@ describe("POST /v1/inspection/inspections", () => {
     // A second delivery with a NEW message id (not caught by the idempotency table) must not duplicate.
     await deliver({ ...published!, messageId: randomUUID() });
 
-    const rows = await asTenant<Array<{ id: string; state: string; createdBy: string; version: number }>>(TENANT, (tx) =>
+    const rows = await asTenant<Array<{ id: string; state: string; createdBy: string; version: number; planId: string | null }>>(TENANT, (tx) =>
       tx.select().from(inspections).where(and(eq(inspections.tenantId, TENANT), eq(inspections.id, id))));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ state: "scheduled", createdBy: ACTOR, version: 1 });
+    expect(rows[0]).toMatchObject({ state: "scheduled", createdBy: ACTOR, version: 1, planId: ids.plan });
 
     const got = await app.inject({ method: "GET", url: `/v1/inspection/inspections/${id}`, headers: bearer(["supervising_officer"]) });
     expect(got.statusCode).toBe(200);
@@ -145,5 +156,19 @@ describe("POST /v1/inspection/inspections", () => {
       } as never);
     } catch (e) { err = e; }
     expect(isNonRetryable(err)).toBe(true);
+  });
+
+  it("consumer refuses (non-retryable) a command naming another tenant's plan, and creates nothing", async () => {
+    const inspectionId = randomUUID();
+    let err: unknown;
+    try {
+      await deliver({
+        messageId: randomUUID(), type: COMMANDS.inspectionCreate, tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0",
+        payload: { inspectionId, entityId: ids.entity, inspectionTypeId: ids.type, planId: ids.otherPlan, assignedInspectors: [] },
+      } as never);
+    } catch (e) { err = e; }
+    expect(isNonRetryable(err)).toBe(true);
+    const rows = await asTenant<unknown[]>(TENANT, (tx) => tx.select().from(inspections).where(eq(inspections.id, inspectionId)));
+    expect(rows).toHaveLength(0);
   });
 });

@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/protocol/openid-connect/token")) return new Response(JSON.stringify({ access_token: "t", expires_in: 300 }), { status: 200 });
+    if (url.includes("/users?q=")) return new Response("[]", { status: 200 });
     if (url.includes("/users?username=")) return new Response(JSON.stringify(byUsername), { status: 200 });
     if (init?.method === "POST" && url.endsWith("/users")) {
       created.push(JSON.parse(String(init.body)));
@@ -68,5 +69,15 @@ describe("tenant attribute on federated realm users", () => {
     expect((await lookupUserId({ tenantId: TENANT, email: EMAIL, identityUserId: IDENT })).kcUserId).toBeUndefined();
     byUsername = [named({ tenantId: [TENANT], tid: [OTHER] })];
     expect((await lookupUserId({ tenantId: TENANT, email: EMAIL, identityUserId: IDENT })).kcUserId).toBeUndefined();
+  });
+
+  it("findUser fails closed on disagreeing attributes: tenantId=[T], tid=[OTHER] is not found at all (lifecycle actions skip it)", async () => {
+    byUsername = [named({ tenantId: [TENANT], tid: [OTHER] })];
+    // not found by username => lookupUserId falls through to the attribute query (empty) and reports absence, not tid_missing
+    expect(await lookupUserId({ tenantId: TENANT, email: EMAIL, identityUserId: IDENT }))
+      .toMatchObject({ ok: true, reason: "user not present in keycloak" });
+    byUsername = [named({ tenantId: [TENANT, OTHER] })];
+    expect(await lookupUserId({ tenantId: TENANT, email: EMAIL, identityUserId: IDENT }))
+      .toMatchObject({ reason: "user not present in keycloak" });
   });
 });

@@ -26,18 +26,40 @@ export function attributeDefinition(name) {
   };
 }
 
+const ADMIN_ONLY = (list) => Array.isArray(list) && list.length === 1 && list[0] === "admin";
+
+/** True when view AND edit are exactly ["admin"]: a user must never be able to read-write their own tenant. */
+export function isAdminOnly(attr) {
+  return ADMIN_ONLY(attr?.permissions?.view) && ADMIN_ONLY(attr?.permissions?.edit);
+}
+
 /**
- * Add any missing CivitasOne attribute to a user-profile config without touching the rest.
- * Idempotent: returns { profile, added } where `added` is [] when nothing was missing.
+ * Declare any missing CivitasOne attribute, and tighten any already-declared one whose
+ * view/edit permissions are not exactly ["admin"], without touching anything else.
+ * Idempotent: returns { profile, added, tightened }; both are [] when nothing needed doing.
  */
 export function mergeProfile(current) {
   const attributes = Array.isArray(current?.attributes) ? current.attributes : [];
   const have = new Set(attributes.map((a) => a.name));
   const added = TENANT_ATTRIBUTES.filter((n) => !have.has(n));
+  const tightened = [];
+  const fixed = attributes.map((a) => {
+    if (!TENANT_ATTRIBUTES.includes(a.name) || isAdminOnly(a)) return a;
+    tightened.push(a.name);
+    return { ...a, permissions: { ...(a.permissions ?? {}), view: ["admin"], edit: ["admin"] } };
+  });
   return {
-    profile: { ...current, attributes: [...attributes, ...added.map(attributeDefinition)] },
+    profile: { ...current, attributes: [...fixed, ...added.map(attributeDefinition)] },
     added,
+    tightened,
   };
+}
+
+/** Mask an email for logs: dm.nashik@maharashtra.gov.in -> d***@maharashtra.gov.in */
+export function maskUsername(username) {
+  const email = String(username ?? "").split("__").slice(1).join("__");
+  const [local = "", domain = ""] = email.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
 }
 
 const NAMESPACED = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})__.+$/i;

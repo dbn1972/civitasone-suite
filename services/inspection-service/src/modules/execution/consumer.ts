@@ -29,6 +29,7 @@ import {
 } from "./domain.js";
 import { and, eq, isNull } from "drizzle-orm";
 import { regulatedEntities, inspectionTypes } from "../universe/schema.js";
+import { findPlanByIdTx } from "../planning/repo.js";
 import {
   insertInspection,
   updateInspectionState,
@@ -68,6 +69,10 @@ export function registerExecutionConsumers(queue: Queue): void {
           .where(and(eq(inspectionTypes.id, p.inspectionTypeId), eq(inspectionTypes.tenantId, msg.tenantId)))
           .limit(1);
         if (!type[0]) throw new NonRetryableError(`Inspection type not found: ${p.inspectionTypeId} (tenant: ${msg.tenantId})`);
+
+        if (p.planId && !(await findPlanByIdTx(tx, msg.tenantId, p.planId))) {
+          throw new NonRetryableError(`Inspection plan not found: ${p.planId} (tenant: ${msg.tenantId})`);
+        }
 
         const created = await insertInspection(tx, {
           id: p.inspectionId,

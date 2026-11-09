@@ -23,13 +23,14 @@ const headers = { authorization: `Bearer ${token}`, "content-type": "application
 
 const cur = await fetch(endpoint, { headers });
 if (!cur.ok) throw new Error(`GET user profile failed: ${cur.status}`);
-const { profile, added } = mergeProfile(await cur.json());
+const { profile, added, tightened } = mergeProfile(await cur.json());
 
-if (added.length === 0) {
-  console.log("user profile already declares all tenant attributes; nothing to do");
+if (added.length === 0 && tightened.length === 0) {
+  console.log("user profile declares all tenant attributes, admin-only; nothing to do");
   process.exit(0);
 }
-console.log(`${apply ? "adding" : "would add"} to ${cfg.realm} user profile: ${added.join(", ")}`);
+if (added.length) console.log(`${apply ? "adding" : "would add"} to ${cfg.realm} user profile: ${added.join(", ")}`);
+if (tightened.length) console.log(`${apply ? "restricting to admin view/edit" : "would restrict to admin view/edit (users can currently read or edit them)"}: ${tightened.join(", ")}`);
 if (!apply) process.exit(0);
 
 const put = await fetch(endpoint, { method: "PUT", headers, body: JSON.stringify(profile) });

@@ -26,6 +26,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { randomUUID } from "node:crypto";
 import { findEntityById, findInspectionTypeById } from "../universe/repo.js";
+import { findPlanById } from "../planning/repo.js";
 import {
   publishInspectionCreate,
   publishInspectionTransition,
@@ -99,6 +100,7 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     // Tenant-scoped existence reads before publishing; the consumer re-checks inside its tx.
     if (!(await findEntityById(ctx.tenantId, body.entityId))) throw new HttpError(404, "NOT_FOUND", "regulated entity not found");
     if (!(await findInspectionTypeById(ctx.tenantId, body.inspectionTypeId))) throw new HttpError(404, "NOT_FOUND", "inspection type not found");
+    if (body.planId && !(await findPlanById(ctx.tenantId, body.planId))) throw new HttpError(404, "NOT_FOUND", "inspection plan not found");
     const result = await publishInspectionCreate(
       {
         inspectionId: randomUUID(),

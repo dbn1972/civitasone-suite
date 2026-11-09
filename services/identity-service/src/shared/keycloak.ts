@@ -134,7 +134,7 @@ async function findUser(cfg: KcConfig, token: string, tenantId: string, email: s
   // (Lifecycle actions -- disable, enable, reset -- keep accepting a realm user
   // with no tid, as before: the username is tenant-namespaced. Recording a
   // Keycloak id as an identity mapping additionally requires tenantVerified.)
-  const hit = arr.find((u) => u.username === username && (tenantValues(u.attributes).length === 0 || tenantValues(u.attributes).includes(tenantId)));
+  const hit = arr.find((u) => u.username === username && (tenantValues(u.attributes).length === 0 || tenantValues(u.attributes).every((t) => t === tenantId)));
   return hit ? { id: hit.id, enabled: hit.enabled, tenantVerified: hasTenantTid(hit.attributes, tenantId) } : null;
 }
 
