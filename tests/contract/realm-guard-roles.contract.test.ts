@@ -39,6 +39,15 @@ const GUARDED: Record<string, string> = {
   vigilance_officer: "services/audit-service/src/modules/vigilance/routes.ts",
   project_manager: "services/project-service/src/modules/progress/routes.ts",
   project_officer: "services/project-service/src/modules/progress/routes.ts",
+  citizen_admin: "services/citizen-service/src/modules/ai/routes.ts",
+  service_designer: "services/citizen-service/src/modules/applicant-identity/routes.ts",
+  helpdesk_user: "services/citizen-service/src/modules/escalation/routes.ts",
+  helpdesk_agent: "services/citizen-service/src/modules/escalation/routes.ts",
+  helpdesk_admin: "services/citizen-service/src/modules/escalation/routes.ts",
+  install_admin: "services/citizen-service/src/modules/packs/routes.ts",
+  project_admin: "services/project-service/src/modules/dashboard/routes.ts",
+  engineer: "services/project-service/src/modules/dashboard/routes.ts",
+  field_engineer: "services/project-service/src/modules/geo/routes.ts",
 };
 
 describe("realm defines every role the UAT journeys need", () => {
