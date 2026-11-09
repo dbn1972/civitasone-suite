@@ -15,6 +15,7 @@
  *    data) are left alone.
  */
 import { revalidateTag } from "next/cache";
+import { PUBLIC_PREFIXES, isPublicRoute, isDeviceAuthRoute } from "@civitasone/types";
 
 export const TENANT_TAG_PREFIX = "civ:t:";
 /** Tag for a token that carries no tenant claim: purged by any mutation of such a caller. */
@@ -29,17 +30,9 @@ const STATIC_THRESHOLD_SECONDS = 300;
  * That is safe for reads (the tag only scopes purges) but a forged `tid` must not be able to purge
  * another tenant's cache. So a purge is only issued for gateway-AUTHENTICATED routes: there the gateway
  * has verified the bearer, a 2xx proves the token was genuine, and `tid` is its real tenant. Routes the
- * gateway serves without a bearer check are mirrored here from services/gateway-service/src/public-prefixes.ts
- * (PUBLIC_PREFIXES / PUBLIC_ROUTES) and never purge.
+ * gateway serves without a bearer check come from the gateway's own list (@civitasone/types gatewayPublic)
+ * and never purge.
  */
-const GATEWAY_PUBLIC_PREFIXES = [
-  "/api/identity", "/api/v1/install", "/api/v1/advertisement/permits/verify", "/api/v1/building/permits/verify",
-  "/api/v1/careers", "/api/v1/crm/public", "/api/v1/court/public", "/api/v1/tenant/msme-onboard",
-  "/api/v1/hrms/visiting-card/public", "/api/v1/citizen/certificates/verify",
-  "/api/v1/billing/webhooks", "/api/v1/telephony/webhooks",
-];
-const GATEWAY_PUBLIC_ROUTES = ["POST /api/v1/meetings/minutes/verify", "POST /api/v1/visitor/devices/heartbeat"];
-
 /** Final path segments of POST endpoints that only compute/look up and change no stored state. */
 const READ_ONLY_LAST_SEGMENTS = new Set([
   "search", "query", "preview", "template-preview", "validate", "validate-versioned", "validate-pan",
@@ -51,8 +44,8 @@ export function shouldPurgeAfterWrite(method: string, subpath: string): boolean 
   const m = method.toUpperCase();
   if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false;
   const pathname = "/api/" + subpath.replace(/^\/+|\/+$/g, "");
-  if (GATEWAY_PUBLIC_ROUTES.includes(m + " " + pathname)) return false;
-  if (GATEWAY_PUBLIC_PREFIXES.some((x) => pathname === x || pathname.startsWith(x + "/"))) return false;
+  if (isPublicRoute(m, pathname) || isDeviceAuthRoute(m, pathname)) return false;
+  if (PUBLIC_PREFIXES.some((x) => pathname === x || pathname.startsWith(x + "/"))) return false;
   if (m === "POST" && READ_ONLY_LAST_SEGMENTS.has(pathname.split("/").pop() ?? "")) return false;
   return true;
 }
