@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { getSessionRoles, hasRoleFamily } from "@/lib/auth/roleGuard";
-import { WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
+import { WORKFLOW_ANALYTICS_ROLES, WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
 
 type Action = { label: string; href: string; note: string };
 
@@ -103,6 +103,8 @@ export function RoleCommandCenter() {
   if (centers.length === 0) return null;
   // UAT b23: the working inbox is /approvals; only roles workflow-service lets read tasks can use it.
   const canUseApprovals = roles.some((r) => WORKFLOW_TASK_ROLES.includes(r));
+  // Analytics-only roles (e.g. tenant_admin) can use the /workflow hub but not the task inbox.
+  const approvalsHref = canUseApprovals ? "/approvals" : roles.some((r) => WORKFLOW_ANALYTICS_ROLES.includes(r)) ? "/workflow" : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
@@ -110,8 +112,8 @@ export function RoleCommandCenter() {
         <section key={center.id} className="card" aria-labelledby={`cc-${center.id}-h`}>
           <div className="card-h">
             <h2 id={`cc-${center.id}-h`} style={{ margin: 0 }}>{center.title}</h2>
-            {canUseApprovals ? (
-              <Link href="/approvals" className="btn ghost" style={{ fontSize: 12 }}>
+            {approvalsHref ? (
+              <Link href={approvalsHref} className="btn ghost" style={{ fontSize: 12 }}>
                 All approvals{" "}
                 {/* Icon, not a "→" text glyph -- see page.tsx's ArrowRight for why. */}
                 <ArrowRight aria-hidden="true" size={12} style={{ verticalAlign: "middle" }} />

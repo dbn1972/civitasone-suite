@@ -75,6 +75,12 @@ describe("DashboardPage module visibility", () => {
     expect(screen.getByRole("link", { name: enMessages.home.myApprovals })).toHaveAttribute("href", "/approvals");
   });
 
+  it("UAT b23: an analytics-only role (tenant_admin) gets the /workflow hub link", async () => {
+    getSessionRolesMock.mockReturnValue(["tenant_admin"]);
+    await renderDashboard();
+    expect(screen.getByRole("link", { name: enMessages.home.myApprovals })).toHaveAttribute("href", "/workflow");
+  });
+
   it("UAT b23: My approvals is not offered to a role the inbox would turn away", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
     await renderDashboard();

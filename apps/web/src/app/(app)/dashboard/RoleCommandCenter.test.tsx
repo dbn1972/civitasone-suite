@@ -45,6 +45,12 @@ describe("RoleCommandCenter", () => {
     expect(screen.getByRole("link", { name: /All approvals/ })).toHaveAttribute("href", "/approvals");
   });
 
+  it("UAT b23: an analytics-only role (tenant_admin) gets the /workflow hub link", () => {
+    getSessionRolesMock.mockReturnValue(["tenant_admin"]);
+    render(<RoleCommandCenter />);
+    expect(screen.getByRole("link", { name: /All approvals/ })).toHaveAttribute("href", "/workflow");
+  });
+
   it("UAT b23: All approvals is hidden for a role the inbox would turn away (finance_officer)", () => {
     getSessionRolesMock.mockReturnValue(["finance_officer"]);
     render(<RoleCommandCenter />);

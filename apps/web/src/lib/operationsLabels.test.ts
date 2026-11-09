@@ -23,6 +23,14 @@ describe("describeOperationsError (UAT b23)", () => {
   });
   it("keeps plain text unchanged and never returns empty", () => {
     expect(describeOperationsError("Queue consumer failed to start")).toBe("Queue consumer failed to start");
-    expect(describeOperationsError("   at /home/x/y.js:1:2").length).toBeGreaterThan(0);
+    expect(describeOperationsError("   at /home/x/y.js:1:2")).toBe("Error (details withheld)");
+    expect(describeOperationsError("    at Object.run (/home/ec2-user/app/dist/x.js:10:5)")).toBe("Error (details withheld)");
+  });
+  it("keeps ordinary prose containing the word 'at'", () => {
+    expect(describeOperationsError("Job failed at step 3")).toBe("Job failed at step 3");
+    expect(describeOperationsError("Timed out at connect timeout")).toBe("Timed out at connect timeout");
+  });
+  it("strips a real frame that follows a message", () => {
+    expect(describeOperationsError("TypeError: x is undefined at Object.run (/srv/app/dist/x.js:10:5)")).toBe("TypeError: x is undefined");
   });
 });

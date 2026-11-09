@@ -17,11 +17,14 @@ export function operationsSourceLabel(source: string): string {
 // Absolute POSIX/Windows paths, with optional :line:col. node_modules paths are reduced to the package name.
 const NODE_MODULES_PATH = /(?:\/[^\s()'"]+)?\/node_modules\/((?:@[^/\s]+\/)?[^/\s()'"]+)[^\s()'"]*/g;
 const ABS_PATH = /(?:[A-Za-z]:\\|\/)(?:[^\s()'"\\/]+[\\/])+([^\s()'"\\/:]+)(?::\d+){0,2}/g;
-const STACK_FRAME = /\s+at\s+(?:[^\s(]+\s+)?\(?[^\s)]*\)?/g;
+// A stack frame is "at" followed by a path, or by "(path)" / "(file:line:col)", optionally after a function name. Prose such
+// as "failed at step 3" or "at connect timeout" has neither and is left alone.
+const STACK_FRAME = /(?:^|\s)at\s+(?:[^\s(]+\s+)?(?:\([^)]*(?:[\\/]|:\d+:\d+)[^)]*\)|(?:[A-Za-z]:\\|\/)\S*)/g;
+const FALLBACK = "Error (details withheld)";
 
 /**
  * Readable one-line summary of a log error line: stack frames removed, file paths shortened to the file name (or the
- * package name inside node_modules). Falls back to the original text if that would leave nothing.
+ * package name inside node_modules). If nothing readable is left (a bare stack frame) a fixed placeholder is returned, never the raw text.
  */
 export function describeOperationsError(line: string): string {
   const stripped = line
@@ -30,5 +33,5 @@ export function describeOperationsError(line: string): string {
     .replace(ABS_PATH, (_m, file: string) => file)
     .replace(/\s{2,}/g, " ")
     .trim();
-  return stripped || line.trim();
+  return stripped || FALLBACK;
 }
