@@ -233,8 +233,6 @@ export const EVENTS = {
   tadaClaimPublished: "inspection.tada_claim.published",
 
   // ── Execution ────────────────────────────────────────────────────────────
-  /** payload: { inspectionId, entityId, inspectionTypeId, planId, assignedInspectors, scheduledBy } — fires when an inspection is created in state scheduled */
-  inspectionScheduled: "inspection.inspection.scheduled",
   /** payload: { inspectionId, entityId, inspectorId, startedAt, geoLatitude?, geoLongitude? } — fires on scheduled → in_progress */
   inspectionStarted: "inspection.inspection.started",
   /** payload: { inspectionId, entityId, inspectorId, completedAt, checklistScore? } — fires on in_progress → completed */

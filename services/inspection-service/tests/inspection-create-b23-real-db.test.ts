@@ -111,7 +111,7 @@ describe("POST /v1/inspection/inspections", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("202 returns the new inspection id; the consumer creates it in state scheduled, readable via GET, with an outbox event; redelivery is a no-op", async () => {
+  it("202 returns the new inspection id; the consumer creates it in state scheduled, readable via GET, with an audit record; redelivery is a no-op", async () => {
     const spy = vi.spyOn(queue, "publish");
     let published: { messageId: string; tenantId: string; actorId: string; payload: { inspectionId: string } } | undefined;
     try {
@@ -144,7 +144,7 @@ describe("POST /v1/inspection/inspections", () => {
       `SELECT topic FROM _outbox.messages WHERE tenant_id = $1 AND payload->>'inspectionId' = $2 OR (tenant_id = $1 AND payload->>'resourceId' = $2)`,
       [TENANT, id],
     ) as unknown as Array<{ topic: string }>;
-    expect(events.map((e) => e.topic).sort()).toEqual(["audit.event.record", "inspection.inspection.scheduled"]);
+    expect(events.map((e) => e.topic).sort()).toEqual(["audit.event.record"]);
   });
 
   it("consumer refuses (non-retryable) a command naming an entity from another tenant", async () => {
