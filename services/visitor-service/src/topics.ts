@@ -181,7 +181,6 @@ export const EVENTS = {
   // Location / Area lifecycle
   locationCreated:              "visitor.location.created",
   areaCreated:                  "visitor.area.created",
-  gateCreated:                  "visitor.gate.created",
 
   // DPDP lifecycle
   dpdpErasureAccepted:          "visitor.dpdp.erasure_accepted",

@@ -358,6 +358,13 @@ function formatScheduledJobMetrics(): string[] {
     lines.push(`scheduled_job_duration_ms_sum{job="${job}"} ${h.sum}`);
     lines.push(`scheduled_job_duration_ms_count{job="${job}"} ${h.count}`);
   }
+  lines.push(
+    "# HELP inventory_precheck_failopen_total GRN accepts let through because the inventory pre-check could not be completed, by reason",
+    "# TYPE inventory_precheck_failopen_total counter",
+  );
+  for (const [reason, count] of inventoryPrecheckFailopenTotal) {
+    lines.push(`inventory_precheck_failopen_total{reason="${reason}"} ${count}`);
+  }
   return lines;
 }
 
@@ -389,6 +396,8 @@ const publishNoSubscribersTotal = new Map<string, number>(); // topic -> count
 // B23: a consumer/worker skipped a row whose at-rest PII envelope no key in its keyring can open
 // (e.g. rows written under a retired key). Keyed `service:subject`. Alert on any increase.
 const piiDecryptSkippedTotal = new Map<string, number>();
+// procurement GRN accept could not consult inventory and let the accept through (fail-open), by reason.
+const inventoryPrecheckFailopenTotal = new Map<string, number>();
 
 /** Increment outbox_relay_failures_total{service}. */
 export function incrementOutboxRelayFailure(service: string): void {
@@ -429,6 +438,15 @@ export function incrementPiiDecryptSkipped(service: string, subject: string): vo
   piiDecryptSkippedTotal.set(key, (piiDecryptSkippedTotal.get(key) ?? 0) + 1);
 }
 
+/** Increment inventory_precheck_failopen_total{reason} (reason: unreachable | http_<status> | bad_body). */
+export function incrementInventoryPrecheckFailopen(reason: string): void {
+  inventoryPrecheckFailopenTotal.set(reason, (inventoryPrecheckFailopenTotal.get(reason) ?? 0) + 1);
+}
+
+export function getInventoryPrecheckFailopenCount(reason: string): number {
+  return inventoryPrecheckFailopenTotal.get(reason) ?? 0;
+}
+
 export function getPiiDecryptSkippedCount(service: string, subject: string): number {
   return piiDecryptSkippedTotal.get(`${service}:${subject}`) ?? 0;
 }
@@ -461,6 +479,7 @@ export function resetFailureMetrics(): void {
   capturedErrorsTotal.clear();
   publishNoSubscribersTotal.clear();
   piiDecryptSkippedTotal.clear();
+  inventoryPrecheckFailopenTotal.clear();
 }
 
 function formatFailureMetrics(): string[] {

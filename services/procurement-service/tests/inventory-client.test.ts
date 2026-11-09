@@ -1,5 +1,6 @@
 /** UAT B23: procurement's read-only inventory pre-check client - request shape and fail-open behaviour. */
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { getInventoryPrecheckFailopenCount, resetFailureMetrics } from "@civitasone/observability";
 import { precheckGrnStock } from "../src/shared/inventory-client.js";
 
 const TENANT = "11111111-0000-0000-0000-000000000001";
@@ -27,5 +28,22 @@ describe("precheckGrnStock", () => {
     expect(await precheckGrnStock(TENANT, ["X-1"])).toBeNull();
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ hello: 1 }), { status: 200 })));
     expect(await precheckGrnStock(TENANT, ["X-1"])).toBeNull();
+  });
+
+  it("counts each fail-open by reason and warns once per reason without leaking the secret", async () => {
+    resetFailureMetrics();
+    process.env.INTERNAL_SERVICE_SECRET = "s3cret-value-for-test-only";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 401 })));
+    await precheckGrnStock(TENANT, ["X-1"]);
+    await precheckGrnStock(TENANT, ["X-1"]);
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNREFUSED"); }));
+    await precheckGrnStock(TENANT, ["X-1"]);
+    expect(getInventoryPrecheckFailopenCount("http_401")).toBe(2);
+    expect(getInventoryPrecheckFailopenCount("unreachable")).toBe(1);
+    const lines = warn.mock.calls.map((c) => String(c[0]));
+    expect(lines.filter((l) => l.includes("http_401"))).toHaveLength(1);
+    expect(lines.join("")).not.toContain("s3cret");
+    warn.mockRestore();
   });
 });

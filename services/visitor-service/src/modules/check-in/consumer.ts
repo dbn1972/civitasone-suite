@@ -108,9 +108,9 @@ interface ScanBlacklistMatchPayload {
   idDocumentType?: string | null;
 }
 
-/** Visit requests already reported as undecryptable by this process (bounded; log-once guard). */
 /** Shown in overstay alerts when the visitor's name cannot be decrypted. */
 const UNDECRYPTABLE_VISITOR_NAME = "Visitor name unavailable";
+/** Visit requests already reported as undecryptable by this process (bounded; log-once guard). */
 const undecryptableLogged = new Set<string>();
 
 export function registerCheckInConsumers(queue: Queue): void {

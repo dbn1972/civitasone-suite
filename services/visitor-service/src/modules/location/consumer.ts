@@ -159,14 +159,6 @@ export function registerLocationConsumers(queue: Queue): void {
         updatedBy: p.createdBy,
       });
 
-      await enqueue(tx, {
-        topic: EVENTS.gateCreated,
-        eventType: EVENTS.gateCreated,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: { id: p.id, locationId: p.locationId, name: p.name },
-      });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "gate", resourceId: p.id, outcome: "success" } });
 
       await cache.invalidateAfterCommit(tx, cache.makeKey(p.tenantId, RESOURCE, p.locationId));
