@@ -17,6 +17,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { billingInvoices, billingInvoiceItems } from "../src/modules/invoices/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
+import { billingPayments } from "../src/modules/payments/schema.js";
 import { registerInvoicesConsumers } from "../src/modules/invoices/consumer.js";
 import { renderInvoicePdf, type InvoicePdfModel } from "../src/modules/invoices/pdf.js";
 import { assertGstIssuable, invoiceSupplierGstinFromEnv } from "../src/modules/invoices/domain.js";
@@ -111,6 +112,7 @@ describe("D3: assertGstIssuable (pure)", () => {
 let app: Awaited<ReturnType<typeof buildApp>>;
 async function wipe() {
   await asTenant(async (tx) => {
+    await tx.delete(billingPayments).where(eq(billingPayments.tenantId, T));
     await tx.delete(billingInvoiceItems).where(eq(billingInvoiceItems.tenantId, T));
     await tx.delete(billingInvoices).where(eq(billingInvoices.tenantId, T));
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T));
@@ -188,5 +190,73 @@ describe("D4: legacy full settlement emits billing.invoice.paid", () => {
       .filter((m) => (m.payload as { invoiceId: string }).invoiceId === id);
     expect(ev).toHaveLength(1);
     expect((ev[0]!.payload as { totalMinor: string }).totalMinor).toBe("50000");
+    // the settlement now also writes a payments row; remove it (see the note in the /pay describe below)
+    await asTenant((tx) => tx.delete(billingPayments).where(eq(billingPayments.invoiceId, id)));
+  });
+});
+
+describe("legacy PATCH /pay: payable-state guard and payments row", () => {
+  const pay = (id: string) => app.inject({ method: "PATCH", url: `/v1/billing/invoices/${id}/pay`, headers: tok });
+  // Reads the invoice's payment rows and removes them at once: billing_payments is shared across test files and
+  // uat-g3-billing.test.ts re-creates its status CHECK, which fails while any 'completed' row exists.
+  const payments = async (id: string) => asTenant(async (tx) => {
+    const rows = await tx.select().from(billingPayments).where(eq(billingPayments.invoiceId, id));
+    await tx.delete(billingPayments).where(eq(billingPayments.invoiceId, id));
+    return rows;
+  });
+  const paidEvents = async (id: string) => (await asTenant((tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T), eq(outboxMessages.topic, "billing.invoice.paid")))))
+    .filter((m) => (m.payload as { invoiceId: string }).invoiceId === id);
+  const issued = async (period: string) => {
+    const id = await create(period, [{ description: "Training day", amountMinor: 50000 }]);
+    expect((await issue(id)).statusCode).toBe(202);
+    await drain();
+    return id;
+  };
+
+  it("a draft bill cannot be paid: 409 INVOICE_NOT_PAYABLE, nothing changes", async () => {
+    const id = await create("2027-06", [{ description: "Training day", amountMinor: 50000 }]);
+    const r = await pay(id);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("INVOICE_NOT_PAYABLE");
+    await drain();
+    expect((await row(id)).status).toBe("draft");
+    expect(await payments(id)).toHaveLength(0);
+    expect(await paidEvents(id)).toHaveLength(0);
+  });
+
+  it("a cancelled bill cannot be paid", async () => {
+    const id = await issued("2027-07");
+    expect((await app.inject({ method: "PATCH", url: `/v1/billing/invoices/${id}/cancel`, headers: tok, payload: { reason: "raised in error" } })).statusCode).toBe(202);
+    await drain();
+    expect((await row(id)).status).toBe("cancelled");
+    expect((await pay(id)).statusCode).toBe(409);
+    expect((await row(id)).status).toBe("cancelled");
+  });
+
+  it("paying twice: the second is 409, one payments row, one invoice.paid event, paid_at not moved", async () => {
+    const id = await issued("2027-08");
+    expect((await pay(id)).statusCode).toBe(202);
+    await drain();
+    const paidAt = (await row(id)).paidAt;
+    const again = await pay(id);
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("INVOICE_NOT_PAYABLE");
+    await drain();
+    expect((await row(id)).paidAt).toEqual(paidAt);
+    const ps = await payments(id);
+    expect(ps).toHaveLength(1);
+    expect(ps[0]!.amountMinor).toBe(50000n);
+    expect(ps[0]!.method).toBe("legacy_settlement");
+    expect(ps[0]!.status).toBe("completed");
+    expect(await paidEvents(id)).toHaveLength(1);
+  });
+
+  it("a partly paid bill settles only the balance", async () => {
+    const id = await issued("2027-09");
+    await asTenant((tx) => tx.update(billingInvoices).set({ status: "partially_paid", paidMinor: 20000n }).where(eq(billingInvoices.id, id)));
+    expect((await pay(id)).statusCode).toBe(202);
+    await drain();
+    expect((await row(id)).status).toBe("paid");
+    expect((await payments(id)).map((p) => p.amountMinor)).toEqual([30000n]);
   });
 });

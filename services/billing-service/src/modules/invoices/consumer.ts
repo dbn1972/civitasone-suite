@@ -5,9 +5,12 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as paymentsRepo from "../payments/repo.js";
+import { randomUUID } from "node:crypto";
 import {
   shouldSkipInvoiceGeneration,
   assertIssuable,
+  assertPayable,
   assertCancellable,
   fiscalYearCode,
   formatSeriesInvoiceNumber,
@@ -178,9 +181,21 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const inv = await repo.findByIdTx(tx, msg.payload.id);
       if (!inv || inv.tenantId !== msg.tenantId) throw new Error(`invoice ${msg.payload.id} not found`);
+      // B22: same payable-state guard as the receipt route (payments/consumer.ts): only issued / partially_paid.
+      assertPayable(inv.status);
       await repo.updateInvoice(tx, msg.payload.id, {
         status: "paid", paidMinor: inv.totalMinor, paidAt: new Date(), updatedBy: msg.actorId,
       });
+      // The settlement is a receipt like any other: record the balance paid (the receipt route writes this row too).
+      const settled = inv.totalMinor - inv.paidMinor;
+      if (settled > 0n) {
+        const paymentId = randomUUID();
+        await paymentsRepo.insertPayment(tx, {
+          id: paymentId, tenantId: inv.tenantId, invoiceId: inv.id, amountMinor: settled, method: "legacy_settlement", status: "completed",
+          receiptNo: `RCPT-${new Date().getUTCFullYear()}-${paymentId.slice(0, 8).toUpperCase()}`,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      }
       // B22 D4: full settlement must reach finance like every other path that marks a bill paid (the receipt path in
       // payments/consumer.ts emits this); without it INV-2627-000001 was paid with no cash-receipt journal.
       if (inv.status !== "paid") {

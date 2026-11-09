@@ -17,8 +17,9 @@
  *
  * Usage:
  *   BILLING_DATABASE_URL=postgres://... FINANCE_DATABASE_URL=postgres://... \
- *     node scripts/ops/reconcile-billing-gl.mjs [--tenant <uuid>] [--post-date YYYY-MM-DD] [--apply]
+ *     node scripts/ops/reconcile-billing-gl.mjs [--tenant <uuid>] [--post-date YYYY-MM-DD] [--apply] [--requeue]
  *   Default is a dry run: it prints the gaps and writes nothing.
+ *   --requeue     queue again an event an earlier --apply already queued (marker: correlation id reconcile-b22-<id8>).
  *   --post-date   book the re-driven journals on this date (default: the invoice's own issued / paid date in IST).
  *                 Use it if that period has since been closed (finance refuses a posting into a closed period).
  *   BILLING_DATABASE_URL must be able to read invoices.billing_invoices across tenants and (with --apply) insert into
@@ -67,6 +68,11 @@ try {
      WHERE status IN ('posted','reversed') AND (voucher_no LIKE 'INV/%' OR voucher_no LIKE 'RCPT/%')
        ${tenantFilter ? finance`AND tenant_id = ${tenantFilter}::uuid` : finance``}`).map((r) => r.voucher_no));
 
+  // Idempotent: an event this script already queued (marked by its correlation id) is not queued again, whether the
+  // relay has published it yet or not. --requeue ignores the marker (use only if finance failed to post a queued event).
+  const queued = new Set((await billing`
+    SELECT topic || ':' || (payload->>'invoiceId') AS k FROM _outbox.messages WHERE correlation_id LIKE 'reconcile-b22-%'`).map((r) => r.k));
+  const requeue = flag("--requeue");
   const gaps = [];
   for (const inv of invoices) {
     if (!vouchers.has(`INV/${v8(inv.id)}`) && inv.issued_at) {
@@ -77,7 +83,9 @@ try {
     }
   }
 
-  console.log(`${invoices.length} issued/paid invoices checked, ${gaps.length} missing journal event(s)${apply ? "" : " (dry run: nothing written)"}`);
+  const already = requeue ? [] : gaps.filter((g) => queued.has(`${g.topic}:${g.inv.id}`));
+  if (already.length) { for (const g of already) gaps.splice(gaps.indexOf(g), 1); console.log(`${already.length} event(s) already queued by an earlier run: skipped`); }
+  console.log(`${invoices.length} issued/paid invoices checked, ${gaps.length} missing journal event(s) to queue${apply ? "" : " (dry run: nothing written)"}`);
   for (const g of gaps) console.log(`  ${g.kind.padEnd(6)} ${g.inv.invoice_number ?? g.inv.id}  tenant ${g.inv.tenant_id}  total_minor ${g.inv.total_minor}  ->  ${g.topic} ${JSON.stringify(g.payload)}`);
 
   if (apply && gaps.length) {

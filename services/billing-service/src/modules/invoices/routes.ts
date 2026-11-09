@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
-import { DomainError, assertGstIssuable, invoiceSupplierGstinFromEnv } from "./domain.js";
+import { DomainError, assertPayable, assertGstIssuable, invoiceSupplierGstinFromEnv } from "./domain.js";
 import {
   generateBody, createInvoiceBody, cancelBody, approveBody,
   idParam, approvalIdParam, tenantParam,
@@ -92,6 +92,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const inv = await queries.getInvoiceForPayment(id, ctx.tenantId);
     if (!inv) throw new HttpError(404, "NOT_FOUND", "invoice not found");
+    assertPayable(inv.status); // 409 INVOICE_NOT_PAYABLE for a draft / cancelled / already-paid bill (same guard as the receipt route)
     return sendAccepted(reply, acceptedResponseSchema, await commands.payInvoice(ctx, id));
   });
 
