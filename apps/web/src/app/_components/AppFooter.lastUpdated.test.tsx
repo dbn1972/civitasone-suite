@@ -8,7 +8,7 @@
  * The public site footer (GIGW pages) now carries the same identity line.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -26,6 +26,9 @@ function withIntl(ui: React.ReactElement, locale: "en" | "hi" = "en") {
     </NextIntlClientProvider>,
   );
 }
+
+/** UAT b23: the owner line is blank until the tenant fetch settles. */
+const settled = (c: HTMLElement) => waitFor(() => expect(c.querySelector("[data-gigw-loading]")).toBeNull());
 
 const ENV = ["NEXT_PUBLIC_GIGW_OWNER", "NEXT_PUBLIC_CONTENT_UPDATED_AT", "NEXT_PUBLIC_BUILD_TIME"] as const;
 
@@ -53,21 +56,24 @@ describe("app footer last updated (A-N2)", () => {
     expect(container.querySelector("[data-gigw-unset=\"NEXT_PUBLIC_BUILD_TIME\"]")).toBeNull();
   });
 
-  it("shows the labelled demonstration department until NEXT_PUBLIC_GIGW_OWNER is set", () => {
+  it("shows the labelled demonstration department until NEXT_PUBLIC_GIGW_OWNER is set", async () => {
     process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
     const { container } = withIntl(<AppFooter />);
+    await settled(container);
     const owner = container.querySelector("[data-gigw-default=\"NEXT_PUBLIC_GIGW_OWNER\"]");
     expect(owner).toHaveTextContent("Owned and maintained by CivitasOne Demonstration Department (UAT)");
     expect(container.textContent).not.toContain("[Content to be " + "supplied");
   });
 
-  it("shows the configured department (en and hi), without the default", () => {
+  it("shows the configured department (en and hi), without the default", async () => {
     process.env.NEXT_PUBLIC_GIGW_OWNER = "Department of Testing";
     const en = withIntl(<AppFooter />);
+    await settled(en.container);
     expect(en.container).toHaveTextContent("Owned and maintained by Department of Testing");
     expect(en.container.querySelector("[data-gigw-default]")).toBeNull();
     en.unmount();
     const hi = withIntl(<AppFooter />, "hi");
+    await settled(hi.container);
     expect(hi.container).toHaveTextContent("स्वामित्व और रखरखाव: Department of Testing");
   });
 
@@ -92,9 +98,10 @@ describe("public site footer (A-N1 / A-N2)", () => {
     expect(footer.querySelector("[class*=\"text-gray-\"]")).toBeNull();
   });
 
-  it("carries the identity line and links to every GIGW page", () => {
+  it("carries the identity line and links to every GIGW page", async () => {
     process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
     const { container } = withIntl(<MarketingLayout><div /></MarketingLayout>);
+    await settled(container);
     const footer = container.querySelector("footer")!;
     expect(footer).toHaveTextContent(/Last updated: 04 Nov 2026/);
     expect(footer.querySelector("[data-gigw-default=\"NEXT_PUBLIC_GIGW_OWNER\"]")).toHaveTextContent("CivitasOne Demonstration Department (UAT)");

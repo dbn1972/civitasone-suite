@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { act, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -211,16 +211,18 @@ describe("GIGW footer / contentinfo (A11Y-20, DEFERRED-content)", () => {
     for (const l of GIGW_FOOTER_LINKS) {
       expect(screen.getByRole("link", { name: (enMessages.shell as Record<string, string>)[l.key] })).toHaveAttribute("href", l.href);
     }
+    // UAT b23: the owner line stays blank until the tenant fetch settles, then shows the fallback.
+    await waitFor(() => expect(container.querySelector('[data-gigw-default="NEXT_PUBLIC_GIGW_OWNER"]')).not.toBeNull());
     expect(container.querySelector('[data-gigw-default="NEXT_PUBLIC_GIGW_OWNER"]')).toHaveTextContent("CivitasOne Demonstration Department (UAT)");
     expect(container.querySelector('[data-gigw-unset="NEXT_PUBLIC_BUILD_TIME"]')).not.toBeNull();
     expect(await axeViolations(container)).toEqual([]);
   });
 
-  it("shows the owner and the last-updated date once configured", () => {
+  it("shows the owner and the last-updated date once configured", async () => {
     process.env.NEXT_PUBLIC_GIGW_OWNER = "Department of Example, Ministry of Example";
     process.env.NEXT_PUBLIC_CONTENT_UPDATED_AT = "2026-11-03";
     withIntl(<AppFooter />, "hi");
-    expect(screen.getByText(/Department of Example/)).toBeInTheDocument();
+    expect(await screen.findByText(/Department of Example/)).toBeInTheDocument();
     expect(screen.getByText(/अंतिम अद्यतन: 3 नवंबर 2026/)).toBeInTheDocument();
   });
 

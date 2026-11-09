@@ -2,8 +2,8 @@
  * B10 (UAT) ops CLI: seed the standard 7th CPC Dearness Allowance series
  * (modules/payroll/da-rate-seed.ts) into tenants that have NO DA rate rows, so
  * payroll runs stop failing with DA_RATE_NOT_CONFIGURED. Idempotent: a tenant
- * with any DA row is skipped; a re-run changes nothing. Rows are labelled as
- * UAT seed data (order_ref).
+ * with any DA row is skipped; a re-run changes nothing. A bootstrap only: payroll
+ * admins record DA revisions via POST /v1/payroll/da-rates.
  *
  * Run in the payroll-service package directory with the payroll worker's env
  * (DATABASE_URL as the RLS-scoped payroll_svc role):

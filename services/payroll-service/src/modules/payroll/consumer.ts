@@ -1,4 +1,5 @@
 import { minorToWireNumber } from "../../shared/money.js";
+import { lockDaRates } from "../da-rates/rules.js";
 import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED } from "../tax/verified-inputs.js";
@@ -2262,7 +2263,7 @@ async function processPayrollRun(
   // doc comment) -- the bare `db` this used to call with is RLS-blind on
   // payroll.dearness_allowance_rates and silently resolved every real,
   // configured DA rate to 0n, dropping DA from gross entirely.
-  const daRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month));
+  const daRateBps = await scopedRead(async (tx) => { await lockDaRates(tx, p.tenantId, "shared"); return resolveDaRateBps(tx, p.tenantId, p.month); });
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
   // FORCE-RLS fix: resolvePtSlabs already took `tx: typeof db` correctly --
@@ -3166,7 +3167,7 @@ async function processPensionRun(
   // daRateBps above -- the bare `db` this used to call with is RLS-blind on
   // payroll.dearness_allowance_rates and silently resolved every real,
   // configured rate to 0n, dropping Dearness Relief from pension gross entirely.
-  const drRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month)); // DR shares the DA series
+  const drRateBps = await scopedRead(async (tx) => { await lockDaRates(tx, p.tenantId, "shared"); return resolveDaRateBps(tx, p.tenantId, p.month); }); // DR shares the DA series
   const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
   // MEDIUM (payroll-calc audit): Sec 192 true-up, same monthIdxInFy/
   // monthsRemaining formula processPayrollRun uses -- pension is taxable as
