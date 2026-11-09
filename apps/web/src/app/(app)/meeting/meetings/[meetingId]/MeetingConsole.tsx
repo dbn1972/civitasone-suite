@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import type { HumanError } from "@/lib/messages";
 import { isUuid, unresolvedLabel, type PersonRef } from "@/lib/records/labels";
 import {
@@ -35,9 +36,13 @@ import {
   initiateVote,
   transitionMeeting,
   addAgendaItem,
+  addParticipants,
+  listCommitteeMembers,
   AGENDA_OUTCOME_TYPES,
+  PARTICIPANT_ROLES,
   MeetingTransitionError,
   type AgendaOutcomeType,
+  type ParticipantRole,
 } from "../../_data/client";
 
 type Src = "api" | "error";
@@ -48,6 +53,8 @@ type ViewerPermissions = {
   canCheckIn: boolean;
   canCast: boolean;
   canConclude: boolean;
+  /** M2: may add participants (mirrors meeting-service participant WRITE_ROLES). */
+  canManageParticipants?: boolean;
 };
 
 type Props = {
@@ -376,6 +383,53 @@ export function MeetingConsole({
     }
   }
 
+  // M2: add participants -- the picked employee, or the meeting committee's active members.
+  const [newParticipantId, setNewParticipantId] = useState<string | null>(null);
+  const [newParticipantRole, setNewParticipantRole] = useState<ParticipantRole>("member");
+  async function onAddParticipant() {
+    if (!newParticipantId) return;
+    setBusy("participants:add");
+    setError(null);
+    setToast(null);
+    try {
+      await addParticipants(meeting.id, [{ employeeId: newParticipantId, role: newParticipantRole }]);
+      setNewParticipantId(null);
+      setToast(tl("participantsAdded"));
+      await refreshAttendance();
+    } catch (err) {
+      setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function onAddCommitteeMembers() {
+    if (!meeting.committeeId) return;
+    setBusy("participants:committee");
+    setError(null);
+    setToast(null);
+    try {
+      const onRoster = new Set((attendance?.participants ?? []).map((p) => p.employeeId));
+      const fresh = (await listCommitteeMembers(meeting.committeeId)).filter((m) => !onRoster.has(m.employeeId));
+      if (fresh.length === 0) {
+        setToast(tl("committeeAlreadyAdded"));
+        return;
+      }
+      await addParticipants(
+        meeting.id,
+        fresh.map((m) => ({
+          employeeId: m.employeeId,
+          role: (PARTICIPANT_ROLES as readonly string[]).includes(m.role) ? (m.role as ParticipantRole) : "member",
+        })),
+      );
+      setToast(tl("participantsAdded"));
+      await refreshAttendance();
+    } catch (err) {
+      setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onCheckIn(participantId: string) {
     setBusy(`checkin:${participantId}`);
     setError(null);
@@ -683,6 +737,34 @@ export function MeetingConsole({
         }
         padding
       >
+        {viewerPermissions.canManageParticipants && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
+            <div style={{ flex: "1 1 240px" }}>
+              <div style={labelStyle}>{tl("participantEmployee")}</div>
+              <EmployeePicker
+                value={newParticipantId}
+                onChange={(id) => setNewParticipantId(id)}
+                aria-label={tl("participantEmployee")}
+                clearable
+              />
+            </div>
+            <div>
+              <label htmlFor="mtg-participant-role" style={labelStyle}>{tl("participantRole")}</label>
+              <select id="mtg-participant-role" aria-label={tl("participantRole")} style={fieldStyle} value={newParticipantRole}
+                onChange={(e) => setNewParticipantRole(e.target.value as ParticipantRole)}>
+                {PARTICIPANT_ROLES.map((r) => <option key={r} value={r}>{humanize(r)}</option>)}
+              </select>
+            </div>
+            <button type="button" className="btn" disabled={busy !== null || !newParticipantId} onClick={() => void onAddParticipant()}>
+              {busy === "participants:add" ? "…" : tl("addParticipant")}
+            </button>
+            {meeting.committeeId && (
+              <button type="button" className="btn ghost" disabled={busy !== null} onClick={() => void onAddCommitteeMembers()}>
+                {busy === "participants:committee" ? "…" : tl("addCommitteeMembers")}
+              </button>
+            )}
+          </div>
+        )}
         {attState === "error" ? (
           <ErrorState error={ATTENDANCE_LOAD_ERROR} onRetry={() => void refreshAttendance()} />
         ) : !attendance || attendance.participants.length === 0 ? (

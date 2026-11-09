@@ -11588,6 +11588,12 @@
     "agendaOutcome": "Outcome",
     "addAgenda": "Add agenda item",
     "agendaAdded": "Agenda item added. It appears in the agenda in a moment.",
+    "participantEmployee": "Participant",
+    "participantRole": "Participant role",
+    "addParticipant": "Add participant",
+    "addCommitteeMembers": "Add committee members",
+    "participantsAdded": "Participants added. They appear in the roster in a moment.",
+    "committeeAlreadyAdded": "Every active committee member is already on the roster.",
     "actions": {
       "schedule": "Schedule meeting",
       "lockAgenda": "Lock agenda",

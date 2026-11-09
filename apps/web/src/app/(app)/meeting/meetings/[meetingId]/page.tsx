@@ -13,6 +13,7 @@ import {
   hasAnyRole,
   MEETING_TRANSITION_ROLES,
   MEETING_CHECKIN_ROLES,
+  MEETING_PARTICIPANT_WRITE_ROLES,
   MEETING_CAST_ROLES,
   MEETING_CONCLUDE_ROLES,
 } from "@/lib/auth/roleGuard";
@@ -99,6 +100,7 @@ export default async function MeetingConsolePage(
     canCheckIn: hasAnyRole(sessionRoles, MEETING_CHECKIN_ROLES),
     canCast: hasAnyRole(sessionRoles, MEETING_CAST_ROLES),
     canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
+    canManageParticipants: hasAnyRole(sessionRoles, MEETING_PARTICIPANT_WRITE_ROLES),
   };
 
   // UX-R5 (names, not ids): participants the attendance feed sends without a display name.
