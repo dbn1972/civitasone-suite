@@ -58,7 +58,7 @@ export async function createQueueClient(): Promise<import("./types.js").QueueCli
   // must be absent so the SDK resolves real AWS SQS. If it somehow leaks into a
   // production deployment we refuse to start rather than silently misdirecting
   // traffic to LocalStack.
-  const endpoint = process.env.AWS_ENDPOINT_URL ?? process.env.EP ?? "";
+  const endpoint = process.env.SQS_ENDPOINT_URL || process.env.AWS_ENDPOINT_URL || process.env.EP || "";
   if (
     process.env.NODE_ENV === "production" &&
     (endpoint.includes("localhost") || endpoint.includes("127.0.0.1"))
