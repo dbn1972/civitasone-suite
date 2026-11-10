@@ -6,6 +6,7 @@
  */
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { and, eq, sql } from "drizzle-orm";
+import { effectiveBalanceDays } from "./domain.js";
 import { istToday } from "@civitasone/schemas/validators";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -13,7 +14,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveTypeChanges } from "./schema.js";
 import * as admin from "./type-admin-repo.js";
-import type { LeaveTypeChangeRequestPayload, LeaveTypeChangeDecidePayload, LeaveTypeUpdatePayload, AllocEndPayload } from "./type-admin-commands.js";
+import type { LeaveTypeChangeRequestPayload, LeaveTypeChangeDecidePayload, LeaveTypeUpdatePayload } from "./type-admin-commands.js";
 
 const AUDIT = "audit.event.record";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -48,59 +49,99 @@ export function registerLeaveTypeAdminConsumers(rawQueue: Queue): void {
     });
   });
 
-  // Maker: record the request (impact snapshot for the checker). Nothing is deactivated yet.
+  // Maker: record the request (impact snapshot for the checker). Nothing is changed yet.
   queue.subscribe(COMMANDS.leaveTypeChangeRequest, async (msg) => {
     const p = msg.payload as LeaveTypeChangeRequestPayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await tx.insert(hrmsLeaveTypeChanges).values({
-        id: p.id, tenantId: msg.tenantId, leaveTypeId: p.leaveTypeId, action: p.action, status: "pending",
+      const inserted = await tx.insert(hrmsLeaveTypeChanges).values({
+        id: p.id, tenantId: msg.tenantId, leaveTypeId: p.leaveTypeId, allocId: p.allocId ?? null, action: p.action, status: "pending",
         reason: p.reason, impact: p.impact, requestedBy: msg.actorId, createdBy: msg.actorId, updatedBy: msg.actorId,
-        // a concurrent second request for the same type loses on the one-pending partial unique index
-      }).onConflictDoNothing();
-      await audit(tx, msg, "request_deactivate", "leave_type", p.leaveTypeId, "success", { requestId: p.id, reason: p.reason, impact: p.impact });
+        // a concurrent second request for the same target loses on the one-pending partial unique index
+      }).onConflictDoNothing().returning({ id: hrmsLeaveTypeChanges.id });
+      if (inserted.length === 0) return; // dropped by the unique index: no request exists, so no audit claims one
+      await audit(tx, msg, `request_${p.action}`, p.allocId ? "leave_alloc" : "leave_type", p.allocId ?? p.leaveTypeId, "success",
+        { requestId: p.id, leaveTypeId: p.leaveTypeId, reason: p.reason, impact: p.impact });
     });
   });
 
-  // Checker: approve applies the deactivation + ends live allocations in ONE transaction; reject closes the request.
+  // Checker: approve applies the change in ONE transaction; reject closes the request. The request row is
+  // locked FOR UPDATE so two concurrent decisions serialise (the loser sees it already decided and no-ops).
+  // Refusals (maker == checker, blocked by newly open applications) are COMMITTED with a "denied" audit and
+  // returned, never thrown: a throw would roll the audit back with the transaction.
   queue.subscribe(COMMANDS.leaveTypeChangeDecide, async (msg) => {
     const p = msg.payload as LeaveTypeChangeDecidePayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const req = await admin.findChange(tx, msg.tenantId, p.requestId);
-      if (!req) throw new NonRetryableError(`leave type change ${p.requestId} not found`);
-      if (req.status !== "pending") return; // already decided (replay / double click): nothing to do
+      const req = await admin.findChange(tx, msg.tenantId, p.requestId, true);
+      if (!req || req.status !== "pending") return; // unknown, or already decided (replay / double click)
+      const target = req.allocId ?? req.leaveTypeId;
+      const resourceType = req.allocId ? "leave_alloc" : "leave_type";
       if (req.requestedBy === msg.actorId) {
-        await audit(tx, msg, "decide_deactivate", "leave_type", req.leaveTypeId, "denied", { requestId: req.id, why: "maker-checker: requester cannot decide their own request" });
-        throw new NonRetryableError("maker-checker: the requester cannot decide their own request");
+        await audit(tx, msg, `decide_${req.action}`, resourceType, target, "denied", { requestId: req.id, why: "maker-checker: requester cannot decide their own request" });
+        return;
       }
       const decidedAt = new Date();
+      const close = async (status: "approved" | "rejected", note: string | null, applied?: Record<string, unknown>) => {
+        await tx.update(hrmsLeaveTypeChanges).set({
+          status, decidedBy: msg.actorId, decidedAt, decisionNote: note, ...(applied ? { appliedSummary: applied } : {}),
+          updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypeChanges.version} + 1`,
+        }).where(and(eq(hrmsLeaveTypeChanges.tenantId, msg.tenantId), eq(hrmsLeaveTypeChanges.id, req.id)));
+      };
+      const refuse = async (note: string) => {
+        await close("rejected", note);
+        await audit(tx, msg, `decide_${req.action}`, resourceType, target, "denied", { requestId: req.id, why: note });
+      };
       if (p.decision === "reject") {
-        await tx.update(hrmsLeaveTypeChanges).set({ status: "rejected", decidedBy: msg.actorId, decidedAt, decisionNote: p.note ?? null, updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypeChanges.version} + 1` })
-          .where(and(eq(hrmsLeaveTypeChanges.tenantId, msg.tenantId), eq(hrmsLeaveTypeChanges.id, req.id)));
-        await audit(tx, msg, "reject_deactivate", "leave_type", req.leaveTypeId, "success", { requestId: req.id, note: p.note ?? null });
+        await close("rejected", p.note ?? null);
+        await audit(tx, msg, `reject_${req.action}`, resourceType, target, "success", { requestId: req.id, note: p.note ?? null });
         return;
       }
       const today = istToday();
-      const impact = await admin.leaveTypeImpact(tx, msg.tenantId, req.leaveTypeId, today);
-      if (impact.openApplications > 0) {
-        // Applications were filed after the request: refuse rather than strand them. Closed as rejected, visibly.
-        const note = `blocked at approval: ${impact.openApplications} open leave application(s) now exist on this type`;
-        await tx.update(hrmsLeaveTypeChanges).set({ status: "rejected", decidedBy: msg.actorId, decidedAt, decisionNote: note, updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypeChanges.version} + 1` })
-          .where(and(eq(hrmsLeaveTypeChanges.tenantId, msg.tenantId), eq(hrmsLeaveTypeChanges.id, req.id)));
-        await audit(tx, msg, "decide_deactivate", "leave_type", req.leaveTypeId, "denied", { requestId: req.id, why: note });
+      if (req.action === "deactivate") {
+        const impact = await admin.leaveTypeImpact(tx, msg.tenantId, req.leaveTypeId, today);
+        if (impact.openApplications > 0) return refuse(`blocked at approval: ${impact.openApplications} open leave application(s) now exist on this type`);
+        await tx.update(hrmsLeaveTypes).set({ isActive: false, updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypes.version} + 1` })
+          .where(and(eq(hrmsLeaveTypes.tenantId, msg.tenantId), eq(hrmsLeaveTypes.id, req.leaveTypeId)));
+        const ended = await admin.endAllocationsForType(tx, msg.tenantId, req.leaveTypeId, today,
+          `leave type deactivated (request ${req.id}): ${req.reason}`, msg.actorId);
+        const summary = { endedAllocations: ended.ended, employees: ended.employees, balanceDaysForfeited: ended.balanceDays, endedOn: today };
+        await close("approved", p.note ?? null, summary);
+        await audit(tx, msg, "deactivate", "leave_type", req.leaveTypeId, "success", {
+          requestId: req.id, requestedBy: req.requestedBy, decidedBy: msg.actorId, reason: req.reason, ...summary,
+        });
         return;
       }
-      await tx.update(hrmsLeaveTypes).set({ isActive: false, updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypes.version} + 1` })
-        .where(and(eq(hrmsLeaveTypes.tenantId, msg.tenantId), eq(hrmsLeaveTypes.id, req.leaveTypeId)));
-      const ended = await admin.endAllocationsForType(tx, msg.tenantId, req.leaveTypeId, today,
-        `leave type deactivated (request ${req.id}): ${req.reason}`, msg.actorId);
-      const summary = { endedAllocations: ended.ended, employees: ended.employees, balanceDaysForfeited: ended.balanceDays, endedOn: today };
-      await tx.update(hrmsLeaveTypeChanges).set({ status: "approved", decidedBy: msg.actorId, decidedAt, decisionNote: p.note ?? null, appliedSummary: summary, updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveTypeChanges.version} + 1` })
-        .where(and(eq(hrmsLeaveTypeChanges.tenantId, msg.tenantId), eq(hrmsLeaveTypeChanges.id, req.id)));
-      await audit(tx, msg, "deactivate", "leave_type", req.leaveTypeId, "success", {
-        requestId: req.id, requestedBy: req.requestedBy, decidedBy: msg.actorId, reason: req.reason, ...summary,
-      });
+      const alloc = req.allocId ? await admin.findAllocation(tx, msg.tenantId, req.allocId) : null;
+      if (!alloc) return refuse("the allocation no longer exists");
+      if (req.action === "end_allocation") {
+        if (alloc.status !== "active") return refuse("the allocation is already ended");
+        if ((await admin.countOpenApplicationsOnAllocation(tx, msg.tenantId, alloc.id, today)) > 0) {
+          return refuse("blocked at approval: open leave applications now draw on this allocation");
+        }
+        const balance = effectiveBalanceDays(alloc);
+        await tx.update(hrmsLeaveAllocs).set({
+          status: "ended", endedOn: today, endedReason: `allocation ended (request ${req.id}): ${req.reason}`, endedBy: msg.actorId,
+          updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveAllocs.version} + 1`,
+        }).where(and(eq(hrmsLeaveAllocs.tenantId, msg.tenantId), eq(hrmsLeaveAllocs.id, alloc.id)));
+        const summary = { employeeId: alloc.employeeId, leaveTypeId: alloc.leaveTypeId, fy: alloc.fy, balanceDaysForfeited: balance, endedOn: today };
+        await close("approved", p.note ?? null, summary);
+        await audit(tx, msg, "end", "leave_alloc", alloc.id, "success", { requestId: req.id, requestedBy: req.requestedBy, decidedBy: msg.actorId, reason: req.reason, ...summary });
+        return;
+      }
+      // reinstate_allocation: the balance on the ended row is exactly what it was when it was ended
+      // (the debit path refuses ended rows), so flipping the status restores it as it was.
+      if (alloc.status !== "ended") return refuse("the allocation is not ended");
+      const lt = await admin.findLeaveType(tx, msg.tenantId, alloc.leaveTypeId);
+      if (!lt || lt.isActive === false) return refuse("the leave type is deactivated; reactivate it first");
+      await tx.update(hrmsLeaveAllocs).set({
+        status: "active", endedOn: null, endedReason: null, endedBy: null,
+        updatedBy: msg.actorId, updatedAt: decidedAt, version: sql`${hrmsLeaveAllocs.version} + 1`,
+      }).where(and(eq(hrmsLeaveAllocs.tenantId, msg.tenantId), eq(hrmsLeaveAllocs.id, alloc.id)));
+      const restored = effectiveBalanceDays(alloc);
+      const summary = { employeeId: alloc.employeeId, leaveTypeId: alloc.leaveTypeId, fy: alloc.fy, balanceDaysRestored: restored };
+      await close("approved", p.note ?? null, summary);
+      await audit(tx, msg, "reinstate", "leave_alloc", alloc.id, "success", { requestId: req.id, requestedBy: req.requestedBy, decidedBy: msg.actorId, reason: req.reason, ...summary });
     });
   });
 
@@ -110,27 +151,8 @@ export function registerLeaveTypeAdminConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.update(hrmsLeaveTypes).set({ isActive: true, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${hrmsLeaveTypes.version} + 1` })
         .where(and(eq(hrmsLeaveTypes.tenantId, msg.tenantId), eq(hrmsLeaveTypes.id, p.id)));
-      // Allocations ended by the deactivation stay ended: re-granting is a deliberate, separate allocation.
+      // Allocations ended by the deactivation stay ended; each is brought back only by its own reinstate request (maker-checker).
       await audit(tx, msg, "reactivate", "leave_type", p.id, "success", {});
-    });
-  });
-
-  queue.subscribe(COMMANDS.leaveAllocEnd, async (msg) => {
-    const p = msg.payload as AllocEndPayload;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const today = istToday();
-      if ((await admin.countOpenApplicationsOnAllocation(tx, msg.tenantId, p.id, today)) > 0) {
-        await audit(tx, msg, "end", "leave_alloc", p.id, "denied", { why: "open applications exist on this allocation" });
-        throw new NonRetryableError("allocation has open leave applications");
-      }
-      const rows = await tx.update(hrmsLeaveAllocs).set({
-        status: "ended", endedOn: today, endedReason: p.reason, endedBy: msg.actorId,
-        updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${hrmsLeaveAllocs.version} + 1`,
-      }).where(and(eq(hrmsLeaveAllocs.tenantId, msg.tenantId), eq(hrmsLeaveAllocs.id, p.id), eq(hrmsLeaveAllocs.status, "active")))
-        .returning({ employeeId: hrmsLeaveAllocs.employeeId, leaveTypeId: hrmsLeaveAllocs.leaveTypeId, balanceDays: hrmsLeaveAllocs.balanceDays });
-      if (rows.length === 0) return; // already ended
-      await audit(tx, msg, "end", "leave_alloc", p.id, "success", { ...rows[0], reason: p.reason, endedOn: today });
     });
   });
 

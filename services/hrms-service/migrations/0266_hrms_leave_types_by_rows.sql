@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS leave.hrms_leave_type_changes (
   id             uuid        PRIMARY KEY,
   tenant_id      uuid        NOT NULL,
   leave_type_id  uuid        NOT NULL,
-  action         varchar(16) NOT NULL CHECK (action IN ('deactivate')),
+  -- set for the single-allocation actions ('end_allocation' / 'reinstate_allocation')
+  alloc_id       uuid,
+  action         varchar(24) NOT NULL CHECK (action IN ('deactivate', 'end_allocation', 'reinstate_allocation')),
   status         varchar(12) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   reason         text        NOT NULL,
   -- snapshot of what the request would touch when it was raised (the checker sees it; the
@@ -89,9 +91,10 @@ CREATE TABLE IF NOT EXISTS leave.hrms_leave_type_changes (
   version        integer     NOT NULL DEFAULT 1
 );
 
--- One open request per leave type: a second deactivate while one is pending is a no-op conflict.
+-- One open request per target (the allocation for allocation actions, else the leave type): a second one
+-- while one is pending is a no-op conflict.
 CREATE UNIQUE INDEX IF NOT EXISTS hrms_leave_type_changes_one_pending
-  ON leave.hrms_leave_type_changes (tenant_id, leave_type_id) WHERE status = 'pending';
+  ON leave.hrms_leave_type_changes (tenant_id, COALESCE(alloc_id, leave_type_id)) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS hrms_leave_type_changes_tenant_status_idx
   ON leave.hrms_leave_type_changes (tenant_id, status, created_at DESC);
 
@@ -107,3 +110,10 @@ CREATE INDEX IF NOT EXISTS hrms_leave_allocs_type_status_idx
   ON leave.hrms_leave_allocs (tenant_id, leave_type_id, status);
 CREATE INDEX IF NOT EXISTS hrms_leave_apps_type_status_idx
   ON leave.hrms_leave_apps (tenant_id, leave_type_id, status);
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hrms_svc') THEN
+    GRANT SELECT, INSERT, UPDATE ON leave.hrms_leave_type_changes TO hrms_svc;
+  END IF;
+END $$;

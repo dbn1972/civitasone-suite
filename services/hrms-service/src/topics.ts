@@ -27,7 +27,6 @@ export const COMMANDS = {
   leaveTypeChangeRequest: "hrms.leave_type.change_request",
   leaveTypeChangeDecide:  "hrms.leave_type.change_decide",
   leaveTypeReactivate:    "hrms.leave_type.reactivate",
-  leaveAllocEnd:          "hrms.leave_alloc.end",
   leaveCustomRulesSet:    "hrms.leave.custom_rules.set",
   leaveAllocate:        "hrms.leave.allocate",
   leaveApply:           "hrms.leave.apply",

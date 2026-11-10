@@ -180,6 +180,17 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       }
       const alloc = await repo.findAllocByIdTx(tx, p.allocId);
       if (!alloc) throw new Error(`leave alloc ${p.allocId} not found`);
+      if (alloc.status === "ended") {
+        // S8-G3: the allocation was ended between the 202 and now. Record it as a refused application
+        // (committed, not retried) rather than debiting an ended allocation.
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "hrms", action: "apply", resourceType: "leave_app", resourceId: p.id, outcome: "failure",
+            metadata: { reason: "ALLOCATION_ENDED", allocId: p.allocId, employeeId: p.employeeId, leaveTypeId: p.leaveTypeId } },
+        });
+        return;
+      }
       try {
         assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: effectiveBalanceDays(alloc) }, p.daysApplied);
       } catch (err) {

@@ -19683,7 +19683,7 @@
     "reactivated": "Leave type reactivated. Ended allocations stay ended.",
     "pendingTitle": "Awaiting your approval ({count})",
     "pendingHelp": "You cannot approve a request you raised yourself.",
-    "pendingItem": "Deactivate {code} {name}",
+    "pendingItemEnd":"End one {code} allocation ({fy})","pendingItemReinstate":"Reinstate one {code} allocation ({fy})","pendingAllocDays":"{days} unused days are involved.","pendingItem": "Deactivate {code} {name}",
     "pendingImpact": "Ends {allocations} allocations for {employees} employees ({days} unused days).",
     "pendingReason": "Reason: {reason}",
     "approve": "Approve",

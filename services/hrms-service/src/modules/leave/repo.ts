@@ -321,7 +321,7 @@ export async function debitLeaveBalance(tx: Writer, allocId: string, days: numbe
       balanceDays: sql`FLOOR(${effectiveBalanceSql} - ${days}::numeric)::int`,
       updatedAt: new Date(),
     })
-    .where(and(eq(hrmsLeaveAllocs.id, allocId), sql`${effectiveBalanceSql} >= ${days}`))
+    .where(and(eq(hrmsLeaveAllocs.id, allocId), eq(hrmsLeaveAllocs.status, "active"), sql`${effectiveBalanceSql} >= ${days}`))
     .returning({ balanceDays: hrmsLeaveAllocs.balanceDays });
   if (result.length === 0) {
     throw new Error(`INSUFFICIENT_LEAVE_BALANCE: allocation ${allocId} has fewer than ${days} days remaining`);

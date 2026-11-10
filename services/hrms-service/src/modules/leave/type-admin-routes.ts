@@ -15,12 +15,11 @@ import { scopedRead } from "../../shared/db.js";
 import { idParam } from "./validators.js";
 import {
   updateLeaveTypeBody, deactivateLeaveTypeBody, decideLeaveTypeChangeBody, rejectLeaveTypeChangeBody,
-  endAllocationBody, retireUnusedBody, customRulesBody, leaveTypeAdminQuery, changeListQuery,
+  allocationChangeBody, retireUnusedBody, customRulesBody, leaveTypeAdminQuery, changeListQuery,
 } from "./type-admin-validators.js";
 import * as admin from "./type-admin-repo.js";
 import * as cmd from "./type-admin-commands.js";
-import { hrmsLeaveAllocs } from "./schema.js";
-import { and, eq } from "drizzle-orm";
+import { effectiveBalanceDays } from "./domain.js";
 
 // Same set as policy-admin-routes.ts (leave-entitlement policy is an HR-admin call; hr_officer is read-only here).
 const ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
@@ -106,21 +105,45 @@ export async function leaveTypeAdminRoutes(app: FastifyInstance): Promise<void> 
     return sendAccepted(reply, acceptedResponseSchema, await cmd.reactivateLeaveType(ctx, id));
   });
 
-  app.post("/v1/hrms/leave-allocations/:id/end", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN_ROLES);
-    const { id } = idParam.parse(req.params);
-    const body = endAllocationBody.parse(req.body);
-    const { alloc, open } = await scopedRead(async (tx) => {
-      const rows = await tx.select().from(hrmsLeaveAllocs).where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.id, id))).limit(1);
-      const alloc = rows[0] ?? null;
-      return { alloc, open: alloc ? await admin.countOpenApplicationsOnAllocation(tx, ctx.tenantId, id, istToday()) : 0 };
+  // End / reinstate ONE allocation. Both are requests: a different admin decides them through
+  // /leave-type-changes/:id/{approve,reject}. dryRun shows the days that would be forfeited / restored.
+  for (const action of ["end", "reinstate"] as const) {
+    app.post(`/v1/hrms/leave-allocations/:id/${action}`, async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, ADMIN_ROLES);
+      const { id } = idParam.parse(req.params);
+      const body = allocationChangeBody.parse(req.body);
+      const { alloc, open, lt, pending } = await scopedRead(async (tx) => {
+        const alloc = await admin.findAllocation(tx, ctx.tenantId, id);
+        if (!alloc) return { alloc: null, open: 0, lt: null, pending: null };
+        return {
+          alloc, lt: await admin.findLeaveType(tx, ctx.tenantId, alloc.leaveTypeId),
+          open: await admin.countOpenApplicationsOnAllocation(tx, ctx.tenantId, id, istToday()),
+          pending: await admin.findPendingChangeForAlloc(tx, ctx.tenantId, id),
+        };
+      });
+      if (!alloc) throw new HttpError(404, "NOT_FOUND", "leave allocation not found");
+      const balance = effectiveBalanceDays(alloc);
+      if (action === "end") {
+        if (alloc.status === "ended") throw new HttpError(409, "ALREADY_ENDED", "this allocation is already ended");
+      } else {
+        if (alloc.status !== "ended") throw new HttpError(409, "NOT_ENDED", "only an ended allocation can be reinstated");
+        if (lt && lt.isActive === false) throw new HttpError(409, "LEAVE_TYPE_INACTIVE", "reactivate the leave type before reinstating its allocation");
+      }
+      const blockers = action === "end" && open > 0
+        ? [{ code: "OPEN_APPLICATIONS", message: `${open} leave application(s) draw on this allocation; finish or cancel them first` }] : [];
+      const impact = { employeeId: alloc.employeeId, leaveTypeId: alloc.leaveTypeId, fy: alloc.fy, totalDays: alloc.totalDays, balanceDays: balance, openApplications: open };
+      if (body.dryRun) {
+        return reply.send(action === "end"
+          ? { allocationId: id, impact, daysForfeited: balance, blockers }
+          : { allocationId: id, impact, daysRestored: balance, blockers });
+      }
+      if (blockers.length > 0) throw new HttpError(409, blockers[0]!.code, blockers[0]!.message);
+      if (pending) throw new HttpError(409, "CHANGE_ALREADY_PENDING", `a request for this allocation is already awaiting approval (${pending.id})`);
+      return sendAccepted(reply, acceptedResponseSchema,
+        await cmd.requestAllocationChange(ctx, id, alloc.leaveTypeId, action === "end" ? "end_allocation" : "reinstate_allocation", body.reason, impact));
     });
-    if (!alloc) throw new HttpError(404, "NOT_FOUND", "leave allocation not found");
-    if (alloc.status === "ended") throw new HttpError(409, "ALREADY_ENDED", "this allocation is already ended");
-    if (open > 0) throw new HttpError(409, "OPEN_APPLICATIONS", `${open} leave application(s) draw on this allocation; finish or cancel them first`);
-    return sendAccepted(reply, acceptedResponseSchema, await cmd.endAllocation(ctx, id, body.reason));
-  });
+  }
 
   // Types nobody has used. Dry run (default) lists them; otherwise one maker-checker deactivation request per type.
   app.post("/v1/hrms/leave-types/retire-unused", async (req, reply) => {

@@ -39,8 +39,10 @@ export const rejectLeaveTypeChangeBody = z.object({
   note: z.string().trim().min(3, "a rejection needs a note").max(500),
 }).strict();
 
-export const endAllocationBody = z.object({
+/** End / reinstate one allocation: a maker-checker request; dryRun reports the days at stake and writes nothing. */
+export const allocationChangeBody = z.object({
   reason: z.string().trim().min(10, "give a reason of at least 10 characters").max(500),
+  dryRun: z.boolean().default(false),
 }).strict();
 
 export const retireUnusedBody = z.object({

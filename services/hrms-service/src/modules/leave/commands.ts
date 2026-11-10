@@ -38,7 +38,10 @@ export async function allocateLeave(ctx: RequestContext, body: AllocateLeaveBody
   // repo.insertLeaveAlloc (migration 0163) -- this check alone cannot.
   const existing = await repo.findAllocByEmpAndType(ctx.tenantId, body.employeeId, body.leaveTypeId, body.fy);
   if (existing) {
-    throw new HttpError(409, "ALLOCATION_EXISTS", `an allocation already exists for this employee, leave type and financial year (${body.fy})`);
+    // S8-G3: an ended allocation still occupies the (employee, type, FY) slot; it is brought back by a reinstate request, not re-granted.
+    throw new HttpError(409, "ALLOCATION_EXISTS", existing.status === "ended"
+      ? `an allocation for this employee, leave type and financial year (${body.fy}) was ended; request its reinstatement instead of allocating again`
+      : `an allocation already exists for this employee, leave type and financial year (${body.fy})`);
   }
   // GAP-HR-LEAVE-ALLOCATE-03: server-side policy cap. Default policy
   // (conservative, overridable): totalDays above the type's configured
@@ -48,6 +51,7 @@ export async function allocateLeave(ctx: RequestContext, body: AllocateLeaveBody
   const leaveType = await repo.findLeaveTypeById(body.leaveTypeId, ctx.tenantId);
   // 422 (not 404): the REQUEST references a leave type that does not exist; the route itself exists.
   if (!leaveType) throw new HttpError(422, "UNKNOWN_LEAVE_TYPE", "leave type not found");
+  if (leaveType.isActive === false) throw new HttpError(422, "LEAVE_TYPE_INACTIVE", `${leaveType.name} is deactivated and cannot be allocated`);
   const exceedsMax = leaveType.maxDays > 0 && body.totalDays > leaveType.maxDays;
   // Overriding the policy maximum is an entitlement decision: only an admin
   // may do it (an hr_officer who needs more must ask an hr_admin).

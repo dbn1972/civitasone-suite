@@ -105,9 +105,25 @@ export async function listUnusedLeaveTypes(tx: Reader, tenantId: string) {
     )).orderBy(hrmsLeaveTypes.code);
 }
 
-export async function findChange(tx: Reader, tenantId: string, id: string): Promise<LeaveTypeChangeRow | null> {
-  const rows = await tx.select().from(hrmsLeaveTypeChanges)
+/** `lock` = SELECT ... FOR UPDATE (the decide consumer, so two concurrent decisions serialise). */
+export async function findChange(tx: Reader, tenantId: string, id: string, lock = false): Promise<LeaveTypeChangeRow | null> {
+  const q = tx.select().from(hrmsLeaveTypeChanges)
     .where(and(eq(hrmsLeaveTypeChanges.tenantId, tenantId), eq(hrmsLeaveTypeChanges.id, id))).limit(1);
+  const rows = await (lock ? q.for("update") : q);
+  return rows[0] ?? null;
+}
+
+export async function findAllocation(tx: Reader, tenantId: string, id: string) {
+  const rows = await tx.select().from(hrmsLeaveAllocs)
+    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.id, id))).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Pending request (any action) against one allocation. */
+export async function findPendingChangeForAlloc(tx: Reader, tenantId: string, allocId: string): Promise<LeaveTypeChangeRow | null> {
+  const rows = await tx.select().from(hrmsLeaveTypeChanges).where(and(
+    eq(hrmsLeaveTypeChanges.tenantId, tenantId), eq(hrmsLeaveTypeChanges.allocId, allocId), eq(hrmsLeaveTypeChanges.status, "pending"),
+  )).limit(1);
   return rows[0] ?? null;
 }
 
@@ -121,7 +137,7 @@ export async function findPendingChangeForType(tx: Reader, tenantId: string, lea
 export async function listChanges(tx: Reader, tenantId: string, status: "pending" | "approved" | "rejected" | "all", limit = 200) {
   const rows = await tx.select({
     id: hrmsLeaveTypeChanges.id, leaveTypeId: hrmsLeaveTypeChanges.leaveTypeId, action: hrmsLeaveTypeChanges.action,
-    status: hrmsLeaveTypeChanges.status, reason: hrmsLeaveTypeChanges.reason, impact: hrmsLeaveTypeChanges.impact,
+    allocId: hrmsLeaveTypeChanges.allocId, status: hrmsLeaveTypeChanges.status, reason: hrmsLeaveTypeChanges.reason, impact: hrmsLeaveTypeChanges.impact,
     requestedBy: hrmsLeaveTypeChanges.requestedBy, decidedBy: hrmsLeaveTypeChanges.decidedBy, decidedAt: hrmsLeaveTypeChanges.decidedAt,
     decisionNote: hrmsLeaveTypeChanges.decisionNote, appliedSummary: hrmsLeaveTypeChanges.appliedSummary,
     createdAt: hrmsLeaveTypeChanges.createdAt, leaveTypeCode: hrmsLeaveTypes.code, leaveTypeName: hrmsLeaveTypes.name,

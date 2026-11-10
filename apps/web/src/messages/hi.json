@@ -19662,7 +19662,7 @@
     "reactivated": "अवकाश प्रकार फिर चालू। समाप्त आवंटन समाप्त ही रहेंगे।",
     "pendingTitle": "आपकी मंज़ूरी की प्रतीक्षा ({count})",
     "pendingHelp": "आप अपना ही किया अनुरोध मंज़ूर नहीं कर सकते।",
-    "pendingItem": "{code} {name} बंद करें",
+    "pendingItemEnd":"{code} का एक आवंटन ({fy}) समाप्त करें","pendingItemReinstate":"{code} का एक आवंटन ({fy}) फिर चालू करें","pendingAllocDays":"{days} अप्रयुक्त दिन शामिल हैं।","pendingItem": "{code} {name} बंद करें",
     "pendingImpact": "{employees} कर्मचारियों के {allocations} आवंटन समाप्त होंगे ({days} अप्रयुक्त दिन)।",
     "pendingReason": "कारण: {reason}",
     "approve": "मंज़ूर करें",

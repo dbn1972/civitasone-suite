@@ -8,9 +8,11 @@ import type { LeaveTypeImpact } from "./type-admin-repo.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export interface LeaveTypeUpdatePayload { id: string; changes: Omit<UpdateLeaveTypeBody, "expectedVersion"> }
-export interface LeaveTypeChangeRequestPayload { id: string; leaveTypeId: string; action: "deactivate"; reason: string; impact: LeaveTypeImpact }
+export type ChangeAction = "deactivate" | "end_allocation" | "reinstate_allocation";
+export interface LeaveTypeChangeRequestPayload {
+  id: string; leaveTypeId: string; allocId?: string; action: ChangeAction; reason: string; impact: Record<string, unknown>;
+}
 export interface LeaveTypeChangeDecidePayload { requestId: string; decision: "approve" | "reject"; note: string | null }
-export interface AllocEndPayload { id: string; reason: string }
 
 async function publish(ctx: RequestContext, topic: string, id: string, payload: Record<string, unknown>): Promise<Accepted> {
   await queue.publish(topic, {
@@ -28,7 +30,7 @@ export async function updateLeaveType(ctx: RequestContext, id: string, body: Upd
 
 export async function requestLeaveTypeDeactivation(ctx: RequestContext, leaveTypeId: string, reason: string, impact: LeaveTypeImpact): Promise<Accepted> {
   const id = randomUUID();
-  return publish(ctx, COMMANDS.leaveTypeChangeRequest, id, { id, leaveTypeId, action: "deactivate", reason, impact } satisfies LeaveTypeChangeRequestPayload);
+  return publish(ctx, COMMANDS.leaveTypeChangeRequest, id, { id, leaveTypeId, action: "deactivate", reason, impact: { ...impact } } satisfies LeaveTypeChangeRequestPayload);
 }
 
 export async function decideLeaveTypeChange(ctx: RequestContext, requestId: string, decision: "approve" | "reject", note: string | null): Promise<Accepted> {
@@ -39,8 +41,13 @@ export async function reactivateLeaveType(ctx: RequestContext, id: string): Prom
   return publish(ctx, COMMANDS.leaveTypeReactivate, id, { id });
 }
 
-export async function endAllocation(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
-  return publish(ctx, COMMANDS.leaveAllocEnd, id, { id, reason } satisfies AllocEndPayload);
+/** Maker step for ending / reinstating ONE allocation; a different admin decides it via the change-request routes. */
+export async function requestAllocationChange(
+  ctx: RequestContext, allocId: string, leaveTypeId: string, action: "end_allocation" | "reinstate_allocation",
+  reason: string, impact: Record<string, unknown>,
+): Promise<Accepted> {
+  const id = randomUUID();
+  return publish(ctx, COMMANDS.leaveTypeChangeRequest, id, { id, leaveTypeId, allocId, action, reason, impact } satisfies LeaveTypeChangeRequestPayload);
 }
 
 export async function setCustomLeaveRules(ctx: RequestContext, enabled: boolean): Promise<Accepted> {

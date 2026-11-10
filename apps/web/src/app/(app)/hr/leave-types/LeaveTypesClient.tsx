@@ -21,8 +21,8 @@ type LeaveType = {
   activeAllocations: number; openApplications: number; totalApplications: number; pendingChangeId: string | null;
 };
 type Change = {
-  id: string; leaveTypeCode: string | null; leaveTypeName: string | null; status: string; reason: string;
-  impact: { activeAllocations?: number; employeesWithAllocations?: number; balanceDaysOnLiveAllocations?: number };
+  id: string; action?: string; leaveTypeCode: string | null; leaveTypeName: string | null; status: string; reason: string;
+  impact: { activeAllocations?: number; employeesWithAllocations?: number; balanceDaysOnLiveAllocations?: number; balanceDays?: number; fy?: string };
   createdAt: string;
 };
 type Impact = { activeAllocations: number; employeesWithAllocations: number; balanceDaysOnLiveAllocations: number; openApplications: number };
@@ -288,8 +288,17 @@ export default function LeaveTypesClient() {
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
               {changes.map((c) => (
                 <li key={c.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12, display: "grid", gap: 6 }}>
-                  <strong>{t("pendingItem", { code: c.leaveTypeCode ?? "?", name: c.leaveTypeName ?? "" })}</strong>
-                  <span style={{ fontSize: 13 }}>{t("pendingImpact", { allocations: c.impact.activeAllocations ?? 0, employees: c.impact.employeesWithAllocations ?? 0, days: c.impact.balanceDaysOnLiveAllocations ?? 0 })}</span>
+                  {c.action === "end_allocation" || c.action === "reinstate_allocation" ? (
+                    <>
+                      <strong>{t(c.action === "end_allocation" ? "pendingItemEnd" : "pendingItemReinstate", { code: c.leaveTypeCode ?? "?", fy: c.impact.fy ?? "" })}</strong>
+                      <span style={{ fontSize: 13 }}>{t("pendingAllocDays", { days: c.impact.balanceDays ?? 0 })}</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{t("pendingItem", { code: c.leaveTypeCode ?? "?", name: c.leaveTypeName ?? "" })}</strong>
+                      <span style={{ fontSize: 13 }}>{t("pendingImpact", { allocations: c.impact.activeAllocations ?? 0, employees: c.impact.employeesWithAllocations ?? 0, days: c.impact.balanceDaysOnLiveAllocations ?? 0 })}</span>
+                    </>
+                  )}
                   <span style={{ fontSize: 13, color: "var(--ink2)" }}>{t("pendingReason", { reason: c.reason })}</span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button size="sm" disabled={busy} onClick={() => void decide(c, "approve")}>{t("approve")}<span className="sr-only"> {c.leaveTypeCode}</span></Button>

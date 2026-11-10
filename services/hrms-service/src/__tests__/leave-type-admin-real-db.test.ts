@@ -227,17 +227,105 @@ describe("S8-G3 safe deactivation of a leave type with live allocations", () => 
     expect(done.json().data.some((c: { id: string; decisionNote: string }) => c.id === id && /blocked at approval/.test(c.decisionNote))).toBe(true);
   });
 
-  it("ending one allocation needs a reason, is audited, and an ended one cannot be ended again", async () => {
+  const decideCmd = (requestId: string, actorId: string, decision: "approve" | "reject" = "approve") => queue.publish("hrms.leave_type.change_decide", {
+    messageId: randomUUID(), type: "hrms.leave_type.change_decide", tenantId: TENANT, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+    payload: { requestId, decision, note: null },
+  });
+  const pendingFor = async (code?: string) => (await app.inject({ method: "GET", url: "/v1/hrms/leave-type-changes", headers: checker() })).json().data as Array<{ id: string; action: string; allocId: string | null; leaveTypeCode: string }>;
+  const allocRow = async (id: string) => (await asTenant(TENANT, (tx) => tx`SELECT status, balance_days, ended_on, ended_by, ended_reason FROM leave.hrms_leave_allocs WHERE id = ${id}`))[0]!;
+
+  it("ending one allocation is a maker-checker request: dry run shows the forfeited days, nothing changes until another admin approves", async () => {
+    const dry = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: maker(), payload: { reason: "Divya Menon left the project", dryRun: true } });
+    expect(dry.statusCode).toBe(200);
+    expect(dry.json()).toMatchObject({ daysForfeited: 8, blockers: [] });
     const noReason = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: maker(), payload: {} });
     expect(noReason.statusCode).toBe(400);
     const ok = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: maker(), payload: { reason: "Divya Menon left the project" } });
     expect(ok.statusCode).toBe(202);
     await drain();
-    const row = (await asTenant(TENANT, (tx) => tx`SELECT status, ended_reason FROM leave.hrms_leave_allocs WHERE id = ${allocSL[4]!}`))[0]!;
-    expect(row).toMatchObject({ status: "ended", ended_reason: "Divya Menon left the project" });
-    expect((await auditActions(allocSL[4]!)).map((a) => a.action)).toContain("end");
-    const again = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: maker(), payload: { reason: "Divya Menon left the project" } });
-    expect(again.statusCode).toBe(409);
+    expect((await allocRow(allocSL[4]!)).status).toBe("active");
+    const dup = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: checker(), payload: { reason: "Second attempt on the same" } });
+    expect(dup.statusCode).toBe(409);
+    expect(dup.json().code).toBe("CHANGE_ALREADY_PENDING");
+    const req = (await pendingFor()).find((c) => c.allocId === allocSL[4])!;
+    expect(req.action).toBe("end_allocation");
+
+    // self-decide: refused by the route (403) ...
+    const self = await app.inject({ method: "POST", url: `/v1/hrms/leave-type-changes/${req.id}/approve`, headers: maker(), payload: {} });
+    expect(self.statusCode).toBe(403);
+    // ... and by the consumer, which COMMITS a denied audit (it used to be rolled back with a throw)
+    await decideCmd(req.id, MAKER);
+    await drain();
+    expect((await allocRow(allocSL[4]!)).status).toBe("active");
+    const denied = (await auditActions(allocSL[4]!)).filter((a) => a.action === "decide_end_allocation");
+    expect(denied.map((d) => d.outcome)).toEqual(["denied"]);
+
+    // two concurrent approvals by the checker: exactly one applies, exactly one success audit
+    await decideCmd(req.id, CHECKER);
+    await decideCmd(req.id, CHECKER);
+    await drain();
+    const row = await allocRow(allocSL[4]!);
+    expect(row).toMatchObject({ status: "ended", ended_by: CHECKER });
+    expect(row.ended_reason).toContain("Divya Menon left the project");
+    const trail = await auditActions(allocSL[4]!);
+    expect(trail.filter((a) => a.action === "end" && a.outcome === "success")).toHaveLength(1);
+    expect(trail.filter((a) => a.action === "request_end_allocation")).toHaveLength(1);
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/end`, headers: maker(), payload: { reason: "Ending it once more" } })).statusCode).toBe(409);
+  });
+
+  it("an ended allocation is brought back by a reinstate request: another admin approves and the balance is exactly what it was", async () => {
+    const before = await allocRow(allocSL[4]!);
+    const dry = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/reinstate`, headers: maker(), payload: { reason: "Divya Menon rejoined the project", dryRun: true } });
+    expect(dry.json()).toMatchObject({ daysRestored: 8 });
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[0]}/reinstate`, headers: maker(), payload: { reason: "Not ended so refused" } })).json().code).toBe("NOT_ENDED");
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocSL[4]}/reinstate`, headers: maker(), payload: { reason: "Divya Menon rejoined the project" } });
+    expect(r.statusCode).toBe(202);
+    await drain();
+    expect((await allocRow(allocSL[4]!)).status).toBe("ended");
+    const req = (await pendingFor()).find((c) => c.allocId === allocSL[4])!;
+    expect(req.action).toBe("reinstate_allocation");
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/leave-type-changes/${req.id}/approve`, headers: maker(), payload: {} })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: `/v1/hrms/leave-type-changes/${req.id}/approve`, headers: checker(), payload: {} })).statusCode).toBe(202);
+    await drain();
+    const after = await allocRow(allocSL[4]!);
+    expect(after).toMatchObject({ status: "active", balance_days: before.balance_days, ended_on: null, ended_by: null, ended_reason: null });
+    expect(after.balance_days).toBe(8);
+    expect((await auditActions(allocSL[4]!)).filter((a) => a.action === "reinstate")[0]!.md).toMatchObject({ balanceDaysRestored: 8, decidedBy: CHECKER });
+    const list = await app.inject({ method: "GET", url: `/v1/hrms/leave-allocations?employeeId=${emps[4]}`, headers: maker() });
+    expect(list.json().data.map((a: { id: string }) => a.id)).toContain(allocSL[4]);
+  });
+
+  it("reinstating an allocation of a DEACTIVATED type is refused until the type is reactivated", async () => {
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${allocPL[0]}/reinstate`, headers: maker(), payload: { reason: "Trying to revive a dead type" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("LEAVE_TYPE_INACTIVE");
+  });
+
+  it("allocating to a deactivated type is 422 LEAVE_TYPE_INACTIVE; allocating over an ENDED row points at reinstate", async () => {
+    const inactive = await app.inject({ method: "POST", url: "/v1/hrms/leave-allocations", headers: maker(), payload: { employeeId: emps[0], leaveTypeId: T.PL, fy: "2027-28", totalDays: 5 } });
+    expect(inactive.statusCode).toBe(422);
+    expect(inactive.json().code).toBe("LEAVE_TYPE_INACTIVE");
+    // the PL allocation for 2026-27 is ENDED (type deactivated): the slot is taken, and the error says how to get it back
+    const dup = await app.inject({ method: "POST", url: "/v1/hrms/leave-allocations", headers: maker(), payload: { employeeId: emps[0], leaveTypeId: T.PL, fy: "2026-27", totalDays: 5 } });
+    expect(dup.statusCode).toBe(409);
+    expect(dup.json().message).toMatch(/reinstat/i);
+  });
+
+  it("an ended allocation cannot be debited, and an apply that raced the end is refused with an audit instead of debiting it", async () => {
+    const { withTenantScope } = await import("@civitasone/db");
+    const { db } = await import("../shared/db.js");
+    const repo = await import("../modules/leave/repo.js");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(withTenantScope(db, TENANT, (tx: any) => repo.debitLeaveBalance(tx, allocPL[1]!, 1))).rejects.toThrow(/INSUFFICIENT_LEAVE_BALANCE/);
+    const appId = randomUUID();
+    await queue.publish("hrms.leave.apply", {
+      messageId: randomUUID(), type: "hrms.leave.apply", tenantId: TENANT, actorId: MAKER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: appId, tenantId: TENANT, employeeId: emps[1], leaveTypeId: T.PL, allocId: allocPL[1], fromDate: "2026-12-28", toDate: "2026-12-28", daysApplied: 1, status: "pending" },
+    });
+    await drain();
+    expect(await asTenant(TENANT, (tx) => tx`SELECT 1 FROM leave.hrms_leave_apps WHERE id = ${appId}`)).toHaveLength(0);
+    expect((await auditActions(appId)).map((a) => `${a.action}:${a.outcome}`)).toContain("apply:failure");
+    expect((await allocRow(allocPL[1]!)).balance_days).toBe(10);
   });
 
   it("retire-unused: dry run lists only types with no applications and no live allocations; applying raises maker-checker requests", async () => {
@@ -337,5 +425,76 @@ describe("S8-G3 tenant-defined leave type resolved from rows (switch ON) vs the 
     await app.inject({ method: "PUT", url: "/v1/hrms/leave-config/custom-rules", headers: maker(), payload: { enabled: false } });
     await drain();
     expect((await preview(T.OPEN, optAlloc, emps[3]!)).json()).toMatchObject({ engineApplied: false });
+  });
+});
+
+
+describe("S8-G3 other balance readers and year-end ignore ended allocations", () => {
+  const CT = randomUUID();
+  const CHAT_USER = randomUUID();
+  const emp = randomUUID(); const tSick = randomUUID(); const tEarned = randomUUID();
+  const chatWipe = async () => asTenant(CT, async (tx) => {
+    await tx`DELETE FROM leave.hrms_leave_allocs WHERE tenant_id = ${CT}`;
+    await tx`DELETE FROM leave.hrms_leave_types WHERE tenant_id = ${CT}`;
+    await tx`DELETE FROM employee.hrms_employees WHERE tenant_id = ${CT}`;
+  });
+  beforeAll(async () => {
+    await chatWipe();
+    await asTenant(CT, async (tx) => {
+      await tx`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, user_ref, created_by, updated_by)
+        VALUES (${emp}, ${CT}, 'DIC-2001', 'Sneha Kulkarni', ${randomUUID()}, ${randomUUID()}, '2022-04-01', 'contract', 'confirmed', ${CHAT_USER}, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, created_by, updated_by) VALUES (${tSick}, ${CT}, 'SIK', 'Sick Leave Project', 8, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, created_by, updated_by) VALUES (${tEarned}, ${CT}, 'ERN', 'Earned Leave Project', 15, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, created_by, updated_by) VALUES (${randomUUID()}, ${CT}, ${emp}, ${tSick}, '2026-27', 8, 6, ${MAKER}, ${MAKER})`;
+      // the NEWEST financial year belongs to an ended allocation: the max-FY subquery must not pick it
+      await tx`INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, status, ended_on, created_by, updated_by) VALUES (${randomUUID()}, ${CT}, ${emp}, ${tEarned}, '2027-28', 15, 15, 'ended', current_date, ${MAKER}, ${MAKER})`;
+    });
+  });
+  afterAll(chatWipe);
+  const staff = () => as(CHAT_USER, CT, ["employee"]);
+
+  it("the NLU chatbot's leave balance shows only active allocations (outer query and max-FY subquery)", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/ai/chat", headers: staff(), payload: { message: "what is my leave balance" } });
+    expect(r.statusCode).toBe(200);
+    const text = JSON.stringify(r.json());
+    expect(text).toContain("Sick Leave Project");
+    expect(text).not.toContain("Earned Leave Project");
+  });
+
+  it("the HR assistant's leave balance shows only active allocations (outer query and max-FY subquery)", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/assistant", headers: staff(), payload: { message: "leave balance" } });
+    expect(r.statusCode).toBe(200);
+    const text = JSON.stringify(r.json());
+    expect(text).toContain("Sick Leave Project");
+    expect(text).not.toContain("Earned Leave Project");
+  });
+
+  it("year-end with an ENDED allocation already in the target year skips it quietly: no LEAVE_YEAR_END_RACE, source balance untouched", async () => {
+    const { planLeaveYearEnd } = await import("../modules/leave/year-end-job.js");
+    const { db } = await import("../shared/db.js");
+    const YT = randomUUID(); const ye = randomUUID(); const el = randomUUID(); const src = randomUUID();
+    const dept = randomUUID(); const desig = randomUUID();
+    const wipe = () => asTenant(YT, async (tx) => {
+      await tx`DELETE FROM leave.hrms_leave_allocs WHERE tenant_id = ${YT}`;
+      await tx`DELETE FROM leave.hrms_leave_types WHERE tenant_id = ${YT}`;
+      await tx`DELETE FROM employee.hrms_employees WHERE tenant_id = ${YT}`;
+      await tx`DELETE FROM employee.hrms_designations WHERE tenant_id = ${YT}`;
+      await tx`DELETE FROM employee.hrms_departments WHERE tenant_id = ${YT}`;
+    });
+    await asTenant(YT, async (tx) => {
+      await tx`INSERT INTO employee.hrms_departments (id, tenant_id, code, name, created_by, updated_by) VALUES (${dept}, ${YT}, 'YD', 'YD', ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO employee.hrms_designations (id, tenant_id, code, name, level, created_by, updated_by) VALUES (${desig}, ${YT}, 'YDD', 'YDD', 1, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, employee_type, status, created_by, updated_by)
+        VALUES (${ye}, ${YT}, 'DIC-3001', 'Arjun Reddy', ${dept}, ${desig}, '2019-05-01', 'permanent', 'confirmed', ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, carry_forward, created_by, updated_by) VALUES (${el}, ${YT}, 'EL', 'EL', 30, true, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, created_by, updated_by) VALUES (${src}, ${YT}, ${ye}, ${el}, '2026-27', 30, 20, ${MAKER}, ${MAKER})`;
+      await tx`INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, status, ended_on, created_by, updated_by) VALUES (${randomUUID()}, ${YT}, ${ye}, ${el}, '2027-CY', 15, 15, 'ended', current_date, ${MAKER}, ${MAKER})`;
+    });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(planLeaveYearEnd(db as any, { tenantId: YT, runDate: "2027-01-01", dryRun: false, actorId: MAKER })).resolves.toBeDefined();
+      const rows = await asTenant(YT, (tx) => tx`SELECT fy, status, balance_days FROM leave.hrms_leave_allocs WHERE tenant_id = ${YT} ORDER BY fy`);
+      expect(rows).toEqual([{ fy: "2026-27", status: "active", balance_days: 20 }, { fy: "2027-CY", status: "ended", balance_days: 15 }]);
+    } finally { await wipe(); }
   });
 });
