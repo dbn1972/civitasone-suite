@@ -90,6 +90,25 @@ describe("POST/PATCH /v1/finance/ddo", () => {
   });
 });
 
+describe("PUT /v1/finance/pfms/config agency code", () => {
+  it("is set only when no config row exists; a tenant_admin cannot change it (409), a finance_admin can (audited)", async () => {
+    const tenant = randomUUID();
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/v1/finance/ddo", headers: hdr(tenant, "finance_admin"), payload: { ddoCode: "SMC000105", name: "DDO Solapur", makeDefault: true, agencyCode: "MHSMC001" } });
+    const put = (role: string, body: object) => app.inject({ method: "PUT", url: "/v1/finance/pfms/config", headers: hdr(tenant, role), payload: body });
+    const blocked = await put("tenant_admin", { defaultDdo: "SMC000105", agencyCode: "MHSMC999" });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().code).toBe("AGENCY_CODE_ALREADY_SET");
+    // same value, or omitted, is fine for a tenant_admin and leaves the agency code alone
+    expect((await put("tenant_admin", { defaultDdo: "SMC000105", agencyCode: "MHSMC001" })).statusCode).toBe(200);
+    expect((await put("tenant_admin", { defaultDdo: "SMC000105" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/finance/pfms/config", headers: hdr(tenant, "finance_admin") })).json().agencyCode).toBe("MHSMC001");
+    const ok = await put("finance_admin", { defaultDdo: "SMC000105", agencyCode: "MHSMC002" });
+    expect(ok.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/finance/pfms/config", headers: hdr(tenant, "finance_admin") })).json().agencyCode).toBe("MHSMC002");
+  });
+});
+
 describe("bill route DDO pre-check", () => {
   it("POST /v1/finance/bills with an unconfigured DDO is a 422 DDO_NOT_CONFIGURED, not a 202 that dead-letters", async () => {
     const tenant = randomUUID();
@@ -130,9 +149,7 @@ describe("tenant onboarding seeds a default DDO", () => {
     registerTenantOnboardConsumers({ subscribe: (_t: string, h: (m: unknown) => Promise<void>) => { handlers.push(h); } } as never);
     const msg = { messageId: randomUUID(), type: "tenant.tenant.onboarded", tenantId: tenant, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenantId: tenant, adminEmail: "accounts@smc.gov.in", adminName: "Accounts Officer", edition: "govt_dept" } };
-    // The shared CGA major-head seed in the same handler has a separate, pre-existing CHECK failure; the DDO seed
-    // runs in its own transaction before it, like the GL heads.
-    const run = () => runWithTenant(tenant, () => handlers[0]!(msg)).catch((e: unknown) => { if (!/finance_major_heads_account_type_check/.test(String(e))) throw e; });
+    const run = () => runWithTenant(tenant, () => handlers[0]!(msg));
     await run();
     await run();
     await runWithTenant(tenant, async () => {

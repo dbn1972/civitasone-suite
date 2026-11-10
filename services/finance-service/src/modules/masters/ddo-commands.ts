@@ -6,6 +6,7 @@
  */
 import { and, eq, sql } from "drizzle-orm";
 import type { RequestContext } from "@civitasone/types";
+import { hasAnyRole } from "@civitasone/auth";
 import { HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { recordAudit } from "../../shared/audit-event.js";
@@ -46,12 +47,24 @@ async function assertPaoOrNull(tx: DbTx, tenantId: string, paoCode: string | nul
 }
 
 /** Upsert payments.finance_pfms_config.default_ddo inside the caller's tx. agency_code is NOT NULL, so a first row needs one. */
-async function upsertDefaultDdoTx(tx: DbTx, tenantId: string, defaultDdo: string, agencyCode: string | undefined): Promise<void> {
+async function upsertDefaultDdoTx(tx: DbTx, ctx: RequestContext, defaultDdo: string, agencyCode: string | undefined): Promise<void> {
+  const tenantId = ctx.tenantId;
   const cur = await tx.select().from(financePfmsConfig).where(eq(financePfmsConfig.tenantId, tenantId)).limit(1);
   if (cur[0]) {
+    // agency_code is a payment-routing field: it is only ever SET here (no row yet), or changed by an admin, audited.
+    const changing = !!agencyCode && agencyCode !== cur[0].agencyCode;
+    if (changing && !hasAnyRole(ctx, ["finance_admin", "super_admin"])) {
+      throw new HttpError(409, "AGENCY_CODE_ALREADY_SET", "this tenant's PFMS agency code is already set; only a finance administrator can change it");
+    }
     await tx.update(financePfmsConfig)
-      .set({ defaultDdo, ...(agencyCode ? { agencyCode } : {}), updatedAt: new Date() })
+      .set({ defaultDdo, ...(changing ? { agencyCode } : {}), updatedAt: new Date() })
       .where(eq(financePfmsConfig.tenantId, tenantId));
+    if (changing) {
+      await recordAudit(tx, ctx, {
+        action: "pfms_agency_code_change", resourceType: "pfms_config", resourceId: tenantId,
+        details: { oldAgencyCode: cur[0].agencyCode, newAgencyCode: agencyCode },
+      });
+    }
     return;
   }
   if (!agencyCode) {
@@ -78,7 +91,7 @@ export async function createDdo(
     }).returning();
     const row = rows[0];
     if (!row) throw new Error("DDO_INSERT_FAILED: insert returned no row");
-    if (input.makeDefault) await upsertDefaultDdoTx(tx, ctx.tenantId, ddoCode, input.agencyCode);
+    if (input.makeDefault) await upsertDefaultDdoTx(tx, ctx, ddoCode, input.agencyCode);
     await recordAudit(tx, ctx, {
       action: "ddo_create", resourceType: "ddo", resourceId: row.id,
       details: { ddoCode, paoCode, makeDefault: !!input.makeDefault },
@@ -124,7 +137,7 @@ export async function setDefaultDdo(ctx: RequestContext, input: { defaultDdo: st
     if (ddo.length === 0) {
       throw new HttpError(422, "DDO_NOT_CONFIGURED", `DDO ${code} is not set up for this tenant; create it under Masters > DDO first`);
     }
-    await upsertDefaultDdoTx(tx, ctx.tenantId, code, input.agencyCode);
+    await upsertDefaultDdoTx(tx, ctx, code, input.agencyCode);
     await recordAudit(tx, ctx, { action: "pfms_default_ddo_set", resourceType: "pfms_config", resourceId: ctx.tenantId, details: { defaultDdo: code } });
     return { defaultDdo: code };
   });
