@@ -26,12 +26,15 @@ import { EVENTS } from "../../topics.js";
 import {
   findMissingMandatory,
   findExpiringDocuments,
+  AlertAuditDedupe,
   type SubjectDocs,
   type ExpiringDocLike,
 } from "./alert-domain.js";
 
 const log = pino({ name: "crm-document-alert-scheduler" });
 const AUDIT = "audit.event.record";
+/** UAT B24: one audit row per distinct open alert per day, not per hourly cycle. */
+const auditDedupe = new AlertAuditDedupe();
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -118,11 +121,13 @@ export async function runTenantDocumentAlerts(tenantId: string, now: Date = new 
           topic: EVENTS.documentAlert, eventType: EVENTS.documentAlert,
           tenantId, actorId: tenantId, correlationId: randomUUID(), payload,
         });
-        await enqueue(tx, {
-          topic: AUDIT, eventType: AUDIT,
-          tenantId, actorId: tenantId, correlationId: randomUUID(),
-          payload: { service: "crm", action, resourceType: "document", resourceId, outcome: "success", metadata: payload },
-        });
+        if (auditDedupe.shouldAudit({ tenantId, action, resourceId, docTypeCode: (payload.docTypeCode ?? null) as string | null }, now)) {
+          await enqueue(tx, {
+            topic: AUDIT, eventType: AUDIT,
+            tenantId, actorId: tenantId, correlationId: randomUUID(),
+            payload: { service: "crm", action, resourceType: "document", resourceId, outcome: "success", metadata: payload },
+          });
+        }
         emitted += 1;
       };
 

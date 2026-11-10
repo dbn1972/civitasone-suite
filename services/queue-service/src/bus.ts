@@ -1155,6 +1155,16 @@ export class SqsQueue implements Queue {
         // killed loop and flip /ready to 503.
         recordConsumerHeartbeat(this.service);
 
+        // UAT B24 (audit-trail latency): acknowledgements of the successfully handled
+        // messages of this batch are issued together and awaited once, after the loop,
+        // instead of one DeleteMessage round trip per message. Handlers still run one
+        // after another in receive order, and each message is still only deleted after
+        // its handlers and its outcome record completed. Where one SQS call costs
+        // seconds (the UAT LocalStack: ~4.5 s) a batch of 10 used to spend ~45 s in
+        // deletes alone. A delete that is lost only means a redelivery, which every
+        // consumer already tolerates (at-least-once; the audit consumer dedupes by id).
+        const pendingAcks: Promise<void>[] = [];
+
         for (const sqsMsg of res.Messages ?? []) {
           let msg: CommandEnvelope;
           try {
@@ -1234,7 +1244,7 @@ export class SqsQueue implements Queue {
           if (allHandled) {
             // FF-01 I2: record the terminal result BEFORE deleting the message.
             await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "succeeded" });
-            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            pendingAcks.push(this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!));
             continue;
           }
 
@@ -1268,6 +1278,8 @@ export class SqsQueue implements Queue {
             this.logHandlerError(topic, msg, receiveCount, err);
           }
         }
+        // deleteSqsMessage never rejects (best-effort), so this only waits.
+        await Promise.all(pendingAcks);
       } catch (err) {
         if (this.polling) {
           incrementConsumerError(this.service, topic);

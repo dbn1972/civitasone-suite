@@ -1,0 +1,16 @@
+-- UAT B24 (audit trail latency): index for the hash-chain "latest event of the tenant" read.
+--
+-- Every ingested audit event does, under a per-tenant advisory lock,
+--   SELECT ... FROM events.events WHERE tenant_id = $1 ORDER BY occurred_at DESC LIMIT 1
+-- (events/repo.ts findLatestForTenantTx). Only (tenant_id, event_at) was indexed, so the planner
+-- bitmap-scanned every row the tenant had across all partitions and top-N-sorted them: 33 ms at
+-- 26k rows on the UAT host, growing linearly with the tenant's history, so each append was slower
+-- than the last. With this index each partition yields its newest row from the index and the plan
+-- is a Merge Append with LIMIT 1 (a handful of page reads, independent of history).
+--
+-- The same index serves the date-range listings (listEvents ORDER BY occurred_at DESC).
+-- Created on the partitioned parent, so it reaches every existing partition and every partition
+-- created later by events.create_future_partitions(). Idempotent. A plain (non-CONCURRENT) build:
+-- CONCURRENTLY is not allowed on a partitioned parent, and the table is small (123k rows on UAT).
+-- Rollback: DROP INDEX IF EXISTS events.idx_audit_events_tenant_occurred_at;
+CREATE INDEX IF NOT EXISTS idx_audit_events_tenant_occurred_at ON events.events (tenant_id, occurred_at DESC);

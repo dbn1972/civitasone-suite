@@ -106,3 +106,39 @@ export function findExpiringDocuments(
   }
   return out;
 }
+
+/**
+ * UAT B24: the alert cycle runs hourly and re-detects the same open condition (a subject still
+ * missing its mandatory document, a document still expired) every time. The business event that
+ * drives notifications is re-sent each cycle on purpose, but the matching AUDIT row is a record of
+ * "this alert was raised", so one per distinct alert per window is enough; hourly copies buried the
+ * real activity in the audit trail (~1,100 a day on one UAT tenant, 23 identical rows per subject).
+ *
+ * In-process on purpose (no schema): after a worker restart each open alert is audited once more,
+ * which is the safe direction. An alert that stays open is re-audited once per window.
+ */
+export interface AlertAuditKey {
+  tenantId: string;
+  action: string;
+  resourceId: string;
+  docTypeCode: string | null;
+}
+
+export class AlertAuditDedupe {
+  private readonly seen = new Map<string, number>();
+
+  constructor(private readonly windowMs: number = 24 * 3_600_000) {}
+
+  /** True the first time this alert is seen in the window; records it. */
+  shouldAudit(key: AlertAuditKey, now: Date = new Date()): boolean {
+    const t = now.getTime();
+    // Forget expired entries so memory stays bounded by the number of open alerts.
+    for (const [k, at] of this.seen) if (t - at >= this.windowMs) this.seen.delete(k);
+    const k = `${key.tenantId}|${key.action}|${key.resourceId}|${key.docTypeCode ?? ""}`;
+    if (this.seen.has(k)) return false;
+    this.seen.set(k, t);
+    return true;
+  }
+
+  get size(): number { return this.seen.size; }
+}
