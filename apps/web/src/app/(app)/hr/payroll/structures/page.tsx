@@ -4,6 +4,8 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { CreateStructureForm } from "./CreateStructureForm";
 import { SalaryStructureCard } from "./SalaryStructureCard";
 import { ComponentGrid } from "./ComponentGrid";
+import { PayComponentsSection } from "./PayComponentsSection";
+import { getPayComponentsView } from "./payComponentsData";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
@@ -90,6 +92,9 @@ export default async function PayStructuresPage() {
   const structuresErrored = structuresSource === "error";
   const componentsErrored = componentsSource === "error";
 
+  // Section 8 G2: undefined/failed => not enabled, so the page is unchanged while S8_PAY_COMPONENTS_ENABLED is off.
+  const payComponents = structuresErrored ? { enabled: false, templates: [] } : await getPayComponentsView();
+
   const active = structuresErrored ? null : structures.filter((s) => s.status === "active").length;
   const defaultCount = structuresErrored ? null : structures.filter((s) => s.isDefault).length;
 
@@ -161,6 +166,8 @@ export default async function PayStructuresPage() {
           </div>
         </Card>
       )}
+
+      {payComponents.enabled && <PayComponentsSection structures={structures} templates={payComponents.templates} canWrite={canCreate} />}
 
       <Card title={t("componentGridTitle")}>
         {componentsErrored ? (
