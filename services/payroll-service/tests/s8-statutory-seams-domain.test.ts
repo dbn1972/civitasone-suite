@@ -141,7 +141,7 @@ describe("deploy-order safety: code deployed before migration 0167", () => {
   it("missing tables mean seams OFF and empty PF basis, logged once, never an error", async () => {
     const repo = await import("../src/modules/payroll/statutory-seams-repo.js");
     repo.resetSeamTablesMissingLogForTest();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warn = vi.spyOn(repo.seamLog, "warn").mockImplementation(() => undefined);
     const tx = { execute: vi.fn(async () => [{ ok: false }]) } as never;
     expect(await repo.resolveSeamFlags(tx, "t")).toEqual({ lwfDeductionEnabled: false, esiContributionPeriodEnabled: false });
     expect((await repo.pfWageBasisRowsByEmployee(tx, "t", ["e1"])).size).toBe(0);

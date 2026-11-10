@@ -3,10 +3,12 @@
  * All reads run inside the caller's tx (FORCE RLS). See statutory-seams.ts.
  */
 import { sql } from "drizzle-orm";
+import { pino } from "pino";
 import type { db } from "../../shared/db.js";
 import type { PfWageBasisRow, LwfRule, LwfFrequency } from "./statutory-seams.js";
 
 type Tx = typeof db;
+export const seamLog = pino({ name: "payroll-s8-seams" });
 
 /**
  * Deploy-order safety: these reads run for EVERY tenant on every run, so code
@@ -26,7 +28,7 @@ export async function seamTablesPresent(tx: Tx): Promise<boolean> {
   const ok = rows[0]?.ok === true;
   if (!ok && !missingLogged) {
     missingLogged = true;
-    console.warn("[payroll] S8 statutory-seams tables are missing (migration 0167 not applied): seams treated as OFF");
+    seamLog.warn("S8 statutory-seams tables are missing (migration 0167 not applied): seams treated as OFF");
   }
   return ok;
 }
