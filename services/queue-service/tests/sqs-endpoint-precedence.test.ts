@@ -13,6 +13,10 @@ describe("resolveSqsEndpoint", () => {
   it("is undefined when neither is set (real AWS)", () => {
     expect(resolveSqsEndpoint({})).toBeUndefined();
   });
+  it("treats an empty SQS_ENDPOINT_URL as unset (falls back, never real AWS)", () => {
+    expect(resolveSqsEndpoint({ SQS_ENDPOINT_URL: "", AWS_ENDPOINT_URL: "http://localhost:4566" })).toBe("http://localhost:4566");
+    expect(resolveSqsEndpoint({ SQS_ENDPOINT_URL: "", AWS_ENDPOINT_URL: "" })).toBeUndefined();
+  });
   it("SQS_ENDPOINT_URL alone is honoured", () => {
     expect(resolveSqsEndpoint({ SQS_ENDPOINT_URL: "http://localhost:9324" })).toBe("http://localhost:9324");
   });

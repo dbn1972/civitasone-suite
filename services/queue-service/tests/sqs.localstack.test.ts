@@ -37,7 +37,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 async function startWarm(q: SqsQueue): Promise<void> {
   await q.start();
-  await (q as unknown as { startupTask?: Promise<void> }).startupTask;
+  await q.whenReady();
 }
 
 // FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for real SQS; unset in standard CI so this suite never executes there. (expires: 2026-12-13)

@@ -619,7 +619,8 @@ const MAX_SQS_WAIT_TIME_SECONDS = 20;
 export function resolveSqsEndpoint(
   env: Record<string, string | undefined> = process.env,
 ): string | undefined {
-  return env.SQS_ENDPOINT_URL ?? env.AWS_ENDPOINT_URL;
+  // `||`: an empty SQS_ENDPOINT_URL must fall back, never mean "real AWS".
+  return env.SQS_ENDPOINT_URL || env.AWS_ENDPOINT_URL || undefined;
 }
 
 /**
@@ -638,7 +639,7 @@ export function resolveWaitTimeSeconds(
   // LocalStack / custom endpoints: dozens of workers each holding a 20s long-poll
   // saturates the broker and starves SendMessage. Prefer a short wait unless the
   // operator explicitly overrides SQS_WAIT_TIME_SECONDS.
-  const endpoint = resolveSqsEndpoint() ?? process.env.AWS_ENDPOINT ?? "";
+  const endpoint = resolveSqsEndpoint() || process.env.AWS_ENDPOINT || "";
   if (/localhost|127\.0\.0\.1|localstack/i.test(endpoint)) {
     return 2;
   }
@@ -1075,6 +1076,11 @@ export class SqsQueue implements Queue {
         this.logHandlerError(topic, null, 0, err);
       }
     }
+  }
+
+  /** Resolves once the detached start() warm-up (queue creation + poll-loop setup) has finished. */
+  async whenReady(): Promise<void> {
+    await this.startupTask;
   }
 
   async start(): Promise<void> {
