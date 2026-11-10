@@ -10,8 +10,12 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 
 /** Postgres unique_violation (23505), as raised directly or wrapped in `cause`. */
 export function isUniqueViolation(err: unknown): boolean {
-  const e = err as { code?: unknown; cause?: { code?: unknown } } | null | undefined;
-  return e?.code === "23505" || e?.cause?.code === "23505";
+  const e = err as { code?: unknown; constraint_name?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } | null | undefined;
+  const hit = e?.code === "23505" ? e : e?.cause?.code === "23505" ? e.cause : null;
+  if (!hit) return false;
+  // When the driver reports the constraint, only the contract_no one is a duplicate-number rejection.
+  const name = hit.constraint_name;
+  return typeof name !== "string" || name.includes("contract_no");
 }
 
 const AUDIT_TOPIC = "audit.event.record";

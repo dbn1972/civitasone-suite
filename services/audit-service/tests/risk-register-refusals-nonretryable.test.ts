@@ -26,11 +26,13 @@ const decide = () => handlers.get(COMMANDS.riskAcceptanceDecide)!({
 describe("risk-register riskAcceptanceDecide: business refusals are non-retryable, infrastructure errors still retry", () => {
   beforeEach(() => { H.row = null; H.infraError = null; });
 
-  it("target not found", async () => {
-    await expect(decide()).rejects.toBeInstanceOf(NonRetryableError);
+  it("target not found stays retryable (a follow-on command can race ahead of its create)", async () => {
+    const err = await decide().catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(NonRetryableError);
   });
 
-  it("target already decided", async () => {
+  it("target already decided is permanent", async () => {
     H.row = { status: "approved", requestedBy: "aaaaaaaa-0000-4000-8000-000000000001", version: 1 };
     await expect(decide()).rejects.toBeInstanceOf(NonRetryableError);
   });

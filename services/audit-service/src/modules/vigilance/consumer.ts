@@ -45,7 +45,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const c = await repo.findByIdTx(tx, p.caseId, p.tenantId);
-      if (!c) throw new NonRetryableError(`vigilance case ${p.caseId} not found`);
+      if (!c) throw new Error(`vigilance case ${p.caseId} not found`);
       assertCanScreen(c.stage as VigilanceStage);
       const nextStage: VigilanceStage = p.decision === "rejected" ? "closed" : "screening";
       const n = await repo.updateCaseVersioned(tx, p.caseId, p.tenantId, c.version ?? 1, {
@@ -68,7 +68,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const c = await repo.findByIdTx(tx, p.caseId, p.tenantId);
-      if (!c) throw new NonRetryableError(`vigilance case ${p.caseId} not found`);
+      if (!c) throw new Error(`vigilance case ${p.caseId} not found`);
       assertCanAssignIo(c.screeningStatus as ScreeningStatus);
       assertStageTransition(c.stage as VigilanceStage, "assigned");
       const n = await repo.updateCaseVersioned(tx, p.caseId, p.tenantId, c.version ?? 1, {
@@ -90,7 +90,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const c = await repo.findByIdTx(tx, p.caseId, p.tenantId);
-      if (!c) throw new NonRetryableError(`vigilance case ${p.caseId} not found`);
+      if (!c) throw new Error(`vigilance case ${p.caseId} not found`);
       // move into investigation on first evidence if still 'assigned'
       if (c.stage === "assigned") {
         await repo.updateCaseVersioned(tx, p.caseId, p.tenantId, c.version ?? 1, {
@@ -112,7 +112,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const c = await repo.findByIdTx(tx, p.caseId, p.tenantId);
-      if (!c) throw new NonRetryableError(`vigilance case ${p.caseId} not found`);
+      if (!c) throw new Error(`vigilance case ${p.caseId} not found`);
       assertStageTransition(c.stage as VigilanceStage, "findings");
       const n = await repo.updateCaseVersioned(tx, p.caseId, p.tenantId, c.version ?? 1, {
         findings: p.findings, stage: "findings", inquiryStatus: "inquiry_complete",
@@ -132,7 +132,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const c = await repo.findByIdTx(tx, p.caseId, p.tenantId);
-      if (!c) throw new NonRetryableError(`vigilance case ${p.caseId} not found`);
+      if (!c) throw new Error(`vigilance case ${p.caseId} not found`);
       assertStageTransition(c.stage as VigilanceStage, "action_recommended");
       await repo.insertAction(tx, {
         id: p.id, tenantId: p.tenantId, caseId: p.caseId, recommendation: p.recommendation,
@@ -152,7 +152,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const action = await repo.findActionByIdTx(tx, p.actionId, p.tenantId);
-      if (!action) throw new NonRetryableError(`vigilance action ${p.actionId} not found`);
+      if (!action) throw new Error(`vigilance action ${p.actionId} not found`);
       if (action.status !== "proposed") throw new NonRetryableError(`action ${p.actionId} already decided`);
       // Maker-checker: the deciding authority must differ from the proposer.
       assertDifferentActor(action.proposedBy, msg.actorId, "vigilance action");

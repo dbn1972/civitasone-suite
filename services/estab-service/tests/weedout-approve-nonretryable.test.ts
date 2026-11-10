@@ -44,6 +44,13 @@ describe("estab weed-out approve: business refusals are non-retryable, infrastru
     await expect(approve(CHECKER)).rejects.toBeInstanceOf(NonRetryableError);
   });
 
+  it("weed-out row not found stays retryable", async () => {
+    H.weedout = null;
+    const err = await approve(CHECKER).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(NonRetryableError);
+  });
+
   it("maker = checker", async () => {
     H.weedout = { status: "proposed", proposedBy: MAKER, fileId: "f1" };
     await expect(approve(MAKER)).rejects.toBeInstanceOf(NonRetryableError);

@@ -69,7 +69,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
-      if (!app) throw new NonRetryableError(`rti application ${p.applicationId} not found`);
+      if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       assertStatusTransition(app.status as RtiStatus, "transferred");
       const transferredAt = new Date();
       await repo.insertTransfer(tx, {
@@ -100,7 +100,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
-      if (!app) throw new NonRetryableError(`rti application ${p.applicationId} not found`);
+      if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       assertStatusTransition(app.status as RtiStatus, "third_party_consult");
       await repo.insertConsult(tx, {
         tenantId: p.tenantId, applicationId: p.applicationId, thirdParty: p.thirdParty,
@@ -124,7 +124,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
-      if (!app) throw new NonRetryableError(`rti application ${p.applicationId} not found`);
+      if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       const n = await repo.updateApplicationVersioned(tx, p.applicationId, p.tenantId, app.version ?? 1, {
         additionalFee: p.additionalFee,
         updatedBy: msg.actorId, version: (app.version ?? 1) + 1,
@@ -144,7 +144,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
-      if (!app) throw new NonRetryableError(`rti application ${p.applicationId} not found`);
+      if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       const target: RtiStatus = p.decision === "rejected" ? "rejected" : "responded";
       assertStatusTransition(app.status as RtiStatus, target);
       await repo.insertResponse(tx, {
@@ -182,7 +182,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findByIdTx(tx, p.applicationId, p.tenantId);
-      if (!app) throw new NonRetryableError(`rti application ${p.applicationId} not found`);
+      if (!app) throw new Error(`rti application ${p.applicationId} not found`);
       const existing = await repo.listAppealsForApplicationTx(tx, p.applicationId, p.tenantId);
       assertAppealTierAllowed(p.tier, existing.map((a) => ({ tier: a.tier as AppealTier, order: a.orderStatus as AppealOrder })));
       const filedAt = new Date();
@@ -206,7 +206,7 @@ export function registerRtiConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const appeal = await repo.findAppealByIdTx(tx, p.appealId, p.tenantId);
-      if (!appeal) throw new NonRetryableError(`rti appeal ${p.appealId} not found`);
+      if (!appeal) throw new Error(`rti appeal ${p.appealId} not found`);
       if (appeal.orderStatus !== "pending") throw new NonRetryableError(`appeal ${p.appealId} already decided`);
       // Maker-checker: the deciding authority must differ from the filer.
       assertDifferentActor(appeal.filedBy, msg.actorId, "appeal order");

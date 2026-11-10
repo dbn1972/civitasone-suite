@@ -72,7 +72,9 @@ export function registerRecordsConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const wo = await repo.findWeedoutByIdTx(tx, p.id, p.tenantId);
-        if (!wo || wo.status !== "proposed") {
+        // Missing row: retryable (the propose command may not have been applied yet).
+        if (!wo) throw new Error(`weed-out ${p.id} not found`);
+        if (wo.status !== "proposed") {
           throw new DomainError("INVALID_STATE", `weed-out ${p.id} is not in 'proposed' state`);
         }
         // Maker≠checker: the approver MUST differ from the proposer. Checked
