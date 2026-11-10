@@ -106,7 +106,7 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
   if (typeIds.length > 0) {
     const allocRows = await rows(tx, sql`SELECT id::text AS id, employee_id::text AS employee_id, leave_type_id::text AS leave_type_id, fy, total_days,
         COALESCE(balance_days_exact, balance_days::numeric)::text AS balance
-      FROM leave.hrms_leave_allocs WHERE tenant_id = ${tenantId}::uuid
+      FROM leave.hrms_leave_allocs WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
         AND leave_type_id IN (${sql.join(typeIds.map((id) => sql`${id}::uuid`), sql`, `)})`);
     for (const a of allocRows) {
       const list = allocsByEmployee.get(String(a.employee_id)) ?? [];

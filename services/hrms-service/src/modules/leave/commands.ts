@@ -11,6 +11,11 @@ import { assertLeaveAppStatusTransition, DomainError } from "./domain.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createLeaveType(ctx: RequestContext, body: CreateLeaveTypeBody): Promise<Accepted> {
+  // S8-G3: (tenant, code) is unique in the database; a duplicate used to be a 202 that silently
+  // failed in the consumer. Answer it up front.
+  if ((await repo.listLeaveTypesByTenant(ctx.tenantId, 1000)).some((t) => t.code === body.code)) {
+    throw new HttpError(409, "DUPLICATE_LEAVE_TYPE_CODE", `a leave type with code ${body.code} already exists`);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.leaveTypeCreate, {
     messageId: id, type: COMMANDS.leaveTypeCreate,

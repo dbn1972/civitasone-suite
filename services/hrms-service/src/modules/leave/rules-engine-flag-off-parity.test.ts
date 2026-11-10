@@ -52,7 +52,7 @@ async function runMatrix(): Promise<unknown[]> {
           const r = await validateLeaveRequest({
             employeeType, leaveCode: code as LeaveCategory, fromDate, toDate, daysApplied: 1, currentBalance,
             totalAccumulated: 400, serviceStartDate: "2010-04-01", tenantId: "t-1", isOnProbation,
-            gender, childrenCount: 1, leaveTypeId: withRow ? "lt-1" : undefined, rawEmployeeType: employeeType,
+            ...(gender ? { gender } : {}), childrenCount: 1, ...(withRow ? { leaveTypeId: "lt-1" } : {}), rawEmployeeType: employeeType,
           });
           out.push({ code, employeeType, isOnProbation, gender: gender ?? null, fromDate, toDate, currentBalance, withRow, r });
         }

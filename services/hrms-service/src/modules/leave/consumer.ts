@@ -16,6 +16,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
 import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { registerCompOffConsumers } from "./comp-off-consumer.js";
+import { registerLeaveTypeAdminConsumers } from "./type-admin-consumer.js";
 
 const log = pino({ name: "hrms-leave-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
@@ -34,10 +35,12 @@ const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 export function registerLeaveConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerCompOffConsumers(rawQueue);
+  registerLeaveTypeAdminConsumers(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string; maxDays: number;
       isEncashable: boolean; carryForward: boolean; lopFractionBps: number;
+      systemCode?: string | null; category?: string | null; genderRestriction?: string | null; description?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -49,6 +52,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         // 10000/fully-unpaid when the caller omits it) -- see schema.ts's
         // doc comment on this column.
         lopFractionBps: p.lopFractionBps,
+        systemCode: p.systemCode ?? null, category: p.category ?? null,
+        genderRestriction: p.genderRestriction ?? null, description: p.description ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "leave_type", p.id);
