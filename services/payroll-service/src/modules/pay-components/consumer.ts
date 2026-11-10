@@ -12,7 +12,7 @@ import { COMMANDS } from "../../topics.js";
 import { audit } from "../payroll/consumer.js";
 import { specFromJson, type ComponentRowView } from "./api.js";
 import { validateComponentSpec, type ComponentSpec } from "./model.js";
-import { checkStructure, loadComponents, loadStructure, specAsRow, type StructureView } from "./rules.js";
+import { checkStructure, loadComponents, loadLineage, loadStructure, newVersionRefusal, specAsRow, type StructureView } from "./rules.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Msg = { messageId: string; tenantId: string; actorId: string; correlationId: string; payload: unknown };
@@ -53,9 +53,9 @@ export function registerPayComponentConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
-        INSERT INTO payroll.payroll_structures (id, tenant_id, name, description, is_default, status, kind, effective_from, created_by, updated_by)
+        INSERT INTO payroll.payroll_structures (id, tenant_id, name, description, is_default, status, kind, effective_from, lineage_root_id, created_by, updated_by)
         VALUES (${p.id}::uuid, ${msg.tenantId}::uuid, ${p.name}, ${p.description ?? null}, false, 'active', 'ctc_template',
-                ${p.effectiveFrom ?? null}::date, ${msg.actorId}::uuid, ${msg.actorId}::uuid)`);
+                ${p.effectiveFrom ?? null}::date, ${p.id}::uuid, ${msg.actorId}::uuid, ${msg.actorId}::uuid)`);
       await audit(tx, msg, "create", "payroll_ctc_template", p.id, { name: p.name, effectiveFrom: p.effectiveFrom ?? null });
     });
   });
@@ -107,7 +107,7 @@ export function registerPayComponentConsumers(queue: Queue): void {
           pct_of_ctc_bps = ${spec.pctOfCtcBps}, employer_cost_class = ${spec.employerCostClass}, cost_placement = ${spec.costPlacement},
           counts_for_pf_wage = ${spec.countsForPfWage}, counts_for_esi_wage = ${spec.countsForEsiWage},
           counts_for_gratuity = ${spec.countsForGratuity}, lop_applicable = ${spec.lopApplicable},
-          payslip_order = COALESCE(${spec.payslipOrder}::smallint, payslip_order),
+          payslip_order = ${spec.payslipOrder}::smallint,
           updated_by = ${msg.actorId}::uuid, updated_at = now(), version = version + 1
         WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid`);
       await touchStructure(tx, msg, s.id);
@@ -174,14 +174,21 @@ export function registerPayComponentConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; sourceId: string; name?: string; effectiveFrom?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const src = await loadStructure(tx as never, msg.tenantId, p.sourceId, true);
-      if (!src) return refuse("NOT_FOUND", "structure not found");
-      const next = src.templateVersion + 1;
+      const src0 = await loadStructure(tx as never, msg.tenantId, p.sourceId);
+      if (!src0) return refuse("NOT_FOUND", "structure not found");
+      // Serialise every new-version of a lineage on its root row, whichever version it is made from.
+      const root = await loadStructure(tx as never, msg.tenantId, src0.lineageRootId, true);
+      const src = (await loadStructure(tx as never, msg.tenantId, p.sourceId, true))!;
+      const lineage = await loadLineage(tx as never, msg.tenantId, root?.id ?? src.id);
+      const effectiveFrom = p.effectiveFrom ?? null;
+      const refusal = newVersionRefusal(lineage, effectiveFrom);
+      if (refusal) return refuse(refusal.code, refusal.message);
+      const next = Math.max(src.templateVersion, ...lineage.map((l) => Number(l.template_version))) + 1;
       await tx.execute(sql`
         INSERT INTO payroll.payroll_structures (id, tenant_id, name, description, is_default, status, kind, effective_from,
-                                                template_version, parent_structure_id, created_by, updated_by)
+                                                template_version, parent_structure_id, lineage_root_id, created_by, updated_by)
         VALUES (${p.id}::uuid, ${msg.tenantId}::uuid, ${p.name ?? `${src.name} v${next}`}, ${src.description}, false, 'active', ${src.kind},
-                ${p.effectiveFrom ?? src.effectiveFrom}::date, ${next}, ${src.id}::uuid, ${msg.actorId}::uuid, ${msg.actorId}::uuid)`);
+                ${effectiveFrom}::date, ${next}, ${src.id}::uuid, ${src.lineageRootId}::uuid, ${msg.actorId}::uuid, ${msg.actorId}::uuid)`);
       await tx.execute(sql`
         INSERT INTO payroll.payroll_components
           (id, tenant_id, structure_id, code, name, component_type, is_taxable, formula, pct_of_basic, fixed_minor, currency, calc,

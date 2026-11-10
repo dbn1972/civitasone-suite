@@ -29,7 +29,7 @@ import {
   COMPONENT_CALC_TYPES, COMPONENT_TYPES, COST_PLACEMENTS, EMPLOYER_COST_CLASSES, RESERVED_RUN_CODES, RUN_CALC_TYPES,
   STATUTORY_DERIVED_CLASSES, STRUCTURE_KINDS, payComponentsEnabled, validateComponentSpec, type SpecIssue,
 } from "./model.js";
-import { checkStructure, listTemplates, loadComponents, loadStructure, specAsRow } from "./rules.js";
+import { checkStructure, listTemplates, loadComponents, loadLineage, loadStructure, newVersionRefusal, specAsRow } from "./rules.js";
 
 const READ_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 const WRITE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
@@ -187,8 +187,13 @@ export async function payComponentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = sidParam.parse(req.params);
     const body = newVersionBody.parse(req.body ?? {});
-    const s = await scopedRead((tx) => loadStructure(tx as never, ctx.tenantId, id));
-    if (!s) throw new HttpError(404, "NOT_FOUND", "structure not found");
+    const lineage = await scopedRead(async (tx) => {
+      const s = await loadStructure(tx as never, ctx.tenantId, id);
+      return s ? loadLineage(tx as never, ctx.tenantId, s.lineageRootId) : null;
+    });
+    if (!lineage) throw new HttpError(404, "NOT_FOUND", "structure not found");
+    const refusal = newVersionRefusal(lineage, body.effectiveFrom ?? null);
+    if (refusal) throw new HttpError(422, refusal.code, refusal.message);
     return reply.code(202).send(await commands.newStructureVersion(ctx, id, body));
   });
 }

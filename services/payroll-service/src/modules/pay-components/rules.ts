@@ -1,7 +1,7 @@
 /** Reads for the G2 pay-component API / consumer. Callers run these inside scopedRead or a tenant transaction (FORCE RLS). */
 import { sql } from "drizzle-orm";
 import type { ComponentRowView } from "./api.js";
-import { checkTemplate, type ComponentSpec, type StructureKind, type TemplateLine } from "./model.js";
+import { checkTemplate, pickTemplateVersion, type ComponentSpec, type CostPlacement, type StructureKind, type TemplateLine } from "./model.js";
 
 type Tx = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
 const rows = <T,>(r: unknown): T[] => Array.from(r as Iterable<T>);
@@ -9,7 +9,7 @@ const rows = <T,>(r: unknown): T[] => Array.from(r as Iterable<T>);
 export interface StructureView {
   id: string; name: string; description: string | null; kind: StructureKind; status: string; isDefault: boolean;
   isLocked: boolean; /** locked explicitly OR referenced by a run past draft/failed */ effectivelyLocked: boolean;
-  effectiveFrom: string | null; templateVersion: number; parentStructureId: string | null; updatedBy: string; version: number;
+  effectiveFrom: string | null; templateVersion: number; parentStructureId: string | null; lineageRootId: string; updatedBy: string; version: number;
 }
 
 /** A run that reads the structure and got past draft/failed makes the structure immutable (use new-version). */
@@ -18,7 +18,7 @@ export const RUN_LOCKING_EXCLUDED_STATUSES = ["draft", "failed"] as const;
 export async function loadStructure(tx: Tx, tenantId: string, id: string, forUpdate = false): Promise<StructureView | null> {
   const r = rows<Record<string, unknown>>(await tx.execute(sql`
     SELECT s.id, s.name, s.description, s.kind, s.status, s.is_default, s.is_locked,
-           to_char(s.effective_from, 'YYYY-MM-DD') AS effective_from, s.template_version, s.parent_structure_id,
+           to_char(s.effective_from, 'YYYY-MM-DD') AS effective_from, s.template_version, s.parent_structure_id, COALESCE(s.lineage_root_id, s.id) AS lineage_root_id,
            s.updated_by, s.version,
            EXISTS (SELECT 1 FROM payroll.payroll_runs r
                     WHERE r.tenant_id = s.tenant_id AND r.structure_id = s.id
@@ -33,7 +33,7 @@ export async function loadStructure(tx: Tx, tenantId: string, id: string, forUpd
     kind: s.kind as StructureKind, status: s.status as string, isDefault: s.is_default as boolean,
     isLocked: s.is_locked as boolean, effectivelyLocked: (s.is_locked as boolean) || (s.referenced as boolean),
     effectiveFrom: (s.effective_from as string | null) ?? null, templateVersion: Number(s.template_version),
-    parentStructureId: (s.parent_structure_id as string | null) ?? null, updatedBy: s.updated_by as string, version: Number(s.version),
+    parentStructureId: (s.parent_structure_id as string | null) ?? null, lineageRootId: s.lineage_root_id as string, updatedBy: s.updated_by as string, version: Number(s.version),
   };
 }
 
@@ -59,7 +59,7 @@ export async function loadComponents(tx: Tx, tenantId: string, structureId: stri
 
 export function toTemplateLines(components: ComponentRowView[]): TemplateLine[] {
   return components.map((c) => ({
-    code: c.code, calc: (c.calc as TemplateLine["calc"]) ?? null, pctOfCtcBps: c.pctOfCtcBps, isActive: c.isActive,
+    code: c.code, calc: (c.calc as TemplateLine["calc"]) ?? null, pctOfCtcBps: c.pctOfCtcBps, isActive: c.isActive, costPlacement: c.costPlacement as CostPlacement,
     employerCostClass: (c.employerCostClass as TemplateLine["employerCostClass"]) ?? null,
   }));
 }
@@ -89,3 +89,39 @@ export const specAsRow = (spec: ComponentSpec, base: Partial<ComponentRowView> &
   payslipOrder: spec.payslipOrder, version: 1, ...base,
 });
 
+
+/** Versions of one lineage (the root and every version made from it), oldest first. */
+export async function loadLineage(tx: Tx, tenantId: string, rootId: string) {
+  return rows<Record<string, unknown>>(await tx.execute(sql`
+    SELECT id, kind, is_locked, template_version, to_char(effective_from, 'YYYY-MM-DD') AS effective_from
+      FROM payroll.payroll_structures
+     WHERE tenant_id = ${tenantId}::uuid AND (id = ${rootId}::uuid OR lineage_root_id = ${rootId}::uuid)
+     ORDER BY template_version`));
+}
+
+/** Why a new version of this lineage cannot take `effectiveFrom`, or null if it can. */
+export function newVersionRefusal(lineage: Array<{ effective_from?: unknown }>, effectiveFrom: string | null): { code: string; message: string } | null {
+  const dates = lineage.map((l) => l.effective_from as string | null).filter((d): d is string => !!d);
+  if (dates.length === 0) return null;
+  const latest = dates.reduce((a, b) => (a > b ? a : b));
+  if (!effectiveFrom || effectiveFrom <= latest) {
+    return { code: "EFFECTIVE_FROM_NOT_LATER", message: `the new version must take effect after ${latest}, the latest existing version of this structure` };
+  }
+  return null;
+}
+
+/**
+ * THE contract for the G1 CTC engine: the template version to expand for a payroll month. Returns only a LOCKED
+ * ctc_template version (an unlocked or run structure is never used), the latest whose effective_from is on or
+ * before the month, with its ACTIVE components in payslip order. null = no approved template covers that month.
+ */
+export async function resolveTemplateForMonth(tx: Tx, tenantId: string, lineageRootId: string, month: string) {
+  const lineage = await loadLineage(tx, tenantId, lineageRootId);
+  const picked = pickTemplateVersion(lineage.map((l) => ({
+    id: l.id as string, kind: l.kind as StructureKind, isLocked: l.is_locked as boolean,
+    templateVersion: Number(l.template_version), effectiveFrom: (l.effective_from as string | null) ?? null,
+  })), month);
+  if (!picked) return null;
+  const components = (await loadComponents(tx, tenantId, picked.id)).filter((c) => c.isActive);
+  return { structureId: picked.id, templateVersion: picked.templateVersion, effectiveFrom: picked.effectiveFrom!, components };
+}

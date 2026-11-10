@@ -19,6 +19,9 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerPayComponentConsumers } from "../src/modules/pay-components/consumer.js";
 import * as repo from "../src/modules/payroll/repo.js";
+import { resolveTemplateForMonth } from "../src/modules/pay-components/rules.js";
+import { runWithTenant } from "@civitasone/db";
+import { scopedRead } from "../src/shared/db.js";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
@@ -280,6 +283,93 @@ describe("flag ON: CTC template", () => {
     await until(() => comps(nid), (r) => r.length === lines.length);
     const [row] = await q(sql`SELECT template_version, is_locked, parent_structure_id, kind, to_char(effective_from,'YYYY-MM-DD') AS ef FROM payroll.payroll_structures WHERE id = ${nid}::uuid`);
     expect(row).toMatchObject({ template_version: 2, is_locked: false, parent_structure_id: tid, kind: "ctc_template", ef: "2027-04-01" });
+  });
+});
+
+describe("template lineage: version numbers, effective dates, resolver", () => {
+  async function lockedTemplate(name: string, effectiveFrom: string): Promise<string> {
+    const created = await post("/v1/payroll/ctc-templates", { name, effectiveFrom });
+    const tid = created.json().id as string;
+    await until(() => q(sql`SELECT 1 FROM payroll.payroll_structures WHERE id = ${tid}::uuid`), (r) => r.length === 1);
+    expect((await post(`/v1/payroll/structures/${tid}/components`, { code: "BASIC", name: "Basic Pay", calc: "pct_of_ctc", pctOfCtcBps: 5000 })).statusCode).toBe(202);
+    expect((await post(`/v1/payroll/structures/${tid}/components`, { code: "SPECIAL", name: "Special Allowance", calc: "balancing" })).statusCode).toBe(202);
+    await until(() => comps(tid), (r) => r.length === 2);
+    expect((await post(`/v1/payroll/structures/${tid}/lock`, {}, checker)).statusCode).toBe(202);
+    await until(() => q(sql`SELECT is_locked FROM payroll.payroll_structures WHERE id = ${tid}::uuid`), (r) => r[0]?.is_locked === true);
+    return tid;
+  }
+  const lineage = (root: string) => q(sql`SELECT template_version, to_char(effective_from,'YYYY-MM-DD') AS ef FROM payroll.payroll_structures
+    WHERE id = ${root}::uuid OR lineage_root_id = ${root}::uuid ORDER BY template_version`);
+
+  it("new versions get distinct, increasing numbers across the whole lineage; an equal or earlier effective date is refused", async () => {
+    process.env[FLAG] = "true";
+    const v1 = await lockedTemplate("Project Staff CTC - Noida", "2026-12-01");
+    // not later than the existing version, or missing: refused up front
+    expect((await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2026-12-01" })).json().code).toBe("EFFECTIVE_FROM_NOT_LATER");
+    expect((await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2026-06-01" })).statusCode).toBe(422);
+    expect((await post(`/v1/payroll/structures/${v1}/new-version`, {})).statusCode).toBe(422);
+    const two = await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2027-04-01" });
+    expect(two.statusCode).toBe(202);
+    const v2 = two.json().id as string;
+    await until(() => lineage(v1), (r) => r.length === 2);
+    // v3 made from v1 AFTER v2 exists is number 3, not 2, and must still be later than v2
+    expect((await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2027-01-01" })).json().code).toBe("EFFECTIVE_FROM_NOT_LATER");
+    expect((await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2027-07-01" })).statusCode).toBe(202);
+    await until(() => lineage(v1), (r) => r.length === 3);
+    expect((await lineage(v1)).map((r) => Number(r.template_version))).toEqual([1, 2, 3]);
+    // two simultaneous new-versions (from different versions of the lineage): distinct numbers, never a duplicate
+    const [a, b] = await Promise.all([
+      post(`/v1/payroll/structures/${v2}/new-version`, { effectiveFrom: "2027-10-01" }),
+      post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2027-11-01" }),
+    ]);
+    expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
+    await new Promise((r) => setTimeout(r, 800));
+    const nums = (await lineage(v1)).map((r) => Number(r.template_version));
+    expect(new Set(nums).size).toBe(nums.length);
+    expect(nums.slice(0, 3)).toEqual([1, 2, 3]);
+    expect(nums.length).toBeGreaterThanOrEqual(4);
+    // the DB itself refuses a duplicate number
+    await expect(q(sql`INSERT INTO payroll.payroll_structures (tenant_id, name, status, kind, template_version, lineage_root_id, created_by, updated_by)
+      VALUES (${TENANT}::uuid, 'dup', 'active', 'ctc_template', 2, ${v1}::uuid, ${MAKER}::uuid, ${MAKER}::uuid)`)).rejects.toThrow();
+  });
+
+  it("resolveTemplateForMonth returns only locked versions effective for the month, with active components", async () => {
+    process.env[FLAG] = "true";
+    const v1 = await lockedTemplate("Project Staff CTC - Gurugram", "2026-12-01");
+    const resolve = (month: string) => runWithTenant(TENANT, () => scopedRead((tx) => resolveTemplateForMonth(tx as never, TENANT, v1, month)));
+    expect(await resolve("2026-11")).toBeNull();
+    const r1 = await resolve("2027-03");
+    expect(r1).toMatchObject({ structureId: v1, templateVersion: 1, effectiveFrom: "2026-12-01" });
+    expect(r1!.components.map((c) => c.code).sort()).toEqual(["BASIC", "SPECIAL"]);
+    // v2 exists but is NOT locked: still resolves to v1
+    const v2 = (await post(`/v1/payroll/structures/${v1}/new-version`, { effectiveFrom: "2027-04-01" })).json().id as string;
+    await until(() => comps(v2), (r) => r.length === 2);
+    expect((await resolve("2027-05"))!.templateVersion).toBe(1);
+    // an unlocked draft is never used, a deactivated line is dropped once v2 is locked and effective
+    const sp = (await comp(v2, "SPECIAL"))!;
+    expect((await post(`/v1/payroll/structures/${v2}/components`, { code: "LTA", name: "Leave Travel Allowance", calc: "fixed", fixedMinor: "100000" }, auth(["payroll_admin"], CHECKER))).statusCode).toBe(202);
+    await until(() => comps(v2), (r) => r.length === 3);
+    expect((await post(`/v1/payroll/structures/${v2}/lock`, {}, maker)).statusCode).toBe(403);
+    expect((await post(`/v1/payroll/structures/${v2}/lock`, {}, auth(["payroll_admin"], randomUUID()))).statusCode).toBe(202);
+    await until(() => q(sql`SELECT is_locked FROM payroll.payroll_structures WHERE id = ${v2}::uuid`), (r) => r[0]?.is_locked === true);
+    expect(sp.id).toBeTruthy();
+    expect((await resolve("2027-03"))!.templateVersion).toBe(1);
+    const r2 = await resolve("2027-04");
+    expect(r2!.templateVersion).toBe(2);
+    expect(r2!.components.map((c) => c.code)).toContain("LTA");
+  });
+
+  it("a component edit can clear payslip_order; a run read with the flag on still loads components (share lock)", async () => {
+    process.env[FLAG] = "true";
+    const sid = await newStructure();
+    const url = `/v1/payroll/structures/${sid}/components`;
+    await post(url, fixed("TA", "Transport Allowance", "200000", { payslipOrder: 50 }));
+    await until(() => comps(sid), (r) => r.length === 1);
+    const ta = (await comp(sid, "TA"))!;
+    expect(Number(ta.payslip_order)).toBe(50);
+    expect((await patch(`${url}/${ta.id}`, { payslipOrder: null })).statusCode).toBe(202);
+    await until(() => comp(sid, "TA"), (c) => c?.payslip_order === null);
+    expect((await repo.listComponentsByStructure(sid, TENANT)).map((c) => c.code)).toEqual(["TA"]);
   });
 });
 

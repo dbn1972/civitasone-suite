@@ -130,7 +130,7 @@ export function validateComponentSpec(kind: StructureKind, c: ComponentSpec, opt
   return issues;
 }
 
-export interface TemplateLine { code: string; calc: ComponentCalcType | null; pctOfCtcBps: number | null; isActive: boolean; employerCostClass: EmployerCostClass | null }
+export interface TemplateLine { code: string; calc: ComponentCalcType | null; pctOfCtcBps: number | null; isActive: boolean; employerCostClass: EmployerCostClass | null; costPlacement?: CostPlacement }
 export interface TemplateCheck { errors: SpecIssue[]; warnings: SpecIssue[] }
 
 /**
@@ -144,7 +144,9 @@ export function checkTemplate(lines: TemplateLine[]): TemplateCheck {
   const active = lines.filter((l) => l.isActive);
   const balancing = active.filter((l) => l.calc === "balancing");
   if (balancing.length > 1) errors.push({ code: "MULTIPLE_BALANCING", field: "calc", message: "a template can have only one balancing component" });
-  const ctcBps = active.reduce((s, l) => s + (l.calc === "pct_of_ctc" ? l.pctOfCtcBps ?? 0 : 0), 0);
+  // CTC is what the employer commits INCLUDING inside_ctc employer costs; an on_top employer cost is paid in addition
+  // to CTC, so it neither uses up the 100% nor is carved out of the balancing remainder.
+  const ctcBps = active.reduce((s, l) => s + (l.calc === "pct_of_ctc" && !(l.employerCostClass && l.costPlacement === "on_top") ? l.pctOfCtcBps ?? 0 : 0), 0);
   if (ctcBps > 10000) errors.push({ code: "PCT_OF_CTC_OVER_100", field: "pctOfCtcBps", message: `percent-of-CTC components add up to ${(ctcBps / 100).toFixed(2)}%, which is more than 100%` });
   const basic = active.find((l) => l.code === "BASIC");
   if (!basic) warnings.push({ code: "NO_BASIC", field: "code", message: "the template has no BASIC component" });
@@ -156,4 +158,20 @@ export function checkTemplate(lines: TemplateLine[]): TemplateCheck {
     warnings.push({ code: "NO_BALANCING", field: "calc", message: "no balancing component: the parts will not necessarily add up to CTC" });
   }
   return { errors, warnings };
+}
+
+export interface TemplateVersionInfo { id: string; templateVersion: number; effectiveFrom: string | null; isLocked: boolean; kind: StructureKind }
+
+/**
+ * The version of a template lineage a CTC engine must use for a payroll month (YYYY-MM): only LOCKED
+ * ctc_template versions qualify; of those, the latest whose effective_from falls on or before the end of the
+ * month (ties broken by the higher template_version). A version without an effective_from never resolves.
+ * Mid-month effective dates are the engine's proration concern (G1).
+ */
+export function pickTemplateVersion(versions: TemplateVersionInfo[], month: string): TemplateVersionInfo | null {
+  const [y, mo] = month.split("-").map(Number) as [number, number];
+  const endOfMonth = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+  const ok = versions.filter((v) => v.kind === "ctc_template" && v.isLocked && v.effectiveFrom != null && v.effectiveFrom <= endOfMonth);
+  ok.sort((a, b) => (a.effectiveFrom! === b.effectiveFrom! ? b.templateVersion - a.templateVersion : a.effectiveFrom! < b.effectiveFrom! ? 1 : -1));
+  return ok[0] ?? null;
 }

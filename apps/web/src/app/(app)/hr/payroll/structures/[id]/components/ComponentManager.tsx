@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AcceptedNotice, Button, Card, ConfirmDialog, Drawer, Field, Input, Select } from "../../../../../../_components/ds";
@@ -31,7 +31,14 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
 }) {
   const t = useTranslations("payComponents");
   const router = useRouter();
-  const accepted = useAcceptedWrite();
+  // The write is a 202 and a consumer applies it. Poll the structure until the expected change is visible; if it
+  // never shows up (the consumer refused it, for example after a concurrent change) the notice says it is still
+  // processing instead of claiming success. Synchronous refusals (validation, lock, duplicate) arrive as the 4xx below.
+  const expectRef = useRef<(d: { structure: StructureView; components: ComponentRow[] }) => boolean>(() => true);
+  const accepted = useAcceptedWrite<unknown, { structure: StructureView; components: ComponentRow[] }>({
+    poll: () => browserJson<{ structure: StructureView; components: ComponentRow[] }>(`v1/payroll/structures/${encodeURIComponent(structure.id)}/components`),
+    isDone: (d) => expectRef.current(d),
+  });
   const kind = structure.kind;
   const editable = canWrite && !structure.effectivelyLocked;
 
@@ -49,15 +56,16 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
   const set = <K extends keyof ComponentForm>(k: K, v: ComponentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const issueText = (i: CheckIssue) => (t.has(`check_${i.code}`) ? t(`check_${i.code}`) : i.message);
 
-  async function send(fn: () => Promise<unknown>, okText: string, done: () => void) {
+  async function send(fn: () => Promise<unknown>, okText: string, done: () => void, expectChange: (d: { structure: StructureView; components: ComponentRow[] }) => boolean = () => true) {
     setBusy(true);
     setDialogError(undefined);
     try {
-      await fn();
+      const res = await fn();
+      expectRef.current = expectChange;
       done();
       setMessage({ tone: "good", text: okText });
       router.refresh();
-      void accepted.accept();
+      void accepted.accept(res);
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
@@ -84,6 +92,7 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
         : browserJson(`${base}/components`, { method: "POST", body: JSON.stringify(r.payload) })),
       row ? t("savedMessage", { code: row.code }) : t("addedMessage", { code: r.payload.code ?? "" }),
       () => setEditing(null),
+      (d) => (row ? (d.components.find((c) => c.id === row.id)?.version ?? 0) > row.version : d.components.some((c) => c.code === r.payload.code)),
     );
   }
 
@@ -92,7 +101,8 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
     const j = index + delta;
     if (j < 0 || j >= order.length) return;
     [order[index], order[j]] = [order[j]!, order[index]!];
-    void send(() => browserJson(`${base}/components/reorder`, { method: "POST", body: JSON.stringify({ orderedIds: order }) }), t("reorderedMessage"), () => undefined);
+    void send(() => browserJson(`${base}/components/reorder`, { method: "POST", body: JSON.stringify({ orderedIds: order }) }), t("reorderedMessage"), () => undefined,
+      (d) => d.components.map((c) => c.id).join() === order.join());
   }
 
   const calcText = (c: ComponentRow): string => {
@@ -283,6 +293,7 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
           () => browserJson(`${base}/components/${encodeURIComponent(toggling.id)}/${toggling.isActive ? "deactivate" : "reactivate"}`, { method: "POST", body: JSON.stringify({ reason }) }),
           t(toggling.isActive ? "deactivatedMessage" : "reactivatedMessage", { code: toggling.code }),
           () => setToggling(null),
+          (d) => d.components.find((c) => c.id === toggling.id)?.isActive === !toggling.isActive,
         )}
         onCancel={() => !busy && setToggling(null)}
       />
@@ -297,6 +308,7 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
           () => browserJson(`${base}/${confirm === "lock" ? "lock" : "new-version"}`, { method: "POST", body: JSON.stringify({}) }),
           confirm === "lock" ? t("lockedMessage") : t("newVersionMessage"),
           () => setConfirm(null),
+          confirm === "lock" ? (d) => d.structure.isLocked : () => true,
         )}
         onCancel={() => !busy && setConfirm(null)}
       />

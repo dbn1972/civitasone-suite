@@ -3,6 +3,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
 import { inForceRows } from "./pt-versions-repo.js";
 import { todayIst } from "./pt-versions-domain.js";
+import { payComponentsEnabled } from "../pay-components/model.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
   type PayrollRunRow, type PayrollRunInsert, type PayrollSlipRow,
@@ -147,8 +148,13 @@ export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunR
 
 export async function listComponentsByStructure(structureId: string, tenantId: string) {
   // Section 8 G2: a deactivated component is never paid (every pre-existing row is active).
-  return scopedRead((tx) => tx.select().from(payrollComponents)
-    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId), eq(payrollComponents.isActive, true))));
+  return scopedRead(async (tx) => {
+    // Section 8 G2 (flag on only): a share lock on the structure row, so a component edit (which takes FOR UPDATE)
+    // cannot land between this read and the end of the transaction. Skipped entirely while the flag is off.
+    if (payComponentsEnabled()) await tx.execute(sql`SELECT 1 FROM payroll.payroll_structures WHERE id = ${structureId}::uuid AND tenant_id = ${tenantId}::uuid FOR SHARE`);
+    return tx.select().from(payrollComponents)
+      .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId), eq(payrollComponents.isActive, true)));
+  });
 }
 
 export async function listComponentsByTenant(tenantId: string, limit: number) {

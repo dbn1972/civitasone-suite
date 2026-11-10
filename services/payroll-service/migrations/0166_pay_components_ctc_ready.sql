@@ -8,7 +8,8 @@
 --   is_locked/locked_* set explicitly by the lock action; a structure referenced by a run is also
 --                      treated as locked by the API (no write path needed in the run code)
 --   effective_from     template effective date
---   template_version / parent_structure_id   new-version lineage (templates are immutable once used)
+--   template_version / parent_structure_id / lineage_root_id   new-version lineage (templates are immutable once used);
+--                      unique (tenant, lineage root, template_version), so two versions can never share a number
 -- payroll.payroll_components
 --   is_active          deactivate, never delete (a slip may have used it)
 --   calc               pct_of_ctc | pct_of_basic | fixed | balancing  (NULL = legacy row: the engine
@@ -24,14 +25,14 @@
 --
 -- Additive and idempotent. Old code ignores the new columns. Rollback (after deleting any employer_cost rows,
 -- re-add the 0031 check CHECK (component_type IN ('earning', 'deduction'))):
---   DROP INDEX IF EXISTS payroll.ux_payroll_components_one_balancing;
+--   DROP INDEX IF EXISTS payroll.ux_payroll_components_one_balancing, payroll.ux_payroll_structures_lineage_version;
 --   ALTER TABLE payroll.payroll_components DROP COLUMN IF EXISTS is_active, DROP COLUMN IF EXISTS calc,
 --     DROP COLUMN IF EXISTS pct_of_ctc_bps, DROP COLUMN IF EXISTS employer_cost_class, DROP COLUMN IF EXISTS cost_placement,
 --     DROP COLUMN IF EXISTS counts_for_pf_wage, DROP COLUMN IF EXISTS counts_for_esi_wage,
 --     DROP COLUMN IF EXISTS counts_for_gratuity, DROP COLUMN IF EXISTS lop_applicable, DROP COLUMN IF EXISTS payslip_order;
 --   ALTER TABLE payroll.payroll_structures DROP COLUMN IF EXISTS kind, DROP COLUMN IF EXISTS is_locked,
 --     DROP COLUMN IF EXISTS locked_at, DROP COLUMN IF EXISTS locked_by, DROP COLUMN IF EXISTS effective_from,
---     DROP COLUMN IF EXISTS template_version, DROP COLUMN IF EXISTS parent_structure_id;
+--     DROP COLUMN IF EXISTS template_version, DROP COLUMN IF EXISTS parent_structure_id, DROP COLUMN IF EXISTS lineage_root_id;
 
 SET lock_timeout = '5s';
 
@@ -42,7 +43,14 @@ ALTER TABLE payroll.payroll_structures
   ADD COLUMN IF NOT EXISTS locked_by           uuid,
   ADD COLUMN IF NOT EXISTS effective_from      date,
   ADD COLUMN IF NOT EXISTS template_version    integer     NOT NULL DEFAULT 1,
-  ADD COLUMN IF NOT EXISTS parent_structure_id uuid;
+  ADD COLUMN IF NOT EXISTS parent_structure_id uuid,
+  ADD COLUMN IF NOT EXISTS lineage_root_id     uuid;
+
+-- Every existing structure is the root of its own lineage (version 1). Idempotent.
+UPDATE payroll.payroll_structures SET lineage_root_id = id WHERE lineage_root_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_payroll_structures_lineage_version
+  ON payroll.payroll_structures (tenant_id, lineage_root_id, template_version) WHERE lineage_root_id IS NOT NULL;
 
 DO $$ BEGIN
   ALTER TABLE payroll.payroll_structures

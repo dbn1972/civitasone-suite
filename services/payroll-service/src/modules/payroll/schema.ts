@@ -25,6 +25,7 @@ export const payrollStructures = payrollSchema.table("payroll_structures", {
   effectiveFrom:     date("effective_from", { mode: "string" }),
   templateVersion:   integer("template_version").notNull().default(1),
   parentStructureId: uuid("parent_structure_id"),
+  lineageRootId:     uuid("lineage_root_id"),
 });
 
 export const payrollComponents = payrollSchema.table("payroll_components", {

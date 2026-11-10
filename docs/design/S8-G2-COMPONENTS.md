@@ -23,7 +23,7 @@ Everything is behind **`S8_PAY_COMPONENTS_ENABLED`** (payroll-service env, only 
 ## Columns (migration 0166, additive, idempotent)
 
 `payroll.payroll_structures`: `kind` (default `run`), `is_locked`, `locked_at`, `locked_by`, `effective_from`,
-`template_version` (default 1), `parent_structure_id`. (`version` stays the optimistic row counter.)
+`template_version` (default 1), `parent_structure_id`, `lineage_root_id` (every structure is the root of its own lineage; new versions inherit it). Unique `(tenant_id, lineage_root_id, template_version)`. (`version` stays the optimistic row counter.)
 
 `payroll.payroll_components`: `is_active`, `calc`, `pct_of_ctc_bps` (0..10000), `employer_cost_class`,
 `cost_placement`, `counts_for_pf_wage`, `counts_for_esi_wage`, `counts_for_gratuity`, `lop_applicable`, `payslip_order`.
@@ -55,7 +55,20 @@ that calc, `employer_cost_class` + `cost_placement`, and the four flags (`counts
   computation-time block in G1, not here.
 * Immutability: a structure is locked if `is_locked` or any run past `draft`/`failed` references it. Locked => 409
   `STRUCTURE_LOCKED`; use `new-version` (copies active components into an unlocked structure with `template_version + 1`).
+* Versions: `new-version` serialises on the lineage root, numbers the new version `max(template_version of the lineage) + 1`
+  (never reused, whichever version it is made from) and requires an explicit `effectiveFrom` strictly later than every
+  existing version's (422 `EFFECTIVE_FROM_NOT_LATER`). The unique index is the backstop.
+* `pct_of_ctc` cap (100%): counts earnings and `inside_ctc` employer lines. An `on_top` employer cost is paid in addition to
+  CTC: it does not use up the 100% and is not taken out of the balancing remainder.
 * Maker-checker on a CTC template: lock needs `payroll_admin`/`super_admin` and a different person from the last editor.
+
+## Resolver: the only way the CTC engine reads a template
+
+`resolveTemplateForMonth(tx, tenantId, lineageRootId, 'YYYY-MM')` in `rules.ts` (pure rule: `pickTemplateVersion` in `model.ts`).
+It returns only `kind = 'ctc_template' AND is_locked` versions, the latest whose `effective_from` is on or before the end of
+the month (ties: higher `template_version`), with its **active** components in payslip order; `null` if no approved template
+covers the month. **The CTC engine must use locked templates only, through this resolver**, never read a structure id directly:
+an unlocked draft or a run structure must never drive a slip. Mid-month effective dates are the engine's proration concern.
 
 ## API (all 404 `PAY_COMPONENTS_DISABLED` while the flag is off, except `/meta`)
 

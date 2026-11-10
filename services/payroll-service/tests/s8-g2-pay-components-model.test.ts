@@ -1,7 +1,7 @@
 /** Section 8 G2: the pay-component contract (pure). */
 import { describe, it, expect } from "vitest";
 import {
-  COMPONENT_CALC_TYPES, EMPLOYER_COST_CLASSES, PAY_COMPONENTS_FLAG, checkTemplate, payComponentsEnabled, validateComponentSpec,
+  COMPONENT_CALC_TYPES, EMPLOYER_COST_CLASSES, PAY_COMPONENTS_FLAG, checkTemplate, payComponentsEnabled, pickTemplateVersion, validateComponentSpec,
   type ComponentSpec,
 } from "../src/modules/pay-components/model.js";
 
@@ -100,5 +100,33 @@ describe("template check (owner decision 1 validations)", () => {
   });
   it("ignores inactive lines", () => {
     expect(checkTemplate([line("BASIC", "pct_of_ctc", 5000), line("SA", "balancing"), line("OLD", "balancing", null, false)]).errors).toEqual([]);
+  });
+});
+
+describe("100% cap counts inside-CTC lines only", () => {
+  it("an on_top employer cost does not use up the cap", () => {
+    const l = (code: string, bps: number, cls: "group_insurance" | null, costPlacement: "inside_ctc" | "on_top") =>
+      ({ code, calc: "pct_of_ctc" as const, pctOfCtcBps: bps, isActive: true, employerCostClass: cls, costPlacement });
+    const lines = [l("BASIC", 6000, null, "inside_ctc"), l("INS_TOP", 5000, "group_insurance", "on_top")];
+    expect(checkTemplate(lines).errors).toEqual([]);
+    expect(checkTemplate([...lines.slice(0, 1), l("INS_IN", 5000, "group_insurance", "inside_ctc")]).errors.map((e) => e.code)).toEqual(["PCT_OF_CTC_OVER_100"]);
+  });
+});
+
+describe("pickTemplateVersion (resolver rule)", () => {
+  const v = (templateVersion: number, effectiveFrom: string | null, isLocked = true, kind: "run" | "ctc_template" = "ctc_template") =>
+    ({ id: `t${templateVersion}`, templateVersion, effectiveFrom, isLocked, kind });
+  it("takes the latest locked version effective on or before the end of the month", () => {
+    const vs = [v(1, "2026-12-01"), v(2, "2027-04-01"), v(3, "2027-09-01")];
+    expect(pickTemplateVersion(vs, "2026-11")).toBeNull();
+    expect(pickTemplateVersion(vs, "2026-12")?.templateVersion).toBe(1);
+    expect(pickTemplateVersion(vs, "2027-04")?.templateVersion).toBe(2);
+    expect(pickTemplateVersion(vs, "2028-01")?.templateVersion).toBe(3);
+  });
+  it("never returns an unlocked version, a run structure, or one without an effective date", () => {
+    expect(pickTemplateVersion([v(1, "2026-12-01", false)], "2027-01")).toBeNull();
+    expect(pickTemplateVersion([v(1, "2026-12-01", true, "run")], "2027-01")).toBeNull();
+    expect(pickTemplateVersion([v(1, null)], "2027-01")).toBeNull();
+    expect(pickTemplateVersion([v(1, "2026-12-01"), v(2, "2027-02-01", false)], "2027-03")?.templateVersion).toBe(1);
   });
 });
