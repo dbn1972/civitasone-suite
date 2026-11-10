@@ -145,12 +145,22 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         if (err instanceof DomainError) throw new NonRetryableError(`[finance/budget] ${err.message}`, err);
         throw err;
       }
-      await repo.insertSanction(tx, {
-        id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
-        headId: p.headId, amountMinor: BigInt(p.amountMinor),
-        currency: p.currency ?? "INR", status: "pending_approval",
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
+      // UAT b24: finance_sanctions is UNIQUE (tenant_id, sanction_no). A duplicate that slips past the route check
+      // (two concurrent creates) can never succeed on retry: refuse it once as a permanent error, not 5 retries into the DLQ.
+      try {
+        await repo.insertSanction(tx, {
+          id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
+          headId: p.headId, amountMinor: BigInt(p.amountMinor),
+          currency: p.currency ?? "INR", status: "pending_approval",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        if (e.code === "23505" || e.cause?.code === "23505") {
+          throw new NonRetryableError(`[finance/budget] DUPLICATE_SANCTION_NO: sanction number ${p.sanctionNo} already exists for this tenant`, err instanceof Error ? err : undefined);
+        }
+        throw err;
+      }
       await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
