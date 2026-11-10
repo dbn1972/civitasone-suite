@@ -25,4 +25,5 @@ export const terminateContract = (ctx: RequestContext, id: string, p: Record<str
 export const initiateRenewal = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalInitiate, ctx, { contractId: id, ...p });
 export const bulkRenewal = (ctx: RequestContext, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalBulk, ctx, p);
 export const triggerExpiryDetection = (ctx: RequestContext) => publish(COMMANDS.contractExpiryDetect, ctx, {});
+export const reconcileProjection = (ctx: RequestContext) => publish(COMMANDS.contractProjectionReconcile, ctx, {});
 export const triggerAutoSeparation = (ctx: RequestContext, contractId: string) => publish(COMMANDS.contractAutoSeparate, ctx, { contractId });

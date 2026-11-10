@@ -15,9 +15,12 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { todayIST } from "../../shared/ist.js";
+import { projectFromTerms, reconcileTenantProjection } from "./projection.js";
+import { resolveNotifyRoles } from "./policy.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
+  expiringDashboardQuery,
   activateContractBody,
   initiateRenewalBody,
   bulkRenewalBody,
@@ -45,6 +48,18 @@ const ALL_ROLES = [...HR_ROLES, "manager"];
  * here rather than widening that shared helper's return shape for every
  * other caller.
  */
+/** S8 G5: add the employees a project manager is responsible for to a manager-scope id list (opt-in per tenant). */
+async function withProjectTeam(ctx: { tenantId: string; actorId: string }, scopeIds: string[]): Promise<string[]> {
+  const cfg = await repo.getContractConfig(ctx.tenantId);
+  if (!resolveNotifyRoles(cfg).includes("project_manager")) return scopeIds;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return scopeIds;
+  const team = await scopedRead((tx) =>
+    tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.projectManagerId, actorEmp.id))));
+  return [...new Set([...scopeIds, ...team.map((t) => t.id)])];
+}
+
 async function enrichWithEmployee<T extends { employeeId: string }>(
   tenantId: string,
   rows: T[],
@@ -77,6 +92,28 @@ async function enrichWithEmployee<T extends { employeeId: string }>(
       agencyRef: agencyMap.get(r.employeeId) ?? null,
     };
   });
+}
+
+/**
+ * S8 G5: a project manager may see and initiate the renewal of the contracts of the people whose
+ * hrms_employees.project_manager_id is their own employee record. Opt-in per tenant (contract_config.notify_roles
+ * includes project_manager), so for every existing tenant this is false and the manager-scope rule is unchanged.
+ * The renewal still needs HR approval (the checker); only the initiator rule widens.
+ */
+async function isProjectManagerOf(ctx: { tenantId: string; actorId: string }, employeeId: string): Promise<boolean> {
+  const cfg = await repo.getContractConfig(ctx.tenantId);
+  if (!resolveNotifyRoles(cfg).includes("project_manager")) return false;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return false;
+  const emp = await employeeRepo.findById(employeeId, ctx.tenantId);
+  return emp?.projectManagerId === actorEmp.id;
+}
+
+/** CSV cell: quoted, and a leading = + - @ is neutralised so a spreadsheet never evaluates it as a formula. */
+function csvCell(v: unknown): string {
+  let t = v === null || v === undefined ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+  return `"${t.replace(/"/g, '""')}"`;
 }
 
 export async function contractRoutes(app: FastifyInstance): Promise<void> {
@@ -118,7 +155,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Owner decision 2 (2026-10-14): a manager sees self + direct reports only;
     // HR stays tenant-wide. Empty scope (unlinked actor) matches nothing.
     const scopeIds = await resolveManagerScopeIds(ctx);
-    if (scopeIds) filters.employeeIds = scopeIds;
+    if (scopeIds) filters.employeeIds = await withProjectTeam(ctx, scopeIds);
     const listOpts: { sort?: "endDate"; summaryToday?: string } = {};
     if (query.sort) listOpts.sort = query.sort;
     // Register counts are classified against the IST calendar date (what the officer sees),
@@ -135,7 +172,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId)) && !(await isProjectManagerOf(ctx, contract.employeeId))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
     return reply.send({ data: contract });
   });
 
@@ -143,7 +180,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = employeeIdParam.parse(req.params);
-    if (!(await canReadEmployeeRecord(ctx, employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
+    if (!(await canReadEmployeeRecord(ctx, employeeId)) && !(await isProjectManagerOf(ctx, employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
     const history = await repo.getContractHistory(ctx.tenantId, employeeId);
     return reply.send({ data: history });
   });
@@ -169,7 +206,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Check contract exists
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of your direct reports");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId)) && !(await isProjectManagerOf(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of your direct reports");
     // Segregation of duties (owner follow-up 2026-10-14): an actor never acts on their own
     // record -- nobody, manager or HR, may initiate the renewal of their own contract.
     const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
@@ -230,14 +267,71 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/contracts/dashboard/expiring", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    const q = expiringDashboardQuery.parse(req.query);
     const contracts = await repo.getExpiringContractsDashboard(ctx.tenantId);
     const asOf = new Date().toISOString().slice(0, 10);
-    const enriched = (contracts ?? []).map((c) => ({
+    let rows = contracts ?? [];
+    // S8 G5: project filter, project/manager columns and CSV are opt-in query params; with none of them the
+    // response is exactly what it was before.
+    if (q.projectId) rows = rows.filter((c) => projectFromTerms(c.terms).projectId === q.projectId);
+    const enriched = rows.map((c) => ({
       ...c,
       daysRemaining: daysUntilExpiry(c.endDate, asOf),
       renewalStatus: c.status === "expiring" ? "pending" : "not_started",
     }));
-    return reply.send({ data: enriched });
+    if (!q.projectId && !q.expand && q.format !== "csv") return reply.send({ data: enriched });
+
+    const named = await enrichWithEmployee(ctx.tenantId, enriched);
+    const ids = [...new Set(named.map((c) => c.employeeId))];
+    const mgrRows = ids.length === 0 ? [] : await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id, managerId: hrmsEmployees.managerId, projectManagerId: hrmsEmployees.projectManagerId })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, ids))));
+    const mgrByEmp = new Map(mgrRows.map((r) => [r.id, r]));
+    const mgrIds = [...new Set(mgrRows.flatMap((r) => [r.managerId, r.projectManagerId]).filter((v): v is string => !!v))];
+    const mgrNames = mgrIds.length === 0 ? new Map() : await batchEmployees(ctx.tenantId, mgrIds);
+    const full = named.map((c) => {
+      const proj = projectFromTerms(c.terms);
+      const m = mgrByEmp.get(c.employeeId);
+      return {
+        ...c,
+        projectId: proj.projectId,
+        projectCode: proj.projectCode,
+        projectName: proj.projectName,
+        projectManagerId: m?.projectManagerId ?? null,
+        projectManagerName: m?.projectManagerId ? (mgrNames.get(m.projectManagerId)?.fullName ?? null) : null,
+        lineManagerId: m?.managerId ?? null,
+        lineManagerName: m?.managerId ? (mgrNames.get(m.managerId)?.fullName ?? null) : null,
+      };
+    });
+    if (q.format === "csv") {
+      const head = ["Contract No", "Employee", "Department", "Project Code", "Project", "Project Manager", "Line Manager", "Start Date", "End Date", "Days Remaining", "Status", "Renewal"];
+      const lines = full.map((c) => [
+        c.contractNo, c.employeeName, c.department, c.projectCode, c.projectName, c.projectManagerName, c.lineManagerName,
+        c.startDate, c.endDate, c.daysRemaining, c.status, c.renewalStatus,
+      ].map(csvCell).join(","));
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", 'attachment; filename="contracts-expiring.csv"')
+        .send([head.map(csvCell).join(","), ...lines].join("\r\n"));
+    }
+    return reply.send({ data: full });
+  });
+
+  // ─── S8 G5 — employee contract/project read-model: consistency check + rebuild ──────────────────────
+
+  app.get("/v1/hrms/contracts/projection/check", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const r = await scopedRead((tx) => reconcileTenantProjection(tx, ctx.tenantId, false));
+    return reply.send({ data: { checked: r.checked, drifted: r.drifted, consistent: r.drifted === 0 } });
+  });
+
+  app.post("/v1/hrms/contracts/projection/reconcile", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const result = await commands.reconcileProjection(ctx);
+    return reply.code(202).send(result);
   });
 
   app.get("/v1/hrms/contracts/config", async (req, reply) => {
@@ -270,6 +364,26 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (body.schedulerTimeUtc !== undefined) {
       insertValues.schedulerTimeUtc = body.schedulerTimeUtc;
       updateSet.schedulerTimeUtc = body.schedulerTimeUtc;
+    }
+    if (body.lapseAction !== undefined) {
+      insertValues.lapseAction = body.lapseAction;
+      updateSet.lapseAction = body.lapseAction;
+    }
+    if (body.graceDays !== undefined) {
+      insertValues.graceDays = body.graceDays;
+      updateSet.graceDays = body.graceDays;
+    }
+    if (body.notifyRoles !== undefined) {
+      insertValues.notifyRoles = body.notifyRoles;
+      updateSet.notifyRoles = body.notifyRoles;
+    }
+    if (body.employeeProjectionEnabled !== undefined) {
+      insertValues.employeeProjectionEnabled = body.employeeProjectionEnabled;
+      updateSet.employeeProjectionEnabled = body.employeeProjectionEnabled;
+    }
+    if (body.weeklyDigestEnabled !== undefined) {
+      insertValues.weeklyDigestEnabled = body.weeklyDigestEnabled;
+      updateSet.weeklyDigestEnabled = body.weeklyDigestEnabled;
     }
 
     const result = await publishF3Write(ctx, "contracts_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });

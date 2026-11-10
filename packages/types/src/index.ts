@@ -1161,6 +1161,16 @@ export type EmployeeDetail = {
   pensionScheme?: string;
   /** UAT b18: statutory ids missing for that scheme, e.g. ["UAN_MISSING"]; absent when complete. */
   statutoryIncomplete?: string[];
+  /** S8 G5 read-model (contract + project snapshot); present only for tenants that opted in. */
+  contractId?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractStatus?: string;
+  contractRenewalCount?: number;
+  primaryProjectId?: string;
+  projectCode?: string;
+  projectName?: string;
+  projectManagerId?: string;
 };
 
 // Procurement types

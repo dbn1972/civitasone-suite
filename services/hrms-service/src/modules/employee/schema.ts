@@ -107,6 +107,17 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   maritalStatus:    varchar("marital_status", { length: 16 }),
   bloodGroup:       varchar("blood_group", { length: 4 }),
   shift:            varchar("shift", { length: 16 }),
+  // S8 G5 (migration 0267): READ-MODEL columns, projected from contracts.hrms_contracts (the authority) by
+  // contracts/projection.ts and only while the tenant has contract_config.employee_projection_enabled. Never
+  // written by the employee routes.
+  contractId:           uuid("contract_id"),
+  contractStartDate:    date("contract_start_date"),
+  contractEndDate:      date("contract_end_date"),
+  contractStatus:       varchar("contract_status", { length: 24 }),
+  contractRenewalCount: integer("contract_renewal_count"),
+  primaryProjectId:     uuid("primary_project_id"),   // project-service id (cross-service, no FK)
+  projectCode:          varchar("project_code", { length: 32 }),
+  projectName:          varchar("project_name", { length: 160 }),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

@@ -3,6 +3,13 @@ import { z } from "zod";
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 const uuidStr = z.string().uuid();
 
+// S8 G5: optional project reference carried inside contract terms (additive: older contracts have none).
+const projectRef = {
+  projectId: uuidStr.optional(),
+  projectCode: z.string().min(1).max(32).optional(),
+  projectName: z.string().min(1).max(160).optional(),
+};
+
 export const createContractBody = z.object({
   employeeId: uuidStr,
   startDate: dateStr,
@@ -15,6 +22,7 @@ export const createContractBody = z.object({
     deliverables: z.array(z.string().max(500)).max(20).optional(),
     kpis: z.array(z.string().max(500)).max(20).optional(),
     specialConditions: z.string().max(2000).optional(),
+    ...projectRef,
   }),
 });
 
@@ -30,6 +38,7 @@ export const initiateRenewalBody = z.object({
     deliverables: z.array(z.string().max(500)).max(20).optional(),
     kpis: z.array(z.string().max(500)).max(20).optional(),
     specialConditions: z.string().max(2000).optional(),
+    ...projectRef,
   }).optional(),
   reason: z.string().min(1).max(1000).optional(),
 });
@@ -50,6 +59,19 @@ export const updateConfigBody = z.object({
   approvalChain: z.array(z.object({ role: z.string().min(1).max(64) })).max(5).optional(),
   autoSeparationEnabled: z.boolean().optional(),
   schedulerTimeUtc: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  // S8 G5 -- tenant policy for an unrenewed lapse (default auto_separate = today) and alert routing.
+  lapseAction: z.enum(["auto_separate", "flag_only"]).optional(),
+  graceDays: z.number().int().min(0).max(365).optional(),
+  notifyRoles: z.array(z.enum(["project_manager", "line_manager"])).max(2).optional(),
+  employeeProjectionEnabled: z.boolean().optional(),
+  weeklyDigestEnabled: z.boolean().optional(),
+});
+
+// S8 G5: opt-in expansion + project filter + CSV for the expiring dashboard.
+export const expiringDashboardQuery = z.object({
+  projectId: uuidStr.optional(),
+  format: z.enum(["json", "csv"]).optional(),
+  expand: z.enum(["project"]).optional(),
 });
 
 export const listContractsQuery = z.object({

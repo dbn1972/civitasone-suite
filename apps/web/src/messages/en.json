@@ -19606,5 +19606,27 @@
       "exonerated": "Exonerated",
       "finalised": "Finalised"
     }
+  },
+  "employeeContract": {
+    "title": "Contract and project",
+    "fieldStatus": "Contract status",
+    "fieldStart": "Contract start",
+    "fieldEnd": "Contract end",
+    "fieldRenewals": "Renewals so far",
+    "fieldProject": "Primary project",
+    "fieldProjectManager": "Project manager",
+    "fieldCostCenter": "Reporting cost centre",
+    "daysLeft": "{count, plural, one {# day left} other {# days left}}",
+    "daysOver": "{count, plural, one {# day past end date} other {# days past end date}}",
+    "status": {
+      "active": "Active",
+      "expiring": "Expiring",
+      "escalated": "Escalated",
+      "expired": "Expired",
+      "renewed": "Renewed",
+      "terminated": "Terminated"
+    },
+    "colContractEnd": "Contract ends",
+    "colProject": "Project"
   }
 }

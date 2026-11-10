@@ -19585,5 +19585,27 @@
       "exonerated": "दोषमुक्त",
       "finalised": "अंतिम रूप दिया गया"
     }
+  },
+  "employeeContract": {
+    "title": "अनुबंध और परियोजना",
+    "fieldStatus": "अनुबंध की स्थिति",
+    "fieldStart": "अनुबंध प्रारंभ",
+    "fieldEnd": "अनुबंध समाप्ति",
+    "fieldRenewals": "अब तक नवीनीकरण",
+    "fieldProject": "मुख्य परियोजना",
+    "fieldProjectManager": "परियोजना प्रबंधक",
+    "fieldCostCenter": "रिपोर्टिंग लागत केंद्र",
+    "daysLeft": "{count, plural, one {# दिन शेष} other {# दिन शेष}}",
+    "daysOver": "{count, plural, one {समाप्ति तिथि से # दिन अधिक} other {समाप्ति तिथि से # दिन अधिक}}",
+    "status": {
+      "active": "सक्रिय",
+      "expiring": "समाप्त होने वाला",
+      "escalated": "उच्च स्तर पर भेजा गया",
+      "expired": "समाप्त",
+      "renewed": "नवीनीकृत",
+      "terminated": "समाप्त किया गया"
+    },
+    "colContractEnd": "अनुबंध समाप्ति",
+    "colProject": "परियोजना"
   }
 }
