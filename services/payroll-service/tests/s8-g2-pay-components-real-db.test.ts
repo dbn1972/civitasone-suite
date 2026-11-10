@@ -208,6 +208,7 @@ describe("flag ON: component lifecycle on a run structure", () => {
     await q(sql`INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, status, created_by, updated_by)
                 VALUES (${run}::uuid, ${TENANT}::uuid, ${"G2-" + run.slice(0, 6)}, '2026-10', ${sid}::uuid, 'draft', ${MAKER}::uuid, ${MAKER}::uuid)`);
     expect((await post(url, fixed("TA", "Transport Allowance", "200000"))).statusCode).toBe(202);
+    await until(() => comps(sid), (r) => r.length === 1); // the consumer applied it while the run was still a draft
     await q(sql`UPDATE payroll.payroll_runs SET status = 'approved' WHERE id = ${run}::uuid`);
     const locked = await post(url, fixed("DA2", "Second", "100"));
     expect(locked.statusCode).toBe(409);
