@@ -4,7 +4,7 @@
  * its own transaction (nested scopedRead() inside db.transaction() deadlocks the pool -- see
  * employee/repo.ts findByIdTx); routes pass the scopedRead tx.
  */
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, isNull, sql, desc } from "drizzle-orm";
 import type { db } from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveTenantConfig, hrmsLeaveTypeChanges,
@@ -81,7 +81,7 @@ export async function listLeaveTypesWithCounts(tx: Reader, tenantId: string, inc
     open: sql<number>`count(*) filter (where ${openAppPredicate(today)})::int`,
   }).from(hrmsLeaveApps).where(eq(hrmsLeaveApps.tenantId, tenantId)).groupBy(hrmsLeaveApps.leaveTypeId);
   const pending = await tx.select({ id: hrmsLeaveTypeChanges.id, leaveTypeId: hrmsLeaveTypeChanges.leaveTypeId })
-    .from(hrmsLeaveTypeChanges).where(and(eq(hrmsLeaveTypeChanges.tenantId, tenantId), eq(hrmsLeaveTypeChanges.status, "pending")));
+    .from(hrmsLeaveTypeChanges).where(and(eq(hrmsLeaveTypeChanges.tenantId, tenantId), eq(hrmsLeaveTypeChanges.status, "pending"), isNull(hrmsLeaveTypeChanges.allocId)));
   const ac = new Map(allocCounts.map((r) => [r.leaveTypeId, r.n]));
   const pc = new Map(appCounts.map((r) => [r.leaveTypeId, r]));
   const pend = new Map(pending.map((r) => [r.leaveTypeId, r.id]));
@@ -101,7 +101,7 @@ export async function listUnusedLeaveTypes(tx: Reader, tenantId: string) {
       eq(hrmsLeaveTypes.tenantId, tenantId), eq(hrmsLeaveTypes.isActive, true),
       sql`not exists (select 1 from leave.hrms_leave_apps a where a.tenant_id = ${hrmsLeaveTypes.tenantId} and a.leave_type_id = ${hrmsLeaveTypes.id})`,
       sql`not exists (select 1 from leave.hrms_leave_allocs l where l.tenant_id = ${hrmsLeaveTypes.tenantId} and l.leave_type_id = ${hrmsLeaveTypes.id} and l.status = 'active')`,
-      sql`not exists (select 1 from leave.hrms_leave_type_changes c where c.tenant_id = ${hrmsLeaveTypes.tenantId} and c.leave_type_id = ${hrmsLeaveTypes.id} and c.status = 'pending')`,
+      sql`not exists (select 1 from leave.hrms_leave_type_changes c where c.tenant_id = ${hrmsLeaveTypes.tenantId} and c.leave_type_id = ${hrmsLeaveTypes.id} and c.alloc_id is null and c.status = 'pending')`,
     )).orderBy(hrmsLeaveTypes.code);
 }
 
@@ -130,6 +130,7 @@ export async function findPendingChangeForAlloc(tx: Reader, tenantId: string, al
 export async function findPendingChangeForType(tx: Reader, tenantId: string, leaveTypeId: string): Promise<LeaveTypeChangeRow | null> {
   const rows = await tx.select().from(hrmsLeaveTypeChanges).where(and(
     eq(hrmsLeaveTypeChanges.tenantId, tenantId), eq(hrmsLeaveTypeChanges.leaveTypeId, leaveTypeId), eq(hrmsLeaveTypeChanges.status, "pending"),
+    isNull(hrmsLeaveTypeChanges.allocId), // a single-allocation request must not block (or hide) the type-level deactivation
   )).limit(1);
   return rows[0] ?? null;
 }

@@ -189,6 +189,14 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           payload: { service: "hrms", action: "apply", resourceType: "leave_app", resourceId: p.id, outcome: "failure",
             metadata: { reason: "ALLOCATION_ENDED", allocId: p.allocId, employeeId: p.employeeId, leaveTypeId: p.leaveTypeId } },
         });
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.apply_failed", recipient: p.employeeId, recipientId: p.employeeId,
+            variables: { leaveAppId: p.id, reason: "ALLOCATION_ENDED", fromDate: p.fromDate, toDate: p.toDate },
+          }),
+        });
         return;
       }
       try {

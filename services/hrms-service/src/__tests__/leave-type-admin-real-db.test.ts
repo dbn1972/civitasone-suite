@@ -325,7 +325,30 @@ describe("S8-G3 safe deactivation of a leave type with live allocations", () => 
     await drain();
     expect(await asTenant(TENANT, (tx) => tx`SELECT 1 FROM leave.hrms_leave_apps WHERE id = ${appId}`)).toHaveLength(0);
     expect((await auditActions(appId)).map((a) => `${a.action}:${a.outcome}`)).toContain("apply:failure");
+    const note = await asTenant(TENANT, (tx) => tx`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${TENANT} AND payload::text LIKE ${"%" + appId + "%"} AND payload::text LIKE '%ALLOCATION_ENDED%' AND topic <> 'audit.event.record'`);
+    expect(note.length).toBeGreaterThan(0); // the applicant is told
     expect((await allocRow(allocPL[1]!)).balance_days).toBe(10);
+  });
+
+  it("a pending request on ONE allocation does not block (or hide) the type-level deactivation", async () => {
+    // WFH has no pending type request at this point; park an allocation-end request on one employee's allocation.
+    const al = (await asTenant(TENANT, (tx) => tx`SELECT id FROM leave.hrms_leave_allocs WHERE leave_type_id = ${T.CL} LIMIT 1`))[0]!.id as string;
+    const end = await app.inject({ method: "POST", url: `/v1/hrms/leave-allocations/${al}/end`, headers: maker(), payload: { reason: "Allocation entered in error" } });
+    expect(end.statusCode).toBe(202);
+    await drain();
+    const row = (await app.inject({ method: "GET", url: "/v1/hrms/admin/leave-types", headers: maker() })).json().data.find((t: { code: string }) => t.code === "CL");
+    expect(row.pendingChangeId).toBeNull(); // the Deactivate button stays visible
+    const dry = await app.inject({ method: "POST", url: `/v1/hrms/leave-types/${T.CL}/deactivate`, headers: maker(), payload: { reason: "Retire casual leave type", dryRun: true } });
+    expect(dry.statusCode).toBe(200);
+    const real = await app.inject({ method: "POST", url: `/v1/hrms/leave-types/${T.CL}/deactivate`, headers: checker(), payload: { reason: "Retire casual leave type" } });
+    expect(real.statusCode).toBe(202); // not 409 CHANGE_ALREADY_PENDING
+    await drain();
+    // clean up the two requests so later tests are unaffected
+    for (const c of (await pendingFor()).filter((x) => x.leaveTypeCode === "CL" || x.allocId === al)) {
+      await app.inject({ method: "POST", url: `/v1/hrms/leave-type-changes/${c.id}/reject`, headers: maker(), payload: { note: "test cleanup" } });
+      await app.inject({ method: "POST", url: `/v1/hrms/leave-type-changes/${c.id}/reject`, headers: checker(), payload: { note: "test cleanup" } });
+    }
+    await drain();
   });
 
   it("retire-unused: dry run lists only types with no applications and no live allocations; applying raises maker-checker requests", async () => {
