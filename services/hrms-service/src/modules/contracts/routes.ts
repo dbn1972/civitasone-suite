@@ -240,8 +240,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Check status valid for renewal (active, expiring, or escalated -- a lapsed contract of a flag_only tenant stays escalated until HR acts)
-    if (contract.status !== "active" && contract.status !== "expiring" && contract.status !== "escalated") {
-      throw new HttpError(422, "INVALID_CONTRACT_STATUS", `cannot renew contract in status '${contract.status}'; must be active, expiring or escalated`);
+    // Escalated is renewable only on a flag_only tenant (where a lapsed contract stays escalated until HR acts); every other tenant keeps today's 422.
+    const flagOnly = contract.status === "escalated" && resolveLapsePolicy(await scopedRead((tx) => repo.getContractConfigTx(tx, ctx.tenantId))).action === "flag_only";
+    if (contract.status !== "active" && contract.status !== "expiring" && !(flagOnly && contract.status === "escalated")) {
+      throw new HttpError(422, "INVALID_CONTRACT_STATUS", `cannot renew contract in status '${contract.status}'; must be active or expiring`);
     }
 
     // Check no pending renewal

@@ -9,7 +9,7 @@ import {
 } from "./schema.js";
 import { eq, and, or, sql, desc, asc, gte, lte, inArray, type SQL } from "drizzle-orm";
 import { hrmsEmployees } from "../employee/schema.js";
-import { addDaysToDateOnly } from "../../shared/ist.js";
+import { todayIST, addDaysToDateOnly } from "../../shared/ist.js";
 
 const SERVICE = "hrms";
 
@@ -382,7 +382,7 @@ export async function getExpiringContractsDashboard(tenantId: string, includeLap
             eq(hrmsContracts.tenantId, tenantId),
             or(
               and(inArray(hrmsContracts.status, ["active", "expiring"]), gte(hrmsContracts.endDate, monthStart), lte(hrmsContracts.endDate, monthEnd)),
-              and(inArray(hrmsContracts.status, ["active", "expiring", "escalated"]), sql`${hrmsContracts.endDate} < ${now.toISOString().slice(0, 10)}::date`),
+              and(inArray(hrmsContracts.status, ["active", "expiring", "escalated"]), sql`${hrmsContracts.endDate} < ${todayIST()}::date`),
             ),
           ),
         )

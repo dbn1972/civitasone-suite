@@ -659,9 +659,14 @@ export function registerContractConsumers(queue: Queue): void {
           assertNotSelfRenewal(actingEmployeeId, contract.employeeId, contractId);
 
           const status = contract.status as ContractStatus;
-          if (status === "escalated") {
-            // S8 G5: a flag_only tenant leaves lapsed contracts escalated; HR must be able to renew them (single renew already does this).
-            assertValidTransition("escalated", "expiring");
+          if (status === "escalated" && resolveLapsePolicy(await getContractConfigTx(tx, p.tenantId)).action === "flag_only") {
+            // S8 G5: a flag_only tenant leaves lapsed contracts escalated; HR must be able to renew them. Other tenants keep refusing it.
+            try {
+              assertValidTransition("escalated", "expiring");
+            } catch (err) {
+              if (err instanceof DomainError) throw new NonRetryableError(err.message);
+              throw err;
+            }
             await tx
               .update(hrmsContracts)
               .set({ status: "expiring", updatedBy: msg.actorId, updatedAt: new Date() })

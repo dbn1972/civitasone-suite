@@ -544,3 +544,16 @@ describe("review fixes: projection check and reconcile dedupe", () => {
     expect(reconcileMessageId(ON, t0)).not.toBe(reconcileMessageId(FLAG, t0));
   });
 });
+
+describe("escalated is renewable only on a flag_only tenant", () => {
+  it("a default tenant keeps today's refusal for an escalated contract (route 422, bulk consumer no-op)", async () => {
+    expect(await contractStatus(ON, K_ON2)).toBe("escalated");
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/contracts/${K_ON2}/renew`, headers: hdr(ON, ["hr_admin"], SUB_HR), payload: { newEndDate: day(400) } });
+    expect(r.statusCode).toBe(422);
+    expect((r.json() as { code: string }).code).toBe("INVALID_CONTRACT_STATUS");
+    await publish(ON, COMMANDS.contractRenewalBulk, SEED, { contractIds: [K_ON2], newEndDate: day(400), newTerms: {}, initiatedBy: SEED });
+    expect(await contractStatus(ON, K_ON2)).toBe("escalated");
+    const n = (await asTenant(ON, (tx) => tx`SELECT count(*)::int AS n FROM contracts.hrms_contract_renewals WHERE contract_id = ${K_ON2}`))[0]!.n;
+    expect(n).toBe(0);
+  });
+});
