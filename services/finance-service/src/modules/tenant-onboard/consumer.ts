@@ -20,6 +20,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { financeMajorHeads } from "../hoa/schema.js";
 import { STANDARD_MAJOR_HEADS } from "../hoa/standard-major-heads.js";
 import { seedStandardGlHeadsTx } from "../gl/standard-heads.js";
+import { seedDefaultDdoTx } from "../masters/ddo-seed.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const TENANT_ONBOARDED = "tenant.tenant.onboarded";
@@ -44,6 +45,9 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
     // Own transaction, idempotent on its own (ON CONFLICT (tenant_id, code) DO NOTHING -- a redelivery, or a head the
     // tenant already has, is untouched), so it does not depend on the shared major-head seed below succeeding.
     const glHeadsSeeded = await db.transaction(async (tx) => seedStandardGlHeadsTx(tx, p.tenantId ?? msg.tenantId, msg.actorId));
+    // UAT b24: a default DDO (DDO000001, the code the bill consumer falls back to) so a new tenant can lodge bills
+    // before its admin sets the real DDO. Own transaction + ON CONFLICT DO NOTHING, like the GL heads above.
+    await db.transaction(async (tx) => seedDefaultDdoTx(tx, p.tenantId ?? msg.tenantId, msg.actorId));
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent
 

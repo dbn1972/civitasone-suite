@@ -106,3 +106,60 @@ export function findExpiringDocuments(
   }
   return out;
 }
+
+/**
+ * UAT B24: the alert cycle runs hourly and re-detects the same open condition (a subject still
+ * missing its mandatory document, a document still expired) every time. The business event that
+ * drives notifications is re-sent each cycle on purpose, but the matching AUDIT row is a record of
+ * "this alert was raised", so one per distinct alert per window is enough; hourly copies buried the
+ * real activity in the audit trail (~1,100 a day on one UAT tenant, 23 identical rows per subject).
+ *
+ * In-process on purpose (no schema): after a worker restart each open alert is audited once more,
+ * which is the safe direction. An alert that stays open is re-audited once per window.
+ */
+export interface AlertAuditKey {
+  tenantId: string;
+  action: string;
+  resourceId: string;
+  docTypeCode: string | null;
+}
+
+export class AlertAuditDedupe {
+  private readonly seen = new Map<string, number>();
+  private lastSweep = Number.NEGATIVE_INFINITY;
+
+  constructor(private readonly windowMs: number = 24 * 3_600_000) {}
+
+  private static keyOf(key: AlertAuditKey): string {
+    return `${key.tenantId}|${key.action}|${key.resourceId}|${key.docTypeCode ?? ""}`;
+  }
+
+  /** True when this alert has not been audited within the window. Does NOT record it. */
+  isDue(key: AlertAuditKey, now: Date = new Date()): boolean {
+    const t = now.getTime();
+    this.sweep(t);
+    const at = this.seen.get(AlertAuditDedupe.keyOf(key));
+    return at === undefined || t - at >= this.windowMs;
+  }
+
+  /** Record an alert as audited. Call only after the transaction that wrote the audit row committed. */
+  record(key: AlertAuditKey, now: Date = new Date()): void {
+    this.seen.set(AlertAuditDedupe.keyOf(key), now.getTime());
+  }
+
+  /** isDue + record in one step (for callers with no transaction to wait for). */
+  shouldAudit(key: AlertAuditKey, now: Date = new Date()): boolean {
+    if (!this.isDue(key, now)) return false;
+    this.record(key, now);
+    return true;
+  }
+
+  /** Forget expired entries, at most once per window, so memory stays bounded without an O(n) scan per call. */
+  private sweep(t: number): void {
+    if (t - this.lastSweep < this.windowMs) return;
+    this.lastSweep = t;
+    for (const [k, at] of this.seen) if (t - at >= this.windowMs) this.seen.delete(k);
+  }
+
+  get size(): number { return this.seen.size; }
+}
