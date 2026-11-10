@@ -123,7 +123,6 @@ export const ctcFeedSchema = z.object({
   /** lineage root of the payroll ctc_template; the version in force for the month is resolved by payroll. */
   templateLineageId: z.string().uuid(),
   epfWagePolicy: z.enum(["ceiling", "actual"]),
-  esiOptOut: z.boolean(),
   gratuityProvisionOn: z.boolean(),
   overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: digits })).max(10),
 });

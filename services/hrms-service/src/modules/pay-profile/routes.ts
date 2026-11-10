@@ -62,10 +62,9 @@ const requestBody = z.object({
     annualVariableTargetMinor: minorString.nullable().default(null),
     templateLineageId: z.string().uuid(),
     epfWagePolicy: z.enum(["ceiling", "actual"]).default("ceiling"),
-    esiOptOut: z.boolean().default(false),
     gratuityProvisionOn: z.boolean().default(true),
     overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: minorString })).max(10).default([]),
-  }).optional(),
+  }).strict().optional(), // strict: there is no ESI opt-out (owner decision 10 Nov 2026), so esiOptOut is a 400, not silently ignored
   orderRef: z.string().max(120).optional(),
   remarks: z.string().max(2000).optional(),
 });

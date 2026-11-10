@@ -65,8 +65,6 @@ export interface CtcTerms {
   annualVariableTargetMinor: bigint | null;
   /** "ceiling" = EPF on min(PF wage, ceiling); "actual" = EPF on the actual PF wage (owner decision 2). */
   epfWagePolicy: "ceiling" | "actual";
-  /** The employee has opted out of ESI where the law allows it (VERIFY); default false. */
-  esiOptOut: boolean;
   /** false drops the gratuity_provision lines of the template for this employee. */
   gratuityProvisionOn: boolean;
   /** Per-employee override of single template lines: the monthly amount replaces the template rule. */
@@ -163,7 +161,7 @@ const out = (l: CtcTemplateLine, amountMinor: bigint, source: CtcLineSource): Ct
 export function expandCtc(input: CtcExpandInput): CtcExpansion {
   const { terms, cfg } = input;
   const pfApplicable = input.pfApplicable !== false;
-  const esiEligible = input.statutoryEsi !== false && !terms.esiOptOut;
+  const esiEligible = input.statutoryEsi !== false; // engagement gate only: ESI has no employee opt-out
   if (terms.annualFixedMinor <= 0n) throw new CtcError("CTC_AMOUNT_INVALID", "annual fixed CTC must be positive");
   const M = roundRupee(terms.annualFixedMinor / 12n);
   const warnings: CtcWarning[] = [];

@@ -53,7 +53,7 @@ const ctcProfile = (tpl: string, annualRupees: number, o: Record<string, unknown
   profile: "ctc_contract", source: "assigned", profileId: randomUUID(), effectiveFrom: "2026-11-01", changedWithinMonth: false,
   ctc: {
     annualFixedMinor: String(annualRupees * 100), annualVariableTargetMinor: null, templateLineageId: tpl,
-    epfWagePolicy: "ceiling", esiOptOut: false, gratuityProvisionOn: true, overrides: [], ...o,
+    epfWagePolicy: "ceiling", gratuityProvisionOn: true, overrides: [], ...o,
   },
 });
 const G = () => employee(EMP.g, "DIC-G-0042", "1500000", "2020-01-01");

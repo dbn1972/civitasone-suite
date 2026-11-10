@@ -27,7 +27,7 @@ import {
 import * as commands from "./commands.js";
 import {
   COMPONENT_CALC_TYPES, COMPONENT_TYPES, COST_PLACEMENTS, EMPLOYER_COST_CLASSES, RESERVED_RUN_CODES, RUN_CALC_TYPES,
-  STATUTORY_DERIVED_CLASSES, STRUCTURE_KINDS, payComponentsEnabled, validateComponentSpec, type SpecIssue,
+  STATUTORY_DERIVED_CLASSES, STRUCTURE_KINDS, defaultLopApplicable, payComponentsEnabled, validateComponentSpec, type SpecIssue,
 } from "./model.js";
 import { checkStructure, listTemplates, loadComponents, loadLineage, loadStructure, newVersionRefusal, specAsRow } from "./rules.js";
 
@@ -111,8 +111,10 @@ export async function payComponentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = sidParam.parse(req.params);
-    const spec = specFromCreate(createComponentBody.parse(req.body));
+    const body = createComponentBody.parse(req.body);
+    const spec = specFromCreate(body);
     const { s, components } = await editable(ctx.tenantId, id);
+    if (body.lopApplicable === undefined) spec.lopApplicable = defaultLopApplicable(s.kind, spec);
     firstIssue(validateComponentSpec(s.kind, spec));
     if (components.some((c) => c.code === spec.code)) throw new HttpError(409, "CODE_EXISTS", `component ${spec.code} already exists in this structure`);
     firstIssue(checkStructure(s.kind, [...components, specAsRow(spec, { id: "new", structureId: id })]).errors);

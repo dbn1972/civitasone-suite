@@ -50,7 +50,6 @@ export interface CtcTerms {
   annualVariableTargetMinor: string | null;
   templateLineageId: string;
   epfWagePolicy: "ceiling" | "actual";
-  esiOptOut: boolean;
   gratuityProvisionOn: boolean;
   overrides: Array<{ code: string; monthlyMinor: string }>;
 }

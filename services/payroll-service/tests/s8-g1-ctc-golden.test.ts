@@ -29,7 +29,7 @@ function template(o: { insurancePlacement?: "inside_ctc" | "on_top"; withEsiLine
   return lines;
 }
 const terms = (annualRupees: number, o: Partial<CtcTerms> = {}): CtcTerms => ({
-  annualFixedMinor: rs(annualRupees), annualVariableTargetMinor: null, epfWagePolicy: "ceiling", esiOptOut: false, gratuityProvisionOn: true, overrides: [], ...o,
+  annualFixedMinor: rs(annualRupees), annualVariableTargetMinor: null, epfWagePolicy: "ceiling", gratuityProvisionOn: true, overrides: [], ...o,
 });
 const run = (annual: number, o: Partial<CtcTerms> = {}, lines = template()) => expandCtc({ lines, terms: terms(annual, o), cfg: DEFAULT_STATUTORY_CONFIG });
 const amt = (e: CtcExpansion, code: string): bigint | undefined =>

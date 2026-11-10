@@ -7,7 +7,7 @@ data: no `ctc_contract` pay profile, no change. Migrations: payroll `0168`, hrms
 ## Flow
 
 1. HRMS `POST /v1/hrms/employees/:id/pay-profile` with `payProfile: ctc_contract` and `ctcTerms`
-   `{ annualFixedMinor, annualVariableTargetMinor?, templateLineageId, epfWagePolicy: ceiling|actual, esiOptOut, gratuityProvisionOn, overrides: [{code, monthlyMinor}] }`
+   `{ annualFixedMinor, annualVariableTargetMinor?, templateLineageId, epfWagePolicy: ceiling|actual, gratuityProvisionOn, overrides: [{code, monthlyMinor}] }`
    (digit strings, paise). Same maker-checker, month-start effective date, locked-period rule and audit as every pay profile.
    Flag off: terms are refused (`CTC_PROFILE_DISABLED`) and a terms-less request behaves as before.
 2. The payroll-input feed carries the approved terms in `payProfile.ctc` (flag on only).
@@ -44,3 +44,17 @@ Back-dated revision arrears; CTC statement PDF; preview API and request-form CTC
 at request time (payroll fails the employee by name at run time instead); bulk request rule (G6 `registerBulkProfileRule`);
 HRA for old-regime tax declarations (`tax/consumer.ts` still returns 0 for ctc_contract); F&F for CTC; run-level "by pay profile"
 subtotal; LWF/ESI contribution-period interplay beyond the seams already in #2487; whole-run fault isolation (owner decision Q12).
+
+## Owner decisions, 10 Nov 2026 (second set), as implemented
+
+1. **Two pay-group runs** (regular staff, contract/CTC staff): the existing pay-group model already does this (a run with `payGroupId` pays exactly the
+   group's members for the month; each run has its own register, approval and bank file). No schema change, no new migration. A CTC fault fails only the
+   contract group's run (tested). Operationally: create the two groups, assign members, run each group.
+2. **lop_applicable default** (component API, `defaultLopApplicable`): true for template earnings; false for a fixed non-taxable reimbursement (phone,
+   conveyance), for employer costs (not paid to the employee) and for run structures (not honoured by the run engine). An explicit value always wins.
+   The web form still sends its own checkbox value (unchecked by default); aligning its default is a UI follow-up.
+3. **ESI**: no opt-out (`esiOptOut` removed from the terms, the feed and the API; HRMS answers 400). The contribution-period rule is the #2487 seam
+   (`esi_contribution_period_enabled`, per tenant, default off): covered earlier in the Apr-Sep / Oct-Mar period => stays covered. Reused, not duplicated.
+   Employer ESI that continues past the ceiling is booked by the engine on the real gross and recorded in `employer_esi_minor`; it is not carved out of CTC.
+4. **DIC starting template** is config data in `modules/ctc/dic-starting-template.ts` (not imported at runtime, not loaded anywhere, not in the live DB).
+5. **Project managers** never see individual pay: unchanged; nothing in this branch adds a per-person pay read for projects.

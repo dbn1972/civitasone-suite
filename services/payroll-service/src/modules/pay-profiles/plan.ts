@@ -208,7 +208,7 @@ function planCtc(
   if (!tpl) return fail("CTC_TEMPLATE_NOT_FOUND", emp, `no locked CTC template version of ${terms.templateLineageId} takes effect by this month`);
   const e = emp as { statutoryPf?: boolean; statutoryEsi?: boolean };
   const pfApplicable = e.statutoryPf !== false;
-  const esiEligible = e.statutoryEsi !== false && !terms.esiOptOut;
+  const esiEligible = e.statutoryEsi !== false; // no employee opt-out (owner decision 10 Nov 2026); the engagement gate only
   let expansion;
   try {
     expansion = expandCtc({
@@ -216,7 +216,7 @@ function planCtc(
       terms: {
         annualFixedMinor: BigInt(terms.annualFixedMinor),
         annualVariableTargetMinor: terms.annualVariableTargetMinor != null ? BigInt(terms.annualVariableTargetMinor) : null,
-        epfWagePolicy: terms.epfWagePolicy, esiOptOut: terms.esiOptOut, gratuityProvisionOn: terms.gratuityProvisionOn,
+        epfWagePolicy: terms.epfWagePolicy, gratuityProvisionOn: terms.gratuityProvisionOn,
         overrides: terms.overrides.map((o) => ({ code: o.code, monthlyMinor: BigInt(o.monthlyMinor) })),
       },
     });
@@ -237,7 +237,7 @@ function planCtc(
       ctc: { expansion, template, pfApplicable, esiEligible },
       snapshot: {
         ...base, hraFloorMinor: "0",
-        ctcTemplate: { ...template, annualFixedMinor: terms.annualFixedMinor, epfWagePolicy: terms.epfWagePolicy, esiOptOut: terms.esiOptOut, gratuityProvisionOn: terms.gratuityProvisionOn },
+        ctcTemplate: { ...template, annualFixedMinor: terms.annualFixedMinor, epfWagePolicy: terms.epfWagePolicy, gratuityProvisionOn: terms.gratuityProvisionOn },
         ctcOverrides: terms.overrides,
       },
     },

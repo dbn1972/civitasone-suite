@@ -2827,8 +2827,6 @@ async function processPayrollRun(
         ...s8SeamParams(emp, p.month, s8PfBasisRows, s8LwfRules, s8EsiCovered, s8LwfApplied, s8LwfUnknown),
         // S8 G1: "PF on actual basic" chosen on the CTC terms (owner decision 2) overrides the seam default.
         ...(plan.ctc?.expansion.epfWagePolicy === "actual" ? { pfWageBasis: "actual" as const } : {}),
-        // ... and an ESI opt-out recorded on the CTC terms (where the law allows it, VERIFY) suppresses ESI on the slip.
-        ...(plan.ctc && !plan.ctc.esiEligible ? { statutoryEsi: false } : {}),
       });
 
       // P3: record loan repayments for the EMI that was ACTUALLY withheld after

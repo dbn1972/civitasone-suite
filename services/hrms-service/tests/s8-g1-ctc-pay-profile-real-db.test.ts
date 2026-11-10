@@ -112,13 +112,17 @@ describe("flag on: request -> pending -> maker-checker approval -> feed", () => 
     expect(zero.statusCode).toBe(422);
     expect(zero.json().code).toBe("CTC_ANNUAL_INVALID");
 
+    // no ESI opt-out exists (owner decision 10 Nov 2026): the field is refused, not silently ignored
+    const optOut = await post(empId, { payProfile: "ctc_contract", effectiveFrom: "2026-12-01", ctcTerms: terms({ esiOptOut: true }) });
+    expect(optOut.statusCode).toBe(400);
+
     const ok = await post(empId, { payProfile: "ctc_contract", effectiveFrom: "2026-12-01", ctcTerms: terms(), orderRef: "DIC/HR/2026/117" });
     expect(ok.statusCode).toBe(202);
     await drain();
     const id = ok.json().id as string;
     const [pending] = await asTenant((tx) => tx.select().from(hrmsPayProfiles).where(eq(hrmsPayProfiles.id, id)));
     expect(pending).toMatchObject({ status: "pending", payProfile: "ctc_contract" });
-    expect(pending!.ctcTerms).toMatchObject({ annualFixedMinor: "96000000", templateLineageId: LINEAGE, epfWagePolicy: "ceiling", esiOptOut: false, gratuityProvisionOn: true, overrides: [{ code: "HRA", monthlyMinor: "2400000" }] });
+    expect(pending!.ctcTerms).toMatchObject({ annualFixedMinor: "96000000", templateLineageId: LINEAGE, epfWagePolicy: "ceiling", gratuityProvisionOn: true, overrides: [{ code: "HRA", monthlyMinor: "2400000" }] });
 
     // pending changes nothing: the feed still says govt_scale
     const feedBefore = await app.inject({ method: "GET", url: "/v1/hrms/internal/payroll-input?month=2026-12", headers: headers(MAKER, ["payroll_admin"]) });
@@ -150,7 +154,7 @@ describe("flag on: request -> pending -> maker-checker approval -> feed", () => 
   it("the DB refuses CTC terms on a non-ctc profile row", async () => {
     await expect(asTenant((tx) => tx.insert(hrmsPayProfiles).values({
       tenantId: TENANT, employeeId: emp2Id, payProfile: "consolidated_contract", effectiveFrom: "2027-01-01", consolidatedMonthlyMinor: 3_000_000n,
-      ctcTerms: { annualFixedMinor: "1", annualVariableTargetMinor: null, templateLineageId: LINEAGE, epfWagePolicy: "ceiling", esiOptOut: false, gratuityProvisionOn: true, overrides: [] },
+      ctcTerms: { annualFixedMinor: "1", annualVariableTargetMinor: null, templateLineageId: LINEAGE, epfWagePolicy: "ceiling", gratuityProvisionOn: true, overrides: [] },
       requestedBy: MAKER, createdBy: MAKER, updatedBy: MAKER,
     }))).rejects.toThrow();
   });

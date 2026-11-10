@@ -12,7 +12,7 @@ import {
 const LINEAGE = "6f1d2c34-5b7a-4c1e-9d0a-2b8e4f7a9c10";
 const terms = (o: Partial<CtcTerms> = {}): CtcTerms => ({
   annualFixedMinor: "96000000", // Rs 9,60,000
-  annualVariableTargetMinor: null, templateLineageId: LINEAGE, epfWagePolicy: "ceiling", esiOptOut: false, gratuityProvisionOn: true, overrides: [], ...o,
+  annualVariableTargetMinor: null, templateLineageId: LINEAGE, epfWagePolicy: "ceiling", gratuityProvisionOn: true, overrides: [], ...o,
 });
 const req = (o: Record<string, unknown> = {}) => ({
   payProfile: "ctc_contract" as const, effectiveFrom: "2026-12-01", employeeId: "e1", eligibleForPayroll: true, paymentRoute: "payroll",
