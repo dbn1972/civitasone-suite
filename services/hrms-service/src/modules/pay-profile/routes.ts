@@ -24,7 +24,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import {
   PAY_PROFILES, isPayProfile, planApproval, resolveProfileForMonth, validateProfileRequest, applyMoneyTerms, moneyTermsOf,
-  requiredPayOption, type DeputationMoneyTerms,
+  requiredPayOption, type DeputationMoneyTerms, type CtcTerms,
 } from "./domain.js";
 import { buildEmployeePayFeed } from "./feed.js";
 
@@ -56,6 +56,16 @@ const requestBody = z.object({
     parentDaRateBps: z.number().int().min(0).max(100000).nullable(),
     parentPensionScheme: z.enum(["GPF", "NPS", "EPF"]).nullable(),
   }).partial().optional(),
+  /** S8 G1 (flag S8_CTC_PROFILE_ENABLED): the CTC terms of a ctc_contract profile. Annual, paise, digit strings. */
+  ctcTerms: z.object({
+    annualFixedMinor: minorString,
+    annualVariableTargetMinor: minorString.nullable().default(null),
+    templateLineageId: z.string().uuid(),
+    epfWagePolicy: z.enum(["ceiling", "actual"]).default("ceiling"),
+    esiOptOut: z.boolean().default(false),
+    gratuityProvisionOn: z.boolean().default(true),
+    overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: minorString })).max(10).default([]),
+  }).optional(),
   orderRef: z.string().max(120).optional(),
   remarks: z.string().max(2000).optional(),
 });
@@ -69,6 +79,7 @@ function serialize(r: Awaited<ReturnType<typeof repo.findById>>) {
     deputationId: r.deputationId,
     consolidatedMonthlyMinor: r.consolidatedMonthlyMinor == null ? null : r.consolidatedMonthlyMinor.toString(),
     deputationTerms: r.deputationTerms ?? null,
+    ...(r.ctcTerms ? { ctcTerms: r.ctcTerms } : {}),
     orderRef: r.orderRef, remarks: r.remarks,
     requestedBy: r.requestedBy, decidedBy: r.decidedBy, decidedAt: r.decidedAt, decisionNote: r.decisionNote,
     createdAt: r.createdAt,
@@ -104,6 +115,8 @@ async function assertAssignable(tenantId: string, input: {
   deputationId: string | null; consolidatedMonthlyMinor: bigint | null;
   /** Request: overrides merged over the deputation's terms. Approve: the stored approved copy. */
   termsOverride?: Partial<DeputationMoneyTerms>; termsSnapshot?: DeputationMoneyTerms | null;
+  /** S8 G1: the CTC terms of the request / the stored approved copy. */
+  ctcTerms?: CtcTerms | null;
 }): Promise<DeputationMoneyTerms | null> {
   const emp = await mustEmployee(tenantId, input.employeeId);
   const engagement = (await loadTypeCategoryResolver(tenantId))(emp.employeeType);
@@ -125,6 +138,7 @@ async function assertAssignable(tenantId: string, input: {
     deputationIdGiven: input.deputationId != null,
     consolidatedMonthlyMinor: input.consolidatedMonthlyMinor,
     lockedThrough: await lockedThrough(tenantId),
+    ...(input.ctcTerms ? { ctcTerms: input.ctcTerms } : {}),
   });
   if (error) throw new HttpError(error === "PERIOD_LOCKED" ? 409 : 422, error, `pay profile not assignable: ${error}`);
   return snapshot;
@@ -141,6 +155,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       employeeId: id, payProfile: body.payProfile, effectiveFrom: body.effectiveFrom,
       deputationId: body.deputationId ?? null, consolidatedMonthlyMinor: consolidated,
       ...(body.deputationTerms ? { termsOverride: body.deputationTerms as Partial<DeputationMoneyTerms> } : {}),
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
     });
     const history = await repo.listByEmployee(ctx.tenantId, id);
     if (history.some((r) => r.status === "pending")) {
@@ -155,6 +170,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       deputationId: body.deputationId ?? null,
       consolidatedMonthlyMinor: body.consolidatedMonthlyMinor ?? null,
       deputationTerms,
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
       orderRef: body.orderRef ?? null,
       remarks: body.remarks ?? null,
     });
@@ -201,6 +217,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
           employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
           deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
           termsSnapshot: row.deputationTerms ?? null,
+          ...(row.ctcTerms ? { ctcTerms: row.ctcTerms } : {}),
         });
         const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
         const plan = planApproval(row, active);

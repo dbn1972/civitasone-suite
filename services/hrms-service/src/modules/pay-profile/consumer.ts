@@ -59,6 +59,7 @@ export function registerPayProfileConsumers(queue: Queue): void {
         deputationId: p.deputationId,
         consolidatedMonthlyMinor: p.consolidatedMonthlyMinor == null ? null : BigInt(p.consolidatedMonthlyMinor),
         deputationTerms: p.deputationTerms ?? null,
+        ...(p.ctcTerms ? { ctcTerms: p.ctcTerms } : {}),
         orderRef: p.orderRef,
         remarks: p.remarks,
         requestedBy: msg.actorId,
@@ -70,6 +71,7 @@ export function registerPayProfileConsumers(queue: Queue): void {
       await audit(tx, msg, "request", p.id, {
         employeeId: p.employeeId, payProfile: p.payProfile, effectiveFrom: p.effectiveFrom, deputationId: p.deputationId,
         consolidatedMonthlyMinor: p.consolidatedMonthlyMinor, deputationTerms: p.deputationTerms ?? null,
+        ...(p.ctcTerms ? { ctcTerms: p.ctcTerms } : {}),
       });
     });
     log.info({ messageId: msg.messageId }, "pay profile requested");
@@ -164,6 +166,7 @@ export function registerPayProfileConsumers(queue: Queue): void {
       await audit(tx, msg, "approve", row.id, {
         employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
         deputationId: row.deputationId, deputationTerms: row.deputationTerms ?? null,
+        ...(row.ctcTerms ? { ctcTerms: row.ctcTerms } : {}),
         consolidatedMonthlyMinor: row.consolidatedMonthlyMinor == null ? null : row.consolidatedMonthlyMinor.toString(),
         decisionNote: p.note,
         closedProfileId: plan.closeRowId,
