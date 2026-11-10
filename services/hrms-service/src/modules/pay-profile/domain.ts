@@ -76,6 +76,11 @@ export function ctcTermsError(t: CtcTerms): string | null {
   return null;
 }
 
+/** What an audit event may carry of the CTC terms: no override amounts, no variable target (private pay data). */
+export function ctcAuditTerms(t: CtcTerms): { annualFixedMinor: string; templateLineageId: string; overrideCodes: string[] } {
+  return { annualFixedMinor: t.annualFixedMinor, templateLineageId: t.templateLineageId, overrideCodes: t.overrides.map((o) => o.code) };
+}
+
 export interface PayProfileRow {
   id: string;
   employeeId: string;

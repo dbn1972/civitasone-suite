@@ -138,8 +138,8 @@ describe("flag on: request -> pending -> maker-checker approval -> feed", () => 
     // the audit event carries the terms
     const audits = (await asTenant((tx) => tx.execute(sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record' AND payload->>'resourceId' = ${id} ORDER BY created_at`))) as unknown as Array<{ payload: { action: string; metadata: Record<string, unknown> } }>;
     expect(audits.map((a) => a.payload.action)).toEqual(["request", "approve"]);
-    expect(audits[0]!.payload.metadata.ctcTerms).toMatchObject({ annualFixedMinor: "96000000" });
-    expect(audits[1]!.payload.metadata.ctcTerms).toMatchObject({ annualFixedMinor: "96000000" });
+    // privacy: the audit carries the annual figure, the template and the override CODES only, never override amounts
+    for (const a of audits) expect(a.payload.metadata.ctcTerms).toEqual({ annualFixedMinor: "96000000", templateLineageId: LINEAGE, overrideCodes: ["HRA"] });
 
     // flag off again: the feed block is not emitted
     delete process.env[FLAG];

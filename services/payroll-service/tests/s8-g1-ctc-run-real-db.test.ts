@@ -30,6 +30,8 @@ const T_MIXED = randomUUID();
 const T_GOVT_ONLY = randomUUID();
 const T_BARE = randomUUID(); // no template at all
 const T_OFF = randomUUID(); // template present, flag off
+const T_BONUS = randomUUID(); // CTC gross under the ESI ceiling + a one-off over it
+const T_PFMIS = randomUUID(); // PF seam row disagrees with the CTC terms
 
 const tok = (tid: string) => signToken({ sub: ACTOR, tid, roles: ["payroll_admin"], sid: "ctc" }, SECRET, 3600);
 const hdr = (tid: string) => ({ authorization: `Bearer ${tok(tid)}`, "content-type": "application/json" });
@@ -37,8 +39,8 @@ const asTenant = <T>(tid: string, fn: (tx: Parameters<Parameters<typeof db.trans
   runWithTenant(tid, () => db.transaction(fn));
 const q = async (tid: string, s: ReturnType<typeof sql>) => (await asTenant(tid, (tx) => tx.execute(s))) as unknown as Array<Record<string, unknown>>;
 
-const S = { mixed: randomUUID(), govtOnly: randomUUID(), bare: randomUUID(), off: randomUUID() }; // run structures
-const TPLS: Record<string, string> = { [T_MIXED]: randomUUID(), [T_GOVT_ONLY]: randomUUID(), [T_BARE]: randomUUID(), [T_OFF]: randomUUID() }; // template lineage roots (global PK)
+const S = { mixed: randomUUID(), govtOnly: randomUUID(), bare: randomUUID(), off: randomUUID(), bonus: randomUUID(), pfmis: randomUUID() }; // run structures
+const TPLS: Record<string, string> = { [T_MIXED]: randomUUID(), [T_GOVT_ONLY]: randomUUID(), [T_BARE]: randomUUID(), [T_OFF]: randomUUID(), [T_BONUS]: randomUUID(), [T_PFMIS]: randomUUID() }; // template lineage roots (global PK)
 const EMP = { g: randomUUID(), a: randomUUID(), b: randomUUID(), k: randomUUID() };
 
 const employee = (id: string, no: string, basic: string, joined: string, payProfile?: Record<string, unknown>) => ({
@@ -114,6 +116,8 @@ const slipsOf = async (T: string, runId: string) => {
   const rows = await q(T, sql`SELECT ${SLIP_COLS} FROM payroll.payroll_slips WHERE run_id = ${runId}::uuid ORDER BY employee_no`);
   return Object.fromEntries(rows.map((r) => [r.employee_no as string, r]));
 };
+const fullGovtSlip = async (T: string, runId: string) =>
+  (await q(T, sql`SELECT to_jsonb(s) - 'id' - 'run_id' - 'tenant_id' - 'created_at' - 'updated_at' AS j FROM payroll.payroll_slips s WHERE run_id = ${runId}::uuid AND employee_no = 'DIC-G-0042'`))[0]!.j;
 const comps = (s: Record<string, unknown>) => Object.fromEntries((s.components as Array<{ code: string; amountMinor: number }>).map((c) => [c.code, c.amountMinor]));
 
 beforeAll(async () => {
@@ -128,15 +132,17 @@ beforeAll(async () => {
   await seedTenant(T_GOVT_ONLY, S.govtOnly, true);
   await seedTenant(T_BARE, S.bare, false);
   await seedTenant(T_OFF, S.off, true);
+  await seedTenant(T_BONUS, S.bonus, true);
+  await seedTenant(T_PFMIS, S.pfmis, true);
 });
 
 afterAll(async () => {
   delete process.env[FLAG];
-  for (const T of [T_MIXED, T_GOVT_ONLY, T_BARE, T_OFF]) {
+  for (const T of [T_MIXED, T_GOVT_ONLY, T_BARE, T_OFF, T_BONUS, T_PFMIS]) {
     await asTenant(T, async (tx) => {
       for (const t of ["statutory.payroll_pf", "statutory.payroll_esi", "statutory.payroll_tds", "statutory.payroll_gpf", "statutory.payroll_nps",
         "statutory.allowance_rule_config", "payroll.payroll_register", "payroll.payroll_slips", "payroll.payroll_arrears", "payroll.payroll_runs",
-        "payroll.payroll_components", "payroll.payroll_structures", "payroll.dearness_allowance_rates"]) {
+        "payroll.employee_pf_wage_basis", "payroll.payroll_components", "payroll.payroll_structures", "payroll.dearness_allowance_rates"]) {
         await tx.execute(sql.raw(`DELETE FROM ${t} WHERE tenant_id = '${T}'`));
       }
     });
@@ -183,10 +189,10 @@ describe("mixed run: 1 govt_scale + 2 ctc_contract in ONE run (flag on)", () => 
 
     // the solver's employer figures are the figures the engine booked
     for (const s of [a, b]) {
-      const paid = (s.profile_snapshot as { ctc: { paid: { employerPfMinor: string; employerEsiMinor: string; gratuityProvisionMinor: string } } }).ctc.paid;
-      expect(paid.employerPfMinor).toBe(s.pf_employer_minor);
-      expect(paid.employerEsiMinor).toBe(s.employer_esi_minor);
-      expect(paid.gratuityProvisionMinor).toBe(s.gratuity_provision_minor);
+      const snap = s.profile_snapshot as { ctc: { paid: { employerPfMinor: string; employerEsiMinor: string; gratuityProvisionMinor: string } }; ctcBooked: { employerPfMinor: string; employerEsiMinor: string } };
+      expect(snap.ctc.paid.employerPfMinor).toBe(s.pf_employer_minor); // prediction == booking
+      expect(snap.ctcBooked).toEqual({ employerPfMinor: s.pf_employer_minor, employerEsiMinor: s.employer_esi_minor });
+      expect(snap.ctc.paid.gratuityProvisionMinor).toBe(s.gratuity_provision_minor);
     }
 
     // government employee: still run structure + central DA + HRA floor, NPS, no CTC columns
@@ -205,9 +211,10 @@ describe("mixed run: 1 govt_scale + 2 ctc_contract in ONE run (flag on)", () => 
     govtOnlyRun = await startRun(T_GOVT_ONLY, S.govtOnly, "S8-GOVT");
     const run = await settle(T_GOVT_ONLY, govtOnlyRun);
     expect(run.status).not.toBe("failed");
-    const mixed = (await slipsOf(T_MIXED, mixedRun))["DIC-G-0042"]!;
-    const alone = (await slipsOf(T_GOVT_ONLY, govtOnlyRun))["DIC-G-0042"]!;
-    expect(mixed).toEqual(alone); // every column, the component lines and the profile snapshot
+    const mixed = await fullGovtSlip(T_MIXED, mixedRun);
+    const alone = await fullGovtSlip(T_GOVT_ONLY, govtOnlyRun);
+    expect(Object.keys(mixed as object).length).toBeGreaterThan(30);
+    expect(mixed).toEqual(alone); // ALL columns (SELECT * minus id, run, tenant, timestamps), component lines and snapshot
   }, 90_000);
 });
 
@@ -230,6 +237,33 @@ describe("flag off (the default) and fail-closed behaviour", () => {
     const run = await settle(T_BARE, runId);
     expect(run.status).toBe("failed");
     expect(run.last_error).toContain("CTC_TEMPLATE_NOT_FOUND");
+    expect(run.last_error).toContain("DIC-C-0917");
+  }, 60_000);
+});
+
+describe("booked amounts are authoritative", () => {
+  it("CTC gross under the ESI ceiling plus a one-off over it: employer_esi_minor is the ESI actually booked (0), not the solver's 647", async () => {
+    // Rs 2,76,000 CTC: full-month gross 19,920 (solver: employer ESI 647). An approved one-off of Rs 5,000 lifts the slip gross to 24,920.
+    const low = employee(EMP.a, "DIC-C-0917", "100", "2024-04-01", ctcProfile(TPLS[T_BONUS]!, 276_000));
+    await q(T_BONUS, sql`INSERT INTO payroll.payroll_arrears (tenant_id, employee_id, component_code, from_period, to_period, old_amount_minor, new_amount_minor, difference_minor, status, source, created_by)
+      VALUES (${T_BONUS}::uuid, ${EMP.a}::uuid, 'PERF_BONUS', '2026-10', '2026-10', 0, 0, 500000, 'approved', 'manual', ${ACTOR}::uuid)`);
+    feed([low]);
+    const runId = await startRun(T_BONUS, S.bonus, "S8-BONUS");
+    expect((await settle(T_BONUS, runId)).status).not.toBe("failed");
+    const s = (await slipsOf(T_BONUS, runId))["DIC-C-0917"]!;
+    expect(BigInt(s.gross_minor as string)).toBe(2_492_000n);
+    expect(s).toMatchObject({ esi_minor: "0", employer_esi_minor: "0" });
+    expect((s.profile_snapshot as { ctc: { paid: { employerEsiMinor: string } } }).ctc.paid.employerEsiMinor).toBe("64700"); // the prediction differs; the column is the booking
+  }, 60_000);
+
+  it("a PF wage-basis seam row that disagrees with the CTC terms refuses the employee by name (terms are authoritative)", async () => {
+    await q(T_PFMIS, sql`INSERT INTO payroll.employee_pf_wage_basis (tenant_id, employee_id, basis, effective_from, consent_ref, set_by)
+      VALUES (${T_PFMIS}::uuid, ${EMP.a}::uuid, 'actual', '2026-01-01', 'DIC/PF/2026/09', ${ACTOR}::uuid)`);
+    feed([CA(T_PFMIS)]); // terms say ceiling
+    const runId = await startRun(T_PFMIS, S.pfmis, "S8-PFMIS");
+    const run = await settle(T_PFMIS, runId);
+    expect(run.status).toBe("failed");
+    expect(run.last_error).toContain("CTC_PF_POLICY_MISMATCH");
     expect(run.last_error).toContain("DIC-C-0917");
   }, 60_000);
 });

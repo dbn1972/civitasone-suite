@@ -21,7 +21,7 @@ import { scopedRead } from "../../shared/db.js";
 import { fetchPayrollLockedThrough } from "../../shared/payroll-client.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { loadTypeCategoryResolver } from "../employee/engagement-policy.js";
-import { planApproval, requiredPayOption, deputationTermsError, isPayProfile, applyMoneyTerms } from "./domain.js";
+import { ctcAuditTerms, planApproval, requiredPayOption, deputationTermsError, isPayProfile, applyMoneyTerms } from "./domain.js";
 import type { PayProfileRequestPayload } from "./commands.js";
 
 const log = pino({ name: "hrms-pay-profile", serializers: SAFE_LOG_SERIALIZERS });
@@ -71,7 +71,7 @@ export function registerPayProfileConsumers(queue: Queue): void {
       await audit(tx, msg, "request", p.id, {
         employeeId: p.employeeId, payProfile: p.payProfile, effectiveFrom: p.effectiveFrom, deputationId: p.deputationId,
         consolidatedMonthlyMinor: p.consolidatedMonthlyMinor, deputationTerms: p.deputationTerms ?? null,
-        ...(p.ctcTerms ? { ctcTerms: p.ctcTerms } : {}),
+        ...(p.ctcTerms ? { ctcTerms: ctcAuditTerms(p.ctcTerms) } : {}),
       });
     });
     log.info({ messageId: msg.messageId }, "pay profile requested");
@@ -166,7 +166,7 @@ export function registerPayProfileConsumers(queue: Queue): void {
       await audit(tx, msg, "approve", row.id, {
         employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
         deputationId: row.deputationId, deputationTerms: row.deputationTerms ?? null,
-        ...(row.ctcTerms ? { ctcTerms: row.ctcTerms } : {}),
+        ...(row.ctcTerms ? { ctcTerms: ctcAuditTerms(row.ctcTerms) } : {}),
         consolidatedMonthlyMinor: row.consolidatedMonthlyMinor == null ? null : row.consolidatedMonthlyMinor.toString(),
         decisionNote: p.note,
         closedProfileId: plan.closeRowId,

@@ -2629,6 +2629,11 @@ async function processPayrollRun(
       const ctcPaid = plan.ctc
         ? prorateExpansion(plan.ctc.expansion, { lopDays, notInServiceDays: notInServiceLopDays, daysInMonth }, statutoryConfig, { pfApplicable: plan.ctc.pfApplicable, esiEligible: plan.ctc.esiEligible })
         : null;
+      // S8 G1: the CTC terms' EPF wage policy is authoritative for a CTC employee. A #2487 per-employee seam row that says
+      // otherwise would book a PF the solver did not carve out of CTC, so the employee is refused by name instead.
+      if (plan.ctc && (s8PfBasisRows.get(emp.id)?.length ?? 0) > 0 && pfWageBasisFor(s8PfBasisRows.get(emp.id), p.month) !== plan.ctc.expansion.epfWagePolicy) {
+        throw new DomainError("CTC_PF_POLICY_MISMATCH", `employee ${emp.employeeNo}: the CTC terms say EPF on '${plan.ctc.expansion.epfWagePolicy}' wages but the per-employee PF wage basis for ${p.month} says '${pfWageBasisFor(s8PfBasisRows.get(emp.id), p.month)}'; align them (the CTC terms are authoritative) before running payroll`);
+      }
       const basicMinor = ctcPaid
         ? ctcPaid.basicMinor
         : prorate
@@ -2783,7 +2788,7 @@ async function processPayrollRun(
           : plan.snapshot,
         ...(ctcPaid && plan.ctc ? {
           earningsOverride: ctcEarningsOverride(ctcPaid),
-          ctcSlip: { templateId: plan.ctc.template.structureId, templateVersion: plan.ctc.template.templateVersion, employerEsiMinor: ctcPaid.employerEsiMinor, gratuityProvisionMinor: ctcPaid.gratuityMinor },
+          ctcSlip: { templateId: plan.ctc.template.structureId, templateVersion: plan.ctc.template.templateVersion, gratuityProvisionMinor: ctcPaid.gratuityMinor },
         } : {}),
         // T-STAT M-PT-BASIS (F08): the slab is looked up on the monthly salary
         // (gross earnings less LOP, computed by computeSlip), not Basic + DA.
@@ -3428,7 +3433,7 @@ export async function computeAndInsertSlip(
     /** S8 SEAM 3: covered earlier in this ESI contribution period (flag on); omitted == false. */
     esiContinuation?: boolean;
     /** S8 G1: the CTC template used and the employer-side figures of a ctc_contract slip; omitted for every other profile. */
-    ctcSlip?: { templateId: string; templateVersion: number; employerEsiMinor: bigint; gratuityProvisionMinor: bigint };
+    ctcSlip?: { templateId: string; templateVersion: number; gratuityProvisionMinor: bigint };
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -3512,11 +3517,14 @@ export async function computeAndInsertSlip(
     tdsShortfallFinal: result.tdsShortfallMinor > 0n && params.tdsFlags?.finalMonth === true,
     recoveryDeferredMinor: result.recoveryCarryForwardMinor,
     payProfile: params.payProfile?.kind ?? "govt_scale",
-    profileSnapshot: params.profileSnapshot ?? null,
+    profileSnapshot: params.ctcSlip && params.profileSnapshot
+      ? { ...params.profileSnapshot, ctcBooked: { employerPfMinor: result.pfEmployerMinor.toString(), employerEsiMinor: result.esiEmployerMinor.toString() } }
+      : params.profileSnapshot ?? null,
     pfWageMinor,
     ...(params.ctcSlip ? {
       ctcTemplateId: params.ctcSlip.templateId, ctcTemplateVersion: params.ctcSlip.templateVersion,
-      employerEsiMinor: params.ctcSlip.employerEsiMinor, gratuityProvisionMinor: params.ctcSlip.gratuityProvisionMinor,
+      // the ESI the engine actually booked (whole gross incl. one-offs, esiContinuation), never the solver's prediction
+      employerEsiMinor: result.esiEmployerMinor, gratuityProvisionMinor: params.ctcSlip.gratuityProvisionMinor,
     } : {}),
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
