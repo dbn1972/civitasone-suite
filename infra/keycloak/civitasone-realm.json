@@ -322,7 +322,7 @@
       },
       {
         "name": "records_officer",
-        "description": "Records officer: assigns record categories and closes establishment files (estab-service records management)."
+        "description": "Records officer: manages record categories, disposal, weed-out, archival and record-room transfers (estab-service records management)."
       }
     ]
   },
