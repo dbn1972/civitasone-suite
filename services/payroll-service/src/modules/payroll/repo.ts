@@ -42,8 +42,9 @@ export async function listRunsByTenant(tenantId: string, limit = 50, month?: str
 }
 
 export async function listStructuresByTenant(tenantId: string, limit = 50) {
+  // Section 8 G2: CTC templates are not run structures; every pre-existing row has kind = run.
   return scopedRead((tx) => tx.select().from(payrollStructures)
-    .where(eq(payrollStructures.tenantId, tenantId))
+    .where(and(eq(payrollStructures.tenantId, tenantId), eq(payrollStructures.kind, "run")))
     .limit(limit));
 }
 
@@ -145,13 +146,17 @@ export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunR
 }
 
 export async function listComponentsByStructure(structureId: string, tenantId: string) {
+  // Section 8 G2: a deactivated component is never paid (every pre-existing row is active).
   return scopedRead((tx) => tx.select().from(payrollComponents)
-    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId))));
+    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId), eq(payrollComponents.isActive, true))));
 }
 
 export async function listComponentsByTenant(tenantId: string, limit: number) {
+  // Section 8 G2: components of CTC templates are managed on their own screen, not in the run-structure grid.
   return scopedRead((tx) => tx.select().from(payrollComponents)
-    .where(eq(payrollComponents.tenantId, tenantId)).limit(limit));
+    .where(and(eq(payrollComponents.tenantId, tenantId), sql`NOT EXISTS (
+      SELECT 1 FROM payroll.payroll_structures s WHERE s.id = ${payrollComponents.structureId} AND s.kind = 'ctc_template')`))
+    .limit(limit));
 }
 
 /** FR 53: the run's pay-suspended employees (payroll.payroll_run_suspensions, migration 0057). */

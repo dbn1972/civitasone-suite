@@ -81,6 +81,14 @@ export const COMMANDS = {
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
   bonusRuleCreate:        "payroll.bonus_rule.create",
+  // Section 8 G2: pay-component master (flag S8_PAY_COMPONENTS_ENABLED)
+  ctcTemplateCreate:      "payroll.ctc_template.create",
+  payComponentCreate:     "payroll.pay_component.create",
+  payComponentUpdate:     "payroll.pay_component.update",
+  payComponentSetActive:  "payroll.pay_component.set_active",
+  payComponentReorder:    "payroll.pay_component.reorder",
+  payStructureLock:       "payroll.pay_structure.lock",
+  payStructureNewVersion: "payroll.pay_structure.new_version",
   daRateCreate:           "payroll.da_rate.create",
   daRateDelete:           "payroll.da_rate.delete",
   // fin-payroll-01: tenant slip letterhead (GAP-PAYROLL-SALARY-SLIPS-DETAIL-02)

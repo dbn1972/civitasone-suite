@@ -14,6 +14,7 @@ import { gratuityRuleRoutes } from "./modules/gratuity-rules/routes.js";
 import { arrearApprovalRoutes } from "./modules/arrears-approval/routes.js";
 import { bonusRuleRoutes } from "./modules/bonus-rules/routes.js";
 import { daRateRoutes } from "./modules/da-rates/routes.js";
+import { payComponentRoutes } from "./modules/pay-components/routes.js";
 import { loansRoutes }   from "./modules/loans/routes.js";
 import { statutoryRoutes } from "./modules/statutory/routes.js";
 import { ecrRoutes } from "./modules/statutory/ecr-routes.js";
@@ -99,6 +100,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(arrearApprovalRoutes);
   await app.register(bonusRuleRoutes);
   await app.register(daRateRoutes);
+  await app.register(payComponentRoutes);
   await app.register(loansRoutes);
   await app.register(statutoryRoutes);
   await app.register(ecrRoutes);

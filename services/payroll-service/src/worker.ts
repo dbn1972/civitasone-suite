@@ -13,6 +13,7 @@ import { registerGratuityRuleConsumers } from "./modules/gratuity-rules/consumer
 import { registerArrearApprovalConsumers } from "./modules/arrears-approval/consumer.js";
 import { registerBonusRuleConsumers } from "./modules/bonus-rules/consumer.js";
 import { registerDaRateConsumers } from "./modules/da-rates/consumer.js";
+import { registerPayComponentConsumers } from "./modules/pay-components/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
 import { registerTaxConsumers }     from "./modules/tax/consumer.js";
 import { registerTaxProofConsumers } from "./modules/tax-proofs/consumer.js";
@@ -80,6 +81,7 @@ registerGratuityRuleConsumers(queue);
 registerArrearApprovalConsumers(queue);
 registerBonusRuleConsumers(queue);
 registerDaRateConsumers(queue);
+registerPayComponentConsumers(queue);
 registerLoansConsumers(queue);
 registerTaxConsumers(queue);
 registerTaxProofConsumers(queue);

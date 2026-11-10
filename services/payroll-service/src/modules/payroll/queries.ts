@@ -1,4 +1,5 @@
 import { minorToRupees, minorToWireNumber } from "../../shared/money.js";
+import { payComponentsEnabled } from "../pay-components/model.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
@@ -343,6 +344,14 @@ export async function listComponents(tenantId: string, limit: number) {
     formula: c.formula ?? null,
     pctOfBasic: c.pctOfBasic ?? null,
     fixedMinor: c.fixedMinor != null ? c.fixedMinor.toString() : null,
+    // Section 8 G2: the CTC-ready fields are added only when the flag is on, so the response is
+    // byte-identical to today with it off.
+    ...(payComponentsEnabled() ? {
+      isActive: c.isActive, calc: c.calc ?? null, pctOfCtcBps: c.pctOfCtcBps ?? null,
+      employerCostClass: c.employerCostClass ?? null, costPlacement: c.costPlacement,
+      countsForPfWage: c.countsForPfWage, countsForEsiWage: c.countsForEsiWage, countsForGratuity: c.countsForGratuity,
+      lopApplicable: c.lopApplicable, payslipOrder: c.payslipOrder ?? null,
+    } : {}),
   }));
 }
 

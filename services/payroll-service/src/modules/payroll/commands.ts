@@ -99,7 +99,7 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
   if (body.structureId) {
     const struct = await scopedRead((tx) => tx.execute(sql`
       SELECT id FROM payroll.payroll_structures
-      WHERE id = ${body.structureId}::uuid AND tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
+      WHERE id = ${body.structureId}::uuid AND tenant_id = ${ctx.tenantId}::uuid AND status = 'active' AND kind = 'run'
       LIMIT 1
     `));
     if (!struct[0]) {
