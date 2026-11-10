@@ -7,7 +7,7 @@ import {
   hrmsContractConfig,
   hrmsContractSeq,
 } from "./schema.js";
-import { eq, and, sql, desc, asc, gte, lte, inArray, type SQL } from "drizzle-orm";
+import { eq, and, or, sql, desc, asc, gte, lte, inArray, type SQL } from "drizzle-orm";
 import { hrmsEmployees } from "../employee/schema.js";
 import { addDaysToDateOnly } from "../../shared/ist.js";
 
@@ -361,7 +361,7 @@ export async function listRenewals(
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
-export async function getExpiringContractsDashboard(tenantId: string) {
+export async function getExpiringContractsDashboard(tenantId: string, includeLapsed = false) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     .toISOString()
@@ -369,6 +369,26 @@ export async function getExpiringContractsDashboard(tenantId: string) {
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     .toISOString()
     .slice(0, 10);
+
+  // S8 G5: a flag_only tenant keeps lapsed contracts in force until a person decides, so they must stay on the HR work
+  // list after their end month. Uncached (small set, and the cache key above is invalidated by existing writers).
+  if (includeLapsed) {
+    return scopedRead((tx) =>
+      tx
+        .select()
+        .from(hrmsContracts)
+        .where(
+          and(
+            eq(hrmsContracts.tenantId, tenantId),
+            or(
+              and(inArray(hrmsContracts.status, ["active", "expiring"]), gte(hrmsContracts.endDate, monthStart), lte(hrmsContracts.endDate, monthEnd)),
+              and(inArray(hrmsContracts.status, ["active", "expiring", "escalated"]), sql`${hrmsContracts.endDate} < ${now.toISOString().slice(0, 10)}::date`),
+            ),
+          ),
+        )
+        .orderBy(hrmsContracts.endDate),
+    );
+  }
 
   return cache.getOrLoad(
     `${SERVICE}:${tenantId}:contract:dashboard:expiring`,

@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   pickProjectionContract, buildProjection, projectFromTerms, sameProjection, EMPTY_PROJECTION,
 } from "../modules/contracts/projection.js";
+import { csvCell } from "../modules/contracts/routes.js";
 import {
   resolveLapsePolicy, resolveNotifyRoles, flagOnlyDue, routeRecipients, buildDigest, isDigestDay,
   LAPSE_FLAGGED_MARK, GRACE_ELAPSED_MARK,
@@ -105,5 +106,16 @@ describe("weekly HR digest", () => {
   it("goes out on Mondays only", () => {
     expect(isDigestDay("2026-11-09")).toBe(true);  // Monday
     expect(isDigestDay("2026-11-10")).toBe(false); // Tuesday
+  });
+});
+
+describe("CSV cells", () => {
+  it("neutralises text that starts like a formula (including a leading line feed) but leaves numbers alone", () => {
+    expect(csvCell("=SUM(A1)")).toBe("\"'=SUM(A1)\"");
+    expect(csvCell("\n=1+1")).toBe("\"'\n=1+1\"");
+    expect(csvCell("-5")).toBe("\"'-5\"");
+    expect(csvCell(-45)).toBe('"-45"');
+    expect(csvCell(null)).toBe('""');
+    expect(csvCell('a "b"')).toBe('"a ""b"""');
   });
 });

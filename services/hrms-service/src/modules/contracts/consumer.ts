@@ -5,7 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS, SERVICE } from "../../topics.js";
-import { hrmsContracts, hrmsContractRenewals } from "./schema.js";
+import { hrmsContracts, hrmsContractRenewals, hrmsContractNotifications } from "./schema.js";
 import { assertValidTransition, canRenew, DomainError } from "./domain.js";
 import {
   getContractById,
@@ -24,7 +24,7 @@ import { eq, and } from "drizzle-orm";
 import {
   syncEmployeeContractProjection, reconcileTenantProjection, isProjectionEnabled, invalidateEmployeeCache,
 } from "./projection.js";
-import { resolveLapsePolicy } from "./policy.js";
+import { resolveLapsePolicy, LAPSE_FLAGGED_MARK } from "./policy.js";
 import type { ContractStatus } from "./types.js";
 import { uuidV5 } from "../../shared/ids.js";
 
@@ -659,7 +659,14 @@ export function registerContractConsumers(queue: Queue): void {
           assertNotSelfRenewal(actingEmployeeId, contract.employeeId, contractId);
 
           const status = contract.status as ContractStatus;
-          if (status !== "active" && status !== "expiring") {
+          if (status === "escalated") {
+            // S8 G5: a flag_only tenant leaves lapsed contracts escalated; HR must be able to renew them (single renew already does this).
+            assertValidTransition("escalated", "expiring");
+            await tx
+              .update(hrmsContracts)
+              .set({ status: "expiring", updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(eq(hrmsContracts.id, contractId), eq(hrmsContracts.tenantId, p.tenantId)));
+          } else if (status !== "active" && status !== "expiring") {
             throw new NonRetryableError(
               `Contract ${contractId} status '${status}' is not valid for renewal`,
             );
@@ -764,6 +771,23 @@ export function registerContractConsumers(queue: Queue): void {
       // S8 G5: a flag_only tenant never auto-separates, whoever published this command (the nightly detector or a manual trigger).
       if (resolveLapsePolicy(config).action === "flag_only") {
         await audit(tx, msg, "auto_separate_skipped", "contract", p.contractId, { reason: "lapse_action_flag_only" });
+        // The policy may have flipped after the detector already expired the contract: tell HR once (deduped through the
+        // lapse-flag marker the detector uses) so nothing is silently stuck needing a decision.
+        const already = await tx.select({ id: hrmsContractNotifications.id }).from(hrmsContractNotifications)
+          .where(and(eq(hrmsContractNotifications.tenantId, p.tenantId), eq(hrmsContractNotifications.contractId, p.contractId), eq(hrmsContractNotifications.milestone, LAPSE_FLAGGED_MARK)))
+          .limit(1);
+        if (already.length === 0) {
+          await enqueue(tx, {
+            topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              tenantId: p.tenantId, recipients: [contract.employeeId], roles: ["hr_admin"], channels: ["email", "in_app"],
+              template: "contract_lapsed_flagged",
+              data: { contractId: p.contractId, contractNo: contract.contractNo, employeeId: contract.employeeId, endDate: contract.endDate, status: contract.status },
+            },
+          });
+          await tx.insert(hrmsContractNotifications).values({ tenantId: p.tenantId, contractId: p.contractId, milestone: LAPSE_FLAGGED_MARK });
+          await audit(tx, msg, "lapse_flagged", "contract", p.contractId, { reason: "lapse_action_flag_only" });
+        }
         return;
       }
 

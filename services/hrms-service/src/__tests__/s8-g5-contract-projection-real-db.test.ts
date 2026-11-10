@@ -6,7 +6,7 @@
  *   ON    projection on, project/line manager routing, weekly digest.
  *   FLAG  lapse_action = flag_only with 3 grace days.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc, runWithTenant } from "@civitasone/db";
@@ -15,6 +15,7 @@ import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 import { queue } from "../shared/infra.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../topics.js";
+import { reconcileMessageId } from "../modules/contracts/commands.js";
 import { registerContractConsumers } from "../modules/contracts/consumer.js";
 import { registerF3_contracts_Consumers } from "../modules/contracts/f3-consumer.js";
 import { registerContractExpiryConsumers, sendWeeklyDigest } from "../modules/contracts/expiry-consumer.js";
@@ -104,6 +105,11 @@ async function runDetector(t: string): Promise<void> {
     correlationId: randomUUID(), schemaVersion: "1.0", payload: { tenantId: t },
   });
   await q.drain();
+}
+
+/** The reconcile command is deduplicated per tenant per 10-minute window; clear the marker so a re-run of this file is not skipped. */
+async function resetReconcileWindow(t: string): Promise<void> {
+  await sqlClient.unsafe(`DELETE FROM _inbox.processed WHERE message_id = '${reconcileMessageId(t)}'`).catch(() => undefined);
 }
 
 async function cleanup(): Promise<void> {
@@ -245,6 +251,7 @@ describe("flag ON: the employee record carries the contract and project", () => 
 describe("read-model consistency: drift is detected and repaired, and the repair is idempotent", () => {
   it("check reports the drift, reconcile repairs it, a second reconcile changes nothing", async () => {
     const h = hdr(ON, ["hr_admin"], SUB_HR);
+    await resetReconcileWindow(ON);
     await asTenant(ON, (tx) => tx`UPDATE employee.hrms_employees SET contract_end_date = '2031-01-01', project_code = 'WRONG' WHERE tenant_id = ${ON} AND id = ${N.e1}`);
     const before = (await app.inject({ method: "GET", url: "/v1/hrms/contracts/projection/check", headers: h })).json() as { data: { drifted: number; consistent: boolean } };
     expect(before.data.drifted).toBeGreaterThanOrEqual(1);
@@ -396,5 +403,144 @@ describe("expiring dashboard: project columns, project filter, CSV (all opt-in)"
     expect(lines[0]).toContain("\"Project Manager\"");
     expect(r.body).toContain("\"'=Gateway Phase II\"");
     expect(r.body).not.toMatch(/(^|,)"=/m);
+  });
+});
+
+
+const SUB_LM = uid(42);
+const K_FL4 = uid(100), K_FL5 = uid(101), K_FL6 = uid(102), K_ON_PM_OWN = uid(103), K_ON_OUT = uid(104), K_ON_OUT_RENEWAL = uid(105);
+
+describe("review fixes: flag_only work list and renewal of a lapsed escalated contract", () => {
+  beforeAll(async () => {
+    await seedContract(FLAG, K_FL4, F.e4, "escalated", "2025-01-01", day(-45), termsA); // lapsed in an earlier month
+    await seedContract(FLAG, K_FL5, F.lm, "escalated", "2025-01-01", day(-20), termsB);
+  });
+  const hr = () => hdr(FLAG, ["hr_admin"], SUB_HR);
+
+  it("a flag_only tenant's HR work list includes the lapsed escalated contract from an earlier month; a default tenant's does not", async () => {
+    const r = (await app.inject({ method: "GET", url: "/v1/hrms/contracts/dashboard/expiring", headers: hr() })).json() as { data: Array<{ id: string }> };
+    expect(r.data.map((c) => c.id)).toContain(K_FL4);
+    const other = (await app.inject({ method: "GET", url: "/v1/hrms/contracts/dashboard/expiring", headers: hdr(ON, ["hr_admin"], SUB_HR) })).json() as { data: Array<{ id: string }> };
+    expect(other.data.map((c) => c.id)).not.toContain(K_FL4);
+  });
+
+  it("the CSV lists it, and a negative days-remaining stays a plain number (not neutralised)", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/contracts/dashboard/expiring?format=csv", headers: hr() });
+    const line = r.body.split("\r\n").find((l) => l.includes("CON-S8-" + K_FL4.slice(-4)))!;
+    expect(line).toBeTruthy();
+    expect(line).toContain('"-45"');
+    expect(line).not.toContain("\"'-");
+  });
+
+  it("HR can renew the lapsed escalated contract (it moves to expiring with a pending renewal)", async () => {
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/contracts/${K_FL4}/renew`, headers: hr(), payload: { newEndDate: day(300), reason: "Project extended by sanction" } });
+    expect(r.statusCode).toBe(202);
+    await drain();
+    expect(await contractStatus(FLAG, K_FL4)).toBe("expiring");
+    const n = (await asTenant(FLAG, (tx) => tx`SELECT count(*)::int AS n FROM contracts.hrms_contract_renewals WHERE contract_id = ${K_FL4} AND status = 'pending_approval'`))[0]!.n;
+    expect(n).toBe(1);
+  });
+
+  it("bulk renew accepts an escalated contract too", async () => {
+    await publish(FLAG, COMMANDS.contractRenewalBulk, SEED, { contractIds: [K_FL5], newEndDate: day(300), newTerms: {}, initiatedBy: SEED });
+    expect(await contractStatus(FLAG, K_FL5)).toBe("expiring");
+    const n = (await asTenant(FLAG, (tx) => tx`SELECT count(*)::int AS n FROM contracts.hrms_contract_renewals WHERE contract_id = ${K_FL5}`))[0]!.n;
+    expect(n).toBe(1);
+  });
+});
+
+describe("review fixes: policy flipped mid-flight (contract already expired)", () => {
+  it("a refused auto-separate tells HR once that the contract needs a decision, and audits it", async () => {
+    await seedContract(FLAG, K_FL6, F.pm, "expired", "2025-01-01", day(-3), termsA);
+    await publish(FLAG, COMMANDS.contractAutoSeparate, SEED, { contractId: K_FL6 });
+    await publish(FLAG, COMMANDS.contractAutoSeparate, SEED, { contractId: K_FL6 });
+    const n = (await notices(FLAG, "contract_lapsed_flagged")).filter((p) => p.data.contractId === K_FL6);
+    expect(n).toHaveLength(1);
+    expect(n[0]!.roles).toEqual(["hr_admin"]);
+    expect((await outbox(FLAG, "audit.event.record")).some((m) => m.payload.action === "lapse_flagged" && m.payload.resourceId === K_FL6)).toBe(true);
+    expect(await outbox(FLAG, COMMANDS.lifecycleSeparate)).toHaveLength(0);
+  });
+});
+
+describe("review fixes: project manager sees the renewal they started, not pay, and not other teams", () => {
+  const pm = () => hdr(ON, ["manager"], SUB_PM);
+  const hrOn = () => hdr(ON, ["hr_admin"], SUB_HR);
+  let e1Contract = "";
+  beforeAll(async () => {
+    await asTenant(ON, (tx) => tx`UPDATE employee.hrms_employees SET user_ref = ${SUB_LM} WHERE id = ${N.lm}`);
+    e1Contract = (await asTenant(ON, (tx) => tx`SELECT id FROM contracts.hrms_contracts WHERE tenant_id = ${ON} AND employee_id = ${N.e1} AND status IN ('active','expiring')`))[0]!.id as string;
+    await seedContract(ON, K_ON_PM_OWN, N.pm, "active", "2026-04-01", day(100), termsA);
+    await seedContract(ON, K_ON_OUT, N.e3, "active", "2026-04-01", day(100), termsB);
+    await asTenant(ON, (tx) => tx`INSERT INTO contracts.hrms_contract_renewals (id, tenant_id, contract_id, renewal_number, initiated_by, status, new_end_date, original_terms, new_terms, created_by, updated_by)
+      VALUES (${K_ON_OUT_RENEWAL}, ${ON}, ${K_ON_OUT}, 1, ${SEED}, 'pending_approval', ${day(400)}, ${JSON.stringify(termsB)}::jsonb, ${JSON.stringify(termsB)}::jsonb, ${SEED}, ${SEED})`);
+  });
+
+  it("the renewal the PM started (earlier test) is listed and readable for them; one for another team is neither", async () => {
+    await drain();
+    const list = (await app.inject({ method: "GET", url: "/v1/hrms/contracts/renewals?limit=50", headers: pm() })).json() as { data: Array<{ id: string; contractId: string }> };
+    expect(list.data.some((r) => r.contractId === e1Contract)).toBe(true);
+    expect(list.data.some((r) => r.id === K_ON_OUT_RENEWAL)).toBe(false);
+    const mine = list.data.find((r) => r.contractId === e1Contract)!;
+    expect((await app.inject({ method: "GET", url: `/v1/hrms/contracts/renewals/${mine.id}`, headers: pm() })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/v1/hrms/contracts/renewals/${K_ON_OUT_RENEWAL}`, headers: pm() })).statusCode).toBe(404);
+  });
+
+  it("the PM cannot renew their own contract (SoD) nor a contract outside their team", async () => {
+    const own = await app.inject({ method: "POST", url: `/v1/hrms/contracts/${K_ON_PM_OWN}/renew`, headers: pm(), payload: { newEndDate: day(400) } });
+    expect(own.statusCode).toBe(403);
+    expect((own.json() as { code: string }).code).toBe("SELF_RENEWAL_FORBIDDEN");
+    const out = await app.inject({ method: "POST", url: `/v1/hrms/contracts/${K_ON_OUT}/renew`, headers: pm(), payload: { newEndDate: day(400) } });
+    expect(out.statusCode).toBe(403);
+  });
+
+  it("project-manager-only responses carry no pay (detail, list, history, renewals); HR and the line manager still do", async () => {
+    const noPay = (body: string) => { expect(body).not.toContain("compensationMinor"); expect(body).not.toContain("6500000"); expect(body).not.toContain('"currency"'); };
+    const d = await app.inject({ method: "GET", url: `/v1/hrms/contracts/${e1Contract}`, headers: pm() });
+    expect(d.statusCode).toBe(200);
+    noPay(d.body);
+    expect((d.json() as { data: { terms: { role: string } } }).data.terms.role).toBe("Project Analyst");
+    const listed = (await app.inject({ method: "GET", url: "/v1/hrms/contracts?limit=50", headers: pm() })).json() as { data: Array<{ employeeId: string }> };
+    const team = listed.data.filter((c) => c.employeeId !== N.pm); // the PM's own contract is their own record: shown in full
+    expect(team.length).toBeGreaterThan(0);
+    noPay(JSON.stringify(team));
+    noPay((await app.inject({ method: "GET", url: `/v1/hrms/contracts/employee/${N.e1}/history`, headers: pm() })).body);
+    noPay((await app.inject({ method: "GET", url: "/v1/hrms/contracts/renewals?limit=50", headers: pm() })).body);
+    // unchanged for HR and for the line manager (E1's manager is N.lm)
+    expect((await app.inject({ method: "GET", url: `/v1/hrms/contracts/${e1Contract}`, headers: hrOn() })).body).toContain("6500000");
+    const lm = await app.inject({ method: "GET", url: `/v1/hrms/contracts/${e1Contract}`, headers: hdr(ON, ["manager"], SUB_LM) });
+    expect(lm.statusCode).toBe(200);
+    expect(lm.body).toContain("6500000");
+  });
+});
+
+describe("review fixes: projection check and reconcile dedupe", () => {
+  it("the check answers enabled:false for a tenant that has not opted in, without scanning", async () => {
+    for (const t of [OFF, FLAG]) {
+      const r = await app.inject({ method: "GET", url: "/v1/hrms/contracts/projection/check", headers: hdr(t, ["hr_admin"], SUB_HR) });
+      expect(r.json()).toEqual({ data: { enabled: false } });
+    }
+    const on = (await app.inject({ method: "GET", url: "/v1/hrms/contracts/projection/check", headers: hdr(ON, ["hr_admin"], SUB_HR) })).json() as { data: { enabled: boolean; truncated: boolean } };
+    expect(on.data).toMatchObject({ enabled: true, truncated: false });
+  });
+
+  it("repeated reconcile requests inside the window run one scan", async () => {
+    // a fresh 10-minute window (the in-memory test queue also remembers message ids for the life of the process)
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 26 * 3_600_000);
+    try {
+    await resetReconcileWindow(ON); // a re-run inside the same real 10 minutes would otherwise find the marker
+    const count = async () => (await outbox(ON, "audit.event.record")).filter((m) => m.payload.action === "projection_reconcile").length;
+    const before = await count();
+    for (let i = 0; i < 3; i++) await app.inject({ method: "POST", url: "/v1/hrms/contracts/projection/reconcile", headers: hdr(ON, ["hr_admin"], SUB_HR) });
+    await drain();
+    expect(await count()).toBe(before + 1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("the window id is stable inside a window and differs across tenants and windows", () => {
+    const t0 = 1_800_000_000_000;
+    expect(reconcileMessageId(ON, t0)).toBe(reconcileMessageId(ON, t0 + 60_000));
+    expect(reconcileMessageId(ON, t0)).not.toBe(reconcileMessageId(ON, t0 + 11 * 60_000));
+    expect(reconcileMessageId(ON, t0)).not.toBe(reconcileMessageId(FLAG, t0));
   });
 });

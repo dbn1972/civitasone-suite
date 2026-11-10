@@ -113,18 +113,32 @@ export async function syncEmployeeContractProjection(tx: any, tenantId: string, 
   return true;
 }
 
-export type ReconcileResult = { checked: number; drifted: number; repaired: number; repairedIds: string[] };
+export type ReconcileResult = { checked: number; drifted: number; repaired: number; repairedIds: string[]; truncated: boolean };
 
 /**
  * Compare every employee that has (or should have) a projection against the contracts table. repair=false
  * is the consistency check (counts drift, writes nothing); repair=true fixes it. Also the backfill: the first
  * run after a tenant opts in fills every contract employee. Idempotent.
  */
-export async function reconcileTenantProjection(tx: any, tenantId: string, repair: boolean): Promise<ReconcileResult> {
-  const contracts = await tx
+export async function reconcileTenantProjection(tx: any, tenantId: string, repair: boolean, opts: { limit?: number } = {}): Promise<ReconcileResult> {
+  // opts.limit caps the scan to the first N contract employees (by id) -- used by the on-demand check so one request
+  // can never read a whole large tenant. The repair path is uncapped (it runs as a queued job).
+  let truncated = false;
+  let scope: string[] | null = null;
+  if (opts.limit) {
+    const ids = await tx
+      .selectDistinct({ employeeId: hrmsContracts.employeeId })
+      .from(hrmsContracts)
+      .where(and(eq(hrmsContracts.tenantId, tenantId), ne(hrmsContracts.status, "draft")))
+      .orderBy(hrmsContracts.employeeId)
+      .limit(opts.limit + 1);
+    truncated = ids.length > opts.limit;
+    scope = ids.slice(0, opts.limit).map((r: { employeeId: string }) => r.employeeId);
+  }
+  const contracts = scope !== null && scope.length === 0 ? [] : await tx
     .select()
     .from(hrmsContracts)
-    .where(and(eq(hrmsContracts.tenantId, tenantId), ne(hrmsContracts.status, "draft")));
+    .where(and(eq(hrmsContracts.tenantId, tenantId), ne(hrmsContracts.status, "draft"), ...(scope ? [inArray(hrmsContracts.employeeId, scope)] : [])));
   const byEmployee = new Map<string, any[]>();
   for (const c of contracts) {
     const list = byEmployee.get(c.employeeId) ?? [];
@@ -135,7 +149,8 @@ export async function reconcileTenantProjection(tx: any, tenantId: string, repai
   const where = contractEmployeeIds.length > 0
     ? or(isNotNull(hrmsEmployees.contractId), inArray(hrmsEmployees.id, contractEmployeeIds))
     : isNotNull(hrmsEmployees.contractId);
-  const emps = await tx.select().from(hrmsEmployees).where(and(eq(hrmsEmployees.tenantId, tenantId), where));
+  const empQuery = tx.select().from(hrmsEmployees).where(and(eq(hrmsEmployees.tenantId, tenantId), where));
+  const emps = opts.limit ? await empQuery.limit(opts.limit) : await empQuery;
   let drifted = 0;
   let repaired = 0;
   const repairedIds: string[] = [];
@@ -154,5 +169,5 @@ export async function reconcileTenantProjection(tx: any, tenantId: string, repai
       repairedIds.push(e.id);
     }
   }
-  return { checked: emps.length, drifted, repaired, repairedIds };
+  return { checked: emps.length, drifted, repaired, repairedIds, truncated };
 }

@@ -2,11 +2,17 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { uuidV5 } from "../../shared/ids.js";
+
+/** S8 G5: repeated reconcile requests inside one 10-minute window share a messageId, so the consumer (markProcessed) runs the scan once. */
+export const RECONCILE_WINDOW_MS = 10 * 60_000;
+export const reconcileMessageId = (tenantId: string, now = Date.now()): string =>
+  uuidV5(`projection-reconcile:${tenantId}:${Math.floor(now / RECONCILE_WINDOW_MS)}`);
 
 type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(topic: string, ctx: RequestContext, payload: Record<string, unknown>, withResourceId = false): Promise<Accepted> {
-  const id = randomUUID();
+async function publish(topic: string, ctx: RequestContext, payload: Record<string, unknown>, withResourceId = false, fixedMessageId?: string): Promise<Accepted> {
+  const id = fixedMessageId ?? randomUUID();
   await queue.publish(topic, {
     messageId: id, type: topic,
     tenantId: ctx.tenantId, actorId: ctx.actorId,
@@ -22,8 +28,8 @@ async function publish(topic: string, ctx: RequestContext, payload: Record<strin
 export const createContract = (ctx: RequestContext, p: Record<string, unknown>) => publish(COMMANDS.contractCreate, ctx, p, true);
 export const activateContract = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractActivate, ctx, { contractId: id, ...p });
 export const terminateContract = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractTerminate, ctx, { contractId: id, ...p });
-export const initiateRenewal = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalInitiate, ctx, { contractId: id, ...p });
+export const initiateRenewal = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalInitiate, ctx, { contractId: id, ...p }, true);
 export const bulkRenewal = (ctx: RequestContext, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalBulk, ctx, p);
 export const triggerExpiryDetection = (ctx: RequestContext) => publish(COMMANDS.contractExpiryDetect, ctx, {});
-export const reconcileProjection = (ctx: RequestContext) => publish(COMMANDS.contractProjectionReconcile, ctx, {});
+export const reconcileProjection = (ctx: RequestContext) => publish(COMMANDS.contractProjectionReconcile, ctx, {}, false, reconcileMessageId(ctx.tenantId));
 export const triggerAutoSeparation = (ctx: RequestContext, contractId: string) => publish(COMMANDS.contractAutoSeparate, ctx, { contractId });

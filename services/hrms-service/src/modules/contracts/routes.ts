@@ -6,7 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { hrmsContractConfig } from "./schema.js";
+import { hrmsContractConfig, hrmsContracts } from "./schema.js";
 import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -16,7 +16,7 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { todayIST } from "../../shared/ist.js";
 import { projectFromTerms, reconcileTenantProjection } from "./projection.js";
-import { resolveNotifyRoles } from "./policy.js";
+import { resolveNotifyRoles, resolveLapsePolicy } from "./policy.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
@@ -110,10 +110,31 @@ async function isProjectManagerOf(ctx: { tenantId: string; actorId: string }, em
 }
 
 /** CSV cell: quoted, and a leading = + - @ is neutralised so a spreadsheet never evaluates it as a formula. */
-function csvCell(v: unknown): string {
+export function csvCell(v: unknown): string {
   let t = v === null || v === undefined ? "" : String(v);
-  if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+  // Numbers (e.g. a negative daysRemaining) are data, not formulas: left alone. Text starting = + - @ tab CR LF is neutralised.
+  if (typeof v !== "number" && /^[=+\-@\t\r\n]/.test(t)) t = `'${t}`;
   return `"${t.replace(/"/g, '""')}"`;
+}
+
+/** Pay fields inside contract terms. A project manager (who is not HR or the line manager) never sees these; the owner can relax it. */
+const PAY_TERM_KEYS = ["compensationMinor", "currency"] as const;
+function stripPayTerms<T>(terms: T): T {
+  if (!terms || typeof terms !== "object" || Array.isArray(terms)) return terms;
+  const out: Record<string, unknown> = { ...(terms as Record<string, unknown>) };
+  for (const k of PAY_TERM_KEYS) delete out[k];
+  return out as T;
+}
+function stripContractPay<T extends { terms?: unknown }>(c: T): T {
+  return "terms" in c ? { ...c, terms: stripPayTerms(c.terms) } : c;
+}
+function stripRenewalPay<T extends { originalTerms?: unknown; newTerms?: unknown }>(r: T): T {
+  return { ...r, ...("originalTerms" in r ? { originalTerms: stripPayTerms(r.originalTerms) } : {}), ...("newTerms" in r ? { newTerms: stripPayTerms(r.newTerms) } : {}) };
+}
+/** "full" = HR / self / line manager (unchanged), "pm" = project-manager-only path (pay stripped), null = no access. */
+async function accessTo(ctx: { tenantId: string; actorId: string; roles: string[] } & Record<string, any>, employeeId: string): Promise<"full" | "pm" | null> {
+  if (await canReadEmployeeRecord(ctx as never, employeeId)) return "full";
+  return (await isProjectManagerOf(ctx, employeeId)) ? "pm" : null;
 }
 
 export async function contractRoutes(app: FastifyInstance): Promise<void> {
@@ -162,7 +183,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // not the server's UTC date.
     if (query.summary) listOpts.summaryToday = todayIST();
     const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset }, listOpts);
-    const data = await enrichWithEmployee(ctx.tenantId, result.data);
+    const enriched = await enrichWithEmployee(ctx.tenantId, result.data);
+    const baseSet = scopeIds ? new Set(scopeIds) : null;
+    const data = baseSet ? enriched.map((c) => (baseSet.has(c.employeeId) ? c : stripContractPay(c))) : enriched;
     return reply.send({ ...result, data });
   });
 
@@ -172,17 +195,19 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId)) && !(await isProjectManagerOf(ctx, contract.employeeId))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    return reply.send({ data: contract });
+    const access = await accessTo(ctx, contract.employeeId);
+    if (!access) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
+    return reply.send({ data: access === "pm" ? stripContractPay(contract) : contract });
   });
 
   app.get("/v1/hrms/contracts/employee/:employeeId/history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = employeeIdParam.parse(req.params);
-    if (!(await canReadEmployeeRecord(ctx, employeeId)) && !(await isProjectManagerOf(ctx, employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
+    const access = await accessTo(ctx, employeeId);
+    if (!access) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
     const history = await repo.getContractHistory(ctx.tenantId, employeeId);
-    return reply.send({ data: history });
+    return reply.send({ data: access === "pm" ? (history ?? []).map(stripContractPay) : history });
   });
 
   app.post("/v1/hrms/contracts/:id/terminate", async (req, reply) => {
@@ -214,9 +239,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "SELF_RENEWAL_FORBIDDEN", "you cannot renew your own contract; another approver must initiate it");
     }
 
-    // Check status valid for renewal (must be active or expiring)
-    if (contract.status !== "active" && contract.status !== "expiring") {
-      throw new HttpError(422, "INVALID_CONTRACT_STATUS", `cannot renew contract in status '${contract.status}'; must be active or expiring`);
+    // Check status valid for renewal (active, expiring, or escalated -- a lapsed contract of a flag_only tenant stays escalated until HR acts)
+    if (contract.status !== "active" && contract.status !== "expiring" && contract.status !== "escalated") {
+      throw new HttpError(422, "INVALID_CONTRACT_STATUS", `cannot renew contract in status '${contract.status}'; must be active, expiring or escalated`);
     }
 
     // Check no pending renewal
@@ -225,7 +250,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "RENEWAL_IN_PROGRESS", "a pending renewal already exists for this contract");
     }
 
-    const result = await commands.initiateRenewal(ctx, id, body);
+    // The consumer inserts the renewal with the id returned here, and new_terms is NOT NULL: carry the current terms forward
+    // (overlaid by any supplied terms) so a renewal started without explicit terms is created instead of silently failing.
+    const result = await commands.initiateRenewal(ctx, id, { ...body, newTerms: { ...((contract.terms as Record<string, unknown> | undefined) ?? {}), ...(body.newTerms ?? {}) }, initiatedBy: ctx.actorId });
     return reply.code(202).send(result);
   });
 
@@ -246,9 +273,17 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (query.employeeId) filters.employeeId = query.employeeId;
     if (query.status) filters.status = query.status;
     const scopeIds = await resolveManagerScopeIds(ctx);
-    if (scopeIds) filters.employeeIds = scopeIds;
+    if (scopeIds) filters.employeeIds = await withProjectTeam(ctx, scopeIds);
     const result = await repo.listRenewals(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
-    return reply.send(result);
+    if (!scopeIds) return reply.send(result);
+    // Project-manager-only rows (employee outside the manager scope) lose pay fields.
+    const baseSet = new Set(scopeIds);
+    const cids = [...new Set(result.data.map((r) => r.contractId))];
+    const owners = cids.length === 0 ? [] : await scopedRead((tx) =>
+      tx.select({ id: hrmsContracts.id, employeeId: hrmsContracts.employeeId }).from(hrmsContracts)
+        .where(and(eq(hrmsContracts.tenantId, ctx.tenantId), inArray(hrmsContracts.id, cids))));
+    const ownerOf = new Map(owners.map((o) => [o.id, o.employeeId]));
+    return reply.send({ ...result, data: result.data.map((r) => (baseSet.has(ownerOf.get(r.contractId) ?? "") ? r : stripRenewalPay(r))) });
   });
 
   app.get("/v1/hrms/contracts/renewals/:id", async (req, reply) => {
@@ -258,8 +293,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const renewal = await repo.getRenewalById(ctx.tenantId, id);
     if (!renewal) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
     const owner = await repo.getContractById(ctx.tenantId, renewal.contractId);
-    if (!owner || !(await canReadEmployeeRecord(ctx, owner.employeeId))) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
-    return reply.send({ data: renewal });
+    const access = owner ? await accessTo(ctx, owner.employeeId) : null;
+    if (!owner || !access) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
+    return reply.send({ data: access === "pm" ? stripRenewalPay(renewal) : renewal });
   });
 
   // ─── Task 9.3 — Dashboard and Config ───────────────────────────────────────
@@ -268,7 +304,8 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const q = expiringDashboardQuery.parse(req.query);
-    const contracts = await repo.getExpiringContractsDashboard(ctx.tenantId);
+    const live = await scopedRead((tx) => repo.getContractConfigTx(tx, ctx.tenantId));
+    const contracts = await repo.getExpiringContractsDashboard(ctx.tenantId, resolveLapsePolicy(live).action === "flag_only");
     const asOf = new Date().toISOString().slice(0, 10);
     let rows = contracts ?? [];
     // S8 G5: project filter, project/manager columns and CSV are opt-in query params; with none of them the
@@ -323,8 +360,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/contracts/projection/check", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const r = await scopedRead((tx) => reconcileTenantProjection(tx, ctx.tenantId, false));
-    return reply.send({ data: { checked: r.checked, drifted: r.drifted, consistent: r.drifted === 0 } });
+    const enabled = await scopedRead(async (tx) => (await repo.getContractConfigTx(tx, ctx.tenantId))?.employeeProjectionEnabled === true);
+    if (!enabled) return reply.send({ data: { enabled: false } });
+    const r = await scopedRead((tx) => reconcileTenantProjection(tx, ctx.tenantId, false, { limit: 5000 }));
+    return reply.send({ data: { enabled: true, checked: r.checked, drifted: r.drifted, consistent: r.drifted === 0, truncated: r.truncated } });
   });
 
   app.post("/v1/hrms/contracts/projection/reconcile", async (req, reply) => {
