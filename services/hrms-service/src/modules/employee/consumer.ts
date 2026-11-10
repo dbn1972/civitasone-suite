@@ -11,6 +11,7 @@ import { isExitedStatus } from "./status.js";
 import { defaultPensionScheme } from "./pension-scheme.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { maskValue } from "../../shared/pii-mask.js";
+import { openSealed } from "../bulk-import/sensitive.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
@@ -101,15 +102,18 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           // UAT b18 D1: same hire rule as the single-row create (commands.ts).
           pensionScheme: p.pensionScheme ?? defaultPensionScheme({ dateOfJoining: p.dateOfJoining, employeeType: p.employeeType }),
           basicMinor: BigInt(p.basicMinor), currency: p.currency as "INR", status: "probation",
-          dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null, pan: p.pan ?? null,
+          dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null,
+          // G6: bulk import seals PAN / bank / UAN for the queue; open them here, the column type seals them for storage.
+          // (Plaintext passes through, so a message queued before this change still loads.)
+          pan: p.pan ? openSealed(p.pan) : null,
           aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
-          bankAccountNo: p.bankAccountNo ?? null, bankIfsc: p.bankIfsc ?? null,
+          bankAccountNo: p.bankAccountNo ? openSealed(p.bankAccountNo) : null, bankIfsc: p.bankIfsc ? openSealed(p.bankIfsc) : null,
           payStructureId: p.payStructureId ?? null,
           managerId: p.managerId ?? null,
           ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
           ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
           ...(p.locationId ? { locationId: p.locationId } : {}),
-          esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ?? null, pran: p.pran ?? null,
+          esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ? openSealed(p.uanNumber) : null, pran: p.pran ?? null,
           gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
           agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
