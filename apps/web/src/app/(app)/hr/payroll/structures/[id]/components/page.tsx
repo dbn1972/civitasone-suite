@@ -18,13 +18,14 @@ import { ComponentManager, type StructureCheck, type StructureView } from "./Com
 const LOCK_ROLES = ["payroll_admin", "super_admin"];
 type Detail = { structure: StructureView; components: ComponentRow[]; check: StructureCheck };
 
-export default async function StructureComponentsPage({ params }: { params: { id: string } }) {
+export default async function StructureComponentsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const t = await getTranslations("payComponents");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_PAY_DATA_ROLES.includes(r))) {
     return <PermissionDenied module="pay structures" requiredRoles={PAYROLL_PAY_DATA_ROLES} />;
   }
-  const res = await fetchJson<unknown, Detail | null>(`/api/v1/payroll/structures/${encodeURIComponent(params.id)}/components`, null, {
+  const res = await fetchJson<unknown, Detail | null>(`/api/v1/payroll/structures/${encodeURIComponent(id)}/components`, null, {
     telemetryKey: "payroll.structure-components",
     mapResponse: (p) => {
       const d = p as Partial<Detail> | undefined;
