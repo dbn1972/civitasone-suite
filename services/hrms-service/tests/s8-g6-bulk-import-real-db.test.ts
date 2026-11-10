@@ -383,6 +383,23 @@ describe("G6 bulk pay-profile request / decision", () => {
     expect(res.json<{ accepted: unknown[] }>().accepted).toHaveLength(1);
   });
 
+  it("an HttpError raised while queueing is rethrown untouched (not turned into BULK_PARTIAL)", async () => {
+    process.env.HRMS_S8_BULK_PAY_PROFILE_ENABLED = "true";
+    const { HttpError } = await import("../src/shared/context.js");
+    await asTenant(TENANT, (tx) => tx.insert(hrmsEmployees).values({
+      id: randomUUID(), tenantId: TENANT, employeeNo: "PP-201", fullName: "Contract PP-201", departmentId: deptId, designationId: desigId,
+      dateOfJoining: "2025-04-01", status: "confirmed", employeeType: "contractual", basicMinor: 4_000_000n, createdBy: MAKER, updatedBy: MAKER }));
+    const orig = queue.publish.bind(queue);
+    vi.spyOn(queue, "publish").mockImplementation(async (topic: string, msg: never) => {
+      if (topic === COMMANDS.payProfileRequest) throw new HttpError(429, "RATE_LIMITED", "slow down");
+      return orig(topic, msg);
+    });
+    const res = await bulkReq([item("PP-201")]);
+    vi.restoreAllMocks();
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({ code: "RATE_LIMITED" });
+  });
+
   it("bulk-decision reads the locked period once, not per row", async () => {
     process.env.HRMS_S8_BULK_PAY_PROFILE_ENABLED = "true";
     await drain();

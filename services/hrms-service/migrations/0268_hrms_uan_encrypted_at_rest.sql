@@ -25,4 +25,4 @@ ALTER TABLE employee.hrms_pension_scheme_changes ALTER COLUMN uan_number TYPE te
 -- the 12-digit format of NEW values is validated by the API (pension-scheme-commands.ts) before encryption.
 ALTER TABLE employee.hrms_pension_scheme_changes DROP CONSTRAINT IF EXISTS hrms_pension_scheme_changes_uan_check;
 ALTER TABLE employee.hrms_pension_scheme_changes ADD CONSTRAINT hrms_pension_scheme_changes_uan_check
-  CHECK (uan_number IS NULL OR uan_number ~ '^[0-9]{12}$' OR uan_number LIKE 'enc:v%');
+  CHECK (uan_number IS NULL OR uan_number ~ '^[0-9]{12}$' OR uan_number ~ '^enc:v[12]:');

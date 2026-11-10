@@ -150,6 +150,7 @@ export async function payProfileBulkRoutes(app: FastifyInstance): Promise<void> 
         deputationId: row.deputationId ?? null, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor ?? null,
         deputationTerms: terms, orderRef: row.orderRef ?? null, remarks: row.remarks ?? null,
       }); } catch (err) {
+        if (err instanceof HttpError) throw err; // a deliberate refusal keeps its own status; only queue/publish failures are BULK_PARTIAL
         req.log.error({ err, accepted: accepted.length }, "bulk pay-profile request: queue failed part-way");
         return reply.code(503).send({
           code: "BULK_PARTIAL", message: "The queue failed part-way; the batch is not atomic. Rows listed in `accepted` were queued; retry the rest.",
