@@ -238,7 +238,9 @@ export type SlipPayProfile =
   | { kind: "govt_scale" }
   | { kind: "deputation_parent_scale"; allowance: DeputationAllowanceInput }
   | { kind: "deputation_post_scale" }
-  | { kind: "consolidated_contract" };
+  | { kind: "consolidated_contract" }
+  /** S8 G1: CTC package. Computed only from a pre-built `earningsOverride` (modules/ctc); without one it is still refused. */
+  | { kind: "ctc_contract" };
 
 export type DeputationStationType = "same" | "other";
 
@@ -607,7 +609,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     hraFloorMinor = 0n,
   } = input;
   const profile = input.payProfile ?? { kind: "govt_scale" as const };
-  if ((profile.kind as string) === "ctc_contract") {
+  if (profile.kind === "ctc_contract" && !earningsOverride) {
     throw new DomainError("CTC_PROFILE_NOT_SUPPORTED", "ctc_contract slips are computed by the CTC module (PAY-PROFILES PR3)");
   }
   const consolidated = profile.kind === "consolidated_contract";

@@ -23,6 +23,8 @@ import { computeSlip, computePension, assertRunStatusTransition, runActionDenial
 import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
+import { ctcProfileEnabled, prorateExpansion } from "../ctc/model.js";
+import { buildCtcPlanContext, ctcEarningsOverride, ctcPaidSnapshot } from "../ctc/runtime.js";
 import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -2471,6 +2473,10 @@ async function processPayrollRun(
     const s8LwfApplied = s8LwfOn
       ? await lwfAlreadyAppliedEmployees(tx as unknown as typeof db, p.tenantId, p.month, runEmployeeIds, p.id) : new Set<string>();
     const s8LwfUnknown: string[] = [];
+    // S8 G1: the locked CTC template versions in force for the month, resolved once per lineage. Flag off (default) => undefined.
+    const s8CtcContext = ctcProfileEnabled()
+      ? await buildCtcPlanContext(tx as unknown as Parameters<typeof buildCtcPlanContext>[0], p.tenantId, runEmployees, p.month, statutoryConfig)
+      : undefined;
     const s8EsiCovered = s8Flags.esiContributionPeriodEnabled
       ? await esiCoveredMonthsByEmployee(tx as unknown as typeof db, p.tenantId, runEmployeeIds, esiContributionPeriodStart(p.month), p.month) : null;
 
@@ -2516,7 +2522,7 @@ async function processPayrollRun(
         }
         continue;
       }
-      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules);
+      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules, s8CtcContext);
       if (!planned.ok) throw new DomainError(planned.code, planned.message);
       const plan = planned.plan;
       const empDaRateBps = plan.daRateBps;
@@ -2619,7 +2625,13 @@ async function processPayrollRun(
       // PAY-PROFILES: consolidated pay is instead PRO-RATED for paid days (no
       // LOP line), so PF/ESI fall on the wages actually earned.
       const prorate = plan.lopMode === "prorate";
-      const basicMinor = prorate
+      // S8 G1: a CTC employee is paid line by line, prorated by calendar days (modules/ctc); undefined for everyone else.
+      const ctcPaid = plan.ctc
+        ? prorateExpansion(plan.ctc.expansion, { lopDays, notInServiceDays: notInServiceLopDays, daysInMonth }, statutoryConfig, { pfApplicable: plan.ctc.pfApplicable, esiEligible: plan.ctc.esiEligible })
+        : null;
+      const basicMinor = ctcPaid
+        ? ctcPaid.basicMinor
+        : prorate
         ? roundRupee(proratedPayMinor(scaleBasicMinor, lopDays, daysInMonth))
         : scaleBasicMinor;
       // PAY-PROFILES (Option A): LOP also reduces the deputation allowance
@@ -2729,7 +2741,7 @@ async function processPayrollRun(
             const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
             // UAT L2-N5: LOP falls on HRA as on Basic + DA (consolidated pay: no HRA).
             const hraM = plan.slipProfile.kind === "consolidated_contract" ? 0n : govtHraMinor(scaleBasicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
-            unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
+            unrecordedLopMinor += lopDeductionMinor(plan.ctc ? plan.ctc.expansion.grossMinor : scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
           }
         }
       }
@@ -2766,7 +2778,13 @@ async function processPayrollRun(
         cityClass,
         payProfile: plan.slipProfile,
         hraFloorMinor: plan.hraFloorMinor,
-        profileSnapshot: plan.snapshot,
+        profileSnapshot: ctcPaid && plan.ctc
+          ? { ...plan.snapshot, ...ctcPaidSnapshot(plan.ctc, ctcPaid, { lopDays, notInServiceDays: notInServiceLopDays, daysInMonth: Number(daysInMonth) }) }
+          : plan.snapshot,
+        ...(ctcPaid && plan.ctc ? {
+          earningsOverride: ctcEarningsOverride(ctcPaid),
+          ctcSlip: { templateId: plan.ctc.template.structureId, templateVersion: plan.ctc.template.templateVersion, employerEsiMinor: ctcPaid.employerEsiMinor, gratuityProvisionMinor: ctcPaid.gratuityMinor },
+        } : {}),
         // T-STAT M-PT-BASIS (F08): the slab is looked up on the monthly salary
         // (gross earnings less LOP, computed by computeSlip), not Basic + DA.
         // FR 53: for a suspended employee that is what is actually paid.
@@ -2802,6 +2820,10 @@ async function processPayrollRun(
         rawComponents: plan.applyRunStructure ? rawComponents : [],
         components: adHoc,
         ...s8SeamParams(emp, p.month, s8PfBasisRows, s8LwfRules, s8EsiCovered, s8LwfApplied, s8LwfUnknown),
+        // S8 G1: "PF on actual basic" chosen on the CTC terms (owner decision 2) overrides the seam default.
+        ...(plan.ctc?.expansion.epfWagePolicy === "actual" ? { pfWageBasis: "actual" as const } : {}),
+        // ... and an ESI opt-out recorded on the CTC terms (where the law allows it, VERIFY) suppresses ESI on the slip.
+        ...(plan.ctc && !plan.ctc.esiEligible ? { statutoryEsi: false } : {}),
       });
 
       // P3: record loan repayments for the EMI that was ACTUALLY withheld after
@@ -3405,6 +3427,8 @@ export async function computeAndInsertSlip(
     lwf?: { employeeMinor: bigint; employerMinor: bigint; stateCode: string; frequency: string };
     /** S8 SEAM 3: covered earlier in this ESI contribution period (flag on); omitted == false. */
     esiContinuation?: boolean;
+    /** S8 G1: the CTC template used and the employer-side figures of a ctc_contract slip; omitted for every other profile. */
+    ctcSlip?: { templateId: string; templateVersion: number; employerEsiMinor: bigint; gratuityProvisionMinor: bigint };
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -3490,6 +3514,10 @@ export async function computeAndInsertSlip(
     payProfile: params.payProfile?.kind ?? "govt_scale",
     profileSnapshot: params.profileSnapshot ?? null,
     pfWageMinor,
+    ...(params.ctcSlip ? {
+      ctcTemplateId: params.ctcSlip.templateId, ctcTemplateVersion: params.ctcSlip.templateVersion,
+      employerEsiMinor: params.ctcSlip.employerEsiMinor, gratuityProvisionMinor: params.ctcSlip.gratuityProvisionMinor,
+    } : {}),
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
   // S8 SEAM 2: the LWF amounts applied (employee deduction + employer share) for the liability register.
