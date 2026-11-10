@@ -612,6 +612,17 @@ export const DEFAULT_SQS_WAIT_TIME_SECONDS = 20;
 const MAX_SQS_WAIT_TIME_SECONDS = 20;
 
 /**
+ * SQS-only endpoint. SQS_ENDPOINT_URL (a dedicated broker, e.g. ElasticMQ) wins
+ * over the shared AWS_ENDPOINT_URL (LocalStack, which keeps serving S3/secrets).
+ * Unset => exactly the previous AWS_ENDPOINT_URL behaviour.
+ */
+export function resolveSqsEndpoint(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  return env.SQS_ENDPOINT_URL ?? env.AWS_ENDPOINT_URL;
+}
+
+/**
  * Long-poll wait for ReceiveMessage. Override via SQS_WAIT_TIME_SECONDS (1-20).
  * On a shared LocalStack host, dozens of workers each holding WaitTimeSeconds=20
  * sockets starve SendMessage and stall every outbox relay. Lowering the wait
@@ -627,7 +638,7 @@ export function resolveWaitTimeSeconds(
   // LocalStack / custom endpoints: dozens of workers each holding a 20s long-poll
   // saturates the broker and starves SendMessage. Prefer a short wait unless the
   // operator explicitly overrides SQS_WAIT_TIME_SECONDS.
-  const endpoint = process.env.AWS_ENDPOINT_URL ?? process.env.AWS_ENDPOINT ?? "";
+  const endpoint = resolveSqsEndpoint() ?? process.env.AWS_ENDPOINT ?? "";
   if (/localhost|127\.0\.0\.1|localstack/i.test(endpoint)) {
     return 2;
   }
@@ -773,9 +784,10 @@ export class SqsQueue implements Queue {
       ?? "queue-service";
     this.maxReceiveCount = Number(process.env.SQS_MAX_RECEIVE_COUNT ?? 5);
     this.visibilityTimeout = Number(process.env.SQS_VISIBILITY_TIMEOUT ?? 60);
+    const sqsEndpoint = resolveSqsEndpoint();
     this.client = new SQSClient({
       region: process.env.AWS_DEFAULT_REGION ?? "ap-south-1",
-      ...(process.env.AWS_ENDPOINT_URL ? { endpoint: process.env.AWS_ENDPOINT_URL } : {}),
+      ...(sqsEndpoint ? { endpoint: sqsEndpoint } : {}),
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "test",
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
