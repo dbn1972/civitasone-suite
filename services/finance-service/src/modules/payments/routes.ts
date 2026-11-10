@@ -13,6 +13,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
+import { assertBillDdoConfigured } from "../masters/ddo-commands.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
@@ -213,6 +214,8 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const vendor = await mastersRepo.getVendorById(ctx.tenantId, body.vendorId);
     if (vendor && !vendor.isActive) throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated; reactivate it before lodging bills");
     await assertBillHeadUsable(ctx.tenantId, body.headId);
+    // UAT b24: an unconfigured DDO used to be a 202 that dead-lettered UNKNOWN_DDO in the worker.
+    await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
     // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
     return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, () => commands.createBill(ctx, body)));
   });

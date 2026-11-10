@@ -22,6 +22,8 @@ vi.mock("../src/modules/payments/repo.js", () => ({
 }));
 vi.mock("../src/modules/masters/repo.js", () => ({
   getVendorById: (...a: unknown[]) => getVendorById(...a),
+  // UAT b24: the bill route pre-checks the DDO master; this suite is DB-free, so the DDO "exists".
+  ddoExists: async () => true,
   // GAP2-FINANCE-BILLS-VENDORNAME-01: listBillSummaries now resolves vendor
   // names from the masters repo (batched); provide the stub so these route
   // tests stay DB-free. Returns the names set by each test (default empty).
