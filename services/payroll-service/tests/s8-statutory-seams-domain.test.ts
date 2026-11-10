@@ -3,7 +3,7 @@
  * PF 12% on a Rs 15,000 ceiling, EPS 8.33% capped Rs 1,250, ESI 0.75% / 3.25% at a Rs 21,000 ceiling).
  * The flag-off byte-identity proof is s8-computeslip-pin.test.ts.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { computeSlip, epfEmployerCharges, DEFAULT_STATUTORY_CONFIG, type SlipInput } from "../src/modules/payroll/domain.js";
 import {
   pfWageBasisFor, lwfDueForMonth, esiContributionPeriodStart, esiContinuesInPeriod,
@@ -134,5 +134,18 @@ describe("SEAM 3: ESI contribution-period continuity", () => {
     expect(esiContinuesInPeriod("2026-08", [])).toBe(false);
     expect(esiContinuesInPeriod("2026-08", undefined)).toBe(false);
     expect(esiContinuesInPeriod("2026-08", ["2026-08"])).toBe(false); // this month itself is not memory
+  });
+});
+
+describe("deploy-order safety: code deployed before migration 0167", () => {
+  it("missing tables mean seams OFF and empty PF basis, logged once, never an error", async () => {
+    const repo = await import("../src/modules/payroll/statutory-seams-repo.js");
+    repo.resetSeamTablesMissingLogForTest();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const tx = { execute: vi.fn(async () => [{ ok: false }]) } as never;
+    expect(await repo.resolveSeamFlags(tx, "t")).toEqual({ lwfDeductionEnabled: false, esiContributionPeriodEnabled: false });
+    expect((await repo.pfWageBasisRowsByEmployee(tx, "t", ["e1"])).size).toBe(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

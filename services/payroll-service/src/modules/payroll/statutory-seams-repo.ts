@@ -7,6 +7,29 @@ import type { db } from "../../shared/db.js";
 import type { PfWageBasisRow, LwfRule, LwfFrequency } from "./statutory-seams.js";
 
 type Tx = typeof db;
+
+/**
+ * Deploy-order safety: these reads run for EVERY tenant on every run, so code
+ * deployed before migration 0167 must not fail payroll. A missing relation
+ * (what a 42P01 would report) means "seams unused": defaults, logged once.
+ * A to_regclass() probe is used instead of catching 42P01 because a failed
+ * statement would abort the surrounding transaction.
+ */
+let missingLogged = false;
+export function resetSeamTablesMissingLogForTest(): void { missingLogged = false; }
+export async function seamTablesPresent(tx: Tx): Promise<boolean> {
+  const rows = (await tx.execute(sql`
+    SELECT to_regclass('payroll.payroll_statutory_seams') IS NOT NULL
+       AND to_regclass('payroll.employee_pf_wage_basis') IS NOT NULL
+       AND to_regclass('payroll.payroll_lwf_ledger') IS NOT NULL AS ok
+  `)) as unknown as Array<{ ok: boolean }>;
+  const ok = rows[0]?.ok === true;
+  if (!ok && !missingLogged) {
+    missingLogged = true;
+    console.warn("[payroll] S8 statutory-seams tables are missing (migration 0167 not applied): seams treated as OFF");
+  }
+  return ok;
+}
 const idList = (ids: readonly string[]) => sql`ARRAY[${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)}]`;
 
 export interface SeamFlags { lwfDeductionEnabled: boolean; esiContributionPeriodEnabled: boolean }
@@ -14,6 +37,7 @@ export const SEAMS_OFF: SeamFlags = { lwfDeductionEnabled: false, esiContributio
 
 /** A tenant with no row is OFF. */
 export async function resolveSeamFlags(tx: Tx, tenantId: string): Promise<SeamFlags> {
+  if (!(await seamTablesPresent(tx))) return SEAMS_OFF;
   const rows = (await tx.execute(sql`
     SELECT lwf_deduction_enabled, esi_contribution_period_enabled
       FROM payroll.payroll_statutory_seams WHERE tenant_id = ${tenantId}::uuid LIMIT 1
@@ -25,6 +49,7 @@ export async function resolveSeamFlags(tx: Tx, tenantId: string): Promise<SeamFl
 export async function pfWageBasisRowsByEmployee(tx: Tx, tenantId: string, employeeIds: readonly string[]): Promise<Map<string, PfWageBasisRow[]>> {
   const out = new Map<string, PfWageBasisRow[]>();
   if (employeeIds.length === 0) return out;
+  if (!(await seamTablesPresent(tx))) return out;
   const rows = (await tx.execute(sql`
     SELECT employee_id::text AS employee_id, effective_from::text AS effective_from, basis
       FROM payroll.employee_pf_wage_basis
@@ -79,6 +104,27 @@ export async function esiCoveredMonthsByEmployee(tx: Tx, tenantId: string, emplo
   return out;
 }
 
+/**
+ * Employees that already have an LWF ledger row for `period` from ANOTHER run that is still live
+ * (not cancelled / failed): LWF is one contribution per employee per period, so a later
+ * run (re-run, second regular run) must not deduct it again.
+ */
+export async function lwfAlreadyAppliedEmployees(tx: Tx, tenantId: string, period: string, employeeIds: readonly string[], thisRunId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (employeeIds.length === 0) return out;
+  const rows = (await tx.execute(sql`
+    SELECT DISTINCT l.employee_id::text AS employee_id
+      FROM payroll.payroll_lwf_ledger l
+      JOIN payroll.payroll_runs r ON r.id = l.run_id AND r.tenant_id = l.tenant_id
+     WHERE l.tenant_id = ${tenantId}::uuid AND l.period = ${period} AND l.run_id <> ${thisRunId}::uuid
+       AND l.employee_id = ANY(${idList(employeeIds)})
+       AND r.status NOT IN ('cancelled', 'failed')
+  `)) as unknown as Array<{ employee_id: string }>;
+  for (const r of rows) out.add(r.employee_id);
+  return out;
+}
+
+/** Ledger rows are written for every run that computed LWF, including runs later rejected / cancelled: readers MUST join payroll_runs and filter on its status. */
 export async function insertLwfLedger(tx: Tx, row: {
   tenantId: string; slipId: string; runId: string; employeeId: string; stateCode: string; period: string;
   frequency: string; employeeMinor: bigint; employerMinor: bigint;

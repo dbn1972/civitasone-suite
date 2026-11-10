@@ -17,8 +17,15 @@
 --    (employee deduction and the employer share), the source for the employer
 --    liability register. One row per slip.
 --
+-- 4. payroll.payroll_s8_change_requests: maker-checker for BOTH writes above. A
+--    change is a PENDING request; a DIFFERENT actor approves it (decided_by <>
+--    requested_by, also a CHECK); only an approved request is applied to (1)/(2).
+--    The ledger holds rows of every run that computed LWF, including runs later
+--    rejected or cancelled: readers MUST join payroll_runs and use its status.
+--
 -- Additive and idempotent. Rollback:
---   DROP TABLE IF EXISTS payroll.payroll_lwf_ledger, payroll.employee_pf_wage_basis, payroll.payroll_statutory_seams;
+--   DROP TABLE IF EXISTS payroll.payroll_s8_change_requests, payroll.payroll_lwf_ledger,
+--     payroll.employee_pf_wage_basis, payroll.payroll_statutory_seams;
 
 SET lock_timeout = '5s';
 
@@ -63,14 +70,52 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_lwf_ledger (
   CONSTRAINT payroll_lwf_ledger_slip_uq UNIQUE (tenant_id, slip_id)
 );
 CREATE INDEX IF NOT EXISTS ix_payroll_lwf_ledger_period ON payroll.payroll_lwf_ledger (tenant_id, period, state_code);
+CREATE INDEX IF NOT EXISTS ix_payroll_lwf_ledger_emp ON payroll.payroll_lwf_ledger (tenant_id, employee_id, period);
 
-DO $$
-DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['payroll_statutory_seams', 'employee_pf_wage_basis', 'payroll_lwf_ledger'] LOOP
-    EXECUTE format('ALTER TABLE payroll.%I ENABLE ROW LEVEL SECURITY', t);
-    EXECUTE format('ALTER TABLE payroll.%I FORCE ROW LEVEL SECURITY', t);
-    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_policy ON payroll.%I', t);
-    EXECUTE format('CREATE POLICY tenant_isolation_policy ON payroll.%I USING (tenant_id = payroll.current_tenant_id()) WITH CHECK (tenant_id = payroll.current_tenant_id())', t);
-  END LOOP;
-END $$;
+CREATE TABLE IF NOT EXISTS payroll.payroll_s8_change_requests (
+  id            uuid        PRIMARY KEY,
+  tenant_id     uuid        NOT NULL,
+  kind          varchar(16) NOT NULL,
+  employee_id   uuid,
+  payload       jsonb       NOT NULL,
+  reason        text        NOT NULL,
+  status        varchar(16) NOT NULL DEFAULT 'pending',
+  requested_by  uuid        NOT NULL,
+  decided_by    uuid,
+  decided_at    timestamptz,
+  decision_note text,
+  code          varchar(40),
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT payroll_s8_change_requests_kind_chk   CHECK (kind IN ('flags', 'pf_basis')),
+  CONSTRAINT payroll_s8_change_requests_status_chk CHECK (status IN ('pending', 'approved', 'rejected')),
+  CONSTRAINT payroll_s8_change_requests_maker_chk  CHECK (decided_by IS NULL OR decided_by <> requested_by)
+);
+CREATE INDEX IF NOT EXISTS ix_payroll_s8_change_requests_tenant ON payroll.payroll_s8_change_requests (tenant_id, status, created_at);
+
+ALTER TABLE payroll.payroll_statutory_seams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payroll.payroll_statutory_seams FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON payroll.payroll_statutory_seams;
+CREATE POLICY tenant_isolation_policy ON payroll.payroll_statutory_seams
+  USING (tenant_id = payroll.current_tenant_id())
+  WITH CHECK (tenant_id = payroll.current_tenant_id());
+
+ALTER TABLE payroll.employee_pf_wage_basis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payroll.employee_pf_wage_basis FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON payroll.employee_pf_wage_basis;
+CREATE POLICY tenant_isolation_policy ON payroll.employee_pf_wage_basis
+  USING (tenant_id = payroll.current_tenant_id())
+  WITH CHECK (tenant_id = payroll.current_tenant_id());
+
+ALTER TABLE payroll.payroll_lwf_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payroll.payroll_lwf_ledger FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON payroll.payroll_lwf_ledger;
+CREATE POLICY tenant_isolation_policy ON payroll.payroll_lwf_ledger
+  USING (tenant_id = payroll.current_tenant_id())
+  WITH CHECK (tenant_id = payroll.current_tenant_id());
+
+ALTER TABLE payroll.payroll_s8_change_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payroll.payroll_s8_change_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON payroll.payroll_s8_change_requests;
+CREATE POLICY tenant_isolation_policy ON payroll.payroll_s8_change_requests
+  USING (tenant_id = payroll.current_tenant_id())
+  WITH CHECK (tenant_id = payroll.current_tenant_id());
