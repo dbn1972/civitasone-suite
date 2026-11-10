@@ -12,6 +12,7 @@ import { defaultPensionScheme } from "./pension-scheme.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import { openSealed } from "../bulk-import/sensitive.js";
+import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
@@ -95,6 +96,14 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
             throw new CommandRefusal(IMPORT_FAILURE.INVALID_REFERENCE, {}, `${IMPORT_FAILURE.INVALID_REFERENCE}: manager ${p.managerId} has status '${manager.status}' and has left the organisation`);
           }
         }
+        // A sealed value that cannot be opened is a permanent, named refusal (not a generic CREATE_FAILED / retry loop).
+        const open = (v: string): string => {
+          try { return openSealed(v); } catch (e) {
+            if (!(e instanceof PiiDecryptError)) throw e;
+            const code = e.message.includes("no PII key") ? IMPORT_FAILURE.PII_KEY_UNKNOWN : IMPORT_FAILURE.PII_UNREADABLE;
+            throw new CommandRefusal(code, {}, `${code}: a sealed identifier in this row cannot be opened`);
+          }
+        };
         await repo.insertEmployee(tx, {
           id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,
           departmentId: p.departmentId, designationId: p.designationId,
@@ -105,15 +114,15 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null,
           // G6: bulk import seals PAN / bank / UAN for the queue; open them here, the column type seals them for storage.
           // (Plaintext passes through, so a message queued before this change still loads.)
-          pan: p.pan ? openSealed(p.pan) : null,
+          pan: p.pan ? open(p.pan) : null,
           aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
-          bankAccountNo: p.bankAccountNo ? openSealed(p.bankAccountNo) : null, bankIfsc: p.bankIfsc ? openSealed(p.bankIfsc) : null,
+          bankAccountNo: p.bankAccountNo ? open(p.bankAccountNo) : null, bankIfsc: p.bankIfsc ? open(p.bankIfsc) : null,
           payStructureId: p.payStructureId ?? null,
           managerId: p.managerId ?? null,
           ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
           ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
           ...(p.locationId ? { locationId: p.locationId } : {}),
-          esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ? openSealed(p.uanNumber) : null, pran: p.pran ?? null,
+          esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ? open(p.uanNumber) : null, pran: p.pran ?? null,
           gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
           agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,

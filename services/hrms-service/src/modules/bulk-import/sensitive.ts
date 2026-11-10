@@ -40,8 +40,10 @@ export const sensitiveRowShape = {
 };
 
 /** A key that names an Aadhaar number, however a spreadsheet spells it (aadhaar, Aadhar No, aadhaar_ref, UID ...). */
-const AADHAAR_KEY_RE = /^(aadh?a+r|uid(ai)?$)/;
-const normKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, "");
+// Normalised = lowercase letters only; refuse anything containing a spelling of Aadhaar, or starting with "uid".
+const AADHAAR_SPELLINGS = ["aadhaar", "aadhar", "adhaar", "adhar"];
+const normKey = (k: string) => k.toLowerCase().replace(/[^a-z]/g, "");
+const isAadhaarKey = (k: string) => { const n = normKey(k); return n.startsWith("uid") || AADHAAR_SPELLINGS.some((s) => n.includes(s)); };
 
 /** Field errors for every row that carries an Aadhaar column. Reads KEYS only, never values. */
 export function aadhaarColumnErrors(rawEmployees: unknown): Array<{ field: string; message: string }> {
@@ -50,7 +52,7 @@ export function aadhaarColumnErrors(rawEmployees: unknown): Array<{ field: strin
   rawEmployees.forEach((row, idx) => {
     if (!row || typeof row !== "object") return;
     for (const key of Object.keys(row as Record<string, unknown>)) {
-      if (AADHAAR_KEY_RE.test(normKey(key))) {
+      if (isAadhaarKey(key)) {
         out.push({ field: `employees.${idx}.${key}`, message: "Aadhaar numbers are not accepted in bulk import; remove this column (add Aadhaar on the employee record instead)." });
       }
     }

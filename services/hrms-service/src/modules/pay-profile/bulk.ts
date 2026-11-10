@@ -15,7 +15,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
@@ -141,17 +140,25 @@ export async function payProfileBulkRoutes(app: FastifyInstance): Promise<void> 
     }
     if (dryRun) return reply.code(200).send({ dryRun: true, ok: true, rowCount: items.length, correlationId: ctx.correlationId });
 
-    const batchId = randomUUID();
+    // NOT atomic: each row is its own queued command. If the queue fails part-way the rows already accepted stay
+    // accepted (they are PENDING requests, safe to leave or reject) and are returned so the caller can retry the rest.
     const accepted: Array<{ employeeId: string; profileId: string }> = [];
     for (const { row, employeeId, terms } of resolved) {
-      const a = await commands.requestPayProfile(ctx, {
+      let a;
+      try { a = await commands.requestPayProfile(ctx, {
         employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
         deputationId: row.deputationId ?? null, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor ?? null,
         deputationTerms: terms, orderRef: row.orderRef ?? null, remarks: row.remarks ?? null,
-      });
+      }); } catch (err) {
+        req.log.error({ err, accepted: accepted.length }, "bulk pay-profile request: queue failed part-way");
+        return reply.code(503).send({
+          code: "BULK_PARTIAL", message: "The queue failed part-way; the batch is not atomic. Rows listed in `accepted` were queued; retry the rest.",
+          atomic: false, accepted, notQueued: resolved.length - accepted.length, correlationId: ctx.correlationId,
+        });
+      }
       accepted.push({ employeeId, profileId: a.id });
     }
-    return reply.code(202).send({ id: batchId, status: "accepted", accepted: accepted.length, items: accepted, correlationId: ctx.correlationId });
+    return reply.code(202).send({ status: "accepted", accepted: accepted.length, items: accepted, correlationId: ctx.correlationId });
   });
 
   app.post("/v1/hrms/pay-profiles/bulk-decision", async (req, reply) => {
@@ -161,10 +168,11 @@ export async function payProfileBulkRoutes(app: FastifyInstance): Promise<void> 
     const body = decisionBody.parse(req.body);
     const dryRun = isDryRun(req);
     const ids = [...new Set(body.profileIds)];
+    const locked = body.decision === "approve" ? await loadLockedThrough(ctx.tenantId) : undefined; // once, not per row
     const results: Array<{ profileId: string; outcome: "accepted" | "skipped"; code?: string }> = [];
     for (const profileId of ids) {
       try {
-        await assertDecidable(ctx, profileId, body.decision);
+        await assertDecidable(ctx, profileId, body.decision, locked);
         if (!dryRun) await commands.decidePayProfile(ctx, profileId, body.decision, body.note ?? null);
         results.push({ profileId, outcome: "accepted" });
       } catch (err) {

@@ -221,7 +221,8 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
   toScheme:      varchar("to_scheme", { length: 8 }).notNull(),
   effectiveFrom: date("effective_from").notNull(),
   reason:        text("reason").notNull(),
-  uanNumber:     varchar("uan_number", { length: 12 }),
+  // G6: encrypted at rest (migration 0268); legacy plaintext rows still read.
+  uanNumber:     encryptedText("uan_number"),
   status:        varchar("status", { length: 16 }).notNull().default("pending"),
   // change (maker-checker request) | initial | correction (history backfill rows)
   kind:          varchar("kind", { length: 16 }).notNull().default("change"),

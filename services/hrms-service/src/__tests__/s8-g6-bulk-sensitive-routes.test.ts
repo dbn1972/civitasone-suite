@@ -100,6 +100,15 @@ describe("flag OFF (default): the route is exactly the 11-field contract", () =>
   });
 });
 
+describe("flag OFF: ?dryRun=true is ignored, exactly as before", () => {
+  it("a dryRun request still queues the batch (the parameter did nothing before this change)", async () => {
+    const spy = vi.spyOn(queue, "publish");
+    const res = await post({ employees: [row()] }, { url: "/v1/hrms/employees/bulk?dryRun=true" });
+    expect(res.statusCode).toBe(202);
+    expect(records(spy)).toHaveLength(1);
+  });
+});
+
 describe("flag ON: sensitive columns", () => {
   beforeEach(() => { process.env.HRMS_S8_BULK_IMPORT_ENABLED = "true"; });
 
@@ -121,7 +130,7 @@ describe("flag ON: sensitive columns", () => {
 
   it("400 -- an Aadhaar column is refused by name, whatever the spelling, and nothing is queued or echoed", async () => {
     const spy = vi.spyOn(queue, "publish");
-    for (const key of ["aadhaar", "aadhaarNo", "Aadhar Number", "aadhaar_ref", "uid"]) {
+    for (const key of ["aadhaar", "aadhaarNo", "Aadhar Number", "aadhaar_ref", "uid", "adhar", "Adhaar_no", "ADHAR Card", "uid_number", "UIDAI", "aadhaar-number"]) {
       setDb();
       const res = await post({ employees: [row({ [key]: "234567890123" })] });
       expect(res.statusCode, key).toBe(400);

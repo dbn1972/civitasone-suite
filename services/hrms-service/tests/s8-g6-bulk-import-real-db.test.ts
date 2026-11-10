@@ -35,6 +35,7 @@ import { registerPayProfileConsumers } from "../src/modules/pay-profile/consumer
 import { registerBulkProfileRule } from "../src/modules/pay-profile/bulk.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsPayProfiles } from "../src/modules/pay-profile/schema.js";
+import { COMMANDS } from "../src/topics.js";
 import { hrmsBulkImportBatches, hrmsBulkImportRows } from "../src/modules/bulk-import/schema.js";
 
 registerEmployeeConsumers(queue);
@@ -212,6 +213,60 @@ describe("G6 bulk import of PAN / bank / UAN, end to end", () => {
   }, 120_000);
 });
 
+describe("G6 sealed payloads on the queue, legacy plaintext UAN", () => {
+  it("the create command on the queue is sealed; a replay of it (DLQ redrive) after the fact still loads the employee", async () => {
+    process.env.HRMS_S8_BULK_IMPORT_ENABLED = "true";
+    const spy = vi.spyOn(queue, "publish");
+    const res = await bulk([row("DIC-R01", { pan: "EKLPM3390H", uanNumber: "101234599001", bankAccountNo: "60234512345", bankIfsc: "KKBK0000958" })]);
+    expect(res.statusCode).toBe(202);
+    await drain();
+    const sent = spy.mock.calls.filter((c) => c[0] === COMMANDS.employeeCreate).map((c) => c[1] as { messageId: string; payload: Record<string, string> });
+    spy.mockRestore();
+    expect(sent).toHaveLength(1);
+    const wire = JSON.stringify(sent);
+    for (const clear of ["EKLPM3390H", "101234599001", "60234512345", "KKBK0000958"]) expect(wire).not.toContain(clear);
+    expect(sent[0]!.payload.pan).toMatch(/^enc:v2:/);
+
+    // Remove the employee, then redeliver the SAME message (fresh messageId, as a DLQ redrive would).
+    await asTenant(TENANT, (tx) => tx.delete(hrmsEmployees).where(and(eq(hrmsEmployees.tenantId, TENANT), eq(hrmsEmployees.employeeNo, "DIC-R01"))));
+    await queue.publish(COMMANDS.employeeCreate, { ...sent[0]!, messageId: randomUUID(), type: COMMANDS.employeeCreate, tenantId: TENANT, actorId: MAKER, correlationId: randomUUID(), schemaVersion: "1.0" } as never);
+    await drain();
+    expect(await findByNo("DIC-R01")).toMatchObject({ pan: "EKLPM3390H", uanNumber: "101234599001", bankAccountNo: "60234512345" });
+  });
+
+  it("a sealed value naming an unknown key id is refused with PII_KEY_UNKNOWN (not CREATE_FAILED)", async () => {
+    process.env.HRMS_S8_BULK_IMPORT_ENABLED = "true";
+    const orig = queue.publish.bind(queue);
+    vi.spyOn(queue, "publish").mockImplementation(async (topic: string, msg: never) => {
+      const m = msg as { payload: { items?: Array<{ create: Record<string, unknown> }> } };
+      if (topic === COMMANDS.employeeBulkImportRecord && m.payload.items) m.payload.items[0]!.create.pan = "enc:v2:retired9:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+      return orig(topic, msg as never);
+    });
+    const res = await bulk([row("DIC-K01", { pan: "FHTPN6612J" })]);
+    expect(res.statusCode).toBe(202);
+    await drain();
+    vi.restoreAllMocks();
+    const status = await app.inject({ method: "GET", url: `/v1/hrms/employees/bulk/status/${res.json<{ id: string }>().id}`, headers: hdr(MAKER, ["hr_admin"]) });
+    expect(status.json<{ failedRows: Array<{ code: string }> }>().failedRows[0]!.code).toBe("PII_KEY_UNKNOWN");
+    expect(await findByNo("DIC-K01")).toBeUndefined();
+  });
+
+  it("a LEGACY plaintext uan_number still reads through the detail, the internal payroll projection and the reveal", async () => {
+    const id = (await findByNo("DIC-002"))!.id;
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_number = '100987654321' WHERE id = ${id}::uuid`));
+    expect((await rawOf(id)).uan_number).toBe("100987654321");
+    const detail = await app.inject({ method: "GET", url: `/v1/hrms/employees/${id}`, headers: hdr(MAKER, ["hr_admin"]) });
+    expect(detail.json<{ uanNumber: string }>().uanNumber).toBe("100987654321");
+    const feed = await app.inject({ method: "GET", url: "/v1/hrms/internal/payroll-input?month=2026-11", headers: hdr(MAKER, ["payroll_admin"]) });
+    expect(feed.statusCode).toBe(200);
+    const emp = feed.json<{ employees: Array<{ id: string; uan?: string }> }>().employees.find((e) => e.id === id);
+    expect(emp?.uan).toBe("100987654321");
+    const rev = await app.inject({ method: "POST", url: "/v1/hrms/pii/reveal", headers: hdr(MAKER, ["hr_admin"]),
+      payload: { resourceType: "employee", resourceId: id, field: "uanNumber", reason: "Legacy plaintext row check for EPF ECR" } });
+    expect(rev.json<{ data: { value: string } }>().data.value).toBe("100987654321");
+  });
+});
+
 describe("G6 bulk pay-profile request / decision", () => {
   const bulkReq = (items: unknown[], q = "", h = hdr(MAKER, ["hr_admin"])) =>
     app.inject({ method: "POST", url: `/v1/hrms/pay-profiles/bulk-request${q}`, headers: h, payload: { items } });
@@ -306,6 +361,40 @@ describe("G6 bulk pay-profile request / decision", () => {
     // Deciding again: already decided -> skipped with NOT_PENDING.
     const again = await bulkDecide({ decision: "approve", profileIds: [ids[0]] });
     expect(again.json<{ results: Array<{ code?: string }> }>().results[0]!.code).toBe("NOT_PENDING");
+  });
+
+  it("queue failing part-way: 503 BULK_PARTIAL names the rows already accepted (batch is not atomic)", async () => {
+    process.env.HRMS_S8_BULK_PAY_PROFILE_ENABLED = "true";
+    await asTenant(TENANT, async (tx) => {
+      for (const no of ["PP-101", "PP-102"]) await tx.insert(hrmsEmployees).values({
+        id: randomUUID(), tenantId: TENANT, employeeNo: no, fullName: `Contract ${no}`, departmentId: deptId, designationId: desigId,
+        dateOfJoining: "2025-04-01", status: "confirmed", employeeType: "contractual", basicMinor: 4_000_000n, createdBy: MAKER, updatedBy: MAKER });
+    });
+    const orig = queue.publish.bind(queue);
+    let n = 0;
+    vi.spyOn(queue, "publish").mockImplementation(async (topic: string, msg: never) => {
+      if (topic === COMMANDS.payProfileRequest && ++n === 2) throw new Error("sqs down");
+      return orig(topic, msg);
+    });
+    const res = await bulkReq([item("PP-101"), item("PP-102")]);
+    vi.restoreAllMocks();
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ code: "BULK_PARTIAL", atomic: false, notQueued: 1 });
+    expect(res.json<{ accepted: unknown[] }>().accepted).toHaveLength(1);
+  });
+
+  it("bulk-decision reads the locked period once, not per row", async () => {
+    process.env.HRMS_S8_BULK_PAY_PROFILE_ENABLED = "true";
+    await drain();
+    const pend = (await profilesOf()).filter((p) => p.status === "pending").map((p) => p.id);
+    expect(pend.length).toBeGreaterThanOrEqual(1);
+    lockedThroughMock.mockClear();
+    await bulkDecide({ decision: "reject", profileIds: pend }, hdr(CHECKER, ["hr_admin"]), "?dryRun=true");
+    const rejectCalls = lockedThroughMock.mock.calls.length;
+    await bulkDecide({ decision: "approve", profileIds: [...pend, ...pend.map(() => randomUUID())] }, hdr(CHECKER, ["hr_admin"]), "?dryRun=true");
+    expect(rejectCalls).toBe(0);
+    // one read up front for the batch; per-row assertAssignable reuses it
+    expect(lockedThroughMock.mock.calls.length).toBe(1);
   });
 
   it("limits: more than 100 decisions or 500 requests is a 400", async () => {

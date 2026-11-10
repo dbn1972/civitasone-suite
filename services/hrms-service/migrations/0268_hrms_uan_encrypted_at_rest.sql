@@ -16,3 +16,13 @@
 SET lock_timeout = '5s';
 
 ALTER TABLE employee.hrms_employees ALTER COLUMN uan_number TYPE text;
+
+-- The UAN a maker supplies with an EPF pension-scheme request is held (pending) until approval: same treatment.
+-- Rollback (only while no row holds ciphertext): ALTER TABLE employee.hrms_pension_scheme_changes ALTER COLUMN uan_number TYPE varchar(12);
+ALTER TABLE employee.hrms_pension_scheme_changes ALTER COLUMN uan_number TYPE text;
+
+-- The 0261 CHECK required 12 bare digits; ciphertext cannot satisfy it. Plaintext (legacy rows) or an "enc:" envelope is accepted;
+-- the 12-digit format of NEW values is validated by the API (pension-scheme-commands.ts) before encryption.
+ALTER TABLE employee.hrms_pension_scheme_changes DROP CONSTRAINT IF EXISTS hrms_pension_scheme_changes_uan_check;
+ALTER TABLE employee.hrms_pension_scheme_changes ADD CONSTRAINT hrms_pension_scheme_changes_uan_check
+  CHECK (uan_number IS NULL OR uan_number ~ '^[0-9]{12}$' OR uan_number LIKE 'enc:v%');

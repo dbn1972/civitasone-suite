@@ -67,8 +67,9 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const body = (sensitiveOn ? bulkImportBodySensitive : bulkImportBody).parse(req.body) as z.infer<typeof bulkImportBodySensitive>;
-    // ?dryRun=true: run every check below and answer, with no side effect (nothing queued, no batch recorded).
-    const dryRun = (req.query as { dryRun?: string } | undefined)?.dryRun === "true";
+    // ?dryRun=true (flag on): run every check below and answer, with no side effect (nothing queued, no batch recorded).
+    // Honoured only with the flag on: flag off, the parameter is ignored exactly as before this change.
+    const dryRun = sensitiveOn && (req.query as { dryRun?: string } | undefined)?.dryRun === "true";
     const batchId = randomUUID();
 
     // Validate all rows before queueing. Both checks report through

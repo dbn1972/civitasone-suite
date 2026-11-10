@@ -138,7 +138,7 @@ export async function assertAssignable(tenantId: string, input: {
  * the decider is not its requester (maker-checker), and an approval is still assignable and orders after the
  * employee's active profile. Shared by the single routes and the G6 bulk decision. Throws HttpError.
  */
-export async function assertDecidable(ctx: { tenantId: string; actorId: string }, profileId: string, decision: "approve" | "reject"): Promise<void> {
+export async function assertDecidable(ctx: { tenantId: string; actorId: string }, profileId: string, decision: "approve" | "reject", lockedThroughOverride?: string | null): Promise<void> {
   const row = await repo.findById(ctx.tenantId, profileId);
   if (!row) throw new HttpError(404, "NOT_FOUND", "pay profile request not found");
   if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `pay profile request is already ${row.status}`);
@@ -151,6 +151,7 @@ export async function assertDecidable(ctx: { tenantId: string; actorId: string }
       employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
       deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
       termsSnapshot: row.deputationTerms ?? null,
+      ...(lockedThroughOverride !== undefined ? { lockedThroughOverride } : {}),
     });
     const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
     const plan = planApproval(row, active);

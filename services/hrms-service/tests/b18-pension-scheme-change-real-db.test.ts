@@ -146,7 +146,11 @@ describe("D1: maker-checker change NPS -> EPF effective this month", () => {
     expect(await empRow(C1)).toMatchObject({ pension_scheme: "EPF", uan_number: UAN1 });
     const a = await audits(C1);
     expect(a.map((x) => x.action)).toEqual(["pension_scheme_change_request", "pension_scheme_change"]);
-    expect(a[1]).toMatchObject({ oldValue: { pensionScheme: "NPS", uanNumber: null }, newValue: { pensionScheme: "EPF", uanNumber: UAN1 }, reason: REASON });
+    expect(a[1]).toMatchObject({ oldValue: { pensionScheme: "NPS", uanNumber: null }, newValue: { pensionScheme: "EPF", uanNumber: "********0401" }, reason: REASON });
+    // G6: the audit carries the UAN masked, never in clear, and the requested UAN is encrypted at rest.
+    expect(JSON.stringify(a)).not.toContain(UAN1);
+    const held = await asTenant((tx) => tx.execute(sql`SELECT uan_number FROM employee.hrms_pension_scheme_changes WHERE id = ${changeId}::uuid`)) as unknown as Array<{ uan_number: string }>;
+    expect(held[0]!.uan_number).toMatch(/^enc:v2:/);
     const again = await decide(changeId, "reject", { note: "too late" });
     expect(again.statusCode).toBe(409);
     expect(again.json().code).toBe("PENSION_SCHEME_CHANGE_NOT_PENDING");
