@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -46,7 +46,7 @@ export function registerRiskRegisterConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const control = await repo.findControlByIdTx(tx, p.controlId, p.tenantId);
-      if (!control) throw new Error(`risk control ${p.controlId} not found`);
+      if (!control) throw new NonRetryableError(`risk control ${p.controlId} not found`);
       await repo.insertControlTest(tx, {
         id: p.id, tenantId: p.tenantId, controlId: p.controlId, result: p.result,
         testedBy: p.testedBy ?? null, testDate: new Date().toISOString().slice(0, 10), notes: p.notes ?? null,
@@ -97,7 +97,7 @@ export function registerRiskRegisterConsumers(queue: Queue): void {
       // effectiveness, so a requester cannot self-declare a low residual for a
       // high-inherent risk protected only by an ineffective control.
       const risk = await riskRepo.findByIdTx(tx, p.riskId, p.tenantId);
-      if (!risk) throw new Error(`risk ${p.riskId} not found`);
+      if (!risk) throw new NonRetryableError(`risk ${p.riskId} not found`);
       const controls = await repo.listControlsForRiskTx(tx, p.riskId, p.tenantId);
       const effectiveness: Effectiveness = strongestEffectiveness(
         controls.map((c) => c.effectiveness as Effectiveness),
@@ -120,8 +120,8 @@ export function registerRiskRegisterConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const acc = await repo.findAcceptanceByIdTx(tx, p.acceptanceId, p.tenantId);
-      if (!acc) throw new Error(`risk acceptance ${p.acceptanceId} not found`);
-      if (acc.status !== "proposed") throw new Error(`acceptance ${p.acceptanceId} already decided`);
+      if (!acc) throw new NonRetryableError(`risk acceptance ${p.acceptanceId} not found`);
+      if (acc.status !== "proposed") throw new NonRetryableError(`acceptance ${p.acceptanceId} already decided`);
       assertDifferentActor(acc.requestedBy, msg.actorId, "risk acceptance");
       const n = await repo.updateAcceptanceVersioned(tx, p.acceptanceId, p.tenantId, acc.version ?? 1, {
         status: p.decision, remarks: p.remarks ?? null, decidedBy: msg.actorId, decidedAt: new Date(),

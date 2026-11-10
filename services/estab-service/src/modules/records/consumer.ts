@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -66,31 +66,38 @@ export function registerRecordsConsumers(queue: Queue): void {
   // ── Weed-out: approve (maker≠checker + assertWeedable gate) ────────────────
   queue.subscribe(COMMANDS.weedoutApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const wo = await repo.findWeedoutByIdTx(tx, p.id, p.tenantId);
-      if (!wo || wo.status !== "proposed") {
-        throw new DomainError("INVALID_STATE", `weed-out ${p.id} is not in 'proposed' state`);
-      }
-      // Maker≠checker: the approver MUST differ from the proposer. Checked
-      // BEFORE the retention gate so a same-actor approval always surfaces as
-      // MAKER_CHECKER_VIOLATION.
-      if (wo.proposedBy === msg.actorId) {
-        throw new DomainError(
-          "MAKER_CHECKER_VIOLATION",
-          "MAKER_CHECKER_VIOLATION: approver (reviewed_by) must differ from proposed_by",
-        );
-      }
-      const record = await repo.findRecordTx(tx, p.tenantId, wo.fileId);
-      const category = (record?.recordCategory ?? "A") as RecordCategory;
-      const reviewDue = record?.reviewDueDate ? new Date(record.reviewDueDate) : null;
-      assertWeedable(category, reviewDue, new Date());
+    // Deterministic business refusals (wrong state, maker=checker, retention gate) are permanent:
+    // a plain DomainError is retried 5x then dead-lettered. Infrastructure errors stay retryable.
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const wo = await repo.findWeedoutByIdTx(tx, p.id, p.tenantId);
+        if (!wo || wo.status !== "proposed") {
+          throw new DomainError("INVALID_STATE", `weed-out ${p.id} is not in 'proposed' state`);
+        }
+        // Maker≠checker: the approver MUST differ from the proposer. Checked
+        // BEFORE the retention gate so a same-actor approval always surfaces as
+        // MAKER_CHECKER_VIOLATION.
+        if (wo.proposedBy === msg.actorId) {
+          throw new DomainError(
+            "MAKER_CHECKER_VIOLATION",
+            "MAKER_CHECKER_VIOLATION: approver (reviewed_by) must differ from proposed_by",
+          );
+        }
+        const record = await repo.findRecordTx(tx, p.tenantId, wo.fileId);
+        const category = (record?.recordCategory ?? "A") as RecordCategory;
+        const reviewDue = record?.reviewDueDate ? new Date(record.reviewDueDate) : null;
+        assertWeedable(category, reviewDue, new Date());
 
-      await repo.updateWeedout(tx, p.id, {
-        status: "approved", reviewedBy: msg.actorId, reviewedAt: new Date(),
+        await repo.updateWeedout(tx, p.id, {
+          status: "approved", reviewedBy: msg.actorId, reviewedAt: new Date(),
+        });
+        await audit(tx, msg, "approve", "weedout", p.id);
       });
-      await audit(tx, msg, "approve", "weedout", p.id);
-    });
+    } catch (err) {
+      if (err instanceof DomainError) throw new NonRetryableError(err.message, err);
+      throw err;
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "weedout", p.id));
   });
 
