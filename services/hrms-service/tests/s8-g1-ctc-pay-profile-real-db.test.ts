@@ -115,6 +115,9 @@ describe("flag on: request -> pending -> maker-checker approval -> feed", () => 
     // no ESI opt-out exists (owner decision 10 Nov 2026): the field is refused, not silently ignored
     const optOut = await post(empId, { payProfile: "ctc_contract", effectiveFrom: "2026-12-01", ctcTerms: terms({ esiOptOut: true }) });
     expect(optOut.statusCode).toBe(400);
+    expect(optOut.json()).toMatchObject({ code: "ESI_OPT_OUT_NOT_ALLOWED" });
+    expect(optOut.json().message).toContain("ESI opt-out is not allowed");
+    expect(optOut.json().message).toContain("esiOptOut");
 
     const ok = await post(empId, { payProfile: "ctc_contract", effectiveFrom: "2026-12-01", ctcTerms: terms(), orderRef: "DIC/HR/2026/117" });
     expect(ok.statusCode).toBe(202);

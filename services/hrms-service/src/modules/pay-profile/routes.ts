@@ -148,6 +148,10 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    const rawTerms = (req.body as { ctcTerms?: Record<string, unknown> } | null | undefined)?.ctcTerms;
+    if (rawTerms && typeof rawTerms === "object" && "esiOptOut" in rawTerms) {
+      throw new HttpError(400, "ESI_OPT_OUT_NOT_ALLOWED", "ctcTerms.esiOptOut: ESI opt-out is not allowed; ESI cannot be waived by the employee");
+    }
     const body = requestBody.parse(req.body);
     const consolidated = body.consolidatedMonthlyMinor != null ? BigInt(body.consolidatedMonthlyMinor) : null;
     const deputationTerms = await assertAssignable(ctx.tenantId, {

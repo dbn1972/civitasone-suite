@@ -174,7 +174,8 @@ describe("decision 1: two pay-group runs (regular staff, contract/CTC staff)", (
 });
 
 describe("decision 3: no ESI opt-out; contribution period = the #2487 seam", () => {
-  const lowCtc = () => CA(T.esi, 276_000); // full-month gross 19,920 (under the Rs 21,000 ceiling); employer ESI 647 carved from CTC
+  // Rs 2,76,000 on this template (no group insurance) solves to full-month gross 21,067: just OVER the Rs 21,000 ceiling, so ESI is off at solve time.
+  const lowCtc = () => CA(T.esi, 276_000);
   it("seam on: covered earlier in the Oct-Mar period, a one-off lifts the gross over the ceiling, ESI stays on the booked gross", async () => {
     const prior = randomUUID();
     await q(T.esi, sql`INSERT INTO payroll.payroll_statutory_seams (tenant_id, esi_contribution_period_enabled) VALUES (${T.esi}::uuid, true)`);
