@@ -126,18 +126,39 @@ export interface AlertAuditKey {
 
 export class AlertAuditDedupe {
   private readonly seen = new Map<string, number>();
+  private lastSweep = Number.NEGATIVE_INFINITY;
 
   constructor(private readonly windowMs: number = 24 * 3_600_000) {}
 
-  /** True the first time this alert is seen in the window; records it. */
-  shouldAudit(key: AlertAuditKey, now: Date = new Date()): boolean {
+  private static keyOf(key: AlertAuditKey): string {
+    return `${key.tenantId}|${key.action}|${key.resourceId}|${key.docTypeCode ?? ""}`;
+  }
+
+  /** True when this alert has not been audited within the window. Does NOT record it. */
+  isDue(key: AlertAuditKey, now: Date = new Date()): boolean {
     const t = now.getTime();
-    // Forget expired entries so memory stays bounded by the number of open alerts.
-    for (const [k, at] of this.seen) if (t - at >= this.windowMs) this.seen.delete(k);
-    const k = `${key.tenantId}|${key.action}|${key.resourceId}|${key.docTypeCode ?? ""}`;
-    if (this.seen.has(k)) return false;
-    this.seen.set(k, t);
+    this.sweep(t);
+    const at = this.seen.get(AlertAuditDedupe.keyOf(key));
+    return at === undefined || t - at >= this.windowMs;
+  }
+
+  /** Record an alert as audited. Call only after the transaction that wrote the audit row committed. */
+  record(key: AlertAuditKey, now: Date = new Date()): void {
+    this.seen.set(AlertAuditDedupe.keyOf(key), now.getTime());
+  }
+
+  /** isDue + record in one step (for callers with no transaction to wait for). */
+  shouldAudit(key: AlertAuditKey, now: Date = new Date()): boolean {
+    if (!this.isDue(key, now)) return false;
+    this.record(key, now);
     return true;
+  }
+
+  /** Forget expired entries, at most once per window, so memory stays bounded without an O(n) scan per call. */
+  private sweep(t: number): void {
+    if (t - this.lastSweep < this.windowMs) return;
+    this.lastSweep = t;
+    for (const [k, at] of this.seen) if (t - at >= this.windowMs) this.seen.delete(k);
   }
 
   get size(): number { return this.seen.size; }

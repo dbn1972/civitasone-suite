@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
  */
 
 const { stats } = vi.hoisted(() => ({
-  stats: { deletes: 0, inFlight: 0, maxInFlight: 0, batchServed: false, handledBeforeDelete: true, handled: 0, bodies: [] as string[] },
+  stats: { deletes: 0, inFlight: 0, maxInFlight: 0, batchServed: false, handledBeforeDelete: true, handled: 0, bodies: [] as string[], deleted: [] as string[], retried: [] as string[] },
 }));
 
 vi.mock("@aws-sdk/client-sqs", async (importOriginal) => {
@@ -41,8 +41,12 @@ vi.mock("@aws-sdk/client-sqs", async (importOriginal) => {
           await new Promise((r) => setTimeout(r, 40)); // one slow SQS round trip
           stats.inFlight -= 1;
           stats.deletes += 1;
+          stats.deleted.push(String(cmd.input.ReceiptHandle));
           return {};
         }
+        case "ChangeMessageVisibilityCommand":
+          stats.retried.push(String(cmd.input.ReceiptHandle));
+          return {};
         default:
           return {};
       }
@@ -75,5 +79,33 @@ describe("SqsQueue.pollTopic batch acknowledgement (UAT B24)", () => {
     expect(stats.deletes).toBe(ids.length);
     expect(order).toEqual(ids); // handlers stay serial and in receive order
     expect(stats.maxInFlight).toBeGreaterThan(1); // deletes overlap instead of 10 sequential round trips
+  }, 15_000);
+
+  it("mid-batch failure: messages before and after the failing one are deleted, the failing one is not (retried)", async () => {
+    stats.batchServed = false; stats.deletes = 0; stats.handled = 0; stats.deleted = []; stats.retried = [];
+    const { SqsQueue } = await import("../src/bus.js");
+    const topic = `qtest.midfail.${randomUUID().slice(0, 8)}`;
+    const tenantId = randomUUID();
+    const ids = Array.from({ length: 5 }, () => randomUUID());
+    stats.bodies = ids.map((messageId) => JSON.stringify({
+      messageId, type: topic, tenantId, actorId: "actor-1", correlationId: randomUUID(),
+      timestamp: new Date().toISOString(), schemaVersion: "1.0", payload: {},
+    }));
+    const failing = ids[2]!;
+    const order: string[] = [];
+    const queue = new SqsQueue();
+    queue.subscribe(topic, async (m: { messageId: string }) => {
+      order.push(m.messageId);
+      if (m.messageId === failing) throw new Error("transient DB error");
+    });
+    await queue.start();
+    const deadline = Date.now() + 5000;
+    while ((stats.deletes < 4 || stats.retried.length < 1) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+    await queue.stop();
+
+    expect(order.slice(0, 5)).toEqual(ids); // later messages are still handled after the failure
+    expect([...stats.deleted].sort()).toEqual(["rh-0", "rh-1", "rh-3", "rh-4"]);
+    expect(stats.deleted).not.toContain("rh-2");
+    expect(stats.retried).toEqual(["rh-2"]); // goes to backoff retry exactly as before
   }, 15_000);
 });

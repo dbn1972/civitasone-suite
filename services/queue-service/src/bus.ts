@@ -1155,14 +1155,15 @@ export class SqsQueue implements Queue {
         // killed loop and flip /ready to 503.
         recordConsumerHeartbeat(this.service);
 
-        // UAT B24 (audit-trail latency): acknowledgements of the successfully handled
-        // messages of this batch are issued together and awaited once, after the loop,
-        // instead of one DeleteMessage round trip per message. Handlers still run one
-        // after another in receive order, and each message is still only deleted after
-        // its handlers and its outcome record completed. Where one SQS call costs
-        // seconds (the UAT LocalStack: ~4.5 s) a batch of 10 used to spend ~45 s in
-        // deletes alone. A delete that is lost only means a redelivery, which every
-        // consumer already tolerates (at-least-once; the audit consumer dedupes by id).
+        // UAT B24 (audit-trail latency): the DeleteMessage for each successfully handled
+        // message is STARTED immediately (it overlaps the handlers of later messages in
+        // this batch) but only AWAITED once, after the loop, instead of one blocking
+        // round trip per message. Handlers still run one after another in receive order,
+        // and a message is still only deleted after its handlers and its outcome record
+        // completed. Where one SQS call costs seconds (the UAT LocalStack: ~4.5 s) a
+        // batch of 10 used to spend ~45 s in deletes alone. A delete that is lost only
+        // means a redelivery, which every consumer already tolerates (at-least-once; the
+        // audit consumer dedupes by id).
         const pendingAcks: Promise<void>[] = [];
 
         for (const sqsMsg of res.Messages ?? []) {

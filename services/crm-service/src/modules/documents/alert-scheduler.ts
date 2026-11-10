@@ -27,6 +27,7 @@ import {
   findMissingMandatory,
   findExpiringDocuments,
   AlertAuditDedupe,
+  type AlertAuditKey,
   type SubjectDocs,
   type ExpiringDocLike,
 } from "./alert-domain.js";
@@ -113,15 +114,21 @@ async function expiringCandidates(tx: Tx, tenantId: string): Promise<ExpiringDoc
 
 /** Run the alert cycle for one tenant. Returns how many alerts were emitted. */
 export async function runTenantDocumentAlerts(tenantId: string, now: Date = new Date()): Promise<number> {
-  return (await runWithTenant(tenantId, () =>
+  // Dedupe keys are recorded only after the transaction commits: a rollback must not
+  // suppress the audit row for the next 24 h.
+  const toRecord: AlertAuditKey[] = [];
+  const emittedCount = (await runWithTenant(tenantId, () =>
     db.transaction(async (tx) => {
       let emitted = 0;
+      toRecord.length = 0; // a retried transaction callback starts clean
       const emit = async (payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> => {
         await enqueue(tx, {
           topic: EVENTS.documentAlert, eventType: EVENTS.documentAlert,
           tenantId, actorId: tenantId, correlationId: randomUUID(), payload,
         });
-        if (auditDedupe.shouldAudit({ tenantId, action, resourceId, docTypeCode: (payload.docTypeCode ?? null) as string | null }, now)) {
+        const auditKey: AlertAuditKey = { tenantId, action, resourceId, docTypeCode: (payload.docTypeCode ?? null) as string | null };
+        if (auditDedupe.isDue(auditKey, now) && !toRecord.some((k) => k.action === action && k.resourceId === resourceId && k.docTypeCode === auditKey.docTypeCode)) {
+          toRecord.push(auditKey);
           await enqueue(tx, {
             topic: AUDIT, eventType: AUDIT,
             tenantId, actorId: tenantId, correlationId: randomUUID(),
@@ -176,6 +183,8 @@ export async function runTenantDocumentAlerts(tenantId: string, now: Date = new 
       return emitted;
     }),
   )) as number;
+  for (const k of toRecord) auditDedupe.record(k, now);
+  return emittedCount;
 }
 
 /** One full cycle across every tenant with enabled types or dated documents. */
