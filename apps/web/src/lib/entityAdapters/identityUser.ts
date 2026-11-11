@@ -1,6 +1,7 @@
 import type { EntityOption } from "@/app/_components/ds";
 import { failStrict, type StrictOpt } from "./strict";
 import { fetchAllPages } from "@/lib/fetchAllPages";
+import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
 
 type IdentityUserRow = { id: string; name: string; designation?: string };
 
@@ -28,7 +29,7 @@ async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<Identit
     const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
     return Array.isArray(body) ? body : (body.data ?? []);
   });
-  if (all && !all.complete) console.warn(`[identityUser] picker list truncated at ${all.rows.length} users; search results may be incomplete`);
+  if (all && !all.complete) recordLoaderFallback({ key: "entity-picker.identity-users", reason: "truncated", path: "/api/proxy/v1/identity/users", timestamp: new Date().toISOString() });
   return all ? all.rows : [];
 }
 

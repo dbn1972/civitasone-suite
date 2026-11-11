@@ -1,6 +1,7 @@
 "use client";
 
 import { fetchAllPages } from "@/lib/fetchAllPages";
+import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -51,7 +52,7 @@ async function loadNames(): Promise<Record<string, string>> {
     });
     if (!all) return {};
     // Names beyond the page cap fall back to the generic label; log it rather than hide it.
-    if (!all.complete) console.warn(`[integrations] user directory truncated at ${all.rows.length} rows`);
+    if (!all.complete) recordLoaderFallback({ key: "integrations.user-names", reason: "truncated", path: "/api/proxy/v1/admin/users", timestamp: new Date().toISOString() });
     const out: Record<string, string> = {};
     for (const u of all.rows) {
       const label = typeof u.name === "string" && u.name.trim() !== "" ? u.name : typeof u.email === "string" ? u.email : "";

@@ -15,6 +15,7 @@ vi.mock("@/app/_data/apiClient", () => ({
   },
 }));
 
+import { getLoaderFallbackEvents } from "./loaderTelemetry";
 import { getAdminUsers, getAdminUsersPage, getTenantUsers, getMfaUsers, ADMIN_USERS_PAGE_SIZE } from "./loaders";
 
 const user = (n: number) => ({ id: `u-${n}`, tenantId: "t", email: `u${n}@dept.gov.in`, name: `User ${n}`, empCode: null, status: "active", mfaEnabled: false, version: 1 });
@@ -84,14 +85,12 @@ describe("getMfaUsers walks the pages instead of showing only the endpoint's def
 
 describe("page cap: a truncated list is flagged and logged, never silent", () => {
   it("returns truncated: true and warns when the last allowed page is still full", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     handler = () => ({ payload: page(1, 200) });
     const res = await getAdminUsers();
     expect(res.source).toBe("api");
     expect(res.truncated).toBe(true);
     expect(res.data).toHaveLength(5000);
     expect(fetchedUrls).toHaveLength(25);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("truncated"));
-    warn.mockRestore();
+    expect(getLoaderFallbackEvents().some((e) => e.reason === "truncated" && e.key === "admin.users")).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordLoaderFallback } from "./loaderTelemetry";
 import { MAX_PAGES, USERS_PAGE_SIZE } from "@/lib/fetchAllPages";
 import { buildOrgTree } from "./orgTree";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
@@ -1096,7 +1097,7 @@ async function fetchAllUsersPages<T>(
     if (rawLength < USERS_PAGE_SIZE) return { data: all, source: "api" };
   }
   // Page cap reached with the last page still full: more users exist. Say so (log + `truncated` for the screen).
-  console.warn(`[${telemetryKey}] user list truncated at ${all.length} rows (page cap ${MAX_PAGES})`);
+  recordLoaderFallback({ key: telemetryKey, reason: "truncated", path, timestamp: new Date().toISOString() });
   return { data: all, source: "api", truncated: true };
 }
 

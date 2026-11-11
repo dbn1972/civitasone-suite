@@ -5,6 +5,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { fetchAllPages } from "@/lib/fetchAllPages";
+import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
 import { activeChildCount, headDisplayName, isUnitInactive, orgConflictMessage } from "./orgUnitState";
 
 // Matches tenant-service's real, flat org-unit taxonomy (org-hierarchy
@@ -346,6 +347,7 @@ export function OrgHierarchyManager({
   const [positionsAck, setPositionsAck] = useState(false);
   const [directory, setDirectory] = useState<{ id: string; name: string }[]>([]);
   const [directoryFailed, setDirectoryFailed] = useState(false);
+  const [directoryTruncated, setDirectoryTruncated] = useState(false);
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => { setNowMs(Date.now()); }, [units]);
   // Names for the head-of-unit label and picker. Never block the tree on it: a failure shows
@@ -362,7 +364,10 @@ export function OrgHierarchyManager({
           return Array.isArray(body) ? body : body.data ?? [];
         });
         if (!all) throw new Error("directory");
-        if (!all.complete) console.warn(`[org-hierarchy] head-of-unit directory truncated at ${all.rows.length} users`);
+        if (!all.complete) {
+          recordLoaderFallback({ key: "org-hierarchy.head-directory", reason: "truncated", path: "/api/proxy/v1/admin/users", timestamp: new Date().toISOString() });
+          if (!cancelled) setDirectoryTruncated(true);
+        }
         const rows = all.rows;
         if (!cancelled) {
           setDirectory(rows.filter((r) => typeof r.id === "string" && typeof r.name === "string").map((r) => ({ id: r.id as string, name: r.name as string })));
@@ -657,6 +662,7 @@ export function OrgHierarchyManager({
           </select>
         </label>
         {directoryFailed && <p role="status" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>The user directory could not be loaded, so only clearing the head is possible right now. Reload the page to try again.</p>}
+        {directoryTruncated && <p role="status" style={{ fontSize: 12, margin: 0 }}>Showing the first 5,000 users only. A head of unit outside that list cannot be picked here.</p>}
       </ConfirmDialog>
 
       {/* GAP-ADMIN-ORG-03: deactivate is a soft end-date with a mandatory reason; blocked while active sub-units remain. */}
