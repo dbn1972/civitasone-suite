@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 
 export type HrmsGpfAccountParams = { monthlySubscriptionMinor: bigint; status: string };
@@ -18,6 +21,8 @@ export type HrmsRetirementAccounts = {
  * never gates the statutory report.
  */
 export async function fetchRetirementAccounts(tenantId: string): Promise<HrmsRetirementAccounts | null> {
+  // M5: display/reconciliation only; skip the call when the tenant did not buy the HR module.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms retirement-accounts")).allowed) return null;
   const url = `${HRMS_URL}/v1/hrms/internal/retirement-accounts`;
   try {
     const res = await fetch(url, {

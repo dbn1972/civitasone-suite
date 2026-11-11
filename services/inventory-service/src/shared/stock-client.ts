@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 /**
  * Read-only client to stock-service for the item cross-reference
  * (GAP-INVENTORY-DETAIL-04 / GAP-INVENTORY-LIST-02). inventory-service and stock-service are
@@ -28,6 +31,11 @@ export type RemoteStockBalances = {
 };
 
 async function get(tenantId: string, path: string): Promise<Response> {
+  // M5: do not call a stock module this tenant did not buy (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce).
+  const gate = await licence.check(tenantId, LICENCE_MODULE.stock, "http", "stock-service");
+  if (!gate.allowed) {
+    throw new StockUnavailableError(gate.outcome === "deny" ? "stock module is not licensed for this tenant" : `stock licence could not be verified: ${gate.reason}`);
+  }
   try {
     return await fetch(`${STOCK_URL}${path}`, {
       headers: {

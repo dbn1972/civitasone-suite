@@ -44,6 +44,8 @@ import type {
   TourPlanSubmitPayload,
   TourPlanApprovePayload,
 } from "./commands.js";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
 
 const log = pino({ name: "assignment-consumer" });
 
@@ -80,6 +82,8 @@ export async function fetchInspectorLeave(
   periodStart: string,
   periodEnd: string,
 ): Promise<Array<{ startDate: string; endDate: string }>> {
+  // M5: leave data is optional for a tour plan; skip the call when the tenant did not buy the HR module.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms leave-periods")).allowed) return [];
   const hrmsBaseUrl = process.env.HRMS_SERVICE_URL ?? "http://localhost:3012";
   // CLOS3-S5-08: the real route is the internal leave-periods read (the old
   // /v1/hrms/leave never existed), authenticated service-to-service like the other
