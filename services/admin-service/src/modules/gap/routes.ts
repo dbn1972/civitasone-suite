@@ -102,10 +102,11 @@ function toIso(v: unknown): string | null {
 }
 
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(20),
+  limit: z.coerce.number().int().min(1).max(200, "limit must be at most 200; request further rows with offset").default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+// GET /v1/admin/users: limit is 1..200 (listQuery above); anything higher is a 400 that says so, never an empty list.
 const userListQuery = listQuery.extend({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["active", "suspended", "locked", "deactivated"]).optional(),
@@ -328,7 +329,10 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       ? (body as { rows?: unknown[]; total?: number; counts?: Record<string, number> }) : null;
     const rows = Array.isArray(body) ? body : Array.isArray(searched?.rows) ? searched!.rows! : [];
     const total = typeof searched?.total === "number" ? searched.total : rows.length;
-    return reply.send({ data: rows, meta: { ...pageMeta(q.limit, q.offset, total), ...(searched?.counts ? { counts: searched.counts } : {}) } });
+    // Explicit paging facts so a caller never has to guess whether there is more: offset/limit echoed, hasMore, and
+    // nextOffset (null on the last page or past the end). `page` assumes offset is a multiple of limit; offset is the truth.
+    const nextOffset = rows.length > 0 && q.offset + rows.length < total ? q.offset + rows.length : null;
+    return reply.send({ data: rows, meta: { ...pageMeta(q.limit, q.offset, total), limit: q.limit, offset: q.offset, hasMore: nextOffset !== null, nextOffset, ...(searched?.counts ? { counts: searched.counts } : {}) } });
   });
 
   app.post("/v1/admin/users", async (req, reply) => {

@@ -32,6 +32,34 @@ describe("GET /v1/admin/users", () => {
     expect(body.meta).toMatchObject({ page: 3, pageSize: 25, total: 1240, counts: { active: 1100, suspended: 100, locked: 0, deactivated: 40 } });
   });
 
+  it("exposes explicit paging facts: offset/limit echoed, hasMore and nextOffset (null on the last page)", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockImplementationOnce(async () => json(200, { rows: Array.from({ length: 200 }, (_, i) => ({ id: `u${i}` })), total: 201 }))
+      .mockImplementationOnce(async () => json(200, { rows: [{ id: "u200" }], total: 201 }))
+      .mockImplementationOnce(async () => json(200, { rows: [], total: 201 })));
+    const first = (await app.inject({ method: "GET", url: "/v1/admin/users?limit=200", headers: auth(["tenant_admin"]) })).json();
+    expect(first.data).toHaveLength(200);
+    expect(first.meta).toMatchObject({ total: 201, limit: 200, offset: 0, hasMore: true, nextOffset: 200 });
+    const second = (await app.inject({ method: "GET", url: "/v1/admin/users?limit=200&offset=200", headers: auth(["tenant_admin"]) })).json();
+    expect(second.meta).toMatchObject({ total: 201, offset: 200, hasMore: false, nextOffset: null });
+    const past = (await app.inject({ method: "GET", url: "/v1/admin/users?limit=200&offset=5000", headers: auth(["tenant_admin"]) })).json();
+    expect(past.data).toEqual([]);
+    expect(past.meta).toMatchObject({ total: 201, hasMore: false, nextOffset: null });
+  });
+
+  it("limit 200 is accepted; 201 and 1000 are a 400 that names the maximum, with no upstream call", async () => {
+    const f = vi.fn(async () => json(200, { rows: [], total: 0 }));
+    vi.stubGlobal("fetch", f);
+    expect((await app.inject({ method: "GET", url: "/v1/admin/users?limit=200", headers: auth(["tenant_admin"]) })).statusCode).toBe(200);
+    f.mockClear();
+    for (const lim of ["201", "1000"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/admin/users?limit=${lim}`, headers: auth(["tenant_admin"]) });
+      expect(res.statusCode).toBe(400);
+      expect(JSON.stringify(res.json())).toContain("limit must be at most 200");
+    }
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it("still reads a bare array from an older identity-service (total = rows returned)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(200, [{ id: "u1" }, { id: "u2" }])));
     const res = await app.inject({ method: "GET", url: "/v1/admin/users", headers: auth(["tenant_admin"]) });

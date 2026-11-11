@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PAGES, USERS_PAGE_SIZE } from "@/lib/fetchAllPages";
 import { buildOrgTree } from "./orgTree";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { normalizeHexColor } from "@/lib/orgLevels";
@@ -1068,12 +1069,37 @@ export async function getFinancePaymentById(id: string): Promise<LoaderResult<Fi
   });
 }
 
+/**
+ * The identity user list answers at most USERS_PAGE_SIZE rows per call (default 50, a larger `limit` is a 400),
+ * so a loader that wants every user walks the pages. A failure on any page is an error result, never a quietly
+ * truncated list. `rawLength` is the page's size BEFORE mapping so a mapper that drops a row cannot end the walk early.
+ */
+async function fetchAllUsersPages<T>(
+  path: string,
+  telemetryKey: string,
+  revalidateSeconds: number,
+  map: (payload: unknown) => T[] | null,
+): Promise<LoaderResult<T[]>> {
+  const all: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let rawLength = 0;
+    const res = await fetchJson<unknown, T[]>(`${path}?limit=${USERS_PAGE_SIZE}&offset=${page * USERS_PAGE_SIZE}`, [], {
+      revalidateSeconds,
+      telemetryKey,
+      mapResponse: (p) => {
+        rawLength = getArrayPayload(p)?.length ?? 0;
+        return map(p);
+      },
+    });
+    if (res.source !== "api") return { ...res, data: [] };
+    all.push(...res.data);
+    if (rawLength < USERS_PAGE_SIZE) break;
+  }
+  return { data: all, source: "api" };
+}
+
 export async function getTenantUsers(): Promise<LoaderResult<TenantUserSummary[]>> {
-  return fetchJson("/api/identity/users", [] as TenantUserSummary[], {
-    revalidateSeconds: 30,
-    telemetryKey: "tenant.users",
-    mapResponse: mapTenantUsersFromApi,
-  });
+  return fetchAllUsersPages("/api/identity/users", "tenant.users", 30, mapTenantUsersFromApi);
 }
 
 export async function getTenantRoles(): Promise<LoaderResult<RoleAssignmentSummary[]>> {
@@ -5887,11 +5913,7 @@ export async function getLegalOpinionById(id: string): Promise<LoaderResult<Reco
 // ── Admin / Platform loaders ──────────────────────────────────────────────────
 
 export async function getAdminUsers(): Promise<LoaderResult<UserSummary[]>> {
-  return fetchJson<unknown, UserSummary[]>("/api/identity/users", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "admin.users",
-    mapResponse: mapAdminUserSummaries,
-  });
+  return fetchAllUsersPages("/api/identity/users", "admin.users", 60, mapAdminUserSummaries);
 }
 
 export async function getAdminUserById(id: string): Promise<LoaderResult<UserDetail | null>> {
@@ -7241,12 +7263,15 @@ export async function getAdminUsersPage(query: AdminUsersQuery = {}): Promise<Lo
   const params = new URLSearchParams({ limit: String(ADMIN_USERS_PAGE_SIZE), offset: String((page - 1) * ADMIN_USERS_PAGE_SIZE) });
   if (query.q) params.set("q", query.q);
   if (query.status) params.set("status", query.status);
-  return fetchJson<unknown, AdminUsersPage>(`/api/v1/admin/users?${params.toString()}`, { rows: [], total: 0, counts: null, page, pageSize: ADMIN_USERS_PAGE_SIZE }, {
+  // /api/v1/admin/users is routed by the gateway straight to identity-service, whose list answers a bare array with no total
+  // (so the screen could never show a second page). /users/search is the same prefix and returns { rows, total, counts }.
+  return fetchJson<unknown, AdminUsersPage>(`/api/v1/admin/users/search?${params.toString()}`, { rows: [], total: 0, counts: null, page, pageSize: ADMIN_USERS_PAGE_SIZE }, {
     telemetryKey: "admin.users.list",
     mapResponse: (p) => {
-      const rows = getArrayPayload(p);
+      const rows = getArrayPayload(p) ?? (isRecord(p) && Array.isArray(p.rows) ? p.rows : null);
       if (!rows) return null;
-      const meta = isRecord(p) && isRecord(p.meta) ? p.meta : {};
+      // admin-service's envelope keeps total/counts under `meta`; identity-service's search puts them at the top level.
+      const meta = isRecord(p) ? (isRecord(p.meta) ? p.meta : p) : {};
       const mapped = rows.filter(isRecord).map((u) => ({
         id: String(u.id ?? ""),
         email: String(u.email ?? ""),

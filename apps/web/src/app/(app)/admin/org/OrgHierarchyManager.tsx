@@ -4,6 +4,7 @@ import { Button, ConfirmDialog, LoadErrorState, PageHeader } from "@/app/_compon
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { fetchAllPages } from "@/lib/fetchAllPages";
 import { activeChildCount, headDisplayName, isUnitInactive, orgConflictMessage } from "./orgUnitState";
 
 // Matches tenant-service's real, flat org-unit taxonomy (org-hierarchy
@@ -353,10 +354,15 @@ export function OrgHierarchyManager({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/admin/users?limit=200", { cache: "no-store" });
-        if (!res.ok) throw new Error("directory");
-        const body = (await res.json()) as { data?: { id?: unknown; name?: unknown }[] } | { id?: unknown; name?: unknown }[];
-        const rows = Array.isArray(body) ? body : body.data ?? [];
+        // At most 200 users per call: walk the pages so the head-of-unit picker lists everyone, not the first 200.
+        const all = await fetchAllPages(async (limit, offset) => {
+          const res = await fetch(`/api/proxy/v1/admin/users?limit=${limit}&offset=${offset}`, { cache: "no-store" });
+          if (!res.ok) return null;
+          const body = (await res.json()) as { data?: { id?: unknown; name?: unknown }[] } | { id?: unknown; name?: unknown }[];
+          return Array.isArray(body) ? body : body.data ?? [];
+        });
+        if (!all) throw new Error("directory");
+        const rows = all.rows;
         if (!cancelled) {
           setDirectory(rows.filter((r) => typeof r.id === "string" && typeof r.name === "string").map((r) => ({ id: r.id as string, name: r.name as string })));
           setDirectoryFailed(false);
