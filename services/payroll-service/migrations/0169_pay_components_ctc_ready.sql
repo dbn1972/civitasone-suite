@@ -1,4 +1,4 @@
--- 0166_pay_components_ctc_ready.sql
+-- 0169_pay_components_ctc_ready.sql
 --
 -- Section 8 gap G2 (design section 3.3, shared with G1): the payroll component master becomes
 -- writable and CTC-template ready.

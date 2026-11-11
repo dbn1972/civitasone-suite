@@ -1,6 +1,6 @@
 # S8-G2: pay components, the contract
 
-Section 8 gap G2 (design section 3). Branch `feat/s8-g2-components`, payroll migration `0166`.
+Section 8 gap G2 (design section 3). Branch `feat/s8-g2-components`, payroll migration `0169`.
 Everything is behind **`S8_PAY_COMPONENTS_ENABLED`** (payroll-service env, only the exact string `true` enables it, default off).
 
 ## The one module G1 builds on
@@ -20,7 +20,7 @@ Everything is behind **`S8_PAY_COMPONENTS_ENABLED`** (payroll-service env, only 
 | `checkTemplate(lines)` | the template-level checks below |
 | `payComponentsEnabled()` / `PAY_COMPONENTS_FLAG` | the flag |
 
-## Columns (migration 0166, additive, idempotent)
+## Columns (migration 0169, additive, idempotent)
 
 `payroll.payroll_structures`: `kind` (default `run`), `is_locked`, `locked_at`, `locked_by`, `effective_from`,
 `template_version` (default 1), `parent_structure_id`, `lineage_root_id` (every structure is the root of its own lineage; new versions inherit it). Unique `(tenant_id, lineage_root_id, template_version)`. (`version` stays the optimistic row counter.)
