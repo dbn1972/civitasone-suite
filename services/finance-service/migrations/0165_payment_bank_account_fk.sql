@@ -19,6 +19,9 @@
 -- and the finance.payment.initiate consumer (NonRetryableError) check them.
 -- Column values are not rewritten; bank-recon / instruments / challans keep their own columns.
 
+-- Fail fast instead of queueing behind (and blocking) traffic on a busy payments table.
+SET lock_timeout = '5s';
+
 ALTER TABLE payments.finance_payments DROP CONSTRAINT IF EXISTS fk_fpayments_bank;
 
 DO $$ BEGIN
@@ -32,3 +35,5 @@ DO $$ BEGIN
 EXCEPTION WHEN foreign_key_violation THEN
   RAISE NOTICE 'fk_fpayments_bank_account left NOT VALID: legacy finance_payments.bank_account_id values do not exist in payments.finance_bank_accounts';
 END $$;
+
+RESET lock_timeout;

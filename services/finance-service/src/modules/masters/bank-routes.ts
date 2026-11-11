@@ -11,26 +11,11 @@ import { sameBankAccount } from "./domain.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
-import { encryptedText } from "../../shared/pii-crypto.js";
+import { financeBankAccounts } from "../payments/schema.js";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
 
-const paymentsSchema = pgSchema("payments");
-const bankAccounts = paymentsSchema.table("finance_bank_accounts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull(),
-  bankName: varchar("bank_name", { length: 200 }).notNull(),
-  branchName: varchar("branch_name", { length: 200 }),
-  accountNo: encryptedText("account_no").notNull(),
-  ifsc: encryptedText("ifsc").notNull(),
-  accountType: varchar("account_type", { length: 20 }).notNull().default("current"),
-  purpose: varchar("purpose", { length: 64 }),
-  status: varchar("status", { length: 12 }).notNull().default("active"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  createdBy: uuid("created_by").notNull(),
-  version: integer("version").notNull().default(1),
-});
+const bankAccounts = financeBankAccounts;
 
 const createBankBody = z.object({
   bankName: z.string().min(2, "Bank name is required").max(200),
