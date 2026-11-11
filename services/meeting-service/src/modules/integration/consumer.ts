@@ -93,8 +93,11 @@ interface HrmsEmployeeUpdatedPayload {
 
 interface HrmsEmployeeSeparatedPayload {
   employeeId: string;
-  tenantId: string;
+  /** Not published by hrms-service (tenant travels on the envelope); kept optional for old producers. */
+  tenantId?: string;
   separationDate?: string;
+  /** What hrms-service actually publishes as the last working/separation date. */
+  effectiveDate?: string;
   reason?: string;
 }
 
@@ -392,7 +395,9 @@ async function handleHrmsEmployeeUpdated(msg: CommandEnvelope<HrmsEmployeeUpdate
  */
 async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSeparatedPayload>): Promise<void> {
   const p = msg.payload;
-  const expiredOn = (p.separationDate ?? new Date().toISOString()).slice(0, 10);
+  // The tenant is on the envelope (hrms-service payload carries none) and the date is `effectiveDate`.
+  const tenantId = msg.tenantId;
+  const expiredOn = String(p.separationDate ?? p.effectiveDate ?? new Date().toISOString()).slice(0, 10);
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
@@ -403,7 +408,7 @@ async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSepa
       .from(committeeMembers)
       .where(
         and(
-          eq(committeeMembers.tenantId, p.tenantId),
+          eq(committeeMembers.tenantId, tenantId),
           eq(committeeMembers.memberId, p.employeeId),
           eq(committeeMembers.status, "active"),
         ),
@@ -414,11 +419,11 @@ async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSepa
       await tx
         .update(committeeMembers)
         .set({ status: "expired", tenureEnd: expiredOn, updatedBy: SYSTEM_ACTOR_ID, updatedAt: new Date() })
-        .where(and(eq(committeeMembers.id, m.id), eq(committeeMembers.tenantId, p.tenantId)));
+        .where(and(eq(committeeMembers.id, m.id), eq(committeeMembers.tenantId, tenantId)));
       await enqueue(tx, {
         topic: EVENTS.committeeMemberExpired,
         eventType: EVENTS.committeeMemberExpired,
-        tenantId: p.tenantId,
+        tenantId: tenantId,
         actorId: SYSTEM_ACTOR_ID,
         correlationId: msg.correlationId,
         payload: { committeeId: m.committeeId, membershipId: m.id, memberId: p.employeeId, expiredOn },
@@ -431,7 +436,7 @@ async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSepa
       .from(actionItems)
       .where(
         and(
-          eq(actionItems.tenantId, p.tenantId),
+          eq(actionItems.tenantId, tenantId),
           eq(actionItems.assigneeId, p.employeeId),
           inArray(actionItems.status, ["assigned", "acknowledged", "in_progress", "overdue", "escalated"]),
         ),
@@ -442,7 +447,7 @@ async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSepa
       await enqueue(tx, {
         topic: EVENTS.complianceAlert,
         eventType: EVENTS.complianceAlert,
-        tenantId: p.tenantId,
+        tenantId: tenantId,
         actorId: SYSTEM_ACTOR_ID,
         correlationId: msg.correlationId,
         payload: {
@@ -459,8 +464,8 @@ async function handleHrmsEmployeeSeparated(msg: CommandEnvelope<HrmsEmployeeSepa
     await audit(tx, msgMeta(msg), "handle_separation", "employee", p.employeeId);
   });
 
-  await cache.invalidateResource(p.tenantId, "committee");
-  await cache.invalidateResource(p.tenantId, "action_item");
+  await cache.invalidateResource(tenantId, "committee");
+  await cache.invalidateResource(tenantId, "action_item");
   log.info({ employeeId: p.employeeId }, "processed employee separation");
 }
 

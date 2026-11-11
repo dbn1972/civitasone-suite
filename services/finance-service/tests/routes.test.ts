@@ -12,6 +12,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { istToday } from "@civitasone/schemas/validators";
+import { financeDdo } from "../src/modules/masters/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -36,6 +37,10 @@ beforeAll(async () => {
     { tenantId: TENANT, code: "0002", name: "Routes test bank", level: 2, createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR },
     { id: "bbbbbbbb-0000-4000-8000-000000000002", tenantId: TENANT, code: "RT-BILL", name: "Routes test bill head", level: 2, hoaCode: "207101010101010101", createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR },
   ]).onConflictDoNothing());
+  // UAT b24: POST /v1/finance/bills now refuses (422 DDO_NOT_CONFIGURED) a DDO the tenant has not set up.
+  await scoped(TENANT, (tx) => tx.insert(financeDdo).values({
+    tenantId: TENANT, ddoCode: "DDO123456", name: "Routes test DDO", createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR,
+  }).onConflictDoNothing());
 });
 
 describe("GET /v1/finance/dashboard — shape", () => {

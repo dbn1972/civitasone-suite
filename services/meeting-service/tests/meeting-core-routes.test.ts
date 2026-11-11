@@ -296,6 +296,50 @@ describe("POST /v1/meetings/:meetingId/transition", () => {
   });
 });
 
+// ─── POST …/transition → in_progress: synchronous quorum gate (UAT) ───────
+describe("POST /v1/meetings/:meetingId/transition — quorum pre-check for in_progress", () => {
+  const NOQ_ID = "aaaa3600-0000-4000-8000-0000000000a1";
+  const QUORATE_ID = "aaaa3600-0000-4000-8000-0000000000a2";
+  const ADJ_ID = "aaaa3600-0000-4000-8000-0000000000a3";
+
+  beforeAll(async () => {
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      for (const [id, num, status, quorum] of [
+        [NOQ_ID, "FC/2025-26/101", "agenda_locked", false],
+        [QUORATE_ID, "FC/2025-26/102", "agenda_locked", true],
+        [ADJ_ID, "FC/2025-26/103", "adjourned", false],
+      ] as const) {
+        await sql`
+          INSERT INTO meeting.meetings
+            (id, tenant_id, type, title, status, committee_id, chairperson_id, secretary_id, scheduled_at,
+             financial_year, meeting_number, quorum_established, version, created_by, updated_by)
+          VALUES (${id}, ${TENANT}, 'committee', 'Quorum gate', ${status}, ${COMMITTEE_ID}, ${ACTOR}, ${ACTOR},
+                  '2026-06-01T09:00:00Z', '2025-26', ${num}, ${quorum}, 1, ${ACTOR}, ${ACTOR})`;
+      }
+    });
+  });
+
+  const start = (id: string) =>
+    app.inject({ method: "POST", url: `/v1/meetings/${id}/transition`, headers: auth(["committee_chairperson"]), payload: { version: 1, to: "in_progress" } });
+
+  it("422 MEETING_QUORUM_NOT_MET synchronously when quorum is not established", async () => {
+    const res = await start(NOQ_ID);
+    expect(res.statusCode).toBe(422);
+    expect(JSON.stringify(res.json())).toContain("MEETING_QUORUM_NOT_MET");
+  });
+
+  it("202 when quorum is established", async () => {
+    const res = await start(QUORATE_ID);
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("adjourned to in_progress is not pre-rejected on the stored flag (consumer re-checks quorum LIVE)", async () => {
+    const res = await start(ADJ_ID);
+    expect(res.statusCode).toBe(202);
+  });
+});
+
 // ─── DELETE /v1/meetings/:meetingId (soft cancel) ──────────────────────────
 describe("DELETE /v1/meetings/:meetingId", () => {
   const body = { version: 1, reason: "cancelled by organiser" };

@@ -612,6 +612,18 @@ export const DEFAULT_SQS_WAIT_TIME_SECONDS = 20;
 const MAX_SQS_WAIT_TIME_SECONDS = 20;
 
 /**
+ * SQS-only endpoint. SQS_ENDPOINT_URL (a dedicated broker, e.g. ElasticMQ) wins
+ * over the shared AWS_ENDPOINT_URL (LocalStack, which keeps serving S3/secrets).
+ * Unset => exactly the previous AWS_ENDPOINT_URL behaviour.
+ */
+export function resolveSqsEndpoint(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  // `||`: an empty SQS_ENDPOINT_URL must fall back, never mean "real AWS".
+  return env.SQS_ENDPOINT_URL || env.AWS_ENDPOINT_URL || undefined;
+}
+
+/**
  * Long-poll wait for ReceiveMessage. Override via SQS_WAIT_TIME_SECONDS (1-20).
  * On a shared LocalStack host, dozens of workers each holding WaitTimeSeconds=20
  * sockets starve SendMessage and stall every outbox relay. Lowering the wait
@@ -627,7 +639,7 @@ export function resolveWaitTimeSeconds(
   // LocalStack / custom endpoints: dozens of workers each holding a 20s long-poll
   // saturates the broker and starves SendMessage. Prefer a short wait unless the
   // operator explicitly overrides SQS_WAIT_TIME_SECONDS.
-  const endpoint = process.env.AWS_ENDPOINT_URL ?? process.env.AWS_ENDPOINT ?? "";
+  const endpoint = resolveSqsEndpoint() || process.env.AWS_ENDPOINT || "";
   if (/localhost|127\.0\.0\.1|localstack/i.test(endpoint)) {
     return 2;
   }
@@ -773,9 +785,10 @@ export class SqsQueue implements Queue {
       ?? "queue-service";
     this.maxReceiveCount = Number(process.env.SQS_MAX_RECEIVE_COUNT ?? 5);
     this.visibilityTimeout = Number(process.env.SQS_VISIBILITY_TIMEOUT ?? 60);
+    const sqsEndpoint = resolveSqsEndpoint();
     this.client = new SQSClient({
       region: process.env.AWS_DEFAULT_REGION ?? "ap-south-1",
-      ...(process.env.AWS_ENDPOINT_URL ? { endpoint: process.env.AWS_ENDPOINT_URL } : {}),
+      ...(sqsEndpoint ? { endpoint: sqsEndpoint } : {}),
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "test",
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
@@ -1065,6 +1078,11 @@ export class SqsQueue implements Queue {
     }
   }
 
+  /** Resolves once the detached start() warm-up (queue creation + poll-loop setup) has finished. */
+  async whenReady(): Promise<void> {
+    await this.startupTask;
+  }
+
   async start(): Promise<void> {
     this.polling = true;
     // BOOT-NONBLOCK: start() MUST return immediately so the caller reaches
@@ -1155,6 +1173,17 @@ export class SqsQueue implements Queue {
         // killed loop and flip /ready to 503.
         recordConsumerHeartbeat(this.service);
 
+        // UAT B24 (audit-trail latency): the DeleteMessage for each successfully handled
+        // message is STARTED immediately (it overlaps the handlers of later messages in
+        // this batch) but only AWAITED once, after the loop, instead of one blocking
+        // round trip per message. Handlers still run one after another in receive order,
+        // and a message is still only deleted after its handlers and its outcome record
+        // completed. Where one SQS call costs seconds (the UAT LocalStack: ~4.5 s) a
+        // batch of 10 used to spend ~45 s in deletes alone. A delete that is lost only
+        // means a redelivery, which every consumer already tolerates (at-least-once; the
+        // audit consumer dedupes by id).
+        const pendingAcks: Promise<void>[] = [];
+
         for (const sqsMsg of res.Messages ?? []) {
           let msg: CommandEnvelope;
           try {
@@ -1234,7 +1263,7 @@ export class SqsQueue implements Queue {
           if (allHandled) {
             // FF-01 I2: record the terminal result BEFORE deleting the message.
             await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "succeeded" });
-            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            pendingAcks.push(this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!));
             continue;
           }
 
@@ -1268,6 +1297,8 @@ export class SqsQueue implements Queue {
             this.logHandlerError(topic, msg, receiveCount, err);
           }
         }
+        // deleteSqsMessage never rejects (best-effort), so this only waits.
+        await Promise.all(pendingAcks);
       } catch (err) {
         if (this.polling) {
           incrementConsumerError(this.service, topic);
