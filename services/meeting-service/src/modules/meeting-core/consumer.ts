@@ -625,12 +625,14 @@ async function handleMeetingRecordHeld(msg: CommandEnvelope<MeetingRecordHeldPay
     const { meetingNumber, financialYear } = await computeMeetingNumber(tx, {
       tenantId: msg.tenantId, committeeId: p.committeeId ?? null, scheduledAt,
     });
+    try {
     await tx.insert(meetings).values({
       id: p.id,
       tenantId: msg.tenantId,
       type: p.type,
       title: p.title,
       description: p.description ?? null,
+      recordedHeldAt: now,
       status: "minutes_pending",
       committeeId: p.committeeId ?? null,
       chairpersonId: p.chairpersonId,
@@ -651,6 +653,15 @@ async function handleMeetingRecordHeld(msg: CommandEnvelope<MeetingRecordHeldPay
       createdBy: msg.actorId,
       updatedBy: msg.actorId,
     });
+    } catch (err) {
+      // Lost a race with a concurrent recording of the same meeting (uq_meetings_recorded_held, migration
+      // 0016). Throwing out of the transaction rolls it back, including the number just allocated.
+      const e = err as { code?: string; cause?: { code?: string } };
+      if (e?.code === "23505" || e?.cause?.code === "23505") {
+        throw new NonRetryableError(`MEETING_ALREADY_RECORDED: "${p.title}" at ${scheduledAt.toISOString()} was recorded concurrently`);
+      }
+      throw err;
+    }
 
     for (const a of attendees) {
       const participantId = randomUUID();

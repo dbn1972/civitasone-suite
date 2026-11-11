@@ -354,3 +354,72 @@ describe("who may record a held meeting", () => {
     expect(published).toHaveLength(0);
   });
 });
+
+describe("duplicate recording is also enforced by the database (migration 0016)", () => {
+  const dupBody = () => heldBody({
+    title: "Race probe sitting",
+    scheduledAt: "2025-11-03T10:00:00+05:30", actualStartAt: "2025-11-03T10:00:00+05:30", actualEndAt: "2025-11-03T11:00:00+05:30",
+  });
+  const nextSeq = async () => {
+    const r = await tenantQuery((sql) => sql`select current_value from meeting.number_sequences where series_key = 'meeting:SC' and bucket = '2025-26'`);
+    return Number(r[0].current_value);
+  };
+
+  it("the unique partial index rejects a second record-held row with the same identity, ignores ordinary meetings and cancelled ones", async () => {
+    const mk = async (over: Record<string, unknown>) => tenantQuery((sql) => sql`
+      insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, scheduled_at, created_by, updated_by, recorded_held_at)
+      values (${randomUUID()}, ${TENANT}, 'committee', 'Index probe', ${(over.status as string) ?? "minutes_pending"}, ${COMMITTEE}, '2025-12-01T10:00:00Z', ${ADMIN}, ${ADMIN}, case when ${Boolean(over.held)}::boolean then now() end)`);
+    await mk({ held: true });
+    await expect(mk({ held: true })).rejects.toMatchObject({ code: "23505" });
+    await mk({ held: false });                       // ordinary meeting, same identity: not constrained
+    await mk({ held: false });
+    await mk({ held: true, status: "cancelled" });   // cancelled: outside the index
+  });
+
+  it("two concurrent recordings under different idempotency keys: exactly one meeting, the loser is MEETING_ALREADY_RECORDED, and no number is lost", async () => {
+    const before = await nextSeq();
+    const [a, b] = await Promise.all([record(as(ADMIN, ["meeting_admin"]), dupBody()), record(as(ADMIN, ["meeting_admin"]), dupBody())]);
+    expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
+    const cmds = published.splice(0);
+    expect(cmds).toHaveLength(2);
+    const results = await Promise.allSettled(cmds.map((m) => deliver(m)));
+    const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    expect(isNonRetryable(failed[0]!.reason)).toBe(true);
+    expect(String(failed[0]!.reason.message)).toMatch(/MEETING_ALREADY_RECORDED/);
+    expect(await tenantQuery((sql) => sql`select id from meeting.meetings where title = 'Race probe sitting'`)).toHaveLength(1);
+    // the loser's allocation rolled back with its transaction: exactly one number consumed, so the next is consecutive
+    expect(await nextSeq()).toBe(before + 1);
+    const next = await recordOk({ title: "After the race", scheduledAt: "2025-11-04T10:00:00+05:30", actualStartAt: "2025-11-04T10:00:00+05:30", actualEndAt: "2025-11-04T11:00:00+05:30" });
+    expect(seq((await meetingRow(next)).meeting_number)).toBe(before + 2);
+  });
+
+  it("a unique violation that slips past the application guard is mapped to MEETING_ALREADY_RECORDED and consumes no number", async () => {
+    // A concurrent, still-uncommitted transaction holds an identical record-held row, which the application guard
+    // cannot see; only the unique index can stop the second insert, and only once the first commits.
+    const body = heldBody({ title: "Blind race", scheduledAt: "2025-11-05T10:00:00+05:30", actualStartAt: "2025-11-05T10:00:00+05:30", actualEndAt: "2025-11-05T11:00:00+05:30" });
+    const before = await nextSeq();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    // transaction A: inserts the identical record-held row and stays open (uncommitted)
+    const holder = tenantQuery(async (sql) => {
+      await sql`insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, scheduled_at, created_by, updated_by, recorded_held_at)
+        values (${randomUUID()}, ${TENANT}, 'committee', 'Blind race', 'minutes_pending', ${COMMITTEE}, ${"2025-11-05T04:30:00.000Z"}::timestamptz, ${ADMIN}, ${ADMIN}, now())`;
+      await gate;
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    const res = await record(as(ADMIN, ["meeting_admin"]), body);
+    const cmd = published.splice(0)[0]!;
+    const loser = deliver(cmd).then(() => undefined, (e) => e);   // passes the guard (A is invisible), blocks on A's index entry
+    await new Promise((r) => setTimeout(r, 300));
+    release();                                                    // A commits -> the loser's insert violates the index
+    await holder;
+    const err = await loser;
+    expect(res.statusCode).toBe(202);
+    expect(isNonRetryable(err)).toBe(true);
+    expect(String((err as Error).message)).toMatch(/MEETING_ALREADY_RECORDED/);
+    expect(await tenantQuery((sql) => sql`select id from meeting.meetings where title = 'Blind race'`)).toHaveLength(1);
+    expect(await nextSeq()).toBe(before);   // the loser's allocation was rolled back
+  });
+});
