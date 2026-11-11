@@ -440,6 +440,22 @@ importers:
         specifier: ^3.2.6
         version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)(jsdom@24.1.0)(tsx@4.22.4)
 
+  packages/module-licence:
+    dependencies:
+      '@civitasone/circuit-breaker':
+        specifier: workspace:*
+        version: link:../circuit-breaker
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../observability
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)(jsdom@24.1.0)(tsx@4.22.4)
+
   packages/numbering:
     dependencies:
       drizzle-orm:
@@ -1170,6 +1186,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -2170,6 +2189,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -2392,6 +2414,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -2629,6 +2654,9 @@ importers:
       '@civitasone/gov-adapters':
         specifier: workspace:*
         version: link:../../packages/gov-adapters
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -2787,6 +2815,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -3310,6 +3341,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -4052,6 +4086,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -4286,6 +4323,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/numbering':
         specifier: workspace:*
         version: link:../../packages/numbering
@@ -4371,6 +4411,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -4712,6 +4755,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -4992,6 +5038,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -5698,6 +5747,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/module-licence':
+        specifier: workspace:*
+        version: link:../../packages/module-licence
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability

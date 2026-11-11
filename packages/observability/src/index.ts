@@ -365,6 +365,14 @@ function formatScheduledJobMetrics(): string[] {
   for (const [reason, count] of inventoryPrecheckFailopenTotal) {
     lines.push(`inventory_precheck_failopen_total{reason="${reason}"} ${count}`);
   }
+  lines.push(
+    "# HELP module_licence_decisions_total Module licence check decisions for service-to-service calls and event consumers",
+    "# TYPE module_licence_decisions_total counter",
+  );
+  for (const [key, count] of moduleLicenceDecisionsTotal) {
+    const [service, module, kind, outcome] = key.split("|");
+    lines.push(`module_licence_decisions_total{service="${service}",module="${module}",kind="${kind}",outcome="${outcome}"} ${count}`);
+  }
   return lines;
 }
 
@@ -398,6 +406,24 @@ const publishNoSubscribersTotal = new Map<string, number>(); // topic -> count
 const piiDecryptSkippedTotal = new Map<string, number>();
 // procurement GRN accept could not consult inventory and let the accept through (fail-open), by reason.
 const inventoryPrecheckFailopenTotal = new Map<string, number>();
+
+// Module-sale gap M5: decisions of the shared licence check (@civitasone/module-licence), keyed
+// `service|module|kind|outcome` (kind: http|event; outcome: allow|would_deny|deny|unavailable).
+const moduleLicenceDecisionsTotal = new Map<string, number>();
+
+/** Increment module_licence_decisions_total{service,module,kind,outcome}. */
+export function incrementModuleLicenceDecision(service: string, module: string, kind: string, outcome: string): void {
+  const key = `${service}|${module}|${kind}|${outcome}`;
+  moduleLicenceDecisionsTotal.set(key, (moduleLicenceDecisionsTotal.get(key) ?? 0) + 1);
+}
+
+export function getModuleLicenceDecisionCount(service: string, module: string, kind: string, outcome: string): number {
+  return moduleLicenceDecisionsTotal.get(`${service}|${module}|${kind}|${outcome}`) ?? 0;
+}
+
+export function resetModuleLicenceMetrics(): void {
+  moduleLicenceDecisionsTotal.clear();
+}
 
 /** Increment outbox_relay_failures_total{service}. */
 export function incrementOutboxRelayFailure(service: string): void {

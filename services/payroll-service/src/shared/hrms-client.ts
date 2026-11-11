@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 
@@ -227,6 +229,13 @@ async function fetchInternalWithRetry(
   unreachableMessage: (detail: string) => string,
   attempts = 3,
 ): Promise<Response> {
+  // M5: payroll-input / tax-regime / actor lookups are calls INTO the HR module. Refuse them when the tenant did not
+  // buy it (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce). The tenant is the one the call is
+  // already scoped to (x-tenant-id), never a payload field.
+  const gate = await licence.check(headers["x-tenant-id"], LICENCE_MODULE.hrms, "http", "payroll->hrms internal");
+  if (!gate.allowed) {
+    throw new HrmsUnavailableError(unreachableMessage(gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : `hrms licence could not be verified: ${gate.reason}`));
+  }
   let lastErr: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let res: Response;
