@@ -17,7 +17,7 @@ export const payrollStructures = payrollSchema.table("payroll_structures", {
   createdBy:   uuid("created_by").notNull(),
   updatedBy:   uuid("updated_by").notNull(),
   version:     integer("version").notNull().default(1),
-  // Section 8 G2 (migration 0166): run | ctc_template, lock, effective date, version lineage.
+  // Section 8 G2 (migration 0169): run | ctc_template, lock, effective date, version lineage.
   kind:              varchar("kind", { length: 16 }).notNull().default("run"),
   isLocked:          boolean("is_locked").notNull().default(false),
   lockedAt:          timestamp("locked_at", { withTimezone: true }),
@@ -45,7 +45,7 @@ export const payrollComponents = payrollSchema.table("payroll_components", {
   createdBy:     uuid("created_by").notNull(),
   updatedBy:     uuid("updated_by").notNull(),
   version:       integer("version").notNull().default(1),
-  // Section 8 G2 (migration 0166). See pay-components/model.ts for the value sets.
+  // Section 8 G2 (migration 0169). See pay-components/model.ts for the value sets.
   isActive:          boolean("is_active").notNull().default(true),
   calc:              varchar("calc", { length: 24 }),
   pctOfCtcBps:       integer("pct_of_ctc_bps"),
