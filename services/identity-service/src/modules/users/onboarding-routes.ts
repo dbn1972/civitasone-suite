@@ -12,10 +12,11 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as keycloak from "../../shared/keycloak.js";
+import { randomUUID } from "node:crypto";
 import { assertNotPlatformOperator } from "../operators/commands.js";
 import * as commands from "./commands.js";
 import * as onboardingRepo from "./onboarding-repo.js";
-import { ADMIN_TIER_ROLES, DEFAULT_ROLE, STAFF_ROLES, checkGrant } from "./grantable-roles.js";
+import { ADMIN_TIER_ROLES, DEFAULT_ROLE, STAFF_ROLES, checkGrant, checkCanActFor } from "./grantable-roles.js";
 import { bulkCreateBody, setRolesBody, onboardingSettingsBody, setupLinksBody, redeemBody, userIdParam } from "./validators.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
@@ -37,17 +38,27 @@ async function issueLink(ctx: ReturnType<typeof resolveContext>, userId: string)
   const u = await onboardingRepo.loadForSetup(ctx.tenantId, userId); // tenant-scoped: another tenant's id is "not found"
   if (!u) return { userId, status: "error", code: "NOT_FOUND", message: "user not found" };
   if (u.status !== "active") return { userId, status: "error", code: "USER_NOT_ACTIVE", message: "only an active user can be given a set-password link" };
+  // Nobody issues a link for themselves (their own account can use the normal reset).
+  const me = ctx.actorId.toLowerCase();
+  if (userId.toLowerCase() === me || u.keycloakUserId?.toLowerCase() === me) return { userId, status: "error", code: "SELF_LINK", message: "you cannot issue a set-password link for your own account" };
   if (!u.keycloakUserId) return { userId, status: "error", code: "KEYCLOAK_NOT_LINKED", message: "the user is not linked to a login yet; run keycloak-reconcile first" };
   // A link is a FIRST-password tool. Whoever holds one could set that user's password, so it is never issued for
   // an account that already has one (a peer admin's or an operator's), nor for a platform operator at all.
   try { await assertNotPlatformOperator(ctx.tenantId, userId); }
   catch (err) { if (err instanceof HttpError) return { userId, status: "error", code: err.code, message: err.message }; throw err; }
+  // Holding a link = being able to sign in as that user. So the caller must be allowed to grant EVERY role the target
+  // holds (same tiers as the role-change route): a tenant admin, an operator, or an admin-tier holder the caller is not
+  // themselves, can never be reached this way. Fails closed when Keycloak cannot say what the target holds.
+  const held = await keycloak.getRealmRoleNames({ tenantId: ctx.tenantId, email: u.email }, { effective: true });
+  if (!held.ok || !held.roles) return { userId, status: "error", code: "KEYCLOAK_UNAVAILABLE", message: "could not check the user's roles right now; try again shortly" };
+  const can = checkCanActFor(ctx.roles, held.roles);
+  if (!can.ok) return { userId, status: "error", code: "ROLE_NOT_PERMITTED", message: `you cannot issue a link for this user: they hold ${can.refused.map((r) => r.role).join(", ")}, which you may not grant` };
   const pw = await keycloak.userHasPassword({ tenantId: ctx.tenantId, email: u.email });
   if (!pw.ok) return { userId, status: "error", code: "KEYCLOAK_UNAVAILABLE", message: "could not check the user's login right now; try again shortly" };
   if (pw.hasPassword) return { userId, status: "error", code: "PASSWORD_ALREADY_SET", message: "this user already has a password; use Reset password, which emails them, instead" };
   const attempts = await cache.incr(cache.makeKey(ctx.tenantId, "pwsetup_rate", userId), SETUP_LINK_WINDOW_SECONDS);
   if (attempts > SETUP_LINK_MAX_PER_HOUR) return { userId, status: "error", code: "LINK_RECENTLY_ISSUED", message: "too many links requested for this user; try again later" };
-  const t = await onboardingRepo.issueSetupToken(ctx.tenantId, userId, ctx.actorId, ctx.correlationId);
+  const t = await onboardingRepo.issueSetupToken(ctx.tenantId, userId, ctx.actorId, ctx.roles, ctx.correlationId);
   const url = setupUrl(t.token);
   return { userId, status: "issued", token: t.token, ...(url ? { url } : {}), expiresAt: t.expiresAt.toISOString() };
 }
@@ -100,7 +111,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     if (!keycloak.isKeycloakEnabled()) throw new HttpError(503, "KEYCLOAK_NOT_CONFIGURED", "the login provider is not configured, so no password can be set");
     const r = await issueLink(ctx, id);
     if (r.status === "error") {
-      const status = r.code === "NOT_FOUND" ? 404 : r.code === "LINK_RECENTLY_ISSUED" ? 429 : r.code === "KEYCLOAK_UNAVAILABLE" ? 503 : 409;
+      const status = r.code === "NOT_FOUND" ? 404 : r.code === "LINK_RECENTLY_ISSUED" ? 429 : r.code === "KEYCLOAK_UNAVAILABLE" ? 503 : r.code === "ROLE_NOT_PERMITTED" ? 403 : 409;
       throw new HttpError(status, r.code, r.message);
     }
     return reply.header("Cache-Control", "no-store").code(201).send(r);
@@ -126,8 +137,27 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   // (unknown, used, expired, revoked, user inactive) answers the same 400, so this is not an oracle.
   app.post("/identity/password-setup/redeem", { config: { public: true, rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const { token, password } = redeemBody.parse(req.body);
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    const outcome = await onboardingRepo.redeemSetupToken(token, async (u) => {
+    // Extra ceilings on top of the per-IP limit (the gateway sees the real client IP; here req.ip may be the gateway's):
+    // per token, per tenant, and one global ceiling, so one noisy client cannot starve everyone else's first login and
+    // one token cannot be hammered from many addresses.
+    const parsed = onboardingRepo.parseSetupToken(token);
+    const buckets: Array<[string, number, number]> = [[cache.makeKey("global", "pwsetup_redeem", "all"), 600, 60]];
+    if (parsed) {
+      buckets.push([cache.makeKey(parsed.tenantId, "pwsetup_redeem_tenant", "all"), 120, 60]);
+      buckets.push([cache.makeKey(parsed.tenantId, "pwsetup_redeem_token", parsed.hash.slice(0, 32)), 10, 900]);
+    }
+    for (const [key, max, window] of buckets) {
+      if ((await cache.incr(key, window)) > max) throw new HttpError(429, "TOO_MANY_ATTEMPTS", "too many attempts; wait a few minutes and try again");
+    }
+    const hdr = req.headers["x-correlation-id"];
+    // The audit column is varchar(64): accept only a short, plain id and mint our own otherwise.
+    const correlationId = typeof hdr === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(hdr) ? hdr : randomUUID();
+    const outcome = await onboardingRepo.redeemSetupToken(token, async (u, grantorRoles) => {
+      // Re-check at redeem time: the target may have been promoted (or the link issued for someone it should not have
+      // been) since issue. Same rule as issue, using the roles the issuing admin held then.
+      const held = await keycloak.getRealmRoleNames({ tenantId: u.tenantId, email: u.email }, { effective: true });
+      if (!held.ok || !held.roles) return { ok: false as const, reason: "unavailable" };
+      if (!checkCanActFor(grantorRoles, held.roles).ok) return { ok: false as const, reason: "invalid" };
       const r = await keycloak.setUserPassword({ tenantId: u.tenantId, email: u.email }, password);
       if (r.ok) return { ok: true as const };
       return { ok: false as const, reason: r.policyRejected ? "password_policy" : r.reason === "password_already_set" ? "invalid" : "unavailable" };

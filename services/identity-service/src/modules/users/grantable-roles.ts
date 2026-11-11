@@ -45,6 +45,8 @@ export const PLATFORM_ROLES = [
 ] as const;
 
 const PLATFORM_CALLERS = ["platform_admin", "super_admin"] as const;
+/** Roles that may drive the user-admin routes at all. The worker insists its re-derived grantor holds one. */
+export const USER_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"] as const;
 
 export type GrantRefusal = { role: string; code: "PLATFORM_ROLE" | "NOT_GRANTABLE" | "CALLER_LACKS_ROLE"; message: string };
 export type GrantCheck = { ok: true; roles: string[] } | { ok: false; refused: GrantRefusal[] };
@@ -91,4 +93,29 @@ export function checkGrant(callerRoles: readonly string[], requested: readonly s
 export function effectiveCreateRoles(requested: readonly string[] | undefined): string[] {
   const roles = normaliseRoles(requested ?? []);
   return roles.length > 0 ? roles : [DEFAULT_ROLE];
+}
+
+/** Roles every Keycloak user carries by construction; they say nothing about authority and are ignored when judging a user's roles. */
+export function isBuiltinRealmRole(name: string): boolean {
+  return name.startsWith("default-roles-") || name === "offline_access" || name === "uma_authorization";
+}
+
+/**
+ * Could a caller holding `callerRoles` act for a user who holds `targetRoles`? True only if the caller could GRANT
+ * every role the target holds (same tiers as the role-change route). A target with any role outside the allow-list
+ * (tenant_admin, super_admin, ...) is therefore never reachable, and an admin-tier role the caller lacks blocks too.
+ */
+export function checkCanActFor(callerRoles: readonly string[], targetRoles: readonly string[]): GrantCheck {
+  return checkGrant(callerRoles, targetRoles.filter((r) => !isBuiltinRealmRole(r)));
+}
+
+/** Allow-list only (no caller rule): used to vet a whole desired set before the caller rule is applied to what actually changes. */
+export function checkAllowList(requested: readonly string[]): GrantCheck {
+  const roles = normaliseRoles(requested);
+  const refused: GrantRefusal[] = [];
+  for (const role of roles) {
+    if (PLATFORM.has(role)) refused.push({ role, code: "PLATFORM_ROLE", message: `${role} is a platform or tenant-governance role and cannot be granted through user create / role change` });
+    else if (!isTenantGrantable(role)) refused.push({ role, code: "NOT_GRANTABLE", message: `${role} is not a tenant-grantable role` });
+  }
+  return refused.length > 0 ? { ok: false, refused } : { ok: true, roles };
 }

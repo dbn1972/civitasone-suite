@@ -16,7 +16,7 @@ export const REALM_ROLES = [
   "employee", "manager", "hr_officer", "hr_admin", "finance_admin", "tenant_admin", "super_admin", "platform_admin", "dept_officer",
 ];
 
-export function installFakeKeycloak(opts: { mailWorks?: boolean; policyRejects?: (pw: string) => boolean } = {}) {
+export function installFakeKeycloak(opts: { mailWorks?: boolean; policyRejects?: (pw: string) => boolean; failCleanup?: boolean } = {}) {
   const users = new Map<string, FakeUser>();
   const calls: Call[] = [];
   let seq = 0;
@@ -57,6 +57,7 @@ export function installFakeKeycloak(opts: { mailWorks?: boolean; policyRejects?:
       if (sub === "" && method === "GET") return json(rep(u));
       if (sub === "" && method === "PUT") {
         const b = JSON.parse(body) as Partial<FakeUser>;
+        if (opts.failCleanup && b.requiredActions) return new Response("{}", { status: 500 });
         if (b.email && [...users.values()].some((o) => o.id !== u.id && o.email?.toLowerCase() === b.email!.toLowerCase())) {
           return json({ errorMessage: "User exists with same email" }, 409);
         }
@@ -69,6 +70,7 @@ export function installFakeKeycloak(opts: { mailWorks?: boolean; policyRejects?:
         if (b.requiredActions) u.requiredActions = b.requiredActions as string[];
         return new Response(null, { status: 204 });
       }
+      if (sub === "/role-mappings/realm/composite" && method === "GET") return json([...u.roles, "default-roles-civitasone", "offline_access", "uma_authorization"].map((name) => ({ id: `role-${name}`, name })));
       if (sub === "/role-mappings/realm" && method === "GET") return json([...u.roles].map((name) => ({ id: `role-${name}`, name })));
       if (sub === "/role-mappings/realm" && method === "POST") { for (const r of JSON.parse(body) as Array<{ name: string }>) u.roles.add(r.name); return new Response(null, { status: 204 }); }
       if (sub === "/role-mappings/realm" && method === "DELETE") { for (const r of JSON.parse(body) as Array<{ name: string }>) u.roles.delete(r.name); return new Response(null, { status: 204 }); }

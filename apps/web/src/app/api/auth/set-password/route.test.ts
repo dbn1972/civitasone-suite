@@ -16,6 +16,9 @@ describe("POST /api/auth/set-password", () => {
     const [url, init] = spy.mock.calls[0]!;
     expect(String(url)).toMatch(/\/api\/identity\/password-setup\/redeem$/);
     expect((init as RequestInit).headers).toEqual({ "content-type": "application/json" });
+    // ...and the client address chain is passed on when the proxy supplied one
+    await POST(new Request("http://localhost/api/auth/set-password", { method: "POST", headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" }, body: JSON.stringify({ token: "t".repeat(60), password: PASSWORD }) }));
+    expect(((spy.mock.calls[1]![1] as RequestInit).headers as Record<string, string>)["x-forwarded-for"]).toBe("203.0.113.9, 10.0.0.1");
     const out = await res.text();
     expect(out).not.toContain(PASSWORD); // unknown fields from upstream are dropped
     expect(JSON.parse(out)).toEqual({ status: "password_set" });

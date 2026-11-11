@@ -34,8 +34,16 @@ async function until(cond: () => boolean | Promise<boolean>, ms = 4000): Promise
 
 let q: Queue;
 let kc: ReturnType<typeof installFakeKeycloak>;
+const ACTOR_EMAIL = "actor@dept.gov.in";
+/** The acting admin as the worker re-derives them: an identity row (id = the stamped actor id) + a Keycloak user with these roles. */
+function setActorRoles(roles: string[]) {
+  kc.users.set("actor-kc", { id: "actor-kc", username: `${T}__${ACTOR_EMAIL}`, enabled: true, attributes: { tid: [T] }, requiredActions: [], roles: new Set(roles) });
+}
 
 beforeAll(async () => {
+  await asTenant(async (s) => {
+    await s`INSERT INTO users.users (id, tenant_id, email, name, status, created_by, updated_by) VALUES (${ACTOR}, ${T}, ${ACTOR_EMAIL}, 'Acting Admin', 'active', ${ACTOR}, ${ACTOR})`;
+  });
   q = wire(new MemoryQueue());
   registerUserConsumers(q);
   await q.start();
@@ -55,6 +63,7 @@ beforeEach(() => {
   vi.stubEnv("KEYCLOAK_ADMIN_PASSWORD", "test-admin-pw");
   kc = installFakeKeycloak();
   vi.stubGlobal("fetch", kc.fetchMock);
+  setActorRoles(["tenant_admin"]);
 });
 
 async function createCmd(email: string, extra: Record<string, unknown> = {}) {
@@ -128,6 +137,37 @@ describe("switched ON", () => {
     expect(d.detail.rolesDenied).toEqual(["super_admin:PLATFORM_ROLE"]);
   });
 
+  it("does NOT trust grantorRoles in the message: a forged claim of super_admin from an actor who is only a tenant admin grants nothing", async () => {
+    const email = "claim@dept.gov.in";
+    const id = await createCmd(email, { requestedRoles: ["hr_admin"], grantorRoles: ["super_admin"] });
+    await until(async () => (await auditDetail(id, "onboarding_login_ready")).length > 0);
+    expect(kcUser(email)!.roles.size).toBe(0);
+  });
+
+  it("an actor who is not a user admin (or cannot be found) grants nothing, even a staff role", async () => {
+    setActorRoles(["employee"]);
+    const e1 = "notadmin@dept.gov.in";
+    const id1 = await createCmd(e1, { requestedRoles: ["manager"] });
+    await until(async () => (await auditDetail(id1, "onboarding_login_ready")).length > 0);
+    expect(kcUser(e1)!.roles.size).toBe(0);
+    const e2 = "ghost@dept.gov.in";
+    const id2 = randomUUID();
+    await q.publish("identity.user.create", {
+      messageId: id2, type: "identity.user.create", tenantId: T, actorId: randomUUID(), correlationId: "c-ghost", schemaVersion: "1.0", timestamp: new Date().toISOString(),
+      payload: { id: id2, tenantId: T, email: e2, name: "Ghost", empCode: null, status: "active", mfaEnabled: false, version: 1, createdBy: ACTOR, requestedRoles: ["manager"] },
+    } as never);
+    await until(async () => (await auditDetail(id2, "onboarding_login_ready")).length > 0);
+    expect(kcUser(e2)!.roles.size).toBe(0);
+  });
+
+  it("an actor who really holds hr_admin can grant it", async () => {
+    setActorRoles(["tenant_admin", "hr_admin"]);
+    const email = "hrgrant@dept.gov.in";
+    const id = await createCmd(email, { requestedRoles: ["hr_admin"] });
+    await until(async () => (await auditDetail(id, "onboarding_login_ready")).length > 0);
+    expect([...kcUser(email)!.roles]).toEqual(["hr_admin"]);
+  });
+
   it("re-checks the admin-tier rule too: a grantor who does not hold hr_admin cannot grant it", async () => {
     const email = "forged2@dept.gov.in";
     const id = await createCmd(email, { requestedRoles: ["hr_admin"], grantorRoles: ["tenant_admin"] });
@@ -196,10 +236,12 @@ describe("role change consumer", () => {
     id = await createCmd(email, { requestedRoles: ["employee"], grantorRoles: ["tenant_admin"] });
     await until(async () => (await auditDetail(id, "onboarding_login_ready")).length > 0);
   });
+  // grantorRoles here sets the ACTING admin's real Keycloak roles (the message carries no grantor claim any more).
   const setRoles = async (roles: string[], grantorRoles: string[]) => {
+    setActorRoles(grantorRoles);
     await q.publish("identity.user.roles.set", {
       messageId: randomUUID(), type: "identity.user.roles.set", tenantId: T, actorId: ACTOR, correlationId: "c-roles", schemaVersion: "1.0", timestamp: new Date().toISOString(),
-      payload: { id, roles, grantorRoles, reason: "test change" },
+      payload: { id, roles, reason: "test change" },
     } as never);
     await until(async () => (await auditDetail(id, "roles_changed")).length > 0);
     return (await auditDetail(id, "roles_changed")).at(-1)!.payload as Record<string, unknown>;
@@ -229,6 +271,12 @@ describe("role change consumer", () => {
     const a = await setRoles(["employee"], ["tenant_admin"]);
     expect(a.outcome).toBe("denied");
     expect(kcUser(email)!.roles.has("hr_admin")).toBe(true);
+  });
+
+  it("denies when the actor cannot be confirmed as a user admin", async () => {
+    const a = await setRoles(["manager"], ["employee"]);
+    expect(a.outcome).toBe("denied");
+    expect([...kcUser(email)!.roles]).toEqual(["employee"]);
   });
 
   it("no change is a clean no-op", async () => {

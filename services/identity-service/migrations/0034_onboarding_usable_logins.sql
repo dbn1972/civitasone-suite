@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS users.password_setup_tokens (
   user_id      UUID NOT NULL,
   token_hash   CHAR(64) NOT NULL,
   created_by   UUID NOT NULL,
+  -- the issuing admin's realm roles at issue time; re-checked against the target's roles when the link is redeemed
+  grantor_roles TEXT[] NOT NULL DEFAULT '{}',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at   TIMESTAMPTZ NOT NULL,
   consumed_at  TIMESTAMPTZ,

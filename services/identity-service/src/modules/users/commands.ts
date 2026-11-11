@@ -11,8 +11,12 @@ import { strandsTenantAdmins } from "./last-admin.js";
 import { scopedRead } from "../../shared/db.js";
 import * as userRepo from "./repo.js";
 import * as onboardingRepo from "./onboarding-repo.js";
-import { checkGrant, effectiveCreateRoles, normaliseRoles, type GrantRefusal } from "./grantable-roles.js";
+import * as keycloak from "../../shared/keycloak.js";
+import { pino } from "pino";
+import { checkAllowList, checkGrant, effectiveCreateRoles, isTenantGrantable, normaliseRoles, type GrantRefusal } from "./grantable-roles.js";
 import { bulkCreateMax, type BulkCreateBody, type SetRolesBody } from "./validators.js";
+
+const cmdLog = pino({ name: "identity-users" });
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -33,7 +37,11 @@ export async function createUser(ctx: RequestContext, body: CreateUserBody): Pro
   // Usable-logins create flow (migration 0034). A tenant with no row keeps today's behaviour EXACTLY, which
   // includes ignoring a `roles` field: clients (and tests) already send one, the schema used to drop it silently,
   // and refusing it now would break them. The bulk route, which is new, refuses instead.
-  const settings = await onboardingRepo.getSettings(ctx.tenantId);
+  // A settings read that fails must never break create for tenants that are not switched on: treat it as "off".
+  const settings = await onboardingRepo.getSettings(ctx.tenantId).catch((err: unknown) => {
+    cmdLog.warn({ tenantId: ctx.tenantId, err: String(err) }, "onboarding settings unreadable; treating tenant as off");
+    return onboardingRepo.DEFAULT_SETTINGS;
+  });
   const grant = settings.usableLogins ? assertCanGrant(ctx, effectiveCreateRoles(body.roles)) : null;
   // GAP-TENANT-ADMIN-USERS-07: refuse a duplicate email up front. Without this the
   // POST answered 202 and the consumer then failed on the unique index, so the
@@ -51,7 +59,7 @@ export async function createUser(ctx: RequestContext, body: CreateUserBody): Pro
   await queue.publish(COMMANDS.createUser, {
     messageId: id, type: COMMANDS.createUser, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { ...projected, createdBy: ctx.actorId, ...(grant ? { requestedRoles: grant, grantorRoles: ctx.roles } : {}) },
+    payload: { ...projected, createdBy: ctx.actorId, ...(grant ? { requestedRoles: grant } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -98,7 +106,7 @@ export async function bulkCreateUsers(ctx: RequestContext, body: BulkCreateBody)
       await queue.publish(COMMANDS.createUser, {
         messageId: id, type: COMMANDS.createUser, tenantId: ctx.tenantId, actorId: ctx.actorId,
         correlationId: ctx.correlationId, schemaVersion: "1.0",
-        payload: { ...projected, createdBy: ctx.actorId, requestedRoles: check.roles, grantorRoles: ctx.roles },
+        payload: { ...projected, createdBy: ctx.actorId, requestedRoles: check.roles },
       });
       results.push({ index, email: row.email, status: "accepted", id });
     } catch {
@@ -122,15 +130,24 @@ export async function setUserRoles(ctx: RequestContext, id: string, body: SetRol
   if (isSameUuid(id, ctx.actorId)) {
     throw new HttpError(409, "SELF_ROLE_CHANGE", "you cannot change your own roles; ask another admin");
   }
-  const roles = assertCanGrant(ctx, normaliseRoles(body.roles));
+  const allow = checkAllowList(normaliseRoles(body.roles));
+  if (!allow.ok) throw new RoleRefusedError(allow.refused);
+  const roles = allow.roles;
   const view = await userRepo.findById(ctx.tenantId, id);
   if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
   if (view.status !== "active") throw new HttpError(409, "USER_NOT_ACTIVE", "roles can only be changed for an active user");
   await assertNotPlatformOperator(ctx.tenantId, id);
+  // Only the roles that CHANGE are held to the caller rule: an admin-tier role the user already has (and the caller
+  // lacks) is left alone, not a reason to refuse. Needs the user's current roles; fail closed if they cannot be read.
+  const cur = await keycloak.getRealmRoleNames({ tenantId: ctx.tenantId, email: view.email });
+  if (cur.skipped) throw new HttpError(503, "KEYCLOAK_NOT_CONFIGURED", "the login provider is not configured");
+  if (!cur.ok || !cur.roles) throw new HttpError(503, "KEYCLOAK_UNAVAILABLE", "could not read the user's current roles; try again shortly");
+  const held = cur.roles.filter(isTenantGrantable);
+  assertCanGrant(ctx, [...roles.filter((r) => !held.includes(r)), ...held.filter((r) => !roles.includes(r))]);
   await queue.publish(COMMANDS.setUserRoles, {
     messageId: randomUUID(), type: COMMANDS.setUserRoles, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, roles, grantorRoles: ctx.roles, reason: body.reason },
+    payload: { id, roles, reason: body.reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

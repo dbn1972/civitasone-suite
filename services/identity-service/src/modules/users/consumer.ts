@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as userRepo from "./repo.js";
 import { strandsTenantAdmins } from "./last-admin.js";
 import * as operatorsRepo from "../operators/repo.js";
 import { assertTransition, type UserView } from "./domain.js";
@@ -13,7 +14,7 @@ import { pino } from "pino";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { persistKeycloakUserId } from "./keycloak-link.js";
 import * as onboardingRepo from "./onboarding-repo.js";
-import { checkGrant, isTenantGrantable, normaliseRoles } from "./grantable-roles.js";
+import { USER_ADMIN_ROLES, checkGrant, isTenantGrantable, normaliseRoles } from "./grantable-roles.js";
 import { runWithTenant } from "@civitasone/db";
 
 const kcLog = pino({ name: "identity-keycloak" });
@@ -30,7 +31,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
   // `rawQueue` — subscribing on the raw queue bypasses tenant scoping.
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe<UserView & { createdBy: string; initialRealmRoles?: string[]; requestedRoles?: string[]; grantorRoles?: string[] }>(COMMANDS.createUser, async (msg) => {
+  queue.subscribe<UserView & { createdBy: string; initialRealmRoles?: string[]; requestedRoles?: string[] }>(COMMANDS.createUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -155,7 +156,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
   // transaction, the Keycloak outcome after it. The worker RE-CHECKS the grant rules against the user's real
   // current roles (the HTTP layer cannot see them): a role the grantor may not grant must not be added, and a
   // role they may not grant must not be removed.
-  queue.subscribe<{ id: string; roles: string[]; grantorRoles: string[]; reason: string }>(COMMANDS.setUserRoles, async (msg) => {
+  queue.subscribe<{ id: string; roles: string[]; reason: string }>(COMMANDS.setUserRoles, async (msg) => {
     let email: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -180,8 +181,13 @@ export function registerUserConsumers(rawQueue: Queue): void {
     const held = current.roles.filter(isTenantGrantable);
     const toAdd = desired.filter((r) => !held.includes(r));
     const toRemove = held.filter((r) => !desired.includes(r));
-    const grantCheck = checkGrant(msg.payload.grantorRoles, toAdd);
-    const removeCheck = checkGrant(msg.payload.grantorRoles, toRemove);
+    const grantor = await deriveGrantorRoles(msg.tenantId, msg.actorId);
+    if (!grantor || !isUserAdmin(grantor)) {
+      await audit({ outcome: "denied", severity: "high", refused: ["grantor_unverified"] });
+      return;
+    }
+    const grantCheck = checkGrant(grantor, toAdd);
+    const removeCheck = checkGrant(grantor, toRemove);
     if (!grantCheck.ok || !removeCheck.ok) {
       const refused = [...(grantCheck.ok ? [] : grantCheck.refused), ...(removeCheck.ok ? [] : removeCheck.refused)];
       await audit({ outcome: "denied", severity: "high", refused: refused.map((r) => `${r.role}:${r.code}`) });
@@ -226,6 +232,23 @@ export function registerUserConsumers(rawQueue: Queue): void {
   });
 }
 
+/**
+ * The grantor's roles, re-derived HERE from the stamped actor id (the JWT sub = Keycloak user id) through identity and
+ * Keycloak, never taken from the message: a command that reached the queue another way cannot claim authority it does
+ * not have. null = could not be established (fail closed).
+ */
+async function deriveGrantorRoles(tenantId: string, actorId: string): Promise<string[] | null> {
+  try {
+    const actor = await userRepo.findByIdOrKeycloakId(tenantId, actorId);
+    if (!actor || actor.status !== "active") return null;
+    const r = await keycloak.getRealmRoleNames({ tenantId, email: actor.email }, { effective: true });
+    return r.ok && r.roles ? r.roles : null;
+  } catch {
+    return null;
+  }
+}
+const isUserAdmin = (roles: readonly string[]): boolean => roles.some((r) => (USER_ADMIN_ROLES as readonly string[]).includes(r));
+
 /** An audit record outside any command transaction (post-commit Keycloak outcomes). Never carries secrets. */
 async function auditOutcome(tenantId: string, actorId: string, correlationId: string, payload: Record<string, unknown>): Promise<void> {
   await runWithTenant(tenantId, () => db.transaction(async (tx) => {
@@ -242,7 +265,7 @@ async function auditOutcome(tenantId: string, actorId: string, correlationId: st
  * the first-password step is a Keycloak email (mode email) or an admin-issued single-use link (mode link).
  */
 async function completeUsableLogin(
-  msg: CommandEnvelope & { payload: UserView & { initialRealmRoles?: string[]; requestedRoles?: string[]; grantorRoles?: string[] } },
+  msg: CommandEnvelope & { payload: UserView & { initialRealmRoles?: string[]; requestedRoles?: string[] } },
   settings: onboardingRepo.OnboardingSettings,
 ): Promise<void> {
   const p = msg.payload;
@@ -265,11 +288,20 @@ async function completeUsableLogin(
     // but a command that reached the queue another way must not be able to grant more.
     const fromRequest = p.requestedRoles !== undefined;
     const wanted = fromRequest ? normaliseRoles(p.requestedRoles ?? []) : (p.initialRealmRoles?.length ? [] : ["employee"]);
-    const check = checkGrant(p.grantorRoles ?? [], wanted);
     let grant: string[] = [];
-    if (check.ok) grant = check.roles;
-    else {
-      out.rolesDenied = check.refused.map((r) => `${r.role}:${r.code}`);
+    if (fromRequest) {
+      const grantor = await deriveGrantorRoles(p.tenantId, msg.actorId);
+      if (!grantor || !isUserAdmin(grantor)) {
+        out.rolesDenied = ["grantor_unverified: the acting admin could not be confirmed as a user admin"];
+      } else {
+        const check = checkGrant(grantor, wanted);
+        if (check.ok) grant = check.roles;
+        else out.rolesDenied = check.refused.map((r) => `${r.role}:${r.code}`);
+      }
+    } else {
+      // No roles requested (older producer / default): only the default staff role, which needs no grantor.
+      const check = checkGrant([], wanted);
+      if (check.ok) grant = check.roles;
     }
     const all = [...new Set([...grant, ...(p.initialRealmRoles ?? [])])];
     if (all.length > 0) {

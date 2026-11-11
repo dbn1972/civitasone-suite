@@ -491,7 +491,7 @@ export function AdminUsersManager({
       <Modal open={link !== null} onClose={() => setLink(null)} title={link ? `Set-password link for ${link.user.name || link.user.email}` : ""}>
         {link && (
           <div style={{ display: "grid", gap: 10, fontSize: 13.5 }}>
-            <p>Give this link to the user. It can be used <strong>once</strong> and expires on {new Date(link.expiresAt).toLocaleString("en-IN")}. They choose their own password; nobody else sees it.</p>
+            <p>Give this link to the user. It can be used <strong>once</strong> and expires on {new Date(link.expiresAt).toLocaleString("en-IN")}. They choose their own password. You are holding this link until you hand it over: anyone who has it can set the password, so give it only to the user.</p>
             <label style={{ display: "grid", gap: 4 }}>
               <span style={{ fontSize: 12, color: "var(--mut)" }}>{link.url ? "Link" : "Token (no web address is configured; the user opens /auth/set-password#token=…)"}</span>
               <input readOnly value={link.url ?? link.token} onFocus={(e) => e.currentTarget.select()} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12.5 }} />

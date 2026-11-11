@@ -63,7 +63,7 @@ export function setupTtlSeconds(): number {
  * Issue a token for `userId`, revoking any earlier unused one (one live link per user). The clear token is
  * returned to the caller exactly once and never stored.
  */
-export async function issueSetupToken(tenantId: string, userId: string, actorId: string, correlationId: string, ttlSeconds = setupTtlSeconds()): Promise<{ id: string; token: string; expiresAt: Date }> {
+export async function issueSetupToken(tenantId: string, userId: string, actorId: string, grantorRoles: readonly string[], correlationId: string, ttlSeconds = setupTtlSeconds()): Promise<{ id: string; token: string; expiresAt: Date }> {
   const id = randomUUID();
   const secret = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
@@ -72,7 +72,7 @@ export async function issueSetupToken(tenantId: string, userId: string, actorId:
       eq(passwordSetupTokens.tenantId, tenantId), eq(passwordSetupTokens.userId, userId),
       isNull(passwordSetupTokens.consumedAt), isNull(passwordSetupTokens.revokedAt),
     ));
-    await tx.insert(passwordSetupTokens).values({ id, tenantId, userId, tokenHash: sha256(secret), createdBy: actorId, expiresAt });
+    await tx.insert(passwordSetupTokens).values({ id, tenantId, userId, tokenHash: sha256(secret), createdBy: actorId, grantorRoles: [...grantorRoles], expiresAt });
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: "audit.event.record", eventType: "audit.event.record", tenantId, actorId, correlationId,
       // The audit record names the token row id and expiry, never the token or its hash.
@@ -87,38 +87,53 @@ export type RedeemOutcome =
   | { status: "applied" }
   | { status: "rejected"; reason: string };
 
+class RollbackWith extends Error {
+  constructor(public outcome: RedeemOutcome) { super("rollback"); }
+}
+
 /**
  * Redeem a token. Inside ONE tenant transaction: lock the token row, check it is live (unused, unrevoked, not
- * expired) and its user is active, run `apply` (Keycloak password set), and only if that succeeds mark the token
- * consumed. The row lock makes it single-use under concurrency; a policy rejection leaves it valid for a retry.
+ * expired) and its user is active, MARK IT CONSUMED AND WRITE THE AUDIT RECORD FIRST, then run `apply` (the
+ * Keycloak password set), and commit. Ordering matters:
+ *  - if the consume/audit write fails, nothing has touched Keycloak, so no password is set behind an unconsumed token;
+ *  - if `apply` refuses (policy, outage, roles changed) the transaction is rolled back, so the token stays valid
+ *    for a retry;
+ *  - the row lock makes it single-use under concurrency.
+ * Residual: Keycloak accepts the password and the process dies (or the commit fails) before COMMIT. The token then
+ * still looks unused, but `apply` refuses a user who already has a password, so it cannot be used to change it.
  * Every "not usable" case is the same `invalid`, so the endpoint is not an oracle for which tokens exist.
  */
 export async function redeemSetupToken(
   raw: string,
-  apply: (user: { id: string; tenantId: string; email: string }) => Promise<{ ok: true } | { ok: false; reason: string }>,
+  apply: (user: { id: string; tenantId: string; email: string }, grantorRoles: string[]) => Promise<{ ok: true } | { ok: false; reason: string }>,
   correlationId: string,
 ): Promise<RedeemOutcome> {
   const parsed = parseSetupToken(raw);
   if (!parsed) return { status: "invalid" };
   const { tenantId, hash } = parsed;
-  return runWithTenant(tenantId, () => db.transaction(async (tx): Promise<RedeemOutcome> => {
-    const rows = await tx.select().from(passwordSetupTokens)
-      .where(and(eq(passwordSetupTokens.tenantId, tenantId), eq(passwordSetupTokens.tokenHash, hash),
-        isNull(passwordSetupTokens.consumedAt), isNull(passwordSetupTokens.revokedAt), gt(passwordSetupTokens.expiresAt, new Date())))
-      .for("update").limit(1);
-    const t = rows[0];
-    if (!t) return { status: "invalid" };
-    const u = (await tx.select().from(users).where(and(eq(users.id, t.userId), eq(users.tenantId, tenantId))).limit(1))[0];
-    if (!u || u.status !== "active") return { status: "invalid" };
-    const r = await apply({ id: u.id, tenantId, email: u.email });
-    if (!r.ok) return { status: "rejected", reason: r.reason };
-    await tx.update(passwordSetupTokens).set({ consumedAt: new Date() }).where(eq(passwordSetupTokens.id, t.id));
-    await enqueue(tx as Parameters<typeof enqueue>[0], {
-      topic: "audit.event.record", eventType: "audit.event.record", tenantId, actorId: u.id, correlationId,
-      payload: { service: "identity", action: "password_setup_complete", resourceType: "user", resourceId: u.id, outcome: "success", severity: "medium", tokenId: t.id },
-    });
-    return { status: "applied" };
-  }));
+  try {
+    return await runWithTenant(tenantId, () => db.transaction(async (tx): Promise<RedeemOutcome> => {
+      const rows = await tx.select().from(passwordSetupTokens)
+        .where(and(eq(passwordSetupTokens.tenantId, tenantId), eq(passwordSetupTokens.tokenHash, hash),
+          isNull(passwordSetupTokens.consumedAt), isNull(passwordSetupTokens.revokedAt), gt(passwordSetupTokens.expiresAt, new Date())))
+        .for("update").limit(1);
+      const t = rows[0];
+      if (!t) return { status: "invalid" };
+      const u = (await tx.select().from(users).where(and(eq(users.id, t.userId), eq(users.tenantId, tenantId))).limit(1))[0];
+      if (!u || u.status !== "active") return { status: "invalid" };
+      await tx.update(passwordSetupTokens).set({ consumedAt: new Date() }).where(eq(passwordSetupTokens.id, t.id));
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: "audit.event.record", eventType: "audit.event.record", tenantId, actorId: u.id, correlationId,
+        payload: { service: "identity", action: "password_setup_complete", resourceType: "user", resourceId: u.id, outcome: "success", severity: "medium", tokenId: t.id },
+      });
+      const r = await apply({ id: u.id, tenantId, email: u.email }, t.grantorRoles);
+      if (!r.ok) throw new RollbackWith({ status: "rejected", reason: r.reason });
+      return { status: "applied" };
+    }));
+  } catch (err) {
+    if (err instanceof RollbackWith) return err.outcome;
+    throw err;
+  }
 }
 
 /** Revoke every live token of a user (used when the user is deactivated or a new link supersedes). */

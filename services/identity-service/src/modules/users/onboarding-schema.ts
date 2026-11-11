@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, boolean, timestamp, text } from "drizzle-orm/pg-core";
 
 const usersSchema = pgSchema("users");
 
@@ -18,6 +18,7 @@ export const passwordSetupTokens = usersSchema.table("password_setup_tokens", {
   userId:     uuid("user_id").notNull(),
   tokenHash:  varchar("token_hash", { length: 64 }).notNull(),
   createdBy:  uuid("created_by").notNull(),
+  grantorRoles: text("grantor_roles").array().notNull().default([]),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt:  timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),

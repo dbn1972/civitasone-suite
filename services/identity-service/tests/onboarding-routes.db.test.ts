@@ -241,6 +241,8 @@ describe("bulk onboarding", () => {
 describe("role change endpoint", () => {
   let target: string;
   beforeAll(async () => { target = await seedUser(TA, "rolechange@dept.gov.in"); });
+  const kcTarget = (roles: string[] = []) => kc.users.set("kc-target", { id: "kc-target", username: `${TA}__rolechange@dept.gov.in`, enabled: true, attributes: { tid: [TA] }, requiredActions: [], roles: new Set(roles) });
+  beforeEach(() => kcTarget());
   const put = (headers: Record<string, string>, id: string, payload: Record<string, unknown>) =>
     app.inject({ method: "PUT", url: `/identity/users/${id}/roles`, headers, payload });
 
@@ -248,7 +250,24 @@ describe("role change endpoint", () => {
     const res = await put(asA(), target, { roles: ["employee", "manager"], reason: "promoted to section manager" });
     expect(res.statusCode).toBe(202);
     const cmd = published.find((p) => p.topic === COMMANDS.setUserRoles)!;
-    expect(cmd.msg.payload).toMatchObject({ id: target, roles: ["employee", "manager"], reason: "promoted to section manager", grantorRoles: ["tenant_admin"] });
+    expect(cmd.msg.payload).toMatchObject({ id: target, roles: ["employee", "manager"], reason: "promoted to section manager" });
+    expect(cmd.msg.payload).not.toHaveProperty("grantorRoles"); // the worker re-derives the grantor itself
+  });
+
+  it("only the roles that CHANGE are held to the caller rule: an unchanged admin-tier role the caller lacks is not a reason to refuse", async () => {
+    kcTarget(["employee", "hr_admin"]);
+    const keep = await put(asA(), target, { roles: ["employee", "hr_admin", "manager"], reason: "add manager only" });
+    expect(keep.statusCode).toBe(202);
+    published = [];
+    const strip = await put(asA(), target, { roles: ["employee"], reason: "would remove hr_admin" });
+    expect(strip.statusCode).toBe(403); // removing hr_admin is a change the caller may not make
+    expect(published).toHaveLength(0);
+  });
+
+  it("fails closed when the user's current roles cannot be read", async () => {
+    kc.fetchMock.mockImplementation(async (input: unknown) => String(input).includes("/token") ? new Response(JSON.stringify({ access_token: "t", expires_in: 300 })) : new Response("{}", { status: 500 }));
+    expect((await put(asA(), target, { roles: ["employee"], reason: "kc is down" })).statusCode).toBe(503);
+    expect(published).toHaveLength(0);
   });
 
   it("requires a reason", async () => {
@@ -382,6 +401,105 @@ describe("set-password link (no-mail path)", () => {
     expect((await issue(asA(), () => unlinked)).json().code).toBe("KEYCLOAK_NOT_LINKED");
     const off = await seedUser(TA, `off-${randomUUID().slice(0, 6)}@dept.gov.in`, { status: "suspended" });
     expect((await issue(asA(), () => off)).json().code).toBe("USER_NOT_ACTIVE");
+  });
+
+  it("B1: a link is refused when the target holds a role the caller could not grant (the reported escalation)", async () => {
+    kc.users.get("kc-1")!.roles = new Set(["works_admin", "tenant_admin"]);
+    const res = await issue(asA(["tenant_admin", "hr_admin"]));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("ROLE_NOT_PERMITTED");
+    expect(kc.calls.some((c) => c.path.endsWith("/reset-password"))).toBe(false);
+    const rows = await asTenant(TA, (q) => q`SELECT 1 FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it.each([["tenant_admin"], ["super_admin"], ["platform_admin"], ["service_account"]])("B1: never for a target who holds %s, whoever asks", async (role) => {
+    kc.users.get("kc-1")!.roles = new Set([role]);
+    for (const caller of [asA(["tenant_admin"]), asA(["tenant_admin", "hr_admin"]), asOps(["platform_admin", "super_admin"])]) {
+      const res = await issue(caller);
+      expect([403, 404]).toContain(res.statusCode);
+    }
+    const rows = await asTenant(TA, (q) => q`SELECT 1 FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("B1: an admin-tier target is reachable only by a caller who holds that role (or a platform admin)", async () => {
+    kc.users.get("kc-1")!.roles = new Set(["works_admin"]);
+    expect((await issue(asA(["tenant_admin"]))).statusCode).toBe(403);
+    expect((await issue(asA(["tenant_admin", "works_admin"]))).statusCode).toBe(201);
+  });
+
+  it("B1: Keycloak's built-in roles do not count against the target", async () => {
+    kc.users.get("kc-1")!.roles = new Set(["employee"]); // composite view adds default-roles-*, offline_access, uma_authorization
+    expect((await issue()).statusCode).toBe(201);
+  });
+
+  it("B1: nobody can issue a link for their own account", async () => {
+    const res = await app.inject({ method: "POST", url: `/identity/users/${uid}/password-setup-link`, headers: bearer(uid, TA, ["tenant_admin"]) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SELF_LINK");
+  });
+
+  it("B1: re-checked at redeem: a target promoted after the link was issued can no longer be redeemed", async () => {
+    const { token } = (await issue()).json();
+    kc.users.get("kc-1")!.roles = new Set(["tenant_admin"]); // promoted in the meantime
+    const res = await redeem(token);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_OR_EXPIRED_TOKEN");
+    expect(kc.calls.some((c) => c.path.endsWith("/reset-password"))).toBe(false);
+  });
+
+  it("redeem uses the roles the ISSUER held at issue time, not whoever redeems", async () => {
+    kc.users.get("kc-1")!.roles = new Set(["hr_admin"]);
+    const { token } = (await issue(asA(["tenant_admin", "hr_admin"]))).json();
+    expect((await redeem(token)).statusCode).toBe(200);
+  });
+
+  it("a long or hostile x-correlation-id on the public route cannot break the audit write", async () => {
+    const { token } = (await issue()).json();
+    const res = await app.inject({ method: "POST", url: "/identity/password-setup/redeem", headers: { "x-correlation-id": "x".repeat(300) + "'; drop table" }, payload: { token, password: PASSWORD } });
+    expect(res.statusCode).toBe(200);
+    const audit = await asTenant(TA, (q) => q`SELECT payload->>'action' AS a FROM _outbox.messages WHERE tenant_id = ${TA} AND payload->>'resourceId' = ${uid} AND payload->>'action' = 'password_setup_complete'`);
+    expect(audit.length).toBeGreaterThan(0);
+  });
+
+  it("the token is consumed in the same transaction as its audit record, and a refused attempt leaves it valid", async () => {
+    const { token } = (await issue()).json();
+    expect((await redeem(token, "alllowercase1234")).statusCode).toBe(422);
+    let rows = await asTenant(TA, (q) => q`SELECT consumed_at FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows[0]!.consumed_at).toBeNull();
+    expect((await redeem(token)).statusCode).toBe(200);
+    rows = await asTenant(TA, (q) => q`SELECT consumed_at FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows[0]!.consumed_at).not.toBeNull();
+    const audit = await asTenant(TA, (q) => q`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${TA} AND payload->>'action' = 'password_setup_complete' AND payload->>'resourceId' = ${uid}`);
+    expect(audit).toHaveLength(1);
+  });
+
+  it("a failed post-set cleanup in Keycloak does not turn a set password into 'try again'", async () => {
+    kc = installFakeKeycloak({ failCleanup: true });
+    vi.stubGlobal("fetch", kc.fetchMock);
+    kc.users.set("kc-1", { id: "kc-1", username: `${TA}__${email}`, enabled: true, email, attributes: { tid: [TA] }, requiredActions: [], roles: new Set() });
+    const { token } = (await issue()).json();
+    const res = await redeem(token);
+    expect(res.statusCode).toBe(200);
+    expect(kc.users.get("kc-1")!.password).toBe(true);
+  });
+
+  it("redeem is throttled per token (a hammered token gets 429, other tokens are unaffected)", async () => {
+    const { token } = (await issue()).json();
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i++) codes.push((await redeem(token, "alllowercase1234")).statusCode);
+    expect(codes.at(-1)).toBe(429);
+    expect(codes.slice(0, 5).every((c) => c === 422)).toBe(true);
+  });
+
+  it("a settings read failure never breaks create for a tenant that is not switched on", async () => {
+    const repo = await import("../src/modules/users/onboarding-repo.js");
+    const spy = vi.spyOn(repo, "getSettings").mockRejectedValue(new Error("db down"));
+    const res = await create(asB(), { email: "dbdown@dept.gov.in", name: "Db Down" });
+    spy.mockRestore();
+    expect(res.statusCode).toBe(202);
+    expect(published[0]!.msg.payload).not.toHaveProperty("requestedRoles");
   });
 
   it("never issues a link for an account that already has a password (no takeover of existing accounts)", async () => {

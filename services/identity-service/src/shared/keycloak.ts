@@ -575,14 +575,14 @@ export async function applyLoginProfile(
 }
 
 /** Current realm role NAMES mapped directly on a federated user. Read-only, best-effort. */
-export async function getRealmRoleNames(u: { tenantId: string; email: string }): Promise<KcResult & { roles?: string[] }> {
+export async function getRealmRoleNames(u: { tenantId: string; email: string }, opts: { effective?: boolean } = {}): Promise<KcResult & { roles?: string[] }> {
   const cfg = readConfig();
   if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
   try {
     const token = await getAdminToken(cfg);
     const existing = await findUser(cfg, token, u.tenantId, u.email);
     if (!existing) return { ok: false, reason: "user not present in keycloak" };
-    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm`, { headers: { authorization: `Bearer ${token}` } });
+    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm${opts.effective ? "/composite" : ""}`, { headers: { authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`keycloak role-mappings read failed: ${res.status}`);
     const arr = (await res.json()) as Array<{ name: string }>;
     return { ok: true, kcUserId: existing.id, roles: arr.map((r) => r.name) };
@@ -658,10 +658,16 @@ export async function setUserPassword(
     if (res.status === 400) return { ok: false, kcUserId: existing.id, policyRejected: true, reason: "password_policy" };
     if (!res.ok && res.status !== 204) throw new Error(`keycloak set password failed: ${res.status}`);
     // The password is set; clear any pending UPDATE_PASSWORD so the user is not asked again at first login.
-    await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
-      method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ requiredActions: [], emailVerified: true }),
-    });
+    // Best-effort: the password IS set at this point, so a failure here must not be reported as "try again".
+    try {
+      const cleanup = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+        method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ requiredActions: [], emailVerified: true }),
+      });
+      if (!cleanup.ok && cleanup.status !== 204) captureError(new Error(`keycloak post-set cleanup failed: ${cleanup.status}`), { service: "identity", event: "keycloak_set_password_cleanup_failed", tenantId: u.tenantId });
+    } catch (err) {
+      captureError(err, { service: "identity", event: "keycloak_set_password_cleanup_failed", tenantId: u.tenantId });
+    }
     return { ok: true, kcUserId: existing.id };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_set_password_failed", tenantId: u.tenantId });

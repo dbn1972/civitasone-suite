@@ -13,6 +13,11 @@ const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_
  * passes the password straight into Keycloak. Nothing is stored, logged or echoed on the way: only the status
  * and the stable error code come back.
  */
+function forwardedFor(req: Request): Record<string, string> {
+  const xff = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
+  return xff ? { "x-forwarded-for": xff.slice(0, 512) } : {};
+}
+
 export async function POST(req: Request): Promise<NextResponse> {
   let body: { token?: unknown; password?: unknown };
   try {
@@ -26,7 +31,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const res = await fetch(`${GATEWAY}/api/identity/password-setup/redeem`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      // Pass the client address chain on so the gateway rate-limits the real client, not this server.
+      headers: { "content-type": "application/json", ...forwardedFor(req) },
       body: JSON.stringify({ token: body.token, password: body.password }),
       signal: AbortSignal.timeout(15_000),
       cache: "no-store",
