@@ -96,3 +96,18 @@ Both engines enforce tenant isolation via **filter-based isolation** in a shared
 ## Fallback Behavior
 
 If the search engine is unreachable, the knowledge-service falls back to a PostgreSQL ILIKE query on the local `search_index` table. This ensures search remains functional (though slower) during engine maintenance or outages.
+
+## Cross-module global search (per-tenant flag, default off)
+
+Index `global_search` holds finance vouchers/bills/vendors, HR employees (name + number only), procurement indents/POs.
+Contract: `src/global/` (`catalogue.ts` = types, roles, links; `contract.ts` = the only document shape; `pii.ts` = redaction).
+
+- Switch on per tenant: `GLOBAL_SEARCH_TENANTS=<uuid>,<uuid>` in the gateway, knowledge-service worker and every producing service
+  (`GLOBAL_SEARCH_DISABLED=1` is a global kill switch). Unset = today's behaviour, no events, no queries.
+- Producers call `syncGlobalRecord` (via a per-service `shared/global-search.ts`) inside their write transaction -> outbox -> `search.index.update`
+  (with `entityType`) -> knowledge-service worker `global-consumer.ts` -> Meilisearch.
+- Backfill before switching a tenant on: `pnpm --filter @civitasone/<service> reindex:global-search -- --tenant <uuid>` (dry run), then `--apply`;
+  `--limit N` caps per entity type, `--only <type> --after <id>` resumes, `--purge --apply` removes the tenant's slice.
+- Optional hardening: create a search-only Meilisearch key and set `MEILISEARCH_SEARCH_KEY` + `MEILISEARCH_SEARCH_KEY_UID`; the gateway then signs each
+  search with a per-tenant tenant token that the engine enforces server-side.
+- Adding a module: add a catalogue entry (roles copied from the owning service's read guard), a `shared/global-search.ts`, one `syncX(tx, id)` call per write site, a backfill entity.

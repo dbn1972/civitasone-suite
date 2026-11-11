@@ -13,6 +13,7 @@ import { hrmsEmployees } from "./schema.js";
 import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
+import { syncEmployee } from "../../shared/global-search.js";
 const log = pino({ name: "hrms-f3-employee", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Central audit topic (same constant/payload shape as ./consumer.ts). */
@@ -160,6 +161,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                       eq(hrmsEmployees.version, emp.version),
                       eq(hrmsEmployees.status, "probation"),
                     ));
+            await syncEmployee(tx, targetId, p.tenantId);
             break;
           }
           case "employee_agent1_gap_routes__2": {
@@ -175,6 +177,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                   await tx.update(hrmsEmployees)
                     .set({ status: body.revertToStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
+                  await syncEmployee(tx, targetId, p.tenantId);
                   return { id: targetId, status: body.revertToStatus };
           }
           case "employee_agent1_gap_routes__3": {

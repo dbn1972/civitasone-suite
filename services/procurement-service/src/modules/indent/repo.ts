@@ -2,6 +2,7 @@ import { eq, and, asc, desc, ilike, inArray, sql } from "drizzle-orm";
 import { likePattern } from "../../shared/search.js";
 import { db } from "../../shared/db.js";
 import { procurementIndents, procurementIndentItems, type IndentRow, type IndentInsert, type IndentItemInsert } from "./schema.js";
+import { syncIndent } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 /** Executor that can run raw SQL (drizzle db or tx). Mirrors finance-service's
@@ -120,10 +121,12 @@ export async function findIndentByIdTx(tx: Writer, id: string): Promise<IndentRo
 
 export async function insertIndent(tx: Writer, row: IndentInsert): Promise<void> {
   await tx.insert(procurementIndents).values(row);
+  if (row.id) await syncIndent(tx, row.id, row.tenantId);
 }
 
 export async function updateIndent(tx: Writer, id: string, patch: Partial<IndentInsert>): Promise<void> {
   await tx.update(procurementIndents).set({ ...patch, updatedAt: new Date() }).where(eq(procurementIndents.id, id));
+  await syncIndent(tx, id);
 }
 
 export async function insertIndentItems(tx: Writer, items: IndentItemInsert[]): Promise<void> {

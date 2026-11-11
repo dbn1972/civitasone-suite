@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeHeads } from "../budget/schema.js";
 import { financeBills, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
+import { syncBill } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
@@ -162,10 +163,12 @@ export async function updatePayment(tx: Writer, id: string, patch: Partial<Payme
 
 export async function insertBill(tx: Writer, row: BillInsert): Promise<void> {
   await tx.insert(financeBills).values(row);
+  if (row.id) await syncBill(tx, row.id, row.tenantId);
 }
 
 export async function updateBill(tx: Writer, id: string, patch: Partial<BillInsert>): Promise<void> {
   await tx.update(financeBills).set({ ...patch, updatedAt: new Date() }).where(eq(financeBills.id, id));
+  await syncBill(tx, id);
 }
 
 /**
@@ -199,6 +202,7 @@ export async function advanceBillStage(
       eq(financeBills.version, args.version),
     ))
     .returning({ id: financeBills.id });
+  if (rows.length > 0) await syncBill(tx, args.id, args.tenantId);
   return rows.length;
 }
 

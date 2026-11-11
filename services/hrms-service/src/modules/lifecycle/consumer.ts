@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
+import { syncEmployee } from "../../shared/global-search.js";
 
 const log = pino({ name: "lifecycle-consumer", serializers: SAFE_LOG_SERIALIZERS });
 const AUDIT = "audit.event.record";
@@ -34,6 +35,7 @@ export function registerLifecycleConsumers(queue: Queue): void {
       await tx.update(hrmsEmployees)
         .set({ status: "confirmed", confirmationDate: p.confirmationDate, updatedBy: msg.actorId })
         .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await syncEmployee(tx, p.employeeId, p.tenantId);
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "confirmation",
         effectiveDate: p.confirmationDate,
@@ -89,6 +91,7 @@ export function registerLifecycleConsumers(queue: Queue): void {
       await tx.update(hrmsEmployees)
         .set({ status: "separated", updatedBy: msg.actorId })
         .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await syncEmployee(tx, p.employeeId, p.tenantId);
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "separation",
         effectiveDate: p.effectiveDate,
@@ -145,6 +148,7 @@ export function registerLifecycleConsumers(queue: Queue): void {
       await tx.update(hrmsEmployees)
         .set({ status: "confirmed", updatedBy: msg.actorId })
         .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await syncEmployee(tx, p.employeeId, p.tenantId);
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "reinstatement",
         effectiveDate: p.reinstatementDate,

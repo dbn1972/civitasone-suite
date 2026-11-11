@@ -9,7 +9,10 @@
  * Validates: Requirements 19.2, 19.3, 19.4, 19.7
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
+import {
+  createSearchEngine, GlobalSearchIndex, GLOBAL_ENTITY_TYPES, entityTypesForRoles, isGlobalSearchEnabled,
+  type GlobalSearchHit, type SearchEngine, type SearchResponse,
+} from "@civitasone/search";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 
@@ -119,11 +122,16 @@ export interface GlobalSearchResult {
   description: string | null;
   status: string;
   snippet: string;
+  /** Cross-module records only (tenant flag on): catalogue type, English group label and the record page path. */
+  entityType?: string;
+  entityLabel?: string;
+  href?: string;
 }
 
 export interface GlobalSearchResponse {
   data: GlobalSearchResult[];
-  meta: { page: number; pageSize: number; total: number };
+  /** `recordsUnavailable` is set only when the cross-module index failed while the knowledge search worked. */
+  meta: { page: number; pageSize: number; total: number; recordsUnavailable?: boolean };
 }
 
 // ── Search Engine Singleton ───────────────────────────────────────────────────
@@ -140,6 +148,33 @@ function getEngine(): SearchEngine {
 /** Allow injection for testing. */
 export function setSearchEngine(e: SearchEngine | null): void {
   engine = e;
+}
+
+let globalIndex: Pick<GlobalSearchIndex, "search"> | null = null;
+
+function getGlobalIndex(): Pick<GlobalSearchIndex, "search"> {
+  if (!globalIndex) globalIndex = new GlobalSearchIndex();
+  return globalIndex;
+}
+
+/** Allow injection for testing. */
+export function setGlobalSearchIndex(i: Pick<GlobalSearchIndex, "search"> | null): void {
+  globalIndex = i;
+}
+
+function toGlobalResult(h: GlobalSearchHit): GlobalSearchResult {
+  return {
+    id: h.entityId,
+    module: h.module,
+    name: h.title,
+    refNumber: h.refNumber || null,
+    description: h.summary || null,
+    status: h.status,
+    snippet: h.summary || h.refNumber || "",
+    entityType: h.entityType,
+    entityLabel: GLOBAL_ENTITY_TYPES[h.entityType].label,
+    href: h.href,
+  };
 }
 
 // ── Route Registration ────────────────────────────────────────────────────────
@@ -184,7 +219,14 @@ export function registerSearchRoute(app: FastifyInstance): void {
 
     // ── Permission Filtering ───────────────────────────────────────────────
     const userModules = resolveUserModules(jwtPayload.roles ?? []);
-    if (userModules.length === 0) {
+
+    // ── Cross-module records (per-tenant flag, default off) ────────────────
+    // The tenant comes ONLY from the verified JWT, the entity types ONLY from the caller's JWT roles via the
+    // catalogue; the client controls neither. Flag off => none of this runs and the response is unchanged.
+    const globalOn = isGlobalSearchEnabled(tenantId);
+    const globalTypes = globalOn ? entityTypesForRoles(jwtPayload.roles ?? []) : [];
+
+    if (userModules.length === 0 && globalTypes.length === 0) {
       // User has no module access — return empty results
       return reply.code(200).send({
         data: [],
@@ -193,25 +235,42 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     // ── Execute Search ─────────────────────────────────────────────────────
-    let searchResponse: SearchResponse;
-    try {
-      searchResponse = await getEngine().search({
-        q: query,
-        tenantId,
-        limit: pageSize,
-        offset,
-        // Use tags for module filtering — indexed documents store module as a tag
-        tags: userModules,
-      });
-    } catch (err) {
-      // Graceful degradation: search engine unreachable
-      log.warn(
-        { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
-        "Search engine unreachable — returning SEARCH_UNAVAILABLE",
-      );
-      return reply.code(503).send({
-        error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
-      });
+    let searchResponse: SearchResponse = { hits: [], totalHits: 0, processingTimeMs: 0 };
+    if (userModules.length > 0) {
+      try {
+        searchResponse = await getEngine().search({
+          q: query,
+          tenantId,
+          limit: pageSize,
+          offset,
+          // Use tags for module filtering — indexed documents store module as a tag
+          tags: userModules,
+        });
+      } catch (err) {
+        // Graceful degradation: search engine unreachable
+        log.warn(
+          { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
+          "Search engine unreachable — returning SEARCH_UNAVAILABLE",
+        );
+        return reply.code(503).send({
+          error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
+        });
+      }
+    }
+
+    let globalResults: GlobalSearchResult[] = [];
+    let globalTotal = 0;
+    let globalFailed = false;
+    if (globalTypes.length > 0) {
+      try {
+        const g = await getGlobalIndex().search({ tenantId, q: query, entityTypes: globalTypes, limit: pageSize, offset });
+        globalResults = g.hits.map(toGlobalResult);
+        globalTotal = g.totalHits;
+      } catch (err) {
+        // The cross-module index is additive: its failure must not take down knowledge search.
+        globalFailed = true;
+        log.warn({ correlationId: req.id, err: err instanceof Error ? err.message : "unknown" }, "Cross-module search failed");
+      }
     }
 
     // ── Transform and filter results by module permission ──────────────────
@@ -235,11 +294,12 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     const response: GlobalSearchResponse = {
-      data: results,
+      data: globalOn ? [...globalResults, ...results] : results,
       meta: {
         page,
         pageSize,
-        total: searchResponse.totalHits,
+        total: searchResponse.totalHits + globalTotal,
+        ...(globalFailed ? { recordsUnavailable: true } : {}),
       },
     };
 
