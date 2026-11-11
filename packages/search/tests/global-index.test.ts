@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { GlobalSearchIndex, createTenantToken, buildGlobalDocument } from "../src/global/index.js";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -75,7 +75,7 @@ describe("GlobalSearchIndex.search: server-built filter", () => {
 });
 
 describe("tenant tokens", () => {
-  const key = "unit-test-key-" + "x".repeat(20);
+  const key = randomBytes(24).toString("hex");
   it("is an HS256 JWT whose rule pins the tenant and expires", () => {
     const tok = createTenantToken({ apiKey: key, apiKeyUid: "uid-1", tenantId: A, indexName: "global_search", expiresAtSec: 2_000_000_000 });
     const [h, p, s] = tok.split(".") as [string, string, string];
