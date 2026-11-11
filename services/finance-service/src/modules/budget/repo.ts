@@ -61,6 +61,13 @@ export async function findSanctionByIdAndTenant(id: string, tenantId: string): P
   return rows[0] ?? null;
 }
 
+/** UAT b24: tenant-scoped lookup by sanction number (UNIQUE (tenant_id, sanction_no)). */
+export async function findSanctionByNo(tenantId: string, sanctionNo: string): Promise<SanctionRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeSanctions)
+    .where(and(eq(financeSanctions.tenantId, tenantId), eq(financeSanctions.sanctionNo, sanctionNo))).limit(1));
+  return rows[0] ?? null;
+}
+
 /** Sum of net_minor from bills against a sanction (cross-module via raw SQL aggregate). */
 export async function sanctionUtilised(tx: Writer, sanctionId: string): Promise<bigint> {
   // Bills live in the payments schema — we access them via the shared db connection

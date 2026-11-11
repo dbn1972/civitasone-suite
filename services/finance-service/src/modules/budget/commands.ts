@@ -98,6 +98,12 @@ export async function reappropriateBudget(ctx: RequestContext, id: string, body:
 }
 
 export async function createSanction(ctx: RequestContext, body: CreateSanctionBody): Promise<Accepted> {
+  // UAT b24: sanction_no is UNIQUE per tenant. A repeat used to be 202-accepted, retried 5x and dead-lettered.
+  if (await repo.findSanctionByNo(ctx.tenantId, body.sanctionNo)) {
+    throw new HttpError(409, "DUPLICATE_SANCTION_NO", `Sanction number ${body.sanctionNo} already exists. Use a different number.`, [
+      { field: "sanctionNo", message: "This sanction number is already used.", code: "DUPLICATE_SANCTION_NO" },
+    ]);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.sanctionCreate, {
     messageId: id, type: COMMANDS.sanctionCreate,

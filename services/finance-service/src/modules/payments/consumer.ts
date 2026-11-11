@@ -176,7 +176,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await asRefusalAsync(HoaError, () => assertValidHoAWithMaster(head.hoaCode, reader));
       // DDO/PAO must exist in the per-tenant master (when provided)
       if (!(await ddoExists(p.tenantId, resolvedDdoCode.toUpperCase(), reader))) {
-        throw new NonRetryableError(`UNKNOWN_DDO: ${p.ddoCode} not found in DDO master`);
+        throw new NonRetryableError(`UNKNOWN_DDO: ${resolvedDdoCode} not found in DDO master`);
       }
       if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
         throw new NonRetryableError(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);

@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { stableUuid } from "@civitasone/outbox";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import * as repo from "../devices/repo.js";
@@ -7,6 +8,12 @@ type FeedRule = {
   topic: string;
   mailbox: string;
   entityId: (payload: Record<string, unknown>) => string | null;
+  /**
+   * Raw natural key, for rules whose entity has no uuid of its own (e.g. attendance = employee+day).
+   * The changelog entity_id column is uuid, so entityId is derived from this and the raw key travels
+   * in the payload as `entityKey`.
+   */
+  entityKey?: (payload: Record<string, unknown>) => string | null;
   /** 03-T7: owner for user-private mailboxes (e.g. notifications). */
   ownerId?: (payload: Record<string, unknown>) => string | null;
   /**
@@ -25,7 +32,7 @@ const FEED_RULES: FeedRule[] = [
   { topic: "hrms.employee.created", mailbox: "employees", entityId: (p) => String(p.employeeId ?? "") || null },
   { topic: "hrms.leave.applied", mailbox: "leave_requests", entityId: (p) => String(p.leaveAppId ?? "") || null },
   { topic: "hrms.leave.approved", mailbox: "leave_requests", entityId: (p) => String(p.leaveAppId ?? "") || null },
-  { topic: "hrms.attendance.marked", mailbox: "attendance", entityId: (p) => `${p.employeeId}:${p.attendanceDate}` },
+  { topic: "hrms.attendance.marked", mailbox: "attendance", entityId: () => null, entityKey: (p) => (p.employeeId && p.attendanceDate ? `${p.employeeId}:${p.attendanceDate}` : null) },
   { topic: "finance.payment.made", mailbox: "payments", entityId: (p) => String(p.paymentId ?? "") || null },
   { topic: "finance.gl.posted", mailbox: "journals", entityId: (p) => String(p.journalId ?? "") || null },
   { topic: "procurement.indent.approved", mailbox: "indents", entityId: (p) => String(p.indentId ?? p.id ?? "") || null },
@@ -84,7 +91,12 @@ export function registerSyncFeederConsumers(queue: Queue): void {
   for (const rule of FEED_RULES) {
     queue.subscribe(rule.topic, async (msg) => {
       const payload = msg.payload as Record<string, unknown>;
-      const entityId = rule.entityId(payload);
+      // sync.entity_changelog.entity_id is a uuid column: a composite natural key (attendance =
+      // employeeId:date) is folded through stableUuid (same key -> same id) and kept raw in the payload.
+      const entityKey = rule.entityKey ? rule.entityKey(payload) : null;
+      const entityId = rule.entityKey
+        ? (entityKey ? stableUuid(`${rule.mailbox}:${entityKey}`) : null)
+        : rule.entityId(payload);
       if (!entityId) return;
       // TX-009: this consumer used to call repo.appendChangelog() directly,
       // with no markProcessed/dedup of any kind — every redelivery of any of
@@ -109,7 +121,7 @@ export function registerSyncFeederConsumers(queue: Queue): void {
           mailbox: rule.mailbox,
           entityId,
           operation: rule.operation ?? "upsert",
-          payload,
+          payload: entityKey ? { ...payload, entityKey } : payload,
           ownerUserId: rule.ownerId ? rule.ownerId(payload) : null,
         });
       });

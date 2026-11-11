@@ -8,6 +8,16 @@ import * as repo from "./repo.js";
 import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition, DomainError, FINISHED_CONTRACT_STATUSES } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
+/** Postgres unique_violation (23505), as raised directly or wrapped in `cause`. */
+export function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: unknown; constraint_name?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } | null | undefined;
+  const hit = e?.code === "23505" ? e : e?.cause?.code === "23505" ? e.cause : null;
+  if (!hit) return false;
+  // When the driver reports the constraint, only the contract_no one is a duplicate-number rejection.
+  const name = hit.constraint_name;
+  return typeof name !== "string" || name.includes("contract_no");
+}
+
 const AUDIT_TOPIC = "audit.event.record";
 
 /**
@@ -53,13 +63,22 @@ export function registerContractConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertContract(tx, {
-        id: p.id, tenantId: p.tenantId, contractNo: p.contractNo, vendorId: p.vendorId,
-        poRef: p.poRef ?? null, title: p.title, valueMinor: BigInt(p.valueMinor),
-        currency: p.currency ?? "INR", startDate: p.startDate, expiry: p.expiry,
-        status: "draft", slaTerms: p.slaTerms ?? null,
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
+      try {
+        await repo.insertContract(tx, {
+          id: p.id, tenantId: p.tenantId, contractNo: p.contractNo, vendorId: p.vendorId,
+          poRef: p.poRef ?? null, title: p.title, valueMinor: BigInt(p.valueMinor),
+          currency: p.currency ?? "INR", startDate: p.startDate, expiry: p.expiry,
+          status: "draft", slaTerms: p.slaTerms ?? null,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        // UNIQUE (tenant_id, contract_no): a duplicate contract number is a permanent business
+        // rejection - redelivery can never make it valid (markProcessed already dedups true redelivery).
+        if (isUniqueViolation(err)) {
+          throw new NonRetryableError(`DUPLICATE_CONTRACT_NO: contract ${p.contractNo} already exists for this tenant`, err);
+        }
+        throw err;
+      }
       if (p.milestones?.length) {
         const { contractMilestones } = await import("./schema.js");
         const milestoneRows = p.milestones.map((m) => ({

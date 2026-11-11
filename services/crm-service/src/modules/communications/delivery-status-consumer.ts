@@ -22,6 +22,24 @@ interface DeliveryStatusPayload {
   correlationId?: string;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asUuid = (v: unknown): string | null => (typeof v === "string" && UUID_RE.test(v) ? v : null);
+
+/**
+ * crm.communications.id and .delivery_id are uuid columns. Other producers stamp non-uuid correlation
+ * ids on notification.* events (document-service bulk-scan uses "bulk-scan-dispatch"); binding one
+ * against a uuid column throws "invalid input syntax for type uuid" and the event is DLQ'd forever.
+ * Only uuid-shaped candidates are matched; an event with none is not a CRM communication - ignore it.
+ */
+function matchClause(deliveryId: string | null, correlationId: string | null) {
+  const d = asUuid(deliveryId);
+  const c = asUuid(correlationId);
+  if (d && c) return sql`(delivery_id = ${d} OR id = ${c})`;
+  if (d) return sql`delivery_id = ${d}`;
+  if (c) return sql`id = ${c}`;
+  return null;
+}
+
 function extractDeliveryId(p: DeliveryStatusPayload): string | null {
   return p.deliveryId ?? p.id ?? null;
 }
@@ -37,10 +55,12 @@ export function registerDeliveryStatusConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // Update matching communication record by delivery_id or correlation_id
+        const match = matchClause(deliveryId, msg.correlationId ?? null);
+        if (!match) return;
         await tx.execute(sql`
           UPDATE crm.communications
           SET status = 'delivered'
-          WHERE (delivery_id = ${deliveryId} OR id = ${msg.correlationId})
+          WHERE ${match}
             AND status IN ('pending', 'sent')
         `);
         log.info({ deliveryId, correlationId: msg.correlationId }, "delivery status updated to delivered");
@@ -60,10 +80,12 @@ export function registerDeliveryStatusConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
+        const match = matchClause(deliveryId, msg.correlationId ?? null);
+        if (!match) return;
         await tx.execute(sql`
           UPDATE crm.communications
           SET status = 'failed'
-          WHERE (delivery_id = ${deliveryId} OR id = ${msg.correlationId})
+          WHERE ${match}
             AND status IN ('pending', 'sent')
         `);
         log.info({ deliveryId, correlationId: msg.correlationId }, "delivery status updated to failed");
