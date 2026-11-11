@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-23T04:23:39.080Z",
+  "generatedAt": "2026-11-11T06:20:30.650Z",
   "counts": {
-    "totalNoLoader": 580,
-    "renderPassed": 537,
-    "renderFailed": 43,
-    "manifestConfirmed": 535
+    "totalNoLoader": 585,
+    "renderPassed": 541,
+    "renderFailed": 44,
+    "manifestConfirmed": 531
   },
-  "coveragePct": 94.9,
+  "coveragePct": 93.9,
   "results": [
     {
       "module": "admin",
@@ -514,6 +514,12 @@
     },
     {
       "module": "citizen",
+      "screen": "/citizen/documents/digilocker/callback",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
       "screen": "/citizen/documents",
       "verdict": "PASS",
       "reason": "ok"
@@ -587,12 +593,6 @@
     {
       "module": "citizen",
       "screen": "/citizen/services/[serviceKey]/track/[trackingNo]",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "contracts",
-      "screen": "/contracts",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -863,6 +863,12 @@
     {
       "module": "crm",
       "screen": "/crm/service-requests/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/service-requests",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2206,6 +2212,12 @@
     },
     {
       "module": "inspection",
+      "screen": "/inspection/inspections/[id]",
+      "verdict": "PASS",
+      "reason": "not-found (notFound() on empty record)"
+    },
+    {
+      "module": "inspection",
       "screen": "/inspection/inspections",
       "verdict": "PASS",
       "reason": "ok"
@@ -2458,12 +2470,6 @@
     },
     {
       "module": "learning",
-      "screen": "/learning/my-learning",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "learning",
       "screen": "/learning",
       "verdict": "PASS",
       "reason": "ok"
@@ -2525,6 +2531,12 @@
     {
       "module": "locations",
       "screen": "/locations/jurisdictions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/list",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2609,6 +2621,12 @@
     {
       "module": "meeting",
       "screen": "/meeting/meetings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2782,6 +2800,12 @@
     },
     {
       "module": "procurement",
+      "screen": "/procurement/contracts",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "procurement",
       "screen": "/procurement/grn/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -2849,12 +2873,6 @@
     {
       "module": "procurement",
       "screen": "/procurement/vendors/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/vendors",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -3245,6 +3263,18 @@
     {
       "module": "workflow",
       "screen": "/workflow/definitions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/delegations/legacy",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/delegations",
       "verdict": "PASS",
       "reason": "ok"
     },

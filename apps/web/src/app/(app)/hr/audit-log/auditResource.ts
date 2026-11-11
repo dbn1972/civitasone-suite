@@ -57,6 +57,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "geo_attendance",
   "geo_attendance_reportees",
   "gpf",
+  "grade_band", // S8-G4 private grade bands (hrms grade-bands consumer)
   "gratuity",
   "grievance",
   "holiday",
