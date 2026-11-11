@@ -33,7 +33,7 @@ import { readFileSync, statSync } from "node:fs";
 
 const execFileAsync = promisify(execFile);
 
-const ENDPOINT = process.env.AWS_ENDPOINT_URL ?? "http://localhost:4566";
+const ENDPOINT = process.env.SQS_ENDPOINT_URL || process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
 const REGION = process.env.AWS_DEFAULT_REGION ?? "ap-south-1";
 const PG_CONTAINER = process.env.PG_CONTAINER ?? "civitasone-postgres";
 const PG_USER = process.env.PG_USER ?? "civitas_admin";

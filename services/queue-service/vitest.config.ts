@@ -18,6 +18,9 @@ export default defineConfig({
       ...(process.env.AWS_ENDPOINT_URL
         ? { AWS_ENDPOINT_URL: process.env.AWS_ENDPOINT_URL }
         : {}),
+      ...(process.env.SQS_ENDPOINT_URL
+        ? { SQS_ENDPOINT_URL: process.env.SQS_ENDPOINT_URL }
+        : {}),
       AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION ?? "ap-south-1",
       AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ?? "test",
       AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "test",

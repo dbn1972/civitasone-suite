@@ -22,7 +22,7 @@ async function publish(topic: string, ctx: RequestContext, payload: Record<strin
 export const createContract = (ctx: RequestContext, p: Record<string, unknown>) => publish(COMMANDS.contractCreate, ctx, p, true);
 export const activateContract = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractActivate, ctx, { contractId: id, ...p });
 export const terminateContract = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractTerminate, ctx, { contractId: id, ...p });
-export const initiateRenewal = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalInitiate, ctx, { contractId: id, ...p });
+export const initiateRenewal = (ctx: RequestContext, id: string, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalInitiate, ctx, { contractId: id, ...p }, true);
 export const bulkRenewal = (ctx: RequestContext, p: Record<string, unknown>) => publish(COMMANDS.contractRenewalBulk, ctx, p);
 export const triggerExpiryDetection = (ctx: RequestContext) => publish(COMMANDS.contractExpiryDetect, ctx, {});
 export const triggerAutoSeparation = (ctx: RequestContext, contractId: string) => publish(COMMANDS.contractAutoSeparate, ctx, { contractId });

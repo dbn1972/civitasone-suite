@@ -12,6 +12,7 @@ import { getPolicy } from "./policy.js";
 import { recordAudit } from "../../shared/audit-event.js";
 import { maskPan, maskAccountNo, maskPhone, maskEmail } from "./vendor-mask.js";
 import { todayIST } from "../../shared/ist-date.js";
+import * as ddoCommands from "./ddo-commands.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 // Vendor master is financial system-of-record data (bank account/IFSC feed
@@ -19,6 +20,21 @@ const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_
 // POST /v1/finance/bank-accounts (finance_admin/super_admin only), narrower
 // than the read roles above.
 const WRITER_ROLES = ["finance_admin", "super_admin"];
+// DDO master: a tenant admin sets up the office's DDO at onboarding, before any finance user exists.
+const DDO_WRITER_ROLES = ["finance_admin", "tenant_admin", "super_admin"];
+
+const createDdoBody = z.object({
+  ddoCode:     z.string().trim().min(1).max(12),
+  name:        z.string().trim().min(2).max(200),
+  paoCode:     z.string().trim().min(1).max(12).nullish(),
+  makeDefault: z.boolean().optional(),
+  agencyCode:  z.string().trim().min(1).max(12).optional(),
+});
+const updateDdoBody = z.object({
+  name:     z.string().trim().min(2).max(200).optional(),
+  paoCode:  z.string().trim().min(1).max(12).nullable().optional(),
+  isActive: z.boolean().optional(),
+}).refine((b) => Object.keys(b).length > 0, "nothing to update");
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
@@ -181,6 +197,22 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       data: rows.map((r) => ({ id: r.id, ddoCode: r.ddoCode, name: r.name, paoCode: r.paoCode, isActive: r.isActive })),
     });
+  });
+
+  app.post("/v1/finance/ddo", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DDO_WRITER_ROLES);
+    const body = createDdoBody.parse(req.body);
+    const row = await ddoCommands.createDdo(ctx, body);
+    return reply.code(201).send({ id: row.id, ddoCode: row.ddoCode, name: row.name, paoCode: row.paoCode, isActive: row.isActive });
+  });
+
+  app.patch("/v1/finance/ddo/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DDO_WRITER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const row = await ddoCommands.updateDdo(ctx, id, updateDdoBody.parse(req.body));
+    return reply.send({ id: row.id, ddoCode: row.ddoCode, name: row.name, paoCode: row.paoCode, isActive: row.isActive });
   });
 
   app.get("/v1/finance/vendors", async (req, reply) => {
