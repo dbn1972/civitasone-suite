@@ -15,7 +15,7 @@ vi.mock("@/app/_data/apiClient", () => ({
   },
 }));
 
-import { getAdminUsers, getAdminUsersPage, getTenantUsers, ADMIN_USERS_PAGE_SIZE } from "./loaders";
+import { getAdminUsers, getAdminUsersPage, getTenantUsers, getMfaUsers, ADMIN_USERS_PAGE_SIZE } from "./loaders";
 
 const user = (n: number) => ({ id: `u-${n}`, tenantId: "t", email: `u${n}@dept.gov.in`, name: `User ${n}`, empCode: null, status: "active", mfaEnabled: false, version: 1 });
 const page = (from: number, count: number) => Array.from({ length: count }, (_, i) => user(from + i));
@@ -67,5 +67,31 @@ describe("getAdminUsers / getTenantUsers walk the 200-row pages", () => {
     expect(res.source).toBe("error");
     expect(res.status).toBe(503);
     expect(res.data).toEqual([]);
+  });
+});
+
+describe("getMfaUsers walks the pages instead of showing only the endpoint's default 20", () => {
+  const mfa = (n: number) => ({ id: `m-${n}`, name: `M ${n}`, email: `m${n}@dept.gov.in`, department: "", mfaStatus: "enabled", enrolledAt: null });
+  it("requests limit=200 and follows the 200/201 boundary", async () => {
+    handler = (url) => ({ payload: { data: offsetOf(url) === 0 ? Array.from({ length: 200 }, (_, i) => mfa(i)) : [mfa(200)], meta: {} } });
+    const res = await getMfaUsers();
+    expect(res.data).toHaveLength(201);
+    expect(res.truncated).toBeUndefined();
+    expect(fetchedUrls.every((u) => u.startsWith("/api/v1/admin/mfa/users?limit=200&offset="))).toBe(true);
+    expect(fetchedUrls.map(offsetOf)).toEqual([0, 200]);
+  });
+});
+
+describe("page cap: a truncated list is flagged and logged, never silent", () => {
+  it("returns truncated: true and warns when the last allowed page is still full", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    handler = () => ({ payload: page(1, 200) });
+    const res = await getAdminUsers();
+    expect(res.source).toBe("api");
+    expect(res.truncated).toBe(true);
+    expect(res.data).toHaveLength(5000);
+    expect(fetchedUrls).toHaveLength(25);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("truncated"));
+    warn.mockRestore();
   });
 });

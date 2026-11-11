@@ -1093,9 +1093,11 @@ async function fetchAllUsersPages<T>(
     });
     if (res.source !== "api") return { ...res, data: [] };
     all.push(...res.data);
-    if (rawLength < USERS_PAGE_SIZE) break;
+    if (rawLength < USERS_PAGE_SIZE) return { data: all, source: "api" };
   }
-  return { data: all, source: "api" };
+  // Page cap reached with the last page still full: more users exist. Say so (log + `truncated` for the screen).
+  console.warn(`[${telemetryKey}] user list truncated at ${all.length} rows (page cap ${MAX_PAGES})`);
+  return { data: all, source: "api", truncated: true };
 }
 
 export async function getTenantUsers(): Promise<LoaderResult<TenantUserSummary[]>> {
@@ -6941,11 +6943,8 @@ export type MfaUserStatus = {
 };
 
 export async function getMfaUsers(): Promise<LoaderResult<MfaUserStatus[]>> {
-  return fetchJson<unknown, MfaUserStatus[]>("/api/v1/admin/mfa/users", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "admin.mfa.users",
-    mapResponse: (p) => getArrayPayload(p) as MfaUserStatus[] | null,
-  });
+  // Walks the 200-row pages (the endpoint's default page is 20, which used to be all the screen ever showed).
+  return fetchAllUsersPages<MfaUserStatus>("/api/v1/admin/mfa/users", "admin.mfa.users", 60, (p) => getArrayPayload(p) as MfaUserStatus[] | null);
 }
 
 export type IdpProviderSummary = {

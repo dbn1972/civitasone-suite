@@ -615,15 +615,20 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuery.parse(req.query);
     const { status, body } = await callUpstream<unknown>(
       req, ctx, "GET", identityBaseUrl(),
-      `/identity/users?tenantId=${encodeURIComponent(ctx.tenantId)}&limit=${q.limit}&offset=${q.offset}`,
+      `/identity/users/search?tenantId=${encodeURIComponent(ctx.tenantId)}&limit=${q.limit}&offset=${q.offset}`,
     );
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
-    const rows = (Array.isArray(body) ? body : []) as Array<{ id: string; name: string; email: string; mfaEnabled: boolean }>;
+    // identity-service's search is tenant-scoped and returns the real total of the tenant's users; an older identity-service
+    // answers a bare array (no total), in which case the total can only be the rows returned.
+    const searched = body && typeof body === "object" && !Array.isArray(body) ? (body as { rows?: unknown[]; total?: number }) : null;
+    const rows = (Array.isArray(body) ? body : Array.isArray(searched?.rows) ? searched!.rows! : []) as Array<{ id: string; name: string; email: string; mfaEnabled: boolean }>;
+    const total = typeof searched?.total === "number" ? searched.total : rows.length;
     // department/enrolledAt are not tracked at this layer — left honestly
     // blank/null rather than invented (the existing UsersTable component
     // already renders department as "—" unconditionally for the same reason).
     const data = rows.map((u) => ({ id: u.id, name: u.name, email: u.email, department: "", mfaStatus: mfaStatusLabel(u.mfaEnabled), enrolledAt: null }));
-    return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
+    const nextOffset = data.length > 0 && q.offset + data.length < total ? q.offset + data.length : null;
+    return reply.send({ data, meta: { ...pageMeta(q.limit, q.offset, total), limit: q.limit, offset: q.offset, hasMore: nextOffset !== null, nextOffset } });
   });
 
   // ─── Roles — real, forwarded to identity-service's RBAC store ───

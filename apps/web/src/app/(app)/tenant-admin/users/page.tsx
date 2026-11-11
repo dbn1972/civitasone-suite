@@ -5,7 +5,7 @@ import { UsersTable } from "./UsersTable";
 import { LABELS } from "@/lib/labels";
 
 export default async function AdminUsersPage() {
-  const { data: users, source } = await getAdminUsers();
+  const { data: users, source, truncated } = await getAdminUsers();
 
   // GAP-TENANT-ADMIN-USERS-02: a failed fetch resolves to source "error" with
   // an empty array. The four KPI tiles used to compute from [] and read "0",
@@ -42,6 +42,11 @@ export default async function AdminUsersPage() {
         <StatCard icon="⛔" tone="bad" label="Suspended" value={tile(suspended)} />
         <StatCard icon="🔐" tone="info" label="MFA Enabled" value={tile(mfaEnabled)} />
       </div>
+      {truncated ? (
+        <div role="status" style={{ margin: "0 0 12px", padding: "10px 14px", border: "1px solid var(--warn, #b45309)", borderRadius: 8 }}>
+          This list is truncated: only the first {users.length.toLocaleString("en-IN")} users are shown. Totals and counts cover those users only.
+        </div>
+      ) : null}
       {errored ? (
         // Mirror users/[id]/page.tsx's error treatment: a retry-able state, not
         // a silent empty table. UsersTable is still rendered below for the

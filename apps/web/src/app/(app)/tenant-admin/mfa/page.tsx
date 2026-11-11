@@ -19,7 +19,7 @@ const PENDING = new Set(["pending"]);
 
 export default async function MfaManagementPage() {
   const result = await getMfaUsers();
-  const { data: users, source } = result;
+  const { data: users, source, truncated } = result;
   const errored = toResourceState(result).status === "error";
   const totalUsers = users.length;
   const enrolled = users.filter((u) => ENROLLED.has(norm(u.mfaStatus))).length;
@@ -47,6 +47,11 @@ export default async function MfaManagementPage() {
         <StatCard icon="🚫" tone="bad" label={`Not enrolled (${errored ? "—" : `${100 - enrollmentPct}%`})`} value={errored ? "—" : notEnrolled} />
       </StatGrid>
 
+      {truncated ? (
+        <div role="status" style={{ margin: "0 0 12px", padding: "10px 14px", border: "1px solid var(--warn, #b45309)", borderRadius: 8 }}>
+          This list is truncated: only the first {users.length.toLocaleString("en-IN")} users are shown. Totals and counts cover those users only.
+        </div>
+      ) : null}
       {errored ? (
         <Card title="User MFA Status">
           <RefreshErrorState error={toHumanError("load", { area: "MFA status" })} backHref="/tenant-admin" />

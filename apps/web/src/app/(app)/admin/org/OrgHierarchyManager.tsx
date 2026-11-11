@@ -362,6 +362,7 @@ export function OrgHierarchyManager({
           return Array.isArray(body) ? body : body.data ?? [];
         });
         if (!all) throw new Error("directory");
+        if (!all.complete) console.warn(`[org-hierarchy] head-of-unit directory truncated at ${all.rows.length} users`);
         const rows = all.rows;
         if (!cancelled) {
           setDirectory(rows.filter((r) => typeof r.id === "string" && typeof r.name === "string").map((r) => ({ id: r.id as string, name: r.name as string })));
