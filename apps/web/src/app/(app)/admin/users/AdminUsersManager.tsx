@@ -270,6 +270,9 @@ export function AdminUsersManager({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  // Set-password link (no-mail first-password path): the link is shown once, never stored by this page.
+  const [link, setLink] = useState<{ user: AdminUserSummary; url: string | null; token: string; expiresAt: string } | null>(null);
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | undefined>(undefined);
 
@@ -288,6 +291,28 @@ export function AdminUsersManager({
   }, [users, filter]);
 
   const win = pageWindow(dir.page, dir.pageSize, dir.total, filtered.length);
+
+  async function issueSetPasswordLink(user: AdminUserSummary) {
+    setLinkBusyId(user.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proxy/v1/admin/users/${user.id}/password-setup-link`, { method: "POST", headers: { "content-type": "application/json" } });
+      const json = (await res.json().catch(() => ({}))) as { token?: string; url?: string; expiresAt?: string; code?: string };
+      if (!res.ok || !json.token || !json.expiresAt) {
+        setError(json.code === "KEYCLOAK_NOT_LINKED"
+          ? "This user's login is not ready yet. Try again in a minute, or ask a platform admin to run the reconcile repair."
+          : json.code === "LINK_RECENTLY_ISSUED" ? "Too many links were requested for this user. Try again later."
+          : json.code === "PASSWORD_ALREADY_SET" ? "This user already has a password. A link is only for the first password; use the password reset instead."
+          : adminUserError());
+        return;
+      }
+      setLink({ user, url: json.url ?? null, token: json.token, expiresAt: json.expiresAt });
+    } catch {
+      setError(adminUserError());
+    } finally {
+      setLinkBusyId(null);
+    }
+  }
 
   function askToggleStatus(user: AdminUserSummary) {
     // GAP-ADMIN-USERS-01: never act on your own account from this screen.
@@ -417,6 +442,17 @@ export function AdminUsersManager({
                   >
                     {busyId === u.id ? "…" : u.status === "active" ? "Suspend" : "Activate"}
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={linkBusyId === u.id || u.status !== "active"}
+                    title="Create a one-time link the user opens to choose their own password"
+                    onClick={() => void issueSetPasswordLink(u as AdminUserSummary)}
+                    style={{ fontSize: 11.5 }}
+                  >
+                    {linkBusyId === u.id ? "…" : "Set-password link"}
+                  </Button>
                   <span style={{ fontSize: 11.5, color: "var(--mut)", alignSelf: "center", whiteSpace: "normal", maxWidth: 190 }}>
                     Password reset is managed in the Keycloak Admin console.
                   </span>
@@ -452,6 +488,22 @@ export function AdminUsersManager({
         onConfirm={() => void confirmExport()}
         onCancel={() => { if (!exportBusy) setExportOpen(false); }}
       />
+      <Modal open={link !== null} onClose={() => setLink(null)} title={link ? `Set-password link for ${link.user.name || link.user.email}` : ""}>
+        {link && (
+          <div style={{ display: "grid", gap: 10, fontSize: 13.5 }}>
+            <p>Give this link to the user. It can be used <strong>once</strong> and expires on {new Date(link.expiresAt).toLocaleString("en-IN")}. They choose their own password; nobody else sees it.</p>
+            <label style={{ display: "grid", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>{link.url ? "Link" : "Token (no web address is configured; the user opens /auth/set-password#token=…)"}</span>
+              <input readOnly value={link.url ?? link.token} onFocus={(e) => e.currentTarget.select()} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12.5 }} />
+            </label>
+            <p style={{ fontSize: 12, color: "var(--mut)" }}>This is shown only now and is not saved. A new link replaces this one.</p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(link.url ?? link.token)}>Copy</Button>
+              <Button type="button" size="sm" onClick={() => setLink(null)}>Done</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
       <EditRolesSheet user={editUser} roles={roles} canAssignPlatformRoles={canAssignPlatformRoles} onClose={() => setEditUser(null)} />
       <ConfirmDialog
         open={confirm !== null}
