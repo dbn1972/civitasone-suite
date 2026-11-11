@@ -1,7 +1,7 @@
 -- 0168_s8_g1_ctc_profile.sql
 --
 -- Section 8 gap G1: the private CTC salary profile (ctc_contract). The CTC terms live on the HRMS pay profile
--- (hrms migration 0269); the breakup is computed per month from the LOCKED ctc_template version (G2, 0166) and
+-- (hrms migration 0269); the breakup is computed per month from the LOCKED ctc_template version (G2, 0169) and
 -- booked on the slip as ordinary earning lines. This migration only adds the slip-side facts that reports and
 -- the G7 costing need without parsing JSON: which template version produced the slip, and the employer-side
 -- figures that are not slip deductions.
