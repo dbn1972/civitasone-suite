@@ -5,7 +5,7 @@ import { buildApp } from "../src/app.js";
 import { setSearchEngine, resolveUserModules } from "../src/search-route.js";
 import type { SearchEngine, SearchQuery } from "@civitasone/search";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string; // set by vitest.config.ts
 const TENANT = "00000000-0000-4000-8000-000000000001";
 const tok = (roles: string[]) => signToken({ sub: "00000000-0000-4000-8000-000000000099", tid: TENANT, roles, sid: "s" }, SECRET, 3600);
 
