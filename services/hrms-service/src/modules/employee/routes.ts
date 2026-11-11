@@ -2,11 +2,12 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { zodFieldErrors } from "@civitasone/schemas/http";
 import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { setEmployeeLoginLink } from "./login-link.js";
@@ -121,6 +122,15 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       ? undefined
       : await resolveManagerScope(ctx, req);
     sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses));
+  });
+
+  // UX-R5 (names, not ids): name + designation for the maker / checker / officer ids a record screen holds.
+  // Same who-may-browse gate as the directory list above; returns no other field, so no manager scope applies.
+  app.get("/v1/hrms/employees/officers", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DIRECTORY_ROLES);
+    const { ids } = officerIdsQuery.parse(req.query);
+    return reply.send({ data: await queries.officersByIds(ctx.tenantId, ids) });
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {
@@ -336,6 +346,20 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     if (isExitedStatus(emp.status)) {
       throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
     }
+    // UAT b23: name correction needs a reason; an unchanged name is dropped (not a correction).
+    if (body.fullName !== undefined && body.fullName === emp.fullName) delete body.fullName;
+    // Separation of duties: nobody corrects their own name, whatever their HR role. Direct login link
+    // first; resolveEmployeeForActor (verified-email bootstrap link) second, best effort.
+    if (body.fullName !== undefined) {
+      let isSelf = emp.userRef != null && emp.userRef === ctx.actorId;
+      if (!isSelf) {
+        try { isSelf = (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id === emp.id; } catch { /* ambiguity etc.: the direct link check above stands */ }
+      }
+      if (isSelf) throw new HttpError(403, "SELF_CORRECTION_NOT_ALLOWED", "You cannot correct your own name. Ask another HR officer to do it.");
+    }
+    if (body.fullName !== undefined && !body.reason) {
+      throw new HttpError(400, "REASON_REQUIRED", NAME_CORRECTION_REASON_MESSAGE);
+    }
     // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: a CHANGED managerId must be a real,
     // serving colleague who does not (transitively) report to this employee --
     // never self, never exited staff. An unchanged value is not re-validated, so
@@ -375,7 +399,8 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    // UAT T-EDGE b21: field codes (DATE_INVALID, AADHAAR_INVALID ...) travel with each field.
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {

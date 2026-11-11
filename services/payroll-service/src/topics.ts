@@ -81,6 +81,8 @@ export const COMMANDS = {
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
   bonusRuleCreate:        "payroll.bonus_rule.create",
+  daRateCreate:           "payroll.da_rate.create",
+  daRateDelete:           "payroll.da_rate.delete",
   // fin-payroll-01: tenant slip letterhead (GAP-PAYROLL-SALARY-SLIPS-DETAIL-02)
   // and the manual Form 24Q filing record (GAP-PAYROLL-RETURNS-01).
   letterheadUpsert:       "payroll.letterhead.upsert",

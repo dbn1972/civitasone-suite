@@ -1,4 +1,4 @@
-import { HR_ROLES, LEAVE_POLICY_ADMIN_ROLES } from "./workRoles";
+import { EMPLOYEE_DIRECTORY_VIEW_ROLES, HR_ROLES, LEAVE_POLICY_ADMIN_ROLES } from "./workRoles";
 
 /**
  * GAP-HR-HOME-01 (redesign/gaps/hr.md) -- the HR hub (hr/page.tsx +
@@ -39,6 +39,7 @@ export const HR_TILE_ROLE_OVERRIDES: Record<string, readonly string[]> = {
   // --- Mirrors a real, already-enforced full-page PermissionDenied gate
   //     1:1. A role missing here already gets denied at the destination
   //     today; hiding the tile from them is purely descriptive.
+  "/hr/employees": EMPLOYEE_DIRECTORY_VIEW_ROLES, // UAT b23: employees/page.tsx gate (an employee's directory is empty by backend scope)
   "/hr/advances": ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"], // advances/page.tsx ADVANCE_ROLES
   "/hr/apar": ["hr_admin", "hr_officer", "super_admin", "manager", "employee"], // apar/page.tsx APAR_ROLES
   "/hr/employee-types": ["hr_admin", "super_admin", "admin", "hr_officer", "manager", "officer", "payroll_admin", "payroll_officer"], // GAP-HR-EMPLOYEE-TYPES-04: mirrors employee-types-routes.ts EMPLOYEE_TYPE_READ_ROLES 1:1

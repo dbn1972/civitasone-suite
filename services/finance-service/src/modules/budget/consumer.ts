@@ -9,7 +9,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { minorString } from "@civitasone/schemas/money";
-import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, isSanctionAwaitingDecision, DomainError } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { todayIST, currentFyIST } from "../../shared/ist-date.js";
 
@@ -83,12 +83,22 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await tenantTransaction(db, p.tenantId, async (tx) => {
       if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
       assertValidFY(p.fy);
-      await repo.insertBudget(tx as Parameters<typeof repo.insertBudget>[0], {
-        id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
-        beMinor: BigInt(p.beMinor), reMinor: BigInt(p.beMinor),
-        allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
+      // B23: a (tenant, head, fy) duplicate that slips past the route check (two concurrent creates) can never
+      // succeed on retry: refuse it once, as a permanent error, instead of 5 retries into the DLQ.
+      try {
+        await repo.insertBudget(tx as Parameters<typeof repo.insertBudget>[0], {
+          id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
+          beMinor: BigInt(p.beMinor), reMinor: BigInt(p.beMinor),
+          allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        if (e.code === "23505" || e.cause?.code === "23505") {
+          throw new NonRetryableError(`[finance/budget] BUDGET_EXISTS: head ${p.headId} already has a budget for FY ${p.fy}`, err instanceof Error ? err : undefined);
+        }
+        throw err;
+      }
       await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", `${(msg.payload as any).headId}:${(msg.payload as any).fy}`));
@@ -135,12 +145,22 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         if (err instanceof DomainError) throw new NonRetryableError(`[finance/budget] ${err.message}`, err);
         throw err;
       }
-      await repo.insertSanction(tx, {
-        id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
-        headId: p.headId, amountMinor: BigInt(p.amountMinor),
-        currency: p.currency ?? "INR", status: "pending_approval",
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
+      // UAT b24: finance_sanctions is UNIQUE (tenant_id, sanction_no). A duplicate that slips past the route check
+      // (two concurrent creates) can never succeed on retry: refuse it once as a permanent error, not 5 retries into the DLQ.
+      try {
+        await repo.insertSanction(tx, {
+          id: p.id, tenantId: p.tenantId, sanctionNo: p.sanctionNo, purpose: p.purpose,
+          headId: p.headId, amountMinor: BigInt(p.amountMinor),
+          currency: p.currency ?? "INR", status: "pending_approval",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        if (e.code === "23505" || e.cause?.code === "23505") {
+          throw new NonRetryableError(`[finance/budget] DUPLICATE_SANCTION_NO: sanction number ${p.sanctionNo} already exists for this tenant`, err instanceof Error ? err : undefined);
+        }
+        throw err;
+      }
       await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
@@ -195,9 +215,15 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
+      // UAT bundle 22 (W1): only a sanction still awaiting a decision can be rejected. An approved sanction is
+      // final: a late or racing reject must not flip it to cancelled (it kept approved_by before).
+      if (!isSanctionAwaitingDecision(sanction.status))
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status} (only a pending sanction can be rejected)`);
       assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
-      await repo.updateSanction(tx, p.id, { status: "cancelled", updatedBy: msg.actorId });
-      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "sanction", p.id);
+      // W2: the rejected state, with the checker's reason; one guarded UPDATE so it cannot race an approval.
+      if (!(await repo.rejectSanctionIfPending(tx, p.id, p.tenantId, msg.actorId, p.reason ?? null)))
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} was decided while the rejection ran`);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "sanction", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
@@ -211,7 +237,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       // A decided sanction is never pulled back to pending by a late submit.
-      if (sanction.status === "approved" || sanction.status === "cancelled")
+      if (!isSanctionAwaitingDecision(sanction.status))
         throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status}`);
       // Records that an eOffice file is now deciding this sanction (direct approve is refused meanwhile).
       await repo.updateSanction(tx, p.id, {

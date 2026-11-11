@@ -198,7 +198,7 @@ describe("PATCH /v1/finance/sanctions/:id/{approve,reject} — synchronous maker
       });
       expect(reject.statusCode).toBe(202);
       await drain();
-      expect(await sanctionStatus(id)).toBe("cancelled");
+      expect(await sanctionStatus(id)).toBe("rejected");
     } finally { await app.close(); }
   });
 

@@ -3,6 +3,7 @@ import { getSessionUserId, getSessionRoles, hasAnyRole, MEETING_MINUTES_APPROVE_
 import { getMeeting, getMinutes, getResolutions } from "../../../_data/loaders";
 import { fmtDateTime, humanize, meetingPillStatus, meetingStatusLabel, votePillStatus } from "../../../_data/format";
 import { MinutesPanel } from "./MinutesPanel";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,9 @@ export default async function MinutesPage(
   // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: compute whether viewer can
   // approve/reject minutes (chairperson role required).
   const canApprove = hasAnyRole(getSessionRoles(), MEETING_MINUTES_APPROVE_ROLES);
+  // UX-R5 (names, not ids): maker / checker (and the viewer, who may approve next) as "Name, Designation".
+  const refs = await resolveRecordRefs({ people: [minutes.data?.createdBy, minutes.data?.approvedBy, currentUserId] });
+  const people = Object.fromEntries(refs.people);
 
   // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-06: give the header the meeting's
   // status + scheduled time so the record has context (falls back to the plain
@@ -61,6 +65,13 @@ export default async function MinutesPage(
         subtitle="Draft, review and approve the record of the meeting under a maker-checker workflow."
         back={`/meeting/meetings/${meetingId}`}
         backLabel="Console"
+        actions={
+          minutes.data ? (
+            <a href={`/api/proxy/v1/meetings/${meetingId}/minutes/pdf`} target="_blank" rel="noopener noreferrer" className="btn ghost no-print">
+              Download minutes (PDF)
+            </a>
+          ) : undefined
+        }
       />
 
       {meetingData && (
@@ -89,6 +100,7 @@ export default async function MinutesPage(
         notDrafted={notDrafted && !minutesOutage}
         currentUserId={currentUserId}
         canApprove={canApprove}
+        people={people}
       />
 
       {/* Vote records for this meeting (Req 11.4) */}

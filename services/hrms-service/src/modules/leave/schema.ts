@@ -71,6 +71,8 @@ export const hrmsLeaveApps = leaveSchema.table("hrms_leave_apps", {
   // 'full' | 'first_half' | 'second_half' | 'short_leave'
   dayPart:      varchar("day_part", { length: 16 }).notNull().default("full"),
   reason:       text("reason"),
+  // W8 (migration 0265): the approver's reason when status = rejected.
+  rejectionReason: text("rejection_reason"),
   approvedBy:   uuid("approved_by"),
   status:       varchar("status", { length: 24 }).notNull().default("draft"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -164,6 +164,10 @@ jobs:
       - name: Install Postgres client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pnpm install --frozen-lockfile
+      # UAT ux-docs (PR #2463): issued PDFs are printed by Chromium through packages/render
+      # (renderPdf); the document tests generate real PDFs, so the browser must be present.
+      - name: Install Playwright chromium (PDF renderer)
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
@@ -537,6 +541,18 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/fastify-bodylimit-guard.mjs
 
+      # Evidence for the .trivyignore "not affected" entries for fastify CVE-2026-25223/76169/84428/
+      # 84469/84504: no route schemas, $async, attachValidation, validator compiler, addSchema or
+      # custom not-found handler. Fails if one is introduced. Remove with the Fastify 5 upgrade.
+      - name: Fastify unused-features guard unit tests
+        id: fastify-unused-features-guard-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/fastify-unused-features-guard.test.ts
+      - name: Fastify unused-features guard (Trivy not-affected evidence)
+        id: fastify-unused-features-guard
+        continue-on-error: true
+        run: node scripts/ci/fastify-unused-features-guard.mjs
+
       # UX-001: fetchJson() never throws (apiClient.ts) — it resolves
       # { data: empty, source: "error" } on any failure — but the large
       # majority of page.tsx files decided "nothing to show" from
@@ -776,6 +792,8 @@ jobs:
           R_RAW_SESSION_GUC: ${{ steps.raw-session-guc-guard.outcome }}
           R_FASTIFY_BODYLIMIT_TESTS: ${{ steps.fastify-bodylimit-guard-tests.outcome }}
           R_FASTIFY_BODYLIMIT: ${{ steps.fastify-bodylimit-guard.outcome }}
+          R_FASTIFY_UNUSED_FEATURES_TESTS: ${{ steps.fastify-unused-features-guard-tests.outcome }}
+          R_FASTIFY_UNUSED_FEATURES: ${{ steps.fastify-unused-features-guard.outcome }}
           R_EMPTY_VS_ERROR_TESTS: ${{ steps.empty-vs-error-guard-tests.outcome }}
           R_EMPTY_VS_ERROR: ${{ steps.empty-vs-error-guard.outcome }}
           R_TENANT_TABLE_RLS_TESTS: ${{ steps.tenant-table-rls-guard-tests.outcome }}
@@ -826,6 +844,8 @@ jobs:
           check "Raw session GUC guard" "$R_RAW_SESSION_GUC"
           check "Fastify bodyLimit guard unit tests" "$R_FASTIFY_BODYLIMIT_TESTS"
           check "Fastify bodyLimit guard" "$R_FASTIFY_BODYLIMIT"
+          check "Fastify unused-features guard unit tests" "$R_FASTIFY_UNUSED_FEATURES_TESTS"
+          check "Fastify unused-features guard" "$R_FASTIFY_UNUSED_FEATURES"
           check "Empty-vs-error guard unit tests" "$R_EMPTY_VS_ERROR_TESTS"
           check "Empty-vs-error guard" "$R_EMPTY_VS_ERROR"
           check "Tenant table RLS guard unit tests" "$R_TENANT_TABLE_RLS_TESTS"
@@ -1571,6 +1591,10 @@ jobs:
       - name: Install Postgres client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pnpm install --frozen-lockfile
+      # UAT ux-docs (PR #2463): issued PDFs are printed by Chromium through packages/render
+      # (renderPdf); the document tests generate real PDFs, so the browser must be present.
+      - name: Install Playwright chromium (PDF renderer)
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh

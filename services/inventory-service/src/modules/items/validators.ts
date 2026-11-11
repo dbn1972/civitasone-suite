@@ -232,3 +232,7 @@ export const patchUomBody = z.object({
 });
 export type PatchUomBody = z.infer<typeof patchUomBody>;
 
+export const grnPrecheckBody = z.object({
+  skus: z.array(z.string().min(1).max(64)).max(500),
+  storeId: z.string().uuid().optional(),
+});

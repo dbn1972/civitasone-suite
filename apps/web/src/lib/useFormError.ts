@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { humanErrorFromFailure, type MessageKind } from "./messages";
 import { referenceFromHeaders } from "./errorCatalogue";
 import { UserFacingError, isNetworkFailure, isTimeoutFailure, isUserAbort } from "./userFacingError";
+import { fieldCodeMessage, signalSessionExpired, taskAlreadyDecidedMessage, type DecidedBy } from "./validationCopy";
 
 /**
  * Per-field message from a backend validation failure. Backend services
@@ -12,13 +13,15 @@ import { UserFacingError, isNetworkFailure, isTimeoutFailure, isUserAbort } from
  * they are shown to the user as-is, exactly like the one existing correct
  * consumer of this envelope (locations/list/LocationActions.tsx).
  */
-export type FieldError = { field: string; message: string };
+export type FieldError = { field: string; message: string; code?: string };
 
 /** The standard error envelope backend services in this repo return on a failed request. */
 export type ErrorEnvelope = {
   code?: string;
   message?: string;
   fieldErrors?: FieldError[];
+  /** TASK_ALREADY_DECIDED: who decided first (UAT T-EDGE TE-08). */
+  decidedBy?: DecidedBy;
 };
 
 export type FormErrorState = {
@@ -107,16 +110,23 @@ export function useFormError(area: string): UseFormErrorResult {
   const fromResponse = useCallback(
     async (res: Response, kind: MessageKind = "save", extra?: { limit?: string; types?: string }) => {
       const env = await parseErrorEnvelope(res);
+      // UAT T-EDGE b21: a field code (DATE_INVALID, AADHAAR_INVALID ...) reads as en/hi copy;
+      // a field without a known code keeps the backend message, as before.
       const fieldErrors = env.fieldErrors?.length
-        ? Object.fromEntries(env.fieldErrors.map((f) => [f.field, f.message]))
+        ? Object.fromEntries(env.fieldErrors.map((f) => [f.field, fieldCodeMessage(f.code) ?? f.message]))
         : {};
+      // TE-10: a 401 means the session expired mid-form. The page shell shows a sign-in
+      // notice (lib/validationCopy.ts SESSION_EXPIRED_EVENT); the form values are untouched.
+      if (res.status === 401) signalSessionExpired();
       // GAP-HELPDESK-INTERNAL-NEW-05: a 403 is a permanent permission problem,
       // not a transient save failure — surface the "forbidden" copy instead of
       // the generic "We couldn't save …" text (retrying a 403 never helps).
       const effectiveKind: MessageKind = res.status === 403 && kind !== "load" ? "forbidden" : kind;
       const human = humanErrorFromFailure({ status: res.status, code: env.code, kind: effectiveKind, area, hasFieldErrors: Object.keys(fieldErrors).length > 0, ...extra });
+      // TE-08: name the officer who decided first when the answer carries it.
+      const decided = env.code === "TASK_ALREADY_DECIDED" ? taskAlreadyDecidedMessage(env.decidedBy) : null;
       const next: FormErrorState = {
-        message: `${human.what} ${human.next}`,
+        message: decided ?? `${human.what} ${human.next}`,
         fieldErrors,
         reference: referenceFromHeaders(res.headers),
       };

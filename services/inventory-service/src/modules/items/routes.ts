@@ -12,11 +12,12 @@ import {
   patchCategoryBody, patchUomBody,
   createSubstituteBody, createBinBody, createReservationBody, releaseReservationBody,
   createGoodsReturnBody, qcInspectionBody, binStatusBody, updateSettingsBody,
-  itemQueryParams, idParam,
+  itemQueryParams, idParam, grnPrecheckBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { grnPrecheck } from "./grn-precheck.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
@@ -42,6 +43,15 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = updateItemBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateItem(ctx, id, body));
+  });
+
+  // UAT B23: read-only check procurement calls (service-to-service) when a GRN is accepted, so an unknown or
+  // ambiguous SKU / unknown store is a 422 at the request instead of a silent dead-letter in the consumer.
+  app.post("/v1/inventory/grn-precheck", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const body = grnPrecheckBody.parse(req.body);
+    return reply.send(await grnPrecheck(ctx.tenantId, body.skus, body.storeId));
   });
 
   app.get("/v1/inventory/items/:id", async (req, reply) => {

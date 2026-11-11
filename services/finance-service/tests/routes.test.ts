@@ -5,10 +5,14 @@
  * Uses HS256 test JWTs (JWT_ALGORITHM=HS256 set in vitest.config.ts).
  * No seeded DB rows → routes return [] / empty objects, but schema validates.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
+import { istToday } from "@civitasone/schemas/validators";
+import { financeDdo } from "../src/modules/masters/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -21,6 +25,23 @@ function makeToken(roles: string[] = ["finance_officer"]) {
 }
 
 afterAll(async () => { await sqlClient.end(); });
+
+// UAT T-EDGE b21: journal lines must name accounts in the chart (TE-07 J16), a bill head must exist
+// with a valid head-of-account code (TE-11), and a posting date must be in the posting window.
+// The few heads the accepted-write tests below use are seeded; everything else stays unseeded.
+const SEED_ACTOR = "aaaaaaaa-1111-4000-8000-0000000000a1";
+const POSTING_DATE = istToday();
+beforeAll(async () => {
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values([
+    { tenantId: TENANT, code: "0001", name: "Routes test expense", level: 2, createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR },
+    { tenantId: TENANT, code: "0002", name: "Routes test bank", level: 2, createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR },
+    { id: "bbbbbbbb-0000-4000-8000-000000000002", tenantId: TENANT, code: "RT-BILL", name: "Routes test bill head", level: 2, hoaCode: "207101010101010101", createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR },
+  ]).onConflictDoNothing());
+  // UAT b24: POST /v1/finance/bills now refuses (422 DDO_NOT_CONFIGURED) a DDO the tenant has not set up.
+  await scoped(TENANT, (tx) => tx.insert(financeDdo).values({
+    tenantId: TENANT, ddoCode: "DDO123456", name: "Routes test DDO", createdBy: SEED_ACTOR, updatedBy: SEED_ACTOR,
+  }).onConflictDoNothing());
+});
 
 describe("GET /v1/finance/dashboard — shape", () => {
   it("returns 200 with dashboard shape", async () => {
@@ -180,7 +201,7 @@ describe("POST /v1/finance/journals — unbalanced journal rejection", () => {
       payload: {
         voucherNo: "VCH-TEST-UNBALANCED",
         type: "journal",
-        postingDate: "2024-07-01",
+        postingDate: POSTING_DATE,
         lines: [
           { accountCode: "0001", debitMinor: 60000, creditMinor: 0 },
           { accountCode: "0002", debitMinor: 0, creditMinor: 50000 },
@@ -207,7 +228,7 @@ describe("POST /v1/finance/journals — unbalanced journal rejection", () => {
       payload: {
         voucherNo: "VCH-TEST-BALANCED",
         type: "journal",
-        postingDate: "2024-07-01",
+        postingDate: POSTING_DATE,
         lines: [
           { accountCode: "0001", debitMinor: 50000, creditMinor: 0 },
           { accountCode: "0002", debitMinor: 0, creditMinor: 50000 },
@@ -232,7 +253,7 @@ describe("POST /v1/finance/journals — unbalanced journal rejection", () => {
       payload: {
         voucherNo: "VCH-TEST-SINGLE",
         type: "journal",
-        postingDate: "2024-07-01",
+        postingDate: POSTING_DATE,
         lines: [
           { accountCode: "0001", debitMinor: 100, creditMinor: 100 },
         ],

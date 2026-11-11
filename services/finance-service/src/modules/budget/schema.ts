@@ -94,6 +94,13 @@ export const financeSanctions = budgetSchema.table("finance_sanctions", {
   // While set, a direct /approve is refused (409) -- the eOffice decision is the approver.
   efileSubmittedAt: timestamp("efile_submitted_at", { withTimezone: true }),
   efileFileNo:      text("efile_file_no"),
+  // UAT ux-docs (migration 0162): the approving officer and the decision time, written only when
+  // the sanction becomes approved and never overwritten (trigger finance_sanctions_keep_approval).
+  // The issued sanction order is signed and dated from these, never from updated_by/updated_at.
+  approvedBy:     uuid("approved_by"),
+  approvedAt:     timestamp("approved_at", { withTimezone: true }),
+  // UAT bundle 22 (W2, migration 0163): why the checker rejected it, shown to the maker. Set only with status "rejected".
+  rejectionReason: text("rejection_reason"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

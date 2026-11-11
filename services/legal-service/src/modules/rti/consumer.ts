@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -207,7 +207,7 @@ export function registerRtiConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const appeal = await repo.findAppealByIdTx(tx, p.appealId, p.tenantId);
       if (!appeal) throw new Error(`rti appeal ${p.appealId} not found`);
-      if (appeal.orderStatus !== "pending") throw new Error(`appeal ${p.appealId} already decided`);
+      if (appeal.orderStatus !== "pending") throw new NonRetryableError(`appeal ${p.appealId} already decided`);
       // Maker-checker: the deciding authority must differ from the filer.
       assertDifferentActor(appeal.filedBy, msg.actorId, "appeal order");
       const n = await repo.updateAppealVersioned(tx, p.appealId, p.tenantId, appeal.version ?? 1, {

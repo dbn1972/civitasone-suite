@@ -317,8 +317,11 @@ export async function insertReimbursement(p: ReimbursementInsert) {
 
 // ─── Salary Revisions ─────────────────────────────────────────────────────────
 
-export async function listSalaryRevisions(tenantId: string, employeeId: string | null) {
-  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_salary_revisions WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) ORDER BY effective_date DESC LIMIT 100`));
+// UAT b23 P5: the list is newest-first and capped at 100, so an OLD revision still awaiting its second
+// approver fell off the page once 100 newer ones existed. `status` filters in SQL (before the cap) so
+// the web "pending" panel asks for exactly the pending rows.
+export async function listSalaryRevisions(tenantId: string, employeeId: string | null, status: string | null = null) {
+  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_salary_revisions WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) AND (${status}::text IS NULL OR status=${status}) ORDER BY effective_date DESC, created_at DESC LIMIT 100`));
 }
 
 // ─── Payroll Register ─────────────────────────────────────────────────────────

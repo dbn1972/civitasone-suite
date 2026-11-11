@@ -3,7 +3,7 @@
  *
  * The "existing tenants behave unchanged" proofs:
  *   - a tenant with no gl.finance_settings row reads mandatory / govt / cash (SETTINGS_DEFAULTS);
- *   - the column defaults of migration 0162 give an existing row the same values;
+ *   - the column defaults of migration 0165 give an existing row the same values;
  *   - mandatory refuses exactly as before; the govt COA seed is byte-identical to the fixture captured from origin/main.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
@@ -36,7 +36,7 @@ describe("S2: finance settings defaults (existing tenants unchanged)", () => {
     expect(s).toMatchObject({ budgetControl: "mandatory", coaTemplate: "govt", profileCode: "govt_dept" });
     expect(await scoped(t, (tx) => loadBudgetControlTx(tx, t))).toBe("mandatory");
   });
-  it("migration 0162 column defaults: a row written with only the pre-0162 columns reads mandatory / govt", async () => {
+  it("migration 0165 column defaults: a row written with only the pre-0165 columns reads mandatory / govt", async () => {
     const t = randomUUID();
     await scoped(t, (tx) => tx.insert(financeSettings).values({ tenantId: t, accountingBasis: "cash", updatedBy: ACTOR }));
     const [row] = await scoped(t, (tx) => tx.select().from(financeSettings).where(eq(financeSettings.tenantId, t)));

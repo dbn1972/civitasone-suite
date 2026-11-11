@@ -61,6 +61,13 @@ export async function findSanctionByIdAndTenant(id: string, tenantId: string): P
   return rows[0] ?? null;
 }
 
+/** UAT b24: tenant-scoped lookup by sanction number (UNIQUE (tenant_id, sanction_no)). */
+export async function findSanctionByNo(tenantId: string, sanctionNo: string): Promise<SanctionRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeSanctions)
+    .where(and(eq(financeSanctions.tenantId, tenantId), eq(financeSanctions.sanctionNo, sanctionNo))).limit(1));
+  return rows[0] ?? null;
+}
+
 /** Sum of net_minor from bills against a sanction (cross-module via raw SQL aggregate). */
 export async function sanctionUtilised(tx: Writer, sanctionId: string): Promise<bigint> {
   // Bills live in the payments schema — we access them via the shared db connection
@@ -97,11 +104,26 @@ export async function updateSanction(tx: Writer, id: string, patch: Partial<Sanc
  */
 export async function approveSanctionIfNoEfile(tx: Writer, id: string, tenantId: string, actorId: string): Promise<boolean> {
   const rows = await tx.update(financeSanctions)
-    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date() })
+    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date(), approvedBy: actorId, approvedAt: new Date() })
     .where(and(
       eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
       inArray(financeSanctions.status, ["pending_approval", "draft"]),
       isNull(financeSanctions.efileSubmittedAt),
+    )).returning({ id: financeSanctions.id });
+  return rows.length > 0;
+}
+
+/**
+ * Race-safe reject: moves a still-pending sanction to rejected (with the reason) ONLY while it is pending.
+ * One guarded UPDATE, so an approval and a rejection racing on the same sanction cannot both win, and an
+ * approved sanction is never changed by a later reject. Returns false when the row is no longer pending.
+ */
+export async function rejectSanctionIfPending(tx: Writer, id: string, tenantId: string, actorId: string, reason: string | null): Promise<boolean> {
+  const rows = await tx.update(financeSanctions)
+    .set({ status: "rejected", updatedBy: actorId, updatedAt: new Date(), rejectionReason: reason, efileSubmittedAt: null })
+    .where(and(
+      eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
+      inArray(financeSanctions.status, ["pending_approval", "draft"]),
     )).returning({ id: financeSanctions.id });
   return rows.length > 0;
 }
@@ -278,6 +300,21 @@ export async function findHeadLabels(
       .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.id, unique)))
   );
   return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name }]));
+}
+
+/**
+ * UAT ux-docs: account code -> head name for a printed voucher (journal lines carry
+ * codes only). Tenant-scoped; a code that is not in the chart is absent from the map.
+ */
+export async function findHeadNamesByCodes(tenantId: string, codes: readonly string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(codes)].filter((c) => c.length > 0);
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx.select({ code: financeHeads.code, name: financeHeads.name })
+      .from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, unique)))
+  );
+  return new Map(rows.map((r) => [r.code, r.name]));
 }
 
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {

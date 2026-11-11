@@ -31,6 +31,7 @@ import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { assertWithinOpenQty, DomainError } from "../src/modules/grn/domain.js";
 import { isEmpanelmentLapsed } from "../src/modules/vendor/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "a2000000-0000-4000-8000-000000000001";
@@ -81,6 +82,9 @@ async function seedEmpanelment(vendorId: string, validUntil: string | null, stat
 let app: FastifyInstance;
 let q: MemoryQueue;
 
+// UAT T-EDGE b21 (TE-04 P08): a PO must cite a real approved indent, checked before 202.
+let INDENT_REF = "";
+beforeAll(async () => { INDENT_REF = await seedApprovedIndent(TENANT); });
 beforeAll(async () => {
   await wipe();
   await seedVendor(VENDOR, "Acme Supplies");
@@ -180,7 +184,7 @@ describe("EMPANELMENT-05 / ORDERS-NEW-06 - a lapsed empanelment cannot be ordere
   const CURRENT = "a2000000-2222-4000-8000-000000000003";
   const PLAIN = "a2000000-2222-4000-8000-000000000004";
   const poPayload = (vendorId: string) => ({
-    vendorId, indentRef: `procurement_indent:${randomUUID()}`,
+    vendorId, indentRef: INDENT_REF,
     items: [{ itemCode: "IC-1", description: "Widget", quantity: 1, unit: "nos", unitPriceMinor: 100 }],
   });
 

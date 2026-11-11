@@ -25,6 +25,10 @@ import { sqlClient } from "../../src/shared/db.js";
 import { queue } from "../../src/shared/infra.js";
 import { registerGlConsumers } from "../../src/modules/gl/consumer.js";
 import { financeHeads } from "../../src/modules/budget/schema.js";
+import { istToday } from "@civitasone/schemas/validators";
+
+// UAT T-EDGE b21: a posting date must sit in the posting window (previous FY start .. next FY end), so today.
+const POSTING_DATE = istToday();
 import { scoped } from "../_tenant.js";
 import type { FastifyInstance } from "fastify";
 
@@ -97,7 +101,7 @@ describe("Check #1 — Double-entry GL: real POST balance guard", () => {
       payload: {
         voucherNo: "AUTO",
         type: "journal",
-        postingDate: "2024-04-01",
+        postingDate: POSTING_DATE,
         lines: [
           { accountCode: "1200", debitMinor: 250000, creditMinor: 0 },
           { accountCode: "2100", debitMinor: 0, creditMinor: 250000 },
@@ -120,7 +124,7 @@ describe("Check #1 — Double-entry GL: real POST balance guard", () => {
       payload: {
         voucherNo: "AUTO",
         type: "journal",
-        postingDate: "2024-04-01",
+        postingDate: POSTING_DATE,
         lines: [
           { accountCode: "1200", debitMinor: 250000, creditMinor: 0 },
           { accountCode: "2100", debitMinor: 0, creditMinor: 249999 }, // 1 paisa short

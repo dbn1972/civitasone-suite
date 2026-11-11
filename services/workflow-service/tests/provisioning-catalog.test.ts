@@ -80,8 +80,8 @@ describe("standard definition catalog", () => {
   it("the default (all clusters) seeds every standard definition, incl. the procurement PO/indent chains (F77)", () => {
     const seeded = definitionsForClusters(seedClustersFromEnv(undefined)).map((d) => d.code);
     expect(seeded.sort()).toEqual([
-      "file_noting", "finance_approval", "grant_disbursement", "leave_approval", "procurement_approval",
-      "procurement_indent_approval", "procurement_plan_approval", "procurement_po_amendment_approval",
+      "file_noting", "finance_approval", "grant_disbursement", "leave_approval", "meeting_financial_countersignature",
+      "procurement_approval", "procurement_indent_approval", "procurement_plan_approval", "procurement_po_amendment_approval",
       "procurement_po_approval",
     ]);
   });

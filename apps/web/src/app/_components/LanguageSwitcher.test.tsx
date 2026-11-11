@@ -45,7 +45,8 @@ describe("LanguageSwitcher", () => {
 
   it("shows Indian flag when locale is hi", () => {
     renderWithProvider("hi");
-    expect(screen.getByRole("button", { name: /language/i }).textContent).toContain("🇮🇳");
+    // UAT-P3 (H-1): in Hindi the trigger is named in Hindi ("भाषा: हिन्दी").
+    expect(screen.getByRole("button", { name: /language|भाषा/i }).textContent).toContain("🇮🇳");
   });
 
   it("opens language menu on click and lists all supported language options", () => {

@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
-import { DomainError } from "./domain.js";
+import { DomainError, assertPayable, assertGstIssuable, invoiceSupplierGstinFromEnv } from "./domain.js";
 import {
   generateBody, createInvoiceBody, cancelBody, approveBody,
   idParam, approvalIdParam, tenantParam,
@@ -11,7 +11,8 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
-import { renderInvoicePdf } from "./pdf.js";
+import { renderInvoicePdf, InvoiceSupplierNotConfiguredError } from "./pdf.js";
+import { resolveDocIdentity, DocumentUnavailableError } from "@civitasone/render/official";
 
 const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
@@ -53,6 +54,14 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const inv = await queries.getInvoiceForPayment(id, ctx.tenantId);
     if (!inv) throw new HttpError(404, "NOT_FOUND", "invoice not found");
+    // B22 D3: refuse synchronously (422) a bill that charges tax with no supplier GSTIN or no GST split, instead of
+    // accepting it (202) and letting the consumer fail with no feedback.
+    try {
+      assertGstIssuable(inv, invoiceSupplierGstinFromEnv());
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+      throw err;
+    }
     return reply.code(202).send(await commands.requestIssue(ctx, id, inv.totalMinor));
   });
 
@@ -83,6 +92,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const inv = await queries.getInvoiceForPayment(id, ctx.tenantId);
     if (!inv) throw new HttpError(404, "NOT_FOUND", "invoice not found");
+    assertPayable(inv.status); // 409 INVOICE_NOT_PAYABLE for a draft / cancelled / already-paid bill (same guard as the receipt route)
     return sendAccepted(reply, acceptedResponseSchema, await commands.payInvoice(ctx, id));
   });
 
@@ -111,7 +121,15 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     if (!PDF_STATUSES.has(detail.status)) {
       throw new DomainError("INVOICE_NOT_ISSUED", `a tax invoice PDF is available once the bill is issued (status: ${detail.status})`);
     }
-    const bytes = await renderInvoicePdf(detail);
+    // UAT ux-docs: the recipient (this tenant) name and address from its document identity.
+    let bytes: Uint8Array;
+    try {
+      bytes = await renderInvoicePdf(detail, { recipient: await resolveDocIdentity(ctx.tenantId) });
+    } catch (err) {
+      if (err instanceof InvoiceSupplierNotConfiguredError) throw new HttpError(422, err.code, err.message);
+      if (err instanceof DocumentUnavailableError) throw new HttpError(503, err.code, err.message);
+      throw err;
+    }
     return reply
       .header("content-type", "application/pdf")
       .header("content-disposition", `attachment; filename="${detail.invoiceNumber ?? "invoice"}.pdf"`)

@@ -149,10 +149,10 @@ export function mapProcurementPOListItems(payload: unknown): PurchaseOrderListIt
               : raw === "fully_received" ? "fully_received"
                 : raw === "cancelled" ? "cancelled"
                   : raw === "gem_placed" ? "gem_placed"
-                    // UAT-P1A-02: a closed PO is closed, not a draft; a rejected
-                    // one reads as cancelled, matching normalizePoStatus.
+                    // UAT-P1A-02: a closed PO is closed, not a draft. UAT bundle 22 (W2): a rejected
+                    // one reads Rejected, matching normalizePoStatus.
                     : raw === "closed" ? "closed"
-                      : raw === "rejected" ? "cancelled"
+                      : raw === "rejected" ? "rejected"
                         : raw === "review" ? "draft"
                           : "draft";
     if (!id || !poNo) continue;
@@ -312,8 +312,10 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
     const action = toText(step.action);
     const timestamp = toText(step.timestamp);
     if (!actor || !action || !timestamp) continue;
+    const actorId = toText(step.actorId);
     approvalTrail.push({
       actor,
+      ...(actorId ? { actorId } : {}),
       action,
       timestamp,
       remarks: toText(step.remarks) ?? undefined,
@@ -323,6 +325,8 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
   return {
     ...base,
     purpose: toText(payload.purpose) ?? undefined,
+    // UX-R5: the maker id, for "Name, Designation" via the shared record resolver.
+    ...(toText(payload.createdBy) ? { requestedById: toText(payload.createdBy) as string } : {}),
     lineItems,
     approvalTrail,
     // GAP-PROCUREMENT-INDENTS-DETAIL-05: only an explicit `false` means the
@@ -360,7 +364,9 @@ function normalizePoStatus(raw: string | null): PODetail["status"] {
   if (key === "gem_placed" || key === "gem") return "gem_placed";
   if (key === "partial_grn" || key === "partial") return "partial_grn";
   if (key === "fully_received" || key === "received") return "fully_received";
-  if (key === "cancelled" || key === "rejected") return "cancelled";
+  // UAT bundle 22 (W2): a rejected PO is "Rejected", not "Cancelled" (the service now stores it as rejected).
+  if (key === "rejected") return "rejected";
+  if (key === "cancelled") return "cancelled";
   // UAT-P1A-02: the detail page has a "Closed" state; don't collapse it to Draft.
   if (key === "closed") return "closed";
   return "draft";
@@ -397,10 +403,16 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
     poNo,
     vendor: toText(payload.vendor) ?? toText(payload.vendorName) ?? "—",
     vendorId: toText(payload.vendorId) ?? undefined,
+    // UX-R5: ids the record header resolves to names / business numbers.
+    ...(toText(payload.createdBy) ? { createdById: toText(payload.createdBy) as string } : {}),
+    ...(toText(payload.indentRef) ? { indentRef: toText(payload.indentRef) as string } : {}),
+    ...(toText(payload.sanctionRef) ? { sanctionRef: toText(payload.sanctionRef) as string } : {}),
     orderDate: toText(payload.orderDate) ?? toText(payload.createdAt)?.slice(0, 10) ?? "—",
     deliveryDate: toText(payload.deliveryDate) ?? undefined,
     totalAmount: (parseMinor(payload.totalAmount) ?? 0) || (parseMinor(payload.totalMinor) ?? 0),
     status: normalizePoStatus(toText(payload.status)),
+    // UAT bundle 22 (W2): why the checker rejected this PO, shown to the maker.
+    ...(toText(payload.rejectionReason) ? { rejectionReason: toText(payload.rejectionReason) as string } : {}),
     lineItems,
   };
 }

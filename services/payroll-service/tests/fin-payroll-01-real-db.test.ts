@@ -592,7 +592,8 @@ describe("GAP-PAYROLL-SALARY-SLIPS-DETAIL-02 tenant letterhead", () => {
   it("the payslip PDF names the tenant's own organisation, HTML-escaped, and no hard-coded authority", async () => {
     await put({ orgName: "A & B <Dept>" }); await drain();
     const slipId = (await scoped(TENANT, async (tx) => rowsOf(await tx.execute(sql`SELECT id FROM payroll.payroll_slips WHERE tenant_id = ${TENANT}::uuid AND status = 'paid' LIMIT 1`))))[0]!.id as string;
-    const res = await app.inject({ method: "GET", url: `/v1/payroll/slips/${slipId}/pdf`, headers: auth(["payroll_admin"]) });
+    // UAT ux-docs: the HTML print (the PDF is the default output of /pdf now).
+    const res = await app.inject({ method: "GET", url: `/v1/payroll/slips/${slipId}/pdf?format=html`, headers: auth(["payroll_admin"]) });
     expect(res.statusCode, res.body).toBe(200);
     expect(res.body).toContain("A &amp; B &lt;Dept&gt;");
     expect(res.body).not.toContain("A & B <Dept>");
@@ -648,7 +649,8 @@ describe("slip HTML escaping (stored XSS)", () => {
     });
     hrms.nameOverride = XSS;
     try {
-      for (const url of [`/v1/payroll/slips/${slipId}/pdf`, `/v1/payroll/slips/${slipId}/download`]) {
+      // UAT ux-docs: both HTML outputs (?format=html; the default output is a PDF).
+      for (const url of [`/v1/payroll/slips/${slipId}/pdf?format=html`, `/v1/payroll/slips/${slipId}/download?format=html`]) {
         const res = await app.inject({ method: "GET", url, headers: auth(["payroll_admin"]) });
         expect(res.statusCode, `${url} ${res.body}`).toBe(200);
         expect(res.body).toContain("&lt;img src=x onerror=alert(1)&gt;");

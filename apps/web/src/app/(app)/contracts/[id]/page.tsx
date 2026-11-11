@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { PageHeader, EmptyState, LoadErrorState, StatusPill } from "../../../_components/ds";
+import { EmptyState, LoadErrorState, StatusPill, RecordHeader, DetailList } from "../../../_components/ds";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
+import { isUuid, nameLabel, personLabel } from "@/lib/records/labels";
+import { isTerminalStatus, outcomeLine, raiseBlockedReason } from "@/lib/records/statusActions";
+import { CONTRACT_STATUS_RULE, contractAllowedActions, contractLockedReason } from "@/lib/records/status/contract";
 import { formatIndianDate } from "@/lib/formatters";
 import { poHrefFromRef } from "@/lib/procurement-po-ref";
 import { getTranslations } from "next-intl/server";
-import { getContractById, getVendorOptions } from "../../../_data/loaders";
+import { getContractById } from "../../../_data/loaders";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 import { getContractMilestones, getContractBonds, getContractObligations } from "../../../_data/loaders";
 import { MilestoneActions } from "./MilestoneActions";
@@ -14,6 +18,11 @@ import { deriveContractDisplayFields } from "./page.helpers";
 import { ArrowLeft } from "lucide-react";
 
 const DAY_MS = 86_400_000;
+
+function isDone(status: string): boolean {
+  const s = status.toLowerCase();
+  return s === "completed" || s === "completed_late";
+}
 
 function isOverdue(dueDate: string | undefined, status: string): boolean {
   if (!dueDate) return false;
@@ -26,13 +35,12 @@ function isOverdue(dueDate: string | undefined, status: string): boolean {
 
 export default async function ContractDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const [{ data: contract, source, status }, milestonesRes, bondsRes, obligationsRes, vendorsRes] =
+  const [{ data: contract, source, status }, milestonesRes, bondsRes, obligationsRes] =
     await Promise.all([
       getContractById(params.id),
       getContractMilestones(params.id),
       getContractBonds(params.id),
       getContractObligations(params.id),
-      getVendorOptions(),
     ]);
 
   // GAP-CONTRACTS-DETAIL-01: distinguish a genuine 404 (the contract does not
@@ -77,19 +85,27 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
   const t = await getTranslations("procurement.contractsPage");
   const poHref = poRef !== "—" ? poHrefFromRef(poRef) : null;
 
-  // GAP-CONTRACTS-DETAIL-04: resolve the vendor name from the vendor master
-  // (contract-service stores only a raw vendorId). Fall back to the short id
-  // when unknown — never show nothing. `parties` is already the vendorId when
-  // no name field was on the contract itself.
-  const vendorName =
-    vendorsRes.source === "api" && parties !== "—"
-      ? (vendorsRes.data.find((v) => v.id === parties)?.name ?? null)
-      : null;
-  const partyDisplay = vendorName ?? (parties !== "—" ? parties.slice(0, 8) : "—");
+  // UX-R5 (names, not ids): one batched, tenant-scoped lookup for the vendor and the officers on this record.
+  // contract-service stores the vendor as a raw vendorId and the maker / last actor as user ids.
+  const createdBy = typeof contract.createdBy === "string" ? contract.createdBy : null;
+  const updatedBy = typeof contract.updatedBy === "string" ? contract.updatedBy : null;
+  const vendorId = isUuid(parties) ? parties : null;
+  const refs = await resolveRecordRefs({ people: [createdBy, updatedBy], vendors: [vendorId] });
+  const partyDisplay = parties === "—" ? "—" : nameLabel(refs.vendors, vendorId, vendorId ? null : parties);
+  const raisedBy = createdBy ? personLabel(refs.people, createdBy) : null;
+
+  // UX-R5 / DS-3: actions follow the contract state machine (lib/records/status/contract.ts).
+  const allowed = contractAllowedActions(statusLower);
+  const lockedReason = contractLockedReason(statusLower);
+  const finished = isTerminalStatus(CONTRACT_STATUS_RULE, statusLower);
+  const updatedAt = typeof contract.updatedAt === "string" ? contract.updatedAt : null;
+  const outcome = finished
+    ? outcomeLine({ status: statusLower, by: updatedBy ? personLabel(refs.people, updatedBy) : null, at: updatedAt })
+    : null;
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
+      <nav aria-label="Breadcrumb" data-dup-crumb style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/contracts" className="lnk">Contracts</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <Link href="/contracts/list" className="lnk">List</Link>
@@ -97,58 +113,53 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
         <span aria-current="page">{contractNo !== "—" ? contractNo : title}</span>
       </nav>
 
-      <PageHeader title={title} back="/contracts/list" />
+      <RecordHeader
+        kind="Contract"
+        recordNo={contractNo !== "—" ? contractNo : null}
+        subtitle={title}
+        back="/contracts/list"
+        backLabel="Contracts"
+        status={contractStatus !== "—" ? contractStatus : null}
+        amountMinor={amountMinor ?? null}
+        amountLabel="Value"
+        parties={[
+          partyDisplay !== "—" ? { label: "Vendor", value: partyDisplay } : null,
+          raisedBy ? { label: "Raised by", value: raisedBy } : null,
+        ]}
+        primaryAction={finished ? undefined : <ContractLifecycleSection contractId={params.id} status={statusLower} createdBy={createdBy} inline />}
+        outcome={outcome}
+      />
 
-      <div className="grid g-main" style={{ alignItems: "start" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div className="card">
-            <div className="card-h"><h3>Contract Details</h3></div>
-            <div className="fields">
-              <div className="fld"><div className="l">Contract No.</div><div className="v">{contractNo}</div></div>
-              <div className="fld"><div className="l">Party</div><div className="v">{partyDisplay}</div></div>
-              {/* GAP-CONTRACTS-DETAIL-04: hide Type entirely when absent rather
-                  than showing a meaningless "—" (contract-service has no type). */}
-              {contractType !== "—" && (
-                <div className="fld"><div className="l">Type</div><div className="v">{contractType}</div></div>
-              )}
-              <div className="fld"><div className="l">Value</div><div className="v">{valueDisplay}</div></div>
-              {/* GAP-PROCUREMENT-CONTRACTS-05: the PO this contract is linked to. A
-                  PO uuid opens the order; free text is shown as typed; hidden when none. */}
-              {poRef !== "—" && (
-                <div className="fld">
-                  <div className="l">{t("poColumn")}</div>
-                  <div className="v">{poHref ? <Link href={poHref} className="lnk">{t("viewPo")}</Link> : poRef}</div>
-                </div>
-              )}
-              <div className="fld">
-                <div className="l">Status</div>
-                {/* GAP-CONTRACTS-DETAIL-04: StatusPill maps approved->good,
-                    terminated->bad, draft->mut, pending->warn — the old inline
-                    `pill` class only coloured active/expired. */}
-                <div className="v"><StatusPill status={contractStatus} /></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-h"><h3>Duration</h3></div>
-            <div className="fields">
-              <div className="fld"><div className="l">Start Date</div><div className="v">{formatIndianDate(startDate !== "—" ? startDate : null)}</div></div>
-              <div className="fld"><div className="l">End Date</div><div className="v">{formatIndianDate(endDate !== "—" ? endDate : null)}</div></div>
-            </div>
-          </div>
-
-          {description !== "—" && (
-            <div className="card">
-              <div className="card-h"><h3>Terms &amp; Description</h3></div>
-              <div className="pad">
-                <p style={{ whiteSpace: "pre-wrap", color: "var(--ink2)", lineHeight: 1.6 }}>{description}</p>
-              </div>
-            </div>
-          )}
+      <div className="card">
+        <div className="card-h"><h2 style={{ fontSize: 15, margin: 0 }}>Contract details</h2></div>
+        <div className="pad">
+          <DetailList
+            ariaLabel="Contract details"
+            items={[
+              { label: "Contract No.", value: contractNo !== "—" ? contractNo : null, mono: true },
+              { label: "Vendor", value: partyDisplay !== "—" ? partyDisplay : null },
+              // GAP-CONTRACTS-DETAIL-04: Type is hidden when contract-service has none.
+              contractType !== "—" ? { label: "Type", value: contractType } : null,
+              { label: "Value", value: valueDisplay !== "—" ? valueDisplay : null },
+              // GAP-PROCUREMENT-CONTRACTS-05: the linked PO (uuid opens the order; free text as typed).
+              poRef !== "—"
+                ? { label: t("poColumn"), value: poHref ? <Link href={poHref} className="lnk">{t("viewPo")}</Link> : poRef }
+                : null,
+              { label: "Start date", value: startDate !== "—" ? formatIndianDate(startDate) : null },
+              { label: "End date", value: endDate !== "—" ? formatIndianDate(endDate) : null },
+            ]}
+          />
         </div>
       </div>
 
+      {description !== "—" && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <div className="card-h"><h2 style={{ fontSize: 15, margin: 0 }}>Terms &amp; description</h2></div>
+          <div className="pad">
+            <p style={{ whiteSpace: "pre-wrap", color: "var(--ink2)", lineHeight: 1.6 }}>{description}</p>
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Milestones</h3></div>
@@ -159,7 +170,8 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
             <EmptyState icon="📋" title="No milestones" message="No milestones on this contract." />
           ) : (
             <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
-              {milestonesRes.data.map((m) => {
+              {/* UX-R5: each milestone is listed once -- open ones appear with their actions below. */}
+              {milestonesRes.data.filter((m) => lockedReason || isDone(String(m.status ?? ""))).map((m) => {
                 const mStatus = String(m.status ?? "—");
                 const due = typeof m.dueDate === "string" ? m.dueDate : undefined;
                 const overdue = isOverdue(due, mStatus);
@@ -174,6 +186,9 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
               })}
             </ul>
           )}
+          {lockedReason && milestonesRes.source !== "error" ? (
+            <p data-testid="milestones-locked" style={{ margin: "0 0 4px", fontSize: 13, color: "var(--ink2)" }}>{lockedReason}</p>
+          ) : null}
           <MilestoneActions
             contractId={params.id}
             milestones={milestonesRes.data.map((m) => ({
@@ -181,7 +196,9 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
               title: String(m.title ?? "Milestone"),
               status: String(m.status ?? "pending"),
               dueDate: typeof m.dueDate === "string" ? m.dueDate : undefined,
+              overdue: isOverdue(typeof m.dueDate === "string" ? m.dueDate : undefined, String(m.status ?? "")),
             }))}
+            lockedReason={lockedReason}
           />
         </div>
       </div>
@@ -194,7 +211,7 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
           ) : (
             <BondActions
               contractId={params.id}
-              canRegister={statusLower === "active" || statusLower === "approved"}
+              canRegister={allowed.has("registerBond")}
               bonds={bondsRes.data.map((b) => ({
                 id: String(b.id),
                 referenceNo: typeof b.referenceNo === "string" ? b.referenceNo : undefined,
@@ -226,18 +243,10 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
                 ownerId: typeof o.ownerId === "string" ? o.ownerId : undefined,
                 ...(typeof o.version === "number" ? { version: o.version } : {}),
               }))}
+              lockedReason={lockedReason}
             />
           )}
         </div>
-      </div>
-
-      {/* UAT J10 / D6: approve / activate / close / terminate on screen. */}
-      <div style={{ marginTop: 18 }}>
-        <ContractLifecycleSection
-          contractId={params.id}
-          status={statusLower}
-          createdBy={typeof contract.createdBy === "string" ? contract.createdBy : null}
-        />
       </div>
 
       <RaiseEOfficeNote
@@ -247,6 +256,8 @@ export default async function ContractDetailPage(props: { params: Promise<{ id: 
         dept={dept}
         defaultApprovalChain="file_noting"
         notifyPath={`/api/proxy/v1/contract/contracts/${params.id}/submit-approval`}
+        statusAllowsRaise={allowed.has("raiseForApproval")}
+        outcome={outcome ?? raiseBlockedReason(CONTRACT_STATUS_RULE, statusLower)}
         {...(amountMinor != null ? { amountMinor } : {})}
       />
     </div>

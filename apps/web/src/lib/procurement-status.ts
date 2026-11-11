@@ -18,6 +18,7 @@ export const PO_STATUS_LABELS: Record<string, string> = {
   dispatched: "Dispatched",
   partial_grn: "Partial GRN",
   fully_received: "Fully Received",
+  rejected: "Rejected",
   cancelled: "Cancelled",
   gem_placed: "GeM Placed",
   closed: "Closed",
@@ -89,6 +90,6 @@ export function isDeliveryOverdue(
   if (!deliveryDate) return false;
   const bare = deliveryDate.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(bare)) return false;
-  if (status === "fully_received" || status === "cancelled" || status === "closed") return false;
+  if (status === "fully_received" || status === "cancelled" || status === "rejected" || status === "closed") return false;
   return bare < todayIso;
 }

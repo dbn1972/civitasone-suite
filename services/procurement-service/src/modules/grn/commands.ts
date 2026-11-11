@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
+import { precheckGrnStock } from "../../shared/inventory-client.js";
 import * as repo from "./repo.js";
 import * as poRepo from "../po/repo.js";
 import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError, needsReceivingStore, normalizePoItemRef } from "./domain.js";
@@ -41,6 +43,14 @@ export async function createGrn(ctx: RequestContext, input: CreateGrnBody): Prom
   // F131: every line ref is carried forward as the PO item's own id.
   const body: CreateGrnBody = { ...input, items: input.items.map((i) => ({ ...i, poItemRef: normalizePoItemRef(i.poItemRef, poId, poItems) })) };
   const orderedByRef = new Map(poItems.map((pi) => [pi.id, pi.quantity]));
+  // UAT T-EDGE TE-04: a line that is not on the PO used to be 202-accepted and then
+  // dead-lettered by the worker (assertPoItemsResolved). Refused here instead.
+  const unknownLine = body.items.findIndex((i) => !orderedByRef.has(i.poItemRef));
+  if (unknownLine >= 0) {
+    throw new HttpError(422, "PO_LINE_NOT_FOUND", "a GRN line does not match any line of the purchase order", [
+      { field: `items.${unknownLine}.poItemRef`, message: "Choose a line of this purchase order.", code: "PO_LINE_NOT_FOUND" },
+    ]);
+  }
   const committed = await db.transaction((tx) => repo.committedQtyByPoItemTx(tx, ctx.tenantId, poId));
   try {
     assertWithinOpenQty(
@@ -53,7 +63,8 @@ export async function createGrn(ctx: RequestContext, input: CreateGrnBody): Prom
     if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
     throw err;
   }
-  const id = randomUUID();
+  // UAT T-EDGE TE-09: id (and messageId) from the X-Idempotency-Key when sent (meeting pattern).
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.grnCreate, {
     messageId: id, type: COMMANDS.grnCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -100,13 +111,37 @@ export async function acceptGrn(ctx: RequestContext, id: string, body: AcceptGrn
   // UAT b10 F95: refuse synchronously (422) an accept that inventory could never post as a stock receipt, instead of
   // a 202 that later dead-letters on GRN_NO_RECEIVING_STORE. The store comes from the GRN or from this accept call.
   const grn = await repo.findGrnById(id);
-  if (grn && !grn.storeId && !body.storeId) {
+  if (grn) {
     const items = await repo.findGrnItemsByGrnId(id);
     const poItems = await poRepo.findPoItemsByPoId(grn.poRef.replace(/^procurement_po:/, ""), ctx.tenantId);
     const typeByRef = new Map(poItems.map((pi) => [pi.id, pi.itemType]));
-    if (needsReceivingStore(items.map((i) => ({ itemCode: i.itemCode, acceptedQty: i.acceptedQty, poItemType: typeByRef.get(i.poItemRef) })))) {
+    const lines = items.map((i) => ({ itemCode: i.itemCode, acceptedQty: i.acceptedQty, poItemType: typeByRef.get(i.poItemRef) }));
+    const storeId = body.storeId ?? grn.storeId ?? undefined;
+    if (!storeId && needsReceivingStore(lines)) {
       throw new HttpError(422, "GRN_NO_RECEIVING_STORE",
         "This GRN accepts stock items but names no receiving store. Choose the inventory store the goods go into.");
+    }
+    // UAT B23: inventory dead-letters (UNKNOWN_ITEM_CODE / AMBIGUOUS_ITEM_CODE / UNKNOWN_STORE) a GRN whose stock
+    // lines are not exactly one active item of the tenant, or whose store is not an active store. Ask it now.
+    const stockSkus = [...new Set(lines.filter((l) => needsReceivingStore([l])).map((l) => l.itemCode))];
+    if (stockSkus.length > 0) {
+      const check = await precheckGrnStock(ctx.tenantId, stockSkus, storeId);
+      if (check) {
+        if (check.unknownSkus.length > 0) {
+          const idx = items.findIndex((i) => check.unknownSkus.includes(i.itemCode));
+          throw new HttpError(422, "UNKNOWN_ITEM_CODE",
+            `Item code ${check.unknownSkus.join(", ")} is not an active inventory item. Create it in the item master (with this SKU) before accepting the GRN.`,
+            [{ field: `items.${idx}.itemCode`, message: `No active inventory item has SKU ${check.unknownSkus[0]}.`, code: "UNKNOWN_ITEM_CODE" }]);
+        }
+        if (check.ambiguousSkus.length > 0) {
+          throw new HttpError(422, "AMBIGUOUS_ITEM_CODE",
+            `More than one active inventory item has SKU ${check.ambiguousSkus.join(", ")}. Make the SKU unique in the item master first.`);
+        }
+        if (check.storeKnown === false) {
+          throw new HttpError(422, "UNKNOWN_STORE", "The chosen receiving store is not an active store of this tenant.",
+            [{ field: "storeId", message: "Choose an active inventory store.", code: "UNKNOWN_STORE" }]);
+        }
+      }
     }
   }
   const msgId = randomUUID();

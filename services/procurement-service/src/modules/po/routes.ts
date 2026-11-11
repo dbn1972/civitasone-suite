@@ -12,10 +12,16 @@ import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, assertNonEmpanelledOrderBasis, DomainError } from "../vendor/domain.js";
 import * as tenderRepo from "../tender/repo.js";
-import { assertCanDispatch, assertPoRejectable, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
+import { assertCanDispatch, assertPoRejectable, assertTransitionAllowed, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import { fetchSanctionBalance, rupeesFromMinor } from "./finance-budget-client.js";
 import * as poRepo from "./repo.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
+import { zodFieldErrors } from "@civitasone/schemas/http";
+import { idempotentCreate } from "../../shared/idempotency.js";
+// Same read the PO consumer already does (po/consumer.ts reserveIndentBudget); used here only to
+// answer an impossible PO synchronously. The consumer keeps the atomic reservation.
+import * as indentRepo from "../indent/repo.js";
+import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
 
 // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
 const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
@@ -58,6 +64,39 @@ async function assertPoBudget(ctx: { tenantId: string; correlationId?: string },
     );
   }
   return balance.kind === "unavailable" ? balance.reason : null;
+}
+
+const REF_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * UAT T-EDGE TE-04 (P08): a PO citing an indent that does not exist, is not approved, or has
+ * no headroom left was 202-accepted and then dropped by the worker with only a
+ * po.budget_exceeded INDENT_NOT_FOUND event the maker never saw. The same rules are
+ * checked here, from procurement data, so the maker gets an immediate 422 on the
+ * indentRef field. The guarded reservation in the consumer stays the race-safe authority.
+ */
+async function assertIndentUsable(tenantId: string, indentRef: string, items: Array<{ quantity: number; unitPriceMinor: number }>): Promise<void> {
+  const indentId = indentRef.replace(/^.*:/, "");
+  const indent = REF_UUID_RE.test(indentId) ? await indentRepo.findIndentById(indentId) : null;
+  if (!indent || indent.tenantId !== tenantId) {
+    throw new HttpError(422, "INDENT_NOT_FOUND", "the indent cited on this purchase order was not found", [
+      { field: "indentRef", message: "Choose an existing, approved indent.", code: "INDENT_NOT_FOUND" },
+    ]);
+  }
+  try {
+    assertIndentApproved(indent.status ?? "draft");
+  } catch (err) {
+    if (err instanceof IndentDomainError) {
+      throw new HttpError(422, err.code, err.message, [{ field: "indentRef", message: "The indent must be approved before a purchase order is raised.", code: err.code }]);
+    }
+    throw err;
+  }
+  const remaining = BigInt(indent.totalMinor) - BigInt(indent.committedMinor ?? 0n);
+  if (poTotalMinor(items) > remaining) {
+    throw new HttpError(422, "INDENT_BUDGET_EXCEEDED", `the purchase order total exceeds the ${rupeesFromMinor(remaining)} still uncommitted on indent ${indent.indentNo}`, [
+      { field: "items", message: "The order is more than the indent still allows.", code: "INDENT_BUDGET_EXCEEDED" },
+    ]);
+  }
 }
 
 /** UAT Phase 2 C2: synchronous 422 for a high-value PO with no sanction reference. */
@@ -141,15 +180,21 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
-    assertPoSanction(body);
-    await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
-    await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-    const budgetSkipped = await assertPoBudget(ctx, body);
-    const accepted = await commands.createPo(ctx, body);
-    // Review #2446 (4): the synchronous sanction-balance check failed open
-    // (finance unreachable) — the consumer will re-check. Log only the PO id,
-    // correlation id and the transport reason (no PII, no amounts).
-    if (budgetSkipped) req.log.warn({ poId: accepted.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+    // UAT T-EDGE TE-09: one PO per X-Idempotency-Key. The checks run inside, so a replay
+    // is answered with the first 202 instead of being refused by the commitment it made.
+    const accepted = await idempotentCreate(ctx, "procurement.po.create", body, async () => {
+      assertPoSanction(body);
+      await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
+      await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+      const budgetSkipped = await assertPoBudget(ctx, body);
+      await assertIndentUsable(ctx.tenantId, body.indentRef, body.items);
+      const created = await commands.createPo(ctx, body);
+      // Review #2446 (4): the synchronous sanction-balance check failed open
+      // (finance unreachable) — the consumer will re-check. Log only the PO id,
+      // correlation id and the transport reason (no PII, no amounts).
+      if (budgetSkipped) req.log.warn({ poId: created.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+      return created;
+    });
     return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 
@@ -197,7 +242,16 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
     // UAT W6-A: tenant-scoped existence read; unknown PO answers 404, not 202.
-    if (!(await poRepo.findPoById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    const po = await poRepo.findPoById(id, ctx.tenantId);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    // UAT bundle 22 (W5): a decided (approved / rejected / cancelled ...) or already pending PO cannot be submitted
+    // again; refuse now (409) instead of a 202 the consumer then drops. Same rule the consumer applies.
+    try {
+      assertTransitionAllowed(po.status ?? "draft", "pending");
+    } catch (err) {
+      if (err instanceof PoDomainError) throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${po.status ?? "draft"} purchase order cannot be submitted for approval`);
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitPoForApproval(ctx, id));
   });
 
@@ -235,15 +289,21 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
-    assertPoSanction(body);
-    await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
-    await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-    const budgetSkipped = await assertPoBudget(ctx, body);
-    const accepted = await commands.createPo(ctx, body);
-    // Review #2446 (4): the synchronous sanction-balance check failed open
-    // (finance unreachable) — the consumer will re-check. Log only the PO id,
-    // correlation id and the transport reason (no PII, no amounts).
-    if (budgetSkipped) req.log.warn({ poId: accepted.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+    // UAT T-EDGE TE-09: one PO per X-Idempotency-Key. The checks run inside, so a replay
+    // is answered with the first 202 instead of being refused by the commitment it made.
+    const accepted = await idempotentCreate(ctx, "procurement.po.create", body, async () => {
+      assertPoSanction(body);
+      await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
+      await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+      const budgetSkipped = await assertPoBudget(ctx, body);
+      await assertIndentUsable(ctx.tenantId, body.indentRef, body.items);
+      const created = await commands.createPo(ctx, body);
+      // Review #2446 (4): the synchronous sanction-balance check failed open
+      // (finance unreachable) — the consumer will re-check. Log only the PO id,
+      // correlation id and the transport reason (no PII, no amounts).
+      if (budgetSkipped) req.log.warn({ poId: created.id, correlationId: ctx.correlationId, reason: budgetSkipped }, "po budget pre-check skipped: finance-service unavailable");
+      return created;
+    });
     return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 
@@ -264,11 +324,11 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {
-    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false, ...(err.fieldErrors?.length ? { fieldErrors: err.fieldErrors } : {}) });
     return;
   }
   req.log.error({ err }, "unhandled error");

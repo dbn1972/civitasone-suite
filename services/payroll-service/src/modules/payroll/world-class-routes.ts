@@ -145,8 +145,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   app.get("/v1/payroll/salary-revisions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    const rows = await repo.listSalaryRevisions(ctx.tenantId, q.employeeId ?? null);
+    const q = z.object({ employeeId: z.string().uuid().optional(), status: z.enum(["pending", "approved", "rejected"]).optional() }).parse(req.query);
+    const rows = await repo.listSalaryRevisions(ctx.tenantId, q.employeeId ?? null, q.status ?? null);
     // GAP-PAYROLL-SALARY-REVISIONS-05: pay history is DPDP-sensitive financial
     // data, so every read is recorded (who looked, at whose history).
     await recordAudit(ctx, {

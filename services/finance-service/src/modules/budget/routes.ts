@@ -200,7 +200,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
 
   // H1 — submit a sanction to eOffice for administrative approval. The eFile is
   // raised via the eOffice integration; the decision returns on
-  // finance.sanction.file_decided and moves the sanction to approved/cancelled.
+  // finance.sanction.file_decided and moves the sanction to approved/rejected.
   app.post("/v1/finance/sanctions/:id/submit-approval", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

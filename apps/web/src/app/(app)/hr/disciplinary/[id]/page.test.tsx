@@ -67,6 +67,7 @@ function mockLoaders(opts?: {
   caseResult?: unknown;
   employeeResult?: unknown;
   eventsResult?: unknown;
+  officers?: Array<[string, { name: string; designation: string | null }]>;
 }) {
   fetchJsonMock.mockImplementation((url: string) => {
     if (url.includes("/disciplinary-cases/") && url.includes("/events")) {
@@ -74,6 +75,9 @@ function mockLoaders(opts?: {
     }
     if (url.includes("/disciplinary-cases/")) {
       return Promise.resolve(opts?.caseResult ?? { data: BASE_CASE, source: "api" });
+    }
+    if (opts?.officers && url.includes("/employees/officers")) {
+      return Promise.resolve({ data: opts.officers, source: "api" });
     }
     if (url.includes("/employees/")) {
       return Promise.resolve(
@@ -124,8 +128,9 @@ describe("DisciplinaryCaseDetailPage", () => {
     mockLoaders();
     const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
-    expect(screen.getByText("A. Kumar (E-100)")).toBeInTheDocument();
-    expect(screen.getByText("R. Menon")).toBeInTheDocument();
+    // UX-R5: shown in the record header parties and in the case details list.
+    expect(screen.getAllByText("A. Kumar (E-100)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("R. Menon").length).toBeGreaterThan(0);
   });
 
   it("translates the proceeding type instead of printing the raw enum (GAP-HR-DISCIPLINARY-DETAIL-04)", async () => {
@@ -160,7 +165,7 @@ describe("DisciplinaryCaseDetailPage", () => {
     const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByText("Status History")).toBeInTheDocument();
-    expect(screen.getByText("Issue Charge Memo")).toBeInTheDocument();
+    expect(screen.getByText("Issue charge memo")).toBeInTheDocument();
   });
 
   it("shows the confidentiality notice (GAP-HR-DISCIPLINARY-DETAIL-01)", async () => {
@@ -225,5 +230,66 @@ describe("DisciplinaryCaseDetailPage", () => {
     const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "gone" }), searchParams: Promise.resolve({ from: "vigilance" }) });
     render(ui);
     expect(screen.getByRole("link", { name: "Back to Vigilance" })).toHaveAttribute("href", "/hr/vigilance");
+  });
+});
+
+describe("DisciplinaryCaseDetailPage record trust (UX-R5)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    mockRoles = ["hr_admin"];
+    mockUserId = "u1";
+  });
+
+  const ACTOR = "a1a1a1a1-0000-4000-8000-000000000001";
+  const CHECKER = "b2b2b2b2-0000-4000-8000-000000000002";
+
+  it("names each status-history actor as Name, Designation, never the actor id", async () => {
+    mockLoaders({
+      eventsResult: {
+        data: [{ id: "ev1", tenantId: "t1", caseId: "case-1", fromStatus: "opened", toStatus: "charge_memo_issued", action: "issue_charge_memo", notes: "Memo served in person", occurredAt: "2026-01-05T00:00:00.000Z", actorId: ACTOR }],
+        source: "api",
+      },
+      officers: [[ACTOR, { name: "Asha Rao", designation: "Vigilance Officer" }]],
+    });
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) }));
+    expect(screen.getByText("Asha Rao, Vigilance Officer")).toBeInTheDocument();
+    expect(screen.getByText("Memo served in person")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(ACTOR);
+  });
+
+  it("an unresolved actor reads Name not available (ID ending ...), never Unknown officer", async () => {
+    mockLoaders({
+      eventsResult: {
+        data: [{ id: "ev1", tenantId: "t1", caseId: "case-1", fromStatus: null, toStatus: "opened", action: "open", notes: null, occurredAt: "2026-01-05T00:00:00.000Z", actorId: ACTOR }],
+        source: "api",
+      },
+    });
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) }));
+    expect(screen.getByText("Name not available (ID ending 0001)")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Unknown officer/);
+  });
+
+  it("a dropped case offers no Raise for approval and shows its outcome with the officer name", async () => {
+    mockLoaders({
+      caseResult: { data: { ...BASE_CASE, status: "dropped", updatedBy: CHECKER, updatedAt: "2026-10-30T06:00:00.000Z" }, source: "api" },
+      officers: [[CHECKER, { name: "N. Gupta", designation: "Disciplinary Authority" }]],
+    });
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) }));
+    expect(screen.queryByRole("button", { name: "Raise for approval" })).not.toBeInTheDocument();
+    expect(screen.getByText("Dropped by N. Gupta, Disciplinary Authority on 30 Oct 2026.")).toBeInTheDocument();
+    expect(await screen.findByTestId("eoffice-outcome")).toHaveTextContent("Dropped by N. Gupta");
+  });
+
+  it("a case pending approval is not raised a second time", async () => {
+    mockLoaders({ caseResult: { data: { ...BASE_CASE, status: "pending_approval" }, source: "api" } });
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) }));
+    expect(await screen.findByTestId("eoffice-outcome")).toHaveTextContent("already awaiting an eOffice decision");
+    expect(screen.queryByRole("button", { name: "Raise for approval" })).not.toBeInTheDocument();
+  });
+
+  it("a major case with a recorded finding may be raised for approval", async () => {
+    mockLoaders({ caseResult: { data: { ...BASE_CASE, status: "finding_recorded" }, source: "api" } });
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) }));
+    expect(await screen.findByRole("button", { name: "Raise for approval" })).toBeInTheDocument();
   });
 });

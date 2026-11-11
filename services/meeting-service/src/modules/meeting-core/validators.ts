@@ -17,6 +17,7 @@
  */
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas";
+import { istToday, addYears, checkDateWindow, fieldIssue, yearsFromEnv } from "@civitasone/schemas/validators";
 
 // ─── Domain vocabularies (mirror the migration CHECK-able value sets / domain.ts) ────
 
@@ -77,6 +78,20 @@ const uuid = z.string().uuid();
 const version = z.number().int().nonnegative();
 /** ISO-8601 instant with timezone (matches Drizzle `timestamptz` columns). */
 const isoDateTime = z.string().datetime({ offset: true });
+/**
+ * UAT T-EDGE TE-07 (M04): a new meeting scheduled in 2001 was accepted. The IST calendar day of
+ * `scheduledAt` must be at most MEETING_SCHEDULE_MAX_PAST_YEARS (default 1, minutes of a recent
+ * meeting) back and MEETING_SCHEDULE_MAX_FUTURE_YEARS (default 5) ahead.
+ */
+const scheduledAtNew = isoDateTime.superRefine((v, ctx) => {
+  const day = istToday(new Date(v));
+  const today = istToday();
+  const fail = checkDateWindow(day, {
+    min: addYears(today, -yearsFromEnv("MEETING_SCHEDULE_MAX_PAST_YEARS", 1)),
+    max: addYears(today, yearsFromEnv("MEETING_SCHEDULE_MAX_FUTURE_YEARS", 5)),
+  }, "scheduled date");
+  if (fail) fieldIssue(ctx, fail.code, fail.message);
+});
 /** ISO calendar date `YYYY-MM-DD` (matches Drizzle `date` columns). */
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected date in YYYY-MM-DD format");
 /** Wall-clock time of day `HH:MM` (24h), matches `meeting_series.time_of_day` varchar(5). */
@@ -102,7 +117,7 @@ export const createMeetingSchema = z.object({
   title: z.string().trim().min(1).max(500),
   type: meetingType,
   description: z.string().trim().max(20_000).optional(),
-  scheduledAt: isoDateTime,
+  scheduledAt: scheduledAtNew,
   durationMinutes,
   committeeId: uuid.optional(),
   chairpersonId: uuid,

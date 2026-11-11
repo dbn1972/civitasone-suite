@@ -16,7 +16,7 @@ const AUDIT_TOPIC = "audit.event.record";
  * emits `finance.sanction.file_decided` once the SO→US→DS chain concludes.
  * This consumer applies that decision to the sanction:
  *   approved → status "approved" (+ finance.sanction.approved event)
- *   rejected → status "cancelled"
+ *   rejected → status "rejected"
  *
  * Without this, the file was approved in eOffice but the sanction never moved —
  * the integration loop was open.
@@ -39,7 +39,12 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
       if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
 
       if (cb.decision === "approved") {
-        await repo.updateSanction(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy, efileSubmittedAt: null });
+        // UAT ux-docs: the eOffice decision maker and time are the sanction approval of record.
+        const decidedAt = new Date(cb.decidedAt);
+        await repo.updateSanction(tx, cb.refId, {
+          status: "approved", updatedBy: cb.decidedBy, efileSubmittedAt: null,
+          approvedBy: cb.decidedBy, approvedAt: Number.isNaN(decidedAt.getTime()) ? new Date() : decidedAt,
+        });
         await enqueue(tx, {
           topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
           tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
@@ -47,7 +52,8 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
       } else if (cb.decision === "rejected") {
-        await repo.updateSanction(tx, cb.refId, { status: "cancelled", updatedBy: cb.decidedBy, efileSubmittedAt: null });
+        // UAT bundle 22 (W2): the rejected state (was "cancelled"), with the eOffice reason code when one came back.
+        await repo.updateSanction(tx, cb.refId, { status: "rejected", updatedBy: cb.decidedBy, efileSubmittedAt: null, rejectionReason: cb.reasonCode ?? "Rejected in the eOffice file" });
         await audit(tx, msg, "eoffice_rejected", cb.refId, { fileNo: cb.fileNo });
       } else {
         // "returned" — leave as draft for revision; the file is no longer in

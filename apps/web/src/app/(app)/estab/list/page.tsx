@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles, ESTAB_FILE_CREATE_ROLES } from "@/lib/auth/roleGuard";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
 import { Alert, PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
@@ -91,7 +92,7 @@ export default async function EstabFilesListPage() {
             {/* GAP-ESTAB-LIST-04: "Guided File" is secondary; "Create File" is primary.
                 Use next/link (no full-page reload). */}
             <Link className="btn ghost" href="/estab/workspace">Guided File</Link>
-            <Link className="btn primary" href="/estab/files/new">+ Create File</Link>
+            {getSessionRoles().some((r) => ESTAB_FILE_CREATE_ROLES.includes(r)) ? <Link className="btn primary" href="/estab/files/new">+ Create File</Link> : null}
           </>
         }
       />

@@ -150,7 +150,7 @@ describe("middleware map assets", () => {
 // future route that merely shares leading letters (/contacts, /authz, /verifyx)
 // would silently skip the session check.
 describe("middleware public allow-list segment boundary (V4-A-04)", () => {
-  it.each(["/contacts", "/api/contacts", "/authz", "/api/authz", "/verifyx", "/careers-admin", "/api/careersX", "/sandboxes", "/api/metricsx"])(
+  it.each(["/contacts", "/authz", "/verifyx", "/careers-admin", "/sandboxes"])(
     "keeps %s private (redirects an anonymous visitor)",
     async (path) => {
       const res = (await middleware(anonReq(path)));
@@ -158,6 +158,37 @@ describe("middleware public allow-list segment boundary (V4-A-04)", () => {
       expect(res.headers.get("location")).toContain("/auth/login");
     },
   );
+
+  // UAT T-EDGE TE-10 / TE-14: an API path is just as private, but answers a JSON 401
+  // SESSION_EXPIRED instead of a redirect fetch() would follow into the sign-in page.
+  it.each(["/api/contacts", "/api/authz", "/api/careersX", "/api/metricsx"])(
+    "keeps %s private (401 SESSION_EXPIRED for an anonymous API call)",
+    async (path) => {
+      const res = (await middleware(anonReq(path)));
+      expect(res.status).toBe(401);
+      expect(res.headers.get("location")).toBeNull();
+      expect((await res.json()).code).toBe("SESSION_EXPIRED");
+    },
+  );
+
+  // PR #2465 review SF5: a plain link / address-bar navigation to an /api/ path (e.g. the Form 16
+  // bulk download) cannot render JSON, so it keeps the redirect to the sign-in page.
+  it("redirects a browser NAVIGATION to an /api/ path (Sec-Fetch-Mode: navigate)", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/payroll/form16/bulk"), { headers: { "sec-fetch-mode": "navigate" } });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+  it("redirects an /api/ navigation identified only by Accept: text/html", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/x"), { headers: { accept: "text/html,application/xhtml+xml" } });
+    expect((await middleware(req)).status).toBe(307);
+  });
+  it("still answers fetch()/XHR to an /api/ path with the JSON 401", async () => {
+    const req = new NextRequest(new URL("https://demo.test/api/proxy/x"), { headers: { "sec-fetch-mode": "cors", accept: "*/*" } });
+    const res = await middleware(req);
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe("SESSION_EXPIRED");
+  });
 
   it.each([
     "/auth",

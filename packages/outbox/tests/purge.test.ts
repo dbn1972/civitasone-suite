@@ -179,6 +179,37 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     clearInterval(timer);
   });
 
+  it("B23: a service without _inbox.command_results (42P01) still purges outbox + inbox and does not fail the cycle", async () => {
+    const missing = Object.assign(new Error('relation "_inbox.command_results" does not exist'), { code: "42P01" });
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ count: 4 }) // outbox
+      .mockResolvedValueOnce({ count: 2 }) // inbox.processed
+      .mockRejectedValueOnce(missing); // command_results table not provisioned
+    const db = { execute } as unknown as DrizzleTx;
+    await expect(purgeOutbox(db, 7, 1000)).resolves.toBe(6);
+    const wrapped = Object.assign(new Error("Failed query"), { cause: missing });
+    const db2 = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 0 })
+        .mockRejectedValueOnce(wrapped),
+    } as unknown as DrizzleTx;
+    await expect(purgeOutbox(db2, 7, 1000)).resolves.toBe(0);
+  });
+
+  it("B23: a non-42P01 failure on the command_results delete is still thrown", async () => {
+    const db = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 0 })
+        .mockRejectedValueOnce(Object.assign(new Error("deadlock"), { code: "40P01" })),
+    } as unknown as DrizzleTx;
+    await expect(purgeOutbox(db, 7, 1000)).rejects.toThrow("deadlock");
+  });
+
   it("defaults to a 60-minute interval and 1000-row batches when options are omitted", async () => {
     const db = fakeDb([{ count: 0 }, { count: 0 }, { count: 0 }]);
     const executeSpy = db.execute as ReturnType<typeof vi.fn>;

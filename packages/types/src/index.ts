@@ -812,7 +812,9 @@ export type SanctionSummary = {
 export type SanctionDetail = SanctionSummary & {
   lineItems: Array<{ description: string; amount: string; head: string }>;
   remarks?: string;
-  approvalTrail: Array<{ actor: string; action: string; timestamp: string }>;
+  approvalTrail: Array<{ actor: string; actorId?: string; action: string; timestamp: string; remarks?: string }>;
+  /** UX-R5: the maker id behind sanctionedBy. */
+  sanctionedById?: string;
   /** An eOffice file is deciding this sanction (direct approval is refused meanwhile). */
   efileInFlight?: boolean;
   efileFileNo?: string;
@@ -842,6 +844,8 @@ export type BillDetail = BillSummary & {
   grnRef?: string;
   invoiceNo?: string;
   paymentRef?: string;
+  /** UX-R5: the payee id behind `vendor`. */
+  vendorId?: string;
   /** User id of the officer who lodged the bill (maker-checker: they cannot pass it or release its payment). */
   createdBy?: string;
   /** User id of the officer who passed it, while it is passed (the passer cannot release its payment). */
@@ -1200,10 +1204,14 @@ export type IndentDetail = IndentSummary & {
   }>;
   approvalTrail: Array<{
     actor: string;
+    /** UX-R5: the actor id behind `actor`. */
+    actorId?: string;
     action: string;
     timestamp: string;
     remarks?: string;
   }>;
+  /** UX-R5: the maker (created_by) id behind requestedBy. */
+  requestedById?: string;
   /**
    * GAP-PROCUREMENT-INDENTS-DETAIL-05: false when the workflow engine could not
    * be asked, so an empty trail must not be read as "never decided". Absent on
@@ -1438,7 +1446,7 @@ export type PurchaseOrderListItem = {
   orderDate: string;
   deliveryDate?: string;
   grnStatus?: string;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  status: "draft" | "pending" | "approved" | "rejected" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
 };
 
 export type PODetail = {
@@ -1446,10 +1454,18 @@ export type PODetail = {
   poNo: string;
   vendor: string;
   vendorId?: string;
+  /** UX-R5: the maker (created_by) id. */
+  createdById?: string;
+  /** UX-R5: the indent this PO was raised from (a uuid or an opaque procurement_indent:uuid ref). */
+  indentRef?: string;
+  /** UX-R5: the budget sanction reference backing the PO, when any. */
+  sanctionRef?: string;
   orderDate: string;
   deliveryDate?: string;
   totalAmount: number;
-  status: "draft" | "pending" | "approved" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  status: "draft" | "pending" | "approved" | "rejected" | "dispatched" | "partial_grn" | "fully_received" | "cancelled" | "gem_placed" | "closed";
+  /** UAT bundle 22 (W2): the checker's reason, present only on a rejected PO. */
+  rejectionReason?: string;
   lineItems: Array<{
     itemCode: string;
     itemName: string;
@@ -3355,3 +3371,5 @@ export type FinanceVendorSummary = {
  * the web form and payroll-service (route + consumer) so they cannot drift.
  */
 export const REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES: readonly string[] = ["medical", "lta", "travel"];
+
+export * from "./gatewayPublic.js";

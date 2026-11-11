@@ -25,6 +25,7 @@
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
     "@civitasone/rate-limit": "workspace:*",
+    "@civitasone/render": "workspace:*",
     "@civitasone/scan-link": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/types": "workspace:*",

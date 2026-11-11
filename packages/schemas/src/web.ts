@@ -706,9 +706,15 @@ export const SanctionDetailSchema = SanctionSummarySchema.extend({
   remarks: z.string().optional(),
   approvalTrail: z.array(z.object({
     actor: z.string(),
+    // UX-R5: the actor id behind `actor` (optional for older servers).
+    actorId: z.string().optional(),
     action: z.string(),
     timestamp: z.string(),
+    // UAT bundle 22 (W2): the checker's reason on a rejected step.
+    remarks: z.string().optional(),
   })).default([]),
+  // UX-R5: the maker id behind `sanctionedBy` (optional for older servers).
+  sanctionedById: z.string().optional(),
   // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: an eOffice file is deciding this sanction
   // (set on submit-approval, cleared by the decision). Optional for older servers.
   efileInFlight: z.boolean().optional(),
@@ -758,6 +764,8 @@ export const BillDetailSchema = BillSummarySchema.extend({
   grnRef: z.string().optional(),
   invoiceNo: z.string().optional(),
   paymentRef: z.string().optional(),
+  // UX-R5: the payee id behind `vendor` (optional for older servers).
+  vendorId: z.string().optional(),
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: who lodged the bill and (while it is passed) who passed it, so the page can
   // withhold the maker-checker actions the server would refuse. User ids, never names; the server stays the authority.
   createdBy: z.string().optional(),
@@ -972,6 +980,8 @@ export const LeaveRequestDetailSchema = z.object({
   toDate: z.string(),
   days: z.number(),
   reason: z.string().optional(),
+  // W8: the approver's reason, only on rejected rows; absent/null for pre-deploy rejections.
+  rejectionReason: z.string().nullish(),
   approver: z.string().optional(),
   // routing_failed: see hrms-service leave/domain.ts's transition map and
   // leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber — a request

@@ -55,6 +55,29 @@ vi.mock("next/headers", () => ({
   headers: () => new Map(),
 }));
 
+// next-intl `useTranslations` throws outside a <NextIntlClientProvider>. The shared record components
+// (RecordHeader, ApprovalTrail, RequiredLegend, ds/Field) read their wording through it so every page is bilingual
+// by default; in unit tests that render them (or a server page via `render(await Page())`) without a provider, fall
+// back to the English catalogue -- the same locale the provider-wrapped tests use. With a provider, the real hook
+// is used unchanged.
+vi.mock("next-intl", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next-intl")>();
+  const enMessages = (await import("./src/messages/en.json")).default;
+  return {
+    ...actual,
+    useTranslations: ((namespace?: string) => {
+      try {
+        return (actual.useTranslations as (ns?: string) => unknown)(namespace);
+      } catch (err) {
+        // Scoped on purpose: only the shared record components (namespace recordUi) fall back. Any other
+        // component rendered without a provider still throws, so a missing NextIntlClientProvider is not masked.
+        if (namespace !== "recordUi") throw err;
+        return actual.createTranslator({ locale: "en", messages: enMessages, namespace } as Parameters<typeof actual.createTranslator>[0]);
+      }
+    }) as typeof actual.useTranslations,
+  };
+});
+
 // Mock next-intl/server (UX-017): Vitest/jsdom never sets the "react-server"
 // resolve condition next-intl gates its real server implementation behind,
 // so an unmocked getTranslations() throws "`getTranslations` is not

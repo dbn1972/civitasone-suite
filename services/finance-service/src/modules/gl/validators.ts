@@ -1,11 +1,22 @@
 import { z } from "zod";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
+import { zIsoDate, zTrimmedCode, DATE_WINDOWS, istToday, yearsFromEnv, boundedMinorBigint } from "@civitasone/schemas/validators";
+
+/**
+ * UAT T-EDGE TE-01 / TE-07: journal posting-date window -- from the start of the financial year
+ * FINANCE_POSTING_PAST_FYS (default 1) before the current one to the end of the one
+ * FINANCE_POSTING_FUTURE_FYS (default 1) after it. 1990 / 2099 drafts used to be accepted.
+ */
+export const postingDateWindow = () => DATE_WINDOWS.transaction(
+  istToday(), yearsFromEnv("FINANCE_POSTING_PAST_FYS", 1), yearsFromEnv("FINANCE_POSTING_FUTURE_FYS", 1),
+);
 
 // FIX: was a hand-rolled union missing a z.number() branch, so a plain
 // JSON-number debitMinor/creditMinor (the common case) 400'd. zMoneyMinorBase
 // is the canonical @civitasone/schemas/money decoder — accepts
 // string | safe-integer number | bigint.
-const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().nonnegative());
+// UAT T-EDGE TE-07 (J11): bounded to the sane maximum (1e20 paise used to become a draft).
+const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().nonnegative().superRefine(boundedMinorBigint));
 
 // A NUL (U+0000) byte is not storable in a Postgres text column: it reaches the
 // duplicate-voucher / control-account lookups in gl/routes.ts as a driver error and
@@ -23,7 +34,8 @@ const narrationField = z.preprocess(
 );
 
 const journalLine = z.object({
-  accountCode: z.string().min(1).refine(noNul, NO_NUL_MESSAGE),
+  // UAT T-EDGE TE-06 (J17): trimmed before it is stored or looked up.
+  accountCode: zTrimmedCode(64, "account code").refine(noNul, NO_NUL_MESSAGE),
   debitMinor:  zMoneyMinor,
   creditMinor: zMoneyMinor,
   narration:   narrationField,
@@ -37,13 +49,17 @@ const journalLine = z.object({
   // caller could post one. Enforced here, at the schema boundary, for every
   // caller.
   { message: "a journal line cannot have both debit and credit positive simultaneously", path: ["creditMinor"] },
+).refine(
+  // B22 D6: a line must move money on one side; 0/0 lines were stored on posted vouchers (CONTRA/2026-27/000010-13).
+  (l) => l.debitMinor > 0n || l.creditMinor > 0n,
+  { message: "a journal line must have a debit or a credit amount greater than zero", path: ["debitMinor"] },
 );
 
 export const postJournalBody = z.object({
   // Pass "AUTO" (or omit) to allocate a gapless, FY-sequential voucher number.
   voucherNo:   z.string().min(1).max(64).refine(noNul, NO_NUL_MESSAGE).default("AUTO"),
   type:        z.enum(["journal", "payment", "receipt", "contra"]),
-  postingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "postingDate must be YYYY-MM-DD"),
+  postingDate: zIsoDate({ window: postingDateWindow, label: "posting date" }),
   lines:       z.array(journalLine).min(2),
   narration:   narrationField,
   // DOM-007: explicit override of the per-head budget check in gl/consumer.ts.

@@ -1,3 +1,4 @@
+import { isReservedNodeKey } from "../tasks/rework.js";
 import { eq, and, asc, desc, ne, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { definitions, definitionNodes, definitionEdges, type DefinitionEdgeRow } from "./schema.js";
@@ -195,6 +196,9 @@ export async function insertGraphTx(
   nodes: NodeSpec[],
   edges: EdgeSpec[],
 ): Promise<void> {
+  // W4: hard backstop for every definition path - `rework:` is reserved for the engine's maker task.
+  const reserved = nodes.find((n) => isReservedNodeKey(n.nodeKey));
+  if (reserved) throw new Error(`nodeKey '${reserved.nodeKey}' uses the reserved prefix`);
   if (nodes.length) {
     await tx.insert(definitionNodes).values(
       nodes.map((n, i) => ({

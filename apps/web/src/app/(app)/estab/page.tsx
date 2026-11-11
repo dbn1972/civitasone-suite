@@ -1,5 +1,5 @@
 import { ModuleHub } from "../../_components/ModuleHub";
-import { ESTAB_ADMIN_ROLES, ESTAB_OPERATOR_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { ESTAB_ADMIN_ROLES, ESTAB_FILE_CREATE_ROLES, ESTAB_OPERATOR_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * Establishment hub.
@@ -32,7 +32,7 @@ export default function EstabHubPage() {
             { href: "/estab/inbox", label: "My Desk", note: "Files currently with you, by SLA" },
             { href: "/estab/workspace", label: "Guided File", note: "Open and route a file step by step" },
             { href: "/estab/list", label: "File Register", note: "Digital file tracking (eOffice)" },
-            { href: "/estab/files/new", label: "New File", note: "Open a new digital file" },
+            { href: "/estab/files/new", label: "New File", note: "Open a new digital file", roles: ESTAB_FILE_CREATE_ROLES },
             { href: "/estab/dak", label: "DAK Registry", note: "Inward dak receipt & file opening" },
             { href: "/estab/dfa", label: "Draft for Approval", note: "Draft letters pending approval & sign-off" },
             { href: "/estab/dispatch", label: "Dispatch", note: "Outward correspondence register" },

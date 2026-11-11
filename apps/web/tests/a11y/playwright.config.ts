@@ -45,8 +45,9 @@ export default defineConfig({
     // left the bottom PLATFORM group clipped by `.sb-nav`'s own
     // `overflow: auto` and reported as undecided color-contrast on any route
     // not already in the baseline (e.g. /approvals, /finance/dashboard).
-    // 2800 clears that with headroom for further nav growth.
-    viewport: { width: 1280, height: 2800 },
+    // 2800 cleared that with headroom. UAT-P3 bundle 20 (S-02 self-service + HR/revenue/billing/meeting
+    // sub-entries, approvals inbox) takes the super-admin nav to ~4015px (81 items), so 4400 now.
+    viewport: { width: 1280, height: 4400 },
     ignoreHTTPSErrors: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

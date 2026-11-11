@@ -22,12 +22,24 @@ vi.mock("../src/modules/payments/repo.js", () => ({
 }));
 vi.mock("../src/modules/masters/repo.js", () => ({
   getVendorById: (...a: unknown[]) => getVendorById(...a),
+  // UAT b24: the bill route pre-checks the DDO master; this suite is DB-free, so the DDO "exists".
+  ddoExists: async () => true,
   // GAP2-FINANCE-BILLS-VENDORNAME-01: listBillSummaries now resolves vendor
   // names from the masters repo (batched); provide the stub so these route
   // tests stay DB-free. Returns the names set by each test (default empty).
   getVendorNamesByIds: (...a: unknown[]) => getVendorNamesByIds(...a),
 }));
 vi.mock("../src/modules/payments/commands.js", () => ({ createBill: (...a: unknown[]) => createBill(...a) }));
+// UAT T-EDGE b21: bill create now checks the head and its head-of-account code synchronously;
+// these vendor-check tests use a head that exists with a valid HoA.
+vi.mock("../src/modules/budget/repo.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/modules/budget/repo.js")>()),
+  findHeadByIdAndTenant: vi.fn(async (id: string, tenantId: string) => ({ id, tenantId, hoaCode: "202001010010000002" })),
+}));
+vi.mock("../src/modules/hoa/domain.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/modules/hoa/domain.js")>()),
+  assertValidHoAWithMaster: vi.fn(async () => undefined),
+}));
 
 import { paymentsRoutes } from "../src/modules/payments/routes.js";
 import { financeErrorHandler } from "../src/shared/context.js";

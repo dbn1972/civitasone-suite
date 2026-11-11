@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { zMoneyMinorStringNonNeg } from '@civitasone/schemas';
+import { zIsoDate, zTrimmedCode, istToday, addYears, yearsFromEnv } from '@civitasone/schemas/validators';
+
+/** UAT T-EDGE TE-01 (R01/R02): served-on is a real date, at most NOTICE_SERVED_MAX_PAST_YEARS (default 10) back. The future is refused at the route (NOTICE_DATE_IN_FUTURE). */
+export const noticeServedOnWindow = () => ({ min: addYears(istToday(), -yearsFromEnv('NOTICE_SERVED_MAX_PAST_YEARS', 10)) });
 
 // BUG FIX: was a hand-rolled union whose z.number() branch did
 // `z.number().int().min(0)` with no Number.isSafeInteger guard -- an
@@ -95,8 +99,9 @@ export const recoveryDecideBody = z.object({
 export const serveDemandNoticeBody = z.object({
   assesseeId: z.string().uuid(),
   demandId: z.string().uuid().optional(),
-  noticeNo: z.string().min(1).max(64),
-  servedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+  // UAT T-EDGE TE-06 (R07): trimmed and never blank (a notice number of 4 spaces was stored).
+  noticeNo: zTrimmedCode(64, 'notice number'),
+  servedOn: zIsoDate({ window: noticeServedOnWindow, label: 'served-on date' }),
   noticePeriodDays: z.number().int().min(1).max(365).optional(),
 });
 

@@ -134,6 +134,19 @@ export default async function PerquisitePage(
         title={t("title")}
         subtitle={employeeName && form12ba ? t("subtitleFor", { name: employeeName, fy: form12ba.fy }) : t("subtitle")}
         back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
+        actions={
+          canLookup && form12ba ? (
+            // UAT ux-docs: the printable Form No. 12BA (Rule 26A(2)(b)), a real PDF.
+            <a
+              href={`/api/proxy/v1/payroll/statutory/form12ba/pdf?employeeId=${encodeURIComponent(employeeId!)}&fy=${encodeURIComponent(fy!)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary"
+            >
+              {t("downloadForm12baPdf")}
+            </a>
+          ) : undefined
+        }
       />
       {fyInvalid && (
         <p role="alert" className="pill bad" style={{ width: "fit-content", marginBottom: 12 }}>{t("invalidFyMessage")}</p>

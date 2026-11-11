@@ -4,6 +4,8 @@ import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
+import { zodFieldErrors } from "@civitasone/schemas/http";
+import { idempotentCreate } from "../../shared/idempotency.js";
 import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createGrnBody, idParam, acceptGrnBody, rejectGrnBody, amendGrnBody } from "./validators.js";
@@ -40,7 +42,8 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createGrnBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createGrn(ctx, body));
+    // UAT T-EDGE TE-09: one GRN per X-Idempotency-Key (same body replays, other body 422).
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "procurement.grn.create", body, () => commands.createGrn(ctx, body)));
   });
 
   app.get("/v1/procurement/grns/:id", async (req, reply) => {
@@ -94,11 +97,11 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
 function errorHandler(err: unknown, req: any, reply: any): void {
   const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
   if (err instanceof ZodError) {
-    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: zodFieldErrors(err.issues) });
     return;
   }
   if (err instanceof HttpError) {
-    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false, ...(err.fieldErrors?.length ? { fieldErrors: err.fieldErrors } : {}) });
     return;
   }
   req.log.error({ err }, "unhandled error");

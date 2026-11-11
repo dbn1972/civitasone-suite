@@ -14,6 +14,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { scoped } from "./_tenant.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
+import { financeHeads, financeBudgets } from "../src/modules/budget/schema.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { periodPostingRefusal, voucherNeedsAllocation } from "../src/modules/gl/posting-rules.js";
 import { COMMANDS } from "../src/topics.js";
@@ -52,6 +53,20 @@ async function draft(tenant: string, over: Record<string, unknown> = {}) {
 beforeAll(async () => {
   await closePeriod(T, "2026-03", "hard_close");
   await closePeriod(T, "2026-04", "soft_close");
+  // UAT T-EDGE b21 (J16): a journal line must name an account in the chart of accounts, so
+  // the codes these journals use exist for both tenants.
+  for (const tenant of [T, OTHER]) {
+    const heads = await scoped(tenant, (tx) => tx.insert(financeHeads).values([
+      { tenantId: tenant, code: "5100", name: "Expenditure", level: 2, createdBy: MAKER, updatedBy: MAKER },
+      { tenantId: tenant, code: "1100", name: "Bank", level: 2, createdBy: MAKER, updatedBy: MAKER },
+    ]).returning());
+    // UAT T-PERIOD D-03 (bundle 20): a debit to an expenditure head needs a budget provision for the FY it is
+    // dated in, so the expenditure head carries one for both financial years these journals fall in.
+    const exp = heads.find((h) => h.code === "5100")!;
+    await scoped(tenant, (tx) => tx.insert(financeBudgets).values(
+      ["2025-26", "2026-27"].map((fy) => ({ tenantId: tenant, headId: exp.id, fy, beMinor: 100000000n, reMinor: 100000000n, createdBy: MAKER, updatedBy: MAKER })),
+    ));
+  }
 });
 afterAll(async () => {
   await scoped(T, (tx) => tx.execute(sql`DELETE FROM gl.finance_period_close WHERE tenant_id = ${T}::uuid`));
@@ -114,11 +129,14 @@ describe("POST /v1/finance/journals: period is checked before anything is queued
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("a month that is not a month fails closed: 422 PERIOD_UNKNOWN", async () => {
+  // UAT T-EDGE b21 (TE-01): month 13 is not a real calendar date, so it is now refused by the
+  // schema (400 DATE_INVALID on postingDate) -- still before anything is queued. The period rule
+  // itself still answers PERIOD_UNKNOWN for such a period (pure test above).
+  it("a month that is not a month fails closed before anything is queued: 400 DATE_INVALID", async () => {
     const publish = vi.spyOn(queue, "publish");
     const res = await post({ voucherNo: "AUTO", postingDate: "2026-13-10" });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe("PERIOD_UNKNOWN");
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors).toEqual([expect.objectContaining({ field: "postingDate", code: "DATE_INVALID" })]);
     expect(publish).not.toHaveBeenCalled();
   });
 

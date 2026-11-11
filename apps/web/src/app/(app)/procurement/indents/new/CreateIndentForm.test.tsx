@@ -285,3 +285,54 @@ describe("CreateIndentForm — NEW-03 mode-lookup failure is explicit", () => {
     await waitFor(() => expect(screen.getByText(/Direct Purchase/)).toBeInTheDocument());
   });
 });
+
+// UX-R5 form-field standard: label above, required legend, inline validation on blur, DD-MM-YYYY dates.
+describe("CreateIndentForm — form-field standard (UX-R5)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("shows the required legend and puts each label above its own control (no glued label/value)", () => {
+    render(<CreateIndentForm />);
+    expect(screen.getByText(/are required\./)).toBeInTheDocument();
+    const date = screen.getByLabelText("Indent date *");
+    const label = document.querySelector("label[for=indentDate]")!;
+    expect(label.textContent).toBe("Indent date *");
+    expect(label.parentElement).toBe(date.parentElement);
+  });
+
+  it("validates department and purpose on blur with clear messages, and clears them once fixed", () => {
+    render(<CreateIndentForm />);
+    const dept = screen.getByLabelText("Department *");
+    fireEvent.blur(dept);
+    expect(screen.getByText("Choose the department raising this indent.")).toHaveAttribute("role", "alert");
+    expect(dept).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(dept, { target: { value: "IT" } });
+    expect(screen.queryByText("Choose the department raising this indent.")).not.toBeInTheDocument();
+
+    const purpose = screen.getByLabelText("Purpose / justification *");
+    fireEvent.change(purpose, { target: { value: "ab" } });
+    fireEvent.blur(purpose);
+    expect(screen.getByText("Enter a purpose of at least 3 characters.")).toBeInTheDocument();
+  });
+
+  it("takes dates as DD-MM-YYYY, sends ISO, and flags a required-by date before the indent date on blur", async () => {
+    const spy = mockFetch(() => jsonResponse({ id: "x", status: "accepted" }, 202));
+    render(<CreateIndentForm />);
+    await fillOneLineItem();
+    const indentDate = screen.getByLabelText("Indent date *");
+    fireEvent.change(indentDate, { target: { value: "04112026" } });
+    expect(indentDate).toHaveValue("04-11-2026");
+    const requiredBy = screen.getByLabelText("Required by date");
+    fireEvent.change(requiredBy, { target: { value: "01-11-2026" } });
+    fireEvent.blur(requiredBy);
+    expect(screen.getByText("Required by date cannot be before 04-11-2026.")).toBeInTheDocument();
+    fireEvent.change(requiredBy, { target: { value: "30/11/2026" } });
+    expect(requiredBy).toHaveValue("30-11-2026");
+    fireEvent.change(screen.getByLabelText("Department *"), { target: { value: "IT" } });
+    fireEvent.change(screen.getByLabelText("Purpose / justification *"), { target: { value: "Replenish stock" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(postCalls(spy)).toHaveLength(1));
+    const body = JSON.parse((postCalls(spy)[0][1] as RequestInit).body as string);
+    expect(body.indentDate).toBe("2026-11-04");
+    expect(body.requiredBy).toBe("2026-11-30");
+  });
+});

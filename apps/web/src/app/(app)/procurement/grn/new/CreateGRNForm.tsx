@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toHumanError } from "@/lib/messages";
-import { Button } from "@/app/_components/ds";
+import { Button, DateInput, Field, RequiredLegend, Select } from "@/app/_components/ds";
 import { RemoteSearchSelect, type RemoteOption } from "../../_components/RemoteSearchSelect";
 
 type POOption = { id: string; poNo: string; vendor?: string; vendorId?: string };
@@ -269,9 +269,16 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
 
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 860 }} noValidate>
+      {/* UX-R5 form-field standard: label above, "* required" legend, inline validation on blur, DD-MM-YYYY dates. */}
+      <RequiredLegend />
       <div className="fields">
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="grn-po">Purchase order *</label>
+        <Field
+          id="grn-po"
+          className="field"
+          label="Purchase order"
+          required
+          validate={() => (selectedPo ? undefined : "Choose the purchase order these goods were received against.")}
+        >
           <RemoteSearchSelect
             inputId="grn-po"
             value={selectedPo}
@@ -284,23 +291,23 @@ export function CreateGRNForm({ stores = [] }: { stores?: StoreOption[] }) {
               error: t("error"), retry: t("retry"), clear: t("clear"),
             }}
           />
+        </Field>
+        {/* GAP-PROCUREMENT-GRN-NEW-04 — read-only, derived from the PO. Label above its value (was glued: "VendorChoose a purchase order…"). */}
+        <div className="field" style={{ display: "grid", gap: 6 }}>
+          <span id="grn-vendor-label" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Vendor</span>
+          <span aria-labelledby="grn-vendor-label" style={{ minHeight: 44, display: "flex", alignItems: "center", color: vendorName ? "var(--ink)" : "var(--ink2)" }}>
+            {vendorName || (vendorId ? t("vendorFromPo") : t("vendorPending"))}
+          </span>
         </div>
-        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <span className="label">Vendor</span>
-          {/* GAP-PROCUREMENT-GRN-NEW-04 — read-only, derived from the PO. */}
-          <span>{vendorName || (vendorId ? t("vendorFromPo") : t("vendorPending"))}</span>
-        </div>
-        <label className="field" htmlFor="grn-store" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <span className="label">Receiving store</span>
-          <select id="grn-store" value={storeId} onChange={(e) => setStoreId(e.target.value)} style={{ minHeight: 44 }}>
+        <Field id="grn-store" className="field" label="Receiving store" hint="Needed when stock items are accepted.">
+          <Select value={storeId} onChange={(e) => setStoreId(e.target.value)}>
             <option value="">{stores.length > 0 ? "Select store…" : "No inventory stores available"}</option>
             {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label className="field" htmlFor="grn-received-date" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <span className="label">Received date</span>
-          <input id="grn-received-date" type="date" max={todayIST()} value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} style={{ minHeight: 44 }} />
-        </label>
+          </Select>
+        </Field>
+        <Field id="grn-received-date" className="field" label="Received date" required hint="DD-MM-YYYY, today or earlier.">
+          <DateInput value={receivedDate} max={todayIST()} onChange={setReceivedDate} />
+        </Field>
       </div>
 
       <fieldset style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14, margin: "8px 0 0" }}>

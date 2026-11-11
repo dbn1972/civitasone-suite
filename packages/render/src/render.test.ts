@@ -76,6 +76,23 @@ describe("renderCsv", () => {
     expect(lines[2]).toBe('"Beta, Inc",200'); // comma in value = quoted
   });
 
+  it("neutralises spreadsheet formulas in text cells but leaves numbers alone (UAT b23)", () => {
+    const csv = renderCsv(
+      [{ header: "Name", key: "n" }, { header: "Net", key: "v" }],
+      [
+        { n: '=HYPERLINK("http://evil.example","Click")', v: -1500 },
+        { n: "+91 98765 43210", v: "-1,500.00" },
+        { n: "@SUM(A1)", v: 0 },
+        { n: "Lakshmi Narayanan", v: 7 },
+      ],
+    );
+    const lines = csv.split("\n");
+    expect(lines[1]).toBe(`"'=HYPERLINK(""http://evil.example"",""Click"")",-1500`);
+    expect(lines[2]).toBe("'+91 98765 43210,\"-1,500.00\"");
+    expect(lines[3]).toBe("'@SUM(A1),0");
+    expect(lines[4]).toBe("Lakshmi Narayanan,7");
+  });
+
   it("escapes double quotes in values", () => {
     const csv = renderCsv(
       [{ header: "Desc", key: "d" }],

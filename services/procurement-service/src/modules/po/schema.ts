@@ -24,6 +24,8 @@ export const procurementPos = poSchema.table("procurement_pos", {
   // D4 (UAT g4-procurement): populated when the PO is closed (PATCH /pos/:id/close). Migration 0046.
   closedAt:        timestamp("closed_at", { withTimezone: true }),
   closureReason:   text("closure_reason"),
+  // UAT bundle 22 (W2, migration 0050): the checker's reason, set only with status "rejected"; shown to the maker.
+  rejectionReason: text("rejection_reason"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
@@ -92,6 +94,9 @@ export const procurementPoItems = poSchema.table("procurement_po_items", {
   unitPriceMinor: bigint("unit_price_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
   itemType:       varchar("item_type", { length: 16 }).notNull().default("consumable"),
+  // UAT ux-docs (migration 0049): GST rate in basis points (1800 = 18%) and HSN/SAC; optional.
+  gstRateBp:      integer("gst_rate_bp"),
+  hsnSac:         varchar("hsn_sac", { length: 8 }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

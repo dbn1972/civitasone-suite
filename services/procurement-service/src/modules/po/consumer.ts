@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -15,6 +15,7 @@ import * as indentRepo from "../indent/repo.js";
 import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 import { closeWorkflowForRef } from "../../shared/workflow-close.js";
+import { notifyMakerOfRefusal } from "../../shared/refusal-notify.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -28,6 +29,11 @@ const INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? "";
 /** Finance service unreachable / errored — distinct from a budget shortfall. */
 class FinanceUnavailableError extends Error {
   constructor(message: string) { super(message); this.name = "FinanceUnavailableError"; }
+}
+
+/** finance-service has no such sanction for this tenant (404): a permanent answer, not an outage. */
+class SanctionNotFoundError extends Error {
+  constructor(message: string) { super(message); this.name = "SanctionNotFoundError"; }
 }
 
 // PO value above this (Rs 1,000 in paise) must carry a sanctionRef (#14).
@@ -51,7 +57,17 @@ async function checkSanctionAvailable(sanctionRef: string, required: bigint, ten
     // Network error / timeout → retryable finance-unavailable, NOT budget-exceeded.
     throw new FinanceUnavailableError(`finance-service unreachable: ${String(err)}`);
   }
-  if (!res.ok) throw new FinanceUnavailableError(`finance-service sanctions check failed: ${res.status}`);
+  if (!res.ok) {
+    // UAT b24: a 4xx is finance's final answer about THIS request; retrying the same request cannot change it.
+    // 404 = the sanction does not exist for the tenant (the maker is told, like every other rejection); any other
+    // 4xx (bad id, 401/403 service credentials) is permanent too and goes to the DLQ once, not five times.
+    // 408/429 and 5xx stay retryable.
+    if (res.status === 404) throw new SanctionNotFoundError(`sanction ${sanctionId} not found for tenant`);
+    if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+      throw new NonRetryableError(`[procurement/po] FINANCE_REFUSED: finance-service sanctions check answered ${res.status} for sanction ${sanctionId}`);
+    }
+    throw new FinanceUnavailableError(`finance-service sanctions check failed: ${res.status}`);
+  }
   const data = await res.json() as { available: string };
   // Throws DomainError("BUDGET_EXCEEDED") only when funds are genuinely insufficient.
   assertBudgetSufficient(BigInt(data.available), required);
@@ -124,7 +140,7 @@ export function registerPoConsumers(queue: Queue): void {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; rateContractRef?: string; deliveryDate?: string;
       tenderId?: string; gemOrderRef?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string; gstRateBp?: number; hsnSac?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
 
@@ -153,15 +169,17 @@ export function registerPoConsumers(queue: Queue): void {
           // Do NOT misreport this as a budget shortfall and do NOT write a PO.
           throw err;
         }
-        // Genuine budget shortfall (DomainError BUDGET_EXCEEDED) → emit + drop PO.
+        if (err instanceof NonRetryableError) throw err;
+        const notFound = err instanceof SanctionNotFoundError;
+        // Genuine budget shortfall (DomainError BUDGET_EXCEEDED), or an unknown sanction → emit + drop PO.
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
           await enqueue(tx, {
             topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err), code: "BUDGET_EXCEEDED" },
+            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err), code: notFound ? "SANCTION_NOT_FOUND" : "BUDGET_EXCEEDED" },
           });
-          await audit(tx, msg, "rejected_budget_exceeded", "po", p.id);
+          await audit(tx, msg, notFound ? "rejected_sanction_not_found" : "rejected_budget_exceeded", "po", p.id);
         });
         return;
       }
@@ -251,6 +269,7 @@ export function registerPoConsumers(queue: Queue): void {
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
         itemType: i.itemType ?? "consumable",
+        gstRateBp: i.gstRateBp ?? null, hsnSac: i.hsnSac ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);
@@ -311,7 +330,7 @@ export function registerPoConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
 
-  // F102: reject a PO awaiting approval -> cancelled. Reached from the workflow
+  // F102: reject a PO awaiting approval -> rejected (UAT bundle 22 W2; was cancelled). Reached from the workflow
   // inbox reject (payload { id, tenantId, rejectedBy, reason }) and from
   // PATCH /v1/procurement/pos/:id/reject.
   queue.subscribe(COMMANDS.poReject, async (msg) => {
@@ -321,10 +340,10 @@ export function registerPoConsumers(queue: Queue): void {
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
       assertPoRejectable(po.status ?? "draft");
-      assertTransitionAllowed(po.status ?? "draft", "cancelled");
+      assertTransitionAllowed(po.status ?? "draft", "rejected");
       // Version-locked: a concurrent / duplicate reject conflicts and rolls back,
-      // so the release below runs at most once per PO.
-      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "cancelled", updatedBy: msg.actorId });
+      // so the release below runs at most once per PO. UAT bundle 22 (W2): "rejected", with the reason.
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "rejected", rejectionReason: p.reason ?? null, updatedBy: msg.actorId });
       // F102 review: give the PO's reservation back to its indent (reserved at
       // create by reserveIndentBudget, same transaction, tenant-scoped).
       const indentId = po.indentRef.replace(/^.*:/, "");
@@ -406,7 +425,7 @@ export function registerPoConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; poNo: string; vendorId: string; indentRef: string;
       sanctionRef?: string; gemOrderNo: string; deliveryDate?: string;
-      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string }>;
+      items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string; gstRateBp?: number; hsnSac?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
     await db.transaction(async (tx) => {
@@ -461,6 +480,7 @@ export function registerPoConsumers(queue: Queue): void {
         itemCode: i.itemCode, description: i.description, quantity: i.quantity,
         unit: i.unit, unitPriceMinor: BigInt(i.unitPriceMinor), currency: "INR" as const,
         itemType: i.itemType ?? "consumable",
+        gstRateBp: i.gstRateBp ?? null, hsnSac: i.hsnSac ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);
@@ -479,4 +499,9 @@ async function audit(
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "procurement", action, resourceType, resourceId, outcome: "success", ...(extra ? { details: extra } : {}) },
   });
+  // UAT T-EDGE TE-04: every worker-side refusal of a PO (rejected_*) is also told to the
+  // maker, who was answered 202 and would otherwise never learn it was not saved.
+  if (action.startsWith("rejected_")) {
+    await notifyMakerOfRefusal(tx, msg, { resourceType, resourceId, action, link: "/procurement/purchase-orders" });
+  }
 }

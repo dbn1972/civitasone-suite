@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { employeeDirectoryForRoles } from "@/lib/employeeDirectory";
 import { PageHeader, RefreshErrorState, EmptyState } from "@/app/_components/ds";
 import {
   getMeeting,
@@ -7,11 +8,13 @@ import {
   getActiveVotes,
 } from "../../_data/loaders";
 import { MeetingConsole } from "./MeetingConsole";
+import { resolveRecordRefs } from "@/lib/records/recordRefs";
 import {
   getSessionRoles,
   hasAnyRole,
   MEETING_TRANSITION_ROLES,
   MEETING_CHECKIN_ROLES,
+  MEETING_PARTICIPANT_WRITE_ROLES,
   MEETING_CAST_ROLES,
   MEETING_CONCLUDE_ROLES,
 } from "@/lib/auth/roleGuard";
@@ -98,7 +101,14 @@ export default async function MeetingConsolePage(
     canCheckIn: hasAnyRole(sessionRoles, MEETING_CHECKIN_ROLES),
     canCast: hasAnyRole(sessionRoles, MEETING_CAST_ROLES),
     canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
+    canManageParticipants: hasAnyRole(sessionRoles, MEETING_PARTICIPANT_WRITE_ROLES),
+    // The meeting roles are not on hrms-service's directory list; derive which directory (if any) they can search.
+    employeeDirectory: employeeDirectoryForRoles(sessionRoles),
   };
+
+  // UX-R5 (names, not ids): participants the attendance feed sends without a display name.
+  const unnamed = (attendance.data?.participants ?? []).filter((p) => !p.displayName).map((p) => p.employeeId);
+  const people = unnamed.length ? Object.fromEntries((await resolveRecordRefs({ people: unnamed })).people) : {};
 
   const degraded =
     agenda.source === "error" ||
@@ -128,6 +138,7 @@ export default async function MeetingConsolePage(
         initialActiveVotes={activeVotes.data}
         activeVotesSource={activeVotes.source}
         viewerPermissions={viewerPermissions}
+        people={people}
       />
     </>
   );

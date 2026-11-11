@@ -6,6 +6,9 @@
   [class*="sidebar"], [class*="topbar"], [class*="notification"] {
     display: none !important;
   }
+  /* UAT ux-docs: a printed record carries neither the site footer (GIGW owner / last-updated line)
+     nor the what's-new banner. */
+  .app-foot, [data-print-hide] { display: none !important; }
   /* Full width */
   body, main, .hr-main, .page-shell { margin: 0 !important; padding: 0 !important; width: 100% !important; }
   /* Page breaks */

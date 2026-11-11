@@ -3,12 +3,12 @@
  *
  * "Last updated" is real: it comes from the build time that next.config.mjs
  * bakes in as NEXT_PUBLIC_BUILD_TIME (an owner-set NEXT_PUBLIC_CONTENT_UPDATED_AT
- * still wins). The owning department is NOT invented: it stays an
- * owner-supplied config value (NEXT_PUBLIC_GIGW_OWNER) with a marked placeholder.
+ * still wins). The owning department is NOT invented: it is department config
+ * (NEXT_PUBLIC_GIGW_OWNER) with a labelled demonstration default until set.
  * The public site footer (GIGW pages) now carries the same identity line.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -26,6 +26,9 @@ function withIntl(ui: React.ReactElement, locale: "en" | "hi" = "en") {
     </NextIntlClientProvider>,
   );
 }
+
+/** UAT b23: the owner line is blank until the tenant fetch settles. */
+const settled = (c: HTMLElement) => waitFor(() => expect(c.querySelector("[data-gigw-loading]")).toBeNull());
 
 const ENV = ["NEXT_PUBLIC_GIGW_OWNER", "NEXT_PUBLIC_CONTENT_UPDATED_AT", "NEXT_PUBLIC_BUILD_TIME"] as const;
 
@@ -50,15 +53,28 @@ describe("app footer last updated (A-N2)", () => {
     process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
     const { container } = withIntl(<AppFooter />);
     expect(screen.getByText(/Last updated: 04 Nov 2026/)).toBeInTheDocument();
-    expect(container.querySelector("[data-deferred-content=\"last-updated\"]")).toBeNull();
+    expect(container.querySelector("[data-gigw-unset=\"NEXT_PUBLIC_BUILD_TIME\"]")).toBeNull();
   });
 
-  it("keeps the department as a marked, owner-supplied config placeholder", () => {
+  it("shows the labelled demonstration department until NEXT_PUBLIC_GIGW_OWNER is set", async () => {
     process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
     const { container } = withIntl(<AppFooter />);
-    const owner = container.querySelector("[data-deferred-content=\"owner\"]");
-    expect(owner).toHaveTextContent((enMessages.shell as Record<string, string>).footerOwnerPending);
-    expect(owner).toHaveAttribute("data-owner-config", "NEXT_PUBLIC_GIGW_OWNER");
+    await settled(container);
+    const owner = container.querySelector("[data-gigw-default=\"NEXT_PUBLIC_GIGW_OWNER\"]");
+    expect(owner).toHaveTextContent("Owned and maintained by CivitasOne Demonstration Department (UAT)");
+    expect(container.textContent).not.toContain("[Content to be " + "supplied");
+  });
+
+  it("shows the configured department (en and hi), without the default", async () => {
+    process.env.NEXT_PUBLIC_GIGW_OWNER = "Department of Testing";
+    const en = withIntl(<AppFooter />);
+    await settled(en.container);
+    expect(en.container).toHaveTextContent("Owned and maintained by Department of Testing");
+    expect(en.container.querySelector("[data-gigw-default]")).toBeNull();
+    en.unmount();
+    const hi = withIntl(<AppFooter />, "hi");
+    await settled(hi.container);
+    expect(hi.container).toHaveTextContent("स्वामित्व और रखरखाव: Department of Testing");
   });
 
   it("links to the sitemap, contact us and feedback pages", () => {
@@ -82,16 +98,49 @@ describe("public site footer (A-N1 / A-N2)", () => {
     expect(footer.querySelector("[class*=\"text-gray-\"]")).toBeNull();
   });
 
-  it("carries the identity line and links to every GIGW page", () => {
+  it("carries the identity line and links to every GIGW page", async () => {
     process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
     const { container } = withIntl(<MarketingLayout><div /></MarketingLayout>);
+    await settled(container);
     const footer = container.querySelector("footer")!;
     expect(footer).toHaveTextContent(/Last updated: 04 Nov 2026/);
-    expect(footer.querySelector("[data-deferred-content=\"owner\"]")).not.toBeNull();
+    expect(footer.querySelector("[data-gigw-default=\"NEXT_PUBLIC_GIGW_OWNER\"]")).toHaveTextContent("CivitasOne Demonstration Department (UAT)");
     const hrefs = [...footer.querySelectorAll("a")].map((a) => a.getAttribute("href"));
     for (const p of ["/accessibility-statement", "/screen-reader-access", "/website-policies", "/sitemap", "/contact-us",
-      "/feedback", "/help-desk", "/privacy-policy", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer", "/about"]) {
+      "/feedback", "/help-desk", "/privacy-policy", "/terms-and-conditions", "/hyperlink-policy", "/copyright-policy", "/disclaimer", "/about",
+      "/content-contribution-policy", "/content-archival-policy", "/content-review-policy"]) {
       expect(hrefs, p).toContain(p);
     }
   });
+
+  it("WCAG 1.4.10: below sm the sandbox link moves into the mobile menu, so the header fits 320 px", () => {
+    const { container } = withIntl(<MarketingLayout><div /></MarketingLayout>);
+    const header = container.querySelector("header")!;
+    const inBar = header.querySelector("nav > div:last-child > a[href=\"/sandbox\"]");
+    expect(inBar).toHaveClass("hidden", "sm:inline-block");
+    fireEvent.click(header.querySelector("button")!);
+    const menuLinks = [...header.querySelectorAll("a[href=\"/sandbox\"]")].filter((a) => a !== inBar);
+    expect(menuLinks.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("PR #2457 review (WCAG 3.1.2): on Hindi pages the English header and footer text is marked lang=\"en\"", () => {
+    process.env.NEXT_PUBLIC_BUILD_TIME = "2026-11-04T05:00:00.000Z";
+    const { container } = withIntl(<MarketingLayout><div /></MarketingLayout>, "hi");
+    const langOf = (el: Element) => el.closest("[lang]")?.getAttribute("lang") ?? null;
+    const header = container.querySelector("header")!;
+    expect(header).toHaveAttribute("lang", "en");
+    for (const name of ["Products", "Pricing", "Docs", "Sign In"]) expect(langOf(screen.getAllByText(name)[0]!), name).toBe("en");
+    const footer = container.querySelector("footer")!;
+    for (const text of ["Features", "Modules", "Documentation", "Careers", "Made in India"]) {
+      const el = [...footer.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent?.includes(text))!;
+      expect(langOf(el), text).toBe("en");
+    }
+    expect(langOf([...footer.querySelectorAll("span")].find((e) => e.textContent?.startsWith("© 2026"))!)).toBe("en");
+    // translated parts stay in the page language
+    const about = [...footer.querySelectorAll("a")].find((a) => a.getAttribute("href") === "/about")!;
+    expect(about).toHaveTextContent("हमारे बारे में");
+    expect(langOf(about)).toBeNull();
+    expect(footer).toHaveTextContent("अंतिम अद्यतन: 4 नवंबर 2026");
+  });
 });
+

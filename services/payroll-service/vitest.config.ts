@@ -7,7 +7,13 @@ import { testDbHostPort } from "../../vitest.testdb";
 export default defineConfig({
   test: {
     ...sharedTestTimeouts,
-    setupFiles: ["./tests/setup-tax-config.ts", "./tests/setup-tenant-identity.ts"],
+    setupFiles: [
+      "./tests/setup-tax-config.ts",
+      // #2464 (b19 D-15): tenant-service answers "no documentIdentity" for throwaway tenants.
+      "./tests/setup-tenant-identity.ts",
+      // #2463: the same for resolveDocIdentity in the official document renderer.
+      "../../packages/render/test-support/tenant-identity-setup.ts",
+    ],
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
@@ -47,7 +53,8 @@ export default defineConfig({
       // test never reaches a real tenant-service on the host (tests stub fetch).
       TENANT_SERVICE_URL: "http://127.0.0.1:1",
       // The env fallback is honoured only on an explicitly single-tenant deployment
-      // (repo.ts); the read of tenant-service itself fails closed (503).
+      // (deductor-config/repo.ts and form16-pdf/form16-document.ts); the read of tenant-service
+      // itself fails closed (503).
       PAYROLL_DEDUCTOR_ENV_FALLBACK: "single-tenant",
       EMPLOYER_NAME: "Test Pay and Accounts Office",
       EMPLOYER_TAN: "TSTP12345T",

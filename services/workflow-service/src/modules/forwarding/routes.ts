@@ -6,7 +6,7 @@ import * as commands from "./commands.js";
 import { canViewInstance, findById as findTaskById, TASK_ADMIN_ROLES } from "../tasks/repo.js";
 import type { TaskForwardRow } from "./schema.js";
 
-const ROLES = [
+export const FORWARD_ROLES = [
   "workflow_user", "workflow_admin", "super_admin", "hr_admin", "manager",
   "estab_officer", "estab_admin",
 ];
@@ -43,7 +43,7 @@ async function canViewTaskForwards(
 export async function forwardingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/tasks/:id/forward", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, FORWARD_ROLES);
     const { id } = idParam.parse(req.params);
     const body = forwardBody.parse(req.body ?? {});
     const result = await commands.forwardTask(ctx, id, body.toUserId, body.remarks);
@@ -52,7 +52,7 @@ export async function forwardingRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/workflow/tasks/:id/recall", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, FORWARD_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recallBody.parse(req.body ?? {});
     const result = await commands.recallTask(ctx, id, body.remarks);
@@ -61,7 +61,7 @@ export async function forwardingRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/workflow/tasks/:id/forwards", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, FORWARD_ROLES);
     const { id } = idParam.parse(req.params);
     const forwards = await commands.listForwards(id, ctx.tenantId);
     // A non-participant gets the same 404 as for a task that does not exist.

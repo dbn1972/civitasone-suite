@@ -167,6 +167,162 @@
       {
         "name": "works_admin",
         "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "store_officer",
+        "description": "Stores officer: records GRN receipts, issues stock (SRN) and views consumables. Referenced by inventory, procurement (GRN) and estab (consumables) guards."
+      },
+      {
+        "name": "warehouse_officer",
+        "description": "Warehouse officer: receives goods against a GRN and issues stock (SRN). Referenced by procurement GRN and inventory SRN guards."
+      },
+      {
+        "name": "store_keeper",
+        "description": "Store keeper: day-to-day item, batch, cycle-count and stores work in inventory-service."
+      },
+      {
+        "name": "inventory_user",
+        "description": "Inventory user: reads stores and items and maintains item and batch records (inventory-service)."
+      },
+      {
+        "name": "inventory_manager",
+        "description": "Inventory manager: stores, stock adjustments, cycle counts and quality hold release (inventory-service)."
+      },
+      {
+        "name": "inventory_admin",
+        "description": "Inventory administrator: custodians and all inventory configuration (inventory-service)."
+      },
+      {
+        "name": "qc_inspector",
+        "description": "Quality-control inspector: passes or rejects received batches (inventory-service batches)."
+      },
+      {
+        "name": "asset_manager",
+        "description": "Asset manager: asset register, condemnation and asset bulk upload (asset-service, admin-service uploads)."
+      },
+      {
+        "name": "asset_admin",
+        "description": "Asset administrator: asset register administration (asset-service, admin-service uploads)."
+      },
+      {
+        "name": "meeting_admin",
+        "description": "Meeting administrator: assigns and verifies action items and administers meetings (meeting-service)."
+      },
+      {
+        "name": "committee_secretary",
+        "description": "Committee secretary: convenes meetings, records minutes and assigns action items (meeting-service)."
+      },
+      {
+        "name": "committee_chairperson",
+        "description": "Committee chairperson: chairs meetings and verifies action items (meeting-service)."
+      },
+      {
+        "name": "committee_member",
+        "description": "Committee member: attends meetings, votes and updates own action items (meeting-service)."
+      },
+      {
+        "name": "billing_admin",
+        "description": "Billing administrator: invoices, e-invoicing, gateways and GSTN (billing-service)."
+      },
+      {
+        "name": "revenue_officer",
+        "description": "Revenue officer: demands, assessments, arrears and trade licences (revenue-service); parcel records (location-service)."
+      },
+      {
+        "name": "revenue_admin",
+        "description": "Revenue administrator: revenue analytics, arrears recovery notices and settings (revenue-service)."
+      },
+      {
+        "name": "revenue_collector",
+        "description": "Revenue collector: counter collections and assessments (revenue-service)."
+      },
+      {
+        "name": "revenue_analyst",
+        "description": "Revenue analyst: revenue analytics and forecasts (revenue-service)."
+      },
+      {
+        "name": "contract_admin",
+        "description": "Contract administrator: approvals, clauses, e-sign and obligations (contract-service)."
+      },
+      {
+        "name": "supervising_officer",
+        "description": "Supervising officer: assigns and supervises inspections (inspection-service)."
+      },
+      {
+        "name": "reviewing_officer",
+        "description": "Reviewing officer: reviews inspection reports (inspection-service)."
+      },
+      {
+        "name": "vigilance_officer",
+        "description": "Vigilance officer: vigilance cases and investigations (audit-service, hrms-service)."
+      },
+      {
+        "name": "vigilance_admin",
+        "description": "Vigilance administrator: vigilance case administration (audit-service)."
+      },
+      {
+        "name": "observer",
+        "description": "Meeting observer: read-only attendee of committee meetings, agenda and attendance (meeting-service, hrms-service)."
+      },
+      {
+        "name": "project_manager",
+        "description": "Project manager: creates and runs projects, reviews DPRs, acts on escalations and board intake (project-service)."
+      },
+      {
+        "name": "project_officer",
+        "description": "Project officer: day-to-day project, progress and evidence entry and board intake (project-service)."
+      },
+      {
+        "name": "citizen_admin",
+        "description": "Citizen services administrator: service catalogue, fee schedules and citizen-service administration (citizen-service)."
+      },
+      {
+        "name": "service_designer",
+        "description": "Service designer: designs citizen service definitions and applicant identity rules (citizen-service)."
+      },
+      {
+        "name": "helpdesk_user",
+        "description": "Helpdesk user: raises and follows helpdesk tickets and escalations (helpdesk-service, citizen-service, notification-service)."
+      },
+      {
+        "name": "helpdesk_agent",
+        "description": "Helpdesk agent: works and resolves helpdesk tickets and escalations (helpdesk-service, citizen-service)."
+      },
+      {
+        "name": "helpdesk_admin",
+        "description": "Helpdesk administrator: helpdesk configuration, SLAs and escalation rules (helpdesk-service, citizen-service)."
+      },
+      {
+        "name": "install_admin",
+        "description": "Install administrator: activates domain packs and installation settings (install-service, citizen-service packs)."
+      },
+      {
+        "name": "project_admin",
+        "description": "Project administrator: project-service administration and dashboards."
+      },
+      {
+        "name": "engineer",
+        "description": "Engineer: technical officer with read access to project dashboards (project-service)."
+      },
+      {
+        "name": "field_engineer",
+        "description": "Field engineer: records geo-tagged site progress on projects (project-service)."
+      },
+      {
+        "name": "front_desk",
+        "description": "Visitor front desk: issues and manages digital visitor passes and receives reception-desk notifications (visitor-service, notification-service)."
+      },
+      {
+        "name": "gate_terminal",
+        "description": "Visitor gate terminal: checks visitors in and out at the security gate (visitor-service check-in)."
+      },
+      {
+        "name": "estab_admin",
+        "description": "Establishment administrator: approves delegated financial actions (DFA), manages approval rules and e-sign settings, and administers establishment files (estab-service)."
+      },
+      {
+        "name": "records_officer",
+        "description": "Records officer: manages record categories, disposal, weed-out, archival and record-room transfers (estab-service records management)."
       }
     ]
   },
@@ -357,6 +513,19 @@
     "xRobotsTag": "none",
     "xFrameOptions": "SAMEORIGIN",
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"tenantId\",\"displayName\":\"tenantId\",\"validations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"tid\",\"displayName\":\"tid\",\"validations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"identity_user_id\",\"displayName\":\"identity_user_id\",\"validations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"email_addr\",\"displayName\":\"email_addr\",\"validations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
   },
   "users": [
     {

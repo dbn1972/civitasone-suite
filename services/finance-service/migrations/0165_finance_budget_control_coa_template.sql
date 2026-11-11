@@ -1,4 +1,4 @@
--- 0162_finance_budget_control_coa_template.sql
+-- 0165_finance_budget_control_coa_template.sql
 -- Tenant-type profile switch (docs/design/TENANT-PROFILE-SWITCH.md), slice S2. Additive and idempotent.
 --  1. gl.finance_settings.budget_control: mandatory (DEFAULT) | advisory | off. mandatory is the behaviour every tenant
 --     has had since UAT T-PERIOD D-03 (no expenditure debit without a budget provision, GFR).

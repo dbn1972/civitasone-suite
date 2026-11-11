@@ -170,12 +170,14 @@ describe("provisioning/catalog — standard definitions", () => {
   // B9-wf1 added the plan / PO amendment single-approver chains: 5 + 4.
   // B10: leave_approval is now the one-node Reporting Officer chain hrms
   // requests (its old start node was the applicant, on non-existent roles).
+  // B23b-wf: meeting_financial_countersignature is the one-node finance_admin Counter-signature chain
+  // meeting-service requests for a GFR-threshold financial decision: 9 + 1.
   const SINGLE_APPROVER = [
     "procurement_indent_approval", "procurement_po_approval",
     "procurement_plan_approval", "procurement_po_amendment_approval",
-    "leave_approval",
+    "leave_approval", "meeting_financial_countersignature",
   ];
-  it("has 9 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(9));
+  it("has 10 standard definitions", () => expect(STANDARD_DEFINITIONS.length).toBe(10));
 
   it.each(STANDARD_DEFINITIONS.filter(d => !SINGLE_APPROVER.includes(d.code)).map(d => d.code))("definition '%s' has ≥ 3 nodes", (code) => {
     const def = STANDARD_DEFINITIONS.find(d => d.code === code)!;

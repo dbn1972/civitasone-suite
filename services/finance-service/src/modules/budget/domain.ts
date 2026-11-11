@@ -30,7 +30,15 @@ export function assertValidHeadParent(
   }
 }
 
-export type SanctionStatus = "draft" | "approved" | "exhausted" | "cancelled";
+export type SanctionStatus = "draft" | "pending_approval" | "approved" | "exhausted" | "rejected" | "cancelled";
+
+/**
+ * UAT bundle 22 (W1/W5): a sanction is decided (approved or rejected) once. Only a sanction still awaiting a
+ * decision can be approved or rejected; approved / exhausted / rejected / cancelled are final for both.
+ */
+export function isSanctionAwaitingDecision(status: string): boolean {
+  return status === "pending_approval" || status === "draft";
+}
 
 export interface BudgetAvailability {
   reMinor: bigint;

@@ -149,3 +149,28 @@ describe("MilestoneActions", () => {
   });
 
 });
+
+describe("MilestoneActions on a finished contract (UX-R5 / DS-3)", () => {
+  it("renders no Complete / Mark late when the contract is locked", () => {
+    render(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "pending" }]}
+        lockedReason="This contract is closed. Milestones and obligations can no longer be changed."
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Complete" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark late" })).not.toBeInTheDocument();
+  });
+
+  it("shows the status and an overdue flag on the action row (the milestone is listed once)", () => {
+    render(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "pending", dueDate: "2026-01-01", overdue: true }]}
+      />,
+    );
+    expect(screen.getByText("Overdue")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+  });
+});

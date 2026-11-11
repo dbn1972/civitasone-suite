@@ -8,7 +8,8 @@ import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
-import { procurementPos } from "../src/modules/po/schema.js";
+import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
+import { seedApprovedIndent } from "./helpers/approved-indent.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-000000000099";
@@ -17,6 +18,8 @@ const FAKE_UUID = "00000000-0000-4000-8000-000000000001";
 // absent) used by the GRN-NEW-04 "accepted (202)" create below.
 const COV_PO_ID = "00000000-0000-4000-8000-0000000000c0";
 const COV_VENDOR_ID = "00000000-0000-4000-8000-0000000000c1";
+const COV_PO_ITEM_ID = "00000000-0000-4000-8000-0000000000c2";
+const COV_INDENT_ID = "00000000-0000-4000-8000-0000000000c3";
 
 function tok(roles: string[] = ["procurement_officer", "procurement_manager", "super_admin"]) {
   return signToken({ sub: "user-cov-001", tid: TENANT, roles, sid: "sess-cov-001" }, SECRET);
@@ -29,7 +32,7 @@ const citizenAuth = { authorization: `Bearer ${citizenTok()}` };
 
 afterAll(async () => {
   await runWithTenant(TENANT, () => db.transaction((tx) =>
-    tx.delete(procurementPos).where(eq(procurementPos.id, COV_PO_ID))));
+    tx.delete(procurementPoItems).where(eq(procurementPoItems.id, COV_PO_ITEM_ID)).then(() => tx.delete(procurementPos).where(eq(procurementPos.id, COV_PO_ID)))));
   await sqlClient.end();
 });
 
@@ -43,6 +46,11 @@ beforeAll(async () => {
     await tx.insert(procurementPos).values({
       id: COV_PO_ID, tenantId: TENANT, poNo: "PO-COV-001", vendorId: COV_VENDOR_ID,
       indentRef: "procurement_indent:cov", status: "approved", totalMinor: 50000n,
+      createdBy: COV_VENDOR_ID, updatedBy: COV_VENDOR_ID,
+    });
+    await tx.delete(procurementPoItems).where(eq(procurementPoItems.id, COV_PO_ITEM_ID));
+    await tx.insert(procurementPoItems).values({
+      id: COV_PO_ITEM_ID, poId: COV_PO_ID, tenantId: TENANT, itemCode: "IT001", description: "Monitor", quantity: 10,
       createdBy: COV_VENDOR_ID, updatedBy: COV_VENDOR_ID,
     });
   }));
@@ -134,7 +142,8 @@ describe("POST routes — accepted (202)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/pos", headers: auth,
       payload: {
-        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001", gemOrderRef: "GEM/TEST/BASIS",
+        // UAT T-EDGE b21 (TE-04 P08): the cited indent must exist and be approved (checked before 202).
+        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: await seedApprovedIndent(TENANT, COV_INDENT_ID), gemOrderRef: "GEM/TEST/BASIS",
         // UAT Phase 2 C2: a ₹10,000 PO is only valid with a budget sanction (#14);
         // without one the route now answers 422 SANCTION_REF_REQUIRED.
         sanctionRef: `finance_sanction:${FAKE_UUID}`,
@@ -167,7 +176,8 @@ describe("POST routes — accepted (202)", () => {
         // DOM-002 — grnCreate is receive-only now: no `inspection` field.
         // GRN-NEW-04 — poRef must resolve to a real PO whose vendor matches.
         grnNo: "GRN-TEST-001", poRef: `procurement_po:${COV_PO_ID}`, vendorId: COV_VENDOR_ID,
-        items: [{ poItemRef: "item-1", itemCode: "IT001", orderedQty: 5, receivedQty: 5, acceptedQty: 5 }],
+        // UAT T-EDGE b21 (TE-04): every GRN line must be a line of the PO (checked before 202).
+        items: [{ poItemRef: COV_PO_ITEM_ID, itemCode: "IT001", orderedQty: 5, receivedQty: 5, acceptedQty: 5 }],
       },
     });
     await app.close();

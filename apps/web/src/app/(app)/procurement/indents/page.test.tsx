@@ -45,16 +45,16 @@ describe("IndentsPage", () => {
   it("INDENTS-02: on a failed load, stats read '—' (not 0) and a retry is offered", async () => {
     route({}, "error");
     render(await IndentsPage({ searchParams: Promise.resolve({}) }));
-    expect(screen.getByText("Pending Approval").closest(".stat")).toHaveTextContent("—");
-    expect(screen.getByText("Tender Required").closest(".stat")).toHaveTextContent("—");
-    expect(screen.getByText("Approved").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Pending Approval").closest("li")).toHaveTextContent("—");
+    expect(screen.getByText("Tender Required").closest("li")).toHaveTextContent("—");
+    expect(screen.getByText("Approved").closest("li")).toHaveTextContent("—");
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
 
   it("INDENTS-02: a genuine empty (non-error) still shows 0 and the empty state", async () => {
     route({ data: [] });
     render(await IndentsPage({ searchParams: Promise.resolve({}) }));
-    expect(screen.getByText("Pending Approval").closest(".stat")).toHaveTextContent("0");
+    expect(screen.getByText("Pending Approval").closest("li")).toHaveTextContent("0");
     expect(screen.getByText("No indents yet")).toBeInTheDocument();
   });
 
@@ -62,9 +62,9 @@ describe("IndentsPage", () => {
     route({ data: [indent({ id: "a", status: "tender_required" }), indent({ id: "b", status: "tender_required" })] });
     const { container } = render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     // Scope to the stat tile (the DataTable status cell also reads "Tender Required").
-    const statLabel = Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === "Tender Required");
+    const statLabel = Array.from(container.querySelectorAll("[data-summary-strip] li span")).find((el) => el.textContent === "Tender Required");
     expect(statLabel).toBeTruthy();
-    expect(statLabel!.closest(".stat")).toHaveTextContent("2");
+    expect(statLabel!.closest("li")).toHaveTextContent("2");
   });
 
   it("INDENTS-01: a full page shows a truncation notice and a Next link", async () => {
@@ -187,7 +187,7 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
   it("keeps the stat tiles on the unfiltered page rather than zeroing them under a filter", async () => {
     serverRoute(tenant());
     const { container } = render(await IndentsPage({ searchParams: Promise.resolve({ status: PENDING_INDENT_STATUSES.join(",") }) }));
-    const tile = (label: string) => Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === label)!.closest(".stat");
+    const tile = (label: string) => Array.from(container.querySelectorAll("[data-summary-strip] li span")).find((el) => el.textContent === label)!.closest("li");
     expect(tile("Approved")).toHaveTextContent("100");
     expect(tile("On this page")).toHaveTextContent("100");
     expect(paths.some((p) => !p.includes("status="))).toBe(true);
@@ -255,7 +255,7 @@ describe("IndentsPage server totals (D4c #18)", () => {
   it("tiles show whole-tenant counts, not the page, and the total tile says Total indents", async () => {
     summaryRoute([indent({ id: "a", status: "approved" })], { total: 250, counts: { approved: 200, pending: 40, draft: 10 } });
     const { container } = render(await IndentsPage({ searchParams: Promise.resolve({}) }));
-    const tile = (label: string) => Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === label)!.closest(".stat");
+    const tile = (label: string) => Array.from(container.querySelectorAll("[data-summary-strip] li span")).find((el) => el.textContent === label)!.closest("li");
     expect(tile("Total indents")).toHaveTextContent("250");
     expect(tile("Approved")).toHaveTextContent("200");
     expect(tile("Pending Approval")).toHaveTextContent("40");

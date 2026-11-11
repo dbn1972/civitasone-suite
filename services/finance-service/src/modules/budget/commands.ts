@@ -8,7 +8,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
-import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, isSanctionAwaitingDecision, DomainError } from "./domain.js";
 import * as repo from "./repo.js";
 import { readSettings } from "../approvals/repo.js";
 import { submitChangeRequest } from "../approvals/commands.js";
@@ -48,6 +48,17 @@ export async function createBudget(ctx: RequestContext, body: CreateBudgetBody):
       ? { idempotencyKey: `budget-create:${ctx.idempotencyKey}:${body.headId}:${body.fy}:${body.beMinor}`, tenantId: ctx.tenantId }
       : { tenantId: ctx.tenantId },
   );
+  // UAT B23 (DLQ gate): finance_budgets is UNIQUE (tenant_id, head_id, fy). A second budget for a head+FY
+  // that already has one used to be 202-accepted and then died in the worker on the unique index (retried,
+  // then dead-lettered) while the user believed it was created. Refuse it here with a 409 the form can show.
+  // A replay of the SAME idempotent command (the existing row carries this command's id) is still a 202.
+  const existing = await repo.findBudget(body.headId, body.fy, ctx.tenantId);
+  if (existing) {
+    if (existing.id === id) return { id, status: "accepted", correlationId: ctx.correlationId };
+    throw new HttpError(409, "BUDGET_EXISTS", `A budget for this head already exists for FY ${body.fy}. Edit or re-appropriate the existing budget instead.`, [
+      { field: "headId", message: `This head already has a budget for FY ${body.fy}.`, code: "BUDGET_EXISTS" },
+    ], { existingBudgetId: existing.id });
+  }
   await queue.publish(COMMANDS.budgetCreate, {
     messageId: id, type: COMMANDS.budgetCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -87,6 +98,12 @@ export async function reappropriateBudget(ctx: RequestContext, id: string, body:
 }
 
 export async function createSanction(ctx: RequestContext, body: CreateSanctionBody): Promise<Accepted> {
+  // UAT b24: sanction_no is UNIQUE per tenant. A repeat used to be 202-accepted, retried 5x and dead-lettered.
+  if (await repo.findSanctionByNo(ctx.tenantId, body.sanctionNo)) {
+    throw new HttpError(409, "DUPLICATE_SANCTION_NO", `Sanction number ${body.sanctionNo} already exists. Use a different number.`, [
+      { field: "sanctionNo", message: "This sanction number is already used.", code: "DUPLICATE_SANCTION_NO" },
+    ]);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.sanctionCreate, {
     messageId: id, type: COMMANDS.sanctionCreate,
@@ -142,6 +159,11 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
   try {
     assertSanctionApproverDistinct(existing.createdBy, ctx.actorId);
   } catch (err) { toDomain(err, 409); }
+  // UAT bundle 22 (W1/W5): an already decided sanction cannot be rejected. Refuse now (409) instead of
+  // accepting (202) a command the worker would drop, and never let a late reject touch an approved sanction.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be rejected`);
+  }
   await queue.publish(COMMANDS.sanctionReject, {
     messageId: randomUUID(), type: COMMANDS.sanctionReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -161,7 +183,12 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
 export async function submitSanctionForApproval(ctx: RequestContext, id: string, fileNo: string | null = null): Promise<Accepted> {
   // UAT W8-D (P1): the consumer rejects an unknown / foreign sanction (NonRetryableError);
   // say so now (404) instead of 202-accepting a submission that can only fail.
-  if (!(await repo.findSanctionByIdAndTenant(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "sanction not found");
+  const existing = await repo.findSanctionByIdAndTenant(id, ctx.tenantId);
+  if (!existing) throw new HttpError(404, "NOT_FOUND", "sanction not found");
+  // UAT bundle 22 (W5): a decided sanction is not pulled back to pending; the worker would drop it after the 202.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be submitted for approval`);
+  }
   await queue.publish(COMMANDS.sanctionSubmitApproval, {
     messageId: randomUUID(), type: COMMANDS.sanctionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -201,9 +228,10 @@ export async function approveSanction(ctx: RequestContext, id: string, reason?: 
     throw new HttpError(409, "EFILE_IN_FLIGHT",
       `this sanction is awaiting an eOffice decision${existing.efileFileNo ? ` (file ${existing.efileFileNo})` : ""}; it cannot be approved directly`);
   }
-  if (existing.status === "approved") return { id, status: "accepted", correlationId: ctx.correlationId }; // idempotent
-  if (existing.status !== "pending_approval" && existing.status !== "draft") {
-    throw new HttpError(409, "INVALID_SANCTION_STATE", `a ${existing.status} sanction cannot be approved`);
+  // UAT bundle 22 (W5): an already decided sanction (approved, rejected, cancelled, exhausted) cannot be approved
+  // again. 409 now, instead of a 202 for a decision that is then silently ignored.
+  if (!isSanctionAwaitingDecision(existing.status)) {
+    throw new HttpError(409, "INVALID_STATE_TRANSITION", `a ${existing.status} sanction cannot be approved`);
   }
   // UAT T-EDGE TE-02: the approval is applied HERE, synchronously, in one transaction that locks the head allocation
   // row and checks available = allocation - (approved sanctions + committed + expended). Two approvals racing on one

@@ -8,7 +8,9 @@
  * It writes the standard central-government DA series under the 7th CPC (the
  * table is one effective-dated series per tenant -- no pay-level column; 7th
  * CPC DA is a single percentage for every pay level, and DR for pensioners
- * reads the same series). Every row is labelled as UAT seed data in order_ref.
+ * reads the same series). order_ref carries realistic order text (no test-style
+ * labels: the owner forbids them in UAT data). Payroll admins record later
+ * revisions through POST /v1/payroll/da-rates (modules/da-rates).
  *
  * Only a tenant with NO DA rows at all is seeded: a tenant that already has
  * any row has its own configuration, and mixing a seeded series into it would
@@ -20,7 +22,11 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { audit } from "./consumer.js";
 
-export const UAT_DA_ORDER_REF = "UAT SEED DATA -- 7th CPC central DA; verify against the DoE OM before go-live";
+/** Order text for a seeded revision, e.g. "7th CPC Central DA as per MoF DoE OM, effective 01.07.2025". */
+export function daSeedOrderRef(effectiveFrom: string): string {
+  const [y, m, d] = effectiveFrom.split("-");
+  return `7th CPC Central DA as per Ministry of Finance, Department of Expenditure OM, effective ${d}.${m}.${y}`;
+}
 
 /**
  * 7th CPC central DA (percent of basic pay), half-yearly revisions. rate_bps:
@@ -63,7 +69,7 @@ export async function seedUatDaRates(
     for (const r of STANDARD_DA_SERIES) {
       const rows = (await tx.execute(sql`
         INSERT INTO payroll.dearness_allowance_rates (tenant_id, effective_from, rate_bps, order_ref)
-        VALUES (${tenantId}::uuid, ${r.effectiveFrom}::date, ${r.rateBps}, ${UAT_DA_ORDER_REF})
+        VALUES (${tenantId}::uuid, ${r.effectiveFrom}::date, ${r.rateBps}, ${daSeedOrderRef(r.effectiveFrom)})
         ON CONFLICT (tenant_id, effective_from) DO NOTHING
         RETURNING effective_from
       `)) as unknown as Array<unknown>;

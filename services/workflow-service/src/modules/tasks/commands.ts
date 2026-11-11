@@ -15,6 +15,9 @@ import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
 import { isStrictSodRefType } from "./sod.js";
 import { todayIST } from "../../shared/dates.js";
+import { fetchUserDisplayName } from "../../shared/identity-client.js";
+import { resolvePeople } from "../../shared/people-client.js";
+import { REWORK_PREFIX, isReworkTask } from "./rework.js";
 
 /**
  * UAT follow-up (F108, security): a task with no roleRef used to be completable
@@ -56,6 +59,24 @@ function today(): string {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
+/**
+ * UAT T-EDGE TE-08: the losing checker of a parallel approval was told 202 "accepted". A task that
+ * is already decided is now a synchronous 409 TASK_ALREADY_DECIDED that names who decided it and
+ * how (the web shows it in en/hi). The consumer lock stays the final guard for a true race (and
+ * now tells the late checker too, see tasks/consumer.ts notifyLateDecision).
+ */
+export async function taskAlreadyDecided(tenantId: string, taskId: string, decision: string | null | undefined): Promise<HttpError> {
+  const row = await repo.findDecisionById(taskId, tenantId);
+  const deciderId = row?.completedBy ?? null;
+  const name = deciderId ? ((await resolvePeople(tenantId, [deciderId])).get(deciderId)?.name ?? await fetchUserDisplayName(tenantId, deciderId)) : null;
+  const how = row?.decision ?? decision ?? "completed";
+  return new HttpError(409, "TASK_ALREADY_DECIDED", `this task was already decided (${how})${name ? ` by ${name}` : ""}`, {
+    decision: how,
+    decidedBy: deciderId ? { id: deciderId, name } : null,
+    decidedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+  });
+}
+
 export async function completeTask(
   ctx: RequestContext,
   taskId: string,
@@ -64,18 +85,6 @@ export async function completeTask(
 ): Promise<Accepted> {
   const existing = await repo.findById(taskId, ctx.tenantId);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
-  if (existing.status === "completed") throw new HttpError(409, "CONFLICT", "task already completed");
-  // Gap 1 — a call task is a system wait task held until its child instance
-  // completes; it is auto-resolved by the engine, never by a human.
-  if (existing.isCall) throw new HttpError(409, "CALL_TASK", "this is a sub-workflow call task; it completes when its child instance finishes");
-
-  // P0-2 — a task may only be completed while its instance is active. Suspended
-  // or cancelled instances block task completion (409); resuming re-enables it.
-  // This is the friendly pre-check; the consumer re-checks under the row lock.
-  const lifecycleInstance = await instanceRepo.findById(existing.instanceId, ctx.tenantId);
-  if (lifecycleInstance && lifecycleInstance.status !== "active") {
-    throw new HttpError(409, "INSTANCE_NOT_ACTIVE", `instance is ${lifecycleInstance.status}; tasks cannot be completed`);
-  }
 
   const isSuperAdmin = ctx.roles.includes("super_admin");
   let sodOverride = false;
@@ -140,6 +149,24 @@ export async function completeTask(
     throw new HttpError(403, "NOT_ASSIGNEE", "this task is assigned to another user");
   }
 
+  // BLOCKER 1 (PR #2465 review): the already-decided 409 names who decided, so it must sit BEHIND the
+  // role-on-task, F108 and assignee gates above - a caller who fails them gets 403/404, never the decider.
+  // It still precedes the call-task / instance-active checks and SoD (a decided task's instance is usually
+  // no longer active, and the decider would trip SOD_REPEAT_ACTOR on their own completed task).
+  if (existing.status === "completed") throw await taskAlreadyDecided(ctx.tenantId, taskId, existing.decision);
+  // Gap 1 — a call task is a system wait task held until its child instance
+  // completes; it is auto-resolved by the engine, never by a human.
+  if (existing.isCall) throw new HttpError(409, "CALL_TASK", "this is a sub-workflow call task; it completes when its child instance finishes");
+
+  // P0-2 — a task may only be completed while its instance is active. Suspended
+  // or cancelled instances block task completion (409); resuming re-enables it.
+  // This is the friendly pre-check; the consumer re-checks under the row lock.
+  const lifecycleInstance = await instanceRepo.findById(existing.instanceId, ctx.tenantId);
+  if (lifecycleInstance && lifecycleInstance.status !== "active") {
+    throw new HttpError(409, "INSTANCE_NOT_ACTIVE", `instance is ${lifecycleInstance.status}; tasks cannot be completed`);
+  }
+
+
   // Segregation of duties (NON-AUTHORITATIVE fast-fail for UX only):
   //  (a) submitter may not approve their own request (self-approval);
   //  (b) an actor who completed a PRIOR step on this instance may not act on
@@ -150,7 +177,16 @@ export async function completeTask(
   // authoritative SoD enforcement now lives inside the consumer transaction
   // under a row lock (see consumer.ts). This block only short-circuits the
   // obvious self-approval case early for a friendlier error.
-  if (!isSuperAdmin) {
+  // W4: the maker's "correct and resubmit" task is not a checker decision, so maker-checker SoD
+  // does not apply to it - but it can only be resubmitted (approve), never rejected or returned.
+  // Recognised by role + assignee + prefix, never the key alone (rework.ts).
+  const isRework = isReworkTask(existing, existing.nodeKey?.startsWith(REWORK_PREFIX) ? await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId) : null);
+  if (isRework && decision !== "approve") {
+    throw new HttpError(422, "REWORK_RESUBMIT_ONLY", "a returned item can only be corrected and resubmitted");
+  }
+  if (isRework) {
+    // fall through: role / assignee gates above already confined this to the maker
+  } else if (!isSuperAdmin) {
     const instance = await instanceRepo.findByIdFull(existing.instanceId, ctx.tenantId);
     // self-approval: by the actor directly, OR via a delegation whose delegator
     // is the submitter (the delegate is standing in for that role).
@@ -165,7 +201,7 @@ export async function completeTask(
     // repeat-actor: a prior step completed by the actor directly OR by a
     // delegator the actor is now acting on behalf of (four-eyes via delegation).
     const conflict = priorTasks.some(
-      (t) => t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
+      (t) => !(t.decision === "return" && t.nodeKey === existing.nodeKey) && t.completedBy != null && (t.completedBy === ctx.actorId || delegatorIds.has(t.completedBy)),
     );
     if (conflict) {
       throw new HttpError(403, "SOD_REPEAT_ACTOR", "you already acted on a prior step of this workflow");

@@ -105,12 +105,52 @@ export type DirectoryEntry = { id: string; displayName: string };
 export async function directoryByIds(tenantId: string, ids: string[]): Promise<DirectoryEntry[]> {
   if (ids.length === 0) return [];
   return scopedRead(async (tx) => {
+    // UX-R5 (names, not ids): other services store the actor as the JWT sub, which is the KEYCLOAK user id
+    // (FQ14), not users.users.id. Matching only users.id made every such lookup miss, so record screens showed
+    // "Unknown officer". Match either key, strictly inside tenant_id = tenantId, and answer under the id the
+    // caller asked for. An exact identity-id match wins over a Keycloak-id match (same rule as findByIdOrKeycloakId).
     const rows = await tx
-      .select({ id: users.id, name: users.name })
+      .select({ id: users.id, keycloakUserId: users.keycloakUserId, name: users.name })
       .from(users)
-      .where(and(eq(users.tenantId, tenantId), inArray(users.id, ids)));
-    return rows.map((r) => ({ id: r.id, displayName: r.name }));
+      .where(and(eq(users.tenantId, tenantId), or(inArray(users.id, ids), inArray(users.keycloakUserId, ids))));
+    return directoryEntriesFor(ids, rows);
   });
+}
+
+/**
+ * Pure: key each directory row by whichever of the caller-asked ids it matched (identity id first, then
+ * Keycloak sub), once per asked id. Rows matching nothing asked are dropped.
+ */
+export function directoryEntriesFor(
+  ids: readonly string[],
+  rows: ReadonlyArray<{ id: string; keycloakUserId: string | null; name: string }>,
+): DirectoryEntry[] {
+  const wanted = new Set(ids);
+  const out = new Map<string, string>();
+  for (const r of rows) if (wanted.has(r.id)) out.set(r.id, r.name);
+  for (const r of rows) if (r.keycloakUserId && wanted.has(r.keycloakUserId) && !out.has(r.keycloakUserId)) out.set(r.keycloakUserId, r.name);
+  return [...out].map(([id, displayName]) => ({ id, displayName }));
+}
+
+/**
+ * UX-R5: the tenant user summaries keyed by BOTH the identity id and (when linked) the Keycloak sub, so a
+ * peer service holding either one resolves the same name. Name only; capped like the route it backs.
+ */
+export async function summariesByTenant(tenantId: string, limit = 2000): Promise<Array<{ id: string; name: string }>> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: users.id, keycloakUserId: users.keycloakUserId, name: users.name })
+    .from(users)
+    .where(eq(users.tenantId, tenantId))
+    .limit(limit));
+  return summaryEntriesFor(rows);
+}
+
+/** Pure: one {id,name} per identity id, plus one per Keycloak sub that is not itself some identity id. */
+export function summaryEntriesFor(rows: ReadonlyArray<{ id: string; keycloakUserId: string | null; name: string }>): Array<{ id: string; name: string }> {
+  const out = new Map<string, string>();
+  for (const r of rows) out.set(r.id, r.name);
+  for (const r of rows) if (r.keycloakUserId && !out.has(r.keycloakUserId)) out.set(r.keycloakUserId, r.name);
+  return [...out].map(([id, name]) => ({ id, name }));
 }
 
 export async function directoryByQuery(tenantId: string, q: string, limit: number): Promise<DirectoryEntry[]> {

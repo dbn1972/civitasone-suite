@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
 import { humanizeStatus } from "@/lib/formatters";
 import { Button, StatusPill } from "@/app/_components/ds";
+import { isUuid, unresolvedLabel } from "@/lib/records/labels";
 
 export type ServiceEntry = {
   id: string;
@@ -235,7 +236,8 @@ export function ServiceBookView({ entries }: Props) {
                       <EventBadge type={entry.eventType} eventCfg={eventCfg} />
                     </td>
                     <td style={{ padding: "10px 12px", fontWeight: 500 }}>
-                      {entry.employee ?? entry.employeeId ?? "—"}
+                      {/* UX-R5: never the raw employee UUID (the page resolves names; this is the last fallback). */}
+                      {entry.employee ?? (isUuid(entry.employeeId) ? unresolvedLabel(entry.employeeId) : entry.employeeId) ?? "—"}
                     </td>
                     {/* GAP-HR-SERVICE-BOOK-02: "From" dropped -- the data
                         model never had a from-posting field, so the column
