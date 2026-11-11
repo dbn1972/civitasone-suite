@@ -39,9 +39,10 @@ function errorCode(text: string): string | undefined {
   return undefined;
 }
 
-export function CreatePOForm() {
+export function CreatePOForm({ localApproval = false }: { localApproval?: boolean } = {}) {
   const router = useRouter();
   const t = useTranslations();
+  const tl = useTranslations("poLocalApproval");
   const tw = useTranslations("procurement.w2");
   const tv = useTranslations("procurement.vendorPicker");
   const [vendor, setVendor] = useState<RemoteOption | null>(null);
@@ -116,11 +117,13 @@ export function CreatePOForm() {
   // GAP-PROCUREMENT-ORDERS-NEW-04: reconcile PO total against the sanctioned
   // indent value. Exceeding it is a block (overspend against a sanctioned indent).
   const exceedsIndent = indentTotalMinor != null && poTotalMinor > indentTotalMinor;
-  const needsSanction = poTotalMinor > SANCTION_REQUIRED_ABOVE_MINOR;
+  // M10: a tenant without Finance has no sanction to cite (local approval mode).
+  const needsSanction = !localApproval && poTotalMinor > SANCTION_REQUIRED_ABOVE_MINOR;
 
   // UAT Phase 2 C2: approved budget sanctions (finance-service admits
   // procurement_officer as a reader). Only approved ones can fund a PO.
   useEffect(() => {
+    if (localApproval) { setSanctionsState("ready"); return; }
     const controller = new AbortController();
     setSanctionsState("loading");
     fetch("/api/proxy/v1/finance/sanctions?limit=100", { signal: controller.signal })
@@ -142,7 +145,7 @@ export function CreatePOForm() {
         setSanctionsState("error");
       });
     return () => controller.abort();
-  }, [sanctionsNonce]);
+  }, [sanctionsNonce, localApproval]);
 
   // GAP-PROCUREMENT-ORDERS-NEW-04: the GFR band for the PO total. A failed lookup
   // is reported as such (the tender-requirement check did not run), never as a
@@ -353,6 +356,11 @@ export function CreatePOForm() {
           />
         </Field>
 
+        {localApproval ? (
+          <p role="note" style={{ gridColumn: "1 / -1", margin: 0, fontSize: "0.8125rem", color: "var(--ink2)" }}>
+            {tl("noSanctionNote")} <Link href="/procurement/approval-settings">{tl("limitsLinkCreate")}</Link>
+          </p>
+        ) : (
         <Field id="po-sanction" label={t("procurement.poForm.sanctionLabel")} required={needsSanction}>
           <Select value={sanctionId} onChange={(e) => setSanctionId(e.target.value)} aria-describedby="po-sanction-hint">
             <option value="">{t("procurement.poForm.sanctionNone")}</option>
@@ -368,6 +376,7 @@ export function CreatePOForm() {
             <span role="status" style={{ fontSize: "0.8125rem" }}>{t("procurement.poForm.sanctionsEmpty")}</span>
           ) : null}
         </Field>
+        )}
 
         {needsBasis ? (
           <fieldset style={{ gridColumn: "1 / -1", border: "1px solid var(--bd)", borderRadius: 8, padding: 12 }}>
