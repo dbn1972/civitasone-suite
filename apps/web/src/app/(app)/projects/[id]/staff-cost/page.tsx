@@ -45,16 +45,21 @@ export default async function ProjectStaffCostPage(props: {
             <StatCard icon="₹" iconBg="var(--warnbg)" label={t("statEmployer")} value={formatMoney(res.data.totals.employerCostMinor)} />
             <StatCard icon="₹" iconBg="var(--goodbg)" label={t("statTotal")} value={formatMoney(res.data.totals.totalCostMinor)} />
           </StatGrid>
+          {res.data.suppressedPeriods > 0 && (
+            <p role="note" className="pill" style={{ margin: "12px 0", width: "fit-content" }}>{t("suppressedNotice")}</p>
+          )}
           <Card title={t("tableTitle", { from: range.from, to: range.to })}>
             <DataTable<Row>
               columns={[
                 { key: "period", label: t("colPeriod") },
-                { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
-                { key: "employer", label: t("colEmployer"), align: "right", cellType: "amount" },
-                { key: "total", label: t("colTotal"), align: "right", cellType: "amount" },
+                { key: "gross", label: t("colGross"), align: "right" },
+                { key: "employer", label: t("colEmployer"), align: "right" },
+                { key: "total", label: t("colTotal"), align: "right" },
                 { key: "headcount", label: t("colHeadcount"), align: "right" },
               ]}
-              rows={res.data.periods.map((p) => ({ id: p.period, period: p.period, gross: p.grossMinor, employer: p.employerCostMinor, total: p.totalCostMinor, headcount: p.headcount }))}
+              rows={res.data.periods.map((p) => p.suppressed
+                ? { id: p.period, period: p.period, gross: t("suppressedCell"), employer: t("suppressedCell"), total: t("suppressedCell"), headcount: "—" }
+                : { id: p.period, period: p.period, gross: formatMoney(p.grossMinor), employer: formatMoney(p.employerCostMinor), total: formatMoney(p.totalCostMinor), headcount: p.headcount })}
               emptyIcon="📊" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")}
             />
           </Card>

@@ -88,6 +88,12 @@ export const addMemberBody = z.object({
   .refine((b) => b.userId !== undefined || b.role !== "project_manager", { message: "a member without a login cannot be the project manager", path: ["role"] });
 export type AddMemberBody = z.infer<typeof addMemberBody>;
 
+/** Change an existing member's role. Appointing (or removing) a project manager has its own rules in routes.ts. */
+export const changeMemberRoleBody = z.object({
+  role: z.enum(["project_manager", "project_officer", "engineer", "finance_officer", "viewer"]),
+}).strict();
+export type ChangeMemberRoleBody = z.infer<typeof changeMemberRoleBody>;
+
 export const memberParam   = z.object({ id: z.string().uuid(), memberId: z.string().uuid() });
 export const listTasksQuery = z.object({
   status:   z.string().optional(),

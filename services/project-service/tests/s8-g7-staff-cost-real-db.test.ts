@@ -54,10 +54,11 @@ async function createProject(code: string, extra: Record<string, unknown> = {}):
 }
 const addMember = (projectId: string, body: Record<string, unknown>, headers = as.admin) =>
   app.inject({ method: "POST", url: `/v1/projects/${projectId}/members`, headers, payload: body });
-const publishPosted = (payload: unknown, tenantId = TENANT, messageId = randomUUID()) =>
-  queue.publish(CONSUMED_EVENTS.projectCostPosted, { messageId, type: CONSUMED_EVENTS.projectCostPosted, tenantId, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0", payload } as never);
-const posting = (projectId: string, month: string, gross: string, employer: string, heads: number) =>
-  ({ projectId, costMonth: month, grossMinor: gross, employerCostMinor: employer, totalCostMinor: (BigInt(gross) + BigInt(employer)).toString(), headcount: heads });
+const publishPosted = (postings: unknown[], opts: { asOf?: string; minCohort?: number } = {}, tenantId = TENANT, messageId = randomUUID()) =>
+  queue.publish(CONSUMED_EVENTS.projectCostPosted, { messageId, type: CONSUMED_EVENTS.projectCostPosted, tenantId, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0",
+    payload: { asOf: opts.asOf ?? new Date().toISOString(), minCohort: opts.minCohort ?? 3, postings } } as never);
+const posting = (projectId: string, month: string, gross: string, employer: string, cohort: number) =>
+  ({ projectId, costMonth: month, grossMinor: gross, employerCostMinor: employer, totalCostMinor: (BigInt(gross) + BigInt(employer)).toString(), cohort });
 
 beforeAll(async () => {
   const raw = queue.subscribe.bind(queue);
@@ -145,50 +146,86 @@ describe("project -> cost centre", () => {
 describe("project manager: cost TOTALS only, never individual pay", () => {
   const URL = (id: string, q = "from=2026-04&to=2026-12") => `/v1/projects/${id}/staff-cost?${q}`;
   const NEVER = /employee|salary|slip|userId|pan|bank/i;
+  const T0 = "2026-11-01T00:00:00.000Z", T1 = "2026-11-02T00:00:00.000Z", T2 = "2026-11-03T00:00:00.000Z";
 
-  it("totals come from payroll's aggregate feed, summed by month; a reclass adds money but no people", async () => {
-    const run1 = randomUUID(), run2 = randomUUID(), rc = randomUUID();
-    await publishPosted({ kind: "run", sourceId: run1, postings: [posting(P1, "2026-09", "1000000", "120000", 4)] });
-    await publishPosted({ kind: "run", sourceId: run2, postings: [posting(P1, "2026-10", "2000000", "240000", 5), posting(P2, "2026-10", "500", "0", 1)] });
-    await publishPosted({ kind: "reclass", sourceId: rc, postings: [posting(P1, "2026-09", "250000", "30000", 0)] });
+  it("shows months with >= 3 people, hides months with 1 or 2 (no amounts, no headcount), and totals add up the visible months only", async () => {
+    await publishPosted([
+      posting(P1, "2026-09", "1000000", "120000", 4),   // visible
+      posting(P1, "2026-10", "777777", "0", 1),         // ONE person: hidden
+      posting(P1, "2026-11", "500000", "60000", 2),     // two people: hidden
+      posting(P1, "2026-12", "3000000", "360000", 3),   // exactly 3: visible
+      posting(P2, "2026-10", "500", "0", 1),
+    ], { asOf: T0 });
     await mq().drain();
     const r = await app.inject({ method: "GET", url: URL(P1), headers: as.pm1 });
     expect(r.statusCode).toBe(200);
     const b = r.json();
     expect(b.periods).toEqual([
-      { period: "2026-09", grossMinor: "1250000", employerCostMinor: "150000", totalCostMinor: "1400000", headcount: 4 },
-      { period: "2026-10", grossMinor: "2000000", employerCostMinor: "240000", totalCostMinor: "2240000", headcount: 5 },
+      { period: "2026-09", suppressed: false, grossMinor: "1000000", employerCostMinor: "120000", totalCostMinor: "1120000", headcount: 4 },
+      { period: "2026-10", suppressed: true, reason: "MIN_COHORT" },
+      { period: "2026-11", suppressed: true, reason: "MIN_COHORT" },
+      { period: "2026-12", suppressed: false, grossMinor: "3000000", employerCostMinor: "360000", totalCostMinor: "3360000", headcount: 3 },
     ]);
-    expect(b.totals).toEqual({ grossMinor: "3250000", employerCostMinor: "390000", totalCostMinor: "3640000" });
-    // the response has exactly these fields: nothing that could carry a person's pay
-    expect(Object.keys(b).sort()).toEqual(["currency", "from", "periods", "projectCode", "projectId", "to", "totals"]);
-    expect(Object.keys(b.periods[0]).sort()).toEqual(["employerCostMinor", "grossMinor", "headcount", "period", "totalCostMinor"]);
-    expect(JSON.stringify(b)).not.toMatch(NEVER);
-    expect(JSON.stringify(b)).not.toContain(EMP_A);
-    // another project's postings are not mixed in
-    expect((await app.inject({ method: "GET", url: URL(P2), headers: as.admin })).json().totals.totalCostMinor).toBe("500");
+    // the range total covers the visible months only, so (total - visible months) is 0, never a hidden month
+    expect(b.totals).toEqual({ scope: "visible_periods", grossMinor: "4000000", employerCostMinor: "480000", totalCostMinor: "4480000" });
+    expect(b.suppressedPeriods).toBe(2);
+    expect(Object.keys(b).sort()).toEqual(["currency", "from", "periods", "projectCode", "projectId", "suppressedPeriods", "to", "totals"]);
+    expect(r.body).not.toContain("777777");
+    expect(r.body).not.toMatch(NEVER);
+    expect(r.body).not.toContain(EMP_A);
   });
 
-  it("is idempotent: redelivery of the same posting does not double count", async () => {
-    const src = randomUUID();
-    await publishPosted({ kind: "run", sourceId: src, postings: [posting(P2, "2026-11", "100", "10", 1)] });
-    await publishPosted({ kind: "run", sourceId: src, postings: [posting(P2, "2026-11", "100", "10", 1)] });
+  it("asking for just the hidden month shows nothing about it", async () => {
+    const b = (await app.inject({ method: "GET", url: URL(P1, "from=2026-10&to=2026-10"), headers: as.pm1 })).json();
+    expect(b.periods).toEqual([{ period: "2026-10", suppressed: true, reason: "MIN_COHORT" }]);
+    expect(b.totals).toEqual({ scope: "visible_periods", grossMinor: "0", employerCostMinor: "0", totalCostMinor: "0" });
+  });
+
+  it("the threshold travels with the snapshot: 4 hides a 3-person month, 2 shows a 2-person month, and it is never below 2", async () => {
+    await publishPosted([posting(P2, "2026-09", "900", "100", 3)], { asOf: T1, minCohort: 4 });
+    await publishPosted([posting(P2, "2026-11", "800", "100", 2)], { asOf: T1, minCohort: 2 });
+    await publishPosted([posting(P2, "2026-12", "700", "100", 1)], { asOf: T1, minCohort: 2 });
     await mq().drain();
-    expect((await app.inject({ method: "GET", url: URL(P2, "from=2026-11&to=2026-11"), headers: as.admin })).json().totals.totalCostMinor).toBe("110");
+    const b = (await app.inject({ method: "GET", url: URL(P2), headers: as.fin })).json();
+    const by = (m: string) => b.periods.find((x: Row) => x.period === m);
+    expect(by("2026-09").suppressed).toBe(true);
+    expect(by("2026-11")).toMatchObject({ suppressed: false, headcount: 2 });
+    expect(by("2026-12").suppressed).toBe(true); // 1 person is hidden whatever the setting says
+    // a snapshot that tries to lower the threshold below 2 is refused whole
+    const before = (await q(sql`SELECT count(*)::int AS n FROM project.project_staff_cost_postings`))[0]!.n;
+    await publishPosted([posting(P2, "2026-08", "5", "5", 1)], { asOf: T2, minCohort: 1 });
+    await mq().drain();
+    expect((await q(sql`SELECT count(*)::int AS n FROM project.project_staff_cost_postings`))[0]!.n).toBe(before);
+    // and the database floor is 2 as well
+    await expect(q(sql`UPDATE project.project_staff_cost_postings SET min_cohort = 1`)).rejects.toThrow();
   });
 
-  it("only the project's own manager (member with role project_manager) can open it; a global role alone is not enough", async () => {
+  it("a snapshot replaces the previous one, an older one is ignored, a repeat changes nothing", async () => {
+    await publishPosted([posting(P2, "2026-07", "100", "10", 5)], { asOf: T1 });
+    await publishPosted([posting(P2, "2026-07", "999", "1", 5)], { asOf: T0 }); // older: ignored
+    await publishPosted([posting(P2, "2026-07", "100", "10", 5)], { asOf: T1 }); // repeat
+    await mq().drain();
+    expect((await app.inject({ method: "GET", url: URL(P2, "from=2026-07&to=2026-07"), headers: as.admin })).json().totals.totalCostMinor).toBe("110");
+    await publishPosted([posting(P2, "2026-07", "300", "30", 5)], { asOf: T2 });  // newer: replaces (a reclass moved money)
+    await mq().drain();
+    expect((await app.inject({ method: "GET", url: URL(P2, "from=2026-07&to=2026-07"), headers: as.admin })).json().totals.totalCostMinor).toBe("330");
+  });
+
+  it("pay-detail roles are exempt: super_admin sees the hidden month", async () => {
+    const b = (await app.inject({ method: "GET", url: URL(P1, "from=2026-10&to=2026-10"), headers: as.admin })).json();
+    expect(b.periods[0]).toMatchObject({ suppressed: false, grossMinor: "777777", headcount: 1 });
+  });
+
+  it("only the project's own manager (member with role project_manager) can open it; a global role is not enough", async () => {
     expect((await app.inject({ method: "GET", url: URL(P1), headers: as.pm1 })).statusCode).toBe(200);   // PM1 is P1's manager
     expect((await app.inject({ method: "GET", url: URL(P2), headers: as.pm1 })).statusCode).toBe(403);   // ... not P2's
     expect((await app.inject({ method: "GET", url: URL(P1), headers: as.pm2 })).statusCode).toBe(403);   // PM2 manages nothing
     expect((await app.inject({ method: "GET", url: URL(P1), headers: as.officer })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: URL(P1), headers: as.employee })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: URL(P1), headers: as.payroll })).statusCode).toBe(403);
-    // an engineer member of the project is a member, not its manager
     const eng = randomUUID();
     await addMember(P1, { userId: eng, role: "engineer" }); await mq().drain();
     expect((await app.inject({ method: "GET", url: URL(P1), headers: auth(eng, ["project_officer"]) })).statusCode).toBe(403);
-    // finance and audit read any project's totals; unknown project 404
     expect((await app.inject({ method: "GET", url: URL(P2), headers: as.fin })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: URL(P2), headers: as.aud })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: URL(randomUUID()), headers: as.admin })).statusCode).toBe(404);
@@ -202,13 +239,81 @@ describe("project manager: cost TOTALS only, never individual pay", () => {
     expect(await q(sql`SELECT 1 FROM project.project_staff_cost_postings`, OTHER)).toHaveLength(0);
   });
 
-  it("the table cannot hold a person: a payload with employee data is rejected whole, nothing stored", async () => {
+  it("the table cannot hold a person: a payload carrying employee data, or an inconsistent total, is rejected whole", async () => {
     const before = (await q(sql`SELECT count(*)::int AS n FROM project.project_staff_cost_postings`))[0]!.n;
-    await publishPosted({ kind: "run", sourceId: randomUUID(), postings: [{ ...posting(P1, "2026-12", "9", "1", 1), employeeId: EMP_A }] });
-    await publishPosted({ kind: "run", sourceId: randomUUID(), postings: [posting(P1, "2026-12", "9", "9", 1)] }); // total != gross + employer -> not ours
+    await publishPosted([{ ...posting(P1, "2026-06", "9", "1", 5), employeeId: EMP_A }], { asOf: T2 });
+    await publishPosted([{ ...posting(P1, "2026-06", "9", "9", 5), totalCostMinor: "1" }], { asOf: T2 });
     await mq().drain();
-    expect((await q(sql`SELECT count(*)::int AS n FROM project.project_staff_cost_postings`))[0]!.n).toBe(before + 1);
+    expect((await q(sql`SELECT count(*)::int AS n FROM project.project_staff_cost_postings`))[0]!.n).toBe(before);
     const cols = (await q(sql`SELECT column_name FROM information_schema.columns WHERE table_schema = 'project' AND table_name = 'project_staff_cost_postings'`)).map((c) => c.column_name as string);
     expect(cols.some((c) => NEVER.test(c))).toBe(false);
+  });
+});
+
+describe("appointing a project manager (self-promotion is closed)", () => {
+  const OFFICER2 = randomUUID(), SOMEONE = randomUUID(), SOMEONE2 = randomUUID();
+  const actions = async (action: string) => q(sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic = 'audit.event.record' AND payload->>'action' = ${action} ORDER BY created_at`);
+  let P3 = "";
+
+  it("a project officer cannot make THEMSELVES manager, nor appoint anyone else as manager", async () => {
+    P3 = await createProject("MYGOV");
+    const officer = auth(OFFICER2, ["project_officer"]);
+    expect((await addMember(P3, { userId: OFFICER2, role: "project_manager" }, officer)).statusCode).toBe(403);
+    expect((await addMember(P3, { userId: SOMEONE, role: "project_manager" }, officer)).statusCode).toBe(403);
+    await mq().drain();
+    expect(await q(sql`SELECT 1 FROM project.project_members WHERE project_id = ${P3}::uuid AND role = 'project_manager'`)).toHaveLength(0);
+    // and therefore the cost totals stay closed to them
+    expect((await app.inject({ method: "GET", url: `/v1/projects/${P3}/staff-cost?from=2026-04&to=2026-12`, headers: officer })).statusCode).toBe(403);
+  });
+
+  it("a super admin can appoint someone else, but not themselves", async () => {
+    expect((await addMember(P3, { userId: ADMIN, role: "project_manager" }, as.admin)).statusCode).toBe(403);
+    expect((await addMember(P3, { userId: PM2, role: "project_manager" }, as.admin)).statusCode).toBe(202);
+    await mq().drain();
+    expect((await app.inject({ method: "GET", url: `/v1/projects/${P3}/staff-cost?from=2026-04&to=2026-12`, headers: as.pm2 })).statusCode).toBe(200);
+    const a = await actions("add");
+    expect(a.some((x) => (x.payload as Row).role === "project_manager" && x.actor_id === ADMIN)).toBe(true);
+  });
+
+  it("the project's manager can appoint another manager; a plain member cannot change anyone's role; nobody changes their own", async () => {
+    expect((await addMember(P3, { userId: SOMEONE, role: "engineer" }, as.pm2)).statusCode).toBe(202);
+    expect((await addMember(P3, { userId: OFFICER2, role: "project_officer" }, as.pm2)).statusCode).toBe(202);
+    await mq().drain();
+    const memberId = async (u: string) => (await q(sql`SELECT id FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${u}::uuid`))[0]!.id as string;
+    const patch = (mid: string, role: string, headers: typeof as.pm2) => app.inject({ method: "PATCH", url: `/v1/projects/${P3}/members/${mid}`, headers, payload: { role } });
+    // a project officer: cannot promote the engineer, cannot promote themselves
+    expect((await patch(await memberId(SOMEONE), "project_manager", auth(OFFICER2, ["project_officer"]))).statusCode).toBe(403);
+    expect((await patch(await memberId(OFFICER2), "project_manager", auth(OFFICER2, ["project_officer"]))).statusCode).toBe(403);
+    // the manager cannot change their own role either
+    expect((await patch(await memberId(PM2), "viewer", as.pm2)).json().code).toBe("SELF_ROLE_CHANGE");
+    // ... but can promote someone else, and it is audited with before and after
+    expect((await patch(await memberId(SOMEONE), "project_manager", as.pm2)).statusCode).toBe(202);
+    await mq().drain();
+    expect((await q(sql`SELECT role FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${SOMEONE}::uuid`))[0]!.role).toBe("project_manager");
+    const ch = await actions("role_change");
+    expect(ch).toHaveLength(1);
+    expect(ch[0]!.actor_id).toBe(PM2);
+    expect(ch[0]!.payload).toMatchObject({ from: "engineer", to: "project_manager", userId: SOMEONE });
+    // an ordinary role change by a non-manager is fine for non-manager roles
+    expect((await patch(await memberId(OFFICER2), "viewer", auth(randomUUID(), ["project_officer"]))).statusCode).toBe(202);
+    // demoting a manager is a manager decision too
+    expect((await patch(await memberId(SOMEONE), "viewer", auth(randomUUID(), ["project_officer"]))).statusCode).toBe(403);
+  });
+
+  it("a member without a login cannot become the manager by role change", async () => {
+    await addMember(P3, { employeeId: EMP_A, role: "engineer" }, as.pm2); await mq().drain();
+    const mid = (await q(sql`SELECT id FROM project.project_members WHERE project_id = ${P3}::uuid AND employee_id = ${EMP_A}::uuid`))[0]!.id as string;
+    expect((await app.inject({ method: "PATCH", url: `/v1/projects/${P3}/members/${mid}`, headers: as.pm2, payload: { role: "project_manager" } })).statusCode).toBe(400);
+  });
+
+  it("commands that skip the route are refused by the consumer and audited as denied", async () => {
+    const forged = SOMEONE2;
+    await queue.publish("project.member.add", { messageId: randomUUID(), type: "project.member.add", tenantId: TENANT, actorId: forged, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: randomUUID(), projectId: P3, tenantId: TENANT, userId: forged, employeeId: null, role: "project_manager", viaSuperAdmin: false } } as never);
+    await mq().drain();
+    expect(await q(sql`SELECT 1 FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${forged}::uuid`)).toHaveLength(0);
+    const denied = await actions("member_add_denied");
+    expect(denied.length).toBeGreaterThan(0);
+    expect((denied[0]!.payload as Row).outcome).toBe("failure");
   });
 });

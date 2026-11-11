@@ -14,7 +14,7 @@ import { ProjectCostingRangeForm } from "./ProjectCostingRangeForm";
 import {
   PROJECT_COSTING_APPROVE_ROLES, PROJECT_COSTING_TOTALS_ROLES, PROJECT_COSTING_VIEW_ROLES, PROJECT_COSTING_WRITE_ROLES,
   getAllocations, getByCostCenter, getByProject, getCostCenters, getProjectIndex, getSettings,
-  type CostCenterCostRow, type ProjectCostRow, type UnallocatedRow,
+  type CostCenterCostRow, type ProjectCostReport, type UnallocatedRow,
 } from "./projectCostingData";
 
 type Row = Record<string, unknown>;
@@ -49,7 +49,7 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
   const empty = <T,>(d: T): Promise<LoaderResult<T>> => Promise.resolve({ data: d, source: "api" } as LoaderResult<T>);
   const [settings, allocations, projects, centers, byProject, byCc] = await Promise.all([
     getSettings(), getAllocations(), getProjectIndex(), getCostCenters(),
-    canSeeTotals && rangeValid ? getByProject(fromRaw, toRaw) : empty<ProjectCostRow[]>([]),
+    canSeeTotals && rangeValid ? getByProject(fromRaw, toRaw) : empty<ProjectCostReport>({ rows: [], minCohort: null }),
     canSeeTotals && rangeValid ? getByCostCenter(fromRaw, toRaw) : empty<{ data: CostCenterCostRow[]; unallocated: UnallocatedRow[] }>({ data: [], unallocated: [] }),
   ]);
   const names = await resolveEmployeeNames(allocations.data.map((a) => a.employeeId));
@@ -60,14 +60,20 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
   const personLabel = (id: string) => employeeDisplayLabel(names, id, formatShortId(id));
   const enabled = settings.data.enabled;
 
-  const projectRows: Row[] = byProject.data.map((r) => ({
+  const minCohort = byProject.data.minCohort ?? 3;
+  const hiddenCell = t("suppressedCell", { n: minCohort });
+    const projectRows: Row[] = byProject.data.rows.map((r) => ({
     id: `${r.period}:${r.projectId}`, period: r.period, project: projectLabel(r.projectId), gross: r.grossMinor, employer: r.employerCostMinor, total: r.totalCostMinor, headcount: r.headcount,
+    hidden: r.suppressed,
   }));
   const ccRows: Row[] = [
-    ...byCc.data.data.map((r) => ({ id: `${r.period}:${r.costCenterId}`, period: r.period, costCenter: centerLabel(r.costCenterId), gross: r.grossMinor, employer: r.employerCostMinor, total: r.totalCostMinor, headcount: r.headcount })),
-    ...byCc.data.unallocated.map((r) => ({ id: `${r.period}:unallocated`, period: r.period, costCenter: t("unallocatedRow"), gross: r.grossMinor, employer: r.employerCostMinor, total: r.totalCostMinor, headcount: r.headcount })),
+    ...byCc.data.data.map((r) => ({ id: `${r.period}:${r.costCenterId}`, period: r.period, costCenter: centerLabel(r.costCenterId), gross: r.grossMinor, employer: r.employerCostMinor, total: r.totalCostMinor, headcount: r.headcount, hidden: r.suppressed })),
+    ...byCc.data.unallocated.map((r) => ({ id: `${r.period}:unallocated`, period: r.period, costCenter: t("unallocatedRow"), gross: r.grossMinor, employer: r.employerCostMinor, total: r.totalCostMinor, headcount: r.headcount, hidden: r.suppressed })),
   ];
-  const sum = (k: keyof ProjectCostRow) => projectRows.reduce((s, r) => s + BigInt(String(r[k === "grossMinor" ? "gross" : k === "employerCostMinor" ? "employer" : "total"])), 0n);
+  const showMoney = (v: unknown, hidden: unknown) => (hidden === true ? hiddenCell : formatMoney(v as string));
+  const anyHidden = [...projectRows, ...ccRows].some((r) => r.hidden === true);
+  // The totals above the table add up the VISIBLE rows only.
+  const sumVisible = (k: "gross" | "total") => projectRows.reduce((s, r) => (r.hidden ? s : s + BigInt(String(r[k]))), 0n);
   const reportErrored = byProject.source === "error" || byCc.source === "error";
   const allocationRows: AllocationTableRow[] = allocations.data.map((a) => ({
     id: a.id, person: personLabel(a.employeeId), target: a.targetType === "project" ? projectLabel(a.projectId) : centerLabel(a.costCenterId),
@@ -106,20 +112,21 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
               <EmptyState icon="🗓️" title={t("chooseRangeTitle")} message={t("chooseRangeMessage")} />
             ) : (
               <>
+                {anyHidden && <p role="note" className="pill" style={{ margin: "0 0 12px", width: "fit-content" }}>{t("suppressedNotice", { n: minCohort })}</p>}
                 <StatGrid>
-                  <StatCard icon="📁" iconBg="var(--infobg)" label={t("statProjects")} value={new Set(projectRows.map((r) => r.project)).size} />
-                  <StatCard icon="₹" iconBg="var(--warnbg)" label={t("statGross")} value={formatMoney(sum("grossMinor"))} />
-                  <StatCard icon="₹" iconBg="var(--goodbg)" label={t("statTotal")} value={formatMoney(sum("totalCostMinor"))} />
+                  <StatCard icon="📁" iconBg="var(--infobg)" label={t("statProjects")} value={new Set(projectRows.filter((r) => !r.hidden).map((r) => r.project)).size} />
+                  <StatCard icon="₹" iconBg="var(--warnbg)" label={t("statGross")} value={formatMoney(sumVisible("gross"))} />
+                  <StatCard icon="₹" iconBg="var(--goodbg)" label={t("statTotal")} value={formatMoney(sumVisible("total"))} />
                 </StatGrid>
                 <DataTable<Row>
                   columns={[
                     { key: "period", label: t("colPeriod") }, { key: "project", label: t("colProject") },
-                    { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
-                    { key: "employer", label: t("colEmployer"), align: "right", cellType: "amount" },
-                    { key: "total", label: t("colTotal"), align: "right", cellType: "amount" },
+                    { key: "gross", label: t("colGross"), align: "right" },
+                    { key: "employer", label: t("colEmployer"), align: "right" },
+                    { key: "total", label: t("colTotal"), align: "right" },
                     { key: "headcount", label: t("colHeadcount"), align: "right" },
                   ]}
-                  rows={projectRows} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15}
+                  rows={projectRows.map((r) => ({ ...r, gross: showMoney(r.gross, r.hidden), employer: showMoney(r.employer, r.hidden), total: showMoney(r.total, r.hidden), headcount: r.hidden ? "—" : r.headcount }))} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15}
                   emptyIcon="📊" emptyTitle={t("reportEmptyTitle")} emptyMessage={t("reportEmptyMessage")}
                 />
               </>
@@ -130,12 +137,12 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
               <DataTable<Row>
                 columns={[
                   { key: "period", label: t("colPeriod") }, { key: "costCenter", label: t("colCostCenter") },
-                  { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
-                  { key: "employer", label: t("colEmployer"), align: "right", cellType: "amount" },
-                  { key: "total", label: t("colTotal"), align: "right", cellType: "amount" },
+                  { key: "gross", label: t("colGross"), align: "right" },
+                  { key: "employer", label: t("colEmployer"), align: "right" },
+                  { key: "total", label: t("colTotal"), align: "right" },
                   { key: "headcount", label: t("colHeadcount"), align: "right" },
                 ]}
-                rows={ccRows} sortable pageSize={15}
+                rows={ccRows.map((r) => ({ ...r, gross: showMoney(r.gross, r.hidden), employer: showMoney(r.employer, r.hidden), total: showMoney(r.total, r.hidden), headcount: r.hidden ? "—" : r.headcount }))} sortable pageSize={15}
                 emptyIcon="🏢" emptyTitle={t("reportEmptyTitle")} emptyMessage={t("reportEmptyMessage")}
               />
             </Card>

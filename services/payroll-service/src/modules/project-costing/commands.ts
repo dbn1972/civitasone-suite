@@ -11,7 +11,7 @@ export type AllocationRequestPayload = {
 };
 export type AllocationDecidePayload = { id: string; decision: "approve" | "reject"; note: string | null };
 export type AllocationEndPayload = { id: string; effectiveTo: string };
-export type CostingSettingsPayload = { enabled: boolean };
+export type CostingSettingsPayload = { enabled?: boolean | undefined; minCohort?: number | undefined };
 export type CostGeneratePayload = { runId: string };
 
 async function publish(ctx: RequestContext, type: string, id: string, payload: unknown): Promise<Accepted> {

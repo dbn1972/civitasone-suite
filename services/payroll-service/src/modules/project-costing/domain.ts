@@ -211,3 +211,119 @@ export function reclassDeltas(
   }
   return out;
 }
+
+// ─── Small-cohort suppression (owner rule: a project manager never sees individual pay) ───────────
+
+/** Default minimum number of distinct costed people behind any cell a non-pay-detail reader may see. */
+export const DEFAULT_MIN_COHORT = 3;
+/** The threshold can be raised per tenant but never lowered below 2 (one person is individual pay). */
+export const MIN_COHORT_FLOOR = 2;
+
+export function effectiveMinCohort(v: number | null | undefined): number {
+  return Math.max(MIN_COHORT_FLOOR, typeof v === "number" && Number.isInteger(v) ? v : DEFAULT_MIN_COHORT);
+}
+
+export interface EmployeeLeafRow {
+  period: string; lineKey: string; targetType: TargetType | "unallocated"; projectId: string | null; costCenterId: string | null;
+  employeeId: string; gross: bigint; employer: bigint; total: bigint;
+}
+
+/** One reporting leaf: a (period, line key) with the distinct people whose NET cost on it is not zero. */
+export interface LeafCell {
+  id: string; period: string; lineKey: string; targetType: TargetType | "unallocated"; projectId: string | null; costCenterId: string | null;
+  employees: Set<string>; gross: bigint; employer: bigint; total: bigint;
+}
+
+/**
+ * Group per-employee rows into leaf cells. A person whose run line and reclass
+ * deltas net to zero on a leaf is not counted (they no longer cost anything
+ * there), and a cell nobody costs anything on is dropped.
+ */
+export function buildLeafCells(rows: EmployeeLeafRow[]): LeafCell[] {
+  const cells = new Map<string, LeafCell>();
+  const net = new Map<string, EmployeeLeafRow>();
+  for (const r of rows) {
+    const k = `${r.period}|${r.lineKey}|${r.employeeId}`;
+    const cur = net.get(k);
+    net.set(k, cur ? { ...cur, gross: cur.gross + r.gross, employer: cur.employer + r.employer, total: cur.total + r.total } : { ...r });
+  }
+  for (const r of net.values()) {
+    const id = `${r.period}|${r.lineKey}`;
+    let c = cells.get(id);
+    if (!c) {
+      c = { id, period: r.period, lineKey: r.lineKey, targetType: r.targetType, projectId: r.projectId, costCenterId: r.costCenterId, employees: new Set(), gross: 0n, employer: 0n, total: 0n };
+      cells.set(id, c);
+    }
+    c.gross += r.gross; c.employer += r.employer; c.total += r.total;
+    if (r.gross !== 0n || r.employer !== 0n || r.total !== 0n) c.employees.add(r.employeeId);
+  }
+  return [...cells.values()].filter((c) => c.employees.size > 0).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * Which cells must be hidden from a reader who may see totals but not people.
+ *
+ * Primary suppression: a leaf cell with fewer than `k` distinct costed people.
+ * Complementary suppression, per period: a hidden cell could otherwise be
+ * recovered by subtracting the visible cells from a known period total, so the
+ * smallest visible cells are hidden too until the hidden remainder covers at
+ * least `k` distinct people (counted as a union, since one person can sit in
+ * several cells). Roll-ups are only shown when every leaf under them is
+ * visible, so no report can be differenced against another to expose a leaf.
+ */
+export function suppressedCells(cells: LeafCell[], k: number): Set<string> {
+  const hidden = new Set<string>();
+  const periods = new Map<string, LeafCell[]>();
+  for (const c of cells) periods.set(c.period, [...(periods.get(c.period) ?? []), c]);
+  for (const group of periods.values()) {
+    const union = new Set<string>();
+    for (const c of group) if (c.employees.size < k) { hidden.add(c.id); c.employees.forEach((e) => union.add(e)); }
+    if (hidden.size === 0 || !group.some((c) => hidden.has(c.id))) continue;
+    const visible = group.filter((c) => !hidden.has(c.id)).sort((a, b) => a.employees.size - b.employees.size || (a.id < b.id ? -1 : 1));
+    for (const c of visible) {
+      if (union.size >= k) break;
+      hidden.add(c.id);
+      c.employees.forEach((e) => union.add(e));
+    }
+  }
+  return hidden;
+}
+
+export interface TotalsRow {
+  period: string; suppressed: boolean; grossMinor?: string; employerCostMinor?: string; totalCostMinor?: string; headcount?: number;
+}
+const visibleRow = (period: string, g: bigint, e: bigint, t: bigint, heads: number): TotalsRow =>
+  ({ period, suppressed: false, grossMinor: g.toString(), employerCostMinor: e.toString(), totalCostMinor: t.toString(), headcount: heads });
+
+/** Roll leaf cells up to one row per (period, project); hidden if ANY leaf of the project is hidden. */
+export function rollupByProject(cells: LeafCell[], hidden: Set<string>): Array<TotalsRow & { projectId: string }> {
+  const groups = new Map<string, LeafCell[]>();
+  for (const c of cells) if (c.targetType === "project" && c.projectId) groups.set(`${c.period}|${c.projectId}`, [...(groups.get(`${c.period}|${c.projectId}`) ?? []), c]);
+  return [...groups.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, g]) => {
+    const first = g[0]!;
+    if (g.some((c) => hidden.has(c.id))) return { period: first.period, projectId: first.projectId!, suppressed: true };
+    const people = new Set<string>();
+    g.forEach((c) => c.employees.forEach((e) => people.add(e)));
+    return { ...visibleRow(first.period, g.reduce((s, c) => s + c.gross, 0n), g.reduce((s, c) => s + c.employer, 0n), g.reduce((s, c) => s + c.total, 0n), people.size), projectId: first.projectId! };
+  });
+}
+
+/** Roll leaf cells up to one row per (period, cost centre) (project lines roll into their cost centre) plus the unallocated bucket. */
+export function rollupByCostCenter(cells: LeafCell[], hidden: Set<string>): { data: Array<TotalsRow & { costCenterId: string }>; unallocated: TotalsRow[] } {
+  const groups = new Map<string, LeafCell[]>();
+  const unalloc: LeafCell[] = [];
+  for (const c of cells) {
+    if (c.targetType === "unallocated") unalloc.push(c);
+    else if (c.costCenterId) groups.set(`${c.period}|${c.costCenterId}`, [...(groups.get(`${c.period}|${c.costCenterId}`) ?? []), c]);
+  }
+  const data = [...groups.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, g]) => {
+    const first = g[0]!;
+    if (g.some((c) => hidden.has(c.id))) return { period: first.period, costCenterId: first.costCenterId!, suppressed: true };
+    const people = new Set<string>();
+    g.forEach((c) => c.employees.forEach((e) => people.add(e)));
+    return { ...visibleRow(first.period, g.reduce((s, c) => s + c.gross, 0n), g.reduce((s, c) => s + c.employer, 0n), g.reduce((s, c) => s + c.total, 0n), people.size), costCenterId: first.costCenterId! };
+  });
+  const unallocated = unalloc.sort((a, b) => (a.period < b.period ? -1 : 1)).map((c) =>
+    hidden.has(c.id) ? { period: c.period, suppressed: true } : visibleRow(c.period, c.gross, c.employer, c.total, c.employees.size));
+  return { data, unallocated };
+}

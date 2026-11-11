@@ -16,15 +16,19 @@ vi.mock("@/app/_data/employeeNames", () => ({
 import Page from "./page";
 
 const P = "22222222-2222-4222-8222-222222222222";
+const P2 = "44444444-4444-4444-8444-444444444444";
 function routeFetch(enabled = true) {
   fetchJsonMock.mockImplementation((url: string) => {
     if (url.includes("/settings")) return Promise.resolve({ data: { enabled }, source: "api" });
     if (url.includes("/allocations")) return Promise.resolve({ data: [
       { id: "a1", employeeId: "e1", targetType: "project", projectId: P, costCenterId: "c1", splitPct: "60.00", effectiveFrom: "2026-04-01", effectiveTo: null, status: "pending", requestedBy: "u9" },
     ], source: "api" });
-    if (url.includes("/by-project")) return Promise.resolve({ data: [{ period: "2026-09", projectId: P, grossMinor: "1000000", employerCostMinor: "120000", totalCostMinor: "1120000", headcount: 4 }], source: "api" });
-    if (url.includes("/by-cost-center")) return Promise.resolve({ data: { data: [], unallocated: [{ period: "2026-09", grossMinor: "500", employerCostMinor: "0", totalCostMinor: "500", headcount: 1 }] }, source: "api" });
-    if (url.includes("/costing-index")) return Promise.resolve({ data: [{ projectId: P, code: "DIGILOCKER", name: "DigiLocker", costCenterId: "c1" }], source: "api" });
+    if (url.includes("/by-project")) return Promise.resolve({ data: { minCohort: 3, rows: [
+      { period: "2026-09", projectId: P, suppressed: false, grossMinor: "1000000", employerCostMinor: "120000", totalCostMinor: "1120000", headcount: 4 },
+      { period: "2026-09", projectId: P2, suppressed: true, grossMinor: null, employerCostMinor: null, totalCostMinor: null, headcount: null },
+    ] }, source: "api" });
+    if (url.includes("/by-cost-center")) return Promise.resolve({ data: { data: [], unallocated: [{ period: "2026-09", suppressed: false, grossMinor: "500", employerCostMinor: "0", totalCostMinor: "500", headcount: 3 }] }, source: "api" });
+    if (url.includes("/costing-index")) return Promise.resolve({ data: [{ projectId: P, code: "DIGILOCKER", name: "DigiLocker", costCenterId: "c1" }, { projectId: P2, code: "UMANG", name: "UMANG", costCenterId: "c2" }], source: "api" });
     return Promise.resolve({ data: [], source: "api" });
   });
 }
@@ -50,6 +54,16 @@ describe("Project costing page", () => {
     expect(screen.getAllByText("DIGILOCKER — DigiLocker").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Approve allocation: Asha Rao 60%/ })).toBeInTheDocument();
     expect(screen.getByText("Not allocated")).toBeInTheDocument();
+  });
+
+  it("a hidden row (fewer than 3 people) shows the reason, never an amount, and the totals add up the visible rows only", async () => {
+    rolesMock.mockReturnValue(["finance_officer"]);
+    await renderPage();
+    expect(screen.getAllByText("Hidden (fewer than 3 people)").length).toBeGreaterThan(0);
+    expect(screen.getByRole("note")).toHaveTextContent("fewer than 3 people");
+    expect(screen.getByText("UMANG — UMANG")).toBeInTheDocument();
+    // total cost card = the one visible row only (11,200.00), not a sum that includes a hidden row
+    expect(screen.getAllByText("₹11,200.00").length).toBeGreaterThan(0);
   });
 
   it("finance officer sees totals but no request form and no approve buttons", async () => {

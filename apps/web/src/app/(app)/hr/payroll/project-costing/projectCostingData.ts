@@ -5,7 +5,7 @@
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import {
   mapAllocations, mapByCostCenter, mapByProject, mapCostCenters, mapProjectIndex, mapSettings,
-  type Allocation, type CostCenterCostRow, type CostCenterOption, type ProjectCostRow, type ProjectOption, type UnallocatedRow,
+  type Allocation, type CostCenterCostRow, type CostCenterOption, type ProjectCostReport, type ProjectOption, type UnallocatedRow,
 } from "./projectCostingShared";
 
 export * from "./projectCostingShared";
@@ -18,8 +18,8 @@ export const getSettings = (): Promise<LoaderResult<{ enabled: boolean }>> =>
 export const getAllocations = (): Promise<LoaderResult<Allocation[]>> =>
   fetchJson<unknown, Allocation[]>(`${BASE}/allocations`, [], { telemetryKey: "payroll.project-costing.allocations", mapResponse: mapAllocations });
 
-export const getByProject = (from: string, to: string): Promise<LoaderResult<ProjectCostRow[]>> =>
-  fetchJson<unknown, ProjectCostRow[]>(`${BASE}/by-project?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, [], {
+export const getByProject = (from: string, to: string): Promise<LoaderResult<ProjectCostReport>> =>
+  fetchJson<unknown, ProjectCostReport>(`${BASE}/by-project?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { rows: [], minCohort: null }, {
     telemetryKey: "payroll.project-costing.by-project", mapResponse: mapByProject,
   });
 

@@ -26,6 +26,7 @@ export const COMMANDS = {
   taskUpdate:              "project.task.update",
   memberAdd:               "project.member.add",
   memberRemove:            "project.member.remove",
+  memberRoleChange:        "project.member.role_change",
   escalationAct:           "project.escalation.act",
 } as const;
 

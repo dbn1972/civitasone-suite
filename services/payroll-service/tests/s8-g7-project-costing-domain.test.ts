@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_MIN_COHORT, buildLeafCells, effectiveMinCohort, rollupByCostCenter, rollupByProject, suppressedCells, type EmployeeLeafRow,
   FULL_BPS, apportion, daysInMonth, isValidSplitPct, peakAllocationBps, pctToBps, reclassDeltas, splitSlipCost,
   totalOf, type AllocationLine, type CostAmounts,
 } from "../src/modules/project-costing/domain.js";
@@ -139,5 +140,76 @@ describe("csv", () => {
     expect(csvCell("-500")).toBe("-500");
     expect(csvCell("a,b")).toBe('"a,b"');
     expect(toCsv(["a", "b"], [["1", null]])).toBe("a,b\r\n1,\r\n");
+  });
+});
+
+describe("small-cohort suppression (pure)", () => {
+  const row = (period: string, project: string, employee: string, gross: bigint, cc = "cc-" + project): EmployeeLeafRow => ({
+    period, lineKey: `project:${project}:${cc}`, targetType: "project", projectId: project, costCenterId: cc, employeeId: employee, gross, employer: 0n, total: gross,
+  });
+  const people = (n: number, prefix: string) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+
+  it("the threshold defaults to 3 and can never be lowered below 2", () => {
+    expect(DEFAULT_MIN_COHORT).toBe(3);
+    expect(effectiveMinCohort(undefined)).toBe(3);
+    expect(effectiveMinCohort(1)).toBe(2);
+    expect(effectiveMinCohort(0)).toBe(2);
+    expect(effectiveMinCohort(-5)).toBe(2);
+    expect(effectiveMinCohort(2.5)).toBe(3);
+    expect(effectiveMinCohort(7)).toBe(7);
+  });
+
+  it("headcount 1 and 2 are hidden, 3 is shown", () => {
+    const cells = buildLeafCells([row("2026-09", "a", "e1", 100n), ...people(2, "b").map((e) => row("2026-09", "b", e, 100n)), ...people(3, "c").map((e) => row("2026-09", "c", e, 100n))]);
+    const hidden = suppressedCells(cells, 3);
+    const rows = rollupByProject(cells, hidden);
+    expect(rows.map((r) => [r.projectId, r.suppressed])).toEqual([["a", true], ["b", true], ["c", false]]);
+    expect(rows.find((r) => r.projectId === "a")).toEqual({ period: "2026-09", projectId: "a", suppressed: true }); // no amounts at all
+    expect(rows.find((r) => r.projectId === "c")).toMatchObject({ headcount: 3, grossMinor: "300" });
+  });
+
+  it("a lone hidden cell hides the smallest visible neighbour so the hidden remainder covers >= k people (subtraction attack)", () => {
+    const cells = buildLeafCells([row("2026-09", "a", "e1", 100n), ...people(3, "c").map((e) => row("2026-09", "c", e, 100n)), ...people(5, "d").map((e) => row("2026-09", "d", e, 100n))]);
+    const rows = rollupByProject(cells, suppressedCells(cells, 3));
+    expect(rows.map((r) => [r.projectId, r.suppressed])).toEqual([["a", true], ["c", true], ["d", false]]);
+  });
+
+  it("people who sit in several cells count once in the hidden union", () => {
+    // x is in hidden cell a AND in visible cell c; hidden union {x} = 1 < 3, so more must be hidden
+    const cells = buildLeafCells([row("2026-09", "a", "x", 100n), ...["x", "y", "z"].map((e) => row("2026-09", "c", e, 100n)), ...people(4, "d").map((e) => row("2026-09", "d", e, 100n))]);
+    const rows = rollupByProject(cells, suppressedCells(cells, 3));
+    expect(rows.find((r) => r.projectId === "a")!.suppressed).toBe(true);
+    expect(rows.find((r) => r.projectId === "c")!.suppressed).toBe(true);
+    expect(rows.find((r) => r.projectId === "d")!.suppressed).toBe(false);
+  });
+
+  it("each month is decided on its own", () => {
+    const cells = buildLeafCells([...people(3, "a").map((e) => row("2026-09", "p", e, 10n)), row("2026-10", "p", "a0", 10n)]);
+    const rows = rollupByProject(cells, suppressedCells(cells, 3));
+    expect(rows.map((r) => [r.period, r.suppressed])).toEqual([["2026-09", false], ["2026-10", true]]);
+  });
+
+  it("a reclass delta that nets a person to zero does not count them, and a net-zero cell disappears", () => {
+    const cells = buildLeafCells([
+      ...people(3, "a").map((e) => row("2026-09", "p", e, 100n)),
+      row("2026-09", "p", "a0", -100n), // a0's reclass reversed their run line: they no longer cost anything on p
+      row("2026-09", "q", "z", 50n), row("2026-09", "q", "z", -50n), // fully reversed
+    ]);
+    expect(cells.map((c) => c.projectId)).toEqual(["p"]);
+    expect(cells[0]!.employees.size).toBe(2);
+    expect(rollupByProject(cells, suppressedCells(cells, 3))[0]!.suppressed).toBe(true);
+  });
+
+  it("a cost centre is shown only when every leaf under it is visible; the unallocated bucket has its own rule", () => {
+    const un = (e: string): EmployeeLeafRow => ({ period: "2026-09", lineKey: "unallocated", targetType: "unallocated", projectId: null, costCenterId: null, employeeId: e, gross: 10n, employer: 0n, total: 10n });
+    const cells = buildLeafCells([
+      ...people(3, "a").map((e) => row("2026-09", "p1", e, 100n, "ccX")), row("2026-09", "p2", "solo", 100n, "ccX"), // ccX = p1 (3) + p2 (1)
+      ...people(4, "b").map((e) => row("2026-09", "p3", e, 100n, "ccY")),
+      ...people(3, "u").map(un),
+    ]);
+    const r = rollupByCostCenter(cells, suppressedCells(cells, 3));
+    expect(r.data.find((x) => x.costCenterId === "ccX")!.suppressed).toBe(true);
+    expect(r.data.find((x) => x.costCenterId === "ccY")).toMatchObject({ suppressed: false, headcount: 4 });
+    expect(r.unallocated[0]).toMatchObject({ suppressed: false, headcount: 3 });
   });
 });

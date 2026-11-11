@@ -113,7 +113,7 @@ afterAll(async () => { await app?.close(); await sqlClient.end(); });
 
 describe("flag default OFF: a no-op for existing tenants", () => {
   it("allocation writes are refused (409), settings read false, the run hook writes nothing", async () => {
-    expect((await get(`${BASE}/settings`)).json().data.enabled).toBe(false);
+    expect((await get(`${BASE}/settings`)).json().data).toEqual({ enabled: false, minCohort: 3 });
     const res = await post(`${BASE}/allocations`, alloc(E1, P1, CC1, 60, "2026-04-01"), as.officer);
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("PROJECT_COSTING_DISABLED");
@@ -247,11 +247,12 @@ describe("cost lines from an approved run", () => {
     expect(ev.length).toBeGreaterThan(0);
     const text = JSON.stringify(ev.map((e) => e.payload));
     for (const id of [E1, E2, E3]) expect(text).not.toContain(id);
-    expect(text).not.toMatch(/employee/i);
-    const p = (ev[0]!.payload as { kind: string; postings: Array<Record<string, string | number>> });
-    expect(p.kind).toBe("run");
+    expect(text).not.toMatch(/employee"|employeeId/i);
+    const p = ev[0]!.payload as { asOf: string; minCohort: number; postings: Array<Record<string, string | number>> };
+    expect(p.minCohort).toBe(3);
     expect(p.postings.map((x) => x.projectId).sort()).toEqual([P1, P2].sort());
-    expect(Object.keys(p.postings[0]!).sort()).toEqual(["costMonth", "employerCostMinor", "grossMinor", "headcount", "projectId", "totalCostMinor"]);
+    expect(Object.keys(p.postings[0]!).sort()).toEqual(["cohort", "costMonth", "employerCostMinor", "grossMinor", "projectId", "totalCostMinor"]);
+    expect(p.postings.every((x) => x.cohort === 1)).toBe(true);
     // unallocated and cost-centre-only lines are not project postings
     expect(p.postings.every((x) => [P1, P2].includes(x.projectId as string))).toBe(true);
   });
@@ -272,19 +273,19 @@ describe("cost lines from an approved run", () => {
 describe("reports and the access matrix (a project manager never sees individual pay)", () => {
   const range = "from=2026-09&to=2026-09";
   it("by-project totals equal the sum of the lines; unallocated is reported separately on by-cost-center", async () => {
-    const r = await get(`${BASE}/by-project?${range}`, as.finoff);
+    const r = await get(`${BASE}/by-project?${range}`, as.finadmin);
     expect(r.statusCode).toBe(200);
     const byP = new Map((r.json().data as Array<{ projectId: string; grossMinor: string; headcount: number }>).map((x) => [x.projectId, x]));
     expect(BigInt(byP.get(P1)!.grossMinor) + BigInt(byP.get(P2)!.grossMinor)).toBe(100_000_01n);
     expect(byP.get(P1)!.headcount).toBe(1);
-    const cc = await get(`${BASE}/by-cost-center?${range}`, as.finoff);
+    const cc = await get(`${BASE}/by-cost-center?${range}`, as.finadmin);
     expect(cc.json().unallocated[0].grossMinor).toBe("5000000");
     expect(cc.json().data.map((x: { costCenterId: string }) => x.costCenterId).sort()).toEqual([CC1, CC2].sort());
   });
 
   it("the totals reports never carry an employee id or a per-person field", async () => {
     for (const url of [`${BASE}/by-project?${range}`, `${BASE}/by-cost-center?${range}`]) {
-      const text = (await get(url, as.finoff)).body;
+      const text = (await get(url, as.finadmin)).body;
       for (const id of [E1, E2]) expect(text).not.toContain(id);
       expect(text).not.toMatch(/employee/i);
     }
@@ -293,7 +294,7 @@ describe("reports and the access matrix (a project manager never sees individual
   it("csv export works and carries the same totals", async () => {
     const res = await get(`${BASE}/by-project?${range}&format=csv`, as.finadmin);
     expect(res.headers["content-type"]).toContain("text/csv");
-    expect(res.body.split("\r\n")[0]).toBe("period,projectId,grossMinor,employerCostMinor,totalCostMinor,headcount");
+    expect(res.body.split("\r\n")[0]).toBe("period,projectId,suppressed,grossMinor,employerCostMinor,totalCostMinor,headcount");
     expect(res.body).not.toContain(E1);
   });
 
@@ -335,12 +336,13 @@ describe("back-dated reclassification: approved runs are never rewritten", () =>
     expect(rc.find((r) => r.target_type === "project")!.gross).toBe("2500000");
     expect(rc.every((r) => r.booked_run_id === null)).toBe(true);
     // the report by cost month now shows the corrected truth ...
-    const r = await get(`/v1/payroll/project-costing/by-project?from=2026-09&to=2026-09&projectId=${P1}`, as.finoff);
+    const r = await get(`/v1/payroll/project-costing/by-project?from=2026-09&to=2026-09&projectId=${P1}`, as.finadmin);
     expect(BigInt(r.json().data[0].grossMinor)).toBe(60_000_01n + 25_000_00n);
-    // ... and the project-service feed got a reclass posting (money moved, no people counted)
-    const ev = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic = 'payroll.project_cost.posted' AND payload->>'kind' = 'reclass'`);
-    expect(ev).toHaveLength(1);
-    expect((ev[0]!.payload as { postings: Array<{ headcount: number }> }).postings.every((x) => x.headcount === 0)).toBe(true);
+    // ... and project-service got a fresh snapshot of the corrected month (absolute values, cohort 2 now)
+    const ev = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic = 'payroll.project_cost.posted' ORDER BY created_at DESC LIMIT 1`);
+    const last = (ev[0]!.payload as { postings: Array<{ projectId: string; costMonth: string; grossMinor: string; cohort: number }> }).postings.find((x) => x.projectId === P1 && x.costMonth === "2026-09")!;
+    expect(BigInt(last.grossMinor)).toBe(60_000_01n + 25_000_00n);
+    expect(last.cohort).toBe(2);
   });
 
   it("re-running the reclass finds no difference (idempotent) and the next run books the deltas", async () => {
@@ -355,7 +357,7 @@ describe("back-dated reclassification: approved runs are never rewritten", () =>
     const oct = await lines(runId);
     expect(oct.find((r) => r.target_type === "project")!.gross).toBe("2500000");
     // basis=booked: the September correction is reported in October, September itself stays as first booked
-    const booked = await get(`${BASE}/by-project?from=2026-09&to=2026-10&projectId=${P1}&basis=booked`, as.finoff);
+    const booked = await get(`${BASE}/by-project?from=2026-09&to=2026-10&projectId=${P1}&basis=booked`, as.finadmin);
     const byPeriod = Object.fromEntries((booked.json().data as Array<{ period: string; grossMinor: string }>).map((x) => [x.period, BigInt(x.grossMinor)]));
     expect(byPeriod["2026-09"]).toBe(60_000_01n);
     expect(byPeriod["2026-10"]).toBe(25_000_00n + 25_000_00n);
@@ -367,7 +369,7 @@ describe("back-dated reclassification: approved runs are never rewritten", () =>
     expect(res.statusCode).toBe(202);
     await drain();
     // 14 of 30 days at 50%: P1 should now carry 50% * 14/30 of 50,000.00 = 11,666.67
-    const r = await get(`${BASE}/by-project?from=2026-09&to=2026-09&projectId=${P1}`, as.finoff);
+    const r = await get(`${BASE}/by-project?from=2026-09&to=2026-09&projectId=${P1}`, as.finadmin);
     expect(BigInt(r.json().data[0].grossMinor)).toBe(60_000_01n + 11_666_67n);
     expect((await post(`${BASE}/allocations/${a!.id}/end`, { effectiveTo: "2026-09-30" }, as.finadmin)).statusCode).toBe(422);
   });

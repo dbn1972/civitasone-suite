@@ -11,7 +11,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import type { AllocationDecidePayload, AllocationEndPayload, AllocationRequestPayload, CostGeneratePayload, CostingSettingsPayload } from "./commands.js";
 import { FULL_BPS, nextDay, pctToBps } from "./domain.js";
-import { lockEmployeeCosting, peakWithCandidate, reclassEmployeeTx, recordRunCostLinesTx } from "./service.js";
+import { emitProjectSnapshots, lockEmployeeCosting, peakWithCandidate, reclassEmployeeTx, recordRunCostLinesTx } from "./service.js";
 
 const AUDIT = "audit.event.record";
 
@@ -32,13 +32,22 @@ export function registerProjectCostingConsumers(queue: Queue): void {
     const p = msg.payload as CostingSettingsPayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const before = rowsOf<{ on: boolean }>(await tx.execute(sql`
-        SELECT project_costing_enabled AS on FROM payroll.payroll_settings WHERE tenant_id = ${msg.tenantId}::uuid FOR UPDATE`));
+      const before = rowsOf<{ on: boolean; k: number }>(await tx.execute(sql`
+        SELECT project_costing_enabled AS on, project_cost_min_cohort AS k FROM payroll.payroll_settings WHERE tenant_id = ${msg.tenantId}::uuid FOR UPDATE`));
       await tx.execute(sql`
-        INSERT INTO payroll.payroll_settings (tenant_id, project_costing_enabled, created_at, updated_at)
-        VALUES (${msg.tenantId}::uuid, ${p.enabled}, NOW(), NOW())
-        ON CONFLICT (tenant_id) DO UPDATE SET project_costing_enabled = EXCLUDED.project_costing_enabled, updated_at = NOW()`);
-      await auditer(tx, msg, "project_costing_settings_updated", "payroll_settings", msg.tenantId)("success", { before: before[0]?.on ?? false, after: p.enabled });
+        INSERT INTO payroll.payroll_settings (tenant_id, project_costing_enabled, project_cost_min_cohort, created_at, updated_at)
+        VALUES (${msg.tenantId}::uuid, COALESCE(${p.enabled ?? null}::boolean, false), COALESCE(${p.minCohort ?? null}::int, 3), NOW(), NOW())
+        ON CONFLICT (tenant_id) DO UPDATE
+          SET project_costing_enabled = COALESCE(${p.enabled ?? null}::boolean, payroll.payroll_settings.project_costing_enabled),
+              project_cost_min_cohort = COALESCE(${p.minCohort ?? null}::int, payroll.payroll_settings.project_cost_min_cohort),
+              updated_at = NOW()`);
+      const after = rowsOf<{ on: boolean; k: number }>(await tx.execute(sql`
+        SELECT project_costing_enabled AS on, project_cost_min_cohort AS k FROM payroll.payroll_settings WHERE tenant_id = ${msg.tenantId}::uuid`))[0]!;
+      // The project-service view applies the threshold from the snapshots, so a changed threshold is re-published.
+      if (after.on && before[0]?.k !== after.k) await emitProjectSnapshots(tx as never, msg, "all");
+      await auditer(tx, msg, "project_costing_settings_updated", "payroll_settings", msg.tenantId)("success", {
+        before: { enabled: before[0]?.on ?? false, minCohort: before[0]?.k ?? 3 }, after: { enabled: after.on, minCohort: after.k },
+      });
     });
   });
 

@@ -30,9 +30,12 @@ export type Allocation = {
   requestedBy: string;
 };
 
-export type ProjectCostRow = { period: string; projectId: string; grossMinor: string; employerCostMinor: string; totalCostMinor: string; headcount: number };
-export type CostCenterCostRow = { period: string; costCenterId: string; grossMinor: string; employerCostMinor: string; totalCostMinor: string; headcount: number };
-export type UnallocatedRow = { period: string; grossMinor: string; employerCostMinor: string; totalCostMinor: string; headcount: number };
+/** A totals row. `suppressed` rows (fewer than minCohort people behind them) carry NO amounts and no headcount. */
+type Totals = { suppressed: boolean; grossMinor: string | null; employerCostMinor: string | null; totalCostMinor: string | null; headcount: number | null };
+export type ProjectCostRow = { period: string; projectId: string } & Totals;
+export type CostCenterCostRow = { period: string; costCenterId: string } & Totals;
+export type UnallocatedRow = { period: string } & Totals;
+export type ProjectCostReport = { rows: ProjectCostRow[]; minCohort: number | null };
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const digits = (v: unknown): string | null => (typeof v === "string" && /^-?\d{1,18}$/.test(v) ? v : null);
@@ -58,33 +61,36 @@ export function mapAllocations(p: unknown): Allocation[] | null {
   return out;
 }
 
-export function mapByProject(p: unknown): ProjectCostRow[] | null {
-  const arr = (p as { data?: unknown } | null)?.data;
-  if (!Array.isArray(arr)) return null;
-  const out: ProjectCostRow[] = [];
-  for (const r of arr as Array<Record<string, unknown>>) {
-    const period = str(r.period), projectId = str(r.projectId), g = digits(r.grossMinor), e = digits(r.employerCostMinor), t = digits(r.totalCostMinor);
-    if (!period || !projectId || g === null || e === null || t === null) continue;
-    out.push({ period, projectId, grossMinor: g, employerCostMinor: e, totalCostMinor: t, headcount: typeof r.headcount === "number" ? r.headcount : 0 });
+function totals(r: Record<string, unknown>): Totals | null {
+  if (r.suppressed === true) return { suppressed: true, grossMinor: null, employerCostMinor: null, totalCostMinor: null, headcount: null };
+  const g = digits(r.grossMinor), e = digits(r.employerCostMinor), t = digits(r.totalCostMinor);
+  if (g === null || e === null || t === null) return null;
+  return { suppressed: false, grossMinor: g, employerCostMinor: e, totalCostMinor: t, headcount: typeof r.headcount === "number" ? r.headcount : 0 };
+}
+
+export function mapByProject(p: unknown): ProjectCostReport | null {
+  const body = p as { data?: unknown; minCohort?: unknown } | null;
+  if (!body || !Array.isArray(body.data)) return null;
+  const rows: ProjectCostRow[] = [];
+  for (const r of body.data as Array<Record<string, unknown>>) {
+    const period = str(r.period), projectId = str(r.projectId), t = totals(r);
+    if (period && projectId && t) rows.push({ period, projectId, ...t });
   }
-  return out;
+  return { rows, minCohort: typeof body.minCohort === "number" ? body.minCohort : null };
 }
 
 export function mapByCostCenter(p: unknown): { data: CostCenterCostRow[]; unallocated: UnallocatedRow[] } | null {
   const body = p as { data?: unknown; unallocated?: unknown } | null;
   if (!body || !Array.isArray(body.data)) return null;
-  const shape = (r: Record<string, unknown>) => ({
-    period: str(r.period), g: digits(r.grossMinor), e: digits(r.employerCostMinor), t: digits(r.totalCostMinor), heads: typeof r.headcount === "number" ? r.headcount : 0,
-  });
   const data: CostCenterCostRow[] = [];
   for (const r of body.data as Array<Record<string, unknown>>) {
-    const s = shape(r), cc = str(r.costCenterId);
-    if (s.period && cc && s.g !== null && s.e !== null && s.t !== null) data.push({ period: s.period, costCenterId: cc, grossMinor: s.g, employerCostMinor: s.e, totalCostMinor: s.t, headcount: s.heads });
+    const period = str(r.period), cc = str(r.costCenterId), t = totals(r);
+    if (period && cc && t) data.push({ period, costCenterId: cc, ...t });
   }
   const unallocated: UnallocatedRow[] = [];
   for (const r of (Array.isArray(body.unallocated) ? body.unallocated : []) as Array<Record<string, unknown>>) {
-    const s = shape(r);
-    if (s.period && s.g !== null && s.e !== null && s.t !== null) unallocated.push({ period: s.period, grossMinor: s.g, employerCostMinor: s.e, totalCostMinor: s.t, headcount: s.heads });
+    const period = str(r.period), t = totals(r);
+    if (period && t) unallocated.push({ period, ...t });
   }
   return { data, unallocated };
 }

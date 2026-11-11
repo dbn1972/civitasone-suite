@@ -9,7 +9,7 @@ import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import {
   type AllocationLine, type CostAmounts, type CostLine, type TargetIdentity, type TargetType,
-  addAmounts, monthEnd, monthStart, peakAllocationBps, pctToBps, reclassDeltas, splitSlipCost, totalOf, zeroAmounts,
+  addAmounts, effectiveMinCohort, monthEnd, monthStart, peakAllocationBps, pctToBps, reclassDeltas, splitSlipCost, totalOf, zeroAmounts,
 } from "./domain.js";
 
 export type Tx = { execute: (q: SQL) => Promise<unknown> };
@@ -117,37 +117,51 @@ async function insertLines(tx: Tx, tenantId: string, lines: LineInsert[]): Promi
   }
 }
 
-export interface ProjectPosting {
-  projectId: string; costMonth: string; grossMinor: string; employerCostMinor: string; totalCostMinor: string; headcount: number;
+export interface ProjectSnapshot {
+  projectId: string; costMonth: string; grossMinor: string; employerCostMinor: string; totalCostMinor: string; cohort: number;
 }
 
-async function emitPostings(
-  tx: Parameters<typeof enqueue>[0],
+export async function loadMinCohort(tx: Tx, tenantId: string): Promise<number> {
+  const r = rowsOf<{ k: number }>(await tx.execute(sql`
+    SELECT project_cost_min_cohort AS k FROM payroll.payroll_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1`));
+  return effectiveMinCohort(r[0]?.k);
+}
+
+/**
+ * Publish the CURRENT per-project, per-cost-month totals (run lines plus
+ * reclass deltas) to project-service, for the given months or for every month.
+ * A snapshot replaces the previous one (absolute values + `asOf`), so a stale
+ * or repeated delivery cannot double count. Aggregates only: `cohort` is the
+ * number of distinct people whose net cost on the project that month is not
+ * zero, so project-service can hide a month that fewer than `minCohort` people
+ * stand behind. No employee id and no per-person amount is in the payload.
+ */
+export async function emitProjectSnapshots(
+  tx: Parameters<typeof enqueue>[0] & Tx,
   msg: { tenantId: string; actorId: string; correlationId: string },
-  kind: "run" | "reclass", sourceId: string, postings: ProjectPosting[],
-): Promise<void> {
-  if (postings.length === 0) return;
-  // Aggregates only: no employee id, no per-person amount ever leaves payroll in this event.
+  scope: { months: string[] } | "all",
+): Promise<number> {
+  const monthFilter = scope === "all" ? sql`TRUE` : scope.months.length === 0 ? sql`FALSE` : sql`cost_month IN (${sql.join(scope.months.map((m) => sql`${m}`), sql`, `)})`;
+  const r = rowsOf<{ project_id: string; cost_month: string; g: string; e: string; t: string; cohort: string }>(await tx.execute(sql`
+    WITH per_emp AS (
+      SELECT project_id, cost_month, employee_id, SUM(gross_minor) AS g,
+             SUM(employer_pf_minor + employer_esi_minor + employer_nps_minor + other_employer_minor) AS e, SUM(total_cost_minor) AS t
+        FROM payroll.slip_cost_lines
+       WHERE tenant_id = ${msg.tenantId}::uuid AND target_type = 'project' AND ${monthFilter}
+       GROUP BY project_id, cost_month, employee_id)
+    SELECT project_id, cost_month, SUM(g)::text AS g, SUM(e)::text AS e, SUM(t)::text AS t,
+           COUNT(*) FILTER (WHERE g <> 0 OR e <> 0 OR t <> 0)::text AS cohort
+      FROM per_emp GROUP BY project_id, cost_month ORDER BY project_id, cost_month`));
+  if (r.length === 0) return 0;
   await enqueue(tx, {
     topic: EVENTS.projectCostPosted, eventType: EVENTS.projectCostPosted,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    // A reclass delta moves money, not people: its headcount is always 0 so a sum over postings counts staff once.
-    payload: { kind, sourceId, postings: kind === "reclass" ? postings.map((p) => ({ ...p, headcount: 0 })) : postings },
+    payload: {
+      asOf: new Date().toISOString(), minCohort: await loadMinCohort(tx, msg.tenantId),
+      postings: r.map((x): ProjectSnapshot => ({ projectId: x.project_id, costMonth: x.cost_month, grossMinor: x.g, employerCostMinor: x.e, totalCostMinor: x.t, cohort: Number(x.cohort) })),
+    },
   });
-}
-
-/** Per project and cost month totals of the run lines (or of a reclass batch) straight from the table. */
-async function projectPostings(tx: Tx, tenantId: string, where: SQL): Promise<ProjectPosting[]> {
-  const r = rowsOf<{ project_id: string; cost_month: string; gross: string; employer: string; total: string; heads: string }>(await tx.execute(sql`
-    SELECT project_id, cost_month, SUM(gross_minor)::text AS gross,
-           SUM(employer_pf_minor + employer_esi_minor + employer_nps_minor + other_employer_minor)::text AS employer,
-           SUM(total_cost_minor)::text AS total, COUNT(DISTINCT employee_id)::text AS heads
-      FROM payroll.slip_cost_lines
-     WHERE tenant_id = ${tenantId}::uuid AND target_type = 'project' AND ${where}
-     GROUP BY project_id, cost_month ORDER BY project_id, cost_month`));
-  return r.map((x) => ({
-    projectId: x.project_id, costMonth: x.cost_month, grossMinor: x.gross, employerCostMinor: x.employer, totalCostMinor: x.total, headcount: Number(x.heads),
-  }));
+  return r.length;
 }
 
 export type RunCostResult = { skipped: "disabled" | "no_slips" | null; slips: number; lines: number; projects: number };
@@ -187,9 +201,8 @@ export async function recordRunCostLinesTx(
     UPDATE payroll.slip_cost_lines SET booked_run_id = ${run.id}::uuid, booked_month = ${run.month}
      WHERE tenant_id = ${msg.tenantId}::uuid AND kind = 'reclass' AND booked_run_id IS NULL`);
 
-  const postings = await projectPostings(tx, msg.tenantId, sql`kind = 'run' AND run_id = ${run.id}::uuid`);
-  await emitPostings(tx, msg, "run", run.id, postings);
-  return { skipped: null, slips: slips.length, lines: inserts.length, projects: postings.length };
+  const projects = await emitProjectSnapshots(tx, msg, { months: [run.month] });
+  return { skipped: null, slips: slips.length, lines: inserts.length, projects };
 }
 
 /**
@@ -205,6 +218,8 @@ export async function reclassEmployeeTx(
   msg: { tenantId: string; actorId: string; correlationId: string },
   employeeId: string, sinceDate: string, batchId: string = randomUUID(),
 ): Promise<{ deltaLines: number; months: number }> {
+  // With the flag off nothing is costed and nothing may be written (a tenant that switched it off must stay a no-op).
+  if (!(await isProjectCostingEnabled(tx, msg.tenantId))) return { deltaLines: 0, months: 0 };
   const slips = rowsOf<{ slip_id: string; run_id: string; cost_month: string }>(await tx.execute(sql`
     SELECT DISTINCT slip_id, run_id, cost_month FROM payroll.slip_cost_lines
      WHERE tenant_id = ${msg.tenantId}::uuid AND employee_id = ${employeeId}::uuid AND kind = 'run' AND cost_month >= ${sinceDate.slice(0, 7)}
@@ -238,8 +253,6 @@ export async function reclassEmployeeTx(
     }
   }
   await insertLines(tx, msg.tenantId, inserts);
-  if (inserts.length > 0) {
-    await emitPostings(tx, msg, "reclass", batchId, await projectPostings(tx, msg.tenantId, sql`kind = 'reclass' AND reclass_batch_id = ${batchId}::uuid`));
-  }
+  if (inserts.length > 0) await emitProjectSnapshots(tx, msg, { months: [...new Set(inserts.map((i) => i.costMonth))] });
   return { deltaLines: inserts.length, months: new Set(slips.map((s) => s.cost_month)).size };
 }

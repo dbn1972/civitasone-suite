@@ -23,8 +23,10 @@ import { scopedRead } from "../../shared/db.js";
 import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import * as commands from "./commands.js";
 import { toCsv } from "./csv.js";
-import { FULL_BPS, isIsoDate, isValidSplitPct, pctToBps } from "./domain.js";
-import { isProjectCostingEnabled, peakWithCandidate } from "./service.js";
+import {
+  FULL_BPS, MIN_COHORT_FLOOR, buildLeafCells, isIsoDate, isValidSplitPct, pctToBps, rollupByCostCenter, rollupByProject, suppressedCells, type EmployeeLeafRow, type TotalsRow,
+} from "./domain.js";
+import { isProjectCostingEnabled, loadMinCohort, peakWithCandidate } from "./service.js";
 
 /** Request allocations. */
 export const ALLOCATION_WRITE_ROLES = ["payroll_admin", "payroll_officer", "hr_admin", "super_admin"];
@@ -83,14 +85,18 @@ export async function projectCostingRoutes(app: FastifyInstance): Promise<void> 
   app.get(`${base}/settings`, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...new Set([...ALLOCATION_READ_ROLES, ...TOTALS_ROLES])]);
-    const enabled = await scopedRead((tx) => isProjectCostingEnabled(tx, ctx.tenantId));
-    return reply.send({ data: { enabled } });
+    const { enabled, minCohort } = await scopedRead(async (tx) => ({ enabled: await isProjectCostingEnabled(tx, ctx.tenantId), minCohort: await loadMinCohort(tx, ctx.tenantId) }));
+    return reply.send({ data: { enabled, minCohort } });
   });
 
   app.put(`${base}/settings`, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, SETTINGS_ROLES);
-    const body = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+    const body = z.object({
+      enabled: z.boolean().optional(),
+      /** Fewest distinct costed people behind a cell shown to a reader without pay-detail access. Never below 2. */
+      minCohort: z.number().int().min(MIN_COHORT_FLOOR).max(100).optional(),
+    }).strict().refine((b) => b.enabled !== undefined || b.minCohort !== undefined, "provide enabled and/or minCohort").parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateCostingSettings(ctx, body));
   });
 
@@ -176,61 +182,72 @@ export async function projectCostingRoutes(app: FastifyInstance): Promise<void> 
   });
 
   // ─── Reports (totals) ─────────────────────────────────────────────────────
-  const totalsSelect = sql`
-    SUM(gross_minor)::text AS gross_minor,
-    SUM(employer_pf_minor + employer_esi_minor + employer_nps_minor + other_employer_minor)::text AS employer_cost_minor,
-    SUM(total_cost_minor)::text AS total_cost_minor,
-    COUNT(DISTINCT employee_id) FILTER (WHERE kind = 'run')::int AS headcount`;
+  // Readers without pay-detail access (finance_officer) get SMALL-COHORT SUPPRESSION: a cell that
+  // fewer than `minCohort` distinct people stand behind is returned as { suppressed: true } with no
+  // amounts and no headcount, and neighbours are hidden too where a hidden cell could be recovered
+  // by subtraction (see suppressedCells). Pay-detail roles see everything.
+  const loadCells = async (tenantId: string, from: string, to: string, basis: "cost_month" | "booked") => {
+    const p = periodExpr(basis);
+    const rows = rowsOf(await scopedRead((tx) => tx.execute(sql`
+      SELECT ${p} AS period, line_key, target_type, project_id, cost_center_id, employee_id,
+             SUM(gross_minor)::text AS g, SUM(employer_pf_minor + employer_esi_minor + employer_nps_minor + other_employer_minor)::text AS e,
+             SUM(total_cost_minor)::text AS t
+        FROM payroll.slip_cost_lines
+       WHERE tenant_id = ${tenantId}::uuid AND ${p} BETWEEN ${from} AND ${to}
+       GROUP BY ${p}, line_key, target_type, project_id, cost_center_id, employee_id`)));
+    return buildLeafCells(rows.map((r): EmployeeLeafRow => ({
+      period: r.period as string, lineKey: r.line_key as string, targetType: r.target_type as EmployeeLeafRow["targetType"], projectId: r.project_id ?? null,
+      costCenterId: r.cost_center_id ?? null, employeeId: r.employee_id as string, gross: BigInt(r.g as string), employer: BigInt(r.e as string), total: BigInt(r.t as string),
+    })));
+  };
+  const hiddenFor = async (ctx: ReturnType<typeof resolveContext>, cells: ReturnType<typeof buildLeafCells>): Promise<{ hidden: Set<string>; minCohort: number | null }> => {
+    if (ctx.roles.some((r) => PAY_DETAIL_ROLES.includes(r))) return { hidden: new Set(), minCohort: null };
+    const k = await scopedRead((tx) => loadMinCohort(tx, ctx.tenantId));
+    return { hidden: suppressedCells(cells, k), minCohort: k };
+  };
+  const shape = (r: TotalsRow) => r.suppressed
+    ? { period: r.period, suppressed: true, reason: "MIN_COHORT" }
+    : { period: r.period, suppressed: false, grossMinor: r.grossMinor, employerCostMinor: r.employerCostMinor, totalCostMinor: r.totalCostMinor, headcount: r.headcount };
+  const csvRow = (id: unknown, r: TotalsRow) => [r.period, id, r.suppressed ? "yes" : "no", r.grossMinor ?? "", r.employerCostMinor ?? "", r.totalCostMinor ?? "", r.headcount ?? ""];
 
   app.get(`${base}/by-project`, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TOTALS_ROLES);
     const q = rangeQuery.parse(req.query);
-    const p = periodExpr(q.basis);
-    const data = rowsOf(await scopedRead((tx) => tx.execute(sql`
-      SELECT ${p} AS period, project_id, ${totalsSelect}
-        FROM payroll.slip_cost_lines
-       WHERE tenant_id = ${ctx.tenantId}::uuid AND target_type = 'project' AND ${p} BETWEEN ${q.from} AND ${q.to}
-         AND (${q.projectId ?? null}::uuid IS NULL OR project_id = ${q.projectId ?? null}::uuid)
-       GROUP BY ${p}, project_id ORDER BY ${p}, project_id`)));
-    const cols = ["period", "projectId", "grossMinor", "employerCostMinor", "totalCostMinor", "headcount"];
-    const out = data.map((r) => [r.period, r.project_id, r.gross_minor, r.employer_cost_minor, r.total_cost_minor, r.headcount]);
+    const cells = await loadCells(ctx.tenantId, q.from, q.to, q.basis);
+    const { hidden, minCohort } = await hiddenFor(ctx, cells);
+    // The filter runs AFTER suppression so one project's visibility never depends on which project was asked for.
+    const rows = rollupByProject(cells, hidden).filter((r) => !q.projectId || r.projectId === q.projectId);
     if (q.format === "csv") {
       return reply.header("content-type", "text/csv; charset=utf-8")
-        .header("content-disposition", `attachment; filename="project-cost-${q.from}-${q.to}.csv"`).send(toCsv(cols, out));
+        .header("content-disposition", `attachment; filename="project-cost-${q.from}-${q.to}.csv"`)
+        .send(toCsv(["period", "projectId", "suppressed", "grossMinor", "employerCostMinor", "totalCostMinor", "headcount"], rows.map((r) => csvRow(r.projectId, r))));
     }
-    return reply.send({ from: q.from, to: q.to, basis: q.basis, data: data.map((r) => ({
-      period: r.period, projectId: r.project_id, grossMinor: r.gross_minor, employerCostMinor: r.employer_cost_minor,
-      totalCostMinor: r.total_cost_minor, headcount: Number(r.headcount),
-    })) });
+    return reply.send({ from: q.from, to: q.to, basis: q.basis, minCohort, data: rows.map((r) => ({ ...shape(r), projectId: r.projectId })) });
   });
 
   app.get(`${base}/by-cost-center`, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TOTALS_ROLES);
     const q = rangeQuery.parse(req.query);
-    const p = periodExpr(q.basis);
-    const data = rowsOf(await scopedRead((tx) => tx.execute(sql`
-      SELECT ${p} AS period, cost_center_id, ${totalsSelect}
-        FROM payroll.slip_cost_lines
-       WHERE tenant_id = ${ctx.tenantId}::uuid AND target_type <> 'unallocated' AND ${p} BETWEEN ${q.from} AND ${q.to}
-       GROUP BY ${p}, cost_center_id ORDER BY ${p}, cost_center_id`)));
-    const unallocated = rowsOf(await scopedRead((tx) => tx.execute(sql`
-      SELECT ${p} AS period, ${totalsSelect}
-        FROM payroll.slip_cost_lines
-       WHERE tenant_id = ${ctx.tenantId}::uuid AND target_type = 'unallocated' AND ${p} BETWEEN ${q.from} AND ${q.to}
-       GROUP BY ${p} ORDER BY ${p}`)));
-    const shape = (r: Row) => ({ period: r.period, grossMinor: r.gross_minor, employerCostMinor: r.employer_cost_minor, totalCostMinor: r.total_cost_minor, headcount: Number(r.headcount) });
+    const cells = await loadCells(ctx.tenantId, q.from, q.to, q.basis);
+    const { hidden, minCohort } = await hiddenFor(ctx, cells);
+    const { data, unallocated } = rollupByCostCenter(cells, hidden);
     if (q.format === "csv") {
       return reply.header("content-type", "text/csv; charset=utf-8")
         .header("content-disposition", `attachment; filename="cost-centre-cost-${q.from}-${q.to}.csv"`)
-        .send(toCsv(["period", "costCenterId", "grossMinor", "employerCostMinor", "totalCostMinor", "headcount"],
-          [...data.map((r) => [r.period, r.cost_center_id, r.gross_minor, r.employer_cost_minor, r.total_cost_minor, r.headcount]),
-           ...unallocated.map((r) => [r.period, "unallocated", r.gross_minor, r.employer_cost_minor, r.total_cost_minor, r.headcount])]));
+        .send(toCsv(["period", "costCenterId", "suppressed", "grossMinor", "employerCostMinor", "totalCostMinor", "headcount"],
+          [...data.map((r) => csvRow(r.costCenterId, r)), ...unallocated.map((r) => csvRow("unallocated", r))]));
     }
-    return reply.send({ from: q.from, to: q.to, basis: q.basis,
-      data: data.map((r) => ({ ...shape(r), costCenterId: r.cost_center_id })), unallocated: unallocated.map(shape) });
+    return reply.send({ from: q.from, to: q.to, basis: q.basis, minCohort,
+      data: data.map((r) => ({ ...shape(r), costCenterId: r.costCenterId })), unallocated: unallocated.map(shape) });
   });
+
+  const totalsSelect = sql`
+    SUM(gross_minor)::text AS gross_minor,
+    SUM(employer_pf_minor + employer_esi_minor + employer_nps_minor + other_employer_minor)::text AS employer_cost_minor,
+    SUM(total_cost_minor)::text AS total_cost_minor,
+    COUNT(DISTINCT employee_id) FILTER (WHERE kind = 'run')::int AS headcount`;
 
   // ─── Per-person (pay detail roles only) ───────────────────────────────────
   app.get(`${base}/projects/:projectId/employees`, async (req, reply) => {

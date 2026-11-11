@@ -4,7 +4,9 @@
 -- ~/orch-logs/segments/section8-design.md section 8.
 --
 -- 1. payroll.payroll_settings.project_costing_enabled: per-tenant switch, default
---    FALSE. While it is false nothing below is read or written by a run, so the
+--    FALSE. project_cost_min_cohort: the fewest distinct costed people behind a
+--    cell that a reader who may see totals but not individual pay is shown
+--    (default 3, never below 2 - a one-person total is that person's pay). While it is false nothing below is read or written by a run, so the
 --    migration is a no-op for every existing tenant.
 -- 2. payroll.employee_cost_allocations: an employee's cost charged to a project
 --    or a cost centre, split_pct (2 dp) from effective_from to effective_to.
@@ -24,13 +26,23 @@
 --   DROP TABLE IF EXISTS payroll.slip_cost_lines;
 --   DROP TABLE IF EXISTS payroll.employee_cost_allocations;
 --   DROP FUNCTION IF EXISTS payroll.slip_cost_lines_guard();
---   ALTER TABLE payroll.payroll_settings DROP COLUMN IF EXISTS project_costing_enabled;
+--   ALTER TABLE payroll.payroll_settings DROP COLUMN IF EXISTS project_costing_enabled, DROP COLUMN IF EXISTS project_cost_min_cohort;
 -- Affected services: payroll-service
 
 SET lock_timeout = '5s';
 
 ALTER TABLE payroll.payroll_settings
   ADD COLUMN IF NOT EXISTS project_costing_enabled boolean NOT NULL DEFAULT false;
+
+ALTER TABLE payroll.payroll_settings
+  ADD COLUMN IF NOT EXISTS project_cost_min_cohort integer NOT NULL DEFAULT 3;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_settings_min_cohort_chk') THEN
+    ALTER TABLE payroll.payroll_settings
+      ADD CONSTRAINT payroll_settings_min_cohort_chk CHECK (project_cost_min_cohort >= 2);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS payroll.employee_cost_allocations (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

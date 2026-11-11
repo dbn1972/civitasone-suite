@@ -19610,6 +19610,8 @@
     }
   },
   "projectCosting": {
+    "suppressedNotice": "Some rows are hidden because fewer than {n} people are behind them, so no one's pay can be worked out. Payroll and finance administrators see them in full.",
+    "suppressedCell": "Hidden (fewer than {n} people)",
     "title": "Project costing",
     "subtitle": "Charge an employee's salary cost to projects or cost centres by percentage and date, approve it, and read the cost by project and by cost centre.",
     "backLabel": "Back to payroll",
@@ -19698,6 +19700,8 @@
     "selfApprovalError": "You cannot approve an allocation you requested."
   },
   "projectStaffCost": {
+    "suppressedNotice": "Some months are hidden because fewer than 3 people are behind them, so no one's pay can be worked out. Totals add up the visible months only.",
+    "suppressedCell": "Hidden (fewer than 3 people)",
     "title": "Staff cost",
     "subtitle": "What this project's staff cost, in total, month by month.",
     "backLabel": "Back to project",

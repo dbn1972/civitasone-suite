@@ -4,7 +4,8 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { type ProjectInsert } from "./schema.js";
+import { projectMembers, type ProjectInsert } from "./schema.js";
+import { and, eq } from "drizzle-orm";
 import { assertTaskTransitionAllowed, assertMilestoneCanComplete } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -193,15 +194,43 @@ export function registerProjectConsumers(queue: Queue): void {
   // ─── Member Add ─────────────────────────────────────────────────────────────
 
   queue.subscribe(COMMANDS.memberAdd, async (msg) => {
-    const p = msg.payload as { id: string; projectId: string; tenantId: string; userId?: string | null; employeeId?: string | null; role: string };
+    const p = msg.payload as { id: string; projectId: string; tenantId: string; userId?: string | null; employeeId?: string | null; role: string; viaSuperAdmin?: boolean };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Defence in depth for a command that skipped the route: appointing a manager is a manager / super admin act, never one's own.
+      if (p.role === "project_manager" && !(await mayAppointManager(tx, msg, p.projectId, p.userId ?? null, p.viaSuperAdmin === true))) {
+        await audit(tx, msg, "member_add_denied", "member", p.id, { role: p.role, projectId: p.projectId }, "failure");
+        return;
+      }
       await repo.insertMember(tx, {
         id: p.id, projectId: p.projectId, tenantId: p.tenantId,
         userId: p.userId ?? null, employeeId: p.employeeId ?? null, role: p.role,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "add", "member", p.id);
+      await audit(tx, msg, "add", "member", p.id, { role: p.role, projectId: p.projectId, userId: p.userId ?? null, employeeId: p.employeeId ?? null });
+    });
+  });
+
+  // ─── Member role change (S8 G7) ─────────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.memberRoleChange, async (msg) => {
+    const p = msg.payload as { memberId: string; projectId: string; tenantId: string; role: string; viaSuperAdmin?: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const member = await repo.findMemberByIdTx(tx, p.memberId, p.tenantId);
+      if (!member || member.projectId !== p.projectId) { await audit(tx, msg, "member_role_change_denied", "member", p.memberId, { reason: "NOT_FOUND" }, "failure"); return; }
+      if (member.userId && member.userId === msg.actorId) {
+        await audit(tx, msg, "member_role_change_denied", "member", p.memberId, { reason: "SELF_ROLE_CHANGE", from: member.role, to: p.role }, "failure");
+        return;
+      }
+      const touchesManager = p.role === "project_manager" || member.role === "project_manager";
+      if (touchesManager && (p.role === "project_manager" && !member.userId
+        || !(await mayAppointManager(tx, msg, p.projectId, member.userId ?? null, p.viaSuperAdmin === true)))) {
+        await audit(tx, msg, "member_role_change_denied", "member", p.memberId, { reason: "MANAGER_GRANT_FORBIDDEN", from: member.role, to: p.role }, "failure");
+        return;
+      }
+      await repo.updateMemberRoleTx(tx, p.memberId, p.tenantId, p.role, msg.actorId);
+      await audit(tx, msg, "role_change", "member", p.memberId, { projectId: p.projectId, from: member.role, to: p.role, userId: member.userId, employeeId: member.employeeId });
     });
   });
 
@@ -218,10 +247,19 @@ export function registerProjectConsumers(queue: Queue): void {
 
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+/** Authoritative re-check of "may appoint a project manager": the actor is this project's manager (or a super admin), and is not the target. */
+async function mayAppointManager(tx: any, msg: any, projectId: string, targetUserId: string | null, viaSuperAdmin: boolean): Promise<boolean> {
+  if (targetUserId && targetUserId === msg.actorId) return false;
+  if (viaSuperAdmin) return true;
+  const rows = await (tx as typeof db).select().from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, msg.actorId), eq(projectMembers.tenantId, msg.tenantId))).limit(1);
+  return rows[0]?.role === "project_manager";
+}
+
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, details?: Record<string, unknown>, outcome: "success" | "failure" = "success"): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "project", action, resourceType, resourceId, outcome: "success" },
+    payload: { ...(details ?? {}), service: "project", action, resourceType, resourceId, outcome },
   });
 }

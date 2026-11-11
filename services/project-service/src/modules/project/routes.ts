@@ -11,7 +11,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   createProjectBody, createTaskBody, updateTaskStatusBody, createMilestoneBody,
   idParam, taskParam, milestoneParam, listProjectsQuery,
-  updateProjectBody, updateTaskBody, addMemberBody, memberParam, listTasksQuery,
+  updateProjectBody, updateTaskBody, addMemberBody, changeMemberRoleBody, memberParam, listTasksQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -21,6 +21,21 @@ import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-cl
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
 const READER_ROLES = [...PROJ_ROLES, "audit_officer", "finance_officer"];
+
+/**
+ * Only the project's existing manager (a member with role project_manager) or a super admin may appoint
+ * or change a project manager, and nobody may do it to themselves.
+ */
+async function assertMayAppointManager(ctx: ReturnType<typeof resolveContext>, projectId: string, targetUserId: string | undefined): Promise<void> {
+  if (targetUserId && targetUserId === ctx.actorId) {
+    throw new HttpError(403, "SELF_ROLE_CHANGE", "nobody can give themselves the project manager role");
+  }
+  if (ctx.roles.includes("super_admin")) return;
+  const me = await repo.findMemberByUserAndProject(projectId, ctx.actorId, ctx.tenantId);
+  if (me?.role !== "project_manager") {
+    throw new HttpError(403, "MANAGER_GRANT_FORBIDDEN", "only this project's manager or a super admin can appoint or change a project manager");
+  }
+}
 
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/projects", async (req, reply) => {
@@ -234,6 +249,10 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROJ_ROLES);
     const { id } = idParam.parse(req.params);
     const body = addMemberBody.parse(req.body);
+    // Appointing a project manager is how a person gets the project's cost totals (staff-cost), so it is
+    // not open to every project officer: only this project's existing manager or a super admin may do it,
+    // and nobody may give THEMSELVES the role.
+    if (body.role === "project_manager") await assertMayAppointManager(ctx, id, body.userId);
     // idempotency: check if the user / employee is already a member
     if (body.userId) {
       const existing = await repo.findMemberByUserAndProject(id, body.userId, ctx.tenantId);
@@ -256,6 +275,24 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.addMember(ctx, id, body));
+  });
+
+  app.patch("/v1/projects/:id/members/:memberId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROJ_ROLES);
+    const { id, memberId } = memberParam.parse(req.params);
+    const body = changeMemberRoleBody.parse(req.body);
+    const member = await repo.findMemberById(memberId, ctx.tenantId);
+    if (!member || member.projectId !== id) throw new HttpError(404, "NOT_FOUND", "member not found");
+    if (member.userId && member.userId === ctx.actorId) {
+      throw new HttpError(403, "SELF_ROLE_CHANGE", "you cannot change your own role on a project");
+    }
+    if (body.role === "project_manager" && !member.userId) {
+      throw new HttpError(400, "VALIDATION_ERROR", "a member without a login cannot be the project manager");
+    }
+    // changing a manager's role, or making someone a manager, is a manager / super admin decision
+    if (body.role === "project_manager" || member.role === "project_manager") await assertMayAppointManager(ctx, id, member.userId ?? undefined);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.changeMemberRole(ctx, id, memberId, body.role));
   });
 
   app.delete("/v1/projects/:id/members/:memberId", async (req, reply) => {

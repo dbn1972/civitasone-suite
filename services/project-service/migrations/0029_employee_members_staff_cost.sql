@@ -47,18 +47,20 @@ CREATE TABLE IF NOT EXISTS project.project_staff_cost_postings (
   tenant_id            uuid NOT NULL,
   project_id           uuid NOT NULL,
   cost_month           char(7) NOT NULL,
-  kind                 varchar(8) NOT NULL,
-  source_id            uuid NOT NULL,
   gross_minor          bigint NOT NULL,
   employer_cost_minor  bigint NOT NULL,
   total_cost_minor     bigint NOT NULL,
-  headcount            integer NOT NULL DEFAULT 0,
+  -- distinct people whose net cost on the project that month is not zero (a count, never an id)
+  cohort               integer NOT NULL,
+  -- the tenant's minimum cohort when payroll published this snapshot (>= 2)
+  min_cohort           integer NOT NULL DEFAULT 3,
+  as_of                timestamptz NOT NULL,
   received_at          timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, project_id, cost_month, kind, source_id),
-  CONSTRAINT psc_kind_chk CHECK (kind IN ('run', 'reclass')),
-  CONSTRAINT psc_total_chk CHECK (total_cost_minor = gross_minor + employer_cost_minor)
+  PRIMARY KEY (tenant_id, project_id, cost_month),
+  CONSTRAINT psc_total_chk CHECK (total_cost_minor = gross_minor + employer_cost_minor),
+  CONSTRAINT psc_cohort_chk CHECK (cohort >= 0),
+  CONSTRAINT psc_min_cohort_chk CHECK (min_cohort >= 2)
 );
-CREATE INDEX IF NOT EXISTS ix_psc_project_month ON project.project_staff_cost_postings (tenant_id, project_id, cost_month);
 
 ALTER TABLE project.project_staff_cost_postings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project.project_staff_cost_postings FORCE ROW LEVEL SECURITY;

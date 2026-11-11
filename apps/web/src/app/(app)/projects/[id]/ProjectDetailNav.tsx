@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 
 interface ProjectDetailNavProps {
   projectId: string;
+  /** Translated label of the Staff cost tab (the layout passes it; English by default). */
+  staffCostLabel?: string;
 }
 
 const NAV_TABS = [
@@ -25,7 +27,7 @@ const NAV_TABS = [
  * Rendered in [id]/layout.tsx so it appears on every sub-page (overview,
  * tasks, team, risks) without each page having to repeat the markup.
  */
-export function ProjectDetailNav({ projectId }: ProjectDetailNavProps) {
+export function ProjectDetailNav({ projectId, staffCostLabel = "Staff cost" }: ProjectDetailNavProps) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
 
@@ -40,7 +42,8 @@ export function ProjectDetailNav({ projectId }: ProjectDetailNavProps) {
 
   return (
     <nav aria-label="Project sections" className="subnav">
-      {NAV_TABS.map(({ label, segment }) => {
+      {NAV_TABS.map(({ label: baseLabel, segment }) => {
+        const label = segment === "staff-cost" ? staffCostLabel : baseLabel;
         const href = segment ? `${base}/${segment}` : base;
         const active = isActive(segment);
         return (

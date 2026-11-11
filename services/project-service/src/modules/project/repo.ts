@@ -226,6 +226,16 @@ export async function deleteMemberTx(tx: Writer, id: string, tenantId: string): 
     .where(and(eq(projectMembers.id, id), eq(projectMembers.tenantId, tenantId)));
 }
 
+export async function findMemberById(id: string, tenantId: string): Promise<typeof projectMembers.$inferSelect | null> {
+  return db.transaction((tx) => findMemberByIdTx(tx as unknown as Writer, id, tenantId));
+}
+
+export async function updateMemberRoleTx(tx: Writer, id: string, tenantId: string, role: string, updatedBy: string): Promise<void> {
+  await tx.update(projectMembers)
+    .set({ role, updatedBy, updatedAt: new Date(), version: sql`${projectMembers.version} + 1` })
+    .where(and(eq(projectMembers.id, id), eq(projectMembers.tenantId, tenantId)));
+}
+
 export async function findMemberByEmployeeAndProject(
   projectId: string,
   employeeId: string,

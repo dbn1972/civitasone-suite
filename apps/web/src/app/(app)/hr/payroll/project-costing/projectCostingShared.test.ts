@@ -37,22 +37,28 @@ describe("validateAllocationDates", () => {
 });
 
 describe("mappers read known fields only", () => {
-  it("by-project keeps the amounts as digit strings and drops rows with bad amounts", () => {
-    const rows = mapByProject({ data: [
-      { period: "2026-09", projectId: "p1", grossMinor: "1000", employerCostMinor: "100", totalCostMinor: "1100", headcount: 3, employeeId: "must-not-pass" },
-      { period: "2026-09", projectId: "p2", grossMinor: "1e3", employerCostMinor: "1", totalCostMinor: "1", headcount: 1 },
+  it("by-project keeps the amounts as digit strings, drops rows with bad amounts, and a suppressed row carries NO amounts", () => {
+    const r = mapByProject({ minCohort: 3, data: [
+      { period: "2026-09", projectId: "p1", suppressed: false, grossMinor: "1000", employerCostMinor: "100", totalCostMinor: "1100", headcount: 3, employeeId: "must-not-pass" },
+      { period: "2026-09", projectId: "p2", suppressed: false, grossMinor: "1e3", employerCostMinor: "1", totalCostMinor: "1", headcount: 1 },
+      { period: "2026-09", projectId: "p3", suppressed: true, reason: "MIN_COHORT", grossMinor: "777", headcount: 1 },
     ] });
-    expect(rows).toEqual([{ period: "2026-09", projectId: "p1", grossMinor: "1000", employerCostMinor: "100", totalCostMinor: "1100", headcount: 3 }]);
-    expect(JSON.stringify(rows)).not.toContain("must-not-pass");
+    expect(r!.minCohort).toBe(3);
+    expect(r!.rows).toEqual([
+      { period: "2026-09", projectId: "p1", suppressed: false, grossMinor: "1000", employerCostMinor: "100", totalCostMinor: "1100", headcount: 3 },
+      { period: "2026-09", projectId: "p3", suppressed: true, grossMinor: null, employerCostMinor: null, totalCostMinor: null, headcount: null },
+    ]);
+    expect(JSON.stringify(r)).not.toMatch(/must-not-pass|777/);
     expect(mapByProject({})).toBeNull();
   });
   it("by-cost-centre separates the unallocated rows", () => {
     const r = mapByCostCenter({
-      data: [{ period: "2026-09", costCenterId: "c1", grossMinor: "5", employerCostMinor: "1", totalCostMinor: "6", headcount: 1 }],
-      unallocated: [{ period: "2026-09", grossMinor: "9", employerCostMinor: "0", totalCostMinor: "9", headcount: 2 }],
+      data: [{ period: "2026-09", costCenterId: "c1", suppressed: false, grossMinor: "5", employerCostMinor: "1", totalCostMinor: "6", headcount: 3 }],
+      unallocated: [{ period: "2026-09", suppressed: false, grossMinor: "9", employerCostMinor: "0", totalCostMinor: "9", headcount: 3 }, { period: "2026-10", suppressed: true }],
     });
     expect(r!.data).toHaveLength(1);
     expect(r!.unallocated[0]!.totalCostMinor).toBe("9");
+    expect(r!.unallocated[1]).toMatchObject({ suppressed: true, totalCostMinor: null });
   });
   it("allocations, settings and the project index", () => {
     expect(mapSettings({ data: { enabled: true } })).toEqual({ enabled: true });

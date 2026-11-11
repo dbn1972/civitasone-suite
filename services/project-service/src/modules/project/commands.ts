@@ -81,9 +81,18 @@ export async function addMember(ctx: RequestContext, projectId: string, body: Ad
   await queue.publish(COMMANDS.memberAdd, {
     messageId: id, type: COMMANDS.memberAdd,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, projectId, tenantId: ctx.tenantId, userId: body.userId ?? null, employeeId: body.employeeId ?? null, role: body.role },
+    payload: { id, projectId, tenantId: ctx.tenantId, userId: body.userId ?? null, employeeId: body.employeeId ?? null, role: body.role, viaSuperAdmin: ctx.roles.includes("super_admin") },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function changeMemberRole(ctx: RequestContext, projectId: string, memberId: string, role: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.memberRoleChange, {
+    messageId: randomUUID(), type: COMMANDS.memberRoleChange,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { memberId, projectId, tenantId: ctx.tenantId, role, viaSuperAdmin: ctx.roles.includes("super_admin") },
+  });
+  return { id: memberId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function removeMember(ctx: RequestContext, projectId: string, memberId: string): Promise<Accepted> {
