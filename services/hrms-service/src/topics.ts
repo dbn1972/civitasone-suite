@@ -206,6 +206,11 @@ export const COMMANDS = {
   leaveTenantConfigSet: "hrms.leave.tenant_config.set",
   // fin-hr-02: per-tenant HR policy settings (modules/policy-settings)
   policySettingSet: "hrms.policy_setting.set",
+  // S8-G4: private grade bands (modules/grade-bands/*)
+  gradeBandCreate:     "hrms.grade_band.create",
+  gradeBandUpdate:     "hrms.grade_band.update",
+  gradeBandSetActive:  "hrms.grade_band.set_active",
+  gradeBandDelete:     "hrms.grade_band.delete",
   // GAP-LEARNING-ASSESSMENTS-VERIFY-01: DPDP audit-on-read for a certificate
   // verification lookup — published (fire-and-forget) from the verify route,
   // recorded to the audit outbox by assessment/consumer.ts, same async CQRS

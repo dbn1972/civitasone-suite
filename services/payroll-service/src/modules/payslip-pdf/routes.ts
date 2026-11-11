@@ -184,6 +184,7 @@ export async function loadSlipDocument(ctx: ReturnType<typeof resolveContext>, i
     let designation = "";
     let payLevel: number | null = null;
     let payGrade: string | null = null;
+    let gradeBand: { code: string; name: string } | null = null;
     let rawPan: string | null = null;
     let rawBankAccount: string | null = null;
 
@@ -205,10 +206,13 @@ export async function loadSlipDocument(ctx: ReturnType<typeof resolveContext>, i
           rawPan = emp.pan ?? null;
           rawBankAccount = emp.bankAccountNo ?? null;
           // Additive HRMS fields (UAT ux-docs); absent from an older HRMS.
-          const extra = emp as { designation?: unknown; payLevel?: unknown; payGrade?: unknown };
+          const extra = emp as { designation?: unknown; payLevel?: unknown; payGrade?: unknown; gradeBand?: unknown };
           designation = typeof extra.designation === "string" ? extra.designation : "";
           payLevel = typeof extra.payLevel === "number" && extra.payLevel > 0 ? extra.payLevel : null;
           payGrade = typeof extra.payGrade === "string" && extra.payGrade ? extra.payGrade : null;
+          // S8-G4 (additive): sent by HRMS only for a tenant on private grade bands.
+          const gb = extra.gradeBand as { code?: unknown; name?: unknown } | null | undefined;
+          if (gb && typeof gb.code === "string" && gb.code) gradeBand = { code: gb.code, name: typeof gb.name === "string" ? gb.name : "" };
         } else {
           log.warn({ employeeId: slip.employeeId, month: run.month },
             "payslip-pdf: employee not found in HRMS payroll-input for month");
@@ -301,7 +305,7 @@ export async function loadSlipDocument(ctx: ReturnType<typeof resolveContext>, i
       showSignatureBlock: letterhead?.showSignatureBlock ?? false,
       month: run?.month ?? "",
       employee: {
-        employeeNo: slip.employeeNo, name: employeeName, designation: designation || null, payLevel, payGrade,
+        employeeNo: slip.employeeNo, name: employeeName, designation: designation || null, payLevel, payGrade, ...(gradeBand ? { gradeBand } : {}),
         department: department || null, pan: rawPan, uan: uan || null, bankAccount: rawBankAccount, bankIfsc: bankIfsc || null,
       },
       slip: {

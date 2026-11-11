@@ -31,6 +31,8 @@ export interface PayslipDocInput {
     designation: string | null;
     payLevel: number | null;
     payGrade: string | null;
+    /** S8-G4: the designation's private grade band (C2, T3 ...). Absent/null on a government tenant. */
+    gradeBand?: { code: string; name: string } | null;
     department: string | null;
     pan: string | null;
     uan: string | null;
@@ -98,6 +100,11 @@ function payLevelText(e: PayslipDocInput["employee"]): string {
   return level || e.payGrade || "";
 }
 
+/** "C2 — Senior Engineer"; the code alone when the name is blank. */
+function gradeBandText(b: { code: string; name: string }): string {
+  return b.name && b.name !== b.code ? `${b.code} \u2014 ${b.name}` : b.code;
+}
+
 export async function renderPayslipPdf(input: PayslipDocInput): Promise<Uint8Array> {
   const hi = input.lang === "hi";
   // Hindi-first when the slip is in Hindi; bilingual headings either way.
@@ -120,7 +127,11 @@ export async function renderPayslipPdf(input: PayslipDocInput): Promise<Uint8Arr
     { label: L("Employee No", "कर्मचारी संख्या"), value: e.employeeNo },
     { label: L("Name", "नाम"), value: e.name },
     { label: L("Designation", "पदनाम"), value: e.designation ?? "" },
-    { label: L("Pay Level", "वेतन स्तर"), value: payLevelText(e) },
+    // S8-G4: a tenant on private grade bands prints its band here instead of a (blank) 7th CPC pay level;
+    // without a band the row is exactly what it always was.
+    e.gradeBand
+      ? { label: L("Grade Band", "ग्रेड बैंड"), value: gradeBandText(e.gradeBand) }
+      : { label: L("Pay Level", "वेतन स्तर"), value: payLevelText(e) },
     { label: L("Department", "विभाग"), value: e.department ?? "" },
     { label: L("PAN", "पैन"), value: maskPanForPrint(e.pan) || "Not available" },
     { label: L("UAN", "यूएएन"), value: e.uan ?? "" },
