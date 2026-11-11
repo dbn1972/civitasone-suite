@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { assertNotPlatformOperator } from "../operators/commands.js";
 import * as commands from "./commands.js";
 import * as onboardingRepo from "./onboarding-repo.js";
-import { ADMIN_TIER_ROLES, DEFAULT_ROLE, STAFF_ROLES, checkGrant, checkCanActFor } from "./grantable-roles.js";
+import { ADMIN_TIER_ROLES, DEFAULT_ROLE, STAFF_ROLES, checkGrant, checkCanActFor, USER_ADMIN_ROLES } from "./grantable-roles.js";
 import { bulkCreateBody, setRolesBody, onboardingSettingsBody, setupLinksBody, redeemBody, userIdParam } from "./validators.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
@@ -152,12 +152,19 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const hdr = req.headers["x-correlation-id"];
     // The audit column is varchar(64): accept only a short, plain id and mint our own otherwise.
     const correlationId = typeof hdr === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(hdr) ? hdr : randomUUID();
-    const outcome = await onboardingRepo.redeemSetupToken(token, async (u, grantorRoles) => {
+    const outcome = await onboardingRepo.redeemSetupToken(token, async (u, issuer, grantorRoles) => {
       // Re-check at redeem time: the target may have been promoted (or the link issued for someone it should not have
       // been) since issue. Same rule as issue, using the roles the issuing admin held then.
       const held = await keycloak.getRealmRoleNames({ tenantId: u.tenantId, email: u.email }, { effective: true });
       if (!held.ok || !held.roles) return { ok: false as const, reason: "unavailable" };
       if (!checkCanActFor(grantorRoles, held.roles).ok) return { ok: false as const, reason: "invalid" };
+      // ...and against the issuing admin's CURRENT standing, not just the snapshot: a link does not outlive the issuer
+      // being disabled, demoted, or otherwise no longer able to grant the target's roles. Any lookup failure is a refusal.
+      if (!issuer || issuer.status !== "active") return { ok: false as const, reason: "invalid" };
+      const now = await keycloak.getRealmRoleNames({ tenantId: u.tenantId, email: issuer.email }, { effective: true });
+      if (!now.ok || !now.roles) return { ok: false as const, reason: "invalid" };
+      if (!now.roles.some((r) => (USER_ADMIN_ROLES as readonly string[]).includes(r))) return { ok: false as const, reason: "invalid" };
+      if (!checkCanActFor(now.roles, held.roles).ok) return { ok: false as const, reason: "invalid" };
       const r = await keycloak.setUserPassword({ tenantId: u.tenantId, email: u.email }, password);
       if (r.ok) return { ok: true as const };
       return { ok: false as const, reason: r.policyRejected ? "password_policy" : r.reason === "password_already_set" ? "invalid" : "unavailable" };

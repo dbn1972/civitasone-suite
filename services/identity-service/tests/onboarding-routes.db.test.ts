@@ -318,7 +318,16 @@ describe("set-password link (no-mail path)", () => {
   const PASSWORD = `Aa1!${randomUUID()}`;
   let uid: string;
   let email: string;
+  // The ISSUING admin as the redeem re-check sees them: an identity row (id = the token's sub) + a Keycloak user.
+  const setIssuer = (roles: string[], enabled = true) =>
+    kc.users.set("issuer-kc", { id: "issuer-kc", username: `${TA}__issuer@dept.gov.in`, enabled, attributes: { tid: [TA] }, requiredActions: [], roles: new Set(roles) });
+  beforeAll(async () => {
+    await asTenant(TA, async (q) => {
+      await q`INSERT INTO users.users (id, tenant_id, email, name, status, created_by, updated_by) VALUES (${ADMIN_A}, ${TA}, 'issuer@dept.gov.in', 'Issuing Admin', 'active', ${ADMIN_A}, ${ADMIN_A}) ON CONFLICT DO NOTHING`;
+    });
+  });
   beforeEach(async () => {
+    setIssuer(["tenant_admin"]);
     email = `link-${randomUUID().slice(0, 8)}@dept.gov.in`;
     uid = await seedUser(TA, email);
     kc.users.set("kc-1", { id: "kc-1", username: `${TA}__${email}`, enabled: true, attributes: { tid: [TA], tenantId: [TA] }, requiredActions: [], roles: new Set() });
@@ -451,7 +460,50 @@ describe("set-password link (no-mail path)", () => {
 
   it("redeem uses the roles the ISSUER held at issue time, not whoever redeems", async () => {
     kc.users.get("kc-1")!.roles = new Set(["hr_admin"]);
+    setIssuer(["tenant_admin", "hr_admin"]);
     const { token } = (await issue(asA(["tenant_admin", "hr_admin"]))).json();
+    expect((await redeem(token)).statusCode).toBe(200);
+  });
+
+  it("issuer demoted after issue (can no longer grant the target's roles): redeem refused with the generic 400, token not consumed", async () => {
+    kc.users.get("kc-1")!.roles = new Set(["hr_admin"]);
+    setIssuer(["tenant_admin", "hr_admin"]);
+    const { token } = (await issue(asA(["tenant_admin", "hr_admin"]))).json();
+    setIssuer(["tenant_admin"]); // lost hr_admin
+    const res = await redeem(token);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_OR_EXPIRED_TOKEN");
+    expect(kc.calls.some((c) => c.path.endsWith("/reset-password"))).toBe(false);
+    const rows = await asTenant(TA, (q) => q`SELECT consumed_at FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows[0]!.consumed_at).toBeNull();
+  });
+
+  it("issuer no longer a user admin at all: refused", async () => {
+    const { token } = (await issue()).json();
+    setIssuer(["employee"]);
+    expect((await redeem(token)).statusCode).toBe(400);
+    expect(kc.users.get("kc-1")!.password).toBeUndefined();
+  });
+
+  it("issuer disabled (identity status) after issue: refused", async () => {
+    const { token } = (await issue()).json();
+    await asTenant(TA, (q) => q`UPDATE users.users SET status = 'suspended' WHERE id = ${ADMIN_A}`);
+    try {
+      expect((await redeem(token)).statusCode).toBe(400);
+    } finally {
+      await asTenant(TA, (q) => q`UPDATE users.users SET status = 'active' WHERE id = ${ADMIN_A}`);
+    }
+    expect(kc.users.get("kc-1")!.password).toBeUndefined();
+  });
+
+  it("issuer missing from Keycloak, or Keycloak unreadable for the issuer: refused (fail closed)", async () => {
+    const { token } = (await issue()).json();
+    kc.users.delete("issuer-kc");
+    expect((await redeem(token)).statusCode).toBe(400);
+  });
+
+  it("issuer unchanged: still works", async () => {
+    const { token } = (await issue()).json();
     expect((await redeem(token)).statusCode).toBe(200);
   });
 
@@ -478,6 +530,7 @@ describe("set-password link (no-mail path)", () => {
   it("a failed post-set cleanup in Keycloak does not turn a set password into 'try again'", async () => {
     kc = installFakeKeycloak({ failCleanup: true });
     vi.stubGlobal("fetch", kc.fetchMock);
+    setIssuer(["tenant_admin"]);
     kc.users.set("kc-1", { id: "kc-1", username: `${TA}__${email}`, enabled: true, email, attributes: { tid: [TA] }, requiredActions: [], roles: new Set() });
     const { token } = (await issue()).json();
     const res = await redeem(token);

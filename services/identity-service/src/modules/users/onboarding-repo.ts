@@ -6,7 +6,7 @@
  * bits of which only the SHA-256 is stored.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, isNull, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, isNull, gt, inArray, or, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -105,7 +105,7 @@ class RollbackWith extends Error {
  */
 export async function redeemSetupToken(
   raw: string,
-  apply: (user: { id: string; tenantId: string; email: string }, grantorRoles: string[]) => Promise<{ ok: true } | { ok: false; reason: string }>,
+  apply: (user: { id: string; tenantId: string; email: string }, issuer: { id: string; email: string; status: string } | null, grantorRoles: string[]) => Promise<{ ok: true } | { ok: false; reason: string }>,
   correlationId: string,
 ): Promise<RedeemOutcome> {
   const parsed = parseSetupToken(raw);
@@ -126,7 +126,11 @@ export async function redeemSetupToken(
         topic: "audit.event.record", eventType: "audit.event.record", tenantId, actorId: u.id, correlationId,
         payload: { service: "identity", action: "password_setup_complete", resourceType: "user", resourceId: u.id, outcome: "success", severity: "medium", tokenId: t.id },
       });
-      const r = await apply({ id: u.id, tenantId, email: u.email }, t.grantorRoles);
+      // The issuing admin as they are NOW (a link must not outlive its issuer's authority). The id stamped on the token
+      // is the JWT sub, i.e. either the identity id or the Keycloak id.
+      const issuer = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users)
+        .where(and(eq(users.tenantId, tenantId), or(eq(users.id, t.createdBy), eq(users.keycloakUserId, t.createdBy)))).limit(1))[0] ?? null;
+      const r = await apply({ id: u.id, tenantId, email: u.email }, issuer, t.grantorRoles);
       if (!r.ok) throw new RollbackWith({ status: "rejected", reason: r.reason });
       return { status: "applied" };
     }));
