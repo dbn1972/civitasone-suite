@@ -496,6 +496,41 @@ describe("set-password link (no-mail path)", () => {
     expect(kc.users.get("kc-1")!.password).toBeUndefined();
   });
 
+  it("issuer's Keycloak user disabled (identity still says active): refused", async () => {
+    const { token } = (await issue()).json();
+    setIssuer(["tenant_admin"], false);
+    const res = await redeem(token);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_OR_EXPIRED_TOKEN");
+    expect(kc.users.get("kc-1")!.password).toBeUndefined();
+  });
+
+  it("issuer hard-deleted after issue: refused, token not consumed", async () => {
+    const { token } = (await issue()).json();
+    await asTenant(TA, (q) => q`DELETE FROM users.users WHERE id = ${ADMIN_A}`);
+    try {
+      expect((await redeem(token)).statusCode).toBe(400);
+    } finally {
+      await asTenant(TA, (q) => q`INSERT INTO users.users (id, tenant_id, email, name, status, created_by, updated_by) VALUES (${ADMIN_A}, ${TA}, 'issuer@dept.gov.in', 'Issuing Admin', 'active', ${ADMIN_A}, ${ADMIN_A}) ON CONFLICT DO NOTHING`);
+    }
+    expect(kc.users.get("kc-1")!.password).toBeUndefined();
+    const rows = await asTenant(TA, (q) => q`SELECT consumed_at FROM users.password_setup_tokens WHERE user_id = ${uid}`);
+    expect(rows[0]!.consumed_at).toBeNull();
+  });
+
+  it("issuer whose only identity row is in ANOTHER tenant (cross-tenant platform admin): refused, fails closed", async () => {
+    const { token } = (await issue()).json();
+    await asTenant(TA, (q) => q`DELETE FROM users.users WHERE id = ${ADMIN_A}`);
+    await asTenant(TB, (q) => q`INSERT INTO users.users (id, tenant_id, email, name, status, created_by, updated_by) VALUES (${ADMIN_A}, ${TB}, 'issuer@dept.gov.in', 'Issuing Admin', 'active', ${ADMIN_A}, ${ADMIN_A}) ON CONFLICT DO NOTHING`);
+    try {
+      expect((await redeem(token)).statusCode).toBe(400);
+    } finally {
+      await asTenant(TB, (q) => q`DELETE FROM users.users WHERE id = ${ADMIN_A}`);
+      await asTenant(TA, (q) => q`INSERT INTO users.users (id, tenant_id, email, name, status, created_by, updated_by) VALUES (${ADMIN_A}, ${TA}, 'issuer@dept.gov.in', 'Issuing Admin', 'active', ${ADMIN_A}, ${ADMIN_A}) ON CONFLICT DO NOTHING`);
+    }
+    expect(kc.users.get("kc-1")!.password).toBeUndefined();
+  });
+
   it("issuer missing from Keycloak, or Keycloak unreadable for the issuer: refused (fail closed)", async () => {
     const { token } = (await issue()).json();
     kc.users.delete("issuer-kc");

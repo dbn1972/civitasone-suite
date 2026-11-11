@@ -575,7 +575,7 @@ export async function applyLoginProfile(
 }
 
 /** Current realm role NAMES mapped directly on a federated user. Read-only, best-effort. */
-export async function getRealmRoleNames(u: { tenantId: string; email: string }, opts: { effective?: boolean } = {}): Promise<KcResult & { roles?: string[] }> {
+export async function getRealmRoleNames(u: { tenantId: string; email: string }, opts: { effective?: boolean } = {}): Promise<KcResult & { roles?: string[]; enabled?: boolean }> {
   const cfg = readConfig();
   if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
   try {
@@ -585,7 +585,7 @@ export async function getRealmRoleNames(u: { tenantId: string; email: string }, 
     const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm${opts.effective ? "/composite" : ""}`, { headers: { authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`keycloak role-mappings read failed: ${res.status}`);
     const arr = (await res.json()) as Array<{ name: string }>;
-    return { ok: true, kcUserId: existing.id, roles: arr.map((r) => r.name) };
+    return { ok: true, kcUserId: existing.id, roles: arr.map((r) => r.name), enabled: existing.enabled };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_role_read_failed", tenantId: u.tenantId, email: u.email });
     return { ok: false, reason: String(err) };

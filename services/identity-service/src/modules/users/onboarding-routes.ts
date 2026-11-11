@@ -163,6 +163,8 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       if (!issuer || issuer.status !== "active") return { ok: false as const, reason: "invalid" };
       const now = await keycloak.getRealmRoleNames({ tenantId: u.tenantId, email: issuer.email }, { effective: true });
       if (!now.ok || !now.roles) return { ok: false as const, reason: "invalid" };
+      // identity may still say active while the login itself is disabled: that issuer has no standing either.
+      if (now.enabled !== true) return { ok: false as const, reason: "invalid" };
       if (!now.roles.some((r) => (USER_ADMIN_ROLES as readonly string[]).includes(r))) return { ok: false as const, reason: "invalid" };
       if (!checkCanActFor(now.roles, held.roles).ok) return { ok: false as const, reason: "invalid" };
       const r = await keycloak.setUserPassword({ tenantId: u.tenantId, email: u.email }, password);
