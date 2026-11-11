@@ -366,3 +366,31 @@ describe("receipt policy: version stamped at the route", () => {
     expect(other.statusCode).toBe(202);
   });
 });
+
+describe("receipt policy: consumer tenant + concurrency", () => {
+  it("two concurrent first-ever saves for a tenant leave exactly one entry per version", async () => {
+    const T = randomUUID();
+    const send = (policy: unknown) => (queue as unknown as { publish: (t: string, m: unknown) => Promise<void> }).publish("payroll.reimbursement_receipt_policy.update", {
+      messageId: randomUUID(), type: "payroll.reimbursement_receipt_policy.update", tenantId: T, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: randomUUID(), tenantId: T, policy, reason: null },
+    });
+    await Promise.all([send({ categories: { food: { mode: "always" } } }), send({ categories: { fuel: { mode: "always" } } })]);
+    const rows = await until(() => q(sql`SELECT reimbursement_receipt_policy_version AS v, reimbursement_receipt_policy_history AS h FROM payroll.payroll_settings WHERE tenant_id = ${T}::uuid`, T), (r) => r[0]?.v === 2);
+    const versions = (rows[0]!.h as Array<{ version: number }>).map((e) => e.version).sort();
+    expect(versions).toEqual([1, 2]);
+  });
+
+  it("a command whose payload tenant differs from the envelope is refused (policy save and claim create)", async () => {
+    const OTHER = randomUUID();
+    const pub = (topic: string, payload: Record<string, unknown>) => (queue as unknown as { publish: (t: string, m: unknown) => Promise<void> }).publish(topic, {
+      messageId: randomUUID(), type: topic, tenantId: TENANT, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0", payload,
+    });
+    await pub("payroll.reimbursement_receipt_policy.update", { id: randomUUID(), tenantId: OTHER, policy: { categories: {} }, reason: null });
+    const ref = `XTEN-${randomUUID().slice(0, 6)}`;
+    await pub("payroll.reimbursement.create", { id: randomUUID(), tenantId: OTHER, employeeId: EMP_ID, category: "food", amountMinor: 100, period: "2026-08", billRef: ref });
+    await settle();
+    expect(await q(sql`SELECT 1 FROM payroll.payroll_settings WHERE tenant_id = ${OTHER}::uuid`, OTHER)).toHaveLength(0);
+    expect(await q(sql`SELECT 1 FROM payroll.payroll_reimbursements WHERE bill_ref = ${ref}`, OTHER)).toHaveLength(0);
+    expect(await q(sql`SELECT 1 FROM payroll.payroll_reimbursements WHERE bill_ref = ${ref}`)).toHaveLength(0);
+  });
+});
