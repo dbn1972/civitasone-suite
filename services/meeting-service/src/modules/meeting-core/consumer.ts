@@ -36,6 +36,7 @@ import { meetings, meetingSeries, meetingStateTransitions, meetingTypes } from "
 import { agendaItems } from "../agenda/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { attendanceRecords } from "../attendance/schema.js";
+import { minutes } from "../minutes/schema.js";
 import { participants } from "../participant/schema.js";
 import { resolutions } from "../decision/schema.js";
 import { roomBookings } from "../calendar/schema.js";
@@ -47,6 +48,9 @@ import {
   computeNoticeDays,
   isDirectMeetingOwner,
   holdsMeetingAdminRole,
+  recordHeldAuthority,
+  assertHeldMeetingTimes,
+  assertHeldAttendeeTimes,
   isMeetingState,
   CHAIR_STANDING_ROLES,
   SECRETARIAL_STANDING_ROLES,
@@ -498,6 +502,220 @@ async function handleMeetingCreate(msg: CommandEnvelope<MeetingCreatePayload>): 
       payload: { meetingId: p.id, type: p.type, committeeId: p.committeeId ?? null, status: "draft" },
     });
     await audit(tx, msg, "create", "meeting", p.id);
+  });
+  await invalidate(msg.tenantId, CACHE_RESOURCE, p.id);
+}
+
+interface MeetingRecordHeldPayload {
+  id: string;
+  tenantId: string;
+  minutesId: string;
+  title: string;
+  type: string;
+  description?: string;
+  committeeId?: string;
+  chairpersonId: string;
+  secretaryId: string;
+  convenerId?: string;
+  venue?: string;
+  vcEnabled?: boolean;
+  confidentialityLevel?: string;
+  fileReference?: string;
+  scheduledAt?: string;
+  actualStartAt: string;
+  actualEndAt: string;
+  quorumEstablished?: boolean;
+  attendees: Array<{
+    employeeId: string; role: string; status?: string; mode?: string; isMandatory?: boolean; checkInAt?: string; checkOutAt?: string;
+  }>;
+  minutes: { content: string; templateType?: string };
+  /** Verified token roles stamped by the route; absent on a forged/older message (no admin bypass then). */
+  actorRoles?: string[];
+}
+
+/**
+ * meeting.record_held → record a meeting that has already taken place, atomically:
+ *   meeting (status `minutes_pending`, scheduled/actual times in the past) + participants + attendance +
+ *   a minutes DRAFT (approved through the normal minutes flow) + one transition-log row + an audit record.
+ *
+ * Order matters for the numbering guarantee: every validation and the duplicate guard run BEFORE the number
+ * is allocated, and the allocation is in the same transaction as the insert, so a refused or failed
+ * recording never consumes a number (the counter row rolls back with it). The number is allocated from the
+ * (prefix, FY) series of the HELD date, so a meeting held in FY 2025-26 is numbered in that year's series.
+ *
+ * No domain events are emitted (invitations, calendar entries and reminders for a meeting that is already
+ * over would be wrong); the audit record and transition log are the trail.
+ */
+async function handleMeetingRecordHeld(msg: CommandEnvelope<MeetingRecordHeldPayload>): Promise<void> {
+  const p = msg.payload;
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+
+    // 1. Authority (defence in depth: the route checked the same). No stamped roles = no bypass.
+    const authority = recordHeldAuthority(p.actorRoles, msg.actorId, p.secretaryId);
+    let allowed = authority === "admin" || authority === "named_secretary";
+    if (authority === "needs_standing" && p.committeeId) {
+      const standing = await tx.select({ id: committeeMembers.id }).from(committeeMembers).where(and(
+        eq(committeeMembers.tenantId, msg.tenantId), eq(committeeMembers.committeeId, p.committeeId),
+        eq(committeeMembers.memberId, msg.actorId), eq(committeeMembers.status, "active"),
+        inArray(committeeMembers.role, [...SECRETARIAL_STANDING_ROLES]),
+      )).limit(1);
+      allowed = standing.length > 0;
+    }
+    if (!allowed) {
+      throw new NonRetryableError(`FORBIDDEN: actor ${msg.actorId} may not record a held meeting`);
+    }
+
+    // 2. The times: all in the past, end after start, within a day.
+    const now = new Date();
+    const actualStartAt = new Date(p.actualStartAt);
+    const actualEndAt = new Date(p.actualEndAt);
+    const scheduledAt = new Date(p.scheduledAt ?? p.actualStartAt);
+    let durationMinutes: number;
+    try {
+      durationMinutes = assertHeldMeetingTimes({ scheduledAt, actualStartAt, actualEndAt, now });
+    } catch (err) {
+      asPermanent(err);
+    }
+    const attendees = p.attendees.map((a) => ({
+      ...a,
+      status: a.status ?? "present",
+      mode: a.mode ?? "in_person",
+      checkInAt: new Date(a.checkInAt ?? p.actualStartAt),
+      checkOutAt: a.checkOutAt ? new Date(a.checkOutAt) : null,
+    }));
+    try {
+      for (const a of attendees) assertHeldAttendeeTimes(a, { actualStartAt, actualEndAt });
+    } catch (err) {
+      asPermanent(err);
+    }
+    if (new Set(attendees.map((a) => a.employeeId)).size !== attendees.length) {
+      throw new NonRetryableError("VALIDATION_FAILED: an attendee is listed more than once");
+    }
+
+    // 3. The committee (if any) and quorum: computed from the attendees against its rule.
+    let quorumEstablished = p.quorumEstablished ?? false;
+    if (p.committeeId) {
+      const committee = await tx.select({ quorumRule: committees.quorumRule }).from(committees)
+        .where(and(eq(committees.id, p.committeeId), eq(committees.tenantId, msg.tenantId))).limit(1);
+      if (!committee[0]) throw new NonRetryableError(`COMMITTEE_NOT_FOUND: ${p.committeeId}`);
+      const roster = await tx.select({ memberId: committeeMembers.memberId }).from(committeeMembers).where(and(
+        eq(committeeMembers.tenantId, msg.tenantId), eq(committeeMembers.committeeId, p.committeeId), eq(committeeMembers.status, "active"),
+      ));
+      quorumEstablished = evaluateQuorum(
+        attendees.map((a) => ({ status: a.status, mode: a.mode, role: a.role })),
+        committee[0].quorumRule as QuorumRule,
+        roster.length,
+      ).established;
+    }
+
+    // 4. Duplicate guard (a retry under a different idempotency key must not record the meeting twice).
+    const dup = await tx.select({ id: meetings.id, meetingNumber: meetings.meetingNumber }).from(meetings).where(and(
+      eq(meetings.tenantId, msg.tenantId),
+      p.committeeId ? eq(meetings.committeeId, p.committeeId) : sql`${meetings.committeeId} is null`,
+      eq(meetings.title, p.title),
+      eq(meetings.scheduledAt, scheduledAt),
+      notInArray(meetings.status, ["cancelled"]),
+    )).limit(1);
+    if (dup[0]) {
+      throw new NonRetryableError(`MEETING_ALREADY_RECORDED: "${p.title}" at ${scheduledAt.toISOString()} already exists as ${dup[0].meetingNumber ?? dup[0].id}`);
+    }
+
+    // 5. Number from the held date's FY, then insert everything in this same transaction.
+    const { meetingNumber, financialYear } = await computeMeetingNumber(tx, {
+      tenantId: msg.tenantId, committeeId: p.committeeId ?? null, scheduledAt,
+    });
+    await tx.insert(meetings).values({
+      id: p.id,
+      tenantId: msg.tenantId,
+      type: p.type,
+      title: p.title,
+      description: p.description ?? null,
+      status: "minutes_pending",
+      committeeId: p.committeeId ?? null,
+      chairpersonId: p.chairpersonId,
+      secretaryId: p.secretaryId,
+      convenerId: p.convenerId ?? null,
+      scheduledAt,
+      actualStartAt,
+      actualEndAt,
+      durationMinutes,
+      venue: p.venue ?? null,
+      vcEnabled: p.vcEnabled ?? false,
+      confidentialityLevel: p.confidentialityLevel ?? "internal",
+      fileReference: p.fileReference ?? null,
+      quorumEstablished,
+      quorumEstablishedAt: quorumEstablished ? actualStartAt : null,
+      meetingNumber,
+      financialYear,
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+
+    for (const a of attendees) {
+      const participantId = randomUUID();
+      await tx.insert(participants).values({
+        id: participantId,
+        tenantId: msg.tenantId,
+        meetingId: p.id,
+        employeeId: a.employeeId,
+        role: a.role,
+        isMandatory: a.isMandatory ?? a.role === "member",
+        invitationStatus: "accepted",
+        attendanceMode: a.mode,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await tx.insert(attendanceRecords).values({
+        id: randomUUID(),
+        tenantId: msg.tenantId,
+        meetingId: p.id,
+        participantId,
+        method: "manual",
+        checkInAt: a.checkInAt,
+        checkOutAt: a.checkOutAt,
+        mode: a.mode,
+        status: a.status,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+    }
+
+    // The minutes arrive with the meeting: a DRAFT with no submission deadline (the deadline exists to chase
+    // a secretary who has not drafted; here the draft is the input). It is approved through the normal flow.
+    await tx.insert(minutes).values({
+      id: p.minutesId,
+      tenantId: msg.tenantId,
+      meetingId: p.id,
+      templateType: p.minutes.templateType ?? "summary",
+      content: p.minutes.content,
+      status: "draft",
+      currentVersion: 1,
+      submissionDeadline: null,
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+
+    await tx.insert(meetingStateTransitions).values({
+      tenantId: msg.tenantId,
+      meetingId: p.id,
+      fromState: "draft",
+      toState: "minutes_pending",
+      reason: "Recorded as an already-held meeting",
+      actorId: msg.actorId,
+    });
+
+    await enqueue(tx, {
+      topic: AUDIT_TOPIC,
+      eventType: AUDIT_TOPIC,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: {
+        service: SERVICE, action: "record_held", resourceType: "meeting", resourceId: p.id, outcome: "success",
+        metadata: { meetingNumber, financialYear, attendeeCount: attendees.length, quorumEstablished, minutesId: p.minutesId, committeeId: p.committeeId ?? null },
+      },
+    });
   });
   await invalidate(msg.tenantId, CACHE_RESOURCE, p.id);
 }
@@ -1209,6 +1427,7 @@ type RegisterConsumer = <T>(topic: string, handler: ConsumerHandler<T>) => void;
  */
 export function registerMeetingCoreConsumers(register: RegisterConsumer): void {
   register(COMMANDS.meetingCreate, handleMeetingCreate);
+  register(COMMANDS.meetingRecordHeld, handleMeetingRecordHeld);
   register(COMMANDS.meetingUpdate, handleMeetingUpdate);
   register(COMMANDS.meetingTransition, handleMeetingTransition);
   register(COMMANDS.meetingCancel, handleMeetingCancel);

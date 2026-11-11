@@ -31,6 +31,7 @@
  *
  * Endpoints (16):
  *   POST   /v1/meetings                          create meeting (draft)
+ *   POST   /v1/meetings/record-held              record an already-held meeting (past date, attendees, minutes)
  *   GET    /v1/meetings                          list meetings (paginated, filterable)
  *   GET    /v1/meetings/:meetingId               meeting details
  *   PATCH  /v1/meetings/:meetingId               update meeting
@@ -54,7 +55,7 @@ import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, MEETING_ADMIN_ROLES, allowedTargets, canTransition, isMeetingState, validateQuorumForStart } from "./domain.js";
+import { recordHeldAuthority, RECORD_HELD_ROLES, assertHeldMeetingTimes, isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, MEETING_ADMIN_ROLES, allowedTargets, canTransition, isMeetingState, validateQuorumForStart } from "./domain.js";
 import { httpError } from "../../shared/context.js";
 import {
   createMeetingSchema,
@@ -68,10 +69,12 @@ import {
   listMeetingsQuerySchema,
   listMeetingTypesQuerySchema,
   listSeriesQuerySchema,
+  recordHeldMeetingSchema,
   meetingIdParam,
   seriesIdParam,
 } from "./validators.js";
 import * as repo from "./repo.js";
+import { getCommitteeById } from "../committee/repo.js";
 import * as commands from "./commands.js";
 
 // ─── RBAC role groups (design § Access Control Matrix — Meetings) ────────────
@@ -162,6 +165,38 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     requireIdempotencyKey(ctx); // GAP-MEETING-MEETINGS-NEW-04
     const body = createMeetingSchema.parse(req.body);
     const accepted = await commands.publishMeetingCreate(ctx, body);
+    return reply.code(202).send({ data: accepted });
+  });
+
+  /**
+   * POST /v1/meetings/record-held — enter a meeting that has ALREADY been held: past date, actual start/end,
+   * attendees and minutes, in one command (replaces "schedule in the future, then patch scheduledAt").
+   * Meeting admins and secretaries only; a secretary must be the meeting's own secretary or hold `secretary`
+   * standing on its committee. A future date is refused. The meeting is numbered from the FY of the held
+   * date by the same gap-free counter as every other meeting, and lands in `minutes_pending`.
+   */
+  app.post("/v1/meetings/record-held", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...RECORD_HELD_ROLES]);
+    requireIdempotencyKey(ctx);
+    const body = recordHeldMeetingSchema.parse(req.body);
+    assertHeldMeetingTimes({
+      scheduledAt: new Date(body.scheduledAt ?? body.actualStartAt),
+      actualStartAt: new Date(body.actualStartAt),
+      actualEndAt: new Date(body.actualEndAt),
+      now: new Date(),
+    });
+    if (body.committeeId && !(await getCommitteeById(ctx.tenantId, body.committeeId))) {
+      throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee not found");
+    }
+    const authority = recordHeldAuthority(ctx.roles, ctx.actorId, body.secretaryId);
+    const allowed = authority === "admin" || authority === "named_secretary"
+      || (authority === "needs_standing" && !!body.committeeId
+        && (await repo.hasCommitteeStanding(ctx.tenantId, body.committeeId, ctx.actorId, SECRETARIAL_STANDING_ROLES)));
+    if (!allowed) {
+      throw new HttpError(403, "FORBIDDEN", "only a meeting admin, or the secretary of this meeting or its committee, may record a held meeting");
+    }
+    const accepted = await commands.publishMeetingRecordHeld(ctx, body);
     return reply.code(202).send({ data: accepted });
   });
 
