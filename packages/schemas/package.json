@@ -18,6 +18,8 @@
     "./module-manifest": "./dist/module-manifest.js",
     "./module-resolver": "./dist/module-resolver.js",
     "./module-catalogue": "./dist/module-catalogue.js",
+    "./plan-modules": "./dist/plan-modules.js",
+    "./plan-pricing": "./dist/plan-pricing.js",
     "./validators": "./dist/validators.js"
   },
   "scripts": {

@@ -23,6 +23,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyGatewayModuleCache } from "../../module-cache-notify.js";
 import * as repo from "./repo.js";
 import { buildRegistry, resolveComposition } from "./domain.js";
+import { planApplyRequests, tenantEntitlement } from "./schema.js";
+import { and, eq } from "drizzle-orm";
 
 const log = pino({ name: "admin-composition-applier" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -31,6 +33,22 @@ interface ApplyPlanPayload {
   tenantId: string;
   moduleIds: string[];
   profileCode: string | null;
+}
+
+interface PlanApplyRequestPayload {
+  requestId: string;
+  tenantId: string;
+  planCode: string;
+  moduleIds: string[];
+  userModuleIds: string[];
+  profileCode: string | null;
+}
+
+interface PlanApplyDecidePayload {
+  tenantId: string;
+  requestId: string;
+  decision: "approve" | "reject";
+  reason?: string;
 }
 
 interface SetEnforcementModePayload {
@@ -142,6 +160,88 @@ export function registerCompositionConsumers(queue: Queue): void {
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionApplyPlan }, "Consumer processing failed");
       throw err; // fail loud: retried / DLQ'd, never a silent half-write
+    }
+  });
+
+  // M6 — maker-checker: record a plan-application request. Nothing is applied here.
+  queue.subscribe<PlanApplyRequestPayload>(COMMANDS.compositionPlanApplyRequest, async (msg) => {
+    const p = msg.payload;
+    try {
+      const reg = buildRegistry(await repo.loadRegistry(p.tenantId));
+      const userModules = resolveComposition(reg, p.moduleIds).entries.filter((e) => e.source === "user").map((e) => e.id).sort();
+      await runWithTenant(p.tenantId, () =>
+        db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await tx.insert(planApplyRequests).values({
+            id: p.requestId, tenantId: p.tenantId, planCode: p.planCode, moduleIds: p.moduleIds, userModuleIds: userModules,
+            profileCode: p.profileCode, requestedBy: msg.actorId,
+          });
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "admin", action: "composition_plan_apply_requested", resourceType: "plan_apply_request", resourceId: p.requestId,
+              outcome: "success", targetTenantId: p.tenantId, planCode: p.planCode, userModules, profileCode: p.profileCode,
+            },
+          });
+        }),
+      );
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionPlanApplyRequest }, "Consumer processing failed");
+      throw err;
+    }
+  });
+
+  // M6 — maker-checker: the checker's decision. Approve = the same write as apply-plan, in the same transaction as the
+  // status change and the audit event. The consumer is authoritative: the request must be pending and the decider must
+  // not be the requester (the DB CHECK is the last line).
+  queue.subscribe<PlanApplyDecidePayload>(COMMANDS.compositionPlanApplyDecide, async (msg) => {
+    const p = msg.payload;
+    let applied = false;
+    try {
+      await runWithTenant(p.tenantId, () =>
+        db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          const rows = await tx.select().from(planApplyRequests)
+            .where(and(eq(planApplyRequests.id, p.requestId), eq(planApplyRequests.tenantId, p.tenantId))).for("update");
+          const req = rows[0];
+          if (!req) throw new Error(`plan application ${p.requestId} not found`);
+          if (req.status !== "pending") throw new Error(`plan application ${p.requestId} is already ${req.status}`);
+          if (req.requestedBy === msg.actorId) throw new Error("MAKER_CHECKER_VIOLATION: the requester cannot decide their own plan application");
+          const audit = (action: string, extra: Record<string, unknown>) =>
+            enqueue(tx as Parameters<typeof enqueue>[0], {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "admin", action, resourceType: "plan_apply_request", resourceId: p.requestId, outcome: "success", targetTenantId: p.tenantId, planCode: req.planCode, requestedBy: req.requestedBy, ...extra },
+            });
+          if (p.decision === "reject") {
+            await tx.update(planApplyRequests).set({ status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.reason ?? null })
+              .where(eq(planApplyRequests.id, p.requestId));
+            await audit("composition_plan_apply_rejected", { reason: p.reason ?? null });
+            return;
+          }
+          // re-validate against the registry as it is NOW (it may have changed since the request)
+          const reg = buildRegistry(await repo.loadRegistry(p.tenantId));
+          const userModules = resolveComposition(reg, req.moduleIds).entries.filter((e) => e.source === "user").map((e) => e.id).sort();
+          const before = (await tx.select({ id: tenantEntitlement.moduleId }).from(tenantEntitlement)
+            .where(and(eq(tenantEntitlement.tenantId, p.tenantId), eq(tenantEntitlement.source, "user")))).map((r) => r.id).sort();
+          await repo.applyPlanTx(tx as unknown as Parameters<typeof repo.applyPlanTx>[0], p.tenantId, userModules, req.profileCode, msg.actorId);
+          await tx.update(planApplyRequests).set({ status: "applied", decidedBy: msg.actorId, decidedAt: new Date(), userModuleIds: userModules, previousUserModules: before })
+            .where(eq(planApplyRequests.id, p.requestId));
+          await audit("composition_plan_apply_approved", { userModules, previousUserModules: before, profileCode: req.profileCode });
+          // the same audit action the direct applier writes, so the existing trail queries still see every entitlement change
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { service: "admin", action: "composition_apply_plan", resourceType: "tenant_composition", resourceId: p.tenantId, outcome: "success", profileCode: req.profileCode, userModules },
+          });
+          applied = true;
+        }),
+      );
+      if (applied) {
+        await cache.invalidate(cache.makeKey(p.tenantId, "composition", p.tenantId));
+        await notifyGatewayModuleCache(p.tenantId);
+      }
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionPlanApplyDecide }, "Consumer processing failed");
+      throw err;
     }
   });
 }

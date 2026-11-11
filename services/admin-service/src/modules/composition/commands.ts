@@ -72,3 +72,50 @@ export async function applyPlan(ctx: RequestContext, input: ApplyPlanInput): Pro
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export interface PlanApplyRequestInput {
+  tenantId: string;
+  planCode: string;
+  /** The plan's catalogue modules as supplied by the maker. */
+  moduleIds: string[];
+  /** What they resolve to as user picks (core + hard deps derived), computed by the route. */
+  userModuleIds: string[];
+  profileCode: string | null;
+}
+
+/** M6: publish a plan-application REQUEST (nothing is applied until a different admin approves it). */
+export async function planApplyRequest(ctx: RequestContext, input: PlanApplyRequestInput): Promise<Accepted> {
+  const id = commandMessageId(ctx, `composition-plan-request:${input.tenantId}`, "plan_apply_request");
+  await queue.publish(COMMANDS.compositionPlanApplyRequest, {
+    messageId: id,
+    type: COMMANDS.compositionPlanApplyRequest,
+    tenantId: input.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { ...input, requestId: id },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export interface PlanApplyDecideInput {
+  tenantId: string;
+  requestId: string;
+  decision: "approve" | "reject";
+  reason?: string;
+}
+
+/** M6: publish the checker's decision. The consumer re-checks maker != checker and the request state. */
+export async function planApplyDecide(ctx: RequestContext, input: PlanApplyDecideInput): Promise<Accepted> {
+  const id = commandMessageId(ctx, `composition-plan-decide:${input.requestId}`, input.decision);
+  await queue.publish(COMMANDS.compositionPlanApplyDecide, {
+    messageId: id,
+    type: COMMANDS.compositionPlanApplyDecide,
+    tenantId: input.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: input,
+  });
+  return { id: input.requestId, status: "accepted", correlationId: ctx.correlationId };
+}

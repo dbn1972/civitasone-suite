@@ -19,6 +19,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { toGatewayKeys } from "./gateway-map.js";
+import { planApplyRequiresApproval } from "./plan-apply.js";
 import {
   buildRegistry,
   resolveComposition,
@@ -279,6 +280,10 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/apply-plan", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    // M6: with PLAN_APPLY_MAKER_CHECKER=on a plan is applied only through the approval flow (plan-apply.ts).
+    if (planApplyRequiresApproval()) {
+      throw new HttpError(409, "PLAN_APPLY_REQUIRES_APPROVAL", "applying a plan needs approval: POST /v1/admin/composition/plan-applications");
+    }
     const result = applyPlanBody.safeParse(req.body);
     if (!result.success) {
       const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
