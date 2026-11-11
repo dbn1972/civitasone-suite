@@ -28,6 +28,7 @@ import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consume
 import { registerOpeningYtdConsumers } from "./modules/opening-ytd/consumer.js";
 import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
 import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
+import { registerProjectCostingConsumers } from "./modules/project-costing/consumer.js";
 import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
 import { registerReturnFilingConsumers } from "./modules/return-filings/consumer.js";
 import { registerPostingConsumers } from "./modules/posting-history/consumer.js";
@@ -94,6 +95,7 @@ registerSponsorConfigConsumers(queue);
 registerOpeningYtdConsumers(queue);
 registerBankFileSigningConsumers(queue);
 registerCostingRuleConsumers(queue);
+registerProjectCostingConsumers(queue);
 registerLetterheadConsumers(queue);
 registerReturnFilingConsumers(queue);
 

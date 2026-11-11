@@ -10,6 +10,7 @@ export const createProjectBody = z.object({
   sanctionRef:      z.string().optional(),
   startDate:        z.string().optional(),
   endDate:          z.string().optional(),
+  costCenterId:     z.string().uuid().optional(),
 });
 export type CreateProjectBody = z.infer<typeof createProjectBody>;
 
@@ -57,6 +58,7 @@ export const updateProjectBody = z.object({
   dprCostMinor:    z.number().int().nonnegative().optional(),
   sanctionRef:     z.string().optional(),
   status:          z.enum(["planned", "active", "on_hold", "completed", "cancelled", "archived"]).optional(),
+  costCenterId:    z.string().uuid().nullable().optional(),
 }).strict();
 export type UpdateProjectBody = z.infer<typeof updateProjectBody>;
 
@@ -72,10 +74,18 @@ export const updateTaskBody = z.object({
 }).strict();
 export type UpdateTaskBody = z.infer<typeof updateTaskBody>;
 
+/**
+ * A member is a login (userId), an HRMS employee (employeeId, with or without a
+ * login), or both. userId-only bodies work exactly as before. A member with no
+ * login cannot be a project manager: the manager is who may open the project's
+ * cost totals, and that needs a login.
+ */
 export const addMemberBody = z.object({
-  userId: z.string().uuid(),
-  role:   z.enum(["project_manager", "project_officer", "engineer", "finance_officer", "viewer"]).default("viewer"),
-});
+  userId:     z.string().uuid().optional(),
+  employeeId: z.string().uuid().optional(),
+  role:       z.enum(["project_manager", "project_officer", "engineer", "finance_officer", "viewer"]).default("viewer"),
+}).refine((b) => b.userId !== undefined || b.employeeId !== undefined, { message: "provide userId and/or employeeId", path: ["userId"] })
+  .refine((b) => b.userId !== undefined || b.role !== "project_manager", { message: "a member without a login cannot be the project manager", path: ["role"] });
 export type AddMemberBody = z.infer<typeof addMemberBody>;
 
 export const memberParam   = z.object({ id: z.string().uuid(), memberId: z.string().uuid() });

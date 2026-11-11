@@ -17,6 +17,7 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import * as queries from "./queries.js";
 import { assertTaskTransitionAllowed, DomainError } from "./domain.js";
+import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
 const READER_ROLES = [...PROJ_ROLES, "audit_officer", "finance_officer"];
@@ -233,10 +234,26 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROJ_ROLES);
     const { id } = idParam.parse(req.params);
     const body = addMemberBody.parse(req.body);
-    // idempotency: check if user already a member
-    const existing = await repo.findMemberByUserAndProject(id, body.userId, ctx.tenantId);
-    if (existing) {
-      return reply.code(409).send({ code: "CONFLICT", message: "user is already a member of this project" });
+    // idempotency: check if the user / employee is already a member
+    if (body.userId) {
+      const existing = await repo.findMemberByUserAndProject(id, body.userId, ctx.tenantId);
+      if (existing) {
+        return reply.code(409).send({ code: "CONFLICT", message: "user is already a member of this project" });
+      }
+    }
+    if (body.employeeId) {
+      // S8 G7: employee membership (with or without a login). The id is a soft cross-service
+      // reference, so HRMS is asked; an unreachable HRMS is a 503, never a silent accept.
+      try {
+        if (!(await verifyEmployeeExists(ctx.tenantId, body.employeeId))) throw new HttpError(404, "EMPLOYEE_NOT_FOUND", "employee not found");
+      } catch (err) {
+        if (err instanceof HrmsUnavailableError) throw new HttpError(503, "HRMS_UNAVAILABLE", "could not verify the employee; try again");
+        throw err;
+      }
+      const existing = await repo.findMemberByEmployeeAndProject(id, body.employeeId, ctx.tenantId);
+      if (existing) {
+        return reply.code(409).send({ code: "CONFLICT", message: "employee is already a member of this project" });
+      }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.addMember(ctx, id, body));
   });

@@ -50,6 +50,12 @@ export const COMMANDS = {
   costingRuleUpsert:      "payroll.costing_rule.upsert",
   // GAP-PAYROLL-COSTING-02: edit split % / deactivate / reactivate a rule.
   costingRuleUpdate:      "payroll.costing_rule.update",
+  // S8 G7 (project costing, MIS layer v1)
+  costAllocationRequest:  "payroll.cost_allocation.request",
+  costAllocationDecide:   "payroll.cost_allocation.decide",
+  costAllocationEnd:      "payroll.cost_allocation.end",
+  projectCostingSettings: "payroll.project_costing.settings",
+  projectCostGenerate:    "payroll.project_cost.generate",
   offCycleCreate:         "payroll.off_cycle.create",
   offCycleProcess:        "payroll.off_cycle.process",
   stateRulesUpsert:       "payroll.state_rules.upsert",
@@ -131,6 +137,11 @@ export const EVENTS = {
   flexElectionDecided:    "payroll.flex_election.decided",
   costingRuleUpserted:    "payroll.costing_rule.upserted",
   costingRuleUpdated:     "payroll.costing_rule.updated",
+  costAllocationRequested: "payroll.cost_allocation.requested",
+  costAllocationDecided:  "payroll.cost_allocation.decided",
+  projectCostingSettingsUpdated: "payroll.project_costing.settings_updated",
+  /** Per-project cost TOTALS of a run or a reclass batch (no employee id, no per-person amount). Consumed by project-service. */
+  projectCostPosted:      "payroll.project_cost.posted",
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",

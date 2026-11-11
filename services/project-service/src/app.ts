@@ -18,6 +18,7 @@ import { dashboardRoutes }   from "./modules/dashboard/routes.js";
 import { evidenceRoutes }    from "./modules/evidence/routes.js";
 import { boardIntakeRoutes } from "./modules/board-intake/routes.js";
 import { escalationRoutes } from "./modules/escalation/routes.js";
+import { staffCostRoutes } from "./modules/staff-cost/routes.js";
 
 // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
 // external caller cannot forge it. Same value as hrms-service INTERNAL_PROXY_TRUST. Deliberately not `true`.
@@ -77,6 +78,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(evidenceRoutes);
   await app.register(boardIntakeRoutes);
   await app.register(escalationRoutes);
+  await app.register(staffCostRoutes);
 
   const { worldClassProjectRoutes } = await import("./modules/project/world-class-routes.js");
   await app.register(worldClassProjectRoutes);

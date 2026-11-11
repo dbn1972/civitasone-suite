@@ -81,7 +81,7 @@ export async function addMember(ctx: RequestContext, projectId: string, body: Ad
   await queue.publish(COMMANDS.memberAdd, {
     messageId: id, type: COMMANDS.memberAdd,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, projectId, tenantId: ctx.tenantId, userId: body.userId, role: body.role },
+    payload: { id, projectId, tenantId: ctx.tenantId, userId: body.userId ?? null, employeeId: body.employeeId ?? null, role: body.role },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

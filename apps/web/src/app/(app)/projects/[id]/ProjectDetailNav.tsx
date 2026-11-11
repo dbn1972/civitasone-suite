@@ -12,6 +12,7 @@ const NAV_TABS = [
   { label: "Tasks", segment: "tasks" },
   { label: "Team", segment: "members" },
   { label: "Risks", segment: "risks" },
+  { label: "Staff cost", segment: "staff-cost" },
 ] as const;
 
 /**

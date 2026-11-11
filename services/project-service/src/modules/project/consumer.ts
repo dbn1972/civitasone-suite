@@ -17,7 +17,7 @@ export function registerProjectConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string;
       schemeId?: string; agencyRef?: string; dprCostMinor?: number; sanctionedMinor?: number;
-      sanctionRef?: string; startDate?: string; endDate?: string;
+      sanctionRef?: string; startDate?: string; endDate?: string; costCenterId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -26,7 +26,7 @@ export function registerProjectConsumers(queue: Queue): void {
         schemeId: p.schemeId ?? null, agencyRef: p.agencyRef ?? null,
         dprCostMinor: BigInt(p.dprCostMinor ?? 0),
         sanctionedMinor: BigInt(p.sanctionedMinor ?? 0),
-        sanctionRef: p.sanctionRef ?? null,
+        sanctionRef: p.sanctionRef ?? null, costCenterId: p.costCenterId ?? null,
         startDate: p.startDate ?? null, endDate: p.endDate ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -137,6 +137,7 @@ export function registerProjectConsumers(queue: Queue): void {
       projectId: string; tenantId: string;
       name?: string; agencyRef?: string; startDate?: string; endDate?: string;
       sanctionedMinor?: number; dprCostMinor?: number; sanctionRef?: string; status?: string;
+      costCenterId?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -149,6 +150,7 @@ export function registerProjectConsumers(queue: Queue): void {
       if (p.dprCostMinor !== undefined)    patch.dprCostMinor = BigInt(p.dprCostMinor);
       if (p.sanctionRef !== undefined)     patch.sanctionRef = p.sanctionRef;
       if (p.status !== undefined)          patch.status = p.status;
+      if (p.costCenterId !== undefined)    patch.costCenterId = p.costCenterId;
       await repo.updateProjectTx(tx, p.projectId, p.tenantId, patch);
       await audit(tx, msg, "update", "project", p.projectId);
     });
@@ -191,12 +193,12 @@ export function registerProjectConsumers(queue: Queue): void {
   // ─── Member Add ─────────────────────────────────────────────────────────────
 
   queue.subscribe(COMMANDS.memberAdd, async (msg) => {
-    const p = msg.payload as { id: string; projectId: string; tenantId: string; userId: string; role: string };
+    const p = msg.payload as { id: string; projectId: string; tenantId: string; userId?: string | null; employeeId?: string | null; role: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertMember(tx, {
         id: p.id, projectId: p.projectId, tenantId: p.tenantId,
-        userId: p.userId, role: p.role,
+        userId: p.userId ?? null, employeeId: p.employeeId ?? null, role: p.role,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "add", "member", p.id);

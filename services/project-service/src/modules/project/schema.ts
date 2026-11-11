@@ -12,6 +12,8 @@ export const projectProjects = projectSchema.table("project_projects", {
   dprCostMinor:     bigint("dpr_cost_minor", { mode: "bigint" }).notNull().default(0n),
   sanctionedMinor:  bigint("sanctioned_minor", { mode: "bigint" }).notNull().default(0n),
   sanctionRef:      text("sanction_ref"),
+  /** S8 G7 (migration 0029): the finance cost centre this project's staff cost is charged to. */
+  costCenterId:     uuid("cost_center_id"),
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   status:           varchar("status", { length: 24 }).notNull().default("planned"),
   startDate:        date("start_date"),
@@ -68,7 +70,10 @@ export const projectMembers = projectSchema.table("project_members", {
   id:          uuid("id").primaryKey().defaultRandom(),
   projectId:   uuid("project_id").notNull(),
   tenantId:    uuid("tenant_id").notNull(),
-  userId:      uuid("user_id").notNull(),
+  /** S8 G7 (migration 0029): null for a member without a login (employee-only membership). */
+  userId:      uuid("user_id"),
+  /** S8 G7: HRMS employee id (soft cross-service reference), with or without a login. */
+  employeeId:  uuid("employee_id"),
   role:        varchar("role", { length: 64 }).notNull().default("member"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
