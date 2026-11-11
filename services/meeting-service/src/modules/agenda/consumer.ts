@@ -29,6 +29,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { agendaItems } from "./schema.js";
 import { getPolicyNumber } from "../config-registry/policy.js";
 import { meetings, meetingStateTransitions } from "../meeting-core/schema.js";
+import { syncMeeting } from "../../shared/global-search.js";
 import {
   orderAgendaItems,
   validateReorderBijection,
@@ -509,6 +510,7 @@ async function handleAgendaLock(msg: CommandEnvelope): Promise<void> {
       set: { status: toState, updatedBy: msg.actorId, updatedAt: new Date() },
       entity: "meeting",
     });
+    await syncMeeting(tx, p.meetingId, msg.tenantId);
     await tx.insert(meetingStateTransitions).values({
       tenantId: msg.tenantId,
       meetingId: p.meetingId,

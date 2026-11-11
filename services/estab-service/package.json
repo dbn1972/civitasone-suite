@@ -9,12 +9,14 @@
     "dev": "tsx watch src/index.ts",
     "worker": "tsx src/worker.ts",
     "test": "vitest run",
+    "reindex:global-search": "tsx src/reindex-global-search.ts",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@civitasone/search": "workspace:*",
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/data-governance": "workspace:*",

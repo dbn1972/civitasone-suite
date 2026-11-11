@@ -55,6 +55,7 @@ import {
 import { getPolicyNumber, getPolicyBool, getPolicyString } from "../config-registry/policy.js";
 import type { SqlExecutor } from "@civitasone/numbering";
 import { allocateMeetingNumber } from "../../shared/numbering.js";
+import { syncMeeting } from "../../shared/global-search.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "meeting";
@@ -488,6 +489,7 @@ async function handleMeetingCreate(msg: CommandEnvelope<MeetingCreatePayload>): 
       createdBy: msg.actorId,
       updatedBy: msg.actorId,
     });
+    await syncMeeting(tx, p.id, p.tenantId);
 
     await enqueue(tx, {
       topic: EVENTS.meetingCreated,
@@ -528,6 +530,7 @@ async function handleMeetingUpdate(msg: CommandEnvelope<MeetingUpdatePayload>): 
       set,
       entity: "meeting",
     });
+    await syncMeeting(tx, p.meetingId, msg.tenantId);
     await audit(tx, msg, "update", "meeting", p.meetingId);
   });
   await invalidate(msg.tenantId, CACHE_RESOURCE, p.meetingId);
@@ -657,6 +660,7 @@ async function applyTransition(
     set,
     entity: "meeting",
   });
+  await syncMeeting(tx, meeting.id, meeting.tenantId);
 
   await tx.insert(meetingStateTransitions).values({
     tenantId: meeting.tenantId,
@@ -1100,6 +1104,7 @@ async function handleSeriesGenerate(msg: CommandEnvelope<SeriesGeneratePayload>)
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      await syncMeeting(tx, meetingId, msg.tenantId);
       generatedMeetingIds.push(meetingId);
       await enqueue(tx, {
         topic: EVENTS.meetingCreated,
