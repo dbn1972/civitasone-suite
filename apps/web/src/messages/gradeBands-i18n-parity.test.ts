@@ -9,6 +9,11 @@ import hi from "./hi.json";
 type Dict = Record<string, unknown>;
 const E = en as Dict; const H = hi as Dict;
 
+// Code-point checks instead of regex classes (lint: no-misleading-character-class forbids combining marks in a class).
+const isDevanagari = (ch: string): boolean => { const c = ch.codePointAt(0)!; return c >= 0x0900 && c <= 0x097f; };
+const hasDevanagari = (v: string): boolean => [...v].some(isDevanagari);
+const hasLetters = (v: string): boolean => [...v].some((ch) => /[A-Za-z]/.test(ch) || isDevanagari(ch));
+
 const placeholders = (s: string): string[] => [...s.matchAll(/\{(\w+)/g)].map((m) => m[1]!).sort();
 
 const NEW_KEYS: Array<[string, string[]]> = [
@@ -42,12 +47,11 @@ describe("grade-band strings", () => {
   });
 
   it("every sentence-length Hindi string is actually Hindi (contains Devanagari), not a copied English fallback", () => {
-    const dev = /[ऀ-ॿ]/;
-    const h = H.gradeBands as Dict;
+        const h = H.gradeBands as Dict;
     for (const [k, v] of Object.entries(h)) {
       // Strings that are only placeholders, the rupee sign and punctuation (e.g. the CTC range) are language-neutral.
       const words = typeof v === "string" ? v.replace(/\{[^}]*\}/g, "") : "";
-      if (typeof v === "string" && v.length > 12 && /[A-Za-zऀ-ॿ]/.test(words)) expect(dev.test(v), k).toBe(true);
+      if (typeof v === "string" && v.length > 12 && hasLetters(words)) expect(hasDevanagari(v), k).toBe(true);
     }
   });
 });
