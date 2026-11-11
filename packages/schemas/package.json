@@ -17,6 +17,7 @@
     "./plugin": "./dist/plugin.js",
     "./module-manifest": "./dist/module-manifest.js",
     "./module-resolver": "./dist/module-resolver.js",
+    "./module-catalogue": "./dist/module-catalogue.js",
     "./validators": "./dist/validators.js"
   },
   "scripts": {

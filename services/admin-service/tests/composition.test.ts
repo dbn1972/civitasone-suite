@@ -55,7 +55,10 @@ describe("GET /v1/admin/composition/registry", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     const payroll = body.modules.find((m: any) => m.id === "payroll");
-    expect(payroll.hardDeps).toEqual(expect.arrayContaining(["employee", "config", "finance"]));
+    // M1: payroll hard-requires only the employee master; finance is a soft (event) dependency
+    expect(payroll.hardDeps).toEqual(expect.arrayContaining(["employee", "config"]));
+    expect(payroll.hardDeps).not.toContain("finance");
+    expect(payroll.softDeps).toContain("finance");
     expect(body.profiles.map((p: any) => p.code)).toEqual(expect.arrayContaining(["govt_dept", "psu", "small_office"]));
   });
 });
@@ -115,7 +118,7 @@ describe("onboarding an org profile", () => {
 });
 
 describe("enable / disable with dependency resolution (fresh tenant)", () => {
-  it("enabling payroll on an empty tenant pulls employee + finance as deps", async () => {
+  it("enabling payroll on an empty tenant pulls employee as a dep, but NOT finance (M1)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/admin/composition/modules/payroll/enable",
@@ -125,7 +128,7 @@ describe("enable / disable with dependency resolution (fresh tenant)", () => {
     const src = sourceMap(res.json());
     expect(src["payroll"]).toBe("user");
     expect(src["employee"]).toBe("dep");
-    expect(src["finance"]).toBe("dep");
+    expect(src["finance"]).toBeUndefined(); // soft dep: payroll runs without a ledger
     expect(src["attendance"]).toBeUndefined(); // soft dep, not auto-enabled
   });
 
@@ -139,7 +142,7 @@ describe("enable / disable with dependency resolution (fresh tenant)", () => {
     expect(res.json().error?.code ?? res.json().code).toBe("COMPOSITION_BLOCKED");
   });
 
-  it("disabling payroll then employee succeeds and GCs finance", async () => {
+  it("disabling payroll then employee succeeds", async () => {
     const d1 = await app.inject({ method: "POST", url: "/v1/admin/composition/modules/payroll/disable", headers: auth(ADMIN, ["tenant_admin"], ENABLE) });
     expect(d1.statusCode).toBe(200);
     expect(d1.json().modules.find((m: any) => m.id === "finance")).toBeUndefined();
