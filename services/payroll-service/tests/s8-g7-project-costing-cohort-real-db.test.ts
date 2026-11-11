@@ -166,10 +166,13 @@ describe("export and basis", () => {
     expect((await get(`${BASE}/by-project?from=2026-09&to=2026-09&format=csv`, as.finadmin)).body).toContain(UNIQUE_GROSS.toString());
   });
 
-  it("basis=booked is suppressed the same way", async () => {
-    const res = await get(`${BASE}/by-project?from=2026-09&to=2026-10&basis=booked`, as.finoff);
-    expect(res.statusCode).toBe(200);
-    expect(res.body).not.toContain(UNIQUE_GROSS.toString());
+  it("basis=booked is closed to readers without pay-detail access (JSON and CSV); pay-detail roles still have it", async () => {
+    for (const url of [`${BASE}/by-project?from=2026-09&to=2026-10&basis=booked`, `${BASE}/by-cost-center?from=2026-09&to=2026-10&basis=booked`, `${BASE}/by-project?from=2026-09&to=2026-10&basis=booked&format=csv`]) {
+      const res = await get(url, as.finoff);
+      expect(res.statusCode, url).toBe(403);
+      expect(res.json().code).toBe("BASIS_RESTRICTED");
+    }
+    expect((await get(`${BASE}/by-project?from=2026-09&to=2026-10&basis=booked`, as.finadmin)).statusCode).toBe(200);
   });
 
   it("filtering by project does not change what is hidden (suppression runs before the filter)", async () => {

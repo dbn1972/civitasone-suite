@@ -200,6 +200,16 @@ export async function projectCostingRoutes(app: FastifyInstance): Promise<void> 
       costCenterId: r.cost_center_id ?? null, employeeId: r.employee_id as string, gross: BigInt(r.g as string), employer: BigInt(r.e as string), total: BigInt(r.t as string),
     })));
   };
+  /**
+   * `booked` omits reclass deltas that no run has booked yet, so it can show a DIFFERENT cohort and amounts than
+   * `cost_month` for the same cell; a reader who may run both could subtract them and isolate the reclassed person.
+   * Readers without pay-detail access therefore get `cost_month` only (the base the suppression is judged on).
+   */
+  const assertBasisAllowed = (ctx: ReturnType<typeof resolveContext>, basis: "cost_month" | "booked"): void => {
+    if (basis === "booked" && !ctx.roles.some((r) => PAY_DETAIL_ROLES.includes(r))) {
+      throw new HttpError(403, "BASIS_RESTRICTED", "the booked basis is only available to payroll and finance administrators");
+    }
+  };
   const hiddenFor = async (ctx: ReturnType<typeof resolveContext>, cells: ReturnType<typeof buildLeafCells>): Promise<{ hidden: Set<string>; minCohort: number | null }> => {
     if (ctx.roles.some((r) => PAY_DETAIL_ROLES.includes(r))) return { hidden: new Set(), minCohort: null };
     const k = await scopedRead((tx) => loadMinCohort(tx, ctx.tenantId));
@@ -214,6 +224,7 @@ export async function projectCostingRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, TOTALS_ROLES);
     const q = rangeQuery.parse(req.query);
+    assertBasisAllowed(ctx, q.basis);
     const cells = await loadCells(ctx.tenantId, q.from, q.to, q.basis);
     const { hidden, minCohort } = await hiddenFor(ctx, cells);
     // The filter runs AFTER suppression so one project's visibility never depends on which project was asked for.
@@ -230,6 +241,7 @@ export async function projectCostingRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, TOTALS_ROLES);
     const q = rangeQuery.parse(req.query);
+    assertBasisAllowed(ctx, q.basis);
     const cells = await loadCells(ctx.tenantId, q.from, q.to, q.basis);
     const { hidden, minCohort } = await hiddenFor(ctx, cells);
     const { data, unallocated } = rollupByCostCenter(cells, hidden);

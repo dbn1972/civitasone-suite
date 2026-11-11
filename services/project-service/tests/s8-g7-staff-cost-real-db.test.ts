@@ -309,11 +309,55 @@ describe("appointing a project manager (self-promotion is closed)", () => {
   it("commands that skip the route are refused by the consumer and audited as denied", async () => {
     const forged = SOMEONE2;
     await queue.publish("project.member.add", { messageId: randomUUID(), type: "project.member.add", tenantId: TENANT, actorId: forged, correlationId: randomUUID(), schemaVersion: "1.0",
-      payload: { id: randomUUID(), projectId: P3, tenantId: TENANT, userId: forged, employeeId: null, role: "project_manager", viaSuperAdmin: false } } as never);
+      payload: { id: randomUUID(), projectId: P3, tenantId: TENANT, userId: forged, employeeId: null, role: "project_manager", actorRoles: ["project_officer"] } } as never);
     await mq().drain();
     expect(await q(sql`SELECT 1 FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${forged}::uuid`)).toHaveLength(0);
     const denied = await actions("member_add_denied");
     expect(denied.length).toBeGreaterThan(0);
     expect((denied[0]!.payload as Row).outcome).toBe("failure");
+  });
+
+  it("removing a member: must belong to the URL's project, a manager only by a manager / super admin, never the last manager", async () => {
+    const del = (pid: string, mid: string, headers: typeof as.pm2) => app.inject({ method: "DELETE", url: `/v1/projects/${pid}/members/${mid}`, headers });
+    const memberId = async (u: string) => (await q(sql`SELECT id FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${u}::uuid`))[0]!.id as string;
+    const someone = auth(SOMEONE, ["project_officer"]); // SOMEONE is a manager of P3 by now
+    const stranger = auth(randomUUID(), ["project_officer"]);
+    // a project officer cannot remove a manager
+    expect((await del(P3, await memberId(SOMEONE), stranger)).json().code).toBe("MANAGER_GRANT_FORBIDDEN");
+    // the member's project is checked against the URL (the other project's URL does not reach P3's member)
+    expect((await del(P1, await memberId(OFFICER2), as.admin)).statusCode).toBe(404);
+    expect((await del(P3, randomUUID(), as.admin)).statusCode).toBe(404);
+    // a manager cannot remove themselves
+    expect((await del(P3, await memberId(PM2), as.pm2)).json().code).toBe("SELF_ROLE_CHANGE");
+    // ... but another manager can remove them while a second manager remains
+    expect((await del(P3, await memberId(PM2), someone)).statusCode).toBe(202);
+    await mq().drain();
+    expect(await q(sql`SELECT 1 FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${PM2}::uuid`)).toHaveLength(0);
+    const rm = (await actions("remove")).filter((x) => (x.payload as Row).role === "project_manager");
+    expect(rm).toHaveLength(1);
+    expect(rm[0]!.actor_id).toBe(SOMEONE);
+    // the last manager cannot be removed, not even by a super admin
+    const r = await del(P3, await memberId(SOMEONE), as.admin);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("LAST_MANAGER");
+    // an ordinary member can still be removed by any project officer (unchanged behaviour)
+    expect((await del(P3, await memberId(OFFICER2), stranger)).statusCode).toBe(202);
+    await mq().drain();
+    expect(await q(sql`SELECT 1 FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${OFFICER2}::uuid`)).toHaveLength(0);
+  });
+
+  it("forged remove commands are refused by the consumer: last manager, manager by a non-manager, wrong project", async () => {
+    const mid = (await q(sql`SELECT id FROM project.project_members WHERE project_id = ${P3}::uuid AND user_id = ${SOMEONE}::uuid`))[0]!.id as string;
+    const forge = async (actor: string, roles: string[], projectId = P3, memberId = mid) => {
+      await queue.publish("project.member.remove", { messageId: randomUUID(), type: "project.member.remove", tenantId: TENANT, actorId: actor, correlationId: randomUUID(), schemaVersion: "1.0",
+        payload: { memberId, projectId, tenantId: TENANT, actorRoles: roles } } as never);
+      await mq().drain();
+    };
+    await forge(randomUUID(), ["project_officer"]);       // not a manager
+    await forge(ADMIN, ["super_admin"]);                  // last manager
+    await forge(ADMIN, ["super_admin"], P1);              // wrong project
+    expect(await q(sql`SELECT 1 FROM project.project_members WHERE id = ${mid}::uuid`)).toHaveLength(1);
+    const denied = await actions("member_remove_denied");
+    expect(denied.map((d) => (d.payload as Row).reason).sort()).toEqual(["LAST_MANAGER", "MANAGER_REMOVE_FORBIDDEN", "NOT_FOUND"]);
   });
 });

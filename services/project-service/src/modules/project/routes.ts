@@ -299,6 +299,14 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
     const { id, memberId } = memberParam.parse(req.params);
+    // The member must belong to THIS project (the URL's project id used to be ignored), removing a project
+    // manager is a manager / super admin decision, and a project is never left without a manager.
+    const member = await repo.findMemberById(memberId, ctx.tenantId);
+    if (!member || member.projectId !== id) throw new HttpError(404, "NOT_FOUND", "member not found");
+    if (member.role === "project_manager") {
+      await assertMayAppointManager(ctx, id, member.userId ?? undefined);
+      if ((await repo.countManagers(id, ctx.tenantId)) <= 1) throw new HttpError(409, "LAST_MANAGER", "a project must keep at least one project manager; appoint another first");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.removeMember(ctx, id, memberId));
   });
 
