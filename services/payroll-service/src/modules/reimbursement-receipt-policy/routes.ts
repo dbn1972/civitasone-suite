@@ -30,6 +30,7 @@ export async function receiptPolicyRoutes(app: FastifyInstance): Promise<void> {
     const stored = await loadReceiptPolicy(ctx.tenantId);
     return {
       isDefault: stored.isDefault,
+      version: stored.version,
       updatedAt: stored.updatedAt,
       modes: RECEIPT_MODES,
       categories: Object.fromEntries(REIMBURSEMENT_CATEGORY_CODES.map((c) => {

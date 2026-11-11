@@ -19,6 +19,7 @@
 -- Additive and idempotent. RLS on both tables already exists (0036); re-asserted.
 -- Rollback:
 --   ALTER TABLE payroll.payroll_reimbursements DROP CONSTRAINT IF EXISTS payroll_reimbursements_receipt_basis_chk,
+--     DROP COLUMN IF EXISTS receipt_policy_version, DROP COLUMN IF EXISTS self_declared_on_behalf,
 --     DROP COLUMN IF EXISTS receipt_basis, DROP COLUMN IF EXISTS self_declared_by, DROP COLUMN IF EXISTS self_declared_at;
 --   ALTER TABLE payroll.payroll_settings DROP CONSTRAINT IF EXISTS payroll_settings_reimbursement_receipt_policy_chk,
 --     DROP COLUMN IF EXISTS reimbursement_receipt_policy;
@@ -26,6 +27,13 @@ SET lock_timeout = '5s';
 
 ALTER TABLE payroll.payroll_settings
   ADD COLUMN IF NOT EXISTS reimbursement_receipt_policy jsonb;
+
+-- Policy versioning: every save bumps the version and appends {version, policy, at} to a
+-- bounded history, so a claim accepted under version N is processed under N even if the
+-- policy changes before the consumer runs. Version 0 = the built-in default.
+ALTER TABLE payroll.payroll_settings
+  ADD COLUMN IF NOT EXISTS reimbursement_receipt_policy_version integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS reimbursement_receipt_policy_history jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 ALTER TABLE payroll.payroll_settings
   DROP CONSTRAINT IF EXISTS payroll_settings_reimbursement_receipt_policy_chk;
@@ -40,7 +48,11 @@ ALTER TABLE payroll.payroll_settings
 ALTER TABLE payroll.payroll_reimbursements
   ADD COLUMN IF NOT EXISTS receipt_basis varchar(16) NOT NULL DEFAULT 'not_required',
   ADD COLUMN IF NOT EXISTS self_declared_by uuid,
-  ADD COLUMN IF NOT EXISTS self_declared_at timestamptz;
+  ADD COLUMN IF NOT EXISTS self_declared_at timestamptz,
+  -- the policy version the claim was accepted (and processed) under
+  ADD COLUMN IF NOT EXISTS receipt_policy_version integer,
+  -- self-declaration signed by someone other than the employee it is for (HR filing on their behalf)
+  ADD COLUMN IF NOT EXISTS self_declared_on_behalf boolean NOT NULL DEFAULT false;
 
 ALTER TABLE payroll.payroll_reimbursements
   DROP CONSTRAINT IF EXISTS payroll_reimbursements_receipt_basis_chk;

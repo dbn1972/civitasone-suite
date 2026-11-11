@@ -7198,7 +7198,10 @@
     "decisionBasisReceipt": "रसीद संलग्न है: निर्णय से पहले रसीदें स्तंभ में उसे देखें।",
     "decisionBasisSelfDeclaration": "रसीद नहीं है: दावेदार ने उसके बजाय स्व-घोषणा पर हस्ताक्षर किए हैं।",
     "decisionBasisNone": "इस दावे के लिए रसीद आवश्यक नहीं थी।",
-    "receiptPolicyLink": "दावों के लिए रसीद नियम तय करें"
+    "receiptPolicyLink": "दावों के लिए रसीद नियम तय करें",
+    "selfDeclarationOnBehalfBadge": "स्व-घोषणा (की ओर से)",
+    "selfDeclarationOnBehalfAria": "रसीद के बजाय {employee} की ओर से दावा दर्ज करने वाले व्यक्ति द्वारा हस्ताक्षरित स्व-घोषणा",
+    "decisionBasisSelfDeclarationOnBehalf": "रसीद नहीं है: यह दावा दर्ज करने वाले व्यक्ति ने कर्मचारी की ओर से स्व-घोषणा पर हस्ताक्षर किए हैं। कर्मचारी ने हस्ताक्षर नहीं किए। आप अपने दर्ज किए दावे पर निर्णय नहीं ले सकते।"
   },
   "createReimbursementForm": {
     "receiptFileInvalidError": "एक रसीद अधिकतम 10 MB की PDF, JPG या PNG नहीं है। उसे हटाएँ, मान्य फ़ाइल अपलोड करें और फिर से प्रस्तुत करें।",

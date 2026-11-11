@@ -29,6 +29,7 @@ type Row = {
   attachment_count?: number;
   /** Receipt policy: how the claim was supported. */
   receipt_basis?: "receipt" | "self_declaration" | "not_required";
+  self_declared_on_behalf?: boolean;
 } & Record<string, unknown>;
 
 /**
@@ -121,6 +122,7 @@ export default async function ReimbursementsPage() {
       bill_ref: r.bill_ref?.trim() ? r.bill_ref : "—",
       receipt_count: Number(r.attachment_count ?? 0),
       receipt_basis: r.receipt_basis,
+      self_declared_on_behalf: r.self_declared_on_behalf === true,
       status: r.status,
     };
   });

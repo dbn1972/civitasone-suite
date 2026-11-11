@@ -37,4 +37,12 @@ describe("ReimbursementsTable: how each claim was supported", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Approve claim of/ }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent("Supported by a receipt");
   });
+
+  it("marks a self-declaration signed on the employee's behalf, in the column and in the approve dialog", () => {
+    const row: ClaimRow = { ...ROWS[1]!, id: "e", self_declared_on_behalf: true };
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReimbursementsTable rows={[row]} canDecide showEmployee /></NextIntlClientProvider>);
+    expect(screen.getByLabelText(/Self-declaration signed on behalf of Gita Menon/)).toHaveTextContent("Self-declaration (on behalf)");
+    fireEvent.click(screen.getByRole("button", { name: /^Approve claim of/ }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("signed a self-declaration on the employee's behalf");
+  });
 });

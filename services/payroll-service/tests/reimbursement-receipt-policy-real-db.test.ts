@@ -255,3 +255,114 @@ describe("receipt policy: modes, thresholds, self-declaration, audit", () => {
     expect((await post(claim({ category: "food" }))).statusCode).toBe(202);
   });
 });
+
+// ─── Policy version stamp: an accepted claim is processed under the rule it passed ───
+describe("receipt policy: version stamped at the route", () => {
+  const OFFICER_2 = randomUUID();
+  const currentVersion = async (): Promise<number> =>
+    (await app.inject({ method: "GET", url: URL, headers: auth(ADMIN, ["payroll_admin"]) })).json<{ version: number }>().version;
+  const waitVersion = async (v: number) => { await until(currentVersion, (x) => x >= v); };
+  const publishRaw = (payload: Record<string, unknown>) => (queue as unknown as { publish: (t: string, m: unknown) => Promise<void> }).publish("payroll.reimbursement.create", {
+    messageId: randomUUID(), type: "payroll.reimbursement.create", tenantId: TENANT, actorId: EMP_USER, correlationId: randomUUID(), schemaVersion: "1.0", payload,
+  });
+
+  it("each save bumps the version; GET reports it", async () => {
+    const v0 = await currentVersion();
+    expect((await put({ food: { mode: "never" } })).statusCode).toBe(202);
+    await waitVersion(v0 + 1);
+    expect((await put({})).statusCode).toBe(202);
+    await waitVersion(v0 + 2);
+    const rows = await q(sql`SELECT reimbursement_receipt_policy_version AS v, jsonb_array_length(reimbursement_receipt_policy_history) AS n FROM payroll.payroll_settings WHERE tenant_id = ${TENANT}::uuid`);
+    expect(rows[0]!.v).toBe(v0 + 2);
+    expect(Number(rows[0]!.n)).toBeGreaterThanOrEqual(2);
+  });
+
+  it("MID-FLIGHT: a claim accepted under the old rule is stored even if the policy is tightened before the consumer runs, and the audit names the version", async () => {
+    const v0 = await currentVersion();
+    // hold the command back: accepted by the route, not yet processed
+    const real = (queue as unknown as { publish: (t: string, m: unknown) => Promise<void> }).publish.bind(queue);
+    let held: { t: string; m: unknown } | null = null;
+    const spy = vi.spyOn(queue as unknown as { publish: (t: string, m: unknown) => Promise<void> }, "publish").mockImplementation(async (t, m) => {
+      if (t === "payroll.reimbursement.create" && !held) { held = { t, m }; return; }
+      return real(t, m);
+    });
+    const ref = `MID-${randomUUID().slice(0, 6)}`;
+    const res = await post(claim({ category: "food", billRef: ref }));
+    spy.mockRestore();
+    expect(res.statusCode).toBe(202);
+    expect((held as { m: { payload: { receiptPolicyVersion: number } } } | null)!.m.payload.receiptPolicyVersion).toBe(v0);
+    // policy tightened: food now needs a receipt
+    expect((await put({ food: { mode: "always" } })).statusCode).toBe(202);
+    await waitVersion(v0 + 1);
+    expect((await post(claim({ category: "food" }))).statusCode).toBe(422); // new claims see the new rule
+    // the held claim is now delivered: processed under the version it was accepted under
+    await real(held!.t, held!.m);
+    const id = (res.json() as { id: string }).id;
+    const row = await stored(id);
+    expect(row).toMatchObject({ receipt_basis: "not_required", receipt_policy_version: v0 });
+    const audit = await until(() => auditsFor(id, "create"), (a) => a.length > 0);
+    expect(audit[0]!.payload).toMatchObject({ receiptPolicyVersion: v0 });
+  });
+
+  it("a stamp naming a version that does not exist, or the current stricter version, is refused", async () => {
+    const vNow = await currentVersion(); // food = always
+    const ref = `FORGE-${randomUUID().slice(0, 6)}`;
+    const base = { tenantId: TENANT, employeeId: EMP_ID, period: "2026-08", billRef: ref, category: "food", amountMinor: 100 };
+    await publishRaw({ ...base, id: randomUUID(), receiptPolicyVersion: vNow + 7 });      // future / nonexistent
+    await publishRaw({ ...base, id: randomUUID(), receiptPolicyVersion: -1 });
+    await publishRaw({ ...base, id: randomUUID(), receiptPolicyVersion: vNow });          // exists, but food needs a receipt
+    await settle();
+    expect(await q(sql`SELECT 1 FROM payroll.payroll_reimbursements WHERE bill_ref = ${ref}`)).toHaveLength(0);
+  });
+
+  it("a stamp for a version superseded long ago is refused (stale)", async () => {
+    const vOld = (await currentVersion()) - 1; // lenient version, superseded by the current one
+    await q(sql`UPDATE payroll.payroll_settings SET reimbursement_receipt_policy_history =
+      (SELECT jsonb_agg(jsonb_set(e, '{at}', '"2020-01-01T00:00:00Z"'::jsonb)) FROM jsonb_array_elements(reimbursement_receipt_policy_history) e)
+      WHERE tenant_id = ${TENANT}::uuid`);
+    const ref = `STALE-${randomUUID().slice(0, 6)}`;
+    await publishRaw({ tenantId: TENANT, employeeId: EMP_ID, period: "2026-08", billRef: ref, category: "food", amountMinor: 100, id: randomUUID(), receiptPolicyVersion: vOld });
+    await settle();
+    expect(await q(sql`SELECT 1 FROM payroll.payroll_reimbursements WHERE bill_ref = ${ref}`)).toHaveLength(0);
+  });
+
+  it("a route-accepted claim stores the version it passed", async () => {
+    const v = await currentVersion();
+    const r = await post(claim({ category: "food", attachmentKeys: [await receipt()] }));
+    expect(r.statusCode).toBe(202);
+    expect((await stored((r.json() as { id: string }).id)).receipt_policy_version).toBe(v);
+  });
+
+  // ─── self-declaration filed by HR on someone's behalf ───
+  it("HR filing a self-declaration for an employee: both people recorded, marked 'on behalf' in the claim, list and audit; the filer cannot approve it", async () => {
+    const OFFICER_EMP = randomUUID();
+    EMPLOYEE_BY_ACTOR.set(OFFICER, OFFICER_EMP);
+    const v = await currentVersion();
+    expect((await put({ lta: { mode: "always", selfDeclarationUpToMinor: 200000 } })).statusCode).toBe(202);
+    await waitVersion(v + 1);
+
+    const hr = await post(claim({ category: "lta", amountMinor: 150000, selfDeclaration: true }), ["payroll_officer"], OFFICER);
+    expect(hr.statusCode).toBe(202);
+    const hrId = (hr.json() as { id: string }).id;
+    const row = await stored(hrId);
+    expect(row).toMatchObject({ receipt_basis: "self_declaration", self_declared_on_behalf: true, self_declared_by: OFFICER, created_by: OFFICER, employee_id: EMP_ID });
+    const audit = await until(() => auditsFor(hrId, "create"), (a) => a.length > 0);
+    expect(audit[0]!.payload).toMatchObject({ receiptBasis: "self_declaration", selfDeclaredOnBehalf: true, selfDeclaredBy: OFFICER, selfDeclaredFor: EMP_ID });
+
+    // the employee declaring for themselves is NOT marked on behalf
+    const own = await post(claim({ category: "lta", amountMinor: 150000, selfDeclaration: true }));
+    expect(own.statusCode).toBe(202);
+    const ownRow = await stored((own.json() as { id: string }).id);
+    expect(ownRow).toMatchObject({ self_declared_on_behalf: false, self_declared_by: EMP_USER });
+
+    const list = await app.inject({ method: "GET", url: "/v1/payroll/reimbursements", headers: auth(OFFICER_2, ["payroll_officer"]) });
+    expect((list.json() as { data: Row[] }).data.find((x) => x.id === hrId)).toMatchObject({ self_declared_on_behalf: true });
+
+    // approver cannot be the filer
+    const self = await app.inject({ method: "PATCH", url: `/v1/payroll/reimbursements/${hrId}/approve`, headers: auth(OFFICER, ["payroll_officer"]), payload: {} });
+    expect(self.statusCode).toBe(403);
+    expect(code(self)).toBe("SELF_APPROVAL_FORBIDDEN");
+    const other = await app.inject({ method: "PATCH", url: `/v1/payroll/reimbursements/${hrId}/approve`, headers: auth(OFFICER_2, ["payroll_officer"]), payload: {} });
+    expect(other.statusCode).toBe(202);
+  });
+});

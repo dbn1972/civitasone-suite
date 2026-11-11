@@ -8,9 +8,9 @@ import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
-import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError, resolveActorEmployeeId } from "../../shared/hrms-client.js";
 import { headObject } from "@civitasone/storage";
-import { describeReceiptRule, effectiveReceiptRule } from "@civitasone/types";
+import { describeReceiptRule, effectiveReceiptRule, evaluateReceiptRule, type ReceiptBasis } from "@civitasone/types";
 import { loadReceiptPolicy } from "../reimbursement-receipt-policy/repo.js";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
@@ -54,9 +54,10 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
  */
 async function assertReceipts(
   ctx: RequestContext, category: string, keys: string[] | undefined, amountMinor: number, selfDeclared: boolean,
-): Promise<void> {
+): Promise<{ policyVersion: number; basis: ReceiptBasis }> {
   // Receipt policy: the tenant's per-category rule (default = medical / LTA / travel need a receipt).
-  const { policy } = await loadReceiptPolicy(ctx.tenantId);
+  // The version read here is stamped on the command: the claim is processed under the rule it passed.
+  const { policy, version } = await loadReceiptPolicy(ctx.tenantId);
   const violation = receiptRuleViolation(ctx.tenantId, ctx.actorId, category, keys, { policy, amountMinor, selfDeclared });
   if (violation === "RECEIPT_REQUIRED") {
     const rule = effectiveReceiptRule(policy, category);
@@ -65,7 +66,7 @@ async function assertReceipts(
   if (violation === "RECEIPT_KEY_INVALID") {
     throw new HttpError(422, "RECEIPT_KEY_INVALID", "receipts must be uploaded through the receipt upload endpoint by the person submitting the claim");
   }
-  if (!keys || keys.length === 0) return;
+  if (!keys || keys.length === 0) return { policyVersion: version, basis: evaluateReceiptRule(policy, category, amountMinor, 0, selfDeclared).ok ? (evaluateReceiptRule(policy, category, amountMinor, 0, selfDeclared) as { basis: ReceiptBasis }).basis : "not_required" };
   // HEAD every object: it must exist, be within the size cap and be a PDF / JPEG /
   // PNG as stored (the presign signs both, but the stored object is what counts).
   let heads: Awaited<ReturnType<typeof headObject>>[];
@@ -85,6 +86,7 @@ async function assertReceipts(
       throw new HttpError(422, "RECEIPT_FILE_INVALID", "a receipt must be a PDF, JPEG or PNG of at most 10 MB");
     }
   }
+  return { policyVersion: version, basis: "receipt" };
 }
 
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
@@ -562,12 +564,18 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
   await assertEmployeeExists(ctx, body.employeeId);
-  await assertReceipts(ctx, body.category, body.attachmentKeys, body.amountMinor, body.selfDeclaration === true);
+  const { policyVersion, basis } = await assertReceipts(ctx, body.category, body.attachmentKeys, body.amountMinor, body.selfDeclaration === true);
+  // A self-declaration signed by someone other than the employee it is for (HR filing for them) is marked as such.
+  let onBehalf = false;
+  if (basis === "self_declaration") {
+    const own = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId).catch(() => null);
+    onBehalf = own !== body.employeeId;
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, receiptPolicyVersion: policyVersion, selfDeclaredOnBehalf: onBehalf },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

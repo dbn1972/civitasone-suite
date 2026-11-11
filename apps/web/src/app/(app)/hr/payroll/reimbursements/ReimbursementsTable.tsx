@@ -20,6 +20,8 @@ export type ClaimRow = {
   receipt_count: number;
   /** Receipt policy: how the claim was supported. Absent on rows from an older API. */
   receipt_basis?: "receipt" | "self_declaration" | "not_required" | undefined;
+  /** The self-declaration was signed by HR/staff filing for the employee, not by the employee. */
+  self_declared_on_behalf?: boolean | undefined;
   status: string;
 } & Record<string, unknown>;
 
@@ -110,7 +112,9 @@ export function ReimbursementsTable({
             {t("viewReceipts", { count: row.receipt_count })}
           </Button>
         ) : row.receipt_basis === "self_declaration" ? (
-          <span className="pill warn" aria-label={t("selfDeclarationAria", { employee: row.employee_label })}>{t("selfDeclarationBadge")}</span>
+          <span className="pill warn" aria-label={t(row.self_declared_on_behalf ? "selfDeclarationOnBehalfAria" : "selfDeclarationAria", { employee: row.employee_label })}>
+            {t(row.self_declared_on_behalf ? "selfDeclarationOnBehalfBadge" : "selfDeclarationBadge")}
+          </span>
         ) : row.receipt_basis === "not_required" ? (
           <span style={{ color: "var(--mut)" }}>{t("receiptNotRequired")}</span>
         ) : (
@@ -206,7 +210,7 @@ export function ReimbursementsTable({
               {decision.row.receipt_basis && (
                 <span style={{ display: "block", marginTop: 8 }}>
                   {t(
-                    decision.row.receipt_basis === "self_declaration" ? "decisionBasisSelfDeclaration"
+                    decision.row.receipt_basis === "self_declaration" ? (decision.row.self_declared_on_behalf ? "decisionBasisSelfDeclarationOnBehalf" : "decisionBasisSelfDeclaration")
                     : decision.row.receipt_basis === "receipt" ? "decisionBasisReceipt" : "decisionBasisNone",
                   )}
                 </span>

@@ -10097,7 +10097,10 @@
     "decisionBasisReceipt": "Supported by a receipt: view it in the Receipts column before deciding.",
     "decisionBasisSelfDeclaration": "No receipt: the claimant signed a self-declaration instead.",
     "decisionBasisNone": "No receipt was required for this claim.",
-    "receiptPolicyLink": "Set receipt rules for claims"
+    "receiptPolicyLink": "Set receipt rules for claims",
+    "selfDeclarationOnBehalfBadge": "Self-declaration (on behalf)",
+    "selfDeclarationOnBehalfAria": "Self-declaration signed on behalf of {employee} by the person who filed the claim, instead of a receipt",
+    "decisionBasisSelfDeclarationOnBehalf": "No receipt: the person who filed this claim signed a self-declaration on the employee's behalf. The employee did not sign it. You cannot decide a claim you filed."
   },
   "createReimbursementForm": {
     "receiptFileInvalidError": "A receipt is not a PDF, JPG or PNG of at most 10 MB. Remove it, upload a valid file and resubmit.",
