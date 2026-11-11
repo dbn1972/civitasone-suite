@@ -137,9 +137,6 @@ export const EVENTS = {
   flexElectionDecided:    "payroll.flex_election.decided",
   costingRuleUpserted:    "payroll.costing_rule.upserted",
   costingRuleUpdated:     "payroll.costing_rule.updated",
-  costAllocationRequested: "payroll.cost_allocation.requested",
-  costAllocationDecided:  "payroll.cost_allocation.decided",
-  projectCostingSettingsUpdated: "payroll.project_costing.settings_updated",
   /** Per-project cost TOTALS of a run or a reclass batch (no employee id, no per-person amount). Consumed by project-service. */
   projectCostPosted:      "payroll.project_cost.posted",
   offCycleCreated:        "payroll.off_cycle.created",

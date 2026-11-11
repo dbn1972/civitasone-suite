@@ -126,8 +126,3 @@ export function validateAllocationDates(from: string, to: string): "fromRequired
   if (to && to < from) return "toBeforeFromError";
   return null;
 }
-
-/** The target costing line type of an allocation in plain terms for a label. */
-export function shortId(id: string): string {
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
-}

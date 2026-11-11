@@ -6,14 +6,14 @@ import type { LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { isValidPeriod } from "@/lib/payroll/period";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatShortId } from "@/lib/formatters";
 import { employeeDisplayLabel, resolveEmployeeNames } from "@/app/_data/employeeNames";
 import { AllocationForm } from "./AllocationForm";
-import { AllocationDecisionButtons } from "./AllocationDecisionButtons";
+import { AllocationsTable, type AllocationTableRow } from "./AllocationsTable";
 import { ProjectCostingRangeForm } from "./ProjectCostingRangeForm";
 import {
   PROJECT_COSTING_APPROVE_ROLES, PROJECT_COSTING_TOTALS_ROLES, PROJECT_COSTING_VIEW_ROLES, PROJECT_COSTING_WRITE_ROLES,
-  getAllocations, getByCostCenter, getByProject, getCostCenters, getProjectIndex, getSettings, shortId,
+  getAllocations, getByCostCenter, getByProject, getCostCenters, getProjectIndex, getSettings,
   type CostCenterCostRow, type ProjectCostRow, type UnallocatedRow,
 } from "./projectCostingData";
 
@@ -55,9 +55,9 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
   const names = await resolveEmployeeNames(allocations.data.map((a) => a.employeeId));
   const projectMap = new Map(projects.data.map((p) => [p.projectId, p]));
   const centerMap = new Map(centers.data.map((c) => [c.id, c]));
-  const projectLabel = (id: string | null) => { if (!id) return "—"; const p = projectMap.get(id); return p ? `${p.code} — ${p.name}` : t("unresolved", { id: shortId(id) }); };
-  const centerLabel = (id: string) => { const c = centerMap.get(id); return c ? `${c.code} — ${c.name}` : t("unresolved", { id: shortId(id) }); };
-  const personLabel = (id: string) => employeeDisplayLabel(names, id, shortId(id));
+  const projectLabel = (id: string | null) => { if (!id) return "—"; const p = projectMap.get(id); return p ? `${p.code} — ${p.name}` : t("unresolved", { id: formatShortId(id) }); };
+  const centerLabel = (id: string) => { const c = centerMap.get(id); return c ? `${c.code} — ${c.name}` : t("unresolved", { id: formatShortId(id) }); };
+  const personLabel = (id: string) => employeeDisplayLabel(names, id, formatShortId(id));
   const enabled = settings.data.enabled;
 
   const projectRows: Row[] = byProject.data.map((r) => ({
@@ -69,9 +69,10 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
   ];
   const sum = (k: keyof ProjectCostRow) => projectRows.reduce((s, r) => s + BigInt(String(r[k === "grossMinor" ? "gross" : k === "employerCostMinor" ? "employer" : "total"])), 0n);
   const reportErrored = byProject.source === "error" || byCc.source === "error";
-  const allocationRows: Row[] = allocations.data.map((a) => ({
+  const allocationRows: AllocationTableRow[] = allocations.data.map((a) => ({
     id: a.id, person: personLabel(a.employeeId), target: a.targetType === "project" ? projectLabel(a.projectId) : centerLabel(a.costCenterId),
     pct: `${Number(a.splitPct)}%`, window: `${a.effectiveFrom} → ${a.effectiveTo ?? t("openEnded")}`, status: t(`status_${a.status}`),
+    pending: a.status === "pending", requestedBy: a.requestedBy, label: `${personLabel(a.employeeId)} ${Number(a.splitPct)}%`,
   }));
 
   return (
@@ -88,39 +89,7 @@ export default async function ProjectCostingPage(props: { searchParams: Promise<
         {allocations.source === "error" ? (
           <div className="pad"><RefreshErrorState error={toHumanError("load", { area: "cost allocations" })} backHref="/hr/payroll" /></div>
         ) : (
-          allocations.data.length === 0 ? (
-            <EmptyState icon="🧮" title={t("allocationsEmptyTitle")} message={t("allocationsEmptyMessage")} />
-          ) : (
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <caption className="sr-only">{t("allocationsTitle")}</caption>
-                <thead>
-                  <tr>
-                    {[t("colEmployee"), t("colTarget"), t("colPct"), t("colWindow"), t("colStatus")].map((c) => <th key={c} scope="col">{c}</th>)}
-                    {canDecide && <th scope="col">{t("colActions")}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {allocationRows.map((r, i) => {
-                    const a = allocations.data[i]!;
-                    return (
-                      <tr key={a.id}>
-                        <td>{String(r.person)}</td><td>{String(r.target)}</td><td style={{ textAlign: "right" }}>{String(r.pct)}</td>
-                        <td>{String(r.window)}</td><td>{String(r.status)}</td>
-                        {canDecide && (
-                          <td>
-                            {a.status === "pending" && (
-                              <AllocationDecisionButtons allocationId={a.id} requestedBy={a.requestedBy} currentUserId={currentUserId} label={`${personLabel(a.employeeId)} ${Number(a.splitPct)}%`} />
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )
+          <AllocationsTable rows={allocationRows} canDecide={canDecide} currentUserId={currentUserId} />
         )}
       </Card>
 

@@ -1,1 +1,5 @@
-export { default } from "../costing/loading";
+import { RouteSkeleton } from "@/app/_components/RouteSkeleton";
+
+export default function Loading() {
+  return <RouteSkeleton />;
+}

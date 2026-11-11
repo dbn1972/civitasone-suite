@@ -8,7 +8,7 @@ import type { Queue } from "@civitasone/queue";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import type { AllocationDecidePayload, AllocationEndPayload, AllocationRequestPayload, CostGeneratePayload, CostingSettingsPayload } from "./commands.js";
 import { FULL_BPS, nextDay, pctToBps } from "./domain.js";
 import { lockEmployeeCosting, peakWithCandidate, reclassEmployeeTx, recordRunCostLinesTx } from "./service.js";
@@ -38,10 +38,6 @@ export function registerProjectCostingConsumers(queue: Queue): void {
         INSERT INTO payroll.payroll_settings (tenant_id, project_costing_enabled, created_at, updated_at)
         VALUES (${msg.tenantId}::uuid, ${p.enabled}, NOW(), NOW())
         ON CONFLICT (tenant_id) DO UPDATE SET project_costing_enabled = EXCLUDED.project_costing_enabled, updated_at = NOW()`);
-      await enqueue(tx, {
-        topic: EVENTS.projectCostingSettingsUpdated, eventType: EVENTS.projectCostingSettingsUpdated,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { enabled: p.enabled },
-      });
       await auditer(tx, msg, "project_costing_settings_updated", "payroll_settings", msg.tenantId)("success", { before: before[0]?.on ?? false, after: p.enabled });
     });
   });
@@ -62,11 +58,6 @@ export function registerProjectCostingConsumers(queue: Queue): void {
         VALUES (${p.id}::uuid, ${msg.tenantId}::uuid, ${p.employeeId}::uuid, ${p.targetType}, ${p.projectId}::uuid, ${p.costCenterId}::uuid,
                 ${p.splitPct}, ${p.effectiveFrom}::date, ${p.effectiveTo}::date, ${p.note}, ${msg.actorId}::uuid)
         ON CONFLICT (id) DO NOTHING`);
-      await enqueue(tx, {
-        topic: EVENTS.costAllocationRequested, eventType: EVENTS.costAllocationRequested,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { id: p.id, employeeId: p.employeeId, targetType: p.targetType, projectId: p.projectId, costCenterId: p.costCenterId, splitPct: p.splitPct, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo },
-      });
       await audit("success", { employeeId: p.employeeId, targetType: p.targetType, projectId: p.projectId, costCenterId: p.costCenterId, splitPct: p.splitPct, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo });
     });
   });
@@ -97,11 +88,6 @@ export function registerProjectCostingConsumers(queue: Queue): void {
          WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid`);
       let reclass = { deltaLines: 0, months: 0 };
       if (p.decision === "approve") reclass = await reclassEmployeeTx(tx as never, msg, cur.employee_id, cur.effective_from, msg.messageId);
-      await enqueue(tx, {
-        topic: EVENTS.costAllocationDecided, eventType: EVENTS.costAllocationDecided,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { id: p.id, employeeId: cur.employee_id, decision: p.decision },
-      });
       await audit("success", { employeeId: cur.employee_id, note: p.note, reclassDeltaLines: reclass.deltaLines, reclassMonths: reclass.months });
     });
   });
