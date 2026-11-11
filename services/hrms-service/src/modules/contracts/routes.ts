@@ -188,7 +188,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "RENEWAL_IN_PROGRESS", "a pending renewal already exists for this contract");
     }
 
-    const result = await commands.initiateRenewal(ctx, id, body);
+    // The consumer inserts the renewal with the id returned here, and new_terms is NOT NULL: carry the current terms forward
+    // (overlaid by any supplied terms) so a renewal started without explicit terms is created instead of silently failing.
+    const result = await commands.initiateRenewal(ctx, id, { ...body, newTerms: { ...((contract.terms as Record<string, unknown> | undefined) ?? {}), ...(body.newTerms ?? {}) } });
     return reply.code(202).send(result);
   });
 

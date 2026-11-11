@@ -6,7 +6,8 @@ import { getDlqMessageCount, getPublishNoSubscribersCount, resetFailureMetrics }
 /**
  * 05-T5: real-SqsQueue integration against LocalStack.
  *
- * GATED on AWS_ENDPOINT_URL — exactly like the identity/finance perf tests are
+ * (Also runs against ElasticMQ: set SQS_ENDPOINT_URL=http://localhost:9324.)
+ * GATED on SQS_ENDPOINT_URL / AWS_ENDPOINT_URL — exactly like the identity/finance perf tests are
  * gated on DB_URL. With no LocalStack this whole suite SKIPS cleanly in CI; set
  * AWS_ENDPOINT_URL (e.g. http://localhost:4566) to run it:
  *
@@ -14,7 +15,7 @@ import { getDlqMessageCount, getPublishNoSubscribersCount, resetFailureMetrics }
  *   QUEUE_DRIVER=sqs AWS_DEFAULT_REGION=ap-south-1 \
  *   pnpm --filter @civitasone/queue-service test
  */
-const endpoint = process.env.AWS_ENDPOINT_URL;
+const endpoint = process.env.SQS_ENDPOINT_URL ?? process.env.AWS_ENDPOINT_URL;
 
 function publishInput(type: string) {
   return {
@@ -28,6 +29,16 @@ function publishInput(type: string) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * start() is BOOT-NONBLOCK: it returns before the subscriber queues exist, so a
+ * publish() issued straight after it can find no subscriber queue yet (ListQueues
+ * is empty). Await the detached warm-up so these tests exercise delivery, not that race.
+ */
+async function startWarm(q: SqsQueue): Promise<void> {
+  await q.start();
+  await q.whenReady();
+}
 
 // FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for real SQS; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
@@ -53,7 +64,7 @@ describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
     const received: CommandEnvelope[] = [];
     queue = new SqsQueue();
     queue.subscribe(topic, async (msg) => { received.push(msg); });
-    await queue.start();
+    await startWarm(queue);
 
     const messageId = await queue.publish(topic, publishInput(topic));
 
@@ -70,7 +81,7 @@ describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
     let calls = 0;
     queue = new SqsQueue();
     queue.subscribe(topic, async () => { calls++; throw new Error("always fails"); });
-    await queue.start();
+    await startWarm(queue);
 
     await queue.publish(topic, publishInput(topic));
 
@@ -92,7 +103,7 @@ describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
       seen.add(msg.messageId);
       applied++;
     });
-    await queue.start();
+    await startWarm(queue);
 
     // Same messageId published twice → at-least-once may deliver both.
     const input = { ...publishInput(topic), messageId: randomUUID() };
