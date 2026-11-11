@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -31,6 +31,11 @@ class FinanceUnavailableError extends Error {
   constructor(message: string) { super(message); this.name = "FinanceUnavailableError"; }
 }
 
+/** finance-service has no such sanction for this tenant (404): a permanent answer, not an outage. */
+class SanctionNotFoundError extends Error {
+  constructor(message: string) { super(message); this.name = "SanctionNotFoundError"; }
+}
+
 // PO value above this (Rs 1,000 in paise) must carry a sanctionRef (#14).
 
 async function checkSanctionAvailable(sanctionRef: string, required: bigint, tenantId: string): Promise<void> {
@@ -52,7 +57,17 @@ async function checkSanctionAvailable(sanctionRef: string, required: bigint, ten
     // Network error / timeout → retryable finance-unavailable, NOT budget-exceeded.
     throw new FinanceUnavailableError(`finance-service unreachable: ${String(err)}`);
   }
-  if (!res.ok) throw new FinanceUnavailableError(`finance-service sanctions check failed: ${res.status}`);
+  if (!res.ok) {
+    // UAT b24: a 4xx is finance's final answer about THIS request; retrying the same request cannot change it.
+    // 404 = the sanction does not exist for the tenant (the maker is told, like every other rejection); any other
+    // 4xx (bad id, 401/403 service credentials) is permanent too and goes to the DLQ once, not five times.
+    // 408/429 and 5xx stay retryable.
+    if (res.status === 404) throw new SanctionNotFoundError(`sanction ${sanctionId} not found for tenant`);
+    if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+      throw new NonRetryableError(`[procurement/po] FINANCE_REFUSED: finance-service sanctions check answered ${res.status} for sanction ${sanctionId}`);
+    }
+    throw new FinanceUnavailableError(`finance-service sanctions check failed: ${res.status}`);
+  }
   const data = await res.json() as { available: string };
   // Throws DomainError("BUDGET_EXCEEDED") only when funds are genuinely insufficient.
   assertBudgetSufficient(BigInt(data.available), required);
@@ -154,15 +169,17 @@ export function registerPoConsumers(queue: Queue): void {
           // Do NOT misreport this as a budget shortfall and do NOT write a PO.
           throw err;
         }
-        // Genuine budget shortfall (DomainError BUDGET_EXCEEDED) → emit + drop PO.
+        if (err instanceof NonRetryableError) throw err;
+        const notFound = err instanceof SanctionNotFoundError;
+        // Genuine budget shortfall (DomainError BUDGET_EXCEEDED), or an unknown sanction → emit + drop PO.
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
           await enqueue(tx, {
             topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err), code: "BUDGET_EXCEEDED" },
+            payload: { poId: p.id, poNo: p.poNo, sanctionRef: p.sanctionRef, totalMinor: totalMinor.toString(), reason: String(err), code: notFound ? "SANCTION_NOT_FOUND" : "BUDGET_EXCEEDED" },
           });
-          await audit(tx, msg, "rejected_budget_exceeded", "po", p.id);
+          await audit(tx, msg, notFound ? "rejected_sanction_not_found" : "rejected_budget_exceeded", "po", p.id);
         });
         return;
       }

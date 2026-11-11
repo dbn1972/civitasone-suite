@@ -11,6 +11,7 @@ import { fetchUserNames } from "../../shared/identity-client.js";
 import { readSettings } from "../approvals/repo.js";
 import { isProductionDeployment } from "./dsc-client.js";
 import { SENT_STATES, checkDistinct, checkReleasable } from "./release.js";
+import { setDefaultDdo } from "../masters/ddo-commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -87,6 +88,17 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
       paymentRail: isPaymentRailEnabled() ? "live" : "disabled",
       treasuryMode: getPfmsTreasuryMode(),
     });
+  });
+
+  // UAT b24: the tenant default DDO (used when a bill omits ddoCode) must be writable; it must name an existing active DDO.
+  app.put("/v1/finance/pfms/config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["finance_admin", "tenant_admin", "super_admin"]);
+    const body = z.object({
+      defaultDdo: z.string().trim().min(1).max(12),
+      agencyCode: z.string().trim().min(1).max(12).optional(),
+    }).parse(req.body);
+    return reply.send(await setDefaultDdo(ctx, body));
   });
 
   app.get("/v1/finance/pfms/batches", async (req, reply) => {
