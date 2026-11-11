@@ -37,6 +37,8 @@ import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type Pt
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
+import { evaluateReceiptRule, describeReceiptRule } from "@civitasone/types";
+import { loadReceiptPolicyTx } from "../reimbursement-receipt-policy/repo.js";
 import { MAKER_CHECKER_MESSAGES, MAKER_CHECKER_VIOLATION, runMakerCheckerDenial } from "./run-maker-checker.js";
 import { DUPLICATE_RUN_NO, duplicateRunNoMessage, isRunNoUniqueViolation } from "./run-no.js";
 import { ptOfSlips, splitEmployeeDeductions } from "./run-deductions.js";
@@ -1615,23 +1617,30 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; category: string; amountMinor: number;
       billDate?: string | null; billRef?: string | null; period: string;
-      attachmentKeys?: string[];
+      attachmentKeys?: string[]; selfDeclaration?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const keys = p.attachmentKeys ?? [];
+      // Receipt policy: re-checked against the tenant's rule as it stands now.
+      const policy = await loadReceiptPolicyTx(tx as never, p.tenantId);
       // Re-asserted here because the command can be published without the route
       // (GAP-PAYROLL-REIMBURSEMENTS-03): a new claim in a receipt-required
       // category needs a receipt, and every key must be one this tenant issued
       // to the submitter. Dead-lettered, nothing inserted.
-      const violation = receiptRuleViolation(p.tenantId, msg.actorId, p.category, keys);
+      const violation = receiptRuleViolation(p.tenantId, msg.actorId, p.category, keys, { policy, amountMinor: p.amountMinor, selfDeclared: p.selfDeclaration === true });
       if (violation) throw new NonRetryableError(`${violation}: reimbursement ${p.id} rejected`);
+      const decision = evaluateReceiptRule(policy, p.category, p.amountMinor, keys.length, p.selfDeclaration === true);
+      const basis = decision.ok ? decision.basis : "not_required";
+      const declared = basis === "self_declaration";
       await tx.execute(sql`
         INSERT INTO payroll.payroll_reimbursements
-          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by, attachment_keys)
+          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by, attachment_keys,
+           receipt_basis, self_declared_by, self_declared_at)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.category}, ${p.amountMinor},
           ${p.billDate ?? null}::date, ${p.billRef ?? null}, ${p.period}, ${msg.actorId}::uuid,
-          ${sql`ARRAY[${keys.length ? sql.join(keys.map((k) => sql`${k}`), sql`, `) : sql``}]::text[]`})
+          ${sql`ARRAY[${keys.length ? sql.join(keys.map((k) => sql`${k}`), sql`, `) : sql``}]::text[]`},
+          ${basis}, ${declared ? msg.actorId : null}::uuid, ${declared ? sql`NOW()` : null})
         ON CONFLICT (id) DO NOTHING
       `);
       await enqueue(tx, {
@@ -1639,7 +1648,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { id: p.id, employeeId: p.employeeId, amountMinor: p.amountMinor },
       });
-      await audit(tx, msg, "create", "payroll_reimbursement", p.id);
+      await audit(tx, msg, "create", "payroll_reimbursement", p.id, {
+        receiptBasis: basis,
+        ...(declared ? { selfDeclaredBy: msg.actorId } : {}),
+        receiptRule: describeReceiptRule(decision.rule),
+      });
     });
   });
 

@@ -62,6 +62,7 @@ export const COMMANDS = {
   openingYtdCreate:       "payroll.opening_ytd.create",
   openingYtdDecide:       "payroll.opening_ytd.decide",
   bankFileSigningUpdate:  "payroll.bank_file_signing.update",
+  reimbursementReceiptPolicyUpdate: "payroll.reimbursement_receipt_policy.update",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
   // GAP-PAYROLL-TAX-DECLARATION-02: investment-proof upload / verification / retention
@@ -140,6 +141,7 @@ export const EVENTS = {
   dscConfigRemoved:       "payroll.dsc_config.removed",
   sponsorConfigUpserted:  "payroll.sponsor_config.upserted",
   bankFileSigningUpdated: "payroll.bank_file_signing.updated",
+  reimbursementReceiptPolicyUpdated: "payroll.reimbursement_receipt_policy.updated",
   letterheadUpserted:     "payroll.letterhead.upserted",
   returnFilingRecorded:   "payroll.return_filing.recorded",
 } as const;

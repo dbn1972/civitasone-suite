@@ -3373,3 +3373,4 @@ export type FinanceVendorSummary = {
 export const REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES: readonly string[] = ["medical", "lta", "travel"];
 
 export * from "./gatewayPublic.js";
+export * from "./reimbursementReceiptPolicy.js";

@@ -10,6 +10,8 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { headObject } from "@civitasone/storage";
+import { describeReceiptRule, effectiveReceiptRule } from "@civitasone/types";
+import { loadReceiptPolicy } from "../reimbursement-receipt-policy/repo.js";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
 import { audit, resolveArrearsReviewThresholdBps, resolveEpsUnrecordedPolicy } from "./consumer.js";
@@ -50,10 +52,15 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
  * tenant's reimbursement prefix (no pointing a claim at another tenant's, or
  * an unrelated, object) and must really have been uploaded.
  */
-async function assertReceipts(ctx: RequestContext, category: string, keys: string[] | undefined): Promise<void> {
-  const violation = receiptRuleViolation(ctx.tenantId, ctx.actorId, category, keys);
+async function assertReceipts(
+  ctx: RequestContext, category: string, keys: string[] | undefined, amountMinor: number, selfDeclared: boolean,
+): Promise<void> {
+  // Receipt policy: the tenant's per-category rule (default = medical / LTA / travel need a receipt).
+  const { policy } = await loadReceiptPolicy(ctx.tenantId);
+  const violation = receiptRuleViolation(ctx.tenantId, ctx.actorId, category, keys, { policy, amountMinor, selfDeclared });
   if (violation === "RECEIPT_REQUIRED") {
-    throw new HttpError(422, "RECEIPT_REQUIRED", `a ${category} claim needs at least one receipt`);
+    const rule = effectiveReceiptRule(policy, category);
+    throw new HttpError(422, "RECEIPT_REQUIRED", `a ${category} claim needs at least one receipt (rule: ${describeReceiptRule(rule)})`);
   }
   if (violation === "RECEIPT_KEY_INVALID") {
     throw new HttpError(422, "RECEIPT_KEY_INVALID", "receipts must be uploaded through the receipt upload endpoint by the person submitting the claim");
@@ -555,7 +562,7 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
   await assertEmployeeExists(ctx, body.employeeId);
-  await assertReceipts(ctx, body.category, body.attachmentKeys);
+  await assertReceipts(ctx, body.category, body.attachmentKeys, body.amountMinor, body.selfDeclaration === true);
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,

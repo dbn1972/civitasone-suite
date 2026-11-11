@@ -9,7 +9,8 @@ import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import { formatMoney, formatPeriod } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { REIMBURSEMENT_CATEGORIES, reimbursementCategoryKey, type ReimbursementCategory } from "@/lib/payroll/reimbursementCategories";
-import { receiptRequired } from "@/lib/payroll/receiptRules";
+import { receiptNeed } from "@/lib/payroll/receiptRules";
+import type { ReceiptPolicy } from "@civitasone/types";
 import { ReceiptUpload, type Receipt } from "./ReceiptUpload";
 
 /**
@@ -25,7 +26,7 @@ export type ClaimSubject = { mode: "admin" } | { mode: "self"; employeeId: strin
 type InvalidField = "employeeId" | "amount" | "period" | "receipts" | null;
 
 
-export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) {
+export function CreateReimbursementForm({ subject, policy = null }: { subject: ClaimSubject; policy?: ReceiptPolicy | null }) {
   const t = useTranslations("createReimbursementForm");
   const tFallback = useTranslations("employeeFallback");
   const tv = useTranslations("hrFormErrors2");
@@ -40,6 +41,8 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
   // GAP-PAYROLL-REIMBURSEMENTS-03: private receipt keys + an upload-in-flight flag.
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [uploading, setUploading] = useState(false);
+  // Receipt policy: the filer signs a self-declaration in place of a receipt (only where the rule allows it).
+  const [selfDeclared, setSelfDeclared] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -54,12 +57,17 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
   const dateId = useId();
   const refId = useId();
   const errId = useId();
+  const declId = useId();
   const amtRef = useRef<HTMLInputElement>(null);
   const periodRef = useRef<HTMLInputElement>(null);
 
   const employeeId = subject.mode === "self" ? subject.employeeId : pickedEmployeeId;
   const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? tFallback("unknownEmployee");
   const amountMinor = rupeesToMinorString(amount);
+  // The tenant's rule for this category at this amount (amount 0 until a valid one is typed).
+  const need = receiptNeed(policy, category, amountMinor !== null && BigInt(amountMinor) <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(amountMinor) : 0);
+  const canDeclare = receipts.length === 0 && need.required && need.selfDeclarationAllowed;
+  const usingSelfDeclaration = canDeclare && selfDeclared;
   const isInvalid = (f: Exclude<InvalidField, null>) => tone === "bad" && invalidField === f;
   const categoryLabel = (c: string) => {
     const key = reimbursementCategoryKey(c);
@@ -84,9 +92,10 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
     }
     // GAP-PAYROLL-REIMBURSEMENTS-04: a real month (2026-13 used to pass).
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim())) return fail("period", "periodFormatError", () => periodRef.current?.focus());
-    // GAP-PAYROLL-REIMBURSEMENTS-03: medical / LTA / travel claims need a receipt.
+    // GAP-PAYROLL-REIMBURSEMENTS-03: a claim needs a receipt where the tenant's rule says so
+    // (default: medical / LTA / travel), unless a self-declaration is allowed and signed.
     if (uploading) return fail("receipts", "receiptUploadingError");
-    if (receiptRequired(category) && receipts.length === 0) return fail("receipts", "receiptRequiredError");
+    if (need.required && receipts.length === 0 && !usingSelfDeclaration) return fail("receipts", "receiptRequiredError");
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -106,6 +115,7 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
           billRef: billRef.trim() || undefined,
           period: period.trim(),
           attachmentKeys: receipts.length > 0 ? receipts.map((r) => r.key) : undefined,
+          selfDeclaration: usingSelfDeclaration ? true : undefined,
         }, {
         RECEIPT_REQUIRED: t("receiptRequiredError"),
         RECEIPT_KEY_INVALID: t("receiptKeyInvalidError"),
@@ -119,6 +129,7 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
       setAmount("");
       setBillRef("");
       setReceipts([]);
+      setSelfDeclared(false);
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
@@ -188,8 +199,30 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
 
           <div>
             <ReceiptUpload receipts={receipts} onChange={setReceipts} onBusyChange={setUploading} />
-            {receiptRequired(category) && (
+            {need.rule.mode === "always" && (
               <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("receiptRequiredHint", { category: categoryLabel(category) })}</p>
+            )}
+            {need.rule.mode === "above_amount" && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--mut)" }}>
+                {t("receiptRuleAboveHint", { category: categoryLabel(category), amount: formatMoney(need.rule.thresholdMinor ?? 0) })}
+              </p>
+            )}
+            {need.rule.mode !== "never" && need.rule.selfDeclarationUpToMinor != null && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--mut)" }}>
+                {t("selfDeclarationHint", { category: categoryLabel(category), amount: formatMoney(need.rule.selfDeclarationUpToMinor) })}
+              </p>
+            )}
+            {canDeclare && (
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10 }}>
+                <input
+                  id={declId}
+                  type="checkbox"
+                  checked={selfDeclared}
+                  onChange={(e) => setSelfDeclared(e.target.checked)}
+                  style={{ width: 18, height: 18, marginTop: 2 }}
+                />
+                <label htmlFor={declId} style={{ fontSize: 13 }}>{t("selfDeclarationLabel")}</label>
+              </div>
             )}
           </div>
 

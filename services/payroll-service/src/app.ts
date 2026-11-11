@@ -33,6 +33,7 @@ import { nachRoutes } from "./modules/nach/routes.js";
 import { fnfRoutes } from "./modules/fnf/routes.js";
 import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
 import { bankFileSigningRoutes } from "./modules/bank-file-signing/routes.js";
+import { receiptPolicyRoutes } from "./modules/reimbursement-receipt-policy/routes.js";
 import { deductorConfigRoutes } from "./modules/deductor-config/routes.js";
 import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
 import { costingRuleRoutes } from "./modules/costing-rules/routes.js";
@@ -118,6 +119,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fnfRoutes);
   await app.register(dscConfigRoutes);
   await app.register(bankFileSigningRoutes);
+  await app.register(receiptPolicyRoutes);
   await app.register(deductorConfigRoutes);
   await app.register(form16VerifyRoutes);
   await app.register(costingRuleRoutes);

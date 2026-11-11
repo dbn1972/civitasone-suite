@@ -10090,12 +10090,19 @@
     "decisionDescription": "{category} claim of <strong>{amount}</strong> for <strong>{employee}</strong>, period {period}.",
     "approvedMessage": "Claim of {amount} approved.",
     "rejectedMessage": "Claim of {amount} rejected.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "receiptNotRequired": "Not required",
+    "selfDeclarationBadge": "Self-declaration",
+    "selfDeclarationAria": "Self-declaration signed instead of a receipt, for {employee}",
+    "decisionBasisReceipt": "Supported by a receipt: view it in the Receipts column before deciding.",
+    "decisionBasisSelfDeclaration": "No receipt: the claimant signed a self-declaration instead.",
+    "decisionBasisNone": "No receipt was required for this claim.",
+    "receiptPolicyLink": "Set receipt rules for claims"
   },
   "createReimbursementForm": {
     "receiptFileInvalidError": "A receipt is not a PDF, JPG or PNG of at most 10 MB. Remove it, upload a valid file and resubmit.",
     "receiptKeyInvalidError": "A receipt could not be verified. Remove it, upload it again here, and resubmit.",
-    "receiptRequiredError": "Attach at least one receipt: medical, LTA and travel claims need supporting documents.",
+    "receiptRequiredError": "Attach at least one receipt, as your organisation's rule requires for this claim.",
     "receiptUploadingError": "Wait for the receipt upload to finish.",
     "receiptRequiredHint": "{category} claims need at least one receipt.",
     "formTitle": "Create Reimbursement Claim",
@@ -10121,7 +10128,10 @@
     "confirmTitle": "Submit this reimbursement claim?",
     "confirmLabel": "Submit claim",
     "confirmDescription": "Submit a {category} claim of {amount} for <strong>{employee}</strong>, period {period}.",
-    "employeeLabel": "Employee"
+    "employeeLabel": "Employee",
+    "receiptRuleAboveHint": "{category} claims above {amount} need at least one receipt.",
+    "selfDeclarationHint": "For {category} claims up to {amount} you may sign a self-declaration instead of attaching a receipt.",
+    "selfDeclarationLabel": "I declare that this expense was incurred as stated and that I have no receipt to attach. I understand this declaration is recorded against my name."
   },
   "payrollReturns": {
     "title": "Quarterly TDS Returns",
@@ -19606,5 +19616,36 @@
       "exonerated": "Exonerated",
       "finalised": "Finalised"
     }
+  },
+  "receiptPolicy": {
+    "title": "Reimbursement receipt rules",
+    "subtitle": "Choose, for each kind of claim, when a receipt is required and when a signed self-declaration may replace it.",
+    "backLabel": "Back to Reimbursements",
+    "cardTitle": "Receipt rule per claim type",
+    "tableCaption": "Receipt rule for each reimbursement category",
+    "colCategory": "Claim type",
+    "colRule": "Receipt required",
+    "colThreshold": "Above amount (₹)",
+    "colSelfDecl": "Self-declaration up to (₹)",
+    "mode_always": "Always",
+    "mode_never": "Never",
+    "mode_above_amount": "Above an amount",
+    "ruleAria": "Receipt rule for {category}",
+    "thresholdAria": "Receipt required above this amount in rupees, for {category}",
+    "selfDeclAria": "Self-declaration accepted up to this amount in rupees, for {category}",
+    "selfDeclPlaceholder": "Not allowed",
+    "helpText": "Above an amount: claims up to that amount need no receipt; larger claims do. A self-declaration limit lets the claimant sign a declaration instead of attaching a receipt up to that amount; leave it blank to require a receipt. Without a change here, medical, LTA and travel claims need a receipt and other claims do not.",
+    "usingDefaultNote": "No custom rule is saved: medical, LTA and travel claims need a receipt; all other claims do not.",
+    "customNote": "Your organisation's rule is in force. Claim types you have not changed keep the default.",
+    "saveBtn": "Save receipt rules",
+    "savedMessage": "Receipt rules saved.",
+    "confirmTitle": "Save these receipt rules?",
+    "confirmLabel": "Save rules",
+    "confirmDescription": "New claims are checked against these rules straight away. Claims already filed are not changed. The change is recorded in the audit log.",
+    "confirmReasonLabel": "Reason for the change (min 10 characters)",
+    "errorThreshold": "Enter an amount above zero (in rupees) for {category}.",
+    "errorSelfDecl": "Enter the self-declaration limit for {category} as an amount above zero, or leave it blank.",
+    "errorSelfDeclBelowThreshold": "For {category}, the self-declaration limit must be higher than the amount above which a receipt is required.",
+    "loadErrorMessage": "We couldn't load the receipt rules, so nothing is shown here. Refresh the page to try again."
   }
 }
