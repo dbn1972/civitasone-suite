@@ -226,3 +226,63 @@ describe("existing behaviour is unchanged", () => {
     expect(COMMANDS.inspectionCreate).toBe("inspection.inspection.create");
   });
 });
+
+describe("the generic /transition route enforces the same conducting rule", () => {
+  const t = (id: string, headers: Record<string, string>, targetState: string) =>
+    app.inject({ method: "POST", url: `/v1/inspection/inspections/${id}/transition`, headers, payload: { targetState } });
+
+  it("refuses an unassigned inspector (and a reviewing officer) for in_progress and completed; publishes nothing", async () => {
+    const id = await schedule();
+    for (const [sub, roles] of [[STRANGER, ["inspector"]], [REVIEWER, ["reviewing_officer"]]] as const) {
+      const res = await t(id, as(sub, [...roles]), "in_progress");
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error?.code ?? res.json().code).toBe("NOT_ASSIGNED");
+    }
+    expect(published).toHaveLength(0);
+    // get it to in_progress legitimately, then try completing as a stranger
+    expect((await t(id, as(ASSIGNED, ["inspector"]), "in_progress")).statusCode).toBe(202);
+    await deliverAll();
+    expect((await t(id, as(STRANGER, ["inspector"]), "completed")).statusCode).toBe(403);
+    expect(published).toHaveLength(0);
+    expect((await row(id)).state).toBe("in_progress");
+  });
+
+  it("allows the assigned inspector and an admin; other targets (paused) are unchanged", async () => {
+    const id = await schedule();
+    expect((await t(id, as(ADMIN, ["inspection_admin"]), "in_progress")).statusCode).toBe(202);
+    await deliverAll();
+    expect((await t(id, as(ASSIGNED, ["inspector"]), "completed")).statusCode).toBe(202);
+    await deliverAll();
+    expect((await row(id)).state).toBe("completed");
+    const id2 = await schedule();
+    await t(id2, as(ASSIGNED, ["inspector"]), "in_progress"); await deliverAll();
+    // pausing is not a conducting target: no assigned-inspector requirement added
+    expect((await t(id2, as(STRANGER, ["inspector"]), "paused")).statusCode).toBe(202);
+  });
+
+  it("the reviewer's return-for-revision edge (under_review -> in_progress) is exempt", async () => {
+    const id = await schedule();
+    await asTenant(TENANT, (tx) => tx.update(inspections).set({ state: "under_review" }).where(eq(inspections.id, id)));
+    expect((await t(id, as(REVIEWER, ["reviewing_officer"]), "in_progress")).statusCode).toBe(202);
+    await deliverAll();
+    expect((await row(id)).state).toBe("in_progress");
+  });
+
+  it("consumer re-checks: a forged transition from an unassigned actor is non-retryable (no stamped roles = no admin bypass); stamped admin roles pass", async () => {
+    const id = await schedule();
+    const cmd = (actorId: string, actorRoles?: string[]) => ({
+      messageId: randomUUID(), type: COMMANDS.inspectionTransition, tenantId: TENANT, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { inspectionId: id, targetState: "in_progress", ...(actorRoles ? { actorRoles } : {}) },
+    });
+    const run = (m: ReturnType<typeof cmd>) => runWithTenant(TENANT, () => handlers.get(m.type)!(m));
+    let err: unknown;
+    try { await run(cmd(STRANGER)); } catch (e) { err = e; }
+    expect(isNonRetryable(err)).toBe(true);
+    err = undefined;
+    try { await run(cmd(STRANGER, ["inspector"])); } catch (e) { err = e; }
+    expect(isNonRetryable(err)).toBe(true);
+    expect((await row(id)).state).toBe("scheduled");
+    await run(cmd(ADMIN, ["inspection_admin"]));
+    expect((await row(id)).state).toBe("in_progress");
+  });
+});

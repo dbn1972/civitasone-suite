@@ -27,8 +27,8 @@ import type { FastifyInstance } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { hasAnyRole } from "@civitasone/auth";
 import { randomUUID } from "node:crypto";
+import { mayConduct } from "./domain.js";
 import { findEntityById, findInspectionTypeById } from "../universe/repo.js";
 import { findPlanById } from "../planning/repo.js";
 import {
@@ -56,7 +56,6 @@ const TRANSITION_ROLES = ["inspector", "reviewing_officer", "inspection_admin", 
  * review but do not conduct; admins may act for an inspector.
  */
 const CONDUCT_ROLES = ["inspector", "inspection_admin", "tenant_admin", "super_admin"];
-const CONDUCT_OVERRIDE_ROLES = ["inspection_admin", "tenant_admin", "super_admin"];
 
 /** Finalize: reviewing officer only (plus admin overrides). */
 const FINALIZE_ROLES = ["reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
@@ -141,8 +140,7 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     const { id } = idParam.parse(rawParams);
     const inspection = await findInspectionById(ctx.tenantId, id);
     if (!inspection) throw new HttpError(404, "NOT_FOUND", "inspection not found");
-    const assigned = Array.isArray(inspection.assignedInspectors) ? (inspection.assignedInspectors as unknown[]) : [];
-    if (!hasAnyRole(ctx, CONDUCT_OVERRIDE_ROLES) && !assigned.includes(ctx.actorId)) {
+    if (!mayConduct(inspection.assignedInspectors, ctx.actorId, ctx.roles)) {
       throw new HttpError(403, "NOT_ASSIGNED", "only an inspector assigned to this inspection may conduct it");
     }
     if (inspection.state !== expected) {
@@ -184,7 +182,13 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     const { id } = idParam.parse(req.params);
     const body = transitionSchema.parse(req.body);
     // UAT W8-B: tenant-scoped existence read before publishing; the consumer stays the race-safe check.
-    if (!(await findInspectionById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "inspection not found");
+    const current = await findInspectionById(ctx.tenantId, id);
+    if (!current) throw new HttpError(404, "NOT_FOUND", "inspection not found");
+    // Starting / completing / resuming is for the assigned inspector (or an admin), exactly as /start and
+    // /complete; the reviewer's return-for-revision edge is exempt. Everything else is unchanged.
+    if (!mayConduct(current.assignedInspectors, ctx.actorId, ctx.roles, { from: current.state, to: body.targetState })) {
+      throw new HttpError(403, "NOT_ASSIGNED", "only an inspector assigned to this inspection may conduct it");
+    }
     const result = await publishInspectionTransition(
       { inspectionId: id, targetState: body.targetState, remarks: body.remarks },
       ctx,
