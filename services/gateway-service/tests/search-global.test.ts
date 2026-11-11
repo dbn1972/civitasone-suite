@@ -8,7 +8,7 @@ import { buildApp } from "../src/app.js";
 import { setSearchEngine, setGlobalSearchIndex } from "../src/search-route.js";
 import type { GlobalSearchRequest, GlobalSearchResult as IndexResult, SearchEngine, GlobalEntityType } from "@civitasone/search";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string; // set by vitest.config.ts
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
 const ACTOR = "00000000-0000-4000-8000-000000000099";
