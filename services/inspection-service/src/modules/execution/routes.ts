@@ -10,8 +10,10 @@
  *   - Finalize: reviewing_officer only
  *   - Reads: inspector, reviewing_officer, supervising_officer
  *
- * Endpoints (7):
- *   POST /v1/inspection/inspections                     — schedule a new inspection
+ * Endpoints (9):
+ *   POST /v1/inspection/inspections                     — schedule a new inspection (optionally linked to a plan)
+ *   POST /v1/inspection/inspections/:id/start           — start it (scheduled → in_progress); conducting inspector
+ *   POST /v1/inspection/inspections/:id/complete        — complete it (in_progress → completed) with remarks; conducting inspector
  *   POST /v1/inspection/inspections/:id/transition      — trigger state transition
  *   POST /v1/inspection/inspections/:id/submit-review   — submit for review
  *   POST /v1/inspection/inspections/:id/finalize        — finalize inspection
@@ -21,9 +23,10 @@
  *
  * _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
 import { randomUUID } from "node:crypto";
 import { findEntityById, findInspectionTypeById } from "../universe/repo.js";
 import { findPlanById } from "../planning/repo.js";
@@ -46,6 +49,13 @@ const CREATE_ROLES = ["supervising_officer", "inspection_admin", "tenant_admin",
 
 /** Transition operations: inspectors and reviewing officers. */
 const TRANSITION_ROLES = ["inspector", "reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
+
+/**
+ * Conducting the inspection (start / complete): the inspector it is assigned to. Officers schedule and
+ * review but do not conduct; admins may act for an inspector.
+ */
+const CONDUCT_ROLES = ["inspector", "inspection_admin", "tenant_admin", "super_admin"];
+const CONDUCT_OVERRIDE_ROLES = ["inspection_admin", "tenant_admin", "super_admin"];
 
 /** Finalize: reviewing officer only (plus admin overrides). */
 const FINALIZE_ROLES = ["reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
@@ -81,8 +91,17 @@ const submitReviewSchema = z.object({
   reviewerId: z.string().uuid("reviewerId must be a valid UUID"),
 });
 
+/** POST /inspections/:id/complete — remarks are mandatory: they are the inspector's record of the run. */
+const completeSchema = z.object({
+  remarks: z.string({ required_error: "remarks is required" }).trim().min(1, "remarks is required").max(1000),
+});
+
+/** POST /inspections/:id/start — remarks optional. */
+const startSchema = z.object({ remarks: z.string().trim().max(1000).optional() }).default({});
+
 /** GET /inspections — list with pagination. */
 const listQuerySchema = z.object({
+  planId: z.string().uuid("planId must be a valid UUID").optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(15),
 });
@@ -109,6 +128,46 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
         planId: body.planId,
         assignedInspectors: body.assignedInspectors,
       },
+      ctx,
+    );
+    return reply.code(202).send({ data: result });
+  });
+
+  // The inspector it is assigned to (or an admin) may conduct an inspection; fast-fail with a clear
+  // 409 on the wrong state. The consumer remains the race-safe state-machine check.
+  async function loadForConduct(req: FastifyRequest, expected: string) {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONDUCT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const inspection = await findInspectionById(ctx.tenantId, id);
+    if (!inspection) throw new HttpError(404, "NOT_FOUND", "inspection not found");
+    const assigned = Array.isArray(inspection.assignedInspectors) ? (inspection.assignedInspectors as unknown[]) : [];
+    if (!hasAnyRole(ctx, CONDUCT_OVERRIDE_ROLES) && !assigned.includes(ctx.actorId)) {
+      throw new HttpError(403, "NOT_ASSIGNED", "only an inspector assigned to this inspection may conduct it");
+    }
+    if (inspection.state !== expected) {
+      throw new HttpError(409, "INVALID_TRANSITION", `inspection is '${inspection.state}'; it must be '${expected}'`);
+    }
+    return { ctx, id };
+  }
+
+  // ── POST /v1/inspection/inspections/:id/start — scheduled → in_progress ──
+  app.post("/v1/inspection/inspections/:id/start", async (req, reply) => {
+    const { ctx, id } = await loadForConduct(req, "scheduled");
+    const body = startSchema.parse(req.body ?? {});
+    const result = await publishInspectionTransition(
+      { inspectionId: id, targetState: "in_progress", remarks: body.remarks ?? "Inspection started" },
+      ctx,
+    );
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── POST /v1/inspection/inspections/:id/complete — in_progress → completed ──
+  app.post("/v1/inspection/inspections/:id/complete", async (req, reply) => {
+    const { ctx, id } = await loadForConduct(req, "in_progress");
+    const body = completeSchema.parse(req.body ?? {});
+    const result = await publishInspectionTransition(
+      { inspectionId: id, targetState: "completed", remarks: body.remarks },
       ctx,
     );
     return reply.code(202).send({ data: result });
@@ -176,7 +235,7 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     const result = await findInspections(ctx.tenantId, {
       page: query.page,
       pageSize: query.pageSize,
-    });
+    }, query.planId);
     return reply.send(result);
   });
 

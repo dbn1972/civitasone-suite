@@ -56,6 +56,33 @@ describe("InspectionReportPage", () => {
     expect(screen.getByText(/another reviewing officer must approve it/)).toBeInTheDocument();
   });
 
+  it("offers Reject next to Approve to a different reviewing officer on a submitted report", async () => {
+    load({ status: "submitted", submittedBy: MAKER });
+    roles = ["reviewing_officer"]; me = CHECKER;
+    await page();
+    expect(screen.getByRole("button", { name: "Reject report" })).toBeInTheDocument();
+  });
+
+  it("does not offer Reject to the officer who prepared or submitted it", async () => {
+    load({ status: "submitted", submittedBy: MAKER });
+    roles = ["reviewing_officer"]; me = MAKER;
+    await page();
+    expect(screen.queryByRole("button", { name: "Reject report" })).toBeNull();
+  });
+
+  it("shows a rejected report's status, reason and date, and offers the inspector Resubmit + Add observation", async () => {
+    load({ status: "rejected", rejectedAt: "2026-11-05T05:00:00.000Z", rejectedBy: CHECKER, rejectionReason: "Grade not supported by observations" });
+    roles = ["inspector"]; me = MAKER;
+    await page();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("Grade not supported by observations")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(/was rejected/);
+    expect(screen.getByRole("button", { name: "Resubmit for review" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save observation" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject report" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve report" })).toBeNull();
+  });
+
   it("offers no actions on an approved report", async () => {
     load({ status: "approved", approvedAt: "2026-11-03T05:00:00.000Z" });
     roles = ["reviewing_officer", "inspector"]; me = CHECKER;
