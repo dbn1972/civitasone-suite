@@ -23,7 +23,8 @@
  *
  * _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8_
  */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { hasAnyRole } from "@civitasone/auth";
@@ -134,11 +135,10 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
   });
 
   // The inspector it is assigned to (or an admin) may conduct an inspection; fast-fail with a clear
-  // 409 on the wrong state. The consumer remains the race-safe state-machine check.
-  async function loadForConduct(req: FastifyRequest, expected: string) {
-    const ctx = resolveContext(req);
-    requireRole(ctx, CONDUCT_ROLES);
-    const { id } = idParam.parse(req.params);
+  // 409 on the wrong state. The consumer remains the race-safe state-machine check. (The role gate itself
+  // is in each handler so the authz scanner sees it.)
+  async function loadForConduct(ctx: RequestContext, rawParams: unknown, expected: string) {
+    const { id } = idParam.parse(rawParams);
     const inspection = await findInspectionById(ctx.tenantId, id);
     if (!inspection) throw new HttpError(404, "NOT_FOUND", "inspection not found");
     const assigned = Array.isArray(inspection.assignedInspectors) ? (inspection.assignedInspectors as unknown[]) : [];
@@ -148,12 +148,14 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
     if (inspection.state !== expected) {
       throw new HttpError(409, "INVALID_TRANSITION", `inspection is '${inspection.state}'; it must be '${expected}'`);
     }
-    return { ctx, id };
+    return id;
   }
 
   // ── POST /v1/inspection/inspections/:id/start — scheduled → in_progress ──
   app.post("/v1/inspection/inspections/:id/start", async (req, reply) => {
-    const { ctx, id } = await loadForConduct(req, "scheduled");
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONDUCT_ROLES);
+    const id = await loadForConduct(ctx, req.params, "scheduled");
     const body = startSchema.parse(req.body ?? {});
     const result = await publishInspectionTransition(
       { inspectionId: id, targetState: "in_progress", remarks: body.remarks ?? "Inspection started" },
@@ -164,7 +166,9 @@ export async function registerExecutionRoutes(app: FastifyInstance): Promise<voi
 
   // ── POST /v1/inspection/inspections/:id/complete — in_progress → completed ──
   app.post("/v1/inspection/inspections/:id/complete", async (req, reply) => {
-    const { ctx, id } = await loadForConduct(req, "in_progress");
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONDUCT_ROLES);
+    const id = await loadForConduct(ctx, req.params, "in_progress");
     const body = completeSchema.parse(req.body ?? {});
     const result = await publishInspectionTransition(
       { inspectionId: id, targetState: "completed", remarks: body.remarks },
