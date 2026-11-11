@@ -6,6 +6,8 @@ export const COMMANDS = {
   runRevert:              "payroll.run.revert",
   runReject:              "payroll.run.reject",
   runFailStuck:           "payroll.run.fail_stuck",
+  // M9: bank success file for a run in export-only ledger mode (tenant without Finance).
+  runBankConfirmation:    "payroll.run.bank_confirmation",
   loanCreate:             "payroll.loan.create",
   loanDisburse:           "payroll.loan.disburse",
   taxDeclarationCreate:   "payroll.tax_declaration.create",

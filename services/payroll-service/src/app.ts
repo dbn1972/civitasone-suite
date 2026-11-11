@@ -28,6 +28,7 @@ import { bankTransferRoutes } from "./modules/bank-transfer/routes.js";
 import { sponsorConfigRoutes } from "./modules/sponsor-config/routes.js";
 import { openingYtdRoutes } from "./modules/opening-ytd/routes.js";
 import { nachReturnRoutes } from "./modules/nach-return/routes.js";
+import { ledgerExportRoutes } from "./modules/ledger-export/routes.js";
 import { disbursementTransferRoutes } from "./modules/disbursement-transfers/routes.js";
 import { nachRoutes } from "./modules/nach/routes.js";
 import { fnfRoutes } from "./modules/fnf/routes.js";
@@ -113,6 +114,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(sponsorConfigRoutes);
   await app.register(openingYtdRoutes);
   await app.register(nachReturnRoutes);
+  await app.register(ledgerExportRoutes);
   await app.register(disbursementTransferRoutes);
   await app.register(nachRoutes);
   await app.register(fnfRoutes);

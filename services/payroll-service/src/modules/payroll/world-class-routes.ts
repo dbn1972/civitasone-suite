@@ -302,12 +302,13 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       SELECT protected_net_floor_minor, updated_at, salary_revision_second_approver,
              subsistence_initial_pct_bps, subsistence_review_after_days,
              subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
-             flex_election_maker_checker, max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live
+             flex_election_maker_checker, max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live,
+             ledger_mode_override
       FROM payroll.payroll_settings
       WHERE tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
     `))) as unknown as Array<{
-      flex_election_maker_checker: boolean; max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null;
+      flex_election_maker_checker: boolean; max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null; ledger_mode_override: string | null;
       protected_net_floor_minor: string; updated_at: string; salary_revision_second_approver: boolean;
       subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
       subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
@@ -330,6 +331,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       maxDeductionShareBps: s ? Number(s.max_deduction_share_bps) : 5000,
       deductionCapApplies: s ? s.deduction_cap_applies !== false : true,
       payrollGoLiveDate: s?.go_live ?? null,
+      // M9: null = derived from whether the tenant has Finance (see GET /v1/payroll/ledger-mode).
+      ledgerModeOverride: s?.ledger_mode_override ?? null,
     });
   });
 

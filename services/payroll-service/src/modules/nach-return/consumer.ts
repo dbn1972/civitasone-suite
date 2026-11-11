@@ -8,6 +8,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { nachReturnFiles, nachReturnRecords } from "./schema.js";
 import { applyNachReturnToTransfers } from "../disbursement-transfers/ledger.js";
+import { resolveLedgerMode } from "../ledger-export/mode.js";
+import { markSlipsPaidFromSettledTransfersTx } from "../ledger-export/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -30,6 +32,8 @@ interface NachReturnPayload {
 export function registerNachReturnConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.nachReturnProcess, async (msg) => {
     const payload = msg.payload as NachReturnPayload;
+    // M9: in export-only ledger mode (no finance.payment.made will come) a credited NACH line marks its slip paid.
+    const ledgerMode = await resolveLedgerMode(msg.tenantId);
 
     await db.transaction(async (tx) => {
       // Idempotency check
@@ -90,6 +94,20 @@ export function registerNachReturnConsumers(queue: Queue): void {
           reasonText: r.reasonText,
         })),
       });
+
+      if (ledgerMode === "export") {
+        const paid = await markSlipsPaidFromSettledTransfersTx(tx, { tenantId: msg.tenantId, actorId: msg.actorId, runId: payload.runId });
+        if (paid.length > 0) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "payroll", action: "slips_marked_paid", resourceType: "payroll_run", resourceId: payload.runId, outcome: "success",
+              detail: { source: "nach_return", fileReference: payload.fileReference ?? null, slipsMarkedPaid: paid.length, slipIds: paid.slice(0, 200) },
+            },
+          });
+        }
+      }
 
       // Emit nach_return.processed event
       await enqueue(tx, {
