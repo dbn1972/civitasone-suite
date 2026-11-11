@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/module_gating.dart';
 import '../../core/providers.dart';
 
 /// HR Dashboard for employee.
@@ -344,9 +345,14 @@ class _HrDashboardScreenState extends ConsumerState<HrDashboardScreen> {
         route: '/hr/payslips',
       ),
     ];
+    // M2/M7: the Payslip shortcut (and any other route of a disabled module) is
+    // hidden when the tenant has no Payroll. Unknown list = unchanged.
+    final enabledModules = ref.watch(enabledModulesProvider).valueOrNull;
+    final visibleActions =
+        actions.where((a) => isRouteAllowed(enabledModules, a.route)).toList();
 
     return Column(
-      children: actions.map((a) {
+      children: visibleActions.map((a) {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
