@@ -1209,7 +1209,7 @@ export class SqsQueue implements Queue {
               correlationId: msg.correlationId,
               traceparent: msg.traceparent,
             });
-            await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
+            await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope", { msg, error: `invalid_envelope: ${parsed.error}` });
             // G-ASYNC-1: still attributable to a command if the envelope at
             // least carries messageId/tenantId despite failing validation.
             // FF-01 I2: record it BEFORE deleting the message.
@@ -1241,7 +1241,7 @@ export class SqsQueue implements Queue {
                 incrementConsumerError(this.service, topic);
                 captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
                 this.logHandlerError(topic, msg, receiveCount, err);
-                await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
+                await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error", { msg, error: err });
                 // FF-01 I2: the result must be durable BEFORE the message is
                 // removed, so a lost outcome can never hide behind an
                 // already-deleted message.
@@ -1271,7 +1271,7 @@ export class SqsQueue implements Queue {
           // message stops looping invisibly. (Native SQS RedrivePolicy also does
           // this; this is the app-level safety net for parity in LocalStack.)
           if (receiveCount >= this.maxReceiveCount) {
-            await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded");
+            await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded", { msg, error: lastError });
             // FF-01 I2: record the 'failed' result BEFORE deleting the message.
             await this.emitOutcome(topic, {
               messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "failed",
@@ -1350,15 +1350,23 @@ export class SqsQueue implements Queue {
     );
   }
 
-  private async routeToDlq(topic: string, body: string, reason: string): Promise<void> {
+  private async routeToDlq(
+    topic: string,
+    body: string,
+    reason: string,
+    ctx?: { msg?: CommandEnvelope | null; error?: unknown },
+  ): Promise<void> {
     try {
       const dlqUrl = await this.getOrCreateDlq(topic);
+      // The last handler error, so an operator reading the DLQ sees WHY and not just "max_receive_count_exceeded".
+      const lastError = dlqErrorText(ctx?.error);
       await this.client.send(new SendMessageCommand({
         QueueUrl: dlqUrl,
         MessageBody: body,
         MessageAttributes: {
           dlqReason: { DataType: "String", StringValue: reason },
           originTopic: { DataType: "String", StringValue: topic },
+          ...(lastError ? { dlqLastError: { DataType: "String", StringValue: lastError } } : {}),
         },
       }));
       // OPS-1 / PERF-004: DLQ routing is observable (metric + structured log),
@@ -1366,7 +1374,10 @@ export class SqsQueue implements Queue {
       incrementDlqMessage(topic, reason);
       // eslint-disable-next-line no-console -- structured operational error log
       console.error(
-        JSON.stringify({ level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason }),
+        JSON.stringify({
+          level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason,
+          messageId: ctx?.msg?.messageId, correlationId: ctx?.msg?.correlationId,
+        }),
       );
     } catch (err) {
       this.logHandlerError(topic, null, 0, err);
@@ -1378,6 +1389,26 @@ export class SqsQueue implements Queue {
       await this.client.send(new DeleteMessageCommand({ QueueUrl: url, ReceiptHandle: receiptHandle }));
     } catch { /* best-effort */ }
   }
+}
+
+/** Max length of the last-error text attached to a dead-lettered message. */
+export const DLQ_LAST_ERROR_MAX_CHARS = 256;
+
+/**
+ * Last handler error as a short, personal-data-free string for the DLQ `dlqLastError` attribute: the first line only
+ * (no stack), e-mail addresses and long digit runs (account / Aadhaar / phone / PAN-like numbers) masked, then truncated.
+ * Returns undefined when there is no error.
+ */
+export function dlqErrorText(err: unknown): string | undefined {
+  if (err === undefined || err === null) return undefined;
+  const raw = err instanceof Error ? `${err.name !== "Error" ? `${err.name}: ` : ""}${err.message}` : String(err);
+  const text = (raw.split(/\r?\n/)[0] ?? "")
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]")
+    .replace(/\b[A-Z]{5}\d{4}[A-Z]\b/g, "[id]")
+    .replace(/\d{9,}/g, "[num]")
+    .trim();
+  if (!text) return undefined;
+  return text.length > DLQ_LAST_ERROR_MAX_CHARS ? `${text.slice(0, DLQ_LAST_ERROR_MAX_CHARS - 1)}…` : text;
 }
 
 /**
