@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -153,7 +153,7 @@ export function registerVigilanceConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const action = await repo.findActionByIdTx(tx, p.actionId, p.tenantId);
       if (!action) throw new Error(`vigilance action ${p.actionId} not found`);
-      if (action.status !== "proposed") throw new Error(`action ${p.actionId} already decided`);
+      if (action.status !== "proposed") throw new NonRetryableError(`action ${p.actionId} already decided`);
       // Maker-checker: the deciding authority must differ from the proposer.
       assertDifferentActor(action.proposedBy, msg.actorId, "vigilance action");
       const n = await repo.updateActionVersioned(tx, p.actionId, p.tenantId, action.version ?? 1, {

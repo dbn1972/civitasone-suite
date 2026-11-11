@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -121,7 +121,7 @@ export function registerRiskRegisterConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const acc = await repo.findAcceptanceByIdTx(tx, p.acceptanceId, p.tenantId);
       if (!acc) throw new Error(`risk acceptance ${p.acceptanceId} not found`);
-      if (acc.status !== "proposed") throw new Error(`acceptance ${p.acceptanceId} already decided`);
+      if (acc.status !== "proposed") throw new NonRetryableError(`acceptance ${p.acceptanceId} already decided`);
       assertDifferentActor(acc.requestedBy, msg.actorId, "risk acceptance");
       const n = await repo.updateAcceptanceVersioned(tx, p.acceptanceId, p.tenantId, acc.version ?? 1, {
         status: p.decision, remarks: p.remarks ?? null, decidedBy: msg.actorId, decidedAt: new Date(),

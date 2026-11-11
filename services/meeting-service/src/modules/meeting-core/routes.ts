@@ -54,7 +54,7 @@ import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, MEETING_ADMIN_ROLES, allowedTargets, canTransition, isMeetingState } from "./domain.js";
+import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES, MEETING_ADMIN_ROLES, allowedTargets, canTransition, isMeetingState, validateQuorumForStart } from "./domain.js";
 import { httpError } from "../../shared/context.js";
 import {
   createMeetingSchema,
@@ -320,12 +320,21 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     const body = transitionMeetingSchema.parse(req.body);
     // UAT J14 / D9: refuse an edge the state machine does not have HERE (422 with
     // the allowed targets), instead of answering 202 for a command the consumer
-    // can only dead-letter. Data guards (agenda, quorum, notice) stay in the
-    // consumer, which re-checks everything.
+    // can only dead-letter. The consumer re-checks everything.
     if (isMeetingState(meeting.status) && !canTransition(meeting.status, body.to)) {
       throw httpError("MEETING_INVALID_TRANSITION", `cannot transition meeting from "${meeting.status}" to "${body.to}" (allowed: ${allowedTargets(meeting.status).join(", ")})`, {
         from: meeting.status, to: body.to, allowed: allowedTargets(meeting.status),
       });
+    }
+    // Quorum is a pure function of the meeting row, so pre-check it with the SAME domain guard the
+    // consumer runs (no duplicated logic): starting without quorum answers 422 here instead of a
+    // silent 202 + dead-letter. adjourned → in_progress is skipped: the consumer re-evaluates
+    // quorum LIVE from attendance (policy quorum.recheck_on_resume), which the stored flag cannot
+    // predict. The consumer still re-checks everything (state can change before it runs).
+    // Agenda/notice guards (draft → scheduled) need a count + tenant-policy read that no repo
+    // function exposes to the route, so they stay consumer-only.
+    if (body.to === "in_progress" && meeting.status !== "adjourned") {
+      validateQuorumForStart({ now: new Date(), quorumEstablished: meeting.quorumEstablished });
     }
     const accepted = await commands.publishMeetingTransition(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });

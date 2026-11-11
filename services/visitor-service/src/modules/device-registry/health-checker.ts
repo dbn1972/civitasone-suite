@@ -23,7 +23,7 @@
  */
 import { SYSTEM_ACTOR_ID, stableUuid } from "@civitasone/outbox";
 import { pino } from "pino";
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
@@ -36,6 +36,22 @@ import { OFFLINE_ALERT_DELAY_MS, HEARTBEAT_TTL_SECONDS } from "./domain.js";
 import type { LocationHealthSummary } from "./repo.js";
 
 const log = pino({ name: "device-health-checker" });
+
+/**
+ * Columns the checker reads. The encrypted token columns (device_token_hash / old_token_hash) are
+ * deliberately EXCLUDED: selecting them decrypts every row, and a single undecryptable row (tampered /
+ * wrong key / keyring gap) would throw PiiDecryptError and abort the cycle for every tenant.
+ */
+const {
+  deviceTokenHash: _omitTokenHash,
+  oldTokenHash: _omitOldTokenHash,
+  ...HEALTH_CHECK_COLUMNS
+} = getTableColumns(devices);
+void _omitTokenHash;
+void _omitOldTokenHash;
+
+/** A device row as the health checker sees it (no encrypted credential columns). */
+type HealthDevice = Omit<typeof devices.$inferSelect, "deviceTokenHash" | "oldTokenHash">;
 
 /** Interval between health-checker runs (30 seconds). */
 const CHECK_INTERVAL_MS = 30_000;
@@ -91,7 +107,7 @@ export async function runHealthCheck(): Promise<void> {
   // FORCE RLS as visitor_svc returns zero rows, so this worker would never see
   // any device and never flag one offline.
   const activeDevices = await scannerDb
-    .select()
+    .select(HEALTH_CHECK_COLUMNS)
     .from(devices)
     .where(eq(devices.status, "active"));
 
@@ -116,7 +132,7 @@ export async function runHealthCheck(): Promise<void> {
  */
 async function processTenantsDevices(
   tenantId: string,
-  tenantDevices: Array<typeof devices.$inferSelect>,
+  tenantDevices: HealthDevice[],
 ): Promise<void> {
   const now = new Date();
   const locationUpdates = new Map<string, typeof tenantDevices>();
@@ -158,7 +174,7 @@ async function processTenantsDevices(
  */
 async function transitionToOffline(
   tenantId: string,
-  device: typeof devices.$inferSelect,
+  device: HealthDevice,
   now: Date,
 ): Promise<void> {
   try {
@@ -205,7 +221,7 @@ async function transitionToOffline(
  */
 async function transitionToOnline(
   tenantId: string,
-  device: typeof devices.$inferSelect,
+  device: HealthDevice,
   now: Date,
 ): Promise<void> {
   try {
@@ -251,7 +267,7 @@ async function transitionToOnline(
  */
 export async function checkOfflineAlert(
   tenantId: string,
-  device: typeof devices.$inferSelect,
+  device: HealthDevice,
   now: Date,
 ): Promise<void> {
   if (!device.lastSeenAt) return; // Never seen — skip alert (device may not have sent first heartbeat)
@@ -316,7 +332,7 @@ export async function checkOfflineAlert(
 async function updateLocationHealthCache(
   tenantId: string,
   locationId: string,
-  locationDevices: Array<typeof devices.$inferSelect>,
+  locationDevices: HealthDevice[],
 ): Promise<void> {
   const activeDevices = locationDevices.filter((d) => d.status === "active");
   const onlineDevices = activeDevices.filter((d) => d.online);
