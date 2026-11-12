@@ -26,6 +26,7 @@ import { cache } from "../../shared/infra.js";
 import { agendaItems, type AgendaItemRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
 import { computeSubmissionDeadline, isPastSubmissionDeadline, type AgendaConfig } from "./domain.js";
+import { getPolicyNumber } from "../config-registry/policy.js";
 
 /** Cache resource segments (second-to-last key component). */
 const RESOURCE_AGENDA = "agenda";
@@ -73,6 +74,18 @@ export interface MeetingStatus {
   id: string;
   status: string;
   scheduledAt: Date | null;
+  committeeId?: string | null;
+}
+
+/**
+ * The agenda notice period (days before the meeting that proposals close) for a meeting, resolved
+ * the same way the consumer's re-check resolves it: the tenant's `meeting_policy`
+ * `agenda.submission_deadline_days`, default 7. `committeeId` is accepted so a per-committee override
+ * (#2506 `getAgendaNotice`) can be swapped in HERE, in the one place both the route and the worker's
+ * route-side twin read it.
+ */
+export async function getSubmissionDeadlineDays(tenantId: string, _committeeId?: string | null): Promise<number> {
+  return scopedRead((tx) => getPolicyNumber(tx, tenantId, "agenda.submission_deadline_days"));
 }
 
 /**
@@ -82,7 +95,7 @@ export interface MeetingStatus {
  */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
   const rows = await scopedRead((tx) => tx
-    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt })
+    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt, committeeId: meetings.committeeId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1));

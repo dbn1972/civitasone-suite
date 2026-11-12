@@ -15,6 +15,7 @@
 import { browserFetch } from "@/lib/api/browserClient";
 import { toHumanError, type MessageKind } from "@/lib/messages";
 import { UserFacingError } from "@/lib/userFacingError";
+import { AgendaSubmitError, readAgendaRefusal } from "./agendaErrors";
 import type {
   ActiveVote,
   CommitteeSummary,
@@ -210,11 +211,29 @@ export async function transitionMeeting(
 export const AGENDA_OUTCOME_TYPES = ["decision", "discussion", "information", "ratification"] as const;
 export type AgendaOutcomeType = (typeof AGENDA_OUTCOME_TYPES)[number];
 
+async function postAgenda(path: string, body: unknown): Promise<void> {
+  const res = await browserFetch(path, { method: "POST", body: JSON.stringify(body) });
+  if (res.ok) return;
+  // 422 MEETING_PAST_DEADLINE / MEETING_AGENDA_LOCKED are explained, not generic "couldn't save".
+  const refusal = await readAgendaRefusal(res);
+  if (refusal) throw new AgendaSubmitError(refusal.code, readError("save"), refusal.deadline);
+  throw new UserFacingError(readError("save"));
+}
+
 export async function addAgendaItem(
   meetingId: string,
   input: { title: string; outcomeType: AgendaOutcomeType },
 ): Promise<void> {
-  await send("POST", `v1/meeting/${meetingId}/agenda`, { body: input });
+  await postAgenda(`v1/meeting/${meetingId}/agenda`, input);
+}
+
+/** Chair-approved late inclusion: files the item past the submission cut-off, with the recorded reason. */
+export async function addLateAgendaItem(
+  meetingId: string,
+  input: { title: string; outcomeType: AgendaOutcomeType },
+  reason: string,
+): Promise<void> {
+  await postAgenda(`v1/meeting/${meetingId}/agenda/late`, { ...input, reason });
 }
 
 // ─── Attendance ──────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import {
   getSessionRoles,
   hasAnyRole,
   MEETING_TRANSITION_ROLES,
+  MEETING_LATE_AGENDA_APPROVAL_ROLES,
   MEETING_CHECKIN_ROLES,
   MEETING_PARTICIPANT_WRITE_ROLES,
   MEETING_CAST_ROLES,
@@ -102,6 +103,7 @@ export default async function MeetingConsolePage(
     canCast: hasAnyRole(sessionRoles, MEETING_CAST_ROLES),
     canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
     canManageParticipants: hasAnyRole(sessionRoles, MEETING_PARTICIPANT_WRITE_ROLES),
+    canApproveLateAgenda: hasAnyRole(sessionRoles, MEETING_LATE_AGENDA_APPROVAL_ROLES),
     // The meeting roles are not on hrms-service's directory list; derive which directory (if any) they can search.
     employeeDirectory: employeeDirectoryForRoles(sessionRoles),
   };

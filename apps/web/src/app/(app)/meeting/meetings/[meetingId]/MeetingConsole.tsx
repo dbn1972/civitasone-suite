@@ -1,10 +1,11 @@
 "use client";
 
 import { actionErrorText } from "../../_data/errorText";
+import { asAgendaSubmitError } from "../../_data/agendaErrors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import type { HumanError } from "@/lib/messages";
@@ -36,6 +37,7 @@ import {
   initiateVote,
   transitionMeeting,
   addAgendaItem,
+  addLateAgendaItem,
   addParticipants,
   listCommitteeMembers,
   listParticipantEmployeeIds,
@@ -56,6 +58,8 @@ type ViewerPermissions = {
   canConclude: boolean;
   /** M2: may add participants (mirrors meeting-service participant WRITE_ROLES). */
   canManageParticipants?: boolean;
+  /** May approve an agenda item past the submission cut-off (chair / admins). Mirrors agenda/routes.ts LATE_APPROVAL_ROLES. */
+  canApproveLateAgenda?: boolean;
   /** Which employee directory the viewer's roles can search; "none" hides the single-add picker. */
   employeeDirectory?: "hrms" | "payroll" | "none";
 };
@@ -367,6 +371,16 @@ export function MeetingConsole({
   // scheduled; there was no screen to add one.
   const [agendaTitle, setAgendaTitle] = useState("");
   const [agendaOutcome, setAgendaOutcome] = useState<AgendaOutcomeType>("discussion");
+  // The service refuses an item inside the notice window synchronously (422 MEETING_PAST_DEADLINE with the
+  // cut-off); the chair may then file it as a late inclusion with a recorded reason.
+  const [pastDeadline, setPastDeadline] = useState<{ deadline: string | null } | null>(null);
+  const [lateReason, setLateReason] = useState("");
+  const locale = useLocale();
+  function formatDeadline(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(d);
+  }
   async function onAddAgenda(e: React.FormEvent) {
     e.preventDefault();
     const title = agendaTitle.trim();
@@ -374,13 +388,38 @@ export function MeetingConsole({
     setBusy("agenda:add");
     setError(null);
     setToast(null);
+    setPastDeadline(null);
     try {
       await addAgendaItem(meeting.id, { title, outcomeType: agendaOutcome });
       setAgendaTitle("");
       setToast(tl("agendaAdded"));
       router.refresh();
     } catch (err) {
-      setError(actionErrorText(err));
+      const refused = asAgendaSubmitError(err);
+      if (refused?.code === "MEETING_PAST_DEADLINE") setPastDeadline({ deadline: refused.deadline });
+      else if (refused?.code === "MEETING_AGENDA_LOCKED") setError(tl("agendaLocked"));
+      else setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function onAddLateAgenda() {
+    const title = agendaTitle.trim();
+    const reason = lateReason.trim();
+    if (!title || reason.length < 10) return;
+    setBusy("agenda:late");
+    setError(null);
+    setToast(null);
+    try {
+      await addLateAgendaItem(meeting.id, { title, outcomeType: agendaOutcome }, reason);
+      setAgendaTitle("");
+      setLateReason("");
+      setPastDeadline(null);
+      setToast(tl("agendaLateAdded"));
+      router.refresh();
+    } catch (err) {
+      const refused = asAgendaSubmitError(err);
+      setError(refused?.code === "MEETING_AGENDA_LOCKED" ? tl("agendaLocked") : actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -599,6 +638,27 @@ export function MeetingConsole({
               {busy === "agenda:add" ? "…" : tl("addAgenda")}
             </button>
           </form>
+        )}
+        {pastDeadline && (
+          <div id="mtg-agenda-past-deadline" role="alert" style={{ marginTop: 12, fontSize: 13, color: "var(--ink2)" }}>
+            <p style={{ margin: 0, fontWeight: 600 }}>
+              {pastDeadline.deadline ? tl("agendaPastDeadline", { date: formatDeadline(pastDeadline.deadline) }) : tl("agendaPastDeadlineNoDate")}
+            </p>
+            {viewerPermissions.canApproveLateAgenda ? (
+              <div style={{ marginTop: 8 }}>
+                <label htmlFor="mtg-agenda-late-reason" style={labelStyle}>{tl("agendaLateReasonLabel")}</label>
+                <textarea id="mtg-agenda-late-reason" style={fieldStyle} rows={2} maxLength={1000} value={lateReason}
+                  onChange={(e) => setLateReason(e.target.value)} />
+                <button type="button" className="btn" style={{ marginTop: 8 }}
+                  disabled={busy !== null || agendaTitle.trim() === "" || lateReason.trim().length < 10}
+                  onClick={() => void onAddLateAgenda()}>
+                  {busy === "agenda:late" ? "…" : tl("agendaLateSubmit")}
+                </button>
+              </div>
+            ) : (
+              <p style={{ margin: "6px 0 0" }}>{tl("agendaPastDeadlineAskChair")}</p>
+            )}
+          </div>
         )}
       </Card>
 

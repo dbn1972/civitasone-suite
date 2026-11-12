@@ -20,11 +20,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, gt, asc, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
-import { httpError } from "../../shared/context.js";
+import { httpError, HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { agendaItems } from "./schema.js";
 import { getPolicyNumber } from "../config-registry/policy.js";
@@ -39,6 +41,8 @@ import {
   buildCarryForward,
   type ReorderEntry,
 } from "./domain.js";
+
+const log = pino({ name: "meeting-agenda-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 // ─── Message payload contracts (mirror topics.ts COMMANDS.agenda*) ───────────
 
@@ -55,6 +59,8 @@ interface AgendaSubmitPayload {
   confidentialityLevel?: string;
   fileReference?: string;
   linkedDecisionIds?: string[];
+  /** Set only by the chair-gated POST .../agenda/late route: waives the submission cut-off. */
+  lateApproval?: { approvedBy: string; reason: string };
 }
 
 interface AgendaPatch {
@@ -273,7 +279,26 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
     // former hardcoded literals (7 days / 15 min) when the tenant has configured nothing.
     const submissionDeadlineDays = await getPolicyNumber(tx, msg.tenantId, "agenda.submission_deadline_days");
     const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
-    assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date(), config: { submissionDeadlineDays } });
+    try {
+      assertSubmissionAllowed({
+        scheduledAt: meeting.scheduledAt,
+        now: new Date(),
+        isChairpersonApproved: p.lateApproval != null,
+        config: { submissionDeadlineDays },
+      });
+    } catch (err) {
+      // The route refuses this synchronously (422), so reaching here means the meeting moved or the
+      // policy changed between publish and consume. A permanent business refusal: retrying cannot
+      // succeed, so mark it non-retryable (straight to the DLQ) and leave a trace in the log.
+      if (err instanceof HttpError && err.code === "MEETING_PAST_DEADLINE") {
+        log.warn(
+          { tenantId: msg.tenantId, meetingId: p.meetingId, agendaItemId: p.agendaItemId, actorId: msg.actorId, deadline: err.details?.deadline },
+          "agenda item refused at consume time: submission deadline has passed — not retrying",
+        );
+        (err as HttpError & { nonRetryable?: boolean }).nonRetryable = true;
+      }
+      throw err;
+    }
 
     await insertOrderedAgendaItem(tx, {
       id: p.agendaItemId,
@@ -304,7 +329,10 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
       correlationId: msg.correlationId,
       payload: { meetingId: p.meetingId, agendaItemId: p.agendaItemId, outcomeType: p.outcomeType },
     });
-    await audit(tx, msg, "submit", "agenda_item", p.agendaItemId);
+    await audit(
+      tx, msg, p.lateApproval ? "submit_late_approved" : "submit", "agenda_item", p.agendaItemId, "success",
+      p.lateApproval ? { approvedBy: p.lateApproval.approvedBy, reason: p.lateApproval.reason } : undefined,
+    );
   });
   await invalidateAgenda(msg.tenantId, p.meetingId);
 }

@@ -53,6 +53,7 @@ export async function agendaItemSubmit(
   ctx: RequestContext,
   meetingId: string,
   body: AgendaItemSubmitInput,
+  lateApproval?: { approvedBy: string; reason: string },
 ): Promise<AgendaCommandAccepted> {
   const agendaItemId = randomUUID();
   await queue.publish(COMMANDS.agendaItemSubmit, {
@@ -62,7 +63,8 @@ export async function agendaItemSubmit(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: SCHEMA_VERSION,
-    payload: { agendaItemId, meetingId, tenantId: ctx.tenantId, ...body },
+    // `lateApproval` is only ever set by the chair-gated /agenda/late route.
+    payload: { agendaItemId, meetingId, tenantId: ctx.tenantId, ...body, ...(lateApproval ? { lateApproval } : {}) },
   });
   await invalidateAgenda(ctx.tenantId, meetingId);
   return { id: agendaItemId, status: "accepted", correlationId: ctx.correlationId };

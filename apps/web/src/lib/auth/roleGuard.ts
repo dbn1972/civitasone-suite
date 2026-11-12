@@ -728,6 +728,13 @@ export const MEETING_TRANSITION_ROLES = [
   "super_admin",
   "admin",
 ];
+/** Approve an agenda item past the submission cut-off -- mirrors agenda/routes.ts LATE_APPROVAL_ROLES. */
+export const MEETING_LATE_AGENDA_APPROVAL_ROLES = [
+  "committee_chairperson",
+  "meeting_admin",
+  "tenant_admin",
+  "super_admin",
+];
 /** M2: add participants -- mirrors participant/routes.ts WRITE_ROLES. */
 export const MEETING_PARTICIPANT_WRITE_ROLES = [
   "meeting_admin",

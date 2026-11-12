@@ -37,6 +37,15 @@ export const agendaItemSubmitSchema = z.object({
 });
 export type AgendaItemSubmitInput = z.infer<typeof agendaItemSubmitSchema>;
 
+/**
+ * Late inclusion (Req 3.5): the same proposal, filed by someone who may approve it past the
+ * submission cut-off, with the recorded reason (kept in the audit event).
+ */
+export const agendaItemLateSubmitSchema = agendaItemSubmitSchema.extend({
+  reason: z.string().trim().min(10).max(1000),
+});
+export type AgendaItemLateSubmitInput = z.infer<typeof agendaItemLateSubmitSchema>;
+
 /** The fields of an agenda item that may be patched (Req 3.1, 3.2). */
 export const agendaItemPatchSchema = z
   .object({
