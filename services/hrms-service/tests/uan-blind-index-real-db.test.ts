@@ -25,7 +25,10 @@ import { registerBulkImportConsumers } from "../src/modules/bulk-import/consumer
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsBulkImportBatches, hrmsBulkImportRows } from "../src/modules/bulk-import/schema.js";
 import { uanBlindIndex } from "../src/shared/blind-index.js";
-import { backfillUanEncryption, parseArgs } from "../scripts/backfill-uan-encryption.js";
+import { backfillUanEncryption, parseArgs, applyRow, planRow, exitCodeFor, type RawRow } from "../scripts/backfill-uan-encryption.js";
+import { resetUanIndexReadyCache } from "../src/modules/employee/uan-lookup.js";
+import { encryptPii } from "../src/shared/pii-crypto.js";
+import { Writable } from "node:stream";
 
 registerEmployeeConsumers(queue);
 registerBulkImportConsumers(queue);
@@ -60,7 +63,7 @@ const raw = async (id: string, tenant = TENANT) => (await asTenant(tenant, (tx) 
 /** Make a row look like it did before migration 0268 / this PR: plaintext identifiers, no index. */
 const makeLegacy = (id: string, uan: string | null, pan: string | null = null, tenant = TENANT) => asTenant(tenant, (tx) => tx.execute(sql`
   UPDATE employee.hrms_employees SET uan_number = ${uan}, uan_bidx = NULL, pan = ${pan} WHERE id = ${id}::uuid`));
-const byUan = (uan: string, roles = ["hr_admin"], tenant = TENANT) => app.inject({ method: "GET", url: `/v1/hrms/employees/by-uan?uan=${uan}`, headers: hdr(roles, tenant) });
+const byUan = (uan: string, roles = ["hr_admin"], tenant = TENANT) => app.inject({ method: "POST", url: "/v1/hrms/employees/by-uan", headers: hdr(roles, tenant), payload: { uan } });
 
 beforeAll(async () => {
   app = await buildApp();
@@ -72,6 +75,7 @@ beforeAll(async () => {
   }
 });
 beforeEach(() => {
+  resetUanIndexReadyCache();
   delete process.env.HRMS_S8_BULK_IMPORT_ENABLED;
   delete process.env.HRMS_UAN_BLIND_INDEX_ENABLED;
 });
@@ -194,6 +198,7 @@ describe("backfill command", () => {
 
 describe("GET /v1/hrms/employees/by-uan", () => {
   it("flag off: 404", async () => {
+    resetUanIndexReadyCache();
     expect((await byUan(UANS[3]!)).statusCode).toBe(404);
   });
 
@@ -248,5 +253,86 @@ describe("bulk-import duplicate check through the index", () => {
     const res = await bulk([row("NEW-3", { uanNumber: UANS[5] })], "?dryRun=true");
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain("UAN");
+  });
+});
+
+describe("review fixes", () => {
+  it("the UAN never reaches the request log (POST body; query strings are dropped by the serializer)", async () => {
+    process.env.HRMS_UAN_BLIND_INDEX_ENABLED = "true";
+    const lines: string[] = [];
+    const sink = new Writable({ write(chunk, _enc, cb) { lines.push(String(chunk)); cb(); } });
+    const logged = await buildApp({ logStream: sink });
+    try {
+      const post = await logged.inject({ method: "POST", url: "/v1/hrms/employees/by-uan", headers: hdr(["hr_admin"]), payload: { uan: UANS[3] } });
+      expect(post.statusCode).toBe(200);
+      // a caller that still puts it in the query string (the route no longer exists, so 404) must not be logged either
+      await logged.inject({ method: "GET", url: `/v1/hrms/employees/by-uan?uan=${UANS[3]}`, headers: hdr(["hr_admin"]) });
+    } finally { await logged.close(); }
+    const out = lines.join("");
+    expect(out).toContain("/v1/hrms/employees/by-uan"); // requests were logged ...
+    expect(out).not.toContain(UANS[3]!); // ... without the value
+  });
+
+  it("audits every lookup (actor, tenant, hit or miss) and never the UAN", async () => {
+    process.env.HRMS_UAN_BLIND_INDEX_ENABLED = "true";
+    await byUan(UANS[3]!);
+    await byUan("999999999998");
+    const text = (await asTenant(TENANT, (tx) => tx.execute(sql`
+      SELECT to_jsonb(m)::text AS t FROM _outbox.messages m WHERE tenant_id = ${TENANT} AND payload::text LIKE '%employee_uan_lookup%' ORDER BY created_at`)) as unknown as Array<{ t: string }>).map((r) => r.t);
+    expect(text.length).toBeGreaterThanOrEqual(2);
+    expect(text.some((t) => t.includes('"hit": true') || t.includes('"hit":true'))).toBe(true);
+    expect(text.some((t) => t.includes('"hit": false') || t.includes('"hit":false'))).toBe(true);
+    expect(text.join("\n")).toContain(ACTOR);
+    for (const t of text) { expect(t).not.toContain(UANS[3]!); expect(t).not.toContain("999999999998"); }
+  });
+
+  it("a row indexed under a retired / unknown key id makes the tenant not ready (legacy path answers)", async () => {
+    process.env.HRMS_UAN_BLIND_INDEX_ENABLED = "true";
+    const id = await idOf("BF-5");
+    const good = (await raw(id))["uan_bidx"];
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_bidx = 'zz9.0000' WHERE id = ${id}::uuid`));
+    resetUanIndexReadyCache();
+    const { findEmployeesByUan } = await import("../src/modules/employee/uan-lookup.js");
+    expect((await runWithTenant(TENANT, () => findEmployeesByUan(TENANT, UANS[5]!))).via).toBe("scan");
+    expect((await runWithTenant(TENANT, () => findEmployeesByUan(TENANT, UANS[5]!))).matches.map((m) => m.employeeNo)).toContain("BF-5");
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_bidx = ${good} WHERE id = ${id}::uuid`));
+    resetUanIndexReadyCache();
+    expect((await runWithTenant(TENANT, () => findEmployeesByUan(TENANT, UANS[5]!))).via).toBe("index");
+  });
+
+  it("an empty-string uan_number counts as no UAN: it neither blocks readiness nor gets backfilled", async () => {
+    process.env.HRMS_UAN_BLIND_INDEX_ENABLED = "true";
+    const id = await idOf("BF-6");
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_number = '', uan_bidx = NULL WHERE id = ${id}::uuid`));
+    resetUanIndexReadyCache();
+    const { findEmployeesByUan } = await import("../src/modules/employee/uan-lookup.js");
+    expect((await runWithTenant(TENANT, () => findEmployeesByUan(TENANT, UANS[4]!))).via).toBe("index");
+    const rep = await backfillUanEncryption(parseArgs(["--apply", "--tenant", TENANT]));
+    expect(rep.totals.scanned).toBe(0);
+    expect(await raw(id)).toMatchObject({ uan_number: "", uan_bidx: null });
+  });
+
+  it("an index-only fill never indexes a UAN that changed since it was read (compare-and-set on uan_number)", async () => {
+    const id = await idOf("BF-4");
+    const sealedOld = encryptPii(UANS[4]!);
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_number = ${sealedOld}, uan_bidx = NULL WHERE id = ${id}::uuid`));
+    const stale = (await asTenant(TENANT, (tx) => tx.execute(sql`SELECT id, uan_number, pan, bank_account_no, bank_ifsc, uan_bidx FROM employee.hrms_employees WHERE id = ${id}::uuid`)) as unknown as RawRow[])[0]!;
+    const plan = planRow(stale, ["uan_number"], "k1", false);
+    expect(plan).toMatchObject({ seal: [], needsIndex: true });
+    // the UAN is edited between the read and the write
+    const sealedNew = encryptPii(UANS[6]!);
+    await asTenant(TENANT, (tx) => tx.execute(sql`UPDATE employee.hrms_employees SET uan_number = ${sealedNew}, uan_bidx = NULL WHERE id = ${id}::uuid`));
+    expect(await applyRow(TENANT, stale, plan)).toBe("conflict");
+    expect((await raw(id))["uan_bidx"]).toBeNull();
+    // a fresh run indexes the value that is there now
+    await backfillUanEncryption(parseArgs(["--apply", "--tenant", TENANT]));
+    expect((await raw(id))["uan_bidx"]).toBe(uanBlindIndex(TENANT, UANS[6]));
+  });
+
+  it("the command exits non-zero when anything failed or conflicted", () => {
+    const rep = (failed: number, conflicts: number) => ({ mode: "apply" as const, tenants: [], totals: { scanned: 0, sealed: 0, indexed: 0, reindexed: 0, conflicts, failed } });
+    expect(exitCodeFor(rep(0, 0))).toBe(0);
+    expect(exitCodeFor(rep(1, 0))).toBe(2);
+    expect(exitCodeFor(rep(0, 3))).toBe(2);
   });
 });

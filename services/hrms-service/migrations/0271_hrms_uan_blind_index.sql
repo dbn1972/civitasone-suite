@@ -9,7 +9,8 @@
 -- Additive and idempotent. The index is deliberately NOT unique: a UAN belongs to a person for life, so a re-hired
 -- person legitimately appears on two employee records of the same tenant; duplicate policy stays in the application.
 --
--- Rollback: DROP INDEX IF EXISTS employee.idx_hrms_employees_tenant_uan_bidx;
+-- Rollback: DROP INDEX IF EXISTS employee.idx_hrms_employees_uan_bidx_missing;
+--           DROP INDEX IF EXISTS employee.idx_hrms_employees_tenant_uan_bidx;
 --           ALTER TABLE employee.hrms_employees DROP COLUMN IF EXISTS uan_bidx;
 
 SET lock_timeout = '5s';
@@ -19,3 +20,8 @@ ALTER TABLE employee.hrms_employees ADD COLUMN IF NOT EXISTS uan_bidx text;
 CREATE INDEX IF NOT EXISTS idx_hrms_employees_tenant_uan_bidx
   ON employee.hrms_employees (tenant_id, uan_bidx)
   WHERE uan_bidx IS NOT NULL;
+
+-- Serves the per-tenant readiness check (EXISTS of a UAN without an index value) without scanning the tenant's rows.
+CREATE INDEX IF NOT EXISTS idx_hrms_employees_uan_bidx_missing
+  ON employee.hrms_employees (tenant_id)
+  WHERE uan_number IS NOT NULL AND uan_number <> '' AND uan_bidx IS NULL;

@@ -6,19 +6,39 @@
  * UAN also has an index value ("ready"); otherwise the caller gets the legacy decrypt-and-compare result, so running
  * the flag before the backfill (scripts/backfill-uan-encryption.ts) can never hide a duplicate.
  */
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { uanBlindIndexCandidates, normaliseUan } from "../../shared/blind-index.js";
+import { blindIndexKeys } from "../../shared/pii-crypto.js";
 import { hrmsEmployees } from "./schema.js";
 
 type Tx = Parameters<Parameters<typeof scopedRead>[0]>[0];
 
-/** True when no employee of the tenant has a UAN without an index value. */
+const READY_TTL_MS = 30_000;
+const readyUntil = new Map<string, number>();
+/** Test hook: forget cached readiness. */
+export function resetUanIndexReadyCache(): void { readyUntil.clear(); }
+
+/**
+ * True when every employee of the tenant that has a UAN (a non-empty one: an empty string counts as no UAN, like NULL)
+ * also has an index value written under a key id that is still in the keyring. A missing index, or one under a retired
+ * or unknown key id, makes the tenant "not ready" and the caller uses the legacy path. The check is an EXISTS served by
+ * partial indexes (migration 0271); a positive answer is cached for 30 s per tenant (writes always store the active key,
+ * so a ready tenant cannot become unready except by a key change, which needs a restart).
+ */
 export async function uanIndexReady(tx: Tx, tenantId: string): Promise<boolean> {
-  const rows = await tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
-    .where(and(eq(hrmsEmployees.tenantId, tenantId), isNotNull(hrmsEmployees.uanNumber), isNull(hrmsEmployees.uanBidx)))
-    .limit(1);
-  return rows.length === 0;
+  const now = Date.now();
+  if ((readyUntil.get(tenantId) ?? 0) > now) return true;
+  const kids = [...blindIndexKeys().keys.keys()];
+  const res = await tx.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM employee.hrms_employees
+       WHERE tenant_id = ${tenantId}::uuid AND uan_number IS NOT NULL AND uan_number <> ''
+         AND (uan_bidx IS NULL OR split_part(uan_bidx, '.', 1) NOT IN (${sql.join(kids.map((k) => sql`${k}`), sql`, `)}))
+    ) AS not_ready`);
+  const notReady = (res as unknown as Array<{ not_ready: boolean }>)[0]?.not_ready === true;
+  if (!notReady) readyUntil.set(tenantId, now + READY_TTL_MS);
+  return !notReady;
 }
 
 export interface UanMatch { id: string; employeeNo: string; fullName: string; status: string }

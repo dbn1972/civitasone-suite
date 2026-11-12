@@ -78,7 +78,7 @@ export function parseArgs(argv: string[]): BackfillArgs {
   return a;
 }
 
-type RawRow = Record<string, string | null> & { id: string; uan_bidx: string | null };
+export type RawRow = Record<string, string | null> & { id: string; uan_bidx: string | null };
 
 /** What a single row needs, without touching the database. Pure; unit tested. */
 export function planRow(row: RawRow, cols: readonly SealableColumn[], activeKeyId: string, reindex: boolean): { seal: SealableColumn[]; needsIndex: boolean; reindexing: boolean } {
@@ -106,7 +106,7 @@ async function selectBatch(tenantId: string, cols: readonly SealableColumn[], af
   }));
 }
 
-async function applyRow(tenantId: string, row: RawRow, plan: ReturnType<typeof planRow>): Promise<"ok" | "conflict"> {
+export async function applyRow(tenantId: string, row: RawRow, plan: ReturnType<typeof planRow>): Promise<"ok" | "conflict"> {
   const sets: ReturnType<typeof sql>[] = [];
   const guards: ReturnType<typeof sql>[] = [];
   for (const c of plan.seal) {
@@ -117,6 +117,9 @@ async function applyRow(tenantId: string, row: RawRow, plan: ReturnType<typeof p
     const clear = row["uan_number"] != null && isEncrypted(row["uan_number"]) ? decryptPii(row["uan_number"]) : row["uan_number"];
     sets.push(sql`uan_bidx = ${uanBlindIndex(tenantId, clear)}`);
     if (row.uan_bidx == null) guards.push(sql`uan_bidx IS NULL`); else guards.push(sql`uan_bidx = ${row.uan_bidx}`);
+    // Index-only fill: pin the stored UAN we computed the index from, so a concurrent change of the UAN is a conflict,
+    // never an index for a value that is no longer there. (When the UAN is sealed by this same update it is pinned above.)
+    if (!plan.seal.includes("uan_number")) guards.push(sql`uan_number = ${row["uan_number"]!}`);
     // If the UAN is sealed by this very update, the guard above already pins the plaintext we indexed.
   }
   if (sets.length === 0) return "ok";
@@ -126,6 +129,11 @@ async function applyRow(tenantId: string, row: RawRow, plan: ReturnType<typeof p
        WHERE id = ${row.id}::uuid AND tenant_id = ${tenantId}::uuid AND ${sql.join(guards, sql` AND `)}
        RETURNING id`)));
   return (res as unknown as unknown[]).length === 1 ? "ok" : "conflict";
+}
+
+/** Non-zero when anything failed or conflicted, so a wrapper / cron notices. */
+export function exitCodeFor(r: BackfillReport): number {
+  return r.totals.failed > 0 || r.totals.conflicts > 0 ? 2 : 0;
 }
 
 export async function backfillUanEncryption(args: BackfillArgs): Promise<BackfillReport> {
@@ -175,7 +183,9 @@ export async function backfillUanEncryption(args: BackfillArgs): Promise<Backfil
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   try {
-    console.log(JSON.stringify(await backfillUanEncryption(args)));
+    const report = await backfillUanEncryption(args);
+    console.log(JSON.stringify(report));
+    process.exitCode = exitCodeFor(report);
   } finally {
     await sqlClient.end();
   }
