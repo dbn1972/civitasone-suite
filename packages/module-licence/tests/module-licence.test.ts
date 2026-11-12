@@ -164,11 +164,20 @@ describe("enforce", () => {
     expect(await licence.check(A, "finance", "http", "t")).toMatchObject({ allowed: false, outcome: "deny", reason: "tenant_not_configured" });
   });
 
-  it("fail closed: missing or malformed tenant is refused without any fetch", async () => {
+  it("missing or malformed tenant: passes through as off (no fetch), logged + counted; refused only when enforce-for-all", async () => {
     const src = fakeSource({});
-    const { licence } = fixture(src);
-    expect((await licence.check(undefined, "finance", "http", "t")).allowed).toBe(false);
-    expect((await licence.check("../../etc", "finance", "http", "t")).allowed).toBe(false);
+    const { licence, warns } = fixture(src);
+    for (const t of [undefined, "../../etc"]) {
+      expect(await licence.check(t, "finance", "event", "x")).toMatchObject({ allowed: true, outcome: "allow", reason: "no_tenant_treated_as_off" });
+    }
+    expect(warns.filter((w) => w.event === "module_licence_no_tenant")).toHaveLength(2);
+    expect(getModuleLicenceDecisionCount("finance", "finance", "event", "no_tenant")).toBe(2);
+    const handler = vi.fn(async () => {});
+    await licence.guardConsumer({ topic: "t", module: "finance" }, handler)({ messageId: "m" });
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    const strict = createModuleLicence({ service: "finance", source: src, enabled: () => true, enforceAll: () => true, log: { warn: () => {} } });
+    expect(await strict.check(undefined, "finance", "http", "t")).toMatchObject({ allowed: false, outcome: "deny", reason: "no_tenant" });
     expect(src.calls).toEqual([]);
   });
 
@@ -328,10 +337,38 @@ describe("guardSubscriptions", () => {
     expect(h).toHaveBeenCalledTimes(1);
   });
 
+  it("every non-subscribe property is returned untouched (same identity), so mocks and publish behave as before", () => {
+    const { licence } = fixture(fakeSource({}), { enabled: false });
+    const publish = vi.fn();
+    const q = Object.assign(new FakeQueue(), { publish });
+    const g = guardSubscriptions(q, licence, { t: "finance" });
+    expect(g.publish).toBe(publish);
+    expect(typeof (g.publish as unknown as { mockClear: unknown }).mockClear).toBe("function");
+    g.publish("x");
+    expect(publish).toHaveBeenCalledWith("x");
+    expect(g.start).toBe(q.start);
+  });
+
   it("a handler error still propagates (so the queue's own retry/DLQ handling is unchanged)", async () => {
     const { licence } = fixture(fakeSource({ [A]: snap(["finance"], "enforce") }));
     const q = new FakeQueue();
     guardSubscriptions(q, licence, { t: "finance" }).subscribe("t", async () => { throw new Error("boom"); });
     await expect(q.handlers.get("t")!({ tenantId: A })).rejects.toThrow("boom");
+  });
+});
+
+describe("shared breaker", () => {
+  it("tenant-specific 4xx answers never open the breaker for other tenants; real outages do", async () => {
+    let status = 404;
+    const fetchImpl = (async (url: string) => {
+      if (String(url).includes(B)) return { ok: false, status, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({ configured: true, mode: "enforce", data: [{ name: "finance" }] }) };
+    }) as unknown as typeof fetch;
+    const src = compositionProjectionSource({ caller: "bk", fetchImpl });
+    for (let i = 0; i < 6; i++) await expect(src.load(B)).rejects.toThrow(/404/);
+    expect((await src.load(A)).modules?.has("finance")).toBe(true); // breaker still closed
+    status = 503;
+    for (let i = 0; i < 3; i++) await expect(src.load(B)).rejects.toThrow();
+    await expect(src.load(A)).rejects.toThrow(/open/); // genuine failures do open it, for everyone, once
   });
 });

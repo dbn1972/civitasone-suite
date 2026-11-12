@@ -76,6 +76,17 @@ export const TENANT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 
 // ── source: the composition projection ──────────────────────────────────────────────────────────────────────
 
+/**
+ * A 4xx from admin-service about ONE tenant (unknown tenant, bad credentials for it). It still fails the load (callers
+ * fail closed) but says nothing about admin-service's health, so it must not count toward the shared breaker.
+ */
+class ClientStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`admin-service ${status}`);
+    this.name = "ClientStatusError";
+  }
+}
+
 export interface CompositionSourceOptions {
   /** Value of x-internal-caller, e.g. "payroll-service-licence". */
   caller: string;
@@ -84,7 +95,16 @@ export interface CompositionSourceOptions {
 }
 
 export function compositionProjectionSource(opts: CompositionSourceOptions): ModuleSource {
-  const breaker = new CircuitBreaker({ name: `module-licence-${opts.caller}`, failureThreshold: 3, recoveryMs: 10_000 });
+  // ONE breaker per source (= per service process) on purpose: it tracks the health of admin-service, which is shared by
+  // all tenants, so an outage should open it once rather than after N failures per tenant (which would multiply load on
+  // a struggling admin-service). Tenant-specific 4xx answers do not count (countsAsFailure), so one bad tenant cannot open
+  // it for the others; only network errors, timeouts and 5xx/408/429 do.
+  const breaker = new CircuitBreaker({
+    name: `module-licence-${opts.caller}`,
+    failureThreshold: 3,
+    recoveryMs: 10_000,
+    countsAsFailure: (err) => !(err instanceof ClientStatusError),
+  });
   return {
     async load(tenantId: string): Promise<ModuleSnapshot> {
       // Only a canonical UUID may reach the URL path (a crafted id cannot steer to another admin route).
@@ -100,7 +120,10 @@ export function compositionProjectionSource(opts: CompositionSourceOptions): Mod
       const doFetch = opts.fetchImpl ?? fetch;
       const body = await breaker.call(async () => {
         const res = await doFetch(url, { headers, signal: AbortSignal.timeout(opts.timeoutMs ?? 2000) });
-        if (!res.ok) throw new Error(`admin-service ${res.status}`);
+        if (!res.ok) {
+          if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) throw new ClientStatusError(res.status);
+          throw new Error(`admin-service ${res.status}`);
+        }
         return (await res.json()) as { configured?: boolean; mode?: string; data?: Array<{ name: string }> };
       });
       const mode: LicenceMode = body.mode === "shadow" || body.mode === "enforce" ? body.mode : "off";
@@ -156,6 +179,11 @@ export interface ModuleLicenceOptions {
   source?: ModuleSource;
   /** Default: MODULE_LICENCE_CHECK === "on", read on every call. */
   enabled?: () => boolean;
+  /**
+   * Service-wide "enforce for every tenant" switch. Default: MODULE_LICENCE_ENFORCE_ALL === "on", read on every call.
+   * Only used for a message/call whose tenant cannot be identified (see `check`).
+   */
+  enforceAll?: () => boolean;
   /** How long a tenant's snapshot is cached. Default 30 s: the staleness bound for a licence change. */
   ttlMs?: number;
   now?: () => number;
@@ -172,6 +200,9 @@ export interface ConsumerSpec {
 export interface ConsumerMessage {
   tenantId?: string | undefined;
   messageId?: string | undefined;
+  correlationId?: string | undefined;
+  type?: string | undefined;
+  timestamp?: string | undefined;
 }
 
 export interface ModuleLicence {
@@ -194,6 +225,7 @@ const MAX_CACHE = 5000;
 export function createModuleLicence(opts: ModuleLicenceOptions): ModuleLicence {
   const source = opts.source ?? compositionProjectionSource({ caller: `${opts.service}-licence` });
   const enabled = opts.enabled ?? ((): boolean => process.env.MODULE_LICENCE_CHECK === "on");
+  const enforceAll = opts.enforceAll ?? ((): boolean => process.env.MODULE_LICENCE_ENFORCE_ALL === "on");
   const ttlMs = opts.ttlMs ?? 30_000;
   const now = opts.now ?? ((): number => Date.now());
   const log = opts.log ?? consoleLogger;
@@ -247,9 +279,19 @@ export function createModuleLicence(opts: ModuleLicenceOptions): ModuleLicence {
 
     let decision: LicenceDecision;
     if (!tenantId || !TENANT_UUID_RE.test(tenantId)) {
-      // A cross-module call/event with no attributable tenant cannot be tenant-scoped; refuse (fail closed).
-      decision = { allowed: false, outcome: "deny", mode: "enforce", moduleKey, reason: "no_tenant" };
-      record(kind, decision, target, undefined);
+      // No identifiable tenant: there is no tenant mode to read, so the tenant is `off` by definition and the call/event
+      // passes through, UNLESS this service is explicitly enforcing for all tenants (MODULE_LICENCE_ENFORCE_ALL=on).
+      // Denying by default would silently drop events of tenants that are off or watch-only. Either way it is logged
+      // and counted so a malformed producer is visible.
+      const strict = enforceAll();
+      decision = strict
+        ? { allowed: false, outcome: "deny", mode: "enforce", moduleKey, reason: "no_tenant" }
+        : { allowed: true, outcome: "allow", mode: "off", moduleKey, reason: "no_tenant_treated_as_off" };
+      incrementModuleLicenceDecision(opts.service, moduleKey, kind, strict ? "deny" : "no_tenant");
+      log.warn(
+        { event: "module_licence_no_tenant", service: opts.service, kind, target, module: moduleKey, strict, reason: decision.reason },
+        strict ? "module-licence: refused (no identifiable tenant, enforce-for-all)" : "module-licence: no identifiable tenant, passed through as off",
+      );
       return decision;
     }
     try {
@@ -289,8 +331,12 @@ export function createModuleLicence(opts: ModuleLicenceOptions): ModuleLicence {
         // Dropped on purpose: the tenant did not buy the module this consumer belongs to. Acking it (returning)
         // is what stops it retrying and dead-lettering forever.
         log.warn(
-          { event: "module_licence_event_dropped", service: opts.service, topic: spec.topic, module: spec.module, messageId: msg.messageId, tenantId: msg.tenantId, reason: d.reason },
-          "module-licence: event dropped (module not licensed for tenant)",
+          {
+            event: "module_licence_event_dropped", service: opts.service, topic: spec.topic, module: spec.module, reason: d.reason,
+            // enough to find the producer's outbox row and replay it if the module is bought later
+            messageId: msg.messageId, correlationId: msg.correlationId, type: msg.type, producedAt: msg.timestamp, tenantId: msg.tenantId,
+          },
+          "module-licence: event dropped (module not licensed for tenant); replay from the producer outbox by messageId if needed",
         );
         try {
           await onDrop?.(msg, d);
@@ -320,14 +366,14 @@ export function guardSubscriptions<Q extends object>(queue: Q, licence: ModuleLi
   return new Proxy(queue, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver) as unknown;
-      if (prop === "subscribe" && typeof value === "function") {
-        return (topic: string, handler: (msg: ConsumerMessage) => Promise<void>, options?: unknown): unknown => {
-          const module = Object.hasOwn(table, topic) ? table[topic] : undefined;
-          const wrapped = module ? licence.guardConsumer({ topic, module }, handler) : handler;
-          return (value as (...a: unknown[]) => unknown).call(target, topic, wrapped, options);
-        };
-      }
-      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      // ONLY `subscribe` is replaced. Every other property (publish, start, stop, vi.fn mocks, ...) is returned as the very
+      // same value, so identity and behaviour are unchanged, with the flag on or off.
+      if (prop !== "subscribe" || typeof value !== "function") return value;
+      return (topic: string, handler: (msg: ConsumerMessage) => Promise<void>, options?: unknown): unknown => {
+        const module = Object.hasOwn(table, topic) ? table[topic] : undefined;
+        const wrapped = module ? licence.guardConsumer({ topic, module }, handler) : handler;
+        return (value as (...a: unknown[]) => unknown).call(target, topic, wrapped, options);
+      };
     },
   });
 }
