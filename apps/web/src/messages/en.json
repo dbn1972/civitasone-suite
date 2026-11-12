@@ -5892,7 +5892,16 @@
       "footerCount": "{count, plural, one {# result} other {# results}}",
       "navigate": "navigate",
       "open": "open",
-      "close": "close"
+      "close": "close",
+      "recordsPartial": "Some records could not be searched right now. Showing the rest.",
+      "types": {
+        "financeVoucher": "Vouchers",
+        "financeBill": "Bills",
+        "financeVendor": "Vendors",
+        "hrmsEmployee": "Employees",
+        "procurementIndent": "Indents",
+        "procurementPo": "Purchase orders"
+      }
     },
     "page": {
       "approvals": "My approvals",

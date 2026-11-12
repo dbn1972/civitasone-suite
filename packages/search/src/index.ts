@@ -26,6 +26,7 @@ export {
   type PublishSearchIndexInput,
 } from "./indexing.js";
 export type { DrizzleTx } from "./indexing-types.js";
+export * from "./global/index.js";
 
 import type { SearchEngine } from "./types.js";
 import { MeilisearchEngine } from "./meilisearch.js";

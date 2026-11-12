@@ -13,6 +13,7 @@ import { isUniqueViolation } from "../../shared/safe-error-log.js";
 import { hrmsEmployees } from "./schema.js";
 import { defaultPensionScheme } from "./pension-scheme.js";
 import { idempotentId } from "@civitasone/auth";
+import { syncEmployee } from "../../shared/global-search.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -94,6 +95,7 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
       }).returning({ id: hrmsEmployees.id });
       const newId = inserted[0]?.id;
       if (newId) {
+        await syncEmployee(tx, newId, ctx.tenantId);
         await enqueue(tx, {
           topic: "audit.event.record", eventType: "audit.event.record",
           tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,

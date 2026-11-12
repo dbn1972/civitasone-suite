@@ -12,6 +12,7 @@ import {
 } from "./schema.js";
 import type { VendorWriteInput } from "./repo.js";
 import { maskAccountNo, maskPan } from "./vendor-mask.js";
+import { syncVendor } from "../../shared/global-search.js";
 
 /**
  * Vendor onboarding and bank-detail change are fraud control points
@@ -50,6 +51,7 @@ export async function createVendor(ctx: RequestContext, input: VendorWriteInput)
     }).returning();
     const row = rows[0];
     if (!row) throw new Error("VENDOR_INSERT_FAILED: insert returned no row");
+    await syncVendor(tx, row.id, ctx.tenantId);
     await recordAudit(tx, ctx, {
       action: "vendor_create", resourceType: "vendor", resourceId: row.id,
       details: { status, makerChecker: policy.vendorMakerChecker },
@@ -95,6 +97,7 @@ export async function decideVendor(
     }
     throw violation("a vendor you created cannot be approved by you");
   }
+  await syncVendor(tx, row.id, actor.tenantId);
   await recordAudit(tx, actor, {
     action: decision === "approve" ? "vendor_approve" : "vendor_reject",
     resourceType: "vendor", resourceId: id,
