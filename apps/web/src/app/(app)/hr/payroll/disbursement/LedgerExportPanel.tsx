@@ -71,9 +71,9 @@ export function LedgerExportPanel({ runs, mode, canConfirm }: { runs: LedgerRun[
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setContent(await f.text());
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setContent(await file.text());
     setContentInvalid(false);
   }
 
