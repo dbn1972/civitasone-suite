@@ -23,9 +23,11 @@ import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 
 const WRITE_ROLES  = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
-const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer"];
+const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer", "tenant_admin"];
 const BIN_ADMIN_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
-const SETTINGS_ROLES  = ["inventory_admin", "super_admin"];
+// tenant_admin runs the organisation's policy (including which ledger the stock screens use) but is not a
+// store operator, so it is NOT added to WRITE_ROLES: it cannot post receipts or issues.
+const SETTINGS_ROLES  = ["inventory_admin", "super_admin", "tenant_admin"];
 const QC_ROLES     = ["inventory_manager", "inventory_admin", "qc_inspector", "super_admin"];
 
 export async function itemRoutes(app: FastifyInstance): Promise<void> {
@@ -196,7 +198,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
   // ── Tenant inventory policy ───────────────────────────────────────────
   app.get("/v1/inventory/settings", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, [...READER_ROLES, "tenant_admin"]);
     return reply.send({ data: await queries.getSettings(ctx.tenantId) });
   });
 

@@ -10,10 +10,14 @@
  * register together; a linked pair is one item). Only items that exist on the stock side
  * can be posted here, and the stock-service id is what the entry carries. An optional
  * ?itemId= query param (a stock item id, passed from a stock item detail page) preselects it.
+ *
+ * A tenant whose inventory setting `ledgerSource` is "inventory" gets InventoryEntryForm instead, which posts
+ * to inventory-service with inventory items and stores. Every other tenant (the default) gets the form below.
  */
 import { todayIST } from "@/lib/formatters";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -23,6 +27,7 @@ import { ItemPicker } from "@/app/_components/ItemPicker";
 import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
 import type { PickerEntry } from "../../linkHelpers";
+import { InventoryEntryForm } from "./InventoryEntryForm";
 
 const ENTRY_LABELS: Record<string, string> = {
   receipt: "Receipt",
@@ -33,7 +38,7 @@ const ENTRY_LABELS: Record<string, string> = {
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
-export default function NewStockEntryPage() {
+function LegacyStockEntryForm() {
   const router = useRouter();
   const params = useSearchParams();
   const presetItemId = params.get("itemId") ?? "";
@@ -209,4 +214,25 @@ export default function NewStockEntryPage() {
       />
     </>
   );
+}
+
+/** Picks the form by the tenant's ledger source. A failed or unreadable setting means the stock-service form. */
+export default function NewStockEntryPage() {
+  const t = useTranslations("inventoryLedger");
+  const [source, setSource] = useState<"loading" | "stock" | "inventory">("loading");
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/inventory/settings");
+        const body = res.ok ? ((await res.json()) as { data?: { ledgerSource?: string } }) : null;
+        if (active) setSource(body?.data?.ledgerSource === "inventory" ? "inventory" : "stock");
+      } catch {
+        if (active) setSource("stock");
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+  if (source === "loading") return <p role="status" aria-busy="true" className="sub pad">{t("loading")}</p>;
+  return source === "inventory" ? <InventoryEntryForm /> : <LegacyStockEntryForm />;
 }

@@ -1,7 +1,9 @@
 import { EmptyState, LoadErrorState, PageHeader } from "@/app/_components/ds";
 import { INVENTORY_SETTINGS_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 import { getInventorySettings } from "../_data";
+import { getInventoryLedgerSource } from "../_dataLedger";
 import { QcPolicyToggle } from "./QcPolicyToggle";
+import { LedgerSourceControl } from "./LedgerSourceControl";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export default async function InventorySettingsPage() {
       </>
     );
   }
-  const result = await getInventorySettings();
+  const [result, ledger] = await Promise.all([getInventorySettings(), getInventoryLedgerSource()]);
   if (result.source === "error") {
     return (
       <>
@@ -30,6 +32,7 @@ export default async function InventorySettingsPage() {
     <>
       <PageHeader title="Inventory policy" subtitle="Controls that apply to every store in your organisation." back="/inventory" />
       <QcPolicyToggle initial={result.data.qcMakerChecker} />
+      {ledger.source === "error" ? null : <LedgerSourceControl initial={ledger.data} />}
     </>
   );
 }

@@ -19,7 +19,7 @@ import { resolveUserNames } from "../../shared/identity-client.js";
 
 const STORE_ROLES  = ["inventory_user", "inventory_manager", "store_keeper", "inventory_admin", "super_admin"];
 const ADJUST_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
-const READER_ROLES = [...STORE_ROLES, "audit_officer", "finance_officer"];
+const READER_ROLES = [...STORE_ROLES, "audit_officer", "finance_officer", "tenant_admin"];
 
 export async function movementRoutes(app: FastifyInstance): Promise<void> {
   // ── Writes ───────────────────────────────────────────────────────────────
