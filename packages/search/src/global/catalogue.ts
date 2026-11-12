@@ -67,6 +67,38 @@ export const GLOBAL_ENTITY_TYPES = {
     readRoles: ["procurement_officer", "procurement_admin", "super_admin", "audit_officer", "finance_officer"],
     href: (id) => `/procurement/orders/${id}`,
   },
+  // services/contract-service/src/modules/contracts/routes.ts:19-20 READER_ROLES (GET /v1/contract/contracts/:id)
+  "contracts.contract": {
+    module: "contracts",
+    label: "Contracts",
+    readRoles: ["procurement_admin", "finance_admin", "super_admin", "audit_officer", "procurement_officer"],
+    href: (id) => `/contracts/${id}`,
+  },
+  // services/meeting-service/src/modules/meeting-core/routes.ts:86 READ_ROLES (GET /v1/meetings/:meetingId).
+  // Only public/internal meetings are ever indexed (see meeting-service shared/global-search.ts).
+  "meeting.meeting": {
+    module: "meeting",
+    label: "Meetings",
+    readRoles: ["meeting_admin", "committee_secretary", "committee_chairperson", "committee_member", "observer", "tenant_admin", "super_admin", "admin"],
+    href: (id) => `/meeting/meetings/${id}`,
+  },
+  // services/estab-service/src/modules/files/routes.ts:88-89 READER_ROLES (GET /v1/estab/files/:id).
+  // Only public, non-VIP files are ever indexed: per-officer clearance cannot be mirrored in an index.
+  "estab.file": {
+    module: "establishment",
+    label: "Establishment files",
+    readRoles: ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin", "audit_officer"],
+    href: (id) => `/estab/files/${id}`,
+  },
+  // services/citizen-service/src/modules/application/routes.ts:11 OFFICER_ROLES. The applicant's own role (`citizen`)
+  // is deliberately absent: a citizen reads only their own applications, which an index cannot express.
+  // There is no per-application page yet: link to the services page filtered by reference number.
+  "citizen.application": {
+    module: "citizen",
+    label: "Citizen applications",
+    readRoles: ["citizen_officer", "citizen_admin", "super_admin"],
+    href: (_id, ref) => `/citizen/services${ref ? `?application=${encodeURIComponent(ref)}` : ""}`,
+  },
 } as const satisfies Record<string, GlobalEntityDef>;
 
 export type GlobalEntityType = keyof typeof GLOBAL_ENTITY_TYPES;

@@ -78,7 +78,7 @@ describe("cross-module records in global search", () => {
   });
 
   it("has an English and a Hindi heading for every record type the catalogue can return", () => {
-    for (const k of ["financeVoucher", "financeBill", "financeVendor", "hrmsEmployee", "procurementIndent", "procurementPo"]) {
+    for (const k of ["financeVoucher", "financeBill", "financeVendor", "hrmsEmployee", "procurementIndent", "procurementPo", "contractsContract", "meetingMeeting", "estabFile", "citizenApplication"]) {
       const find = (m: unknown): Record<string, string> | undefined => {
         if (m && typeof m === "object") {
           const o = m as Record<string, unknown>;

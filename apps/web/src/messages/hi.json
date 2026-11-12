@@ -5899,7 +5899,11 @@
         "financeVendor": "विक्रेता",
         "hrmsEmployee": "कर्मचारी",
         "procurementIndent": "इंडेंट",
-        "procurementPo": "क्रय आदेश"
+        "procurementPo": "क्रय आदेश",
+        "contractsContract": "अनुबंध",
+        "meetingMeeting": "बैठकें",
+        "estabFile": "स्थापना फ़ाइलें",
+        "citizenApplication": "नागरिक आवेदन"
       }
     },
     "page": {
