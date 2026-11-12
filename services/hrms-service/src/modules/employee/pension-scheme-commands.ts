@@ -33,6 +33,7 @@
  * must be answered to the caller, and one transaction holds the row locks, the
  * writes and the audit outbox event.
  */
+import { uanBlindIndex } from "../../shared/blind-index.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
@@ -257,7 +258,7 @@ export async function approvePensionSchemeChange(ctx: RequestContext, changeId: 
     }).where(and(eq(hrmsPensionSchemeChanges.id, c.id), eq(hrmsPensionSchemeChanges.tenantId, ctx.tenantId))).returning();
     const empPatch: Partial<typeof hrmsEmployees.$inferInsert> = {};
     if (applyNow) empPatch.pensionScheme = c.toScheme;
-    if (c.uanNumber && c.uanNumber !== emp.uanNumber) empPatch.uanNumber = c.uanNumber;
+    if (c.uanNumber && c.uanNumber !== emp.uanNumber) { empPatch.uanNumber = c.uanNumber; empPatch.uanBidx = uanBlindIndex(ctx.tenantId, c.uanNumber); }
     // Review SF1: EPF membership facts are facts, applied on approval.
     if (c.epfFirstJoinedOn != null) empPatch.epfFirstJoinedOn = c.epfFirstJoinedOn;
     if (c.epfVoluntaryJointOption != null) empPatch.epfVoluntaryJointOption = c.epfVoluntaryJointOption;

@@ -53,6 +53,8 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   // G6 (Section 8, owner decision 5): encrypted at rest like pan / bank_account_no (was plaintext varchar(12);
   // migration 0268 widens the column, new writes are sealed, existing plaintext rows still read until backfilled).
   uanNumber:        encryptedText("uan_number"),
+  // Keyed-HMAC blind index of the UAN ("<keyid>.<hex>", migration 0271) for exact-match lookup without decrypting.
+  uanBidx:          text("uan_bidx"),
   hraCityClass:     varchar("hra_city_class", { length: 1 }).notNull().default("X"),
   taxRegime:        varchar("tax_regime", { length: 4 }).notNull().default("new"),
   aadhaarRef:       encryptedText("aadhaar_ref"),
