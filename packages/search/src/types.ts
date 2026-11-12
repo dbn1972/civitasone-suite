@@ -41,6 +41,8 @@ export interface SearchQuery {
   category?: string | undefined;
   /** Optional tag filter (AND logic). */
   tags?: string[] | undefined;
+  /** Optional tag filter (OR logic): the document must carry AT LEAST ONE of these tags. Combined with `tags` by AND. */
+  tagsAny?: string[] | undefined;
   /**
    * When set, only documents whose indexed accessLevel is in this list are
    * retrieved (applied inside the engine query). Documents indexed without a
