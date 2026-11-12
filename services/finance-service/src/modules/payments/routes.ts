@@ -109,6 +109,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, BillDetailSchema, detail);
   });
 
+  // Outcome of a bill lodged with POST /v1/finance/bills (which answers 202 before the worker runs): created, refused with
+  // the worker's code and reason (e.g. DUPLICATE_VENDOR_BILL_NO), or still pending / unknown.
+  app.get("/v1/finance/bills/:id/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    return reply.send({ id, ...(await scopedRead((tx) => repo.findBillOutcome(tx, ctx.tenantId, id))) });
+  });
+
   app.get("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

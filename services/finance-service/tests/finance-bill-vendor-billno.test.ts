@@ -88,7 +88,7 @@ beforeAll(async () => {
   await scoped(TENANT, (tx) => tx.insert(financeDdo).values({ tenantId: TENANT, ddoCode: DDO, name: "VBN DDO", createdBy: ACTOR, updatedBy: ACTOR }).onConflictDoNothing());
   for (const [id, name] of [[V1, "Vendor One"], [V2, "Vendor Two"]] as const) {
     await scoped(TENANT, (tx) => tx.insert(financeVendors).values({
-      id, tenantId: TENANT, name, category: "supplies", pan: "ABCDE3060F", address: "1 Test Road",
+      id, tenantId: TENANT, name, category: "supplies", pan: id === V1 ? "ABCDE3060F" : "ABCDE3061F", address: "1 Test Road",
       bankName: "Test Bank", bankAccountNo: "000111222333", ifsc: "TEST0001234", createdBy: ACTOR, updatedBy: ACTOR,
     }).onConflictDoNothing());
   }
@@ -198,6 +198,16 @@ describe("FINANCE_VENDOR_BILL_NO_UNIQUE on: same vendor + same vendor bill numbe
     expect((await billsOfVendor(V1)).length - before).toBe(1);
     const rejected = await scoped(TENANT, (tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.topic, "finance.bill.rejected"))));
     expect(rejected.some((r) => (r.payload as { code?: string }).code === "DUPLICATE_VENDOR_BILL_NO")).toBe(true);
+    // the loser is visible to the maker: GET /v1/finance/bills/:id/status shows the winner as created and the loser as
+    // rejected with the stable code and a readable reason (no code prefix)
+    const outcomes = await Promise.all([x, y].map(async (c) => (await app.inject({ method: "GET", url: `/v1/finance/bills/${c.id}/status`, headers: auth })).json()));
+    const created = outcomes.filter((o) => o.state === "created");
+    const refused = outcomes.filter((o) => o.state === "rejected");
+    expect(created).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ code: "DUPLICATE_VENDOR_BILL_NO" });
+    expect(refused[0].reason).toBe(`vendor bill number SMC-7300 was already lodged for this vendor as ${created[0].billNo}`);
+    expect((await app.inject({ method: "GET", url: `/v1/finance/bills/${randomUUID()}/status`, headers: auth })).json().state).toBe("pending");
     // the refused command is not marked processed, so it can be re-driven once the first bill is rejected / fixed
     expect(await db.select().from(processed).where(inArray(processed.messageId, [x.msg, y.msg]))).toHaveLength(1);
   });
