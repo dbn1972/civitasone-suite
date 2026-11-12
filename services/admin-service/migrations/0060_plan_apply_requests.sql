@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS composition.plan_apply_requests (
   tenant_id           uuid NOT NULL,
   plan_id             uuid,
   plan_code           text NOT NULL,
-  -- the plan's catalogue modules as the maker supplied them, and what they resolve to (core + hard deps) at request time
+  -- the plan's catalogue modules as taken from the stored plan (tenant-service), and what they resolve to (core + hard deps) at request time
   module_ids          text[] NOT NULL,
   user_module_ids     text[] NOT NULL,
   profile_code        text,
