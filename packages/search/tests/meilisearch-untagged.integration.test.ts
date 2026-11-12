@@ -24,6 +24,7 @@ const doc = (id: string, tenantId: string, tags: string[], title = "leave policy
   id, tenantId, documentId: `d-${id}`, title, content: "annual leave policy", tags,
 });
 
+// FLAKY-SKIP: needs a throwaway Meilisearch (MEILI_TEST_HOST); the CI Tests job has no Meilisearch service (expires: 2027-02-28)
 describe.skipIf(!HOST)("Meilisearch untagged visibility (real engine)", () => {
   const eng = new MeilisearchEngine({ host: HOST });
   const ids = async (q: Parameters<MeilisearchEngine["search"]>[0]) => (await eng.search(q)).hits.map((h) => h.documentId).sort();
