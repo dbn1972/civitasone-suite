@@ -14,6 +14,10 @@ const { buildRegistry, resolveComposition } = await import("../src/modules/compo
 const repo = await import("../src/modules/composition/repo.js");
 
 afterEach(() => { delete process.env.HRMS_RECRUITMENT_SPLIT; });
+const { buildApp } = await import("../src/app.js");
+const { signToken } = await import("@civitasone/auth");
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const BT = "cccccccc-dddd-4000-8000-0000000000d9";
 afterAll(async () => { await sqlClient.end(); });
 
 const HR_NO_REC = ["employee", "attendance", "leave", "appraisal", "career", "ess"];
@@ -68,5 +72,31 @@ describe("hr_no_recruitment bundle (migration 0061)", () => {
   it("the existing hr bundle is untouched", async () => {
     const hr = (await repo.loadBundles("cccccccc-dddd-4000-8000-0000000000d8")).find((x) => x.code === "hr");
     expect([...hr!.moduleIds].sort()).toEqual(["employee", "attendance", "leave", "recruitment", "appraisal", "career", "ess"].sort());
+  });
+});
+
+describe("hr_no_recruitment is unsellable while the split is off", () => {
+  const enable = async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/admin/composition/bundles/hr_no_recruitment/enable",
+      headers: { authorization: `Bearer ${signToken({ sub: "11111111-eeee-4000-8000-0000000000d9", tid: BT, roles: ["tenant_admin"], sid: "m8" }, SECRET, 3600)}` } });
+    await app.close();
+    return r;
+  };
+  it("flag off (default): refused with 409 and nothing is enabled", async () => {
+    const r = await enable();
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("BUNDLE_REQUIRES_RECRUITMENT_SPLIT");
+    const rows = await sqlClient.begin(async (tx) => { await tx`SELECT set_config('app.tenant_id', ${BT}, true)`; return tx`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${BT}`; });
+    expect(rows.length).toBe(0);
+  });
+  it("flag on: the bundle enables HR without recruitment", async () => {
+    process.env.HRMS_RECRUITMENT_SPLIT = "on";
+    const r = await enable();
+    expect(r.statusCode).toBe(200);
+    const mods = (r.json().modules as Array<{ id: string }>).map((m) => m.id);
+    expect(mods).toEqual(expect.arrayContaining(["employee", "appraisal", "career"]));
+    expect(mods).not.toContain("recruitment");
+    await sqlClient.begin(async (tx) => { await tx`SELECT set_config('app.tenant_id', ${BT}, true)`; await tx`DELETE FROM composition.tenant_entitlement WHERE tenant_id = ${BT}`; });
   });
 });

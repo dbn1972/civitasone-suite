@@ -141,6 +141,8 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
 export function recruitmentSplitOn(): boolean {
   return process.env.HRMS_RECRUITMENT_SPLIT === "on";
 }
+/** The offer bundle that is only sellable while the split is on (it would otherwise still reach recruitment through `career`). */
+export const RECRUITMENT_SPLIT_BUNDLE = "hr_no_recruitment";
 const CAREER_KEYS_WHEN_SPLIT: readonly string[] = ["workforce_core"];
 
 /** Project a set of composition module ids to distinct, sorted gateway route-keys. */

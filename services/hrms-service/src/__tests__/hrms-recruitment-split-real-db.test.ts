@@ -40,7 +40,7 @@ function routeSet(app: FastifyInstance): Set<string> {
   // rebuild full paths from the tree lines
   const stack: string[] = [];
   for (const line of tree.split("\n")) {
-    const m = line.match(/^((?:│   |    )*)(?:├── |└── )(.*?) \(([^)]*)\)$/);
+    const m = line.match(/^((?:│ {3}| {4})*)(?:├── |└── )(.*?) \(([^)]*)\)$/);
     if (!m) continue;
     const depth = (m[1]?.length ?? 0) / 4;
     stack.length = depth;

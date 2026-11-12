@@ -18,7 +18,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
-import { toGatewayKeys } from "./gateway-map.js";
+import { toGatewayKeys, recruitmentSplitOn, RECRUITMENT_SPLIT_BUNDLE } from "./gateway-map.js";
 import {
   buildRegistry,
   resolveComposition,
@@ -329,6 +329,11 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     const bundles = await repo.loadBundles(ctx.tenantId);
     const bundle = bundles.find((b) => b.code === code);
     if (!bundle) throw new HttpError(404, "UNKNOWN_BUNDLE", `unknown bundle: ${code}`);
+    // M8: with the split off, `career` still borrows the recruitment gateway key, so this bundle would silently include
+    // the recruitment surface. Refuse it until HRMS_RECRUITMENT_SPLIT=on makes the offer true.
+    if (code === RECRUITMENT_SPLIT_BUNDLE && !recruitmentSplitOn()) {
+      throw new HttpError(409, "BUNDLE_REQUIRES_RECRUITMENT_SPLIT", "this bundle can be sold only while HRMS_RECRUITMENT_SPLIT is on");
+    }
     const reg = await registryFor(ctx.tenantId);
     let nextUser = await repo.getUserModules(ctx.tenantId);
     for (const id of bundle.moduleIds) {
