@@ -2,7 +2,7 @@
  * GAP-LEGAL-LIST-04 (owner decision #14): a small empanelled-advocate master (name, Bar enrolment
  * number, contact); cases link to an advocate and the lists show the advocate's name from the master.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
@@ -17,6 +17,7 @@ import { registerAdvocateConsumers } from "../src/modules/advocates/consumer.js"
 import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000d1601";
@@ -26,7 +27,8 @@ const tok = (roles: string[], tenant = TENANT) => ({ authorization: `Bearer ${si
 const asAdmin = () => tok(["legal_admin"]);
 const asOfficer = () => tok(["legal_officer"]);
 const asAuditor = () => tok(["audit_officer"]);
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+// Deterministic: resolves when every in-flight queue handler has settled (was a fixed 400 ms sleep).
+const drain = () => drainOrFail(queue);
 const ADV = { name: "Adv. Kavita Rao", barEnrolmentNo: "D/1234/2011", contact: "9876543210" };
 
 async function wipe(tenant: string): Promise<void> {
@@ -47,6 +49,11 @@ beforeAll(async () => {
   registerCaseConsumers(queue);
   app = await buildApp();
 });
+// Root cause of the 9 Nov flake: several tests publish a command (create advocate / case) and return without
+// waiting for its consumer. Under load that consumer ran after the NEXT test's beforeEach wipe, inserted the
+// previous test's advocate, and the next test's own create then got 409 DUPLICATE_BAR_ENROLMENT (or the
+// consumer hit uq_empanelled_advocates_bar). Settle the queue after every test so nothing leaks across tests.
+afterEach(async () => { await drain(); });
 beforeEach(async () => { await wipe(TENANT); await wipe(OTHER_TENANT); useFakeOrg(); });
 afterAll(async () => { await wipe(TENANT); await wipe(OTHER_TENANT); await app.close(); await sqlClient.end(); });
 
