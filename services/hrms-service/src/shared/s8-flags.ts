@@ -13,7 +13,7 @@ export const bulkPayProfileEnabled = (): boolean => on("HRMS_S8_BULK_PAY_PROFILE
 export const uanMaskedEnabled = (): boolean => on("HRMS_S8_UAN_MASK_ENABLED");
 
 /**
- * UAN blind index: the duplicate check on bulk import and GET /v1/hrms/employees/by-uan use the keyed-HMAC index
+ * UAN blind index: the duplicate check on bulk import and POST /v1/hrms/employees/by-uan (body) use the keyed-HMAC index
  * (employee.hrms_employees.uan_bidx) instead of decrypting every UAN. Index WRITES are always on (invisible); this flag
  * only switches the READ paths, and a tenant that is not fully backfilled falls back to the old behaviour regardless.
  */

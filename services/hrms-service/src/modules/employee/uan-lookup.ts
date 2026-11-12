@@ -1,6 +1,6 @@
 /**
  * UAN lookups through the blind index (employee.hrms_employees.uan_bidx), used by:
- *   - GET /v1/hrms/employees/by-uan  (exact match, HR / payroll roles), and
+ *   - POST /v1/hrms/employees/by-uan (body)  (exact match, HR / payroll roles), and
  *   - the bulk-import duplicate check (bulk-import/routes.ts).
  * Both are behind HRMS_UAN_BLIND_INDEX_ENABLED. A tenant is only served from the index when EVERY employee that has a
  * UAN also has an index value ("ready"); otherwise the caller gets the legacy decrypt-and-compare result, so running
