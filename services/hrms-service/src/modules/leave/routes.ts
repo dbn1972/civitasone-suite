@@ -28,6 +28,10 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 const LEAVE_CONFIG_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
 
+/** Code + message for a request whose dates are all holidays/weekends (0 leave days to debit). */
+export const LEAVE_NO_WORKING_DAYS = "LEAVE_NO_WORKING_DAYS";
+export const LEAVE_NO_WORKING_DAYS_MESSAGE = "The selected dates are holidays or weekends; no leave days to apply";
+
 /** One reason a leave application cannot be accepted (what a submit answers with 422). */
 interface LeaveViolation {
   code: string;
@@ -199,7 +203,12 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // persists/debits *this*, not the raw client-submitted daysApplied.
     computedDays: result.computedDays,
     warnings: result.warnings,
-    violations: result.valid ? [] : result.errors.map((message) => ({ code: "LEAVE_RULE_VIOLATION", message })),
+    violations: result.valid
+      // A request whose every date is a holiday or weekend would debit 0 days. The shape check
+      // (daysApplied > 0) used to catch it only AFTER this, as a bare 400 VALIDATION_FAILED; refuse it
+      // here with a specific code so preview (valid:false) and submit (422) say the same thing.
+      ? (result.computedDays <= 0 ? [{ code: LEAVE_NO_WORKING_DAYS, message: LEAVE_NO_WORKING_DAYS_MESSAGE }] : [])
+      : result.errors.map((message) => ({ code: "LEAVE_RULE_VIOLATION", message })),
     holidaysInRange: result.holidaysInRange,
     balance,
   };
