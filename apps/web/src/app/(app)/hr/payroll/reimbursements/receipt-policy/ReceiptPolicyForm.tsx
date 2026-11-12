@@ -107,13 +107,13 @@ export function ReceiptPolicyForm({ policy, isDefault }: { policy: ReceiptPolicy
       <p style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 14px" }}>{isDefault ? t("usingDefaultNote") : t("customNote")}</p>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <caption style={{ textAlign: "left", fontWeight: 600, paddingBottom: 8 }}>{t("tableCaption")}</caption>
+          <caption style={{ textAlign: "start", fontWeight: 600, paddingBottom: 8 }}>{t("tableCaption")}</caption>
           <thead>
             <tr>
-              <th scope="col" style={{ textAlign: "left", padding: "6px 8px" }}>{t("colCategory")}</th>
-              <th scope="col" style={{ textAlign: "left", padding: "6px 8px" }}>{t("colRule")}</th>
-              <th scope="col" style={{ textAlign: "left", padding: "6px 8px" }}>{t("colThreshold")}</th>
-              <th scope="col" style={{ textAlign: "left", padding: "6px 8px" }}>{t("colSelfDecl")}</th>
+              <th scope="col" style={{ textAlign: "start", padding: "6px 8px" }}>{t("colCategory")}</th>
+              <th scope="col" style={{ textAlign: "start", padding: "6px 8px" }}>{t("colRule")}</th>
+              <th scope="col" style={{ textAlign: "start", padding: "6px 8px" }}>{t("colThreshold")}</th>
+              <th scope="col" style={{ textAlign: "start", padding: "6px 8px" }}>{t("colSelfDecl")}</th>
             </tr>
           </thead>
           <tbody>
@@ -121,7 +121,7 @@ export function ReceiptPolicyForm({ policy, isDefault }: { policy: ReceiptPolicy
               const r = rows[c]!;
               return (
                 <tr key={c} style={{ borderTop: "1px solid var(--line)" }}>
-                  <th scope="row" style={{ textAlign: "left", padding: "8px", fontWeight: 600 }}>{label(c)}</th>
+                  <th scope="row" style={{ textAlign: "start", padding: "8px", fontWeight: 600 }}>{label(c)}</th>
                   <td style={{ padding: "8px" }}>
                     <Select
                       aria-label={t("ruleAria", { category: label(c) })}

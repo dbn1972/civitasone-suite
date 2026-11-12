@@ -312,8 +312,11 @@ describe("Reimbursement CQRS", () => {
       payload: { id: "reimb-1", tenantId: TENANT, employeeId: EMPLOYEE, category: "food", amountMinor: 250000, period: "2026-07", billDate: null, billRef: null },
     });
 
-    expect(executedQueries).toHaveLength(1);
-    const params = paramsOf(executedQueries[0]);
+    // The consumer now also reads the tenant receipt policy (rule + version) before inserting, so
+    // count the INSERT specifically: it is the one statement that carries the claim id.
+    const inserts = executedQueries.filter((q) => paramsOf(q).includes("reimb-1"));
+    expect(inserts).toHaveLength(1);
+    const params = paramsOf(inserts[0]);
     expect(params).toContain("food");
     expect(params).toContain(250000);
 

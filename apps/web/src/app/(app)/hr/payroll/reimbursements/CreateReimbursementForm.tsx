@@ -57,7 +57,6 @@ export function CreateReimbursementForm({ subject, policy = null }: { subject: C
   const dateId = useId();
   const refId = useId();
   const errId = useId();
-  const declId = useId();
   const amtRef = useRef<HTMLInputElement>(null);
   const periodRef = useRef<HTMLInputElement>(null);
 
@@ -213,16 +212,15 @@ export function CreateReimbursementForm({ subject, policy = null }: { subject: C
               </p>
             )}
             {canDeclare && (
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10 }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10, fontSize: 13 }}>
                 <input
-                  id={declId}
                   type="checkbox"
                   checked={selfDeclared}
                   onChange={(e) => setSelfDeclared(e.target.checked)}
                   style={{ width: 18, height: 18, marginTop: 2 }}
                 />
-                <label htmlFor={declId} style={{ fontSize: 13 }}>{t("selfDeclarationLabel")}</label>
-              </div>
+                {t("selfDeclarationLabel")}
+              </label>
             )}
           </div>
 
