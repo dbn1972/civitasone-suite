@@ -4,7 +4,7 @@
  * their tests are untouched. Server only.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import type { InventoryItemRow } from "./_data";
+import type { InventoryItemRow, InventoryLedgerRow } from "./_data";
 
 export type LedgerSource = "stock" | "inventory";
 
@@ -135,6 +135,51 @@ export function registerRowsFromInventory(items: InventoryItemRow[], balances: I
       totalValue: Number(t?.value ?? 0n),
       isLowStock: min > 0 && qty <= min,
       stockStatus: qty <= 0 ? "out" : min > 0 && qty <= min ? "low" : "ok",
+    };
+  });
+}
+
+/** A row of the Stock Movements Summary, in the shape the summary table and totals use. */
+export type MovementSummaryRow = {
+  id: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  date: string;
+  type: "receipt" | "issue" | "transfer" | "adjustment" | "other";
+  quantity: number;
+  direction: "in" | "out";
+  signedQuantity: number;
+  totalValue: number;
+  referenceNo?: string;
+  balance: number;
+};
+
+const MOVEMENT_TYPES = ["receipt", "issue", "transfer", "adjustment"] as const;
+
+/**
+ * Inventory ledger rows -> Stock Movements Summary rows. A ledger row carries qtyIn / qtyOut, so the
+ * signed quantity is in minus out. A transfer is two rows (out of one store, into the other), as posted.
+ */
+export function movementRowsFromInventoryLedger(rows: InventoryLedgerRow[]): MovementSummaryRow[] {
+  return rows.map((r) => {
+    const signed = (r.qtyIn ?? 0) - (r.qtyOut ?? 0);
+    const ref = r.refNo || r.refDoc || r.grnNo || undefined;
+    let value = 0;
+    try { value = Number(BigInt(r.valueMinor ?? "0")); } catch { /* unparseable value shows as 0 only in this cell */ }
+    return {
+      id: r.id,
+      itemId: r.itemId,
+      itemCode: r.itemSku && r.itemSku.trim() !== "" ? r.itemSku : r.itemId.slice(0, 8).toUpperCase(),
+      itemName: r.itemName && r.itemName.trim() !== "" ? r.itemName : r.itemId.slice(0, 8),
+      date: r.postingDate,
+      type: (MOVEMENT_TYPES as readonly string[]).includes(r.movementType) ? (r.movementType as MovementSummaryRow["type"]) : "other",
+      quantity: Math.abs(signed),
+      direction: signed < 0 ? "out" : "in",
+      signedQuantity: signed,
+      totalValue: Math.abs(value),
+      ...(ref ? { referenceNo: ref } : {}),
+      balance: r.balanceQty ?? 0,
     };
   });
 }

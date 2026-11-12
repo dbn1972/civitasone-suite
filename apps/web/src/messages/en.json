@@ -13183,6 +13183,10 @@
       "store": "Store",
       "qty": "Quantity",
       "noBalances": "No stock has been received into any store yet."
+    },
+    "reconcile": {
+      "subtitle": "Totals of receipts, issues, transfers and adjustments posted to your stores. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances.",
+      "empty": "Record receipts or issues under New stock entry to see them summarised here."
     }
   },
   "payGroupMembers": {
