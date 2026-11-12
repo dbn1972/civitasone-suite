@@ -52,8 +52,33 @@ describe("knowledge search module tags are OR-ed (not AND-ed)", () => {
 
   it("asks the engine to include untagged documents; the tenant still comes from the token", async () => {
     const { q } = await run(["finance_officer"]);
-    expect(q?.includeUntagged).toBe(true);
+    expect(q?.includeUntagged).toEqual({ accessLevels: ["public", "internal"] });
     expect(q?.tenantId).toBe(TENANT);
+  });
+
+  // The untagged clearance comes from the caller's OWN roles (knowledge-service's rule), never a parameter.
+  it.each([
+    [["finance_officer"], ["public", "internal"]],
+    [["hr_officer", "finance_officer"], ["public", "internal"]],
+    [["knowledge_admin"], null],
+    [["super_admin"], null],
+    [["knowledge_admin", "finance_officer"], null],
+  ])("roles %j -> untagged clearance %j", async (roles, expected) => {
+    const { q } = await run(roles as string[]);
+    expect(q?.includeUntagged).toEqual({ accessLevels: expected });
+  });
+
+  it("a request parameter cannot widen the clearance (accessLevels / includeUntagged / tenantId in the query string are ignored)", async () => {
+    const { e, calls } = engine();
+    setSearchEngine(e);
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 200 }));
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/v1/search?q=budget&accessLevels=confidential&includeUntagged=true&levels=all&tenantId=other", headers: { authorization: `Bearer ${tok(["finance_officer"])}` } });
+    await app.close();
+    vi.unstubAllGlobals();
+    expect(calls[0]?.includeUntagged).toEqual({ accessLevels: ["public", "internal"] });
+    expect(calls[0]?.accessLevels).toBeUndefined();
+    expect(calls[0]?.tenantId).toBe(TENANT);
   });
 });
 

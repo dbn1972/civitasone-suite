@@ -92,6 +92,15 @@ const ALL_MODULES = [
  * platform_admin gets all modules.
  * Other roles get a union of their mapped modules.
  */
+/** Roles cleared for every access level (mirrors knowledge-service documents/clearance.ts CLEARANCE_ALL_ROLES). */
+const CLEARANCE_ALL_ROLES = ["knowledge_admin", "super_admin"];
+const STANDARD_ACCESS_LEVELS = ["public", "internal"];
+
+/** Access levels of UNTAGGED knowledge documents the caller may see; `null` = every level. */
+export function untaggedAccessLevels(roles: string[]): string[] | null {
+  return roles.some((r) => CLEARANCE_ALL_ROLES.includes(r)) ? null : STANDARD_ACCESS_LEVELS;
+}
+
 export function resolveUserModules(roles: string[]): string[] {
   const adminRoles = ["super_admin", "tenant_admin", "platform_admin"];
   if (roles.some((r) => adminRoles.includes(r))) {
@@ -205,7 +214,10 @@ export function registerSearchRoute(app: FastifyInstance): void {
         tagsAny: userModules,
         // Knowledge articles are indexed without module tags: untagged documents are visible to every user
         // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
-        includeUntagged: true,
+        // Untagged documents are further limited to the caller's clearance, derived from the caller's OWN roles
+        // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
+        // every level only for knowledge_admin / super_admin.
+        includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
       });
     } catch (err) {
       // Graceful degradation: search engine unreachable

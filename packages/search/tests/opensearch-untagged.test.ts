@@ -14,16 +14,27 @@ describe("OpenSearch includeUntagged", () => {
     const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"] });
     expect(b.filter).toEqual([{ terms: { tags: ["finance"] } }]);
   });
-  it("includeUntagged: should(terms | no tags field), tenant term still in must", async () => {
-    const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], includeUntagged: true });
+  it("includeUntagged (standard clearance): untagged branch carries an accessLevel filter; tenant term still in must", async () => {
+    const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], includeUntagged: { accessLevels: ["public", "internal"] } });
     expect(b.must).toContainEqual({ term: { tenantId: "t1" } });
     expect(b.filter).toEqual([
       {
         bool: {
-          should: [{ terms: { tags: ["finance"] } }, { bool: { must_not: [{ exists: { field: "tags" } }] } }],
+          should: [
+            { terms: { tags: ["finance"] } },
+            { bool: { must_not: [{ exists: { field: "tags" } }], filter: [{ terms: { accessLevel: ["public", "internal"] } }] } },
+          ],
           minimum_should_match: 1,
         },
       },
     ]);
+  });
+  it("cleared for every level (null): no accessLevel condition on the untagged branch", async () => {
+    const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], includeUntagged: { accessLevels: null } });
+    expect(JSON.stringify(b.filter)).not.toContain("accessLevel");
+  });
+  it("an empty level list fails closed", async () => {
+    const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], includeUntagged: { accessLevels: [] } });
+    expect(JSON.stringify(b.filter)).toContain('"accessLevel":["__none__"]');
   });
 });

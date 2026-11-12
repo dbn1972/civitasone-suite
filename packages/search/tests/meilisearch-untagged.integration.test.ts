@@ -20,8 +20,8 @@ async function drain(): Promise<void> {
   throw new Error("meilisearch tasks did not drain");
 }
 
-const doc = (id: string, tenantId: string, tags: string[], title = "leave policy handbook"): SearchDocument => ({
-  id, tenantId, documentId: `d-${id}`, title, content: "annual leave policy", tags,
+const doc = (id: string, tenantId: string, tags: string[], accessLevel?: string): SearchDocument => ({
+  id, tenantId, documentId: `d-${id}`, title: "leave policy handbook", content: "annual leave policy", tags, ...(accessLevel ? { accessLevel } : {}),
 });
 
 // FLAKY-SKIP: needs a throwaway Meilisearch (MEILI_TEST_HOST); the CI Tests job has no Meilisearch service (expires: 2027-02-28)
@@ -38,12 +38,23 @@ describe.skipIf(!HOST)("Meilisearch untagged visibility (real engine)", () => {
       doc("a3", "tenant-A", ["hrms"]),           // tagged hrms, A
       doc("b1", "tenant-B", []),                 // untagged, B
       doc("b2", "tenant-B", ["finance"]),        // tagged finance, B
+      // tenant-D: clearance fixtures
+      doc("p1", "tenant-D", [], "public"),
+      doc("n1", "tenant-D", [], "internal"),
+      doc("r1", "tenant-D", [], "restricted"),
+      doc("c1", "tenant-D", [], "confidential"),
+      doc("f1", "tenant-D", ["finance"], "confidential"), // tagged: module rule only, unchanged
     ]);
     // A document indexed with no `tags` attribute at all (legacy rows): must count as untagged too.
     await fetch(`${HOST}/indexes/${INDEX}/documents`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify([{ id: "a4", tenantId: "tenant-A", documentId: "d-a4", title: "leave policy handbook", content: "annual leave policy", accessLevel: "internal" }]),
+    });
+    await fetch(`${HOST}/indexes/${INDEX}/documents`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([{ id: "x1", tenantId: "tenant-D", documentId: "d-x1", title: "leave policy handbook", content: "annual leave policy", accessLevel: "confidential" }]),
     });
     await drain();
   });
@@ -53,26 +64,50 @@ describe.skipIf(!HOST)("Meilisearch untagged visibility (real engine)", () => {
   });
 
   it("with includeUntagged: module-matching tagged + all untagged of the SAME tenant; other modules stay hidden", async () => {
-    expect(await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance"], includeUntagged: true })).toEqual(["d-a1", "d-a2", "d-a4"]);
+    expect(await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance"], includeUntagged: { accessLevels: null } })).toEqual(["d-a1", "d-a2", "d-a4"]);
   });
 
   it("no cross-tenant leak: tenant-A never sees tenant-B docs (tagged or untagged), and vice versa", async () => {
-    const a = await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance", "hrms"], includeUntagged: true });
+    const a = await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance", "hrms"], includeUntagged: { accessLevels: null } });
     expect(a).toEqual(["d-a1", "d-a2", "d-a3", "d-a4"]);
     expect(a.some((d) => d.startsWith("d-b"))).toBe(false);
-    const b = await ids({ q: "leave", tenantId: "tenant-B", tagsAny: ["finance", "hrms"], includeUntagged: true });
+    const b = await ids({ q: "leave", tenantId: "tenant-B", tagsAny: ["finance", "hrms"], includeUntagged: { accessLevels: null } });
     expect(b).toEqual(["d-b1", "d-b2"]);
   });
 
   it("a tenant with no documents sees nothing, even though untagged docs exist elsewhere", async () => {
-    expect(await ids({ q: "leave", tenantId: "tenant-C", tagsAny: ["finance"], includeUntagged: true })).toEqual([]);
+    expect(await ids({ q: "leave", tenantId: "tenant-C", tagsAny: ["finance"], includeUntagged: { accessLevels: null } })).toEqual([]);
   });
 
   it("empty module list + includeUntagged: only untagged docs of that tenant", async () => {
-    expect(await ids({ q: "leave", tenantId: "tenant-A", tagsAny: [], includeUntagged: true })).toEqual(["d-a1", "d-a4"]);
+    expect(await ids({ q: "leave", tenantId: "tenant-A", tagsAny: [], includeUntagged: { accessLevels: null } })).toEqual(["d-a1", "d-a4"]);
   });
 
   it("an injected tenant string cannot widen the filter", async () => {
-    expect(await ids({ q: "leave", tenantId: 'tenant-A" OR tenantId = "tenant-B', tagsAny: ["finance"], includeUntagged: true })).toEqual([]);
+    expect(await ids({ q: "leave", tenantId: 'tenant-A" OR tenantId = "tenant-B', tagsAny: ["finance"], includeUntagged: { accessLevels: null } })).toEqual([]);
+  });
+
+  const STD = { accessLevels: ["public", "internal"] };
+
+  it("CLEARANCE: a normal user (public+internal) never gets an untagged restricted/confidential doc, including one with no tags field", async () => {
+    const got = await ids({ q: "leave", tenantId: "tenant-D", tagsAny: ["finance"], includeUntagged: STD });
+    expect(got).toEqual(["d-f1", "d-n1", "d-p1"]); // f1 is TAGGED finance: module rule only
+    expect(got).not.toContain("d-r1");
+    expect(got).not.toContain("d-c1");
+    expect(got).not.toContain("d-x1");
+  });
+
+  it("CLEARANCE: an admin (null = every level) gets all untagged documents, restricted and confidential included", async () => {
+    expect(await ids({ q: "leave", tenantId: "tenant-D", tagsAny: ["finance"], includeUntagged: { accessLevels: null } }))
+      .toEqual(["d-c1", "d-f1", "d-n1", "d-p1", "d-r1", "d-x1"]);
+  });
+
+  it("CLEARANCE: an empty level list shows no untagged document at all", async () => {
+    expect(await ids({ q: "leave", tenantId: "tenant-D", tagsAny: ["finance"], includeUntagged: { accessLevels: [] } })).toEqual(["d-f1"]);
+  });
+
+  it("CLEARANCE never crosses tenants: tenant-A's admin view contains no tenant-D document", async () => {
+    const a = await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance"], includeUntagged: { accessLevels: null } });
+    expect(a.some((d) => ["d-p1", "d-n1", "d-r1", "d-c1", "d-f1", "d-x1"].includes(d))).toBe(false);
   });
 });

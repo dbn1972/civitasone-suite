@@ -90,10 +90,15 @@ export class MeilisearchEngine implements SearchEngine {
     }
     if (query.tagsAny) {
       // OR across the tags. Empty list = matches nothing (fail closed), like accessLevels.
-      // includeUntagged adds `tags IS EMPTY OR tags NOT EXISTS` INSIDE the same parenthesised clause, so the
+      // includeUntagged adds `(tags IS EMPTY AND <clearance>) OR (tags NOT EXISTS AND <clearance>)` INSIDE the same parenthesised clause, so the
       // tenant clause above still ANDs with it (a separate array element = AND in Meilisearch).
       const parts = query.tagsAny.map((t) => `tags = "${this.escape(t)}"`);
-      if (query.includeUntagged) parts.push("tags IS EMPTY", "tags NOT EXISTS");
+      if (query.includeUntagged) {
+        // Untagged documents are further limited to the caller's clearance (null = every level).
+        const lv = query.includeUntagged.accessLevels;
+        const level = lv === null ? "" : ` AND (${(lv.length ? lv : ["__none__"]).map((l) => `accessLevel = "${this.escape(l)}"`).join(" OR ")})`;
+        parts.push(`(tags IS EMPTY${level})`, `(tags NOT EXISTS${level})`);
+      }
       filter.push(parts.length ? `(${parts.join(" OR ")})` : `tags = "__none__"`);
     }
     if (query.accessLevels) {

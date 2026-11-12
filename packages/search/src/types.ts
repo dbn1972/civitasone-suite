@@ -45,10 +45,13 @@ export interface SearchQuery {
   tagsAny?: string[] | undefined;
   /**
    * Only meaningful with `tagsAny`. When true, documents that carry NO tags at all also qualify
-   * (`tags IN tagsAny OR tags IS EMPTY`). The tenant filter is always ANDed outside this clause, so
-   * untagged documents are visible only inside their own tenant. Default false (today's behaviour).
+   * (`tags IN tagsAny OR (tags IS EMPTY AND accessLevel IN accessLevels)`). The tenant filter is always ANDed
+   * outside this clause, so untagged documents are visible only inside their own tenant. `accessLevels` is
+   * the caller's clearance for those untagged documents and is REQUIRED (no default): a list limits them to
+   * those levels (an empty list shows none), `null` means cleared for every level. Tagged documents are not
+   * affected. Default (option absent): untagged documents are not included.
    */
-  includeUntagged?: boolean | undefined;
+  includeUntagged?: { accessLevels: readonly string[] | null } | undefined;
   /**
    * When set, only documents whose indexed accessLevel is in this list are
    * retrieved (applied inside the engine query). Documents indexed without a

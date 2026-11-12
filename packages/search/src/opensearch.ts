@@ -170,12 +170,16 @@ export class OpenSearchEngine implements SearchEngine {
       if (query.includeUntagged) {
         // tags IN [...] OR no tags. This bool sits in `filter` next to the tenant `term` in `must`, so
         // the tenant constraint is still ANDed.
-        filter.push({
+        const lv = query.includeUntagged.accessLevels;
+        const untagged: Record<string, unknown> = {
           bool: {
-            should: [anyTag, { bool: { must_not: [{ exists: { field: "tags" } }] } }],
-            minimum_should_match: 1,
+            must_not: [{ exists: { field: "tags" } }],
+            // Untagged documents are limited to the caller's clearance (null = every level). Missing level
+            // or an empty list matches nothing (fail closed).
+            ...(lv === null ? {} : { filter: [{ terms: { accessLevel: lv.length ? [...lv] : ["__none__"] } }] }),
           },
-        });
+        };
+        filter.push({ bool: { should: [anyTag, untagged], minimum_should_match: 1 } });
       } else {
         filter.push(anyTag);
       }
