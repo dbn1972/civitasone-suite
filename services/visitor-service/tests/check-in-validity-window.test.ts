@@ -36,6 +36,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 
+/** Mutable so a test can tighten the tenant's offline age limit. Default: effectively unbounded (fixed 2026-01 fixtures). */
+let offlineMaxAgeHours = 1_000_000;
 const markProcessedMock = vi.fn(async () => true);
 const enqueueMock = vi.fn(async () => undefined);
 const isRevokedMock = vi.fn(async () => false);
@@ -99,7 +101,7 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 vi.mock("../src/modules/config-registry/policy.js", () => ({
   getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
-  getPolicyNumber: async () => 0,
+  getPolicyNumber: async (_tx: unknown, _t: string, key: string) => (key === "check_in.offline_max_age_hours" ? offlineMaxAgeHours : 0),
 }));
 
 vi.mock("../src/modules/digital-pass/revocation-store.js", () => ({
@@ -126,6 +128,7 @@ async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unkno
 }
 
 beforeEach(() => {
+  offlineMaxAgeHours = 1_000_000;
   markProcessedMock.mockReset().mockResolvedValue(true);
   enqueueMock.mockReset().mockResolvedValue(undefined);
   isRevokedMock.mockReset().mockResolvedValue(false);
@@ -225,5 +228,35 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     );
     expect(atEnd.dlq).toHaveLength(0);
     expect(fakeTx.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("checkInRecord offline timestamp age backstop (check_in.offline_max_age_hours)", () => {
+  it("dead-letters (non-retryable) an offline timestamp older than the tenant limit, before any write", async () => {
+    offlineMaxAgeHours = 12;
+    const queue = freshQueue();
+    // WITHIN_WINDOW (2026-01-01) is inside the pass window but far older than 12 h.
+    await publishAndFlush(queue, COMMANDS.checkInRecord, { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() }, 600);
+    expect(queue.dlq).toHaveLength(1);
+    expect(queue.dlq[0]?.error).toContain("OFFLINE_TIMESTAMP_TOO_OLD");
+    expect(fakeTx.update).not.toHaveBeenCalled();
+    expect(fakeTx.insert).not.toHaveBeenCalled();
+  });
+
+  it("commits an offline timestamp inside the limit", async () => {
+    offlineMaxAgeHours = 12;
+    passRow = { ...passRow, validFrom: new Date(Date.now() - 6 * 3_600_000), validUntil: new Date(Date.now() + 6 * 3_600_000) };
+    const queue = freshQueue();
+    await publishAndFlush(queue, COMMANDS.checkInRecord, { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: new Date(Date.now() - 3_600_000).toISOString() });
+    expect(queue.dlq).toHaveLength(0);
+    expect(fakeTx.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("a LIVE check-in ignores a backdated client timestamp (judged at server time -> expired fixture pass)", async () => {
+    const queue = freshQueue();
+    await publishAndFlush(queue, COMMANDS.checkInRecord, { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() }, 600);
+    expect(queue.dlq.length).toBeGreaterThan(0);
+    expect(queue.dlq[0]?.error).toContain("expired");
+    expect(fakeTx.update).not.toHaveBeenCalled();
   });
 });

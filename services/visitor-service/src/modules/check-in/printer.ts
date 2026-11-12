@@ -13,14 +13,20 @@ import { devices } from "../device-registry/schema.js";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === "string" && UUID_RE.test(v);
 
-/** A printer device, or a terminal/kiosk with an attached printer (any capability key or value mentioning "print"). */
+const PRINT_WORDS = new Set(["print", "printer", "printers", "printing"]);
+/** Whole-word match ("badge_printer", "badgePrinter", "print"); NOT "fingerprint" / "blueprint". */
+function mentionsPrinting(text: string): boolean {
+  return text.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).some((w) => PRINT_WORDS.has(w));
+}
+
+/** A printer device, or a terminal/kiosk with an attached printer (a capability key or value naming a printer). */
 export function canPrint(d: { deviceType?: unknown; capabilities?: unknown } | undefined): boolean {
   if (!d) return false;
   if (d.deviceType === "printer") return true;
   const caps = d.capabilities;
   if (!caps || typeof caps !== "object") return false;
   return Object.entries(caps as Record<string, unknown>).some(([k, v]) =>
-    /print/i.test(k) || (Array.isArray(v) && v.some((x) => typeof x === "string" && /print/i.test(x))));
+    mentionsPrinting(k) || (Array.isArray(v) && v.some((x) => typeof x === "string" && mentionsPrinting(x))));
 }
 
 export type BadgePrinterResolution =

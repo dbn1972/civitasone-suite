@@ -34,7 +34,7 @@ import { domainRejectionSafe } from "../../shared/domain-rejection.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyVipArrival } from "../vip/routes.js";
 import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
-import { getPolicyBoolean } from "../config-registry/policy.js";
+import { getPolicyBoolean, getPolicyNumber } from "../config-registry/policy.js";
 import { loadCheckInWindowPolicy, evaluateCheckInWindow } from "./window.js";
 import { resolveBadgePrinter } from "./printer.js";
 import { FUTURE_SKEW_MS } from "./trusted-time.js";
@@ -231,6 +231,13 @@ export function registerCheckInConsumers(queue: Queue): void {
       const timestamp = p.offlineRecorded === true && p.timestamp ? new Date(p.timestamp) : nowAt;
       if (Number.isNaN(timestamp.getTime()) || timestamp.getTime() > nowAt.getTime() + FUTURE_SKEW_MS) {
         throw new NonRetryableError(`OFFLINE_TIMESTAMP_IN_FUTURE: check-in timestamp for pass '${p.passId}' is invalid or in the future`);
+      }
+      if (p.offlineRecorded === true) {
+        // Backstop for the route's bound (same tenant limit): a client-claimed time may not be stale.
+        const maxAgeMs = (await getPolicyNumber(tx, msg.tenantId, "check_in.offline_max_age_hours")) * 3_600_000;
+        if (nowAt.getTime() - timestamp.getTime() > maxAgeMs) {
+          throw new NonRetryableError(`OFFLINE_TIMESTAMP_TOO_OLD: offline timestamp ${timestamp.toISOString()} for pass '${p.passId}' is older than the ${maxAgeMs / 3_600_000} h limit`);
+        }
       }
       // Window is [validFrom (or start of the scheduled day, per tenant policy), validUntil + tenant grace].
       // The route already answered 422 synchronously for this; this is the commit-time backstop.

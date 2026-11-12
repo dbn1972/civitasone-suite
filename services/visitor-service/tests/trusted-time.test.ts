@@ -37,6 +37,17 @@ describe("canPrint (gate terminal must be able to print)", () => {
     expect(canPrint({ deviceType: "kiosk", capabilities: { peripherals: ["badge_printer"] } })).toBe(true);
     expect(canPrint({ deviceType: "kiosk", capabilities: { print: [] } })).toBe(true);
   });
+  it("does not mistake fingerprint / blueprint for a printer (whole-word match only)", () => {
+    expect(canPrint({ deviceType: "kiosk", capabilities: { fingerprint: ["scan"] } })).toBe(false);
+    expect(canPrint({ deviceType: "kiosk", capabilities: { biometrics: ["fingerprint", "blueprint_reader"] } })).toBe(false);
+    expect(canPrint({ deviceType: "scanner", capabilities: { sensors: ["fingerprint_scanner"] } })).toBe(false);
+  });
+  it("still matches print / printer / badge_printer / badgePrinter words", () => {
+    expect(canPrint({ deviceType: "kiosk", capabilities: { print: [] } })).toBe(true);
+    expect(canPrint({ deviceType: "kiosk", capabilities: { peripherals: ["Badge-Printer"] } })).toBe(true);
+    expect(canPrint({ deviceType: "kiosk", capabilities: { badgePrinter: [] } })).toBe(true);
+    expect(canPrint({ deviceType: "kiosk", capabilities: { output: ["label printing"] } })).toBe(true);
+  });
   it("refuses scanners, turnstiles, barriers and kiosks without a printer", () => {
     for (const deviceType of ["scanner", "turnstile", "barrier", "kiosk"]) expect(canPrint({ deviceType, capabilities: { qr: ["scan"] } })).toBe(false);
     expect(canPrint(undefined)).toBe(false);
