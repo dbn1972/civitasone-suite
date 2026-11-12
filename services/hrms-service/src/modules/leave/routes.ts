@@ -12,7 +12,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveLeaveReadScope } from "../../shared/self-scope.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
-import { validateLeaveRequest, getHolidaysInRange, countWorkingDaysExcludingHolidays, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
+import { validateLeaveRequest, getHolidaysInRange, countWorkingDaysExcludingHolidays, countCalendarDays, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -57,6 +57,12 @@ interface LeaveEvaluation {
   warnings: string[];
   /** Blocking reasons; empty means the application is acceptable. */
   violations: LeaveViolation[];
+  /**
+   * true only when the CCS rules engine produced the count. A non-engine code is still counted by the
+   * server under the type's own rule (computedDays is set) but is reported as engineApplied:false.
+   * Absent = derive from computedDays (engine path).
+   */
+  engineApplied?: boolean;
   /** Holiday dates (tenant calendar) inside the requested range. */
   holidaysInRange: string[];
   /** The allocation balance the request is checked against (0.5 granularity). */
@@ -170,12 +176,15 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // after the 202 has already been returned, so a shortfall used to vanish
     // silently (GAP-HR-LEAVE-APPLY-04).
     //
-    // The client's day count is not trusted for the holiday/weekend question: the type's OWN counting
-    // rule (the tenant's policy row for this type + employee type; "calendar" when none, the column
-    // default) decides. A calendar-counted type (maternity, EOL ...) legitimately counts weekends and
-    // holidays, so it is never blocked here. A working-days type whose range holds no working day would
-    // debit 0 days: refuse it with the same LEAVE_NO_WORKING_DAYS as the engine path, and use the
-    // server-computed working-day count for the balance check and the debit.
+    // The client's day count is never trusted for a full-day request. The type's OWN counting rule decides:
+    // the tenant's policy row for this leave type + employee type (`working_days` or `calendar`); a type
+    // with no active policy row falls back to the column default, `calendar` (weekends and holidays count).
+    //   - calendar:     days = toDate - fromDate + 1 (always >= 1, so never the zero-day refusal);
+    //   - working_days: weekends and tenant holidays are excluded; zero is refused with
+    //                   LEAVE_NO_WORKING_DAYS, the same as the engine path.
+    // The server's count REPLACES a disagreeing client count (an inflated or a deflated one) for the balance
+    // check and the persisted debit, exactly as the engine path already does. Half-day / short leave
+    // (dayPart != full, only CL, so never reaches here) keeps its 0.5 semantics: the client value stands.
     let serverDays: number | null = null;
     let holidaysInRange: string[] = [];
     if (body.dayPart === "full") {
@@ -183,16 +192,18 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
       if (policyRow?.countMethod === "working_days") {
         holidaysInRange = await getHolidaysInRange(tenantId, body.fromDate, body.toDate);
         serverDays = countWorkingDaysExcludingHolidays(body.fromDate, body.toDate, new Set(holidaysInRange));
-        if (serverDays <= 0) return { ...violation(LEAVE_NO_WORKING_DAYS, LEAVE_NO_WORKING_DAYS_MESSAGE), computedDays: 0, holidaysInRange };
+        if (serverDays <= 0) return { ...violation(LEAVE_NO_WORKING_DAYS, LEAVE_NO_WORKING_DAYS_MESSAGE), computedDays: 0, holidaysInRange, engineApplied: false };
+      } else {
+        serverDays = countCalendarDays(body.fromDate, body.toDate);
       }
     }
     try {
       assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, serverDays ?? body.daysApplied);
     } catch (err) {
-      if (err instanceof DomainError) return { ...violation(err.code, err.message), computedDays: serverDays, holidaysInRange };
+      if (err instanceof DomainError) return { ...violation(err.code, err.message), computedDays: serverDays, holidaysInRange, engineApplied: false };
       throw err;
     }
-    return { computedDays: serverDays, warnings: [], violations: [], holidaysInRange, balance };
+    return { computedDays: serverDays, warnings: [], violations: [], holidaysInRange, balance, engineApplied: false };
   }
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
@@ -376,7 +387,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       computedDays,
       // false for a leave code outside the CCS engine (e.g. EOL/MED) -- the
       // day count is then the client-submitted one, shown as approximate.
-      engineApplied: evaluation.computedDays != null,
+      engineApplied: evaluation.engineApplied ?? evaluation.computedDays != null,
       warnings: evaluation.warnings,
       violations: evaluation.violations,
       holidaysInRange: evaluation.holidaysInRange,

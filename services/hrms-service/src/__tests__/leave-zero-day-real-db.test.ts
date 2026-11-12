@@ -186,4 +186,38 @@ describe("zero-day leave for codes OUTSIDE the CCS engine (type's own counting r
     expect(p.computedDays).toBe(1);
     expect((await post("/v1/hrms/leave-requests", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2026-10-10", "2026-10-11", 2))).statusCode).toBe(202);
   });
+
+  // The client's day count is never trusted for a full-day request, on a calendar-counted type either.
+  it("calendar type (EOL): an INFLATED client count (10 for a 3-day range) is overridden by the server count, and 3 is what is persisted", async () => {
+    const pre = await post("/v1/hrms/leave-requests/preview", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2026-11-02", "2026-11-04", 10));
+    const p = pre.json() as { valid: boolean; computedDays: number; engineApplied: boolean; balanceAfter: number };
+    expect(p).toMatchObject({ valid: true, computedDays: 3, engineApplied: false, balanceAfter: 27 });
+    const res = await post("/v1/hrms/leave-requests", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2026-11-02", "2026-11-04", 10));
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const rows = await asTenant((tx) => tx`SELECT days_applied FROM leave.hrms_leave_apps WHERE tenant_id = ${TENANT}`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.days_applied).toBe(3);
+  });
+
+  it("calendar type (EOL): a DEFLATED client count (1 for a 30-day range) cannot dodge the debit: 30 is persisted", async () => {
+    const res = await post("/v1/hrms/leave-requests", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2026-11-02", "2026-12-01", 1));
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const rows = await asTenant((tx) => tx`SELECT days_applied FROM leave.hrms_leave_apps WHERE tenant_id = ${TENANT}`);
+    expect(rows[0]!.days_applied).toBe(30);
+  });
+
+  it("calendar type (EOL): a deflated count on a range beyond the balance is refused (422 INSUFFICIENT_LEAVE_BALANCE), not accepted at 1 day", async () => {
+    const res = await post("/v1/hrms/leave-requests", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2026-11-02", "2026-12-05", 1)); // 34 days vs balance 30
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INSUFFICIENT_LEAVE_BALANCE");
+    await drainQueue();
+    expect(await count()).toBe(0);
+  });
+
+  it("a type with no policy row and a holiday-only range is counted by calendar (1 day), regardless of the client's count", async () => {
+    const pre = await post("/v1/hrms/leave-requests/preview", nb(EOL_TYPE_ID, EOL_ALLOC_ID, "2027-01-26", "2027-01-26", 5));
+    expect(pre.json()).toMatchObject({ valid: true, computedDays: 1 });
+  });
 });
