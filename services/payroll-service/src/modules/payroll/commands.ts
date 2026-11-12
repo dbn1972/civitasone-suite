@@ -66,7 +66,10 @@ async function assertReceipts(
   if (violation === "RECEIPT_KEY_INVALID") {
     throw new HttpError(422, "RECEIPT_KEY_INVALID", "receipts must be uploaded through the receipt upload endpoint by the person submitting the claim");
   }
-  if (!keys || keys.length === 0) return { policyVersion: version, basis: evaluateReceiptRule(policy, category, amountMinor, 0, selfDeclared).ok ? (evaluateReceiptRule(policy, category, amountMinor, 0, selfDeclared) as { basis: ReceiptBasis }).basis : "not_required" };
+  if (!keys || keys.length === 0) {
+    const decision = evaluateReceiptRule(policy, category, amountMinor, 0, selfDeclared);
+    return { policyVersion: version, basis: decision.ok ? decision.basis : "not_required" };
+  }
   // HEAD every object: it must exist, be within the size cap and be a PDF / JPEG /
   // PNG as stored (the presign signs both, but the stored object is what counts).
   let heads: Awaited<ReturnType<typeof headObject>>[];
