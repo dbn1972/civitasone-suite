@@ -119,6 +119,9 @@ vi.mock("../src/modules/check-in/commands.js", () => ({
   checkInRecord: vi.fn(async () => fakeAccepted),
   checkOutRecord: vi.fn(async () => fakeAccepted),
 }));
+vi.mock("../src/modules/check-in/preflight.js", () => ({
+  assertPassCheckInAllowed: vi.fn(async () => undefined),
+}));
 vi.mock("../src/modules/check-in/gate-sync.js", () => ({
   loadGateSyncSnapshot: vi.fn(async () => ({ revokedPassIds: [], blacklistHashes: [], watchlistHashes: [] })),
 }));

@@ -84,6 +84,7 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 // dedicated suite (check-in-vip-badge.test.ts).
 vi.mock("../src/modules/config-registry/policy.js", () => ({
   getPolicyBoolean: async () => false,
+  getPolicyNumber: async () => 0,
 }));
 
 const { registerCheckInConsumers } = await import("../src/modules/check-in/consumer.js");

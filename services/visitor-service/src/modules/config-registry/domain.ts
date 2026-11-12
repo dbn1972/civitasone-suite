@@ -138,6 +138,7 @@ export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: n
   "visit_request.max_lead_days":             { min: 1, max: 365 },
   "check_in.overstay_escalation_hours":      { min: 1, max: 168 },
   "check_in.overstay_grace_minutes":         { min: 0, max: 240 },
+  "check_in.expiry_grace_minutes":           { min: 0, max: 1440 },
   "check_in.waiting_reminder_minutes":       { min: 1, max: 1440 },
   "check_in.waiting_reminder_upper_minutes": { min: 1, max: 1440 },
   "digital_pass.multi_day_max_days":         { min: 1, max: 90 },
@@ -149,6 +150,7 @@ export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: n
 export const POLICY_BOOLEAN_KEYS: ReadonlySet<string> = new Set([
   "turnstile.anti_passback_enabled",
   "check_in.auto_print_badge",
+  "check_in.allow_from_start_of_day",
 ]);
 
 function unwrapValue(v: unknown): unknown {

@@ -36,8 +36,11 @@ let gateRow: Record<string, unknown> | undefined;
 
 // Ordered select responses: 1=digitalPasses, 2=gates, 3=visitRequests, 4=locations.
 function makeChain(rows: Record<string, unknown>[]) {
-  return { from: () => ({ where: () => ({ limit: async () => rows }) }) };
+  const limit = async () => rows;
+  return { from: () => ({ where: () => ({ limit, orderBy: () => ({ limit }) }) }) };
 }
+const PRINTER_ID = "88888888-8888-8888-8888-888888888888";
+let gateHasPrinter = true;
 
 const fakeTx = {
   select: vi.fn(() => {
@@ -46,7 +49,7 @@ const fakeTx = {
     if (fakeTx.__n === 1) return makeChain(passRow ? [passRow] : []);
     if (fakeTx.__n === 2) return makeChain(gateRow ? [gateRow] : []);
     if (fakeTx.__n === 3) return makeChain(visitRow ? [visitRow] : []);
-    return makeChain([{ capacityThreshold: null }]);
+    return makeChain([{ capacityThreshold: null, ...(gateHasPrinter ? { id: PRINTER_ID } : {}) }]);
   }) as unknown as (() => ReturnType<typeof makeChain>) & { __n?: number },
   insert: vi.fn(() => ({ values: async () => undefined })),
   update: vi.fn(() => ({ set: () => ({ where: async () => undefined }) })),
@@ -73,11 +76,12 @@ vi.mock("../src/modules/blacklist/screening-store.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
-  getPolicyBoolean: async () => autoPrintEnabled,
+  getPolicyBoolean: async (_tx: unknown, _t: string, key: string) => (key === "check_in.auto_print_badge" ? autoPrintEnabled : false),
+  getPolicyNumber: async () => 0,
 }));
 
 const { registerCheckInConsumers } = await import("../src/modules/check-in/consumer.js");
-const { COMMANDS } = await import("../src/topics.js");
+const { COMMANDS, EVENTS } = await import("../src/topics.js");
 const { VIP_ARRIVED_EVENT } = await import("../src/modules/vip/routes.js");
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
@@ -129,6 +133,7 @@ beforeEach(() => {
   fakeTx.select.mockClear();
   (fakeTx as unknown as { __n?: number }).__n = 0;
   autoPrintEnabled = false;
+  gateHasPrinter = true;
   passRow = {
     id: PASS_ID, tenantId: TENANT, visitRequestId: VISIT_REQUEST_ID,
     locationId: LOCATION_ID, status: "active", passType: "single",
@@ -187,7 +192,20 @@ describe("Fix 2 — check-in → badge auto-handoff", () => {
     expect(jobs[0].payload.passId).toBe(PASS_ID);
     expect(jobs[0].payload.visitorCategory).toBe("default"); // "standard" → default bucket
     expect(jobs[0].tenantId).toBe(TENANT);
+    expect(jobs[0].payload.deviceId).toBe(PRINTER_ID); // gate's default printer, never ""
     expect(queue.dlq).toHaveLength(0);
+  });
+
+  it("queues NO print job (and does not dead-letter) when there is no gate terminal and the gate has no printer", async () => {
+    autoPrintEnabled = true;
+    gateHasPrinter = false;
+    const queue = freshQueue();
+    await checkIn(queue);
+
+    expect(printJobEnqueues()).toHaveLength(0);
+    expect(queue.dlq).toHaveLength(0);
+    // the check-in itself still committed (visitor-checked-in event published)
+    expect(enqueueMock.mock.calls.some((c) => (c[1] as { topic?: string }).topic === EVENTS.visitorCheckedIn)).toBe(true);
   });
 
   it("enqueues NO printJobCreate when the tenant disables the toggle", async () => {

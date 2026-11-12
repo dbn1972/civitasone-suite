@@ -48,6 +48,8 @@ export const POLICY_DEFAULTS = {
   // Check-in / overstay (check-in/overstay-worker.ts, check-in/domain.ts).
   "check_in.overstay_escalation_hours":    2,
   "check_in.overstay_grace_minutes":       0,
+  // Check-in validity window (check-in/window.ts): admit up to N minutes after validUntil. 0 = strict.
+  "check_in.expiry_grace_minutes":         0,
   // Waiting-in-lobby reminder window (check-in/waiting-reminder-worker.ts).
   "check_in.waiting_reminder_minutes":     10,
   "check_in.waiting_reminder_upper_minutes": 15,
@@ -65,6 +67,9 @@ export const POLICY_BOOL_DEFAULTS = {
   // printJobCreate for the visitor's badge on a successful check-in. Defaults
   // ON; a tenant can disable per-site by setting this false.
   "check_in.auto_print_badge":             true,
+  // Check-in window (check-in/window.ts): admit from 00:00 IST of the pass's first day rather than
+  // from the scheduled time. Defaults OFF (strict, previous behaviour).
+  "check_in.allow_from_start_of_day":      false,
 } as const;
 
 export type PolicyNumberKey = keyof typeof POLICY_DEFAULTS;

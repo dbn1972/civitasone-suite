@@ -38,6 +38,7 @@ import { listActiveVisitors } from "./repo.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
 import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { assertGateExists } from "../location/references.js";
+import { assertPassCheckInAllowed } from "./preflight.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
 // Gate-terminal roles: security personnel operating gates + admin staff. The plain
@@ -195,6 +196,7 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const body = checkInBody.parse(req.body);
     // UAT FQ9 #8: an unknown gate is a 422 here, not a 202 followed by a silent dead-letter.
     await assertGateExists(ctx.tenantId, body.gateId);
+    await assertPassCheckInAllowed(ctx.tenantId, body.passId, body.timestamp ?? undefined, ctx.correlationId);
 
     const accepted = await commands.checkInRecord(ctx, {
       passId: body.passId,
