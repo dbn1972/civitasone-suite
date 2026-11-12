@@ -34,6 +34,8 @@ export const fetchModuleKeysFromAdmin: ModuleKeyFetcher = async (tenantId) => {
         headers: {
           "x-internal": "1",
           "x-tenant-id": tenantId,
+          // admin-service reads x-service-secret in its global auth hook and x-internal-secret in the route itself.
+          "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
           "x-internal-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
           "x-internal-caller": "procurement-service-modules",
         },
@@ -72,4 +74,14 @@ export async function tenantHasModule(tenantId: string, moduleKey: string): Prom
   if (!UUID_RE.test(tenantId)) return true;
   const keys = await moduleKeys(tenantId);
   return keys === null ? true : keys.includes(moduleKey);
+}
+
+/**
+ * Without INTERNAL_SERVICE_SECRET every lookup is refused by admin-service, so the fail-safe answers "has Finance" for
+ * every tenant and local approval never engages unless an explicit override is set. Say so at boot.
+ */
+export function warnIfModuleLookupUnconfigured(log: { warn: (o: object, m: string) => void }): void {
+  if (!process.env.INTERNAL_SERVICE_SECRET) {
+    log.warn({ var: "INTERNAL_SERVICE_SECRET" }, "INTERNAL_SERVICE_SECRET is not set: tenant module lookups will fail and every tenant is treated as having Finance; local PO approval engages only through an explicit override");
+  }
 }

@@ -40,6 +40,7 @@ const MAKER = randomUUID();
 const OFFICER = randomUUID();
 const ADMIN = randomUUID();
 const SUPER = randomUUID();
+const SUPER2 = randomUUID();
 
 const headers = (tenantId: string, sub: string, roles: string[]) => ({
   authorization: `Bearer ${signToken({ sub, tid: tenantId, roles, sid: randomUUID() }, SECRET)}`, "content-type": "application/json",
@@ -51,7 +52,7 @@ const published: Captured[] = [];
 const deniedAudits = (tenantId: string) => published.filter((e) => e.topic === AUDIT && e.tenantId === tenantId && e.payload.outcome === "denied");
 
 async function outbox(tenantId: string, topic: string): Promise<Array<Record<string, unknown>>> {
-  const rows = await inTenant(tenantId, (tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, tenantId), eq(outboxMessages.topic, topic))));
+  const rows = await inTenant(tenantId, (tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, tenantId), eq(outboxMessages.topic, topic))).orderBy(outboxMessages.createdAt));
   return rows.map((r) => (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload) as Record<string, unknown>);
 }
 const auditRows = async (tenantId: string, action: string) => (await outbox(tenantId, AUDIT)).filter((p) => p.action === action);
@@ -349,5 +350,108 @@ describe("finance tenant (every current tenant): behaviour is unchanged", () => 
     } finally {
       setModuleKeyFetcher(async (tid) => (hasFinance.get(tid) === false ? ["procurement", "hrms"] : ["procurement", "finance", "hrms"]));
     }
+  });
+});
+
+const putSettings = (tenantId: string, sub: string, roles: string[], payload: Record<string, unknown>) =>
+  app.inject({ method: "PUT", url: "/v1/procurement/po-approval-settings", headers: headers(tenantId, sub, roles), payload });
+const getSettings = async (tenantId: string) => (await app.inject({ method: "GET", url: "/v1/procurement/po-approval-settings", headers: headers(tenantId, SUPER, ["super_admin"]) })).json();
+
+describe("forcing local approval on a tenant that HAS Finance: a super admin, confirmed by a second super admin", () => {
+  const T = randomUUID();
+  beforeAll(() => { hasFinance.set(T, true); });
+
+  it("a procurement admin is refused (403) and nothing is recorded", async () => {
+    const res = await putSettings(T, ADMIN, ["procurement_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("LOCAL_OVERRIDE_REQUIRES_SUPER_ADMIN");
+    expect(await getSettings(T)).toMatchObject({ mode: "finance_sanction", override: null, pendingOverride: null });
+  });
+
+  it("a super admin's request is held pending: the tenant stays on the sanction path, the request is visible and audited", async () => {
+    const res = await putSettings(T, SUPER, ["super_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect(res.statusCode).toBe(202);
+    const g = await getSettings(T);
+    expect(g).toMatchObject({ mode: "finance_sanction", source: "derived", override: null });
+    expect(g.pendingOverride).toMatchObject({ mode: "local", requestedBy: SUPER });
+    const a = (await auditRows(T, "update")).find((p) => (p.details as { modeChange?: string }).modeChange === "requested")!;
+    expect(a.details).toMatchObject({ requestedOverride: "local", awaitingSecondSuperAdmin: true, after: { modeOverride: null } });
+    // still the sanction rule
+    const indentId = await seedIndent(T);
+    const po = await app.inject({ method: "POST", url: "/v1/procurement/pos", headers: headers(T, MAKER, ["procurement_officer"]), payload: payloadFor(indentId, 6_000_000) });
+    expect(po.json().code).toBe("SANCTION_REF_REQUIRED");
+  });
+
+  it("the same super admin asking again does not confirm their own request", async () => {
+    await putSettings(T, SUPER, ["super_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect(await getSettings(T)).toMatchObject({ mode: "finance_sanction", override: null, pendingOverride: { requestedBy: SUPER } });
+  });
+
+  it("a different super admin saving the same choice confirms it: local approval is on, the request is cleared, both people are in the audit row", async () => {
+    const res = await putSettings(T, SUPER2, ["super_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect(res.statusCode).toBe(202);
+    expect(await getSettings(T)).toMatchObject({ mode: "local", source: "override", override: "local", pendingOverride: null });
+    const a = (await auditRows(T, "update")).find((p) => (p.details as { modeChange?: string }).modeChange === "confirmed")!;
+    expect(a.details).toMatchObject({ requestedBy: SUPER, confirmedBy: SUPER2, after: { modeOverride: "local" } });
+    const indentId = await seedIndent(T);
+    const po = await app.inject({ method: "POST", url: "/v1/procurement/pos", headers: headers(T, MAKER, ["procurement_officer"]), payload: payloadFor(indentId, 6_000_000) });
+    await memQueue.drain();
+    expect(po.statusCode).toBe(202);
+  });
+
+  it("going back to the sanction path needs no second person, from a procurement admin, and clears a pending request", async () => {
+    const back = await putSettings(T, ADMIN, ["procurement_admin"], { modeOverride: "finance_sanction" });
+    await memQueue.drain();
+    expect(back.statusCode).toBe(202);
+    expect(await getSettings(T)).toMatchObject({ mode: "finance_sanction", override: "finance_sanction" });
+    await putSettings(T, SUPER, ["super_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect((await getSettings(T)).pendingOverride).toMatchObject({ requestedBy: SUPER });
+    await putSettings(T, ADMIN, ["procurement_admin"], { modeOverride: null });
+    await memQueue.drain();
+    expect(await getSettings(T)).toMatchObject({ mode: "finance_sanction", override: null, pendingOverride: null });
+  });
+
+  it("the consumer re-checks: an unstamped command that skips the route is dropped and records nothing", async () => {
+    const dlqBefore = memQueue.dlq.length;
+    await queue.publish(COMMANDS.poApprovalSettingsUpdate, {
+      messageId: randomUUID(), type: COMMANDS.poApprovalSettingsUpdate, tenantId: T, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { tenantId: T, modeOverride: "local" },
+    });
+    await memQueue.drain();
+    expect(memQueue.dlq.slice(dlqBefore).some((d) => d.topic === COMMANDS.poApprovalSettingsUpdate && String(d.error).includes("LOCAL_OVERRIDE_REQUIRES_SUPER_ADMIN"))).toBe(true);
+    expect(await getSettings(T)).toMatchObject({ override: null, pendingOverride: null });
+  });
+
+  it("a tenant without Finance is already local: a procurement admin may set it, with no second person", async () => {
+    const res = await putSettings(LOCAL, ADMIN, ["procurement_admin"], { modeOverride: "local" });
+    await memQueue.drain();
+    expect(res.statusCode).toBe(202);
+    expect(await getSettings(LOCAL)).toMatchObject({ mode: "local", source: "override", override: "local", pendingOverride: null });
+    await putSettings(LOCAL, ADMIN, ["procurement_admin"], { modeOverride: null });
+    await memQueue.drain();
+  });
+});
+
+describe("local approval mode: an approval without the local marker is refused", () => {
+  it("a marker-less procurement.po.approve (a workflow task raised before the switch, or any other publisher) does not approve the PO; the maker is told", async () => {
+    const po = await seedPo(LOCAL, 6_000_000n);
+    await queue.publish(COMMANDS.poApprove, {
+      messageId: randomUUID(), type: COMMANDS.poApprove, tenantId: LOCAL, actorId: SUPER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: po, tenantId: LOCAL },
+    });
+    await memQueue.drain();
+    expect((await poRow(LOCAL, po))?.status).toBe("draft");
+    expect((await outbox(LOCAL, EVENTS.poApprovalRejected)).some((p) => p.poId === po && p.code === "LOCAL_APPROVAL_REQUIRED")).toBe(true);
+    expect((await auditRows(LOCAL, "approval_rejected_local_mode")).some((p) => p.resourceId === po)).toBe(true);
+    // ... and the same PO is approved through the route, under the matrix
+    const ok = await app.inject({ method: "PATCH", url: `/v1/procurement/pos/${po}/approve`, headers: headers(LOCAL, SUPER2, ["super_admin"]), payload: {} });
+    await memQueue.drain();
+    expect(ok.statusCode).toBe(202);
+    expect((await poRow(LOCAL, po))?.status).toBe("approved");
   });
 });

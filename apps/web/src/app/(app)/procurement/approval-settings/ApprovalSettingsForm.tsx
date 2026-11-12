@@ -14,6 +14,8 @@ export type ApprovalSettings = {
   override: "finance_sanction" | "local" | null;
   matrix: MatrixRow[];
   isDefaultMatrix: boolean;
+  /** A super admin's request to force local approval, awaiting a second super admin. */
+  pendingOverride?: { mode: "local"; requestedBy: string; requestedAt: string } | null;
 };
 
 const ROLES = ["procurement_officer", "procurement_admin", "super_admin"] as const;
@@ -94,6 +96,7 @@ export function ApprovalSettingsForm({ initial, canEdit }: { initial: ApprovalSe
             ? (initial.source === "override" ? t("modeLocalOverride") : t("modeLocalDerived"))
             : (initial.source === "override" ? t("modeSanctionOverride") : t("modeSanctionDerived"))}
         </p>
+        {initial.pendingOverride && <p role="note" className="pill warn" style={{ margin: 0, width: "fit-content" }}>{t("pendingNote")}</p>}
         <Field id={overrideId} label={t("overrideLabel")} style={{ display: "grid", gap: 6, maxWidth: 360 }} disabled={!canEdit}>
           <Select value={override} onChange={(e) => setOverride(e.target.value)} disabled={!canEdit}>
             <option value="">{t("overrideDerived")}</option>

@@ -307,13 +307,26 @@ export function registerPoConsumers(queue: Queue): void {
     // M10: a local approval (PATCH /pos/:id/approve, tenant without Finance) is re-checked here: the mode, and the
     // threshold matrix for the PO's value. An approval from the workflow task carries no such marker: unchanged.
     const local = p.localApproval;
-    if (local && (await resolveApprovalMode(p.tenantId)) !== "local") {
+    const approvalMode = await resolveApprovalMode(p.tenantId);
+    if (local && approvalMode !== "local") {
       throw new NonRetryableError("LOCAL_APPROVAL_NOT_ENABLED: this tenant approves purchase orders through the finance-sanction workflow");
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
+      // M10: in a local-approval tenant the threshold matrix is the ONLY approval path. An approval without the local marker
+      // (a workflow task raised before the switch, or any other publisher of this topic) carries no roles to check against
+      // the matrix, so it is refused: the maker is told, and the PO is approved through PATCH /pos/:id/approve instead.
+      if (!local && approvalMode === "local") {
+        await enqueue(tx, {
+          topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { poId: p.id, poNo: po.poNo, reason: "this tenant approves purchase orders under the approval limits; approve it from the purchase order page", code: "LOCAL_APPROVAL_REQUIRED" },
+        });
+        await audit(tx, msg, "approval_rejected_local_mode", "po", p.id);
+        return;
+      }
       // SoD (#9): the approver must differ from the PO creator. Self-approval is
       // rejected — emit a rejection event instead of approving.
       try {

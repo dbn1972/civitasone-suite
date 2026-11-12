@@ -5,7 +5,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { DEFAULT_MATRIX, validateMatrix, bandFor, approvalDecision, wireBands, MAX_BANDS, type MatrixBand } from "../src/modules/po-approval/matrix.js";
 import { effectiveApprovalMode, isApprovalMode } from "../src/modules/po-approval/mode.js";
-import { tenantHasModule, setModuleKeyFetcher } from "../src/shared/tenant-modules.js";
+import { tenantHasModule, setModuleKeyFetcher, warnIfModuleLookupUnconfigured } from "../src/shared/tenant-modules.js";
 
 const T = "11111111-2222-4333-8444-555555555555";
 const matrix: MatrixBand[] = [
@@ -109,5 +109,24 @@ describe("approval decision", () => {
       { upToMinor: "100000000", approverRoles: ["procurement_admin"] },
       { upToMinor: null, approverRoles: ["super_admin"] },
     ]);
+  });
+});
+
+describe("warnIfModuleLookupUnconfigured", () => {
+  const saved = process.env.INTERNAL_SERVICE_SECRET;
+  afterEach(() => { if (saved === undefined) delete process.env.INTERNAL_SERVICE_SECRET; else process.env.INTERNAL_SERVICE_SECRET = saved; });
+
+  it("says clearly, at boot, that local approval will not engage without INTERNAL_SERVICE_SECRET", () => {
+    delete process.env.INTERNAL_SERVICE_SECRET;
+    const calls: Array<[object, string]> = [];
+    warnIfModuleLookupUnconfigured({ warn: (o, m) => { calls.push([o, m]); } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1]).toMatch(/INTERNAL_SERVICE_SECRET is not set.*treated as having Finance.*explicit override/);
+  });
+  it("is silent when the secret is set", () => {
+    process.env.INTERNAL_SERVICE_SECRET = "x";
+    const calls: unknown[] = [];
+    warnIfModuleLookupUnconfigured({ warn: () => { calls.push(1); } });
+    expect(calls).toEqual([]);
   });
 });

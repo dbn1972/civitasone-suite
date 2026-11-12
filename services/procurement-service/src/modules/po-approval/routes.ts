@@ -21,7 +21,8 @@ import { assertTransitionAllowed, DomainError as PoDomainError } from "../po/dom
 import { idParam } from "../po/validators.js";
 import { approvalDecision, validateMatrix, wireBands, type MatrixBand } from "./matrix.js";
 import { resolveApprovalModeDetail } from "./mode.js";
-import { loadMatrix } from "./repo.js";
+import { loadMatrix, loadPending } from "./repo.js";
+import { tenantHasModule } from "../../shared/tenant-modules.js";
 
 const PROC_ROLES = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -30,6 +31,7 @@ const AUDIT_TOPIC = "audit.event.record";
 
 export const LOCAL_APPROVAL_NOT_ENABLED = "LOCAL_APPROVAL_NOT_ENABLED";
 export const APPROVAL_LEVEL_INSUFFICIENT = "APPROVAL_LEVEL_INSUFFICIENT";
+export const LOCAL_OVERRIDE_REQUIRES_SUPER_ADMIN = "LOCAL_OVERRIDE_REQUIRES_SUPER_ADMIN";
 
 const bandBody = z.object({
   upToMinor: z.string().regex(/^[1-9][0-9]{0,17}$/, "a whole number of paise").nullable(),
@@ -47,8 +49,8 @@ export async function poApprovalRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/po-approval-settings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const [d, m] = await Promise.all([resolveApprovalModeDetail(ctx.tenantId), loadMatrix(ctx.tenantId)]);
-    return reply.send({ mode: d.mode, source: d.source, override: d.override, hasFinance: d.hasFinance, matrix: wireBands(m.bands), isDefaultMatrix: m.isDefault });
+    const [d, m, pending] = await Promise.all([resolveApprovalModeDetail(ctx.tenantId), loadMatrix(ctx.tenantId), loadPending(ctx.tenantId)]);
+    return reply.send({ mode: d.mode, source: d.source, override: d.override, hasFinance: d.hasFinance, matrix: wireBands(m.bands), isDefaultMatrix: m.isDefault, pendingOverride: pending });
   });
 
   app.put("/v1/procurement/po-approval-settings", async (req, reply) => {
@@ -59,10 +61,17 @@ export async function poApprovalRoutes(app: FastifyInstance): Promise<void> {
       const problems = validateMatrix(parseBands(body.matrix));
       if (problems.length > 0) throw new HttpError(400, "INVALID_MATRIX", problems.join("; "));
     }
+    // Forcing local approval on a tenant that HAS Finance drops its sanction rule, the finance budget check and the workflow
+    // task. One procurement admin may not do that: it needs a super admin, and a second, different super admin to confirm
+    // it (the consumer holds the request pending until then). The safe direction (back to the sanction path) stays open.
+    const superAdmin = ctx.roles.includes("super_admin");
+    if (body.modeOverride === "local" && !superAdmin && (await tenantHasModule(ctx.tenantId, "finance"))) {
+      throw new HttpError(403, LOCAL_OVERRIDE_REQUIRES_SUPER_ADMIN, "switching a tenant that has Finance to local approval drops its budget-sanction rule; it needs a super admin, confirmed by a second super admin");
+    }
     await queue.publish(COMMANDS.poApprovalSettingsUpdate, {
       messageId: randomUUID(), type: COMMANDS.poApprovalSettingsUpdate,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-      payload: { tenantId: ctx.tenantId, ...(body.modeOverride !== undefined ? { modeOverride: body.modeOverride } : {}), ...(body.matrix ? { matrix: body.matrix } : {}) },
+      payload: { tenantId: ctx.tenantId, ...(superAdmin ? { superAdmin: true } : {}), ...(body.modeOverride !== undefined ? { modeOverride: body.modeOverride } : {}), ...(body.matrix ? { matrix: body.matrix } : {}) },
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: ctx.tenantId, status: "accepted", correlationId: ctx.correlationId });
   });

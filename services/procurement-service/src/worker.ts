@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { runWithTenant } from "@civitasone/db";
 import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
@@ -30,6 +31,7 @@ import { registerThreeWayMatchConsumers } from "./modules/three-way-match/consum
 import { registerVendorBlacklistConsumers } from "./modules/vendor-blacklist/consumer.js";
 
 const log = pino({ name: "procurement-worker" });
+warnIfModuleLookupUnconfigured(log);
 
 // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
 // scanner DSN must be present and distinct from DATABASE_URL so relay/purge

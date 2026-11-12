@@ -102,6 +102,11 @@ describe("ApprovalSettingsForm", () => {
     expect(screen.getByDisplayValue("50000.00")).toBeDisabled();
   });
 
+  it("shows a pending request to force local approval, which a second super admin must confirm", () => {
+    renderForm({ ...DEFAULTS, mode: "finance_sanction", pendingOverride: { mode: "local", requestedBy: "u1", requestedAt: "2026-11-12T10:00:00Z" } });
+    expect(screen.getByText(/second, different super admin must save the same choice/)).toBeInTheDocument();
+  });
+
   it("describes a finance-sanction tenant and is translated in Hindi", () => {
     renderForm({ ...DEFAULTS, mode: "finance_sanction", isDefaultMatrix: true });
     expect(screen.getByText(/uses the Finance module/)).toBeInTheDocument();

@@ -25,6 +25,7 @@ function mapSettings(p: unknown): ApprovalSettings | null {
     override: o.override === "local" || o.override === "finance_sanction" ? o.override : null,
     matrix: (o.matrix as MatrixRow[]).map((b) => ({ upToMinor: b.upToMinor === null ? null : String(b.upToMinor), approverRoles: Array.isArray(b.approverRoles) ? b.approverRoles.map(String) : [] })),
     isDefaultMatrix: o.isDefaultMatrix === true,
+    pendingOverride: o.pendingOverride && o.pendingOverride.mode === "local" ? { mode: "local", requestedBy: String(o.pendingOverride.requestedBy), requestedAt: String(o.pendingOverride.requestedAt) } : null,
   };
 }
 

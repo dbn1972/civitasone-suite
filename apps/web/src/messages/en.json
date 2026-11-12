@@ -19652,6 +19652,7 @@
     "limitInvalid": "Enter each limit as a rupee amount, for example 50000 or 50000.50.",
     "lastLimit": "The last band has no upper limit.",
     "rolesRequired": "Choose at least one role for every band.",
-    "adminOnly": "Only a procurement admin can change the approval limits."
+    "adminOnly": "Only a procurement admin can change the approval limits.",
+    "pendingNote": "A super admin has asked to switch this organisation to local approval, which drops the budget-sanction rule. A second, different super admin must save the same choice to confirm it."
   }
 }

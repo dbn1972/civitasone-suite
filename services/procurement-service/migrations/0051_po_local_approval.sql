@@ -8,7 +8,9 @@
 --    default, and what every existing tenant has: no row at all) means the
 --    approval mode is derived from whether the tenant has Finance
 --    ('finance_sanction' if it does, 'local' if not). 'finance_sanction' or
---    'local' forces it.
+--    'local' forces it. Forcing 'local' on a tenant that HAS Finance drops its sanction rule, so it is a two-step,
+--    two-person change: a super admin requests it (pending_mode_override / pending_requested_by), a DIFFERENT super
+--    admin confirms it, and only then does mode_override change.
 -- 2. po.po_approval_matrix: the tenant's local approval threshold matrix, one
 --    row per value band. upto_minor is the band's inclusive upper limit in paise
 --    (NULL = no limit, the last band); approver_roles are the procurement roles
@@ -27,10 +29,24 @@ SET lock_timeout = '5s';
 CREATE TABLE IF NOT EXISTS po.po_approval_settings (
   tenant_id     uuid PRIMARY KEY,
   mode_override varchar(16),
+  pending_mode_override varchar(16),
+  pending_requested_by uuid,
+  pending_requested_at timestamptz,
   updated_at    timestamptz NOT NULL DEFAULT now(),
   updated_by    uuid NOT NULL,
-  CONSTRAINT po_approval_settings_mode_chk CHECK (mode_override IS NULL OR mode_override IN ('finance_sanction', 'local'))
+  CONSTRAINT po_approval_settings_mode_chk CHECK (mode_override IS NULL OR mode_override IN ('finance_sanction', 'local')),
+  CONSTRAINT po_approval_settings_pending_chk CHECK (pending_mode_override IS NULL OR pending_mode_override = 'local')
 );
+-- A database that already has the first cut of this table:
+ALTER TABLE po.po_approval_settings ADD COLUMN IF NOT EXISTS pending_mode_override varchar(16);
+ALTER TABLE po.po_approval_settings ADD COLUMN IF NOT EXISTS pending_requested_by uuid;
+ALTER TABLE po.po_approval_settings ADD COLUMN IF NOT EXISTS pending_requested_at timestamptz;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'po_approval_settings_pending_chk') THEN
+    ALTER TABLE po.po_approval_settings ADD CONSTRAINT po_approval_settings_pending_chk
+      CHECK (pending_mode_override IS NULL OR pending_mode_override = 'local');
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS po.po_approval_matrix (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
