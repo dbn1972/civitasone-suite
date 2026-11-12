@@ -97,6 +97,7 @@ export interface MeetingStatus {
   status: string;
   scheduledAt: Date | null;
   committeeId?: string | null;
+  chairpersonId?: string | null;
 }
 
 /**
@@ -117,7 +118,7 @@ export async function getSubmissionDeadlineDays(tenantId: string, _committeeId?:
  */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
   const rows = await scopedRead((tx) => tx
-    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt, committeeId: meetings.committeeId })
+    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt, committeeId: meetings.committeeId, chairpersonId: meetings.chairpersonId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1));

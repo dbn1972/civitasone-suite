@@ -18,7 +18,7 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, ne, gt, asc, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, ne, gt, asc, isNotNull, notInArray, inArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { pino } from "pino";
 import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
@@ -32,6 +32,8 @@ import { agendaItems, agendaLateRequests } from "./schema.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { getPolicyNumber } from "../config-registry/policy.js";
 import { meetings, meetingStateTransitions } from "../meeting-core/schema.js";
+import { committeeMembers } from "../committee/schema.js";
+import { holdsMeetingAdminRole, CHAIR_STANDING_ROLES } from "../meeting-core/domain.js";
 import {
   orderAgendaItems,
   validateReorderBijection,
@@ -647,8 +649,11 @@ async function handleLateRequest(msg: CommandEnvelope): Promise<void> {
  * (a retry cannot change them): already decided, or the decider is the requester.
  */
 async function loadPendingForDecision(tx: DrizzleTx, msg: CommandEnvelope, requestId: string) {
+  // FOR UPDATE: two concurrent decisions on one request serialise here. The second sees the committed
+  // status (not 'pending') and does nothing, so an approve and a reject can never both act (no duplicate
+  // agenda item for a request that ends up rejected, or two items for two approves).
   const rows = await tx.select().from(agendaLateRequests)
-    .where(and(eq(agendaLateRequests.id, requestId), eq(agendaLateRequests.tenantId, msg.tenantId))).limit(1);
+    .where(and(eq(agendaLateRequests.id, requestId), eq(agendaLateRequests.tenantId, msg.tenantId))).limit(1).for("update");
   const row = rows[0];
   if (!row) return null;
   if (row.status !== "pending") {
@@ -657,6 +662,26 @@ async function loadPendingForDecision(tx: DrizzleTx, msg: CommandEnvelope, reque
   }
   if (row.requestedBy === msg.actorId) {
     throw new NonRetryableError("maker-checker: the requester cannot decide their own late-inclusion request");
+  }
+  // Defence in depth (the route checks too): only an administrator or THIS meeting's chairperson decides.
+  const roles = (msg.payload as { actorRoles?: string[] }).actorRoles;
+  if (!holdsMeetingAdminRole(roles)) {
+    const m = await getMeeting(tx, row.meetingId, msg.tenantId);
+    let ok = false;
+    if (m) {
+      const direct = await tx.select({ chairpersonId: meetings.chairpersonId }).from(meetings)
+        .where(and(eq(meetings.id, row.meetingId), eq(meetings.tenantId, msg.tenantId))).limit(1);
+      ok = direct[0]?.chairpersonId === msg.actorId;
+      if (!ok && m.committeeId) {
+        const st = await tx.select({ id: committeeMembers.id }).from(committeeMembers).where(and(
+          eq(committeeMembers.tenantId, msg.tenantId), eq(committeeMembers.committeeId, m.committeeId),
+          eq(committeeMembers.memberId, msg.actorId), eq(committeeMembers.status, "active"),
+          inArray(committeeMembers.role, [...CHAIR_STANDING_ROLES]),
+        )).limit(1);
+        ok = st.length > 0;
+      }
+    }
+    if (!ok) throw new NonRetryableError("only this meeting's chairperson or an administrator can decide a late-inclusion request");
   }
   return row;
 }
@@ -677,6 +702,13 @@ async function handleLateRequestApprove(msg: CommandEnvelope): Promise<void> {
     }
     const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
     const agendaItemId = randomUUID();
+    // Claim the request first: the conditional UPDATE (WHERE status = 'pending') must change exactly one
+    // row, and the item is inserted only then (belt and braces with the FOR UPDATE lock above).
+    const claimed = await tx.update(agendaLateRequests).set({
+      status: "approved", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.note ?? null,
+      agendaItemId, updatedBy: msg.actorId, updatedAt: new Date(),
+    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending"))).returning({ id: agendaLateRequests.id });
+    if (claimed.length !== 1) return;
     await insertOrderedAgendaItem(tx, {
       id: agendaItemId,
       tenantId: msg.tenantId,
@@ -697,10 +729,6 @@ async function handleLateRequestApprove(msg: CommandEnvelope): Promise<void> {
         submittedAt: new Date(),
       },
     });
-    await tx.update(agendaLateRequests).set({
-      status: "approved", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.note ?? null,
-      agendaItemId, updatedBy: msg.actorId, updatedAt: new Date(),
-    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending")));
     await enqueue(tx, {
       topic: EVENTS.agendaItemSubmitted, eventType: EVENTS.agendaItemSubmitted, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
@@ -727,10 +755,11 @@ async function handleLateRequestReject(msg: CommandEnvelope): Promise<void> {
     if (!(await markProcessed(tx, msg.messageId))) return;
     const req = await loadPendingForDecision(tx, msg, p.requestId);
     if (!req) return;
-    await tx.update(agendaLateRequests).set({
+    const claimed = await tx.update(agendaLateRequests).set({
       status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.reason,
       updatedBy: msg.actorId, updatedAt: new Date(),
-    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending")));
+    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending"))).returning({ id: agendaLateRequests.id });
+    if (claimed.length !== 1) return;
     await enqueue(tx, {
       topic: EVENTS.agendaLateRequestRejected, eventType: EVENTS.agendaLateRequestRejected, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,

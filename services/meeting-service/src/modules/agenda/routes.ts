@@ -53,6 +53,8 @@ import {
 import * as repo from "./repo.js";
 import { assertAgendaLockTransition, assertAgendaNotLocked, assertSubmissionAllowed } from "./domain.js";
 import * as commands from "./commands.js";
+import { holdsMeetingAdminRole, CHAIR_STANDING_ROLES } from "../meeting-core/domain.js";
+import { hasCommitteeStanding } from "../meeting-core/repo.js";
 
 // ─── RBAC (design § Access Control Matrix) ──────────────────────────────────
 // meeting_admin: full CRUD · committee_secretary: create/edit agenda · chairperson:
@@ -165,6 +167,21 @@ async function assertSubmissionOpen(tenantId: string, meetingId: string, opts: {
   assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date(), config: { submissionDeadlineDays } });
 }
 
+/**
+ * `committee_chairperson` is a tenant-wide token role, so holding it must not let someone decide for a
+ * meeting they do not chair (the IDOR meeting-core closed for transitions). Admins keep the documented
+ * tenant-wide bypass; everyone else must be THIS meeting's chairperson or hold chairperson standing on
+ * its committee roster.
+ */
+async function assertChairOfMeeting(ctx: RequestContext, meetingId: string): Promise<void> {
+  if (holdsMeetingAdminRole(ctx.roles)) return;
+  const meeting = await repo.getMeetingStatus(ctx.tenantId, meetingId);
+  if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+  if (meeting.chairpersonId && meeting.chairpersonId === ctx.actorId) return;
+  if (meeting.committeeId && (await hasCommitteeStanding(ctx.tenantId, meeting.committeeId, ctx.actorId, CHAIR_STANDING_ROLES))) return;
+  throw new HttpError(403, "FORBIDDEN", "only this meeting's own chairperson (or an administrator) can decide a late inclusion");
+}
+
 export async function agendaRoutes(app: FastifyInstance): Promise<void> {
   // ── Submit an agenda item (Req 3.1) ──────────────────────────────────────
   app.post("/v1/meetings/:meetingId/agenda", async (req, reply) => {
@@ -183,6 +200,7 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LATE_APPROVAL_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const { reason, ...body } = agendaItemLateSubmitSchema.parse(req.body);
+    await assertChairOfMeeting(ctx, meetingId);
     await assertSubmissionOpen(ctx.tenantId, meetingId, { lateApproved: true });
     const accepted = await commands.agendaItemSubmit(ctx, meetingId, body, { approvedBy: ctx.actorId, reason });
     return reply.code(202).send({ data: accepted });
@@ -225,6 +243,7 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LATE_APPROVAL_ROLES);
     const { meetingId, requestId } = lateRequestParam.parse(req.params);
     const { note } = agendaLateRequestDecisionSchema.parse(req.body ?? {});
+    await assertChairOfMeeting(ctx, meetingId);
     await loadDecidableLateRequest(ctx, meetingId, requestId);
     await assertSubmissionOpen(ctx.tenantId, meetingId, { lateApproved: true });
     const accepted = await commands.agendaLateRequestApprove(ctx, meetingId, requestId, note);
@@ -236,6 +255,7 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LATE_APPROVAL_ROLES);
     const { meetingId, requestId } = lateRequestParam.parse(req.params);
     const { reason } = agendaLateRequestRejectSchema.parse(req.body);
+    await assertChairOfMeeting(ctx, meetingId);
     await loadDecidableLateRequest(ctx, meetingId, requestId);
     const accepted = await commands.agendaLateRequestReject(ctx, meetingId, requestId, reason);
     return reply.code(202).send({ data: accepted });

@@ -97,7 +97,7 @@ export async function agendaLateRequestCreate(
 export async function agendaLateRequestApprove(
   ctx: RequestContext, meetingId: string, requestId: string, note?: string,
 ): Promise<AgendaCommandAccepted> {
-  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestApprove, { requestId, meetingId, ...(note ? { note } : {}) });
+  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestApprove, { requestId, meetingId, ...(note ? { note } : {}), actorRoles: ctx.roles });
   await invalidateAgenda(ctx.tenantId, meetingId);
   return { id: requestId, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -105,7 +105,7 @@ export async function agendaLateRequestApprove(
 export async function agendaLateRequestReject(
   ctx: RequestContext, meetingId: string, requestId: string, reason: string,
 ): Promise<AgendaCommandAccepted> {
-  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestReject, { requestId, meetingId, reason });
+  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestReject, { requestId, meetingId, reason, actorRoles: ctx.roles });
   return { id: requestId, status: "accepted", correlationId: ctx.correlationId };
 }
 

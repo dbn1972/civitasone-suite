@@ -56,11 +56,11 @@ beforeAll(async () => {
   await asTenant(async (sql) => {
     await sql`insert into meeting.committees (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
       values (${COMMITTEE}, ${TENANT}, 'Deadline Sync Committee', 'DSC', 'standing', '2025-01-01', ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR}) on conflict (id) do nothing`;
-    await sql`insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, scheduled_at, duration_minutes, created_by, updated_by) values
-      (${M_SOON}, ${TENANT}, 'committee', 'Soon', 'scheduled', ${COMMITTEE}, ${SOON.toISOString()}, 60, ${ACTOR}, ${ACTOR}),
-      (${M_FAR}, ${TENANT}, 'committee', 'Far', 'scheduled', ${COMMITTEE}, '2035-01-15T10:00:00.000Z', 60, ${ACTOR}, ${ACTOR}),
-      (${M_LOCKED}, ${TENANT}, 'committee', 'Locked', 'agenda_locked', ${COMMITTEE}, '2035-01-15T10:00:00.000Z', 60, ${ACTOR}, ${ACTOR}),
-      (${M_TEN_DAYS}, ${TENANT}, 'committee', 'Ten days', 'scheduled', ${COMMITTEE}, ${TEN_DAYS.toISOString()}, 60, ${ACTOR}, ${ACTOR})
+    await sql`insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, chairperson_id, scheduled_at, duration_minutes, created_by, updated_by) values
+      (${M_SOON}, ${TENANT}, 'committee', 'Soon', 'scheduled', ${COMMITTEE}, ${ACTOR}, ${SOON.toISOString()}, 60, ${ACTOR}, ${ACTOR}),
+      (${M_FAR}, ${TENANT}, 'committee', 'Far', 'scheduled', ${COMMITTEE}, ${ACTOR}, '2035-01-15T10:00:00.000Z', 60, ${ACTOR}, ${ACTOR}),
+      (${M_LOCKED}, ${TENANT}, 'committee', 'Locked', 'agenda_locked', ${COMMITTEE}, ${ACTOR}, '2035-01-15T10:00:00.000Z', 60, ${ACTOR}, ${ACTOR}),
+      (${M_TEN_DAYS}, ${TENANT}, 'committee', 'Ten days', 'scheduled', ${COMMITTEE}, ${ACTOR}, ${TEN_DAYS.toISOString()}, 60, ${ACTOR}, ${ACTOR})
       on conflict (id) do nothing`;
     return null;
   });
