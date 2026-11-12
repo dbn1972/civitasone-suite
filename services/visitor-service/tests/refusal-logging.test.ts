@@ -2,6 +2,7 @@
  * Every non-retryable consumer refusal must leave a log line with reason + correlation id
  * (previously a refusal only surfaced as a bare DLQ entry).
  */
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NonRetryableError } from "@civitasone/queue";
 
@@ -10,7 +11,7 @@ vi.mock("pino", () => ({ pino: () => ({ warn: (...a: unknown[]) => warn(...a), i
 
 const { nonRetryableOnDomainRejection, logNonRetryableRefusals } = await import("../src/shared/domain-rejection.js");
 
-const msg = { tenantId: "t-1", correlationId: "corr-42", messageId: "m-1", payload: {} } as never;
+const msg = { tenantId: "t-1", correlationId: "corr-42", messageId: randomUUID(), payload: {} } as never;
 
 class DomainError extends Error {
   constructor(public code: string, m: string) { super(`[${code}] ${m}`); this.name = "DomainError"; }
