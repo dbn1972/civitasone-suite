@@ -12,7 +12,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveLeaveReadScope } from "../../shared/self-scope.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
-import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
+import { validateLeaveRequest, getHolidaysInRange, countWorkingDaysExcludingHolidays, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -169,13 +169,30 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // balance is still enforced HERE -- the consumer's identical check runs
     // after the 202 has already been returned, so a shortfall used to vanish
     // silently (GAP-HR-LEAVE-APPLY-04).
+    //
+    // The client's day count is not trusted for the holiday/weekend question: the type's OWN counting
+    // rule (the tenant's policy row for this type + employee type; "calendar" when none, the column
+    // default) decides. A calendar-counted type (maternity, EOL ...) legitimately counts weekends and
+    // holidays, so it is never blocked here. A working-days type whose range holds no working day would
+    // debit 0 days: refuse it with the same LEAVE_NO_WORKING_DAYS as the engine path, and use the
+    // server-computed working-day count for the balance check and the debit.
+    let serverDays: number | null = null;
+    let holidaysInRange: string[] = [];
+    if (body.dayPart === "full") {
+      const policyRow = await repo.findTenantLeavePolicy(tenantId, body.leaveTypeId, emp.employeeType ?? "");
+      if (policyRow?.countMethod === "working_days") {
+        holidaysInRange = await getHolidaysInRange(tenantId, body.fromDate, body.toDate);
+        serverDays = countWorkingDaysExcludingHolidays(body.fromDate, body.toDate, new Set(holidaysInRange));
+        if (serverDays <= 0) return { ...violation(LEAVE_NO_WORKING_DAYS, LEAVE_NO_WORKING_DAYS_MESSAGE), computedDays: 0, holidaysInRange };
+      }
+    }
     try {
-      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, body.daysApplied);
+      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, serverDays ?? body.daysApplied);
     } catch (err) {
-      if (err instanceof DomainError) return violation(err.code, err.message);
+      if (err instanceof DomainError) return { ...violation(err.code, err.message), computedDays: serverDays, holidaysInRange };
       throw err;
     }
-    return { computedDays: null, warnings: [], violations: [], holidaysInRange: [], balance };
+    return { computedDays: serverDays, warnings: [], violations: [], holidaysInRange, balance };
   }
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
