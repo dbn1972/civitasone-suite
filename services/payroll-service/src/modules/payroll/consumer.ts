@@ -1176,8 +1176,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[]; netPayAcknowledgements?: NetPayAcknowledgement[]; tdsAcknowledgements?: TdsAcknowledgement[] };
+    // The envelope is authoritative for the tenant; a payload naming another tenant is refused.
+    if (p.tenantId !== msg.tenantId) throw new NonRetryableError(`TENANT_MISMATCH: payroll run ${p.id} approval rejected`);
     // M9: how this tenant's salary reaches the books (a settings read and, if no override, an admin-service lookup: outside the transaction).
-    const ledgerMode = await resolveLedgerMode(p.tenantId);
+    const ledgerMode = await resolveLedgerMode(msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);

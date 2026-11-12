@@ -363,6 +363,22 @@ describe("explicit override", () => {
   });
 });
 
+describe("tenant integrity of the approve command", () => {
+  it("a run-approve command whose payload names another tenant than its envelope is refused: the run stays computed", async () => {
+    const w = await seedRun(randomUUID(), false);
+    await queue.publish(COMMANDS.runApprove, {
+      messageId: randomUUID(), type: COMMANDS.runApprove, tenantId: w.tenantId, actorId: CHECKER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id: w.runId, tenantId: randomUUID(), approvedBy: CHECKER },
+    });
+    await memQueue.drain();
+    const status = await runWithTenant(w.tenantId, () => db.transaction(async (tx) => {
+      const r = (await tx.execute(sql`SELECT status FROM payroll.payroll_runs WHERE id = ${w.runId}::uuid`)) as unknown as Array<{ status: string }>;
+      return r[0]?.status;
+    }));
+    expect(status).toBe("computed");
+  });
+});
+
 describe("finance tenant (every current tenant): behaviour is unchanged", () => {
   let w: World;
   beforeAll(async () => { w = await seedRun(randomUUID(), true); await approveAndDisburse(w); });

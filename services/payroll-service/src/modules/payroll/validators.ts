@@ -352,7 +352,7 @@ export const updateSettingsBody = z.object({
   // regular government servants (FR/SR, CCS) legal confirmation is awaited;
   // false leaves the protected-net floor and the approval acknowledgements.
   deductionCapApplies: z.boolean().optional(),
-  // M9 (migration 0166): force the ledger mode; null clears the override (the mode is then derived from Finance).
+  // M9 (migration 0171): force the ledger mode; null clears the override (the mode is then derived from Finance).
   ledgerModeOverride: z.enum(["finance", "export"]).nullable().optional(),
   // The payroll go-live date: TDS is presumed only for months before it (and
   // before the employee first slip) when no opening YTD exists. null clears it.

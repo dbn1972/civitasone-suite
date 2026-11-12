@@ -134,8 +134,10 @@ export async function listSlipsByTenant(
  * per-invocation, so two racing identical commands are NOT deduped by markProcessed(); the second
  * one blocks here until the first commits and then sees the already-advanced status.
  */
-export async function findRunByIdForUpdateTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
-  const rows = await (tx as typeof db).select().from(payrollRuns).where(eq(payrollRuns.id, id)).limit(1).for("update");
+export async function findRunByIdForUpdateTx(tx: Writer, id: string, tenantId?: string): Promise<PayrollRunRow | null> {
+  // `tenantId` (when given) is defence in depth beyond RLS: the run must belong to the message's tenant.
+  const where = tenantId ? and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)) : eq(payrollRuns.id, id);
+  const rows = await (tx as typeof db).select().from(payrollRuns).where(where).limit(1).for("update");
   return rows[0] ?? null;
 }
 

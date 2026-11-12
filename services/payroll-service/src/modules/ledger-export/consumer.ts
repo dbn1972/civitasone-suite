@@ -31,7 +31,7 @@ export function registerLedgerExportConsumers(queue: Queue): void {
     const p = msg.payload as BankConfirmationPayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const run = await repo.findRunByIdForUpdateTx(tx, p.runId);
+      const run = await repo.findRunByIdForUpdateTx(tx, p.runId, msg.tenantId);
       if (!run) throw new NonRetryableError(`payroll run ${p.runId} not found`);
       // The run's own pinned mode, not the tenant's current one (NULL = approved on the finance path).
       if (run.ledgerMode !== "export") {
