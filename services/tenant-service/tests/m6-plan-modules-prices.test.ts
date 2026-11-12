@@ -1,7 +1,7 @@
 /**
  * M6 (module-sale gap): plans and prices linked to modules. Real Postgres (own throwaway DB, DATABASE_URL).
  *
- *  - plan -> catalogue modules: an explicit set is closed over hard dependencies; a plan that predates migration 0035
+ *  - plan -> catalogue modules: an explicit set is closed over hard dependencies; a plan that predates migration 0036
  *    (catalogue_modules NULL) resolves from its product ids exactly as before (existing plans unchanged);
  *  - price store: effective-dated, append-only, INR minor units, GST separate on a quote; the consumer closes the
  *    previous open price and writes the audit event in the same transaction; replays are no-ops;
@@ -36,11 +36,14 @@ function planRow(id: string, code: string, extra: Partial<typeof plans.$inferIns
 }
 
 async function wipe() {
+  // the price history is immutable (trigger), so test cleanup switches the guard off for this table and back on
+  await sqlClient`ALTER TABLE plans.plan_prices DISABLE TRIGGER trg_plan_prices_guard`;
   await scoped(async (tx) => {
     await tx.delete(planPrices).where(eq(planPrices.tenantId, TENANT));
     await tx.delete(plans).where(eq(plans.tenantId, TENANT));
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
   });
+  await sqlClient`ALTER TABLE plans.plan_prices ENABLE TRIGGER trg_plan_prices_guard`;
 }
 
 async function deliver(queue: MemoryQueue, messageId: string, payload: Record<string, unknown>) {
@@ -122,6 +125,23 @@ describe("M6 plan modules + price store (real DB)", () => {
     const second = priced.find((r) => (r.payload as { effectiveFrom?: string }).effectiveFrom === "2026-10-01")!;
     expect(second.payload).toMatchObject({ closedPreviousTo: "2026-09-30", amountMinor: "1200000", subjectKey: "hr_payroll" });
     expect((await db.select().from(processed).where(eq(processed.messageId, MSG2)))).toHaveLength(1);
+  });
+
+  it("price history is immutable at the database: no DELETE, no edit of an amount, an open price can be closed once", async () => {
+    const rows = await scoped((tx) => tx.select().from(planPrices).where(and(eq(planPrices.tenantId, TENANT), eq(planPrices.subjectKey, "hr_payroll"))));
+    const closed = rows.find((r) => r.effectiveTo !== null)!;
+    const open = rows.find((r) => r.effectiveTo === null)!;
+    await expect(scoped((tx) => tx.delete(planPrices).where(eq(planPrices.id, open.id)))).rejects.toThrow(/append-only/);
+    await expect(scoped((tx) => tx.update(planPrices).set({ amountMinor: 1n }).where(eq(planPrices.id, open.id)))).rejects.toThrow(/append-only/);
+    await expect(scoped((tx) => tx.update(planPrices).set({ effectiveTo: "2030-01-01" }).where(eq(planPrices.id, closed.id)))).rejects.toThrow(/append-only/); // already closed: cannot be re-dated
+    await expect(scoped((tx) => tx.update(planPrices).set({ effectiveTo: "2026-12-31" }).where(eq(planPrices.id, open.id)))).resolves.toBeDefined(); // closing an open price once is the allowed edit
+    await scoped((tx) => tx.update(planPrices).set({ effectiveTo: null }).where(eq(planPrices.id, open.id))).catch(() => undefined); // re-opening is refused
+    const after = await scoped((tx) => tx.select().from(planPrices).where(eq(planPrices.id, open.id)));
+    expect(after[0]!.effectiveTo).toBe("2026-12-31");
+    // put the fixture back for the following tests (guard off for this one repair only)
+    await sqlClient`ALTER TABLE plans.plan_prices DISABLE TRIGGER trg_plan_prices_guard`;
+    await scoped((tx) => tx.update(planPrices).set({ effectiveTo: null }).where(eq(planPrices.id, open.id)));
+    await sqlClient`ALTER TABLE plans.plan_prices ENABLE TRIGGER trg_plan_prices_guard`;
   });
 
   it("add-on prices: quote shows plan + add-on with GST separate; an add-on already in the plan is refused", async () => {

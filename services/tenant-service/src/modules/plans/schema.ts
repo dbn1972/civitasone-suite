@@ -24,7 +24,7 @@ export const plans = plansSchema.table("plans", {
   priceMinor: bigint("price_minor", { mode: "bigint" }).notNull(), // amount in paise (INR minor units)
   billingCycle: billingCycleEnum("billing_cycle").notNull().default("annual"),
   features: jsonb("features").$type<Record<string, unknown>>().notNull().default({}),
-  // M6: catalogue module ids this plan is sold as. NULL = derive from enabledModules (every plan that predates 0035).
+  // M6: catalogue module ids this plan is sold as. NULL = derive from enabledModules (every plan that predates 0036).
   catalogueModules: jsonb("catalogue_modules").$type<string[] | null>(),
   // audit columns
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -38,7 +38,7 @@ export const plans = plansSchema.table("plans", {
 }));
 
 /**
- * M6 price store (migration 0035). Net price in paise (INR minor units); GST rate in basis points is stored on the
+ * M6 price store (migration 0036). Net price in paise (INR minor units); GST rate in basis points is stored on the
  * row so GST shows separately. Effective-dated and append-only: a new price closes the previous open one.
  * subjectKey is the plan code (subjectKind=plan) or the catalogue module id (subjectKind=addon).
  */

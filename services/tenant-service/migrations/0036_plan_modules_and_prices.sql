@@ -1,4 +1,4 @@
--- 0035_plan_modules_and_prices.sql
+-- 0036_plan_modules_and_prices.sql
 -- M6 (module-sale gap): plans and prices linked to modules. Additive + idempotent; nothing existing changes.
 --
 --  1. plans.plans.catalogue_modules: the catalogue module ids a plan is sold as (NULL = derive from enabled_modules
@@ -6,6 +6,8 @@
 --  2. plans.plan_prices: effective-dated, append-only price store. Price per plan and per add-on module, in INR
 --     minor units (paise, net of GST), with the GST rate stored on the row so GST is shown separately on a quote.
 --     Same tenant scoping + FORCED RLS as plans.plans (the plan catalogue is held per tenant).
+-- Apply as the OWNING service role (tenant_svc), like 0001-0035: the table is created owned by whoever runs this and the
+-- service must own it. Do not apply as a superuser or the immutability trigger and RLS would belong to the wrong role.
 SET lock_timeout = '5s';
 
 ALTER TABLE plans.plans ADD COLUMN IF NOT EXISTS catalogue_modules jsonb;
@@ -42,3 +44,24 @@ DROP POLICY IF EXISTS tenant_isolation_policy ON plans.plan_prices;
 CREATE POLICY tenant_isolation_policy ON plans.plan_prices
   USING (tenant_id = tenant.current_tenant_id())
   WITH CHECK (tenant_id = tenant.current_tenant_id());
+
+-- Price history is immutable at the database: DELETE is refused, and the only UPDATE allowed is closing an open price
+-- once (effective_to NULL -> a date on or after effective_from) with every other column unchanged.
+CREATE OR REPLACE FUNCTION plans.plan_prices_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'plans.plan_prices is append-only: DELETE refused' USING ERRCODE = '42501';
+  END IF;
+  IF OLD.effective_to IS NULL AND NEW.effective_to IS NOT NULL
+     AND (NEW.id, NEW.tenant_id, NEW.subject_kind, NEW.subject_key, NEW.billing_cycle, NEW.currency, NEW.amount_minor,
+          NEW.gst_rate_bps, NEW.effective_from, NEW.note, NEW.created_at, NEW.created_by)
+         IS NOT DISTINCT FROM
+         (OLD.id, OLD.tenant_id, OLD.subject_kind, OLD.subject_key, OLD.billing_cycle, OLD.currency, OLD.amount_minor,
+          OLD.gst_rate_bps, OLD.effective_from, OLD.note, OLD.created_at, OLD.created_by) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'plans.plan_prices is append-only: only closing an open price once is allowed' USING ERRCODE = '42501';
+END $$;
+DROP TRIGGER IF EXISTS trg_plan_prices_guard ON plans.plan_prices;
+CREATE TRIGGER trg_plan_prices_guard BEFORE UPDATE OR DELETE ON plans.plan_prices
+  FOR EACH ROW EXECUTE FUNCTION plans.plan_prices_guard();

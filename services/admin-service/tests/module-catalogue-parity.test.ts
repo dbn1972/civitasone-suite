@@ -261,6 +261,33 @@ describe("MODULE_SOURCE=catalogue (M4)", () => {
     } finally { delete process.env.MODULE_SOURCE; }
   });
 
+  const settings = async (tid: string) =>
+    (await app.inject({ method: "GET", url: "/v1/admin/composition/settings", headers: adminAuth(tid) })).json() as {
+      source: string; modules: Array<{ id: string; enabled: boolean; source: string | null; hardDeps: string[]; softDeps: string[]; requiredBy: string[] }>;
+    };
+
+  it("settings capability: default is 'legacy' with no module list (the page keeps today's behaviour)", async () => {
+    delete process.env.MODULE_SOURCE;
+    expect(await settings(T)).toEqual({ source: "legacy", modules: [] });
+  });
+
+  it("settings capability: catalogue mode lists modules with why they are on, hard deps and who needs them", async () => {
+    process.env.MODULE_SOURCE = "catalogue";
+    try {
+      const r = await settings(T);
+      expect(r.source).toBe("catalogue");
+      const by = new Map(r.modules.map((m) => [m.id, m]));
+      expect(r.modules.some((m) => ["identity", "org", "config", "workflow", "audit"].includes(m.id))).toBe(false); // core is not switchable
+      expect(by.get("payroll")).toMatchObject({ enabled: true, source: "user", hardDeps: ["employee"] });
+      expect(by.get("payroll")!.softDeps).toContain("finance");
+      expect(by.get("employee")).toMatchObject({ enabled: true });
+      expect(by.get("employee")!.requiredBy).toContain("payroll");
+      expect(by.get("finance")).toMatchObject({ enabled: true, source: "user" });
+      expect(by.get("procurement")).toMatchObject({ enabled: false, source: null });
+      expect(by.get("procurement")!.hardDeps).toEqual(expect.arrayContaining(["finance", "budget"]));
+    } finally { delete process.env.MODULE_SOURCE; }
+  });
+
   it("flag on: the older toggle is retired with a pointer to the catalogue endpoint", async () => {
     process.env.MODULE_SOURCE = "catalogue";
     try {

@@ -75,8 +75,9 @@ export async function applyPlan(ctx: RequestContext, input: ApplyPlanInput): Pro
 
 export interface PlanApplyRequestInput {
   tenantId: string;
+  planId: string;
   planCode: string;
-  /** The plan's catalogue modules as supplied by the maker. */
+  /** The plan's catalogue modules, read server-side from the stored plan. */
   moduleIds: string[];
   /** What they resolve to as user picks (core + hard deps derived), computed by the route. */
   userModuleIds: string[];

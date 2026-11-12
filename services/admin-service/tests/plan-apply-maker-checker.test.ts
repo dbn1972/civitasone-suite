@@ -6,7 +6,7 @@
  *  - every step leaves an audit event; a rejection changes nothing;
  *  - default behaviour is untouched: with PLAN_APPLY_MAKER_CHECKER unset the direct apply-plan route works exactly as before.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
@@ -38,6 +38,24 @@ async function wipe() {
   });
 }
 
+// tenant-service's GET /v1/plans/:id/modules, as the admin route calls it with the maker's own token
+const PLAN_PAYROLL = "c6000000-9999-4000-8000-000000000001";
+const PLAN_LEAVE = "c6000000-9999-4000-8000-000000000002";
+const PLANS: Record<string, { planCode: string; selected: string[] }> = {
+  [PLAN_PAYROLL]: { planCode: "hr_payroll", selected: ["payroll"] },
+  [PLAN_LEAVE]: { planCode: "hr_leave", selected: ["employee", "leave"] },
+};
+function stubTenantService(status?: number) {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+    const id = /\/v1\/plans\/([0-9a-f-]{36})\/modules/.exec(url)?.[1] ?? "";
+    expect(init.headers.authorization).toMatch(/^Bearer /); // the maker's token, not an internal seam
+    const hit = PLANS[id];
+    const st = status ?? (hit ? 200 : 404);
+    return { ok: st < 300, status: st, text: async () => JSON.stringify(hit ?? { code: "NOT_FOUND" }) } as Response;
+  }));
+}
+afterEach(() => vi.unstubAllGlobals());
+
 let app: FastifyInstance;
 beforeAll(async () => {
   registerCompositionConsumers(queue);
@@ -64,7 +82,8 @@ describe("M6 plan application: maker-checker + audit", () => {
   });
 
   it("a request changes nothing; the requester cannot approve; only another admin's approval applies the plan", async () => {
-    const req = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planCode: "hr_payroll", moduleIds: ["payroll"] });
+    stubTenantService();
+    const req = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_PAYROLL });
     expect(req.statusCode).toBe(202);
     const id = req.json().id as string;
     await drain();
@@ -74,7 +93,7 @@ describe("M6 plan application: maker-checker + audit", () => {
     expect(row!.user_module_ids).toEqual(["payroll"]);
 
     // a second request while one is pending is refused
-    const dup = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planCode: "other", moduleIds: ["leave"] });
+    const dup = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_LEAVE });
     expect(dup.statusCode).toBe(409);
     expect(dup.json().code).toBe("PLAN_APPLY_PENDING");
 
@@ -122,7 +141,8 @@ describe("M6 plan application: maker-checker + audit", () => {
 
   it("a rejection changes nothing, needs a reason and is audited", async () => {
     const before = await userModules();
-    const req = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planCode: "hr_leave", moduleIds: ["employee", "leave"] });
+    stubTenantService();
+    const req = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_LEAVE });
     expect(req.statusCode).toBe(202);
     const id = req.json().id as string;
     await drain();
@@ -138,14 +158,52 @@ describe("M6 plan application: maker-checker + audit", () => {
   });
 
   it("validates the module set and the caller", async () => {
-    const bad = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planCode: "x", moduleIds: ["not_a_module"] });
-    expect(bad.statusCode).toBe(404);
-    expect(bad.json().code).toBe("UNKNOWN_MODULE");
-    const forbidden = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planCode: "x", moduleIds: ["leave"] }, ["tenant_admin"]);
+    stubTenantService();
+    const ghost = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: "c6000000-9999-4000-8000-0000000000ff" });
+    expect(ghost.statusCode).toBe(404);
+    expect(ghost.json().code).toBe("PLAN_NOT_FOUND");
+    stubTenantService(503);
+    const down = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_LEAVE });
+    expect(down.statusCode).toBe(502);
+    stubTenantService();
+    const forbidden = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_LEAVE }, ["tenant_admin"]);
     expect(forbidden.statusCode).toBe(403);
     const list = await app.inject({ method: "GET", url: `/v1/admin/composition/plan-applications?tenantId=${T}`, headers: bearer(MAKER) });
     expect(list.statusCode).toBe(200);
     expect(list.json().requests.length).toBe(2);
+  });
+
+  it("the module list comes from the stored plan: modules typed in the body are ignored", async () => {
+    await wipe();
+    stubTenantService();
+    const r = await post("/v1/admin/composition/plan-applications", MAKER, { tenantId: T, planId: PLAN_LEAVE, planCode: "x", moduleIds: ["finance", "procurement"] });
+    expect(r.statusCode).toBe(202);
+    await drain();
+    const [row] = await requests();
+    expect(row).toMatchObject({ plan_code: "hr_leave", plan_id: PLAN_LEAVE });
+    expect(row!.module_ids).toEqual(["employee", "leave"]);
+    expect(row!.user_module_ids).not.toContain("finance");
+    await wipe();
+  });
+
+  it("PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write, not only apply-plan", async () => {
+    process.env.PLAN_APPLY_MAKER_CHECKER = "on";
+    const own = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: MAKER, tid: T, roles, sid: "m6" }, SECRET, 3600)}` });
+    for (const [url, payload] of [
+      ["/v1/admin/composition/onboard", { profile: "govt_dept" }],
+      ["/v1/admin/composition/modules/leave/enable", {}],
+      ["/v1/admin/composition/modules/leave/disable", {}],
+      ["/v1/admin/composition/bundles/hr/enable", {}],
+    ] as const) {
+      const r = await app.inject({ method: "POST", url, headers: own(["tenant_admin"]), payload });
+      expect(r.statusCode, url).toBe(409);
+      expect(r.json().code, url).toBe("PLAN_APPLY_REQUIRES_APPROVAL");
+    }
+    delete process.env.PLAN_APPLY_MAKER_CHECKER;
+    const open = await app.inject({ method: "POST", url: "/v1/admin/composition/modules/leave/enable", headers: own(["tenant_admin"]), payload: {} });
+    expect(open.statusCode).not.toBe(409); // flag off: today's behaviour
+    await drain();
+    await wipe();
   });
 
   it("PLAN_APPLY_MAKER_CHECKER=on closes the direct apply route; off reopens it", async () => {

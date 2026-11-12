@@ -82,6 +82,7 @@ export const tenantEnforcementMode = compositionSchema.table("tenant_enforcement
 export const planApplyRequests = compositionSchema.table("plan_apply_requests", {
   id: uuid("id").primaryKey(),
   tenantId: uuid("tenant_id").notNull(),
+  planId: uuid("plan_id"),
   planCode: text("plan_code").notNull(),
   moduleIds: text("module_ids").array().notNull().$type<string[]>(),
   userModuleIds: text("user_module_ids").array().notNull().$type<string[]>(),

@@ -2,12 +2,13 @@
 -- M6: applying a sold plan to a tenant is a maker-checker change. A platform admin (maker) REQUESTS that a plan's
 -- catalogue modules be applied to a tenant; a DIFFERENT platform admin (checker) approves, and only then the
 -- tenant's entitlements change (through the existing composition applyPlanTx). Nothing is applied automatically.
--- Additive + idempotent. Tenant-scoped with FORCED RLS (same policy as composition.tenant_entitlement).
+-- Additive + idempotent. Apply as the owning service role (admin_svc), like 0001-0059. Tenant-scoped with FORCED RLS (same policy as composition.tenant_entitlement).
 SET lock_timeout = '5s';
 
 CREATE TABLE IF NOT EXISTS composition.plan_apply_requests (
   id                  uuid PRIMARY KEY,
   tenant_id           uuid NOT NULL,
+  plan_id             uuid,
   plan_code           text NOT NULL,
   -- the plan's catalogue modules as the maker supplied them, and what they resolve to (core + hard deps) at request time
   module_ids          text[] NOT NULL,

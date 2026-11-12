@@ -8,6 +8,8 @@
  *
  * Subjects: a plan (subjectKey = plan code) or an add-on module (subjectKey = catalogue module id), per billing cycle.
  */
+import { CATALOGUE_BY_ID } from "./module-catalogue.js";
+
 export const DEFAULT_GST_RATE_BPS = 1800;
 export type PriceSubjectKind = "plan" | "addon";
 export type PriceBillingCycle = "monthly" | "quarterly" | "annual";
@@ -29,7 +31,7 @@ export interface PriceRow {
 
 export class PriceError extends Error {
   constructor(
-    public readonly code: "PRICE_NOT_FOUND" | "PRICE_WINDOW_OVERLAP" | "PRICE_BACKDATED" | "PRICE_INVALID" | "ADDON_ALREADY_IN_PLAN",
+    public readonly code: "PRICE_NOT_FOUND" | "PRICE_WINDOW_OVERLAP" | "PRICE_BACKDATED" | "PRICE_INVALID" | "ADDON_ALREADY_IN_PLAN" | "ADDON_MISSING_DEPENDENCY",
     message: string,
   ) {
     super(message);
@@ -137,7 +139,17 @@ export function quote(input: QuoteInput): Quote {
   };
   line("plan", input.planCode);
   const included = new Set(input.planModuleIds);
-  for (const id of [...new Set(input.addonModuleIds ?? [])]) {
+  const addons = [...new Set(input.addonModuleIds ?? [])];
+  // an add-on is sellable only when everything it hard-depends on is in the plan or among the other add-ons
+  const covered = new Set<string>([...included, ...addons]);
+  for (const id of addons) {
+    for (const dep of CATALOGUE_BY_ID.get(id)?.hardDeps ?? []) {
+      if (!CATALOGUE_BY_ID.get(dep)?.isCore && !covered.has(dep)) {
+        throw new PriceError("ADDON_MISSING_DEPENDENCY", `add-on ${id} needs module ${dep}, which is not in plan ${input.planCode} or the other add-ons`);
+      }
+    }
+  }
+  for (const id of addons) {
     if (included.has(id)) throw new PriceError("ADDON_ALREADY_IN_PLAN", `module ${id} is already included in plan ${input.planCode}`);
     line("addon", id);
   }

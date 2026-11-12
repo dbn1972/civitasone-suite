@@ -6,16 +6,19 @@
  *   POST /v1/admin/composition/plan-applications/:id/approve    approve (checker)    -> 202
  *   POST /v1/admin/composition/plan-applications/:id/reject     reject  (checker)    -> 202
  *
- * The module set comes from the plan (tenant-service GET /v1/plans/:id/modules, already resolved with the catalogue's
- * hard dependencies); this service does not read tenant-service's tables. It re-resolves the set against the
- * registry, so an unknown module or an unresolvable graph is refused. The checker must be a different principal
+ * The request names a plan by id, NOT a module list. The module set is fetched server-side from tenant-service
+ * (GET /v1/plans/:id/modules with the maker's own token; already resolved with the catalogue's hard dependencies), so
+ * the maker cannot type a list that differs from the plan. This service still does not read tenant-service's tables.
+ * It re-resolves the set against the registry, so an unknown module or an unresolvable graph is refused, and stores
+ * the plan id, code and resolved set on the request for the checker to see. The checker must be a different principal
  * than the maker: refused here (409), re-checked by the consumer, and enforced by a DB CHECK.
  *
  * The write itself is the existing applier (repo.applyPlanTx): entitlements + profile + audit in one transaction.
  * Nothing here runs automatically; existing tenants only change when a checker approves a request.
  *
- * PLAN_APPLY_MAKER_CHECKER=on makes the older direct POST /v1/admin/composition/apply-plan refuse (409), so a plan can
- * only be applied through this approval flow. Default off = today's behaviour exactly.
+ * PLAN_APPLY_MAKER_CHECKER=on closes EVERY direct write of a tenant's entitlements with 409 PLAN_APPLY_REQUIRES_APPROVAL:
+ * apply-plan, onboard, modules/:id/enable, modules/:id/disable and bundles/:code/enable (refuseDirectEntitlementWrite).
+ * Entitlements then change only through this approval flow. Default off = today's behaviour exactly.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -29,6 +32,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { buildRegistry, resolveComposition, CompositionError } from "./domain.js";
 import { planApplyRequests } from "./schema.js";
+import { callUpstream, tenantServiceBaseUrl } from "../gap/upstream-client.js";
 
 const PLATFORM_ADMIN = ["super_admin", "platform_admin"];
 const idRe = /^[a-z][a-z0-9_]*$/;
@@ -37,10 +41,16 @@ export function planApplyRequiresApproval(): boolean {
   return process.env.PLAN_APPLY_MAKER_CHECKER === "on";
 }
 
+/** Called by every route that writes entitlements directly: with the flag on they must go through plan-applications. */
+export function refuseDirectEntitlementWrite(): void {
+  if (planApplyRequiresApproval()) {
+    throw new HttpError(409, "PLAN_APPLY_REQUIRES_APPROVAL", "entitlement changes need approval: POST /v1/admin/composition/plan-applications");
+  }
+}
+
 const requestBody = z.object({
   tenantId: z.string().uuid(),
-  planCode: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/),
-  moduleIds: z.array(z.string().min(1).max(64).regex(idRe)).min(1).max(128),
+  planId: z.string().uuid(),
   profileCode: z.string().min(1).max(64).regex(idRe).nullable().default(null),
 });
 const idParam = z.object({ id: z.string().uuid() });
@@ -53,10 +63,20 @@ export async function planApplyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PLATFORM_ADMIN);
     const body = requestBody.parse(req.body);
+    // The plan's modules come from the stored plan, never from the request body.
+    const up = await callUpstream<{ planCode?: string; selected?: string[] }>(req, ctx, "GET", tenantServiceBaseUrl(), `/v1/plans/${body.planId}/modules`);
+    if (up.status === 404) throw new HttpError(404, "PLAN_NOT_FOUND", "plan not found");
+    if (up.status < 200 || up.status >= 300 || typeof up.body?.planCode !== "string" || !Array.isArray(up.body.selected)) {
+      throw new HttpError(502, "PLAN_LOOKUP_FAILED", "could not read the plan's modules from tenant-service");
+    }
+    const planCode = up.body.planCode;
+    // the modules the plan itself names; hard dependencies are added by the registry resolution below, as dependencies
+    const moduleIds = up.body.selected;
+    if (moduleIds.length === 0) throw new HttpError(422, "PLAN_HAS_NO_MODULES", "the plan resolves to no modules");
     const reg = buildRegistry(await repo.loadRegistry(body.tenantId));
     let resolved;
     try {
-      resolved = resolveComposition(reg, body.moduleIds);
+      resolved = resolveComposition(reg, moduleIds);
     } catch (err) {
       if (err instanceof CompositionError) throw new HttpError(404, "UNKNOWN_MODULE", err.message);
       throw err;
@@ -67,7 +87,7 @@ export async function planApplyRoutes(app: FastifyInstance): Promise<void> {
     const userModuleIds = resolved.entries.filter((e) => e.source === "user").map((e) => e.id).sort();
     const pending = await listRequests(body.tenantId, "pending");
     if (pending.length > 0) throw new HttpError(409, "PLAN_APPLY_PENDING", "this tenant already has a plan application awaiting approval");
-    const accepted = await commands.planApplyRequest(ctx, { ...body, userModuleIds });
+    const accepted = await commands.planApplyRequest(ctx, { tenantId: body.tenantId, planId: body.planId, planCode, moduleIds, profileCode: body.profileCode, userModuleIds });
     return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 

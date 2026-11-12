@@ -50,6 +50,14 @@ describe("M6 price store rules", () => {
     }
   });
 
+  it("quote: an add-on whose own hard dependency is missing is refused; covered by the plan or another add-on it is allowed", () => {
+    const rows = [row({ subjectKind: "plan", subjectKey: "base", amountMinor: 100n }), row({ subjectKind: "addon", subjectKey: "payroll", amountMinor: 10n }), row({ subjectKind: "addon", subjectKey: "employee", amountMinor: 20n })];
+    const q = (planModuleIds: string[], addonModuleIds: string[]) => quote({ rows, planCode: "base", planModuleIds, addonModuleIds, billingCycle: "annual", onDate: "2026-11-11" });
+    expect(() => q([], ["payroll"])).toThrow(expect.objectContaining({ code: "ADDON_MISSING_DEPENDENCY" }));
+    expect(q(["employee"], ["payroll"]).lines).toHaveLength(2);
+    expect(q([], ["payroll", "employee"]).lines).toHaveLength(3);
+  });
+
   it("quote: plan + add-ons, GST per line then summed, add-on already in the plan is refused, missing price is refused", () => {
     const rows = [
       row({ subjectKind: "plan", subjectKey: "hrms_basic", amountMinor: 1_000_000n }),

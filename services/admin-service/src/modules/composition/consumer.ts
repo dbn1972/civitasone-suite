@@ -38,6 +38,7 @@ interface ApplyPlanPayload {
 interface PlanApplyRequestPayload {
   requestId: string;
   tenantId: string;
+  planId: string;
   planCode: string;
   moduleIds: string[];
   userModuleIds: string[];
@@ -173,7 +174,7 @@ export function registerCompositionConsumers(queue: Queue): void {
         db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
           await tx.insert(planApplyRequests).values({
-            id: p.requestId, tenantId: p.tenantId, planCode: p.planCode, moduleIds: p.moduleIds, userModuleIds: userModules,
+            id: p.requestId, tenantId: p.tenantId, planId: p.planId, planCode: p.planCode, moduleIds: p.moduleIds, userModuleIds: userModules,
             profileCode: p.profileCode, requestedBy: msg.actorId,
           });
           await enqueue(tx as Parameters<typeof enqueue>[0], {
