@@ -23,7 +23,6 @@ import type { ModuleDef } from "../src/modules/composition/domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ACTOR = "d9200000-eeee-4000-8000-000000000001";
-const ZERO = "00000000-0000-0000-0000-000000000000";
 
 interface Fixture { tenants: Array<{ label: string; entitlements: string; legacyEnabled?: string }> }
 const FIXTURE = JSON.parse(readFileSync(new URL("./fixtures/uat-tenant-module-configs.json", import.meta.url), "utf8")) as Fixture;
