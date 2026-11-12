@@ -50,7 +50,7 @@ type Reply = { status: number; body: unknown } | "throw";
 function stubTenantService(reply: Reply): void {
   vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: unknown) => {
     if (!/\/v1\/tenants\/[^/?]+$/.test(String(input))) return realFetch(input as never, init as never);
-    if (reply === "throw") throw new TypeError("fetch failed: connect ECONNREFUSED");
+    if (reply === "throw") throw new TypeError("fetch failed: connect ECONNREFUSED 10.0.1.5:3002");
     return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } });
   }));
 }
@@ -102,14 +102,14 @@ describe("tenant-service has no such tenant (404 NOT_FOUND): employer not config
   });
 });
 
-describe("a real outage stays 503 TENANT_IDENTITY_UNAVAILABLE, and says what happened", () => {
+describe("a real outage stays 503 TENANT_IDENTITY_UNAVAILABLE with a generic message (no upstream host or port)", () => {
   const outages: Array<[string, Reply, RegExp]> = [
     ["tenant-service 500", { status: 500, body: { code: "INTERNAL" } }, /HTTP 500/],
     ["tenant-service 502", { status: 502, body: {} }, /HTTP 502/],
     ["tenant-service 401 (internal credential refused)", { status: 401, body: { code: "UNAUTHENTICATED" } }, /HTTP 401/],
     ["tenant-service 403", { status: 403, body: { code: "FORBIDDEN" } }, /HTTP 403/],
     ["a 404 that is NOT tenant-service's NOT_FOUND (mis-routed URL)", { status: 404, body: { message: "Route GET:/v1/tenants/x not found" } }, /HTTP 404/],
-    ["fetch throws (connection refused)", "throw", /ECONNREFUSED/],
+    ["fetch throws (connection refused)", "throw", /10\.0\.1\.5|3002/],
     ["200 with a non-object body", { status: 200, body: null }, /not a tenant record/],
   ];
   it.each(outages)("%s", async (_n, reply, reason) => {
@@ -119,7 +119,10 @@ describe("a real outage stays 503 TENANT_IDENTITY_UNAVAILABLE, and says what hap
       const res = await get(randomUUID(), url);
       expect(res.statusCode).toBe(503);
       expect(res.json().code).toBe(TENANT_IDENTITY_UNAVAILABLE);
-      expect(res.json().message).toMatch(reason);
+      // generic message: neither the upstream status/error text nor any host:port reaches the caller
+      expect(res.json().message).toBe("The deductor identity could not be read from tenant-service; try again shortly.");
+      expect(res.body).not.toMatch(reason);
+      expect(res.body).not.toMatch(/127\.0\.0\.1|localhost|:\d{2,5}\b|ECONNREFUSED|HTTP \d{3}/);
     }
   });
 });
