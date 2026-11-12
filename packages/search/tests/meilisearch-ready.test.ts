@@ -23,6 +23,26 @@ describe("ensureReady", () => {
     expect(calls[calls.length - 1]).toBe("GET /tasks/2");
   });
 
+  it("treats index_already_exists on create (a race with another process) as success and still applies the settings", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string, init: RequestInit) => {
+      const path = u.replace("http://m", "");
+      calls.push(`${init.method} ${path}`);
+      if (init.method === "GET" && path === "/indexes/ix") return json({}, 404);
+      if (init.method === "POST" && path === "/indexes") return json({ code: "index_already_exists", message: "exists" }, 409);
+      if (init.method === "PATCH") return json({ taskUid: 5 }, 202);
+      if (path === "/tasks/5") return json({ status: "succeeded" });
+      return json({}, 500);
+    }));
+    await new MeilisearchEngine({ host: "http://m", indexName: "ix" }).ensureReady();
+    expect(calls).toContain("PATCH /indexes/ix/settings");
+  });
+
+  it("any OTHER create failure still throws", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => init.method === "GET" ? json({}, 404) : json({ code: "internal" }, 500)));
+    await expect(new MeilisearchEngine({ host: "http://m", indexName: "ix" }).ensureReady()).rejects.toThrow(/create failed: 500/);
+  });
+
   it("THROWS when the settings are rejected or the task fails (so a caller can retry later)", async () => {
     vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => init.method === "PATCH" ? json({}, 500) : json({}, 200)));
     await expect(new MeilisearchEngine({ host: "http://m", indexName: "ix" }).ensureReady()).rejects.toThrow(/settings failed/);

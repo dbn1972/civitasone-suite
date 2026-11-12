@@ -160,6 +160,8 @@ export function setSearchEngine(e: SearchEngine | null): void {
 // a later search tries again, and a search refused with invalid_search_filter gets ONE repair + ONE retry.
 // The query is NEVER sent without its filters: dropping them would leak restricted documents.
 let ready = new WeakMap<SearchEngine, Promise<void>>();
+// In-flight repairs: concurrent invalid_search_filter results share ONE settings PATCH.
+const repairing = new WeakMap<SearchEngine, Promise<void>>();
 
 function ensureEngineReady(e: SearchEngine): Promise<void> {
   if (!e.ensureReady) return Promise.resolve();
@@ -184,10 +186,14 @@ async function searchWithRepair(e: SearchEngine, q: SearchQuery): Promise<Search
     return await e.search(q);
   } catch (err) {
     if (!isFilterNotReady(err) || !e.ensureReady) throw err;
-    ready.delete(e);
     log.warn("search filter not ready on the index — applying index settings once and retrying once");
+    let repair = repairing.get(e);
+    if (!repair) {
+      repair = e.ensureReady().finally(() => repairing.delete(e));
+      repairing.set(e, repair);
+    }
     try {
-      await e.ensureReady();
+      await repair;
     } catch (repairErr) {
       log.warn({ err: repairErr instanceof Error ? repairErr.message : "unknown" }, "search index repair failed");
       throw err;

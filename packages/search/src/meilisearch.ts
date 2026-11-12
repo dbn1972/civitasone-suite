@@ -66,8 +66,14 @@ export class MeilisearchEngine implements SearchEngine {
     const get = await this.fetch(`/indexes/${this.indexName}`, { method: "GET" });
     if (get.status === 404) {
       const created = await this.fetch("/indexes", { method: "POST", body: JSON.stringify({ uid: this.indexName, primaryKey: "id" }) });
-      if (!created.ok) throw new Error(`Meilisearch index create failed: ${created.status}`);
-      await this.waitForTask(created);
+      if (!created.ok) {
+        // Another process created it between our GET and POST: that is success, continue to the settings.
+        let code = "";
+        try { code = String(((await created.json()) as { code?: unknown }).code ?? ""); } catch { /* no JSON body */ }
+        if (code !== "index_already_exists") throw new Error(`Meilisearch index create failed: ${created.status}`);
+      } else {
+        await this.waitForTask(created);
+      }
     } else if (!get.ok) {
       throw new Error(`Meilisearch index lookup failed: ${get.status}`);
     }

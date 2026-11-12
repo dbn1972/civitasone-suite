@@ -77,6 +77,19 @@ describe("lazy, memoised index readiness", () => {
     expect(queries[1]!.includeUntagged).toEqual({ accessLevels: ["public", "internal"] });
   });
 
+  it("concurrent invalid_search_filter results share ONE repair (a single settings PATCH), and each then retries once", async () => {
+    let repaired = false;
+    let calls = 0;
+    const { e } = engine({
+      ensureReady: async () => { calls++; if (calls > 1) { await new Promise((r) => setTimeout(r, 50)); repaired = true; } },
+      search: async () => { if (!repaired) { await new Promise((r) => setTimeout(r, 10)); throw new FilterNotReady("x"); } return { hits: [hit], totalHits: 1, processingTimeMs: 1 }; },
+    });
+    setSearchEngine(e);
+    const [a, b, c] = await Promise.all([get(), get(), get()]);
+    expect([a.statusCode, b.statusCode, c.statusCode]).toEqual([200, 200, 200]);
+    expect(e.ensureReady).toHaveBeenCalledTimes(2); // the lazy init + exactly one shared repair
+  });
+
   it("a persistent invalid_search_filter gives 503 after exactly one retry, and every attempt carried the clearance filters (never unfiltered)", async () => {
     const { e, queries } = engine({ ensureReady: async () => undefined, search: async () => { throw new FilterNotReady("still not filterable"); } });
     setSearchEngine(e);
