@@ -188,10 +188,14 @@ describe("pageConcurrency: bounded window, results in page order", () => {
 
   it("default window is 2: OCR overlaps (pool is used again) but never exceeds the window; order is preserved even when page 1 is slowest", async () => {
     // Deterministic overlap: page 1's OCR does not finish until page 2's OCR has STARTED -- a latch released by the page-2
-    // stub itself, never by a clock. OVERLAP_CAP_MS is only a failure bound for a pipeline that never overlaps (it sits
-    // below this test's own timeout so that failure is an assertion, not a vitest timeout). The configured window is
-    // asserted first: a serial default (DEFAULT_PAGE_CONCURRENCY = 1) fails immediately instead of waiting out the bound.
+    // stub itself, never by a clock. A pipeline that never overlaps hangs here and fails on the test timeout. The
+    // configured window is asserted first: a serial default (DEFAULT_PAGE_CONCURRENCY = 1) fails immediately.
     expect(DEFAULT_PAGE_CONCURRENCY).toBe(2);
+    // Symmetric rendezvous: page 2's OCR can reach the stub BEFORE page 1's (page 1's preprocess may be the slower of
+    // the two on a starved runner). Then page 2 would finish before page 1 ever started and the two would never
+    // overlap. So page 2 also waits until page 1 is in OCR; the only thing that releases either is the other starting.
+    let page1Started!: () => void;
+    const page1 = new Promise<void>((r) => { page1Started = r; });
     let page2Started!: () => void;
     const page2 = new Promise<void>((r) => { page2Started = r; });
     let active = 0;
@@ -199,9 +203,10 @@ describe("pageConcurrency: bounded window, results in page order", () => {
     const provider = fakeProvider("tesseract", async (_c, ps) => {
       const n = ps[0]!.pageNumber;
       active++; maxActive = Math.max(maxActive, active);
+      if (n === 1) page1Started();
       if (n === 2) page2Started();
       if (n === 1) await page2; // released only by page 2's OCR starting; no clock, so render/preprocess speed cannot matter
-      else await new Promise((r) => setTimeout(r, 10));
+      else { if (n === 2) await page1; await new Promise((r) => setTimeout(r, 10)); }
       active--;
       return ps.map((p) => pageResult(p, 0.9, "tesseract", `page ${p.pageNumber}`));
     });
