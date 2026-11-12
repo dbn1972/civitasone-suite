@@ -54,6 +54,8 @@ export const POLICY_DEFAULTS = {
   "check_in.overstay_grace_minutes":       0,
   // Check-in validity window (check-in/window.ts): admit up to N minutes after validUntil. 0 = strict.
   "check_in.expiry_grace_minutes":         0,
+  // Offline-recorded check-ins (gate terminal offline): max age of the client-claimed timestamp.
+  "check_in.offline_max_age_hours":        12,
   // Waiting-in-lobby reminder window (check-in/waiting-reminder-worker.ts).
   "check_in.waiting_reminder_minutes":     10,
   "check_in.waiting_reminder_upper_minutes": 15,

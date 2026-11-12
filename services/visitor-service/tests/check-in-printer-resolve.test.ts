@@ -36,7 +36,17 @@ describe("isUuid", () => {
 
 describe("resolveBadgePrinter", () => {
   it("uses the supplied gateTerminalId when it is a live device of the tenant", async () => {
-    const tx = fakeTx([{ id: TERMINAL }]);
+    const tx = fakeTx([{ id: TERMINAL, deviceType: "printer", capabilities: {} }]);
+    expect(await resolveBadgePrinter(tx, TENANT, GATE, TERMINAL)).toEqual({ deviceId: TERMINAL, source: "terminal" });
+  });
+
+  it("does not treat a scanner / turnstile terminal as a printer: falls back to the gate printer", async () => {
+    const tx = fakeTx([{ id: TERMINAL, deviceType: "turnstile", capabilities: { qr: ["scan"] } }], [{ id: GATE_PRINTER }]);
+    expect(await resolveBadgePrinter(tx, TENANT, GATE, TERMINAL)).toEqual({ deviceId: GATE_PRINTER, source: "gate_default" });
+  });
+
+  it("accepts a kiosk terminal with an attached printer", async () => {
+    const tx = fakeTx([{ id: TERMINAL, deviceType: "kiosk", capabilities: { peripherals: ["badge_printer"] } }]);
     expect(await resolveBadgePrinter(tx, TENANT, GATE, TERMINAL)).toEqual({ deviceId: TERMINAL, source: "terminal" });
   });
 

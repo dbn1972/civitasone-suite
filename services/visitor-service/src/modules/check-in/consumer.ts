@@ -37,6 +37,7 @@ import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
 import { getPolicyBoolean } from "../config-registry/policy.js";
 import { loadCheckInWindowPolicy, evaluateCheckInWindow } from "./window.js";
 import { resolveBadgePrinter } from "./printer.js";
+import { FUTURE_SKEW_MS } from "./trusted-time.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
@@ -225,7 +226,12 @@ export function registerCheckInConsumers(queue: Queue): void {
       // valid exactly at validFrom and exactly at validUntil. Fail closed:
       // NonRetryableError, the same convention the checks above established
       // for this exact commit path.
-      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
+      // Server time for a live check-in; the claimed time only for an offline record, never in the future.
+      const nowAt = new Date();
+      const timestamp = p.offlineRecorded === true && p.timestamp ? new Date(p.timestamp) : nowAt;
+      if (Number.isNaN(timestamp.getTime()) || timestamp.getTime() > nowAt.getTime() + FUTURE_SKEW_MS) {
+        throw new NonRetryableError(`OFFLINE_TIMESTAMP_IN_FUTURE: check-in timestamp for pass '${p.passId}' is invalid or in the future`);
+      }
       // Window is [validFrom (or start of the scheduled day, per tenant policy), validUntil + tenant grace].
       // The route already answered 422 synchronously for this; this is the commit-time backstop.
       const windowCheck = evaluateCheckInWindow(timestamp, pass.validFrom, pass.validUntil, await loadCheckInWindowPolicy(tx, msg.tenantId));
@@ -459,7 +465,7 @@ export function registerCheckInConsumers(queue: Queue): void {
       }
       // Physical-access audit trail: emitted for EVERY committed check-in, not
       // only when the optional auto-print-badge toggle is on (GAP-VISITOR-GUARD-06).
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: p.offlineRecorded === true ? "check_in_offline" : "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success", ...(p.offlineRecorded === true ? { recordedAt: timestamp.toISOString() } : {}) } });
 
       return {
         locationId: pass.locationId,

@@ -140,6 +140,7 @@ export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: n
   "check_in.overstay_escalation_hours":      { min: 1, max: 168 },
   "check_in.overstay_grace_minutes":         { min: 0, max: 240 },
   "check_in.expiry_grace_minutes":           { min: 0, max: 1440 },
+  "check_in.offline_max_age_hours":          { min: 1, max: 168 },
   "check_in.waiting_reminder_minutes":       { min: 1, max: 1440 },
   "check_in.waiting_reminder_upper_minutes": { min: 1, max: 1440 },
   "digital_pass.multi_day_max_days":         { min: 1, max: 90 },

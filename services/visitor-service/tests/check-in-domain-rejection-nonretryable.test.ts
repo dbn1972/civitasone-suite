@@ -130,7 +130,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       700,
     );
     expect(markProcessedMock).toHaveBeenCalledTimes(1); // one attempt, no retries
@@ -145,7 +145,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkOutRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       700,
     );
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
@@ -161,7 +161,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       1500,
     );
     expect(markProcessedMock.mock.calls.length).toBeGreaterThan(1); // retried

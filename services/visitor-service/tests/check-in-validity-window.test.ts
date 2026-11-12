@@ -158,7 +158,7 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: BEFORE_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: BEFORE_WINDOW.toISOString() },
       600,
     );
 
@@ -177,7 +177,7 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: AFTER_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: AFTER_WINDOW.toISOString() },
       600,
     );
 
@@ -193,7 +193,7 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
     );
 
     expect(queue.dlq).toHaveLength(0);
@@ -206,7 +206,7 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     await publishAndFlush(
       atStart,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: VALID_FROM.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: VALID_FROM.toISOString() },
     );
     expect(atStart.dlq).toHaveLength(0);
     expect(fakeTx.update).toHaveBeenCalledTimes(1);
@@ -221,7 +221,7 @@ describe("checkInRecord validity-window check (DOM-012 fix)", () => {
     await publishAndFlush(
       atEnd,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: VALID_UNTIL.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: VALID_UNTIL.toISOString() },
     );
     expect(atEnd.dlq).toHaveLength(0);
     expect(fakeTx.update).toHaveBeenCalledTimes(1);

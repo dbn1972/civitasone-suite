@@ -13,6 +13,16 @@ import { devices } from "../device-registry/schema.js";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === "string" && UUID_RE.test(v);
 
+/** A printer device, or a terminal/kiosk with an attached printer (any capability key or value mentioning "print"). */
+export function canPrint(d: { deviceType?: unknown; capabilities?: unknown } | undefined): boolean {
+  if (!d) return false;
+  if (d.deviceType === "printer") return true;
+  const caps = d.capabilities;
+  if (!caps || typeof caps !== "object") return false;
+  return Object.entries(caps as Record<string, unknown>).some(([k, v]) =>
+    /print/i.test(k) || (Array.isArray(v) && v.some((x) => typeof x === "string" && /print/i.test(x))));
+}
+
 export type BadgePrinterResolution =
   | { deviceId: string; source: "terminal" | "gate_default" }
   | { deviceId: null; reason: string };
@@ -26,10 +36,11 @@ export async function resolveBadgePrinter(
 ): Promise<BadgePrinterResolution> {
   if (gateTerminalId) {
     if (isUuid(gateTerminalId)) {
-      const rows = await tx.select({ id: devices.id }).from(devices)
+      const rows = await tx.select({ id: devices.id, deviceType: devices.deviceType, capabilities: devices.capabilities }).from(devices)
         .where(and(eq(devices.id, gateTerminalId), eq(devices.tenantId, tenantId), ne(devices.status, "deregistered")))
         .limit(1);
-      if (isUuid(rows[0]?.id)) return { deviceId: rows[0].id as string, source: "terminal" };
+      // Only something that can print: a `printer` device, or a terminal advertising a print capability.
+      if (isUuid(rows[0]?.id) && canPrint(rows[0])) return { deviceId: rows[0].id as string, source: "terminal" };
     }
     // falls through: unknown / non-UUID terminal id -> try the gate's default printer
   }
@@ -44,7 +55,7 @@ export async function resolveBadgePrinter(
   return {
     deviceId: null,
     reason: gateTerminalId
-      ? `gateTerminalId '${gateTerminalId}' is not a registered device of this tenant and gate '${gateId}' has no active printer`
+      ? `gateTerminalId '${gateTerminalId}' is not a printing device of this tenant and gate '${gateId}' has no active printer`
       : `no gateTerminalId given and gate '${gateId}' has no active printer`,
   };
 }
