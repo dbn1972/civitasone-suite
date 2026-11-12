@@ -194,4 +194,13 @@ describe("the real functions (as the worker calls them, as audit_svc)", () => {
         WHERE p.oid = '${HELPER}(text, text, text, date, int, boolean)'::regprocedure AND a.grantee = 0`);
     expect((rows[0] as unknown as { n: number }).n).toBe(0);
   });
+
+  it("the zero-argument wrappers are executable by audit_svc and not by PUBLIC", async () => {
+    for (const fn of ["events.create_future_partitions()", "_outbox.create_future_partitions()"]) {
+      const [r] = await admin.unsafe(
+        `SELECT has_function_privilege('audit_svc', '${fn}'::regprocedure, 'EXECUTE') AS app,
+                (SELECT count(*)::int FROM pg_proc p, aclexplode(p.proacl) a WHERE p.oid = '${fn}'::regprocedure AND a.grantee = 0) AS pub`);
+      expect(r, fn).toMatchObject({ app: true, pub: 0 });
+    }
+  });
 });

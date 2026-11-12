@@ -401,3 +401,22 @@ psql civitas_audit -c "
 > DB restored to {timestamp}. Hash chain verified intact for all {N} tenants.  
 > Outbox replayed. Ingest lag recovering. No audit events lost.  
 > CERT-In compliance: log retention confirmed at {N} days.
+
+## Monthly partitions of `events.events` / `_outbox.messages` (migration 0038)
+
+The worker creates the current month plus 3 ahead every day (`events.create_future_partitions()`,
+`_outbox.create_future_partitions()`, SECURITY DEFINER). On a database where `audit_svc` does not own `events.events`
+(UAT: `civitas_admin` does) the migrator cannot replace those functions, so **run this once, as the table owner, before
+relying on the worker** (and before the first month without a partition, 1 Feb 2027 on UAT):
+
+```
+DATABASE_HOST=... DATABASE_PORT=... DATABASE_USER=<owner of events.events> PGPASSWORD=... \
+  ./scripts/ops/apply-audit-partition-fix.sh
+```
+
+It exits non-zero if partitions are still missing or the functions are not owned by the owner of `events.events`.
+Symptoms of a gap: worker log `partition maintenance: future partitions are still missing` (error level), or
+`must be owner of table events`. Check with `SELECT events.missing_future_partitions();` (0 = fine). If rows of a month
+already sit in `events_default` the partition for that month cannot be created (WARNING in the log): move those rows
+first, then re-run.
+

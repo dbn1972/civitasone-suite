@@ -168,6 +168,19 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'skipped CREATE OR REPLACE FUNCTION _outbox.create_future_partitions() — % is not its owner; apply via scripts/ops/apply-audit-partition-fix.sh', current_user;
 END $mig$;
 
+-- The wrappers run as their owner (SECURITY DEFINER): only the application role may call them, not PUBLIC.
+DO $mig$
+BEGIN
+  REVOKE ALL ON FUNCTION events.create_future_partitions() FROM PUBLIC;
+  REVOKE ALL ON FUNCTION _outbox.create_future_partitions() FROM PUBLIC;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'audit_svc') THEN
+    GRANT EXECUTE ON FUNCTION events.create_future_partitions() TO audit_svc;
+    GRANT EXECUTE ON FUNCTION _outbox.create_future_partitions() TO audit_svc;
+  END IF;
+EXCEPTION WHEN insufficient_privilege OR undefined_function THEN
+  RAISE NOTICE 'skipped wrapper EXECUTE hardening (not owner / wrapper absent) — apply via scripts/ops/apply-audit-partition-fix.sh as the table owner';
+END $mig$;
+
 -- 3) Horizon check used by the worker: how many of the next p_months_ahead+1 months have no partition.
 DO $mig$
 BEGIN
