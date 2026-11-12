@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenApplications, citizenAppDocuments, citizenStatusHistory,
@@ -49,6 +49,12 @@ export async function findDocument(tenantId: string, applicationId: string, docI
     eq(citizenAppDocuments.tenantId, tenantId),
   )).limit(1));
   return rows[0] ?? null;
+}
+
+/** Record that the object behind a document was seen to exist. Idempotent; tenant scoped. */
+export async function markDocumentConfirmed(tenantId: string, docId: string): Promise<void> {
+  await db.transaction((tx) => tx.update(citizenAppDocuments).set({ confirmedAt: new Date() })
+    .where(and(eq(citizenAppDocuments.id, docId), eq(citizenAppDocuments.tenantId, tenantId), isNull(citizenAppDocuments.confirmedAt))));
 }
 
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {

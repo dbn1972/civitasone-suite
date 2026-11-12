@@ -6,7 +6,7 @@ import type { SubmitApplicationBody, StatusUpdateBody, DocUploadBody } from "./v
 import { presignedPutUrl } from "@civitasone/storage";
 import { HttpError } from "../../shared/context.js";
 import { validateUpload, PUT_URL_TTL_SECONDS, DOCUMENT_UPLOAD_LIMITS } from "../documents/storage.js";
-import { buildApplicationDocumentKey } from "./docs-storage.js";
+import { buildApplicationDocumentKey, extensionContentTypeMismatch } from "./docs-storage.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -59,6 +59,9 @@ export async function uploadDocument(ctx: RequestContext, id: string, body: DocU
   }
   const invalid = validateUpload({ filename: body.filename, contentType: body.contentType, sizeBytes: body.sizeBytes });
   if (invalid) throw new HttpError(400, invalid.code, invalid.message);
+
+  const mismatch = extensionContentTypeMismatch(body.filename, body.contentType);
+  if (mismatch) throw new HttpError(422, "FILE_TYPE_MISMATCH", mismatch);
 
   const docId = randomUUID();
   const key = buildApplicationDocumentKey(ctx.tenantId, id, body.filename);

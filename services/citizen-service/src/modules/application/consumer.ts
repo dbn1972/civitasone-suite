@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -136,6 +136,11 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       id: string; applicationId: string; tenantId: string; docType: string; ownerCitizenId?: string | null;
       storageKey?: string; contentType?: string; sizeBytes?: number; filename?: string;
     };
+    // The envelope tenant (set from the verified request context) is authoritative; a payload that
+    // names a different tenant is refused, and every write below uses the envelope tenant.
+    if (p.tenantId !== msg.tenantId) {
+      throw new NonRetryableError(`application document payload tenant '${p.tenantId}' does not match message tenant '${msg.tenantId}'`);
+    }
     // A command queued before migration 0046 carries no object key (its presigned URL was fabricated).
     // There is nothing real to record; never store a made-up link.
     if (!p.storageKey || !keyBelongsToApplication(p.storageKey, msg.tenantId, p.applicationId)) {
@@ -152,7 +157,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!app) return;
       if (p.ownerCitizenId != null && app.citizenId !== p.ownerCitizenId) return;
       await repo.insertDocument(tx, {
-        id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
+        id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId,
         docType: p.docType, storageKey: p.storageKey!,
         contentType: p.contentType ?? null, sizeBytes: p.sizeBytes ?? null, originalFilename: p.filename ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,

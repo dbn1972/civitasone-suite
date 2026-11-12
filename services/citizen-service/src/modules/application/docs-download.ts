@@ -40,6 +40,7 @@ export async function presignDocumentDownload(ctx: RequestContext, applicationId
   // Presigned but never PUT (aborted upload).
   if (!exists) throw new HttpError(409, "DOCUMENT_NOT_AVAILABLE", "document not available");
 
+  if (!doc.confirmedAt) await repo.markDocumentConfirmed(ctx.tenantId, doc.id).catch(() => undefined);
   const expiresIn = downloadTtlSeconds();
   const downloadUrl = await presignedGetUrl({ key: doc.storageKey, expiresIn });
   return { downloadUrl, expiresIn, filename: doc.originalFilename ?? null, contentType: doc.contentType ?? null };

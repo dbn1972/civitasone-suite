@@ -39,14 +39,35 @@ export interface DocumentRowLike {
   contentType?: string | null;
   sizeBytes?: number | string | null;
   originalFilename?: string | null;
+  confirmedAt?: Date | string | null;
+}
+
+/** Content types a file extension may be uploaded as (the citizen document allow-list). */
+export const EXTENSION_CONTENT_TYPES: Record<string, readonly string[]> = {
+  pdf: ["application/pdf"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+  heic: ["image/heic"],
+};
+
+/** Null when the filename extension agrees with the declared content type, else a clear message. */
+export function extensionContentTypeMismatch(filename: string, contentType: string): string | null {
+  const ext = extensionOf(filename);
+  const allowed = EXTENSION_CONTENT_TYPES[ext];
+  if (!allowed || allowed.includes(contentType)) return null; // unknown ext is rejected by validateUpload
+  return `File extension .${ext} does not match content type ${contentType} (expected ${allowed.join(" or ")})`;
 }
 
 /**
- * API view of a document row. NEVER exposes the storage key or any URL: a legacy row (fabricated
- * link, no object) is `available: false`; a real one points at the authenticated download route.
+ * API view of a document row. NEVER exposes the storage key or any URL.
+ * available=true only once the object is confirmed to exist (HEAD succeeded); a presigned-but-not-yet-
+ * uploaded row is `UPLOAD_PENDING`, a legacy row (fabricated link, no object) is `DOCUMENT_NOT_AVAILABLE`.
  */
 export function toDocumentView(row: DocumentRowLike) {
-  const available = typeof row.storageKey === "string" && row.storageKey.length > 0;
+  const hasKey = typeof row.storageKey === "string" && row.storageKey.length > 0;
+  const available = hasKey && row.confirmedAt != null;
   return {
     id: row.id,
     docType: row.docType,
@@ -56,6 +77,6 @@ export function toDocumentView(row: DocumentRowLike) {
     sizeBytes: row.sizeBytes == null ? null : Number(row.sizeBytes),
     available,
     downloadPath: available ? `/v1/citizen/applications/${row.applicationId}/documents/${row.id}/download` : null,
-    ...(available ? {} : { unavailableReason: "DOCUMENT_NOT_AVAILABLE" }),
+    ...(available ? {} : { unavailableReason: hasKey ? "UPLOAD_PENDING" : "DOCUMENT_NOT_AVAILABLE" }),
   };
 }

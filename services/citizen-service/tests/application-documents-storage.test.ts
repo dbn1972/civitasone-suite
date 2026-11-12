@@ -100,7 +100,9 @@ describe("object key helpers", () => {
     if (prev === undefined) delete process.env.CITIZEN_DOC_DOWNLOAD_TTL_SECONDS; else process.env.CITIZEN_DOC_DOWNLOAD_TTL_SECONDS = prev;
   });
   it("toDocumentView never leaks the key or a URL; legacy rows are unavailable", () => {
-    const real = toDocumentView({ id: "d1", applicationId: "a1", docType: "x", uploadedAt: new Date(0), storageKey: "citizen-documents/t/applications/a1/k.pdf", originalFilename: "k.pdf", contentType: "application/pdf", sizeBytes: "10" });
+    const pending = toDocumentView({ id: "d0", applicationId: "a1", docType: "x", uploadedAt: new Date(0), storageKey: "citizen-documents/t/applications/a1/k.pdf", confirmedAt: null });
+    expect(pending).toMatchObject({ available: false, downloadPath: null, unavailableReason: "UPLOAD_PENDING" });
+    const real = toDocumentView({ id: "d1", applicationId: "a1", docType: "x", uploadedAt: new Date(0), confirmedAt: new Date(), storageKey: "citizen-documents/t/applications/a1/k.pdf", originalFilename: "k.pdf", contentType: "application/pdf", sizeBytes: "10" });
     expect(real).toMatchObject({ available: true, downloadPath: "/v1/citizen/applications/a1/documents/d1/download", sizeBytes: 10 });
     expect(JSON.stringify(real)).not.toContain("citizen-documents/t");
     const legacy = toDocumentView({ id: "d2", applicationId: "a1", docType: "x", uploadedAt: new Date(0), storageKey: null });
@@ -216,6 +218,63 @@ describe("application read-model + download", () => {
     const rows = await sqlAsTenant(TENANT, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`);
     expect(rows).toHaveLength(0);
     expect((await get(`/v1/citizen/applications/${appId}`, applicantH)).json().documents.length).toBe(before);
+  });
+});
+
+describe("extension must agree with the declared content type", () => {
+  it("422 FILE_TYPE_MISMATCH for .pdf declared as image/png (and exe-as-pdf style tricks)", async () => {
+    const url = `/v1/citizen/applications/${appId}/documents`;
+    const r = await post(url, { ...PDF, filename: "scan.pdf", contentType: "image/png" }, applicantH);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("FILE_TYPE_MISMATCH");
+    expect(r.json().message).toContain(".pdf");
+    const r2 = await post(url, { ...PDF, filename: "photo.jpg", contentType: "application/pdf" }, applicantH);
+    expect(r2.statusCode).toBe(422);
+    expect((await post(url, { ...PDF, filename: "photo.JPEG", contentType: "image/jpeg" }, applicantH)).statusCode).toBe(202);
+  });
+});
+
+describe("available only after the object exists (confirmed upload)", () => {
+  it("a presigned-but-not-uploaded document is UPLOAD_PENDING; it becomes available once the object exists", async () => {
+    exists.mockResolvedValue(false);
+    const id = (await post(`/v1/citizen/applications/${appId}/documents`, { ...PDF, filename: "late.pdf" }, applicantH)).json().id;
+    expect(await waitFor(async () => (await sqlAsTenant(TENANT, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).length === 1)).toBe(true);
+    const find = async () => (await get(`/v1/citizen/applications/${appId}`, applicantH)).json().documents.find((d: { id: string }) => d.id === id);
+    expect(await find()).toMatchObject({ available: false, downloadPath: null, unavailableReason: "UPLOAD_PENDING" });
+    expect((await get(`/v1/citizen/applications/${appId}/documents/${id}/download`, applicantH)).statusCode).toBe(409);
+
+    exists.mockResolvedValue(true); // the client finished the PUT
+    expect(await find()).toMatchObject({ available: true, downloadPath: `/v1/citizen/applications/${appId}/documents/${id}/download` });
+    const [row] = await sqlAsTenant(TENANT, (sql) => sql`select confirmed_at from application.citizen_app_documents where id = ${id}`);
+    expect(row!.confirmed_at).not.toBeNull();
+    exists.mockClear();
+    expect(await find()).toMatchObject({ available: true });
+    expect(exists).not.toHaveBeenCalled(); // confirmed once, no HEAD per read afterwards
+  });
+
+  it("a store error on the read path does not fail the read and does not confirm", async () => {
+    exists.mockResolvedValue(false);
+    const id = (await post(`/v1/citizen/applications/${appId}/documents`, { ...PDF, filename: "err.pdf" }, applicantH)).json().id;
+    await waitFor(async () => (await sqlAsTenant(TENANT, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).length === 1);
+    exists.mockRejectedValue(new Error("ETIMEDOUT"));
+    const r = await get(`/v1/citizen/applications/${appId}`, applicantH);
+    expect(r.statusCode).toBe(200);
+    expect(r.json().documents.find((d: { id: string }) => d.id === id)).toMatchObject({ available: false, unavailableReason: "UPLOAD_PENDING" });
+    exists.mockReset().mockResolvedValue(true);
+  });
+});
+
+describe("consumer tenant binding", () => {
+  it("refuses a payload whose tenantId differs from the message tenant: nothing is written for either tenant", async () => {
+    const id = randomUUID();
+    const key = buildApplicationDocumentKey(TENANT2, appId, "x.pdf");
+    await queue.publish("citizen.application.doc_upload", {
+      messageId: id, type: "citizen.application.doc_upload", tenantId: TENANT, actorId: APPLICANT, correlationId: "c", schemaVersion: "1.0",
+      payload: { id, applicationId: appId, tenantId: TENANT2, docType: "x", ownerCitizenId: APPLICANT, storageKey: key, contentType: "application/pdf", sizeBytes: 1, filename: "x.pdf" },
+    } as never);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(await sqlAsTenant(TENANT, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).toHaveLength(0);
+    expect(await sqlAsTenant(TENANT2, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).toHaveLength(0);
   });
 });
 

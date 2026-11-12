@@ -39,6 +39,8 @@ export const citizenAppDocuments = applicationSchema.table("citizen_app_document
   contentType:   varchar("content_type", { length: 100 }),
   sizeBytes:     bigint("size_bytes", { mode: "number" }),
   originalFilename: varchar("original_filename", { length: 255 }),
+  /** Set once a HEAD on the object succeeds (migration 0047); available=true only from then on. */
+  confirmedAt:   timestamp("confirmed_at", { withTimezone: true }),
   uploadedAt:    timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
