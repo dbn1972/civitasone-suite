@@ -10,6 +10,9 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull(),
   billNo:      text("bill_no").notNull(),
+  // Migration 0168: the number printed on the VENDOR's invoice (the caller's billNo on POST /v1/finance/bills). NULL for
+  // GRN / works bills and older bills. bill_no above is the internal gapless BILL/<fy>/<seq> number.
+  vendorBillNo: text("vendor_bill_no"),
   vendorId:    uuid("vendor_id").notNull(),
   headId:      uuid("head_id").notNull(),
   sanctionRef: uuid("sanction_ref"),

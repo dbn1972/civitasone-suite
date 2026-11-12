@@ -11,7 +11,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, normaliseVendorBillNo, vendorBillNoKey, vendorBillNoUniqueEnabled, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import { assertBillDdoConfigured } from "../masters/ddo-commands.js";
 import * as ucRepo from "./uc-repo.js";
@@ -217,7 +217,20 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     // UAT b24: an unconfigured DDO used to be a 202 that dead-lettered UNKNOWN_DDO in the worker.
     await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
     // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
-    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, () => commands.createBill(ctx, body)));
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, async () => {
+      // The vendor's invoice number (body.billNo): with FINANCE_VENDOR_BILL_NO_UNIQUE on, the same vendor cannot lodge it
+      // twice (a rejected bill does not count). Inside the idempotent section so a replay of the SAME request still replays.
+      const vendorBillNo = normaliseVendorBillNo(body.billNo);
+      if (vendorBillNo && vendorBillNoUniqueEnabled()) {
+        const dup = await scopedRead((tx) => repo.findDuplicateVendorBill(tx, ctx.tenantId, body.vendorId, vendorBillNoKey(vendorBillNo)));
+        if (dup) {
+          throw new HttpError(409, "DUPLICATE_VENDOR_BILL_NO", `this vendor's bill number ${vendorBillNo} was already lodged as ${dup.billNo}`, [
+            { field: "billNo", message: `Already lodged for this vendor as ${dup.billNo}.` },
+          ]);
+        }
+      }
+      return commands.createBill(ctx, body);
+    }));
   });
 
   // Sample data ("try it"): add clearly-marked [SAMPLE] bills, or clear them.
