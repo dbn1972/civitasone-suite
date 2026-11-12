@@ -77,7 +77,7 @@ describe("GlobalSearchIndex.search: server-built filter", () => {
 describe("tenant tokens", () => {
   const key = randomBytes(24).toString("hex");
   it("is an HS256 JWT whose rule pins the tenant and expires", () => {
-    const tok = createTenantToken({ apiKey: key, apiKeyUid: "uid-1", tenantId: A, indexName: "global_search", expiresAtSec: 2_000_000_000 });
+    const tok = createTenantToken({ apiKey: key, keyUid: "uid-1", tenantId: A, indexName: "global_search", expiresAtSec: 2_000_000_000 });
     const [h, p, s] = tok.split(".") as [string, string, string];
     expect(JSON.parse(Buffer.from(h, "base64url").toString())).toEqual({ typ: "JWT", alg: "HS256" });
     expect(JSON.parse(Buffer.from(p, "base64url").toString())).toEqual({
@@ -86,7 +86,7 @@ describe("tenant tokens", () => {
     expect(s).toBe(createHmac("sha256", key).update(`${h}.${p}`).digest("base64url"));
   });
   it("cannot be minted for a non-UUID tenant", () => {
-    expect(() => createTenantToken({ apiKey: key, apiKeyUid: "u", tenantId: `${A}" OR 1=1`, indexName: "i", expiresAtSec: 1 })).toThrow();
+    expect(() => createTenantToken({ apiKey: key, keyUid: "u", tenantId: `${A}" OR 1=1`, indexName: "i", expiresAtSec: 1 })).toThrow();
   });
   it("search uses a per-tenant token (not the admin key) when a search key is configured", async () => {
     const { impl, calls } = fakeFetch([]);

@@ -243,8 +243,9 @@ export function registerSearchRoute(app: FastifyInstance): void {
           tenantId,
           limit: pageSize,
           offset,
-          // Use tags for module filtering — indexed documents store module as a tag
-          tags: userModules,
+          // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
+          // is AND, which returned nothing for a user with more than one module (and for every admin).
+          tagsAny: userModules,
         });
       } catch (err) {
         // Graceful degradation: search engine unreachable
