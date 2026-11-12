@@ -200,12 +200,13 @@ describe("pageConcurrency: bounded window, results in page order", () => {
       const n = ps[0]!.pageNumber;
       active++; maxActive = Math.max(maxActive, active);
       if (n === 2) page2Started();
-      if (n === 1) await Promise.race([page2, new Promise((r) => setTimeout(r, OVERLAP_CAP_MS))]);
+      if (n === 1) await page2; // released only by page 2's OCR starting; no clock, so render/preprocess speed cannot matter
       else await new Promise((r) => setTimeout(r, 10));
       active--;
       return ps.map((p) => pageResult(p, 0.9, "tesseract", `page ${p.pageNumber}`));
     });
-    const chain = new OcrChain({ providers: [{ provider }], langs: ["eng"] });
+    // The chain's own per-attempt timeout (default 60s) must not cut page 1 off while it waits for page 2's latch.
+    const chain = new OcrChain({ providers: [{ provider, timeoutMs: 140_000 }], langs: ["eng"] });
     const max = () => maxActive;
     const order: number[] = [];
     const out = await processDocument({ data: await scannedPdf(5) }, { chain, ...NO_ORIENT, onPage: (p) => { order.push(p.image.pageNumber); } });
