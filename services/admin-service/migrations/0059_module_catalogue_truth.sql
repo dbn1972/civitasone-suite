@@ -10,18 +10,30 @@
 --      inventory   hard finance                 -> finance,procurement         (SRN gated by the GRN; stock entries from procurement.grn.accepted)
 --      contract    hard workflow                -> workflow,procurement        (vendor master + PO lookup live in procurement)
 --      legal       hard workflow                -> workflow,employee           (department list + officer directory come from HRMS)
+--    The three NEW hard edges (inventory/contract/legal) are stored in the new column pending_hard_deps and become
+--    effective only when admin-service runs with MODULE_SOURCE=catalogue (repo.loadRegistry). Putting them in hard_deps
+--    would make an existing tenant that holds inventory/contract/legal without procurement/employee silently GAIN those
+--    modules. Removed edges (payroll -> finance) are protected the other way by the grandfather step 3.
 --      + soft edges the code already has (events/calls used when present): finance, citizen, employee, procurement,
 --        project, analytics, inspection, helpdesk, crm, meeting.
--- 3. NO CHANGE FOR EXISTING TENANTS: before the dependency edit, every tenant's CURRENT hard-dependency closure
+-- 3. NO GAIN, NO LOSS FOR EXISTING TENANTS (default MODULE_SOURCE unset): before the dependency edit, every tenant's CURRENT hard-dependency closure
 --    (old registry) is written down as explicit 'grandfather' entitlements, so e.g. a tenant that got Finance only
 --    because Payroll pulled it in keeps Finance. Guarded so it runs exactly once (while payroll still hard-requires finance).
 -- 4. M4 single source: the older switch list (config.admin_module_configs enabled gateway keys) is carried into
 --    the catalogue for tenants that have no 'user' selection (legacy-only or grandfather-only tenants), using the
 --    inverse of the catalogue gatewayKeys. A tenant that composed its own modules is untouched (its legacy rows are
---    stale and inert). Never removes anything. Idempotent: ON CONFLICT DO NOTHING; safe to run twice.
+--    stale and inert). A tenant that was never composed (no entitlement rows, no profile) is left exactly as it is, so it does not flip to
+--    configured:true. Never removes anything. Idempotent: ON CONFLICT DO NOTHING; safe to run twice.
+--
+-- The whole file is ONE transaction: a failure part-way (the NO FORCE ... FORCE toggles below) rolls everything back and
+-- can never leave RLS unforced.
 --
 -- Cross-tenant DML on FORCE-RLS tables uses the sanctioned NO FORCE ... FORCE idiom (as 0050/0056); every inserted
 -- row carries its SOURCE row's own tenant_id.
+
+BEGIN;
+
+ALTER TABLE composition.module_registry ADD COLUMN IF NOT EXISTS pending_hard_deps text[] NOT NULL DEFAULT '{}';
 
 -- 1. municipal modules ------------------------------------------------------
 INSERT INTO composition.module_registry (id, name, layer, is_core, cluster, hard_deps, soft_deps, screens, sort_order) VALUES
@@ -71,23 +83,23 @@ END $$;
 ALTER TABLE composition.tenant_entitlement FORCE ROW LEVEL SECURITY;
 
 -- 2. dependency corrections --------------------------------------------------
-UPDATE composition.module_registry r SET hard_deps = v.hard_deps, soft_deps = v.soft_deps
+UPDATE composition.module_registry r SET hard_deps = v.hard_deps, soft_deps = v.soft_deps, pending_hard_deps = v.pending
 FROM (VALUES
-  ('payroll', ARRAY['employee','config']::text[], ARRAY['attendance','leave','loans','finance','benefits']::text[]),
-  ('inventory', ARRAY['finance','procurement']::text[], '{}'::text[]),
-  ('contract', ARRAY['workflow','procurement']::text[], '{}'::text[]),
-  ('legal', ARRAY['workflow','employee']::text[], ARRAY['meeting']::text[]),
-  ('finance', ARRAY['config']::text[], ARRAY['payroll','procurement','grant','billing','citizen','meeting','revenue']::text[]),
-  ('citizen', ARRAY['workflow']::text[], ARRAY['finance','employee']::text[]),
-  ('employee', ARRAY['org','config']::text[], ARRAY['payroll','meeting','citizen']::text[]),
-  ('procurement', ARRAY['finance','budget','workflow']::text[], ARRAY['contract','legal','inventory','meeting','employee']::text[]),
-  ('project', ARRAY['config']::text[], ARRAY['grant','finance','meeting']::text[]),
-  ('analytics', ARRAY['config']::text[], ARRAY['finance','procurement','grant','employee','meeting','court','visitor']::text[]),
-  ('inspection', ARRAY['employee','workflow']::text[], ARRAY['leave']::text[]),
-  ('helpdesk', '{}'::text[], ARRAY['citizen','crm','asset','knowledge','telephony']::text[]),
-  ('crm', '{}'::text[], ARRAY['telephony']::text[]),
-  ('meeting', '{}'::text[], ARRAY['employee']::text[])
-) AS v(id, hard_deps, soft_deps) WHERE r.id = v.id;
+  ('payroll', ARRAY['employee','config']::text[], ARRAY['attendance','leave','loans','finance','benefits']::text[], '{}'::text[]),
+  ('inventory', ARRAY['finance']::text[], ARRAY['procurement']::text[], ARRAY['procurement']::text[]),
+  ('contract', ARRAY['workflow']::text[], ARRAY['procurement']::text[], ARRAY['procurement']::text[]),
+  ('legal', ARRAY['workflow']::text[], ARRAY['meeting','employee']::text[], ARRAY['employee']::text[]),
+  ('finance', ARRAY['config']::text[], ARRAY['payroll','procurement','grant','billing','citizen','meeting','revenue']::text[], '{}'::text[]),
+  ('citizen', ARRAY['workflow']::text[], ARRAY['finance','employee']::text[], '{}'::text[]),
+  ('employee', ARRAY['org','config']::text[], ARRAY['payroll','meeting','citizen']::text[], '{}'::text[]),
+  ('procurement', ARRAY['finance','budget','workflow']::text[], ARRAY['contract','legal','inventory','meeting','employee']::text[], '{}'::text[]),
+  ('project', ARRAY['config']::text[], ARRAY['grant','finance','meeting']::text[], '{}'::text[]),
+  ('analytics', ARRAY['config']::text[], ARRAY['finance','procurement','grant','employee','meeting','court','visitor']::text[], '{}'::text[]),
+  ('inspection', ARRAY['employee','workflow']::text[], ARRAY['leave']::text[], '{}'::text[]),
+  ('helpdesk', '{}'::text[], ARRAY['citizen','crm','asset','knowledge','telephony']::text[], '{}'::text[]),
+  ('crm', '{}'::text[], ARRAY['telephony']::text[], '{}'::text[]),
+  ('meeting', '{}'::text[], ARRAY['employee']::text[], '{}'::text[])
+) AS v(id, hard_deps, soft_deps, pending) WHERE r.id = v.id;
 
 -- 4. carry the older switch list into the catalogue ----------------------------
 ALTER TABLE composition.tenant_entitlement NO FORCE ROW LEVEL SECURITY;
@@ -104,7 +116,12 @@ JOIN legacy l ON l.gateway_key = mc.module_key
 WHERE mc.enabled = true
   AND EXISTS (SELECT 1 FROM composition.module_registry r WHERE r.id = l.module_id)
   AND NOT EXISTS (SELECT 1 FROM composition.tenant_entitlement u WHERE u.tenant_id = mc.tenant_id AND u.source = 'user')
+  -- only tenants already composed (grandfathered entitlements or a profile); a never-composed legacy tenant stays unconfigured
+  AND (EXISTS (SELECT 1 FROM composition.tenant_entitlement g WHERE g.tenant_id = mc.tenant_id)
+       OR EXISTS (SELECT 1 FROM composition.tenant_profile tp WHERE tp.tenant_id = mc.tenant_id))
 ON CONFLICT (tenant_id, module_id) DO NOTHING;
 
 ALTER TABLE config.admin_module_configs    FORCE ROW LEVEL SECURITY;
 ALTER TABLE composition.tenant_entitlement FORCE ROW LEVEL SECURITY;
+
+COMMIT;

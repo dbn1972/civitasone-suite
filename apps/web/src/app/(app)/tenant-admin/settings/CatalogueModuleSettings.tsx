@@ -107,7 +107,7 @@ export function CatalogueModuleSettings({ modules }: { modules: CatalogueModule[
                   </div>
                 </div>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12.5, color: m.enabled ? "var(--good)" : "var(--mut)", minWidth: 56, textAlign: "right" }}>{state}</span>
+                  <span style={{ fontSize: 12.5, color: m.enabled ? "var(--good)" : "var(--mut)", minWidth: 56, textAlign: "end" }}>{state}</span>
                   <button
                     type="button"
                     role="switch"
@@ -124,8 +124,8 @@ export function CatalogueModuleSettings({ modules }: { modules: CatalogueModule[
                     }}
                   >
                     <span aria-hidden="true" style={{
-                      position: "absolute", top: 2, left: m.enabled ? 20 : 2, width: 16, height: 16,
-                      borderRadius: "50%", background: "var(--panel)", transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,.2)",
+                      position: "absolute", top: 2, insetInlineStart: m.enabled ? 20 : 2, width: 16, height: 16,
+                      borderRadius: "50%", background: "var(--panel)", transition: "inset-inline-start .15s", boxShadow: "0 1px 2px rgba(0,0,0,.2)",
                     }} />
                   </button>
                 </div>

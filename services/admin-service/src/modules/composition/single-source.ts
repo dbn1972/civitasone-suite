@@ -11,9 +11,7 @@ import { legacyKeysFromModules, MODULE_CATALOGUE } from "@civitasone/schemas/mod
 import { buildRegistry, resolveComposition } from "./domain.js";
 import * as repo from "./repo.js";
 
-export function catalogueIsSource(): boolean {
-  return process.env.MODULE_SOURCE === "catalogue";
-}
+export { catalogueIsSource } from "./module-source.js";
 
 /** Resolved catalogue module ids for a composed tenant, or null when the tenant was never composed. */
 export async function resolvedCatalogueModules(tenantId: string): Promise<string[] | null> {

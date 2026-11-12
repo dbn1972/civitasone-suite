@@ -23,7 +23,6 @@ import type { ModuleDef } from "../src/modules/composition/domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ACTOR = "d9200000-eeee-4000-8000-000000000001";
-const ZERO = "00000000-0000-0000-0000-000000000000";
 
 interface Fixture { tenants: Array<{ label: string; entitlements: string; legacyEnabled?: string }> }
 const FIXTURE = JSON.parse(readFileSync(new URL("./fixtures/uat-tenant-module-configs.json", import.meta.url), "utf8")) as Fixture;
@@ -49,15 +48,24 @@ const MUNICIPAL = MODULE_CATALOGUE.filter((m) => m.cluster === "municipal").map(
 
 const MIGRATION_TEXT = readFileSync(new URL("../migrations/0059_module_catalogue_truth.sql", import.meta.url), "utf8");
 const FORCE_LINES = /^ALTER TABLE .*FORCE ROW LEVEL SECURITY;$/gm;
-const MIGRATION = MIGRATION_TEXT.replace(FORCE_LINES, ""); // FORCE toggling would race parallel files; the GUC confines the DML to the case tenant
+// The file is one transaction (BEGIN/COMMIT); inside the test's own rolled-back tx those two lines are dropped too.
+const MIGRATION = MIGRATION_TEXT.replace(FORCE_LINES, "").replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, ""); // FORCE toggling would race parallel files; the GUC confines the DML to the case tenant
 
 class Rollback extends Error {}
 type Sql = typeof sqlClient;
 
+type RegRow = { id: string; name: string; layer: number; is_core: boolean; cluster: string; hard_deps: string[]; soft_deps: string[]; pending_hard_deps: string[] | null; screens: string[]; sort_order: number };
+async function registryRows(sql: Sql): Promise<RegRow[]> {
+  // pending_hard_deps does not exist before 0059: select it only when present
+  const has = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'composition' AND table_name = 'module_registry' AND column_name = 'pending_hard_deps'`;
+  return has[0]!.n > 0
+    ? sql<RegRow[]>`SELECT id, name, layer, is_core, cluster, hard_deps, soft_deps, pending_hard_deps, screens, sort_order FROM composition.module_registry`
+    : (await sql<RegRow[]>`SELECT id, name, layer, is_core, cluster, hard_deps, soft_deps, screens, sort_order FROM composition.module_registry`).map((r) => ({ ...r, pending_hard_deps: [] }));
+}
+/** Mirrors repo.loadRegistry: pending hard edges are effective only when MODULE_SOURCE=catalogue. */
 async function loadRegistry(sql: Sql): Promise<ModuleDef[]> {
-  const rows = await sql<Array<{ id: string; name: string; layer: number; is_core: boolean; cluster: string; hard_deps: string[]; soft_deps: string[]; screens: string[]; sort_order: number }>>`
-    SELECT id, name, layer, is_core, cluster, hard_deps, soft_deps, screens, sort_order FROM composition.module_registry`;
-  return rows.map((r) => ({ id: r.id, name: r.name, layer: r.layer, isCore: r.is_core, cluster: r.cluster, hardDeps: r.hard_deps, softDeps: r.soft_deps, screens: r.screens, sortOrder: r.sort_order }));
+  const flag = process.env.MODULE_SOURCE === "catalogue";
+  return (await registryRows(sql)).map((r) => ({ id: r.id, name: r.name, layer: r.layer, isCore: r.is_core, cluster: r.cluster, hardDeps: flag ? [...new Set([...r.hard_deps, ...(r.pending_hard_deps ?? [])])] : r.hard_deps, softDeps: r.soft_deps, screens: r.screens, sortOrder: r.sort_order }));
 }
 async function reach(sql: Sql, tenantId: string): Promise<{ modules: string[]; gatewayKeys: string[]; legacyKeys: string[] }> {
   const sel = await sql<{ module_id: string }[]>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${tenantId} AND source IN ('user','grandfather')`;
@@ -75,6 +83,7 @@ async function inCase<T>(tenantId: string, entitlements: string, legacyEnabled: 
       await sql`select set_config('app.tenant_id', ${tenantId}, true)`;
       for (const [id, d] of Object.entries(OLD_DEPS)) {
         await sql`UPDATE composition.module_registry SET hard_deps = ${d.hard}, soft_deps = ${d.soft} WHERE id = ${id}`;
+        await sql`UPDATE composition.module_registry SET pending_hard_deps = '{}' WHERE id = ${id}`;
       }
       await sql`DELETE FROM composition.module_registry WHERE id = ANY(${MUNICIPAL})`; // pre-0059 catalogue had no municipal rows
       for (const e of entitlements.split(",").filter(Boolean)) {
@@ -97,12 +106,14 @@ afterAll(async () => { await sqlClient.end(); });
 
 describe("catalogue is the single source (registry and gateway map derive from it)", () => {
   it("composition.module_registry equals MODULE_CATALOGUE after all migrations", async () => {
-    const reg = await loadRegistry(sqlClient);
+    const reg = await registryRows(sqlClient);
     const byId = new Map(reg.map((r) => [r.id, r]));
     expect([...byId.keys()].sort()).toEqual(MODULE_CATALOGUE.map((m) => m.id).sort());
     for (const m of MODULE_CATALOGUE) {
       const r = byId.get(m.id)!;
-      expect({ id: r.id, name: r.name, layer: r.layer, isCore: r.isCore, cluster: r.cluster, hardDeps: [...r.hardDeps].sort(), softDeps: [...r.softDeps].sort(), screens: r.screens, sortOrder: r.sortOrder })
+      const pending = r.pending_hard_deps ?? [];
+      // catalogue hardDeps = enforced hard_deps + pending (effective with MODULE_SOURCE=catalogue); a pending edge is also kept in soft_deps
+      expect({ id: r.id, name: r.name, layer: r.layer, isCore: r.is_core, cluster: r.cluster, hardDeps: [...new Set([...r.hard_deps, ...pending])].sort(), softDeps: r.soft_deps.filter((d) => !pending.includes(d)).sort(), screens: r.screens, sortOrder: r.sort_order })
         .toEqual({ id: m.id, name: m.name, layer: m.layer, isCore: m.isCore, cluster: m.cluster, hardDeps: [...m.hardDeps].sort(), softDeps: [...m.softDeps].sort(), screens: [...m.screens], sortOrder: m.sortOrder });
     }
   });
@@ -143,18 +154,16 @@ describe("migration 0059 over the live UAT tenant configs: nothing changes for e
         // exactly the same modules and the same gateway route-keys as before (a payroll-only tenant keeps the
         // Finance it only had because Payroll pulled it in; a legal/contract/inventory tenant gains nothing it lacked
         // only where its dependencies were already present)
-        if (t.label.startsWith("S2-")) {
-          // synthetic: these three modules gained REAL requirements (employee / procurement); the migration cannot
-          // keep a tenant broken, so they are the documented, intended additions and nothing else is added
-          const added = after.modules.filter((m) => !before.modules.includes(m)).sort();
-          expect(added).toEqual(["budget", "employee", "procurement"]);
-          expect(before.modules.filter((m) => !after.modules.includes(m))).toEqual([]);
-        } else {
-          expect(after.modules).toEqual(before.modules);
-          expect(after.gatewayKeys).toEqual(before.gatewayKeys);
-        }
+        // NO GAIN, NO LOSS for every shape (including S2: contract+legal+inventory without procurement/employee)
+        expect(after.modules).toEqual(before.modules);
+        expect(after.gatewayKeys).toEqual(before.gatewayKeys);
       }
-      if (t.legacyEnabled && !t.entitlements.includes(":user")) {
+      if (t.label.startsWith("S3-")) {
+        // never composed: must NOT flip to configured (no entitlement rows written)
+        expect(before.modules.filter((m) => !["identity", "org", "config", "workflow", "audit"].includes(m))).toEqual([]);
+        expect(after.modules).toEqual(before.modules);
+      }
+      if (t.legacyEnabled && t.entitlements.length > 0 && !t.entitlements.includes(":user")) {
         // legacy-only (or grandfather-only) tenants: every legacy key it had is still reachable through the catalogue
         for (const k of t.legacyEnabled.split(",")) {
           if (["audit", "workflow", "documents"].includes(k)) continue; // platform routes, never module-gated
@@ -186,6 +195,39 @@ describe("migration 0059 over the live UAT tenant configs: nothing changes for e
     const comp = resolveComposition(reg, ["payroll"]);
     expect(comp.moduleIds).toContain("employee");
     expect(comp.moduleIds).not.toContain("finance");
+  });
+
+  it("the new hard edges (inventory/contract/legal) take effect only with MODULE_SOURCE=catalogue", async () => {
+    const s2 = FIXTURE.tenants.find((x) => x.label.startsWith("S2-"))!;
+    const tenantId = "d9200000-0000-4000-8000-0000000000f2";
+    const run = async () => inCase(tenantId, s2.entitlements, undefined, async (sql) => {
+      const before = await reach(sql, tenantId);
+      await sql.unsafe(MIGRATION);
+      return { before, after: await reach(sql, tenantId) };
+    });
+    const off = await run();
+    expect(off.after.modules).toEqual(off.before.modules); // default: no gain, no loss
+    process.env.MODULE_SOURCE = "catalogue";
+    try {
+      const on = await run();
+      const gained = on.after.modules.filter((m) => !on.before.modules.includes(m)).sort();
+      expect(gained).toEqual(["budget", "employee", "procurement"]); // explicit operator opt-in only
+    } finally { delete process.env.MODULE_SOURCE; }
+  });
+
+  it("the migration is ONE transaction and every RLS toggle sits inside it", () => {
+    const begin = MIGRATION_TEXT.search(/^BEGIN;$/m);
+    const commit = MIGRATION_TEXT.search(/^COMMIT;$/m);
+    expect(begin).toBeGreaterThanOrEqual(0);
+    expect(commit).toBeGreaterThan(begin);
+    expect(MIGRATION_TEXT.match(/^BEGIN;$/gm)).toHaveLength(1);
+    expect(MIGRATION_TEXT.match(/^COMMIT;$/gm)).toHaveLength(1);
+    for (const m of MIGRATION_TEXT.matchAll(/^ALTER TABLE .*FORCE ROW LEVEL SECURITY;$/gm)) {
+      expect(m.index!).toBeGreaterThan(begin);
+      expect(m.index!).toBeLessThan(commit);
+    }
+    // NO FORCE and FORCE are balanced
+    expect(MIGRATION_TEXT.match(/NO FORCE ROW LEVEL SECURITY;/g)!.length).toBe(MIGRATION_TEXT.match(/\bFORCE ROW LEVEL SECURITY;/g)!.length - MIGRATION_TEXT.match(/NO FORCE ROW LEVEL SECURITY;/g)!.length);
   });
 
   it("every module the gateway routes can be entitled (municipal services included)", async () => {
