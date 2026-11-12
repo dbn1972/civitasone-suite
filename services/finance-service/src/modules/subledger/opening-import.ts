@@ -55,7 +55,7 @@ const entriesSchema = z.array(arOpeningEntrySchema).min(1).max(MAX_ENTRIES)
   .refine((es) => new Set(es.map((e) => e.demandId.toLowerCase())).size === es.length, "demandId repeated in the same request");
 const reasonSchema = z.string().trim().min(10, "Reason must be at least 10 characters").max(500);
 
-const importBody = z.object({ entries: entriesSchema, reason: reasonSchema });
+const importBody = z.object({ entries: entriesSchema, reason: reasonSchema, dryRun: z.boolean().default(false) });
 const backfillBody = z.object({
   dryRun: z.boolean().default(true),
   reason: reasonSchema.optional(),
@@ -129,43 +129,85 @@ const controlCode = () => process.env.FINANCE_AR_CONTROL_CODE ?? "1300";
 
 export type BackfillCandidate = {
   demandId: string; invoiceDate: string; amountMinor: string; receivedMinor: string; balanceMinor: string;
+  /** Posted recognition journals found for this invoice (normally 1; more means the invoice was recognised twice). */
+  journalCount: number;
+  /** Every recognition amount found, oldest first (length = journalCount). */
+  journalAmountsMinor: string[];
 };
 
 /**
- * Billing invoices that debit the AR control head (a posted billing_revenue_recognition journal, narration
- * "Invoice receivable <invoiceId>") and have no gl.finance_ar_ledger row. The amount and date are the journal's own;
- * what the matching billing_cash_receipt journals cleared ("Receivable cleared <invoiceId>") is the received part.
+ * Posted billing_revenue_recognition journals that debit the AR control head, one row PER INVOICE (narration
+ * "Invoice receivable <invoiceId>"). If an invoice has more than one such journal, the rule is: the LATEST journal
+ * (by posting date, then creation time) gives the amount and date, because the invoice is ONE receivable, summing two
+ * recognitions would double it; the others are reported in journalCount / journalAmountsMinor so the checker sees them.
+ * What the matching billing_cash_receipt journals cleared ("Receivable cleared <invoiceId>") is the received part.
+ * `ids` limits to those invoices; `onlyMissing` keeps only invoices with no gl.finance_ar_ledger row.
  */
-export async function findBackfillCandidates(tenantId: string): Promise<BackfillCandidate[]> {
+async function recognitionByInvoice(tenantId: string, opts: { ids?: readonly string[]; onlyMissing: boolean }): Promise<BackfillCandidate[]> {
   const code = controlCode();
   const headRows = rowsOf(await scopedRead((tx) => tx.execute(sql`
     SELECT id::text AS id FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid AND code = ${code} LIMIT 1`)));
   const headId = (headRows[0]?.id as string | undefined) ?? code;
+  const idFilter = opts.ids ? sql`AND lower(r.inv) IN (${sql.join(opts.ids.map((i) => sql`${i.toLowerCase()}`), sql`, `)})` : sql``;
+  const missingFilter = opts.onlyMissing
+    ? sql`AND NOT EXISTS (SELECT 1 FROM gl.finance_ar_ledger a WHERE a.tenant_id = ${tenantId}::uuid AND a.demand_id = lower(r.inv)::uuid)` : sql``;
   const rows = rowsOf(await scopedRead((tx) => tx.execute(sql`
     WITH recog AS (
       SELECT substring(l->>'narration' from 'Invoice receivable ([0-9a-fA-F-]{36})$') AS inv,
-             j.posting_date, (l->>'debitMinor')::bigint AS amt
+             j.posting_date, j.created_at, j.id AS jid, (l->>'debitMinor')::bigint AS amt
       FROM gl.finance_journals j, jsonb_array_elements(j.lines) l
       WHERE j.tenant_id = ${tenantId}::uuid AND j.type = 'billing_revenue_recognition' AND j.status = 'posted'
         AND l->>'accountCode' IN (${code}, ${headId}) AND (l->>'debitMinor') ~ '^[0-9]+$'
+    ), agg AS (
+      SELECT lower(inv) AS inv, COUNT(*) AS n, string_agg(amt::text, ',' ORDER BY posting_date, created_at, jid) AS amts
+      FROM recog WHERE inv IS NOT NULL AND amt > 0 GROUP BY 1
+    ), per_inv AS (
+      SELECT DISTINCT ON (lower(rc.inv)) lower(rc.inv) AS inv, rc.posting_date, rc.amt, agg.n, agg.amts
+      FROM recog rc JOIN agg ON agg.inv = lower(rc.inv)
+      WHERE rc.inv IS NOT NULL AND rc.amt > 0
+      ORDER BY lower(rc.inv), rc.posting_date DESC, rc.created_at DESC, rc.jid DESC
     ), cleared AS (
-      SELECT substring(l->>'narration' from 'Receivable cleared ([0-9a-fA-F-]{36})$') AS inv,
+      SELECT lower(substring(l->>'narration' from 'Receivable cleared ([0-9a-fA-F-]{36})$')) AS inv,
              SUM((l->>'creditMinor')::bigint) AS paid
       FROM gl.finance_journals j, jsonb_array_elements(j.lines) l
       WHERE j.tenant_id = ${tenantId}::uuid AND j.type = 'billing_cash_receipt' AND j.status = 'posted'
         AND l->>'accountCode' IN (${code}, ${headId}) AND (l->>'creditMinor') ~ '^[0-9]+$'
       GROUP BY 1
     )
-    SELECT lower(r.inv) AS demand_id, r.posting_date::text AS invoice_date, r.amt::text AS amount_minor,
-           LEAST(COALESCE(c.paid, 0), r.amt)::text AS received_minor
-    FROM recog r LEFT JOIN cleared c ON lower(c.inv) = lower(r.inv)
-    WHERE r.inv IS NOT NULL AND r.amt > 0
-      AND NOT EXISTS (SELECT 1 FROM gl.finance_ar_ledger a WHERE a.tenant_id = ${tenantId}::uuid AND a.demand_id = lower(r.inv)::uuid)
+    SELECT r.inv AS demand_id, r.posting_date::text AS invoice_date, r.amt::text AS amount_minor,
+           LEAST(COALESCE(c.paid, 0), r.amt)::text AS received_minor, r.n::int AS journal_count, r.amts AS amounts
+    FROM per_inv r LEFT JOIN cleared c ON c.inv = r.inv
+    WHERE true ${idFilter} ${missingFilter}
     ORDER BY r.posting_date, r.inv`)));
   return rows.map((r) => ({
     demandId: String(r.demand_id), invoiceDate: String(r.invoice_date), amountMinor: String(r.amount_minor), receivedMinor: String(r.received_minor),
     balanceMinor: (BigInt(String(r.amount_minor)) - BigInt(String(r.received_minor))).toString(),
+    journalCount: Number(r.journal_count), journalAmountsMinor: String(r.amounts).split(","),
   }));
+}
+
+/** Billing invoices that debit the AR control head with no gl.finance_ar_ledger row (one row per invoice, see recognitionByInvoice). */
+export function findBackfillCandidates(tenantId: string): Promise<BackfillCandidate[]> {
+  return recognitionByInvoice(tenantId, { onlyMissing: true });
+}
+
+export type AmountWarning = { demandId: string; requestedMinor: string; journalMinor: string; journalCount: number };
+
+/**
+ * Entries whose amount differs from the posted recognition journal of the same demand_id (a warning for the checker,
+ * never a block: a demand_id with no journal, e.g. a non-billing receivable, has nothing to compare with).
+ */
+export async function amountWarnings(tenantId: string, entries: ReadonlyArray<{ demandId: string; amountMinor: string }>): Promise<AmountWarning[]> {
+  if (entries.length === 0) return [];
+  const found = new Map((await recognitionByInvoice(tenantId, { ids: entries.map((e) => e.demandId), onlyMissing: false })).map((j) => [j.demandId, j]));
+  const out: AmountWarning[] = [];
+  for (const e of entries) {
+    const j = found.get(e.demandId.toLowerCase());
+    if (j && BigInt(j.amountMinor) !== BigInt(e.amountMinor)) {
+      out.push({ demandId: e.demandId, requestedMinor: e.amountMinor, journalMinor: j.amountMinor, journalCount: j.journalCount });
+    }
+  }
+  return out;
 }
 
 async function arPosition(tenantId: string): Promise<{ subledgerMinor: bigint; controlMinor: bigint }> {
@@ -188,11 +230,15 @@ export async function arOpeningRoutes(app: FastifyInstance): Promise<void> {
     if (present.size === body.entries.length) {
       throw new HttpError(409, "AR_OPENING_ALREADY_PRESENT", "every demand_id in this request already has an AR sub-ledger row; nothing to import");
     }
-    const accepted = await submitChangeRequest(ctx, "ar_opening_balance", subjectKeyFor(body.entries), { entries: body.entries }, body.reason);
-    return reply.code(202).send({
-      ...accepted, entryCount: body.entries.length, alreadyPresent: [...present],
-      totalMinor: body.entries.reduce((s, e) => s + BigInt(e.amountMinor) - BigInt(e.receivedMinor ?? "0"), 0n).toString(),
-    });
+    // An amount that differs from the posted recognition journal of the same demand_id is a WARNING for the checker
+    // (shown here, stored on the request payload), not a block.
+    const warnings = await amountWarnings(ctx.tenantId, body.entries);
+    const totalMinor = body.entries.reduce((s, e) => s + BigInt(e.amountMinor) - BigInt(e.receivedMinor ?? "0"), 0n).toString();
+    if (body.dryRun) {
+      return reply.send({ dryRun: true, entryCount: body.entries.length, alreadyPresent: [...present], totalMinor, warnings });
+    }
+    const accepted = await submitChangeRequest(ctx, "ar_opening_balance", subjectKeyFor(body.entries), { entries: body.entries, warnings }, body.reason);
+    return reply.code(202).send({ ...accepted, entryCount: body.entries.length, alreadyPresent: [...present], totalMinor, warnings });
   });
 
   app.post("/v1/finance/ar/opening-balances/backfill", async (req, reply) => {
@@ -206,6 +252,8 @@ export async function arOpeningRoutes(app: FastifyInstance): Promise<void> {
     const view = {
       controlAccountCode: controlCode(), candidates, candidateCount: all.length, truncated: all.length > candidates.length,
       candidateOpenMinor: openMinor.toString(),
+      // invoices recognised by more than one posted journal: the latest journal's amount is used (see recognitionByInvoice)
+      duplicateRecognitions: candidates.filter((c) => c.journalCount > 1).map((c) => ({ demandId: c.demandId, journalCount: c.journalCount, journalAmountsMinor: c.journalAmountsMinor, usedMinor: c.amountMinor })),
       subledgerBalanceMinor: pos.subledgerMinor.toString(), controlAccountBalanceMinor: pos.controlMinor.toString(),
       differenceMinor: (pos.subledgerMinor - pos.controlMinor).toString(),
       differenceAfterMinor: (pos.subledgerMinor + openMinor - pos.controlMinor).toString(),

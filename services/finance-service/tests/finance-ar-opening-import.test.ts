@@ -23,6 +23,7 @@ import { registerSubledgerConsumers } from "../src/modules/subledger/consumer.js
 import { agingBucket, subjectKeyFor, arOpeningEntrySchema } from "../src/modules/subledger/opening-import.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
+import { financeJournals } from "../src/modules/gl/schema.js";
 import { COMMANDS } from "../src/topics.js";
 
 const SECRET = process.env.JWT_SECRET as string;
@@ -31,6 +32,7 @@ const ADMIN_B = "00000000-aaaa-4000-8000-0000000ac002";
 const OFFICER = "00000000-aaaa-4000-8000-0000000ac003";
 const T1 = randomUUID(); // manual import + gating
 const T2 = randomUUID(); // billing backfill (8 invoices posted before the consumer existed)
+const T3 = randomUUID(); // duplicate recognition journals + amount warnings
 const as = (t: string, sub: string, roles = ["finance_admin"]) => ({ authorization: `Bearer ${signToken({ sub, tid: t, roles, sid: `s-${sub.slice(-3)}` }, SECRET)}` });
 
 type Sent = { topic: string; env: Record<string, unknown> & { messageId: string } };
@@ -97,7 +99,7 @@ async function postInvoicesToGl(t: string, invoices: Array<{ id: string; total: 
 beforeAll(async () => {
   vi.spyOn(queue, "publish").mockImplementation((async (topic: string, env: Sent["env"]) => { sent.push({ topic, env }); }) as never);
   app = await buildApp();
-  for (const t of [T1, T2]) {
+  for (const t of [T1, T2, T3]) {
     for (const [code, name, cls] of [["1300", "Billing receivable", "asset"], ["4010", "SaaS revenue", "income"], ["1100", "Cash / Bank", "asset"]] as const) {
       await scoped(t, (tx) => tx.insert(financeHeads).values({ id: randomUUID(), tenantId: t, code, name, level: 1, classification: cls, createdBy: ADMIN_A, updatedBy: ADMIN_A }));
     }
@@ -262,5 +264,72 @@ describe("backfill: 8 billing invoices on GL 1300 with no AR row", () => {
     const dry = await call("POST", "/v1/finance/ar/opening-balances/backfill", as(T2, ADMIN_A), {});
     expect(dry.json()).toMatchObject({ candidateCount: 0, differenceMinor: "0" });
     expect((await call("POST", "/v1/finance/ar/opening-balances/backfill", as(T2, ADMIN_A), { dryRun: false, reason: REASON })).statusCode).toBe(409);
+  });
+});
+
+describe("review findings: duplicate recognition journals, amount warnings", () => {
+  const dup = randomUUID(), single = randomUUID();
+  const OLD = "2026-08-05", NEW = "2026-09-05";
+  let requestId = "";
+
+  it("an invoice with two posted recognition journals yields ONE candidate (the latest journal), reports the duplicate, and the batch is not rejected", async () => {
+    await postInvoicesToGl(T3, [{ id: single, total: "40000", date: "2026-10-01" }]);
+    // the same invoice recognised a second time later, for a different amount (deterministic journal ids make the
+    // consumer refuse a repeat, so this is inserted the way a manual/legacy posting would have left it)
+    await postInvoicesToGl(T3, [{ id: dup, total: "30000", date: OLD }]);
+    await scoped(T3, (tx) => tx.insert(financeJournals).values({
+      id: randomUUID(), tenantId: T3, voucherNo: "INV/DUPLICATE", type: "billing_revenue_recognition", postingDate: NEW, status: "posted",
+      lines: [
+        { accountCode: "1300", debitMinor: "50000", creditMinor: "0", narration: `Invoice receivable ${dup}` },
+        { accountCode: "4010", debitMinor: "0", creditMinor: "50000", narration: `SaaS revenue ${dup}` },
+      ], createdBy: ADMIN_A, updatedBy: ADMIN_A,
+    }));
+    const dry = (await call("POST", "/v1/finance/ar/opening-balances/backfill", as(T3, ADMIN_A), {})).json();
+    expect(dry.candidateCount).toBe(2);                                   // one row per invoice, not three
+    const row = dry.candidates.find((c: { demandId: string }) => c.demandId === dup);
+    expect(row).toMatchObject({ amountMinor: "50000", invoiceDate: NEW, journalCount: 2, journalAmountsMinor: ["30000", "50000"] });
+    expect(dry.duplicateRecognitions).toEqual([{ demandId: dup, journalCount: 2, journalAmountsMinor: ["30000", "50000"], usedMinor: "50000" }]);
+
+    const res = await call("POST", "/v1/finance/ar/opening-balances/backfill", as(T3, ADMIN_A), { dryRun: false, reason: REASON });
+    expect(res.statusCode).toBe(202);
+    await deliver();
+    expect((await call("POST", `/v1/finance/change-requests/${res.json().id}/approve`, as(T3, ADMIN_B), {})).statusCode).toBe(202);
+    await deliver();
+    expect(dlq).toHaveLength(0);
+    const ar = await rows<Record<string, string>>(T3, sql`SELECT demand_id::text, amount_minor::text FROM gl.finance_ar_ledger WHERE tenant_id = ${T3}::uuid ORDER BY demand_id`);
+    expect(ar).toHaveLength(2);                                           // the whole batch went through
+    expect(ar.find((r) => r.demand_id === dup)!.amount_minor).toBe("50000");
+    const cr = await rows<{ status: string }>(T3, sql`SELECT status FROM gl.finance_change_requests WHERE id = ${res.json().id}::uuid`);
+    expect(cr[0]!.status).toBe("approved");
+  });
+
+  const manual = (demandId: string, amountMinor: string, dryRun?: boolean) => call("POST", "/v1/finance/ar/opening-balances", as(T3, ADMIN_A), {
+    entries: [{ debtorName: "Sample Municipal Council", demandId, amountMinor, invoiceDate: "2026-10-01" }], reason: REASON, ...(dryRun !== undefined ? { dryRun } : {}),
+  });
+
+  it("manual import: an amount that differs from the posted recognition journal is a WARNING (dry run and 202, stored on the request), not a block", async () => {
+    const inv = randomUUID();
+    await postInvoicesToGl(T3, [{ id: inv, total: "12500", date: "2026-10-02" }]);
+    // dry run: 200, warning, no request raised
+    const before = await count(T3, "gl.finance_change_requests");
+    const dry = await manual(inv, "99900", true);
+    expect(dry.statusCode).toBe(200);
+    expect(dry.json()).toMatchObject({ dryRun: true, warnings: [{ demandId: inv, requestedMinor: "99900", journalMinor: "12500", journalCount: 1 }] });
+    expect(await count(T3, "gl.finance_change_requests")).toBe(before);
+    // real request: still accepted, warning carried to the checker on the payload
+    const res = await manual(inv, "99900");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().warnings).toHaveLength(1);
+    requestId = res.json().id;
+    await deliver();
+    const cr = await rows<{ payload: { warnings: Array<{ journalMinor: string }> } }>(T3, sql`SELECT payload FROM gl.finance_change_requests WHERE id = ${requestId}::uuid`);
+    expect(cr[0]!.payload.warnings[0]!.journalMinor).toBe("12500");
+  });
+
+  it("no warning when the amount equals the journal, or when the demand_id has no journal to compare with", async () => {
+    const inv = randomUUID();
+    await postInvoicesToGl(T3, [{ id: inv, total: "7700", date: "2026-10-03" }]);
+    expect((await manual(inv, "7700", true)).json().warnings).toEqual([]);
+    expect((await manual(randomUUID(), "123", true)).json().warnings).toEqual([]);
   });
 });
