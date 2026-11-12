@@ -6,8 +6,10 @@
  * same run figures and compared line by line.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { accrualJournalLines, settlementJournalLines, voucherNo, payMonthEndDate } from "../../services/payroll-service/src/modules/ledger-export/journal.js";
-import { payrollAccrualLines, payrollAccrualVoucherNo, payMonthEndDate as financeMonthEnd } from "../../services/finance-service/src/modules/integrations/payroll-accrual.js";
+import { payrollAccrualLines, payrollAccrualVoucherNo, payrollSettlementEntries, payrollSettlementVoucherNo, payMonthEndDate as financeMonthEnd } from "../../services/finance-service/src/modules/integrations/payroll-accrual.js";
 import { runApprovedPayload } from "../../services/payroll-service/src/modules/payroll/run-approved-payload.js";
 
 const shape = (ls: Array<{ accountCode: string; debitMinor: bigint; creditMinor: bigint; narration: string }>) =>
@@ -47,7 +49,22 @@ describe("payroll journal export == finance accrual lines", () => {
     expect(voucherNo("accrual", { id: runId, month: "2027-02" })).toBe(payrollAccrualVoucherNo({ runId, month: "2027-02" }));
     for (const m of ["2027-01", "2027-02", "2028-02", "2026-12"]) expect(payMonthEndDate(m)).toBe(financeMonthEnd(m));
   });
-  it("the settlement is the net payable cleared against the bank, as finance's disbursal handler posts it", () => {
-    expect(shape(settlementJournalLines(20_295_600n, {})).map((r) => r.slice(0, 3))).toEqual([["2101", "20295600", "0"], ["1101", "0", "20295600"]]);
+  it("the settlement is exactly the entries finance's gl consumer posts on payroll.run.disbursed (same builder, default and overridden heads)", () => {
+    for (const env of [{}, { PAYROLL_GL_NET_PAYABLE_HEAD: "2150", PAYROLL_GL_BANK_HEAD: "1180" }]) {
+      const mine = settlementJournalLines(20_295_600n, env).map((l) => [l.accountCode, l.debitMinor.toString(), l.creditMinor.toString()]);
+      const theirs = payrollSettlementEntries(20_295_600n, env).map((e) => [e.headCode, e.debitMinor, e.creditMinor]);
+      expect(mine).toEqual(theirs);
+    }
+    expect(settlementJournalLines(0n, {})).toEqual([]);
+  });
+  it("the settlement voucher number is finance's", () => {
+    const run = { id: runId, month: "2027-02" };
+    expect(voucherNo("disbursement", run)).toBe(payrollSettlementVoucherNo({ runId, month: "2027-02" }));
+  });
+  it("finance's gl consumer builds its settlement from that shared builder (no private copy left to drift)", () => {
+    const src = readFileSync(join(process.cwd(), "services/finance-service/src/modules/gl/consumer.ts"), "utf8");
+    expect(src).toContain("payrollSettlementEntries(net)");
+    expect(src).toContain("payrollSettlementVoucherNo(p)");
+    expect(src).not.toMatch(/PAYROLL_GL_NET_PAYABLE_HEAD/);
   });
 });

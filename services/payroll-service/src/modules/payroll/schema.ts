@@ -61,6 +61,9 @@ export const payrollRuns = payrollSchema.table("payroll_runs", {
   approvedBy:      uuid("approved_by"),
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   disbursedAt:     timestamp("disbursed_at", { withTimezone: true }),
+  // M9 (migration 0171): the ledger mode the run was approved in, pinned for its life. NULL = approved before the
+  // column existed = the finance path.
+  ledgerMode:      varchar("ledger_mode", { length: 8 }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

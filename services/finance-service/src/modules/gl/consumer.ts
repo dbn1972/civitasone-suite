@@ -25,7 +25,7 @@ import { recordStoresMovementTx } from "./stores-memo.js";
 import { clearGrniTx } from "./grni-clearing.js";
 import { loadSettingsTx } from "../approvals/repo.js";
 import { deductionHeadFallbackTx } from "../integrations/payroll-deductions.js";
-import { payrollAccrualLines, payrollAccrualJournalCommand, payrollAccrualVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
+import { payrollAccrualLines, payrollAccrualJournalCommand, payrollAccrualVoucherNo, payrollSettlementEntries, payrollSettlementVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { needsBudgetProvision, noBudgetProvisionError } from "../budget/provision.js";
@@ -932,8 +932,6 @@ export function registerGlConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.payrollRunDisbursed, async (msg) => {
     const p = msg.payload as PayrollRunDisbursedPayload & { messageId?: string };
 
-    const PAYABLE_HEAD = process.env["PAYROLL_GL_NET_PAYABLE_HEAD"] ?? "2101";
-    const BANK_HEAD = process.env["PAYROLL_GL_BANK_HEAD"] ?? "1101";
 
     // Deterministic id keyed off the run so an outbox redelivery hits the
     // journal PK and no-ops (mirrors the GL spine).
@@ -948,7 +946,7 @@ export function registerGlConsumers(queue: Queue): void {
         return;
       }
 
-      const settlementVoucherNo = `PAYSTL/${p.month}/${p.runId.slice(0, 8).toUpperCase()}`;
+      const settlementVoucherNo = payrollSettlementVoucherNo(p);
       try {
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
@@ -991,10 +989,7 @@ export function registerGlConsumers(queue: Queue): void {
 
           // Validate both head codes exist in COA for this tenant
           const resolvedLines: JournalLine[] = [];
-          for (const entry of [
-            { headCode: PAYABLE_HEAD, debitMinor: net.toString(), creditMinor: "0" },
-            { headCode: BANK_HEAD, debitMinor: "0", creditMinor: net.toString() },
-          ]) {
+          for (const entry of payrollSettlementEntries(net)) {
             const head = await budgetRepo.findHeadByCodeTx(
               tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0],
               msg.tenantId,

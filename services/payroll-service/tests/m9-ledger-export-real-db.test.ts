@@ -48,6 +48,7 @@ const auditsOf = async (tenantId: string, action: string): Promise<Evt[]> => (aw
 const MAKER = randomUUID();
 const CHECKER = randomUUID();
 const DISBURSER = randomUUID();
+const SUPER_ADMIN = randomUUID();
 
 const gross = 5_000_000n; // Rs 50,000.00
 const net = 4_200_000n; // Rs 42,000.00
@@ -61,13 +62,15 @@ const bearer = (tenantId: string, sub: string, roles: string[]) => ({
 const hasFinance = new Map<string, boolean>();
 let app: Awaited<ReturnType<typeof buildApp>>;
 
-async function seedRun(tenantId: string, withFinance: boolean, status = "computed"): Promise<World> {
+async function seedRun(tenantId: string, withFinance: boolean, status = "computed", ledgerMode: string | null = null): Promise<World> {
   hasFinance.set(tenantId, withFinance);
   const w: World = { tenantId, runId: randomUUID(), slipOk: randomUUID(), slipOk2: randomUUID(), slipNeg: randomUUID(), empOk: randomUUID(), empOk2: randomUUID(), empNeg: randomUUID() };
   await runWithTenant(tenantId, () => db.transaction(async (tx) => {
     await repo.insertRun(tx, {
       id: w.runId, tenantId, runNo: `M9-${w.runId.slice(0, 6)}`, month: "2026-09", departmentId: null, structureId: randomUUID(),
       runType: "regular", ddoCode: null, totalGrossMinor: status === "disbursed" ? gross * 2n : 0n, totalNetMinor: status === "disbursed" ? net * 2n : 0n, currency: "INR", status, createdBy: MAKER, updatedBy: MAKER,
+      ...(ledgerMode ? { ledgerMode } : {}),
+      ...(status === "approved" || status === "disbursed" ? { approvedBy: CHECKER, approvedAt: new Date() } : {}),
     });
     const base = { tenantId, runId: w.runId, basicMinor: 3_000_000n, currency: "INR", components: [{ code: "BASIC", name: "Basic", type: "earning", amountMinor: 3000000 }], createdBy: MAKER, updatedBy: MAKER };
     await repo.insertSlip(tx, { ...base, id: w.slipOk, employeeId: w.empOk, employeeNo: "EMP-M9-1", grossMinor: gross, totalDeductionsMinor: gross - net, netPayMinor: net, status: "computed" });
@@ -242,14 +245,14 @@ describe("export-only ledger mode (tenant without Finance)", () => {
   });
 
   it("a run that is not disbursed cannot be confirmed (409)", async () => {
-    const early = await seedRun(randomUUID(), false);
+    const early = await seedRun(randomUUID(), false, "approved", "export");
     const res = await app.inject({ method: "POST", url: `/v1/payroll/runs/${early.runId}/bank-confirmation`, headers: { ...bearer(early.tenantId, MAKER, ["payroll_admin"]), "content-type": "text/csv" }, payload: "EMP-M9-1" });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("RUN_NOT_DISBURSED");
   });
 
   it("a negative-net exception slip is never paid by a confirmation", async () => {
-    const x = await seedRun(randomUUID(), false, "disbursed");
+    const x = await seedRun(randomUUID(), false, "disbursed", "export");
     await runWithTenant(x.tenantId, () => db.transaction(async (tx) => {
       await repo.insertSlip(tx, {
         id: x.slipNeg, tenantId: x.tenantId, runId: x.runId, employeeId: x.empNeg, employeeNo: "EMP-M9-NEG", basicMinor: 3_000_000n, grossMinor: gross,
@@ -320,14 +323,15 @@ describe("explicit override", () => {
     const headers = bearer(tenantId, CHECKER, ["payroll_admin"]);
     expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers })).json()).toEqual({ mode: "finance", source: "derived", override: null, hasFinance: true });
 
-    const put = await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers, payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
+    const superHeaders = bearer(tenantId, CHECKER, ["super_admin"]);
+    const put = await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: superHeaders, payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
     await memQueue.drain();
     expect(put.statusCode).toBe(202);
     expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers })).json()).toEqual({ mode: "export", source: "override", override: "export", hasFinance: null });
     expect((await app.inject({ method: "GET", url: "/v1/payroll/settings", headers })).json().ledgerModeOverride).toBe("export");
     expect((await auditsOf(tenantId, "ledger_mode_changed"))[0]!.payload).toMatchObject({ before: null, after: "export" });
 
-    await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers, payload: { protectedNetFloorMinor: 0, ledgerModeOverride: null } });
+    await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: superHeaders, payload: { protectedNetFloorMinor: 0, ledgerModeOverride: null } });
     await memQueue.drain();
     expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers })).json()).toMatchObject({ mode: "finance", source: "derived" });
     expect((await auditsOf(tenantId, "ledger_mode_changed"))[1]!.payload).toMatchObject({ before: "export", after: null });
@@ -337,7 +341,7 @@ describe("explicit override", () => {
     const tenantId = randomUUID();
     hasFinance.set(tenantId, true);
     const headers = bearer(tenantId, CHECKER, ["payroll_admin"]);
-    await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers, payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
+    await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: bearer(tenantId, CHECKER, ["super_admin"]), payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
     await memQueue.drain();
     await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers, payload: { protectedNetFloorMinor: 100 } });
     await memQueue.drain();
@@ -431,5 +435,139 @@ describe("finance tenant (every current tenant): behaviour is unchanged", () => 
     } finally {
       setModuleKeyFetcher(async (tid) => (hasFinance.get(tid) === false ? ["hrms", "payroll"] : ["hrms", "payroll", "finance"]));
     }
+  });
+});
+
+/** Flip whether a tenant has Finance and drop the accessor's cache, as a real module change would. */
+function flip(tenantId: string, withFinance: boolean): void {
+  hasFinance.set(tenantId, withFinance);
+  setModuleKeyFetcher(async (tid) => (hasFinance.get(tid) === false ? ["hrms", "payroll"] : ["hrms", "payroll", "finance"]));
+}
+const approveOnly = async (w: World) => {
+  const a = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${w.runId}/approve`, headers: bearer(w.tenantId, CHECKER, ["super_admin"]), payload: { reason: "Reviewed the register" } });
+  expect(a.statusCode).toBe(202);
+  await memQueue.drain();
+};
+const disburseOnly = async (w: World) => {
+  const d = await app.inject({ method: "PATCH", url: `/v1/payroll/runs/${w.runId}/disburse`, headers: bearer(w.tenantId, DISBURSER, ["payroll_admin"]), payload: { reason: "Bank file checked" } });
+  expect(d.statusCode).toBe(202);
+  await memQueue.drain();
+};
+const runMode = (w: World) => runWithTenant(w.tenantId, () => db.transaction(async (tx) => {
+  const r = (await tx.execute(sql`SELECT ledger_mode FROM payroll.payroll_runs WHERE id = ${w.runId}::uuid`)) as unknown as Array<{ ledger_mode: string | null }>;
+  return r[0]?.ledger_mode ?? null;
+}));
+async function sentTransfer(w: World, emp: string, no: string, slip: string, format = "csv", fileRef = "bank.csv"): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(w.tenantId, () => db.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO payroll.disbursement_transfers (id, tenant_id, run_id, slip_id, employee_id, employee_no, beneficiary_name, amount_minor, ifsc, account_last4, file_format, file_reference, status, attempt_no, created_by, updated_by)
+      VALUES (${id}::uuid, ${w.tenantId}::uuid, ${w.runId}::uuid, ${slip}::uuid, ${emp}::uuid, ${no}, 'Test Payee', ${net.toString()}::bigint, 'SBIN0000001', '1234', ${format}, ${fileRef}, 'sent', 1, ${MAKER}::uuid, ${MAKER}::uuid)`);
+  }));
+  return id;
+}
+
+describe("the run keeps the mode it was approved in (a mode change in flight)", () => {
+  it("approval records the mode on the run: finance for a Finance tenant, export for one without", async () => {
+    const f = await seedRun(randomUUID(), true);
+    await approveOnly(f);
+    expect(await runMode(f)).toBe("finance");
+    const e = await seedRun(randomUUID(), false);
+    await approveOnly(e);
+    expect(await runMode(e)).toBe("export");
+  });
+
+  it("approved on the finance path, then Finance goes away: disbursement still goes to finance (event + EFT), no journal, and the export-only endpoints refuse the run", async () => {
+    const w = await seedRun(randomUUID(), true);
+    await approveOnly(w);
+    flip(w.tenantId, false);
+    expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers: bearer(w.tenantId, MAKER, ["payroll_admin"]) })).json().mode).toBe("export");
+    await disburseOnly(w);
+    expect(await eventsOf(w.tenantId, "payroll.run.approved")).toHaveLength(1);
+    expect(await eventsOf(w.tenantId, "payroll.run.disbursed")).toHaveLength(1);
+    expect(await eventsOf(w.tenantId, EFT)).toHaveLength(1);
+    expect(await journalRows(w)).toEqual([]);
+    const up = await app.inject({ method: "POST", url: `/v1/payroll/runs/${w.runId}/bank-confirmation`, headers: { ...bearer(w.tenantId, DISBURSER, ["payroll_admin"]), "content-type": "text/csv" }, payload: "EMP-M9-1" });
+    expect(up.statusCode).toBe(409);
+    expect(up.json().code).toBe("BANK_CONFIRMATION_NOT_ENABLED");
+    const dl = await app.inject({ method: "GET", url: `/v1/payroll/runs/${w.runId}/journal-export`, headers: bearer(w.tenantId, MAKER, ["payroll_admin"]) });
+    expect(dl.statusCode).toBe(409);
+    // a manual reconcile of a paid transfer does not mark the slip paid: finance does that, on finance.payment.made
+    const transferId = await sentTransfer(w, w.empOk, "EMP-M9-1", w.slipOk);
+    await queue.publish(COMMANDS.disbursementTransferReconcile, {
+      messageId: randomUUID(), type: COMMANDS.disbursementTransferReconcile, tenantId: w.tenantId, actorId: DISBURSER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { transferId, outcome: "success", reason: "Credit seen on the statement", reasonCode: "OK" },
+    });
+    await memQueue.drain();
+    expect(await slipStatus(w, w.slipOk)).not.toBe("paid");
+  });
+
+  it("approved on the export path, then Finance is added: disbursement still stores the settlement journal (no finance event), and the bank file and NACH still mark slips paid", async () => {
+    const w = await seedRun(randomUUID(), false);
+    await approveOnly(w);
+    flip(w.tenantId, true);
+    expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers: bearer(w.tenantId, MAKER, ["payroll_admin"]) })).json().mode).toBe("finance");
+    await disburseOnly(w);
+    expect(await eventsOf(w.tenantId, "payroll.run.disbursed")).toEqual([]);
+    expect(await eventsOf(w.tenantId, EFT)).toEqual([]);
+    expect((await journalRows(w)).map((r) => r.stage)).toEqual(["accrual", "disbursement"]);
+    const up = await app.inject({ method: "POST", url: `/v1/payroll/runs/${w.runId}/bank-confirmation`, headers: { ...bearer(w.tenantId, DISBURSER, ["payroll_admin"]), "content-type": "text/csv" }, payload: "EMP-M9-1,42000,U1,SUCCESS" });
+    await memQueue.drain();
+    expect(up.statusCode).toBe(202);
+    expect(await slipStatus(w, w.slipOk)).toBe("paid");
+    const transferId = await sentTransfer(w, w.empOk2, "EMP-M9-2", w.slipOk2);
+    await queue.publish(COMMANDS.disbursementTransferReconcile, {
+      messageId: randomUUID(), type: COMMANDS.disbursementTransferReconcile, tenantId: w.tenantId, actorId: DISBURSER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { transferId, outcome: "success", reason: "Credit seen on the statement", reasonCode: "OK" },
+    });
+    await memQueue.drain();
+    expect(await slipStatus(w, w.slipOk2)).toBe("paid");
+  });
+
+  it("a run approved before the mode column existed (NULL) is disbursed on the finance path even if the tenant has no Finance now", async () => {
+    const w = await seedRun(randomUUID(), false, "approved", null);
+    await runWithTenant(w.tenantId, () => db.transaction(async (tx) => {
+      await tx.execute(sql`UPDATE payroll.payroll_runs SET total_gross_minor = ${(gross * 2n).toString()}::bigint, total_net_minor = ${(net * 2n).toString()}::bigint WHERE id = ${w.runId}::uuid`);
+    }));
+    await disburseOnly(w);
+    expect(await eventsOf(w.tenantId, "payroll.run.disbursed")).toHaveLength(1);
+    expect(await eventsOf(w.tenantId, EFT)).toHaveLength(1);
+    expect(await journalRows(w)).toEqual([]);
+  });
+});
+
+describe("forcing export-only mode on a tenant that has Finance needs a super admin", () => {
+  it("a payroll admin is refused (403) and nothing changes; a super admin may; a payroll admin may on a tenant without Finance", async () => {
+    const t = randomUUID();
+    hasFinance.set(t, true);
+    const denied = await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: bearer(t, CHECKER, ["payroll_admin"]), payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
+    await memQueue.drain();
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().code).toBe("LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN");
+    expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers: bearer(t, CHECKER, ["payroll_admin"]) })).json()).toMatchObject({ mode: "finance", override: null });
+    // the other direction, and an unrelated settings change, stay open to a payroll admin
+    expect((await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: bearer(t, CHECKER, ["payroll_admin"]), payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "finance" } })).statusCode).toBe(202);
+    await memQueue.drain();
+    const ok = await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: bearer(t, SUPER_ADMIN, ["super_admin"]), payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } });
+    await memQueue.drain();
+    expect(ok.statusCode).toBe(202);
+    expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers: bearer(t, CHECKER, ["payroll_admin"]) })).json()).toMatchObject({ mode: "export", override: "export" });
+
+    const noFin = randomUUID();
+    hasFinance.set(noFin, false);
+    expect((await app.inject({ method: "PUT", url: "/v1/payroll/settings", headers: bearer(noFin, CHECKER, ["payroll_admin"]), payload: { protectedNetFloorMinor: 0, ledgerModeOverride: "export" } })).statusCode).toBe(202);
+  });
+
+  it("the consumer re-checks: an unstamped command that bypasses the route is dropped and the override is not stored", async () => {
+    const t = randomUUID();
+    hasFinance.set(t, true);
+    const dlqBefore = memQueue.dlq.length;
+    await queue.publish(COMMANDS.settingsUpdate, {
+      messageId: randomUUID(), type: COMMANDS.settingsUpdate, tenantId: t, actorId: CHECKER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { tenantId: t, protectedNetFloorMinor: 0, ledgerModeOverride: "export" },
+    });
+    await memQueue.drain();
+    expect(memQueue.dlq.slice(dlqBefore).some((d) => d.topic === COMMANDS.settingsUpdate && String(d.error).includes("LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN"))).toBe(true);
+    expect((await app.inject({ method: "GET", url: "/v1/payroll/ledger-mode", headers: bearer(t, CHECKER, ["payroll_admin"]) })).json().override).toBeNull();
   });
 });

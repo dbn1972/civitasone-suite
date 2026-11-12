@@ -15,6 +15,7 @@
  */
 import { sql } from "drizzle-orm";
 import { pino } from "pino";
+import type { DrizzleTx } from "@civitasone/outbox";
 import { scopedRead } from "../../shared/db.js";
 import { tenantHasModule } from "../../shared/tenant-modules.js";
 
@@ -36,9 +37,9 @@ export function effectiveLedgerMode(override: string | null | undefined, hasFina
 
 /**
  * Run outside any transaction: it reads the settings row (RLS-scoped) and may ask admin-service.
- * A settings read that fails is treated as "no override" (and logged): the mode then follows whether the
- * tenant has Finance, which itself answers "yes" when unknown -- so a hiccup here can only ever leave a
- * tenant on today's finance path, never move one onto the export path.
+ * It only ever FAILS TOWARDS THE FINANCE PATH: a settings read that errors answers "finance" outright (an explicit
+ * 'finance' override must not become export because its row could not be read), and an unknown Finance answer counts
+ * as "has Finance". A hiccup can therefore only leave a tenant on today's path, never move one off it.
  */
 export async function resolveLedgerModeDetail(tenantId: string): Promise<{ mode: LedgerMode; source: LedgerModeSource; override: LedgerMode | null; hasFinance: boolean | null }> {
   let override: LedgerMode | null = null;
@@ -49,7 +50,8 @@ export async function resolveLedgerModeDetail(tenantId: string): Promise<{ mode:
     const v = rows?.[0]?.ledger_mode_override;
     override = isLedgerMode(v) ? v : null;
   } catch (err) {
-    log.warn({ tenantId, err: err instanceof Error ? err.message : String(err) }, "ledger mode: settings read failed, treating as no override");
+    log.warn({ tenantId, err: err instanceof Error ? err.message : String(err) }, "ledger mode: settings read failed, staying on the finance path");
+    return { mode: "finance", source: "derived", override: null, hasFinance: null };
   }
   // An override makes the Finance lookup unnecessary (and keeps an outage out of the path).
   const hasFinance = override ? null : await tenantHasModule(tenantId, "finance");
@@ -59,4 +61,13 @@ export async function resolveLedgerModeDetail(tenantId: string): Promise<{ mode:
 
 export async function resolveLedgerMode(tenantId: string): Promise<LedgerMode> {
   return (await resolveLedgerModeDetail(tenantId)).mode;
+}
+
+/**
+ * The mode a run was approved in (payroll_runs.ledger_mode), read inside the caller's transaction. NULL -- a run
+ * approved before the column existed -- and anything unreadable mean the finance path.
+ */
+export async function runLedgerModeTx(tx: DrizzleTx, runId: string): Promise<LedgerMode> {
+  const rows = Array.from(((await tx.execute(sql`SELECT ledger_mode FROM payroll.payroll_runs WHERE id = ${runId}::uuid`)) ?? []) as Iterable<{ ledger_mode: string | null }>);
+  return rows[0]?.ledger_mode === "export" ? "export" : "finance";
 }

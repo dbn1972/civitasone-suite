@@ -24,6 +24,7 @@ import { runApprovedPayload, runDisbursedPayload, istDateOf } from "./run-approv
 import { resolveLedgerMode } from "../ledger-export/mode.js";
 import { accrualJournalLines, settlementJournalLines, voucherNo as journalVoucherNo, payMonthEndDate, type JournalLine } from "../ledger-export/journal.js";
 import { storeJournalTx } from "../ledger-export/repo.js";
+import { tenantHasModule } from "../../shared/tenant-modules.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
@@ -1275,6 +1276,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         approvedBy: p.approvedBy,
         approvedAt: new Date(),
         updatedBy: msg.actorId,
+        // M9: the mode this run lives in from now on (disburse, NACH return, reconcile and bank confirmation read it).
+        ledgerMode,
       });
       // INT-FIX: only emit the finance GL accrual trigger when the run actually
       // accrued something. A run approved with zero slips (gross == 0) has no
@@ -1333,7 +1336,6 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.runDisburse, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason?: string };
-    const ledgerMode = await resolveLedgerMode(msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);
@@ -1353,6 +1355,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const disburseDenial = runActionDenial("disburse", run.status);
       if (disburseDenial) throw new NonRetryableError(`${disburseDenial.code}: ${disburseDenial.message}`);
       assertRunStatusTransition(run.status, "disbursed");
+      // M9: the run keeps the mode it was approved in, whatever the tenant's mode is now. A run approved before the
+      // column existed (NULL) was approved on the finance path and is disbursed on it.
+      const ledgerMode = run.ledgerMode === "export" ? "export" : "finance";
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
       // listSlipsByRunTx (not listSlipsByRun/scopedRead) — same nested-
@@ -2155,7 +2160,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       epsUnrecordedPolicy?: EpsUnrecordedPolicy;
       /** M9: null clears the override (back to derived from Finance), "finance" / "export" forces the mode. */
       ledgerModeOverride?: "finance" | "export" | null;
+      /** Stamped by the route: the caller holds super_admin. */
+      ledgerModeSuperAdmin?: boolean;
     };
+    // M9: forcing export on a tenant that HAS Finance stops its salary reaching the GL: super_admin only (the route
+    // refuses it with a 403; a command that skips the route is dropped here). Outside the transaction: it may call admin-service.
+    if (p.ledgerModeOverride === "export" && !p.ledgerModeSuperAdmin && (await tenantHasModule(p.tenantId, "finance"))) {
+      throw new NonRetryableError("LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN: forcing export-only mode on a tenant that has Finance needs a super admin");
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // FR 53 percentages are optional on the command: an omitted one keeps

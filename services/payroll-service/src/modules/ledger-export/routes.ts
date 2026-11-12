@@ -55,9 +55,11 @@ export async function ledgerExportRoutes(app: FastifyInstance): Promise<void> {
     if (!run) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
     const all = await listJournals(ctx.tenantId, runId);
     if (all.length === 0) {
-      const d = await resolveLedgerModeDetail(ctx.tenantId);
-      if (d.mode !== "export") {
-        throw new HttpError(409, LEDGER_EXPORT_NOT_ENABLED, "this tenant posts salary journals to finance; there is no export to download");
+      // Not yet approved: the run has no pinned mode, so the tenant's current mode says whether a journal is coming.
+      // Approved (or later): the run's own pinned mode does.
+      const pinned = run.ledgerMode === "export" ? "export" : (run.approvedAt ? "finance" : (await resolveLedgerModeDetail(ctx.tenantId)).mode);
+      if (pinned !== "export") {
+        throw new HttpError(409, LEDGER_EXPORT_NOT_ENABLED, "this run posts salary journals to finance; there is no export to download");
       }
       throw new HttpError(404, "JOURNAL_NOT_READY", "the journal is produced when the run is approved (accrual) and disbursed (settlement)");
     }
@@ -83,9 +85,9 @@ export async function ledgerExportRoutes(app: FastifyInstance): Promise<void> {
 
     const run = await repo.findRunById(runId, ctx.tenantId);
     if (!run) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
-    const d = await resolveLedgerModeDetail(ctx.tenantId);
-    if (d.mode !== "export") {
-      throw new HttpError(409, BANK_CONFIRMATION_NOT_ENABLED, "this tenant posts salary to finance; slips are marked paid when finance confirms the payment");
+    // The run's own pinned mode (set when it was approved), not the tenant's current one.
+    if (run.ledgerMode !== "export") {
+      throw new HttpError(409, BANK_CONFIRMATION_NOT_ENABLED, "this run posts salary to finance; slips are marked paid when finance confirms the payment");
     }
     if (run.status !== "disbursed") {
       throw new HttpError(409, RUN_NOT_DISBURSED, `a bank confirmation applies to a disbursed run (current status: ${run.status})`);

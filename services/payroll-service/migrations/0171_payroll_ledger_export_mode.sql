@@ -1,4 +1,4 @@
--- 0166_payroll_ledger_export_mode.sql
+-- 0171_payroll_ledger_export_mode.sql
 --
 -- M9 (module-sale gap): payroll for a tenant WITHOUT the Finance module.
 --
@@ -14,10 +14,17 @@
 --    transaction as the status change, so a retry can never produce a second
 --    journal (UNIQUE tenant, run, stage).
 --
+-- 3. payroll.payroll_runs.ledger_mode: the mode a run was APPROVED in, pinned for its whole life. Disburse, the
+--    NACH return, a manual reconcile and a bank confirmation read this, never the tenant's current mode, so a mode
+--    flip (override set or cleared, Finance added or removed) between approval and disbursement can never leave a
+--    run half on the finance path and half on the export path. NULL (every run approved before this migration) is
+--    read as 'finance': those runs were approved on the finance path.
+--
 -- Idempotent: safe to run twice.
 -- Rollback:
 --   DROP TABLE IF EXISTS payroll.payroll_journal_exports;
 --   ALTER TABLE payroll.payroll_settings DROP COLUMN IF EXISTS ledger_mode_override;
+--   ALTER TABLE payroll.payroll_runs DROP COLUMN IF EXISTS ledger_mode;
 SET lock_timeout = '5s';
 
 ALTER TABLE payroll.payroll_settings
@@ -28,6 +35,17 @@ DO $$ BEGIN
     ALTER TABLE payroll.payroll_settings
       ADD CONSTRAINT payroll_settings_ledger_mode_chk
       CHECK (ledger_mode_override IS NULL OR ledger_mode_override IN ('finance', 'export'));
+  END IF;
+END $$;
+
+ALTER TABLE payroll.payroll_runs
+  ADD COLUMN IF NOT EXISTS ledger_mode varchar(8);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_ledger_mode_chk') THEN
+    ALTER TABLE payroll.payroll_runs
+      ADD CONSTRAINT payroll_runs_ledger_mode_chk
+      CHECK (ledger_mode IS NULL OR ledger_mode IN ('finance', 'export'));
   END IF;
 END $$;
 

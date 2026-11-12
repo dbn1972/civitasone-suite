@@ -12,7 +12,6 @@ import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "../payroll/repo.js";
 import { audit } from "../payroll/consumer.js";
-import { resolveLedgerMode } from "./mode.js";
 import * as ledgerRepo from "./repo.js";
 
 export const BANK_CONFIRMATION_NOT_ENABLED = "BANK_CONFIRMATION_NOT_ENABLED";
@@ -30,15 +29,14 @@ const DETAIL_CAP = 200;
 export function registerLedgerExportConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.runBankConfirmation, async (msg) => {
     const p = msg.payload as BankConfirmationPayload;
-    // HTTP and settings read stay outside the transaction.
-    const mode = await resolveLedgerMode(msg.tenantId);
-    if (mode !== "export") {
-      throw new NonRetryableError(`${BANK_CONFIRMATION_NOT_ENABLED}: this tenant posts salary to finance; slips are marked paid from finance.payment.made`);
-    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.runId);
       if (!run) throw new NonRetryableError(`payroll run ${p.runId} not found`);
+      // The run's own pinned mode, not the tenant's current one (NULL = approved on the finance path).
+      if (run.ledgerMode !== "export") {
+        throw new NonRetryableError(`${BANK_CONFIRMATION_NOT_ENABLED}: this run posts salary to finance; slips are marked paid from finance.payment.made`);
+      }
       if (run.status !== "disbursed") {
         throw new NonRetryableError(`${RUN_NOT_DISBURSED}: a bank confirmation applies to a disbursed run (current status: ${run.status})`);
       }

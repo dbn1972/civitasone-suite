@@ -120,8 +120,9 @@ export function LedgerExportPanel({ runs, mode, canConfirm }: { runs: LedgerRun[
         body: JSON.stringify({ protectedNetFloorMinor: current.protectedNetFloorMinor ?? 0, ledgerModeOverride: override === "" ? null : override }),
       });
       setOverrideMsg({ ok: true, text: t("overrideSaved") });
-    } catch {
-      setOverrideMsg({ ok: false, text: t("overrideError") });
+    } catch (err) {
+      // The server says why (for example: forcing export-only mode on a tenant that has Finance needs a super admin).
+      setOverrideMsg({ ok: false, text: err instanceof Error && err.message ? err.message : t("overrideError") });
     } finally {
       setOverrideBusy(false);
     }

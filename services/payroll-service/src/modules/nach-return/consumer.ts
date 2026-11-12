@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { nachReturnFiles, nachReturnRecords } from "./schema.js";
 import { applyNachReturnToTransfers } from "../disbursement-transfers/ledger.js";
-import { resolveLedgerMode } from "../ledger-export/mode.js";
+import { runLedgerModeTx } from "../ledger-export/mode.js";
 import { markSlipsPaidFromSettledTransfersTx } from "../ledger-export/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -32,8 +32,6 @@ interface NachReturnPayload {
 export function registerNachReturnConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.nachReturnProcess, async (msg) => {
     const payload = msg.payload as NachReturnPayload;
-    // M9: in export-only ledger mode (no finance.payment.made will come) a credited NACH line marks its slip paid.
-    const ledgerMode = await resolveLedgerMode(msg.tenantId);
 
     await db.transaction(async (tx) => {
       // Idempotency check
@@ -95,7 +93,9 @@ export function registerNachReturnConsumers(queue: Queue): void {
         })),
       });
 
-      if (ledgerMode === "export") {
+      // M9: a run approved in export-only ledger mode (no finance.payment.made will come) marks a credited NACH line's slip paid.
+      // The run's own pinned mode decides, not the tenant's current one.
+      if ((await runLedgerModeTx(tx, payload.runId)) === "export") {
         const paid = await markSlipsPaidFromSettledTransfersTx(tx, { tenantId: msg.tenantId, actorId: msg.actorId, runId: payload.runId });
         if (paid.length > 0) {
           await enqueue(tx, {

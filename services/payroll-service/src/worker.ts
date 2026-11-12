@@ -1,3 +1,4 @@
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -74,6 +75,7 @@ assertPiiKeyAtBoot();
 }
 
 await loadTaxConfig();
+warnIfModuleLookupUnconfigured(pino({ name: "payroll-tenant-modules" }));
 
 registerPayrollConsumers(queue);
 registerPayProfileConsumers(queue);

@@ -16,7 +16,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, type DrizzleTx } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { disbursementTransfers } from "./schema.js";
-import { resolveLedgerMode } from "../ledger-export/mode.js";
+import { runLedgerModeTx } from "../ledger-export/mode.js";
 import { markSlipsPaidFromSettledTransfersTx } from "../ledger-export/repo.js";
 import type { ReconcilePayload, RetryPayload } from "./commands.js";
 
@@ -114,8 +114,6 @@ export async function handleRetry(msg: Msg): Promise<void> {
 export async function handleReconcile(msg: Msg): Promise<void> {
   const p = msg.payload as ReconcilePayload;
   const t = disbursementTransfers;
-  // M9: in export-only ledger mode a transfer reconciled as paid marks its slip paid (finance never will).
-  const ledgerMode = p.outcome === "success" ? await resolveLedgerMode(msg.tenantId) : "finance";
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
     // Status predicate: only a still-'sent', non-NACH row moves.
@@ -137,7 +135,8 @@ export async function handleReconcile(msg: Msg): Promise<void> {
       });
       return;
     }
-    if (ledgerMode === "export") {
+    // M9: a transfer reconciled as paid on a run approved in export-only mode marks its slip paid (finance never will).
+    if (after.status === "success" && (await runLedgerModeTx(tx, after.runId)) === "export") {
       const paid = await markSlipsPaidFromSettledTransfersTx(tx, { tenantId: msg.tenantId, actorId: msg.actorId, runId: after.runId });
       if (paid.length > 0) {
         await audit(tx, msg, "slips_marked_paid", "payroll_run", after.runId, "success", { source: "manual_reconcile", transferId: after.id, slipsMarkedPaid: paid.length });
