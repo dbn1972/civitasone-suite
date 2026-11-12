@@ -199,7 +199,9 @@ export async function findBillOutcome(
   if (rej) {
     const code = String(rej.code ?? "BILL_REFUSED");
     // the worker prefixes its reason with the code ("DUPLICATE_VENDOR_BILL_NO: ..."): show the sentence only
-    const reason = String(rej.reason ?? "").replace(new RegExp(`^${code}:\\s*`), "");
+    const raw = String(rej.reason ?? "");
+    const prefix = `${code}:`;
+    const reason = raw.startsWith(prefix) ? raw.slice(prefix.length).trimStart() : raw;
     return { state: "rejected", code, reason };
   }
   return { state: "pending" };
