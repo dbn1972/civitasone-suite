@@ -165,6 +165,10 @@ export class OpenSearchEngine implements SearchEngine {
       }
     }
 
+    if (query.tagsAny) {
+      filter.push({ terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } });
+    }
+
     const start = Date.now();
     const result = await this.client.search({
       index: this.indexName,
