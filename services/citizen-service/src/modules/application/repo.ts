@@ -41,6 +41,16 @@ export async function listDocuments(applicationId: string) {
   return db.transaction((tx) => tx.select().from(citizenAppDocuments).where(eq(citizenAppDocuments.applicationId, applicationId)));
 }
 
+/** One document of an application, tenant + application scoped (RLS GUC injected by db.transaction). */
+export async function findDocument(tenantId: string, applicationId: string, docId: string) {
+  const rows = await db.transaction((tx) => tx.select().from(citizenAppDocuments).where(and(
+    eq(citizenAppDocuments.id, docId),
+    eq(citizenAppDocuments.applicationId, applicationId),
+    eq(citizenAppDocuments.tenantId, tenantId),
+  )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {
   await tx.insert(citizenApplications).values(row);
 }

@@ -3,7 +3,10 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { SubmitApplicationBody, StatusUpdateBody, DocUploadBody } from "./validators.js";
-import { buildPresignedUploadUrl } from "./domain.js";
+import { presignedPutUrl } from "@civitasone/storage";
+import { HttpError } from "../../shared/context.js";
+import { validateUpload, PUT_URL_TTL_SECONDS, DOCUMENT_UPLOAD_LIMITS } from "../documents/storage.js";
+import { buildApplicationDocumentKey } from "./docs-storage.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -29,16 +32,60 @@ export async function updateStatus(ctx: RequestContext, id: string, body: Status
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function uploadDocument(ctx: RequestContext, id: string, body: DocUploadBody & { ownerCitizenId?: string | null }): Promise<Accepted & { uploadUrl: string }> {
+export interface DocumentUploadTicket {
+  id: string;
+  /** SigV4 presigned PUT: the client uploads the bytes straight to object storage with `headers`. */
+  uploadUrl: string;
+  method: "PUT";
+  key: string;
+  expiresIn: number;
+  maxSizeMb: number;
+  headers: Record<string, string>;
+}
+/**
+ * The upload ticket rides in the standard `data` envelope: acceptedResponseSchema strips unknown
+ * top-level keys (the old flat `uploadUrl` never reached the client), `data` is passthrough.
+ */
+export type DocumentUploadAccepted = Accepted & { data: DocumentUploadTicket };
+
+/**
+ * Real document handling: validate the file (type + size), mint a short-lived presigned PUT for a
+ * tenant/application-namespaced object key, and queue the row that records that KEY (never a URL).
+ * The caller's ownership of the application was asserted by the route; the consumer re-asserts it.
+ */
+export async function uploadDocument(ctx: RequestContext, id: string, body: DocUploadBody & { ownerCitizenId?: string | null }): Promise<DocumentUploadAccepted> {
+  if (!body.filename || !body.contentType || body.sizeBytes === undefined) {
+    throw new HttpError(400, "FILE_REQUIRED", "filename, contentType and sizeBytes are required to upload a document");
+  }
+  const invalid = validateUpload({ filename: body.filename, contentType: body.contentType, sizeBytes: body.sizeBytes });
+  if (invalid) throw new HttpError(400, invalid.code, invalid.message);
+
   const docId = randomUUID();
-  const uploadUrl = buildPresignedUploadUrl(ctx.tenantId, id, body.docType);
+  const key = buildApplicationDocumentKey(ctx.tenantId, id, body.filename);
+  const uploadUrl = await presignedPutUrl({
+    key,
+    contentType: body.contentType,
+    contentLength: body.sizeBytes,
+    expiresIn: PUT_URL_TTL_SECONDS,
+    serverSideEncryption: "AES256",
+  });
   await queue.publish(COMMANDS.applicationDocUpload, {
     messageId: docId, type: COMMANDS.applicationDocUpload,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     // P0-1: bind to the owner verified at the route; the consumer re-asserts.
-    payload: { id: docId, applicationId: id, tenantId: ctx.tenantId, docType: body.docType, ownerCitizenId: body.ownerCitizenId ?? null },
+    payload: {
+      id: docId, applicationId: id, tenantId: ctx.tenantId, docType: body.docType,
+      ownerCitizenId: body.ownerCitizenId ?? null,
+      storageKey: key, contentType: body.contentType, sizeBytes: body.sizeBytes, filename: body.filename,
+    },
   });
-  return { id: docId, status: "accepted", correlationId: ctx.correlationId, uploadUrl };
+  return {
+    id: docId, status: "accepted", correlationId: ctx.correlationId,
+    data: {
+      id: docId, uploadUrl, method: "PUT", key, expiresIn: PUT_URL_TTL_SECONDS, maxSizeMb: DOCUMENT_UPLOAD_LIMITS.maxSizeMb,
+      headers: { "Content-Type": body.contentType, "x-amz-server-side-encryption": "AES256" },
+    },
+  };
 }
 
 export async function saveDraft(

@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, varchar, integer, timestamp, date, jsonb,
+  pgSchema, uuid, text, varchar, integer, bigint, timestamp, date, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const applicationSchema = pgSchema("application");
@@ -32,7 +32,13 @@ export const citizenAppDocuments = applicationSchema.table("citizen_app_document
   tenantId:      uuid("tenant_id").notNull(),
   applicationId: uuid("application_id").notNull(),
   docType:       varchar("doc_type", { length: 64 }).notNull(),
-  docUrl:        text("doc_url").notNull(),
+  /** LEGACY: fabricated link on pre-0046 rows; NULL on new rows. Never served - see storageKey. */
+  docUrl:        text("doc_url"),
+  /** S3 object key (migration 0046). NULL = legacy row with no object ("document not available"). */
+  storageKey:    text("storage_key"),
+  contentType:   varchar("content_type", { length: 100 }),
+  sizeBytes:     bigint("size_bytes", { mode: "number" }),
+  originalFilename: varchar("original_filename", { length: 255 }),
   uploadedAt:    timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
