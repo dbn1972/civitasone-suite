@@ -166,7 +166,19 @@ export class OpenSearchEngine implements SearchEngine {
     }
 
     if (query.tagsAny) {
-      filter.push({ terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } });
+      const anyTag = { terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } };
+      if (query.includeUntagged) {
+        // tags IN [...] OR no tags. This bool sits in `filter` next to the tenant `term` in `must`, so
+        // the tenant constraint is still ANDed.
+        filter.push({
+          bool: {
+            should: [anyTag, { bool: { must_not: [{ exists: { field: "tags" } }] } }],
+            minimum_should_match: 1,
+          },
+        });
+      } else {
+        filter.push(anyTag);
+      }
     }
 
     const start = Date.now();

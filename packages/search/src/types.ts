@@ -44,6 +44,12 @@ export interface SearchQuery {
   /** Optional tag filter (OR logic): the document must carry AT LEAST ONE of these tags. Combined with `tags` by AND. */
   tagsAny?: string[] | undefined;
   /**
+   * Only meaningful with `tagsAny`. When true, documents that carry NO tags at all also qualify
+   * (`tags IN tagsAny OR tags IS EMPTY`). The tenant filter is always ANDed outside this clause, so
+   * untagged documents are visible only inside their own tenant. Default false (today's behaviour).
+   */
+  includeUntagged?: boolean | undefined;
+  /**
    * When set, only documents whose indexed accessLevel is in this list are
    * retrieved (applied inside the engine query). Documents indexed without a
    * level never match a restricted query.

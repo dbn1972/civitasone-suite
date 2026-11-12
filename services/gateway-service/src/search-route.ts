@@ -203,6 +203,9 @@ export function registerSearchRoute(app: FastifyInstance): void {
         // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
         // is AND, which returned nothing for a user with more than one module (and for every admin).
         tagsAny: userModules,
+        // Knowledge articles are indexed without module tags: untagged documents are visible to every user
+        // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
+        includeUntagged: true,
       });
     } catch (err) {
       // Graceful degradation: search engine unreachable
@@ -219,10 +222,12 @@ export function registerSearchRoute(app: FastifyInstance): void {
     const results: GlobalSearchResult[] = [];
     for (const hit of searchResponse.hits) {
       // Each hit has tags array; the module is stored as a tag
-      const module = hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown";
+      // Untagged documents (knowledge articles) belong to no module and are tenant-wide.
+      const untagged = hit.tags.length === 0;
+      const module = untagged ? "knowledge" : (hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown");
 
-      // Double-check module permission (defense-in-depth)
-      if (!userModules.includes(module)) continue;
+      // Double-check module permission (defense-in-depth): a TAGGED hit must match one of the user's modules.
+      if (!untagged && !userModules.includes(module)) continue;
 
       results.push({
         id: hit.documentId,

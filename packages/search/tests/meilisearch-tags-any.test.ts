@@ -25,4 +25,15 @@ describe("tagsAny (OR) filter", () => {
   it("no tagsAny: filter unchanged", async () => {
     expect(await filterFor({ q: "x", tenantId: "t1" })).toEqual(['tenantId = "t1"']);
   });
+  it("includeUntagged adds IS EMPTY / NOT EXISTS inside the tagsAny clause; tenant clause stays a separate AND element", async () => {
+    const f = await filterFor({ q: "x", tenantId: "t1", tagsAny: ["finance", "hrms"], includeUntagged: true });
+    expect(f).toEqual(['tenantId = "t1"', '(tags = "finance" OR tags = "hrms" OR tags IS EMPTY OR tags NOT EXISTS)']);
+  });
+  it("includeUntagged with an empty module list still shows only untagged documents (tenant-scoped)", async () => {
+    const f = await filterFor({ q: "x", tenantId: "t1", tagsAny: [], includeUntagged: true });
+    expect(f).toEqual(['tenantId = "t1"', "(tags IS EMPTY OR tags NOT EXISTS)"]);
+  });
+  it("includeUntagged without tagsAny changes nothing", async () => {
+    expect(await filterFor({ q: "x", tenantId: "t1", includeUntagged: true })).toEqual(['tenantId = "t1"']);
+  });
 });
