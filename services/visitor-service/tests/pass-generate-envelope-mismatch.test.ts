@@ -68,6 +68,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getAutoApproveCategories: async () => new Set(["vip"]),
   getPolicyNumber: async () => 7,
   MS_PER_DAY: 86_400_000,

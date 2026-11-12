@@ -83,6 +83,7 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 // this suite relies on). Default OFF here — auto-print behavior has its own
 // dedicated suite (check-in-vip-badge.test.ts).
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
   getPolicyNumber: async () => 0,
 }));

@@ -84,6 +84,7 @@ vi.mock("../src/modules/turnstile-control/domain.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyNumber: async () => 1,
   getPolicyBoolean: async () => true,
 }));

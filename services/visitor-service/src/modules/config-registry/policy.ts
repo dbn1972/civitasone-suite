@@ -21,6 +21,10 @@
 import type { Writer } from "./repo.js";
 import { getConfigValueOnTx, listActiveKeys } from "./repo.js";
 import { effectiveAllowed } from "./domain.js";
+import { resolveTimeZone } from "../../shared/tz.js";
+
+/** String-valued visitor_policy key: the tenant's IANA timezone. */
+export const TENANT_TIME_ZONE_KEY = "tenant.time_zone";
 
 /** Namespace for scalar operational knobs. */
 export const POLICY_NS = "visitor_policy";
@@ -144,6 +148,11 @@ export async function getPolicyNumber(
 ): Promise<number> {
   const raw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, key);
   return toNumber(raw) ?? POLICY_DEFAULTS[key];
+}
+
+/** Tenant IANA timezone (`tenant.time_zone`), falling back to Asia/Kolkata when unset or invalid. */
+export async function getTenantTimeZone(tx: Writer, tenantId: string): Promise<string> {
+  return resolveTimeZone(await getConfigValueOnTx(tx, tenantId, POLICY_NS, TENANT_TIME_ZONE_KEY));
 }
 
 export async function getPolicyBoolean(

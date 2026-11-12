@@ -76,6 +76,7 @@ vi.mock("../src/modules/blacklist/screening-store.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async (_tx: unknown, _t: string, key: string) => (key === "check_in.auto_print_badge" ? autoPrintEnabled : false),
   getPolicyNumber: async () => 0,
 }));
