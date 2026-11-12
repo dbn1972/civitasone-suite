@@ -363,6 +363,9 @@ export function createModuleLicence(opts: ModuleLicenceOptions): ModuleLicence {
  * forwarded as is.
  */
 export function guardSubscriptions<Q extends object>(queue: Q, licence: ModuleLicence, table: Readonly<Record<string, string>>): Q {
+  // NOTE: methods other than subscribe run with this === the Proxy. A queue class that uses #private fields, or
+  // getters that need the real instance, would throw TypeError when called through it; the in-tree queues (MemoryQueue,
+  // SqsQueue, RabbitMQ adapter) use ordinary properties only. Keep it that way, or bind inside the class.
   return new Proxy(queue, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver) as unknown;

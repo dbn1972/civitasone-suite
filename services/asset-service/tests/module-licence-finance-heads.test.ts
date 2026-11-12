@@ -6,7 +6,6 @@ import { validateHead } from "../src/shared/finance-client.js";
 
 const ENF_NO = "e1111111-1111-4111-8111-111111111111"; // enforce, module NOT bought
 const ENF_YES = "e2222222-2222-4222-8222-222222222222"; // enforce, module bought
-const OFF = "0f333333-3333-4333-8333-333333333333"; //     off (the default), module not bought
 const SHADOW = "5a444444-4444-4444-8444-444444444444"; //  watch-only, module not bought
 
 type Proj = { configured: boolean; mode: string; data: Array<{ name: string }> };
