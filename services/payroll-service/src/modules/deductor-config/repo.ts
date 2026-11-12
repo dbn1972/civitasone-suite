@@ -38,6 +38,7 @@ export interface ResolvedDeductor {
 
 export const SINGLE_TENANT_ENV_FALLBACK = "single-tenant";
 export const TENANT_IDENTITY_UNAVAILABLE = "TENANT_IDENTITY_UNAVAILABLE";
+export const TENANT_NOT_REGISTERED_PROBLEM = "this tenant is not registered in tenant-service, so no document identity can be set for it yet";
 
 export async function resolveDeductor(tenantId: string): Promise<ResolvedDeductor> {
   let ident: Awaited<ReturnType<typeof readTenantDocIdentity>>;
@@ -45,10 +46,11 @@ export async function resolveDeductor(tenantId: string): Promise<ResolvedDeducto
     ident = await readTenantDocIdentity(tenantId);
   } catch (err) {
     if (err instanceof TenantIdentityUnavailableError) {
-      throw new HttpError(503, TENANT_IDENTITY_UNAVAILABLE, "The deductor identity could not be read from tenant-service; try again shortly.");
+      throw new HttpError(503, TENANT_IDENTITY_UNAVAILABLE, `The deductor identity could not be read from tenant-service (${err.message.replace(/^tenant document identity unavailable: /, "")}); try again shortly.`);
     }
     throw err;
   }
+  const unregistered = ident.registered === false;
   const hasIdent = ident.orgName !== null || ident.tan !== null || ident.pan !== null;
   if (hasIdent) {
     const v = normaliseDeductor({ name: ident.orgName ?? ident.tenantName, tan: ident.tan, pan: ident.pan });
@@ -67,7 +69,9 @@ export async function resolveDeductor(tenantId: string): Promise<ResolvedDeducto
   const problems = deductorProblems(env);
   return {
     source: hasEnv ? "env" : null, ...env, address: null, deductorCategory: null,
-    configured: problems.length === 0, problems,
+    configured: problems.length === 0,
+    // A tenant that tenant-service does not know cannot have a documentIdentity set until it is registered: say so.
+    problems: unregistered && problems.length > 0 ? [...problems, TENANT_NOT_REGISTERED_PROBLEM] : problems,
   };
 }
 
