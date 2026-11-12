@@ -2,9 +2,9 @@
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a test that is hard-skipped (.skip/.todo/xdescribe/xit/xtest), env-gated (.skipIf on an unset var/unreachable dependency), or a Playwright runtime-conditional test.skip(condition, message). REL-014: this file is the inventory scripts/ci/flaky-skip-guard.mjs ratchets against — it fails on a NEW skip not listed here, and on a STALE entry (no longer a skip in source). Every hard/env-gated entry must ALSO carry its own inline // FLAKY-SKIP: <reason> (expires: YYYY-MM-DD) comment at the call site — this file tracks identity and count so the total cannot silently grow, it does not replace the inline requirement. Regenerate with --write-baseline after adding/removing/un-skipping a test. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-014.",
   "generatedAt": "2026-11-12",
   "hardSkipCount": 12,
-  "envGatedCount": 56,
+  "envGatedCount": 57,
   "runtimeConditionalCount": 5,
-  "count": 73,
+  "count": 74,
   "entries": [
     {
       "key": "apps/web/e2e-uat-live/hr-payroll-uat.spec.ts::Pay structure creation is processed asynchronously and had not landed yet — rerun to pick it up.",
@@ -154,6 +154,11 @@
     {
       "key": "services/finance-service/tests/payments.perf.test.ts::finance payments query perf (p95)",
       "file": "services/finance-service/tests/payments.perf.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/gateway-service/tests/search-readiness-real-meili.test.ts::gateway search on a legacy Meilisearch index (kind not filterable)",
+      "file": "services/gateway-service/tests/search-readiness-real-meili.test.ts",
       "kind": "env-gated"
     },
     {

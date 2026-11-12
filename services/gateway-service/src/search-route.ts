@@ -9,7 +9,7 @@
  * Validates: Requirements 19.2, 19.3, 19.4, 19.7
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
+import { createSearchEngine, type SearchEngine, type SearchQuery, type SearchResponse } from "@civitasone/search";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 
@@ -149,6 +149,52 @@ function getEngine(): SearchEngine {
 /** Allow injection for testing. */
 export function setSearchEngine(e: SearchEngine | null): void {
   engine = e;
+  ready = new WeakMap();
+}
+
+// ── Lazy, memoised index readiness ────────────────────────────────────────────
+// The clearance filters need `kind` / `accessLevel` to be FILTERABLE on the index. That is only applied by
+// engine.initialize(), which nothing calls at runtime, so an index created before `kind` existed answers
+// every filtered search with `invalid_search_filter` (-> 503 for ALL global search). The gateway therefore
+// readies the index lazily: once per process before the first search (memoised), a failure is forgotten so
+// a later search tries again, and a search refused with invalid_search_filter gets ONE repair + ONE retry.
+// The query is NEVER sent without its filters: dropping them would leak restricted documents.
+let ready = new WeakMap<SearchEngine, Promise<void>>();
+
+function ensureEngineReady(e: SearchEngine): Promise<void> {
+  if (!e.ensureReady) return Promise.resolve();
+  let p = ready.get(e);
+  if (!p) {
+    p = e.ensureReady().catch((err: unknown) => {
+      ready.delete(e); // not memoised: the next search retries
+      log.warn({ err: err instanceof Error ? err.message : "unknown" }, "search index readiness failed — will retry on a later search");
+    });
+    ready.set(e, p);
+  }
+  return p;
+}
+
+function isFilterNotReady(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "invalid_search_filter";
+}
+
+async function searchWithRepair(e: SearchEngine, q: SearchQuery): Promise<SearchResponse> {
+  await ensureEngineReady(e);
+  try {
+    return await e.search(q);
+  } catch (err) {
+    if (!isFilterNotReady(err) || !e.ensureReady) throw err;
+    ready.delete(e);
+    log.warn("search filter not ready on the index — applying index settings once and retrying once");
+    try {
+      await e.ensureReady();
+    } catch (repairErr) {
+      log.warn({ err: repairErr instanceof Error ? repairErr.message : "unknown" }, "search index repair failed");
+      throw err;
+    }
+    ready.set(e, Promise.resolve());
+    return e.search(q); // the SAME filtered query; a second failure propagates (503), never an unfiltered fallback
+  }
 }
 
 // ── Route Registration ────────────────────────────────────────────────────────
@@ -204,7 +250,7 @@ export function registerSearchRoute(app: FastifyInstance): void {
     // ── Execute Search ─────────────────────────────────────────────────────
     let searchResponse: SearchResponse;
     try {
-      searchResponse = await getEngine().search({
+      searchResponse = await searchWithRepair(getEngine(), {
         q: query,
         tenantId,
         limit: pageSize,

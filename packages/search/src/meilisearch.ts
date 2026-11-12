@@ -16,11 +16,33 @@ function bulkTimeoutMs(): number {
   return Number(process.env.MEILISEARCH_BULK_TIMEOUT_MS) || 60_000;
 }
 
+/** Index settings applied by initialize() / ensureReady(). `kind` and `accessLevel` back the clearance filters. */
+const SETTINGS = {
+  filterableAttributes: ["tenantId", "category", "tags", "accessLevel", "kind"],
+  searchableAttributes: ["title", "content", "tags"],
+  sortableAttributes: ["indexedAt"],
+};
+
 export interface MeilisearchOptions {
   /** Meilisearch host URL (default: http://localhost:7700). */
   host?: string | undefined;
   /** API key for authentication. */
   apiKey?: string | undefined;
+  /** Index name (default: "knowledge_documents"). Normally set by initialize({ indexName }). */
+  indexName?: string | undefined;
+}
+
+/**
+ * A search was refused because a filter attribute is not filterable on the index yet
+ * (Meilisearch `invalid_search_filter`), typically an index created before a newer attribute such as
+ * `kind` was added. Recoverable by (re)applying the index settings; NEVER by dropping the filter.
+ */
+export class SearchFilterError extends Error {
+  readonly code = "invalid_search_filter" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "SearchFilterError";
+  }
 }
 
 export class MeilisearchEngine implements SearchEngine {
@@ -31,6 +53,45 @@ export class MeilisearchEngine implements SearchEngine {
   constructor(opts?: MeilisearchOptions) {
     this.host = opts?.host ?? process.env.MEILISEARCH_HOST ?? "http://localhost:7700";
     this.apiKey = opts?.apiKey ?? process.env.MEILISEARCH_API_KEY ?? "";
+    if (opts?.indexName) this.indexName = opts.indexName;
+  }
+
+  /**
+   * Make the index search-ready: create it if missing and (re)apply the settings (filterable attributes),
+   * then WAIT for Meilisearch to finish the settings task (it is asynchronous: a search sent right after the
+   * PATCH can still be refused). Unlike initialize() this THROWS on failure so a caller can memoise success
+   * and retry failure. Idempotent.
+   */
+  async ensureReady(): Promise<void> {
+    const get = await this.fetch(`/indexes/${this.indexName}`, { method: "GET" });
+    if (get.status === 404) {
+      const created = await this.fetch("/indexes", { method: "POST", body: JSON.stringify({ uid: this.indexName, primaryKey: "id" }) });
+      if (!created.ok) throw new Error(`Meilisearch index create failed: ${created.status}`);
+      await this.waitForTask(created);
+    } else if (!get.ok) {
+      throw new Error(`Meilisearch index lookup failed: ${get.status}`);
+    }
+    const patched = await this.fetch(`/indexes/${this.indexName}/settings`, { method: "PATCH", body: JSON.stringify(SETTINGS) });
+    if (!patched.ok) throw new Error(`Meilisearch settings failed: ${patched.status}`);
+    await this.waitForTask(patched);
+  }
+
+  /** Poll the task a 202 response names until it succeeds; throws if it fails or does not finish in time. */
+  private async waitForTask(res: Response): Promise<void> {
+    let uid: unknown;
+    try { uid = ((await res.json()) as { taskUid?: unknown }).taskUid; } catch { return; }
+    if (typeof uid !== "number") return;
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const t = await this.fetch(`/tasks/${uid}`, { method: "GET" });
+      if (t.ok) {
+        const task = (await t.json()) as { status?: string; error?: { message?: string } };
+        if (task.status === "succeeded") return;
+        if (task.status === "failed" || task.status === "canceled") throw new Error(`Meilisearch task ${uid} ${task.status}: ${task.error?.message ?? ""}`);
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error(`Meilisearch task ${uid} did not finish in time`);
   }
 
   async initialize(config?: SearchEngineConfig): Promise<void> {
@@ -50,11 +111,7 @@ export class MeilisearchEngine implements SearchEngine {
       // PATCH is idempotent.
       await this.fetch(`/indexes/${this.indexName}/settings`, {
         method: "PATCH",
-        body: JSON.stringify({
-          filterableAttributes: ["tenantId", "category", "tags", "accessLevel", "kind"],
-          searchableAttributes: ["title", "content", "tags"],
-          sortableAttributes: ["indexedAt"],
-        }),
+        body: JSON.stringify(SETTINGS),
       });
     } catch (err) {
       log.warn({ err }, "Meilisearch initialization failed — search will use DB fallback");
@@ -130,6 +187,9 @@ export class MeilisearchEngine implements SearchEngine {
     });
 
     if (!res.ok) {
+      let code = "";
+      try { code = String(((await res.json()) as { code?: unknown }).code ?? ""); } catch { /* no JSON body */ }
+      if (code === "invalid_search_filter") throw new SearchFilterError(`Meilisearch search failed: ${res.status} (${code})`);
       throw new Error(`Meilisearch search failed: ${res.status}`);
     }
 

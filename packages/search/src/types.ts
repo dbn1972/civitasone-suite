@@ -112,6 +112,11 @@ export interface SearchEngine {
   initialize(config?: SearchEngineConfig): Promise<void>;
   /** Index a single document (upsert). */
   index(doc: SearchDocument): Promise<void>;
+  /**
+   * Optional: make the index search-ready (create it, apply settings, wait for them), THROWING on failure.
+   * Lets a caller initialise lazily, memoise success and retry failure. Not all providers need it.
+   */
+  ensureReady?(): Promise<void>;
   /** Index multiple documents in bulk. */
   bulkIndex(docs: SearchDocument[]): Promise<void>;
   /** Search for documents. */
