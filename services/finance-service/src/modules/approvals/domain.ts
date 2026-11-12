@@ -4,7 +4,8 @@ import { DomainError } from "../masters/domain.js";
 export { DomainError };
 
 // UAT T-PERIOD D-01: period_reopen -- reopening a HARD-closed month (second finance_admin; migration 0161).
-export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen"] as const;
+export const CHANGE_REQUEST_KINDS = ["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax", "period_reopen", "ar_opening_balance"] as const;
+// AR sub-ledger opening-balance import (migration 0167): ar_opening_balance -- a batch of AR-only rows (never a journal).
 export type ChangeRequestKind = (typeof CHANGE_REQUEST_KINDS)[number];
 
 export type FinanceSettings = {
@@ -53,7 +54,8 @@ export function isRelaxingControl(current: FinanceSettings, changes: Partial<Fin
 /** Request kinds that always need a distinct approver, whatever the maker-checker setting says. */
 export function alwaysDistinctApprover(kind: string): boolean {
   // UAT T-PERIOD review: a hard-close reopen always needs a second officer, whatever the setting says at decision time.
-  return kind === "settings_relax" || kind === "period_reopen";
+  // An AR opening import writes sub-ledger rows with no journal behind them, so it ALWAYS needs a second officer.
+  return kind === "settings_relax" || kind === "period_reopen" || kind === "ar_opening_balance";
 }
 
 export type DebtGlHeads = { loanLiability: string; interestExpense: string; bank: string };

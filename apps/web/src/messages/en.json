@@ -12479,7 +12479,8 @@
       "opening_balances_enter": "Opening balances for",
       "hoa_change": "HoA code change for head",
       "settings_relax": "Switch off a control",
-      "period_reopen": "Reopen accounting period"
+      "period_reopen": "Reopen accounting period",
+      "ar_opening_balance": "Receivables opening balances (sub-ledger only)"
     },
     "hoaChange": "PFMS HoA code: {change}",
     "balancesSummary": "{count, plural, one {# entry} other {# entries}}, total debit {total}",
@@ -12493,7 +12494,8 @@
       "opening_balances_enter": "The balances are posted to the ledger.",
       "hoa_change": "The new HoA code is used for PFMS payment and budget mapping.",
       "settings_relax": "The control is switched off for this office. Ledger-shaping changes it protects will no longer need a second officer.",
-      "period_reopen": "The hard-closed period is reopened for posting. The reopening is recorded in the period reopen log."
+      "period_reopen": "The hard-closed period is reopened for posting. The reopening is recorded in the period reopen log.",
+      "ar_opening_balance": "The receivable rows are added to the AR sub-ledger only. No journal is posted; the general ledger is not changed."
     },
     "reject": "Reject",
     "rejectTitle": "Reject this change?",
