@@ -9,6 +9,7 @@ import * as receiptRepo from "../receipt/repo.js";
 import { weightedAvgRate, voucherTypeForEntry } from "./domain.js";
 import type { EntryItemInsert } from "./schema.js";
 import type { LedgerInsert } from "../ledger/schema.js";
+import { isInventoryLedger } from "../../shared/ledger-source.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
@@ -159,6 +160,11 @@ export function registerEntryConsumers(queue: Queue): void {
     };
     const consumableItems = (p.items ?? []).filter((i) => i.itemType !== "fixed_asset" && i.itemId);
     if (consumableItems.length === 0) return;
+
+    // A tenant on the inventory ledger gets this receipt from inventory-service; writing it here too would
+    // leave a second, invisible stock-register copy. Ack and skip. An unreadable setting keeps today's
+    // behaviour (write) and logs a warning: the event is never dropped on a failed lookup.
+    if (await isInventoryLedger(msg.tenantId)) return;
 
     const entryId = randomUUID();
     const warehouseId = p.warehouseId ?? "00000000-0000-4000-8000-000000000000";
