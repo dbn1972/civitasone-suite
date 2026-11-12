@@ -107,7 +107,7 @@ export function CatalogueModuleSettings({ modules }: { modules: CatalogueModule[
                   </div>
                 </div>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12.5, color: m.enabled ? "var(--good)" : "var(--mut)", minWidth: 56, textAlign: "right" }}>{state}</span>
+                  <span style={{ fontSize: 12.5, color: m.enabled ? "var(--good)" : "var(--mut)", minWidth: 56, textAlign: "end" }}>{state}</span>
                   <button
                     type="button"
                     role="switch"

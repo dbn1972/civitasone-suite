@@ -17,6 +17,9 @@ export const moduleRegistry = compositionSchema.table("module_registry", {
   isCore: boolean("is_core").notNull().default(false),
   hardDeps: text("hard_deps").array().notNull().$type<string[]>().default([]),
   softDeps: text("soft_deps").array().notNull().$type<string[]>().default([]),
+  // Hard edges the catalogue declares but that only take effect when MODULE_SOURCE=catalogue (migration 0059):
+  // adding them to hard_deps would make existing tenants silently gain modules.
+  pendingHardDeps: text("pending_hard_deps").array().notNull().$type<string[]>().default([]),
   screens: text("screens").array().notNull().$type<string[]>().default([]),
   cluster: text("cluster").notNull().default(""),
   sortOrder: integer("sort_order").notNull().default(0),
