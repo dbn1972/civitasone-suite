@@ -161,7 +161,7 @@ describe("GET /api/v1/search — permission filtering", () => {
     expect(res.statusCode).toBe(200);
     // Verify search was called with the correct module tags
     expect(mockEngine.search).toHaveBeenCalledWith(
-      expect.objectContaining({ tags: ["finance"] }),
+      expect.objectContaining({ tagsAny: ["finance"] }),
     );
   });
 

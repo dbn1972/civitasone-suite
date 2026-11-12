@@ -88,6 +88,14 @@ export class MeilisearchEngine implements SearchEngine {
     if (query.tags?.length) {
       filter.push(query.tags.map((t) => `tags = "${this.escape(t)}"`).join(" AND "));
     }
+    if (query.tagsAny) {
+      // OR across the tags. Empty list = matches nothing (fail closed), like accessLevels.
+      filter.push(
+        query.tagsAny.length
+          ? `(${query.tagsAny.map((t) => `tags = "${this.escape(t)}"`).join(" OR ")})`
+          : `tags = "__none__"`,
+      );
+    }
     if (query.accessLevels) {
       // Empty list = matches nothing (fail closed).
       filter.push(
