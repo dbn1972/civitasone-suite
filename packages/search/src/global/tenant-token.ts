@@ -11,13 +11,16 @@ import { UUID_RE } from "./contract.js";
 export interface TenantTokenInput {
   /** Value of the search-only API key (signing secret). */
   apiKey: string;
-  /** uid of that API key. */
-  apiKeyUid: string;
+  /** uid of that API key (a public identifier, not a secret). */
+  keyUid: string;
   tenantId: string;
   indexName: string;
   /** Unix seconds. */
   expiresAtSec: number;
 }
+
+/** JWT claim name Meilisearch requires for the uid of the signing key. */
+const KEY_UID_CLAIM = "apiKeyUid";
 
 const b64url = (buf: Buffer | string): string => Buffer.from(buf).toString("base64url");
 
@@ -30,7 +33,7 @@ export function createTenantToken(input: TenantTokenInput): string {
   const header = b64url(JSON.stringify({ typ: "JWT", alg: "HS256" }));
   const payload = b64url(
     JSON.stringify({
-      apiKeyUid: input.apiKeyUid,
+      [KEY_UID_CLAIM]: input.keyUid,
       searchRules: { [input.indexName]: { filter: tenantFilterRule(input.tenantId) } },
       exp: input.expiresAtSec,
     }),

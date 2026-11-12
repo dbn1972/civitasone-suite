@@ -87,7 +87,7 @@ run("global search against a real Meilisearch", () => {
   });
 
   it("a tenant token pins the tenant even when the caller supplies its own filter (engine-side)", async () => {
-    const tokB = createTenantToken({ apiKey: searchKey, apiKeyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
+    const tokB = createTenantToken({ apiKey: searchKey, keyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
     const raw = async (filter: unknown, token = tokB) =>
       fetch(`${URL_}/indexes/${indexName}/search`, {
         method: "POST",
@@ -102,13 +102,13 @@ run("global search against a real Meilisearch", () => {
   });
 
   it("a forged, tampered or expired tenant token is rejected by the engine", async () => {
-    const good = createTenantToken({ apiKey: searchKey, apiKeyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
+    const good = createTenantToken({ apiKey: searchKey, keyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
     const [h, p, s] = good.split(".") as [string, string, string];
     const payload = JSON.parse(Buffer.from(p, "base64url").toString());
     payload.searchRules[indexName].filter = `tenantId = "${A}"`;
     const tampered = `${h}.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.${s}`;
-    const forged = createTenantToken({ apiKey: "not-the-search-key-0000000000", apiKeyUid: searchKeyUid, tenantId: A, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
-    const expired = createTenantToken({ apiKey: searchKey, apiKeyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) - 60 });
+    const forged = createTenantToken({ apiKey: "not-the-search-key-0000000000", keyUid: searchKeyUid, tenantId: A, indexName, expiresAtSec: Math.floor(Date.now() / 1000) + 300 });
+    const expired = createTenantToken({ apiKey: searchKey, keyUid: searchKeyUid, tenantId: B, indexName, expiresAtSec: Math.floor(Date.now() / 1000) - 60 });
     for (const tok of [tampered, forged, expired]) {
       const res = await fetch(`${URL_}/indexes/${indexName}/search`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` }, body: JSON.stringify({ q: "Acme" }) });
       expect(res.status).toBeGreaterThanOrEqual(400);

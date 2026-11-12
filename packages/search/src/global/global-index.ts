@@ -166,7 +166,7 @@ export class GlobalSearchIndex {
     const credential = this.usesTenantTokens
       ? createTenantToken({
           apiKey: this.searchKey,
-          apiKeyUid: this.searchKeyUid,
+          keyUid: this.searchKeyUid,
           tenantId,
           indexName: this.indexName,
           expiresAtSec: Math.floor(Date.now() / 1000) + this.tokenTtlSec,
