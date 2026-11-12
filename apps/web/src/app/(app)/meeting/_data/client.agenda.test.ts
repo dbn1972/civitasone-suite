@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const browserFetch = vi.fn();
 vi.mock("@/lib/api/browserClient", () => ({ browserFetch: (...a: unknown[]) => browserFetch(...a) }));
 
-import { addAgendaItem, addLateAgendaItem } from "./client";
+import { addAgendaItem, addLateAgendaItem, requestLateAgendaItem, fetchLateRequests, approveLateRequest, rejectLateRequest } from "./client";
 import { AgendaSubmitError, asAgendaSubmitError } from "./agendaErrors";
 
 beforeEach(() => browserFetch.mockReset());
@@ -44,5 +44,35 @@ describe("addLateAgendaItem", () => {
     const [path, init] = browserFetch.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("v1/meeting/m1/agenda/late");
     expect(JSON.parse(init.body as string)).toEqual({ title: "Budget", outcomeType: "decision", reason: "Sanction arrived late" });
+  });
+});
+
+describe("stored late-inclusion requests", () => {
+  it("requestLateAgendaItem posts to .../agenda/late-requests with the reason", async () => {
+    browserFetch.mockResolvedValue(new Response("", { status: 202 }));
+    await requestLateAgendaItem("m1", { title: "Budget", outcomeType: "decision" }, "Sanction arrived late");
+    const [path, init] = browserFetch.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("v1/meeting/m1/agenda/late-requests");
+    expect(JSON.parse(init.body as string)).toEqual({ title: "Budget", outcomeType: "decision", reason: "Sanction arrived late" });
+  });
+  it("fetchLateRequests maps the list", async () => {
+    browserFetch.mockResolvedValue(json({ data: [{ id: "r1", meetingId: "m1", title: "t", outcomeType: "decision", reason: "why", status: "pending", requestedBy: "u", requestedAt: "2026-11-10T00:00:00Z" }] }, 200));
+    const out = await fetchLateRequests("m1");
+    expect(browserFetch.mock.calls[0]![0]).toBe("v1/meeting/m1/agenda/late-requests");
+    expect(out[0]).toMatchObject({ id: "r1", status: "pending", decidedBy: null, agendaItemId: null });
+  });
+  it("approve / reject hit the decision routes; reject carries the reason", async () => {
+    browserFetch.mockResolvedValue(new Response("", { status: 202 }));
+    await approveLateRequest("m1", "r1");
+    await rejectLateRequest("m1", "r1", "Can wait");
+    expect(browserFetch.mock.calls[0]![0]).toBe("v1/meeting/m1/agenda/late-requests/r1/approve");
+    expect(browserFetch.mock.calls[1]![0]).toBe("v1/meeting/m1/agenda/late-requests/r1/reject");
+    expect(JSON.parse((browserFetch.mock.calls[1]![1] as RequestInit).body as string)).toEqual({ reason: "Can wait" });
+  });
+  it("maker-checker and already-decided refusals are coded", async () => {
+    browserFetch.mockResolvedValue(json({ code: "SELF_APPROVAL_FORBIDDEN" }, 403));
+    expect(asAgendaSubmitError(await approveLateRequest("m1", "r1").catch((e: unknown) => e))?.code).toBe("SELF_APPROVAL_FORBIDDEN");
+    browserFetch.mockResolvedValue(json({ code: "LATE_REQUEST_ALREADY_DECIDED" }, 409));
+    expect(asAgendaSubmitError(await approveLateRequest("m1", "r1").catch((e: unknown) => e))?.code).toBe("LATE_REQUEST_ALREADY_DECIDED");
   });
 });

@@ -8,7 +8,13 @@
  */
 import { UserFacingError } from "@/lib/userFacingError";
 
-export const AGENDA_EXPLAINED_CODES = ["MEETING_PAST_DEADLINE", "MEETING_AGENDA_LOCKED"] as const;
+export const AGENDA_EXPLAINED_CODES = [
+  "MEETING_PAST_DEADLINE",
+  "MEETING_AGENDA_LOCKED",
+  // Late-inclusion decisions: maker != checker, and a request someone else already decided.
+  "SELF_APPROVAL_FORBIDDEN",
+  "LATE_REQUEST_ALREADY_DECIDED",
+] as const;
 export type AgendaExplainedCode = (typeof AGENDA_EXPLAINED_CODES)[number];
 
 export class AgendaSubmitError extends UserFacingError {

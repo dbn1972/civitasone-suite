@@ -43,6 +43,8 @@ import { COMMANDS } from "../../topics.js";
 import {
   agendaItemSubmitSchema,
   agendaItemLateSubmitSchema,
+  agendaLateRequestDecisionSchema,
+  agendaLateRequestRejectSchema,
   agendaItemUpdateSchema,
   agendaItemWithdrawSchema,
   agendaReorderSchema,
@@ -65,6 +67,12 @@ const READ_ROLES = [
   "super_admin",
 ];
 const WRITE_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin"];
+/**
+ * Who may ASK for a late inclusion: everyone who can propose an item, plus committee members. The chair
+ * does not (per the access matrix the chair decides, they do not author the agenda); an admin who is also
+ * the chair uses /agenda/late directly.
+ */
+const LATE_REQUEST_ROLES = [...WRITE_ROLES, "committee_member"];
 const LOCK_ROLES = ["meeting_admin", "committee_secretary", "committee_chairperson", "tenant_admin", "super_admin"];
 /** Unlock is chairperson-only (plus platform admins) per the state machine (Req 3.4). */
 const UNLOCK_ROLES = ["meeting_admin", "committee_chairperson", "tenant_admin", "super_admin"];
@@ -79,6 +87,7 @@ const SCHEMA_VERSION = "1.0";
 
 // ─── Path-param + agenda-book body schemas (validated at the boundary) ───────
 const meetingParam = z.object({ meetingId: z.string().uuid() });
+const lateRequestParam = z.object({ meetingId: z.string().uuid(), requestId: z.string().uuid() });
 const itemParam = z.object({ meetingId: z.string().uuid(), itemId: z.string().uuid() });
 
 /** POST agenda-book/generate body — mirrors COMMANDS.agendaBookGenerate payload (topics.ts). */
@@ -176,6 +185,59 @@ export async function agendaRoutes(app: FastifyInstance): Promise<void> {
     const { reason, ...body } = agendaItemLateSubmitSchema.parse(req.body);
     await assertSubmissionOpen(ctx.tenantId, meetingId, { lateApproved: true });
     const accepted = await commands.agendaItemSubmit(ctx, meetingId, body, { approvedBy: ctx.actorId, reason });
+    return reply.code(202).send({ data: accepted });
+  });
+
+  // ── Stored late-inclusion requests (Req 3.5) ────────────────────────────────
+  // A secretary / member asks, with a reason; the chair approves (item added) or rejects (with a reason).
+  app.post("/v1/meetings/:meetingId/agenda/late-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LATE_REQUEST_ROLES);
+    const { meetingId } = meetingParam.parse(req.params);
+    const body = agendaItemLateSubmitSchema.parse(req.body);
+    await assertSubmissionOpen(ctx.tenantId, meetingId, { lateApproved: true }); // 404 unknown, 422 locked
+    const accepted = await commands.agendaLateRequestCreate(ctx, meetingId, body);
+    return reply.code(202).send({ data: accepted });
+  });
+
+  app.get("/v1/meetings/:meetingId/agenda/late-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { meetingId } = meetingParam.parse(req.params);
+    const { status } = z.object({ status: z.enum(["pending", "approved", "rejected"]).optional() }).parse(req.query);
+    await assertMeetingExists(ctx.tenantId, meetingId);
+    return reply.send({ data: await repo.listLateRequests(ctx.tenantId, meetingId, status) });
+  });
+
+  /** 404 unless the request belongs to this meeting; 409 unless pending; 403 for the requester (maker != checker). */
+  async function loadDecidableLateRequest(ctx: RequestContext, meetingId: string, requestId: string) {
+    const row = await repo.getLateRequest(ctx.tenantId, requestId);
+    if (!row || row.meetingId !== meetingId) throw new HttpError(404, "NOT_FOUND", "late-inclusion request not found");
+    if (row.status !== "pending") throw new HttpError(409, "LATE_REQUEST_ALREADY_DECIDED", `this request was already ${row.status}`);
+    if (row.requestedBy === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot decide your own late-inclusion request.");
+    }
+    return row;
+  }
+
+  app.post("/v1/meetings/:meetingId/agenda/late-requests/:requestId/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LATE_APPROVAL_ROLES);
+    const { meetingId, requestId } = lateRequestParam.parse(req.params);
+    const { note } = agendaLateRequestDecisionSchema.parse(req.body ?? {});
+    await loadDecidableLateRequest(ctx, meetingId, requestId);
+    await assertSubmissionOpen(ctx.tenantId, meetingId, { lateApproved: true });
+    const accepted = await commands.agendaLateRequestApprove(ctx, meetingId, requestId, note);
+    return reply.code(202).send({ data: accepted });
+  });
+
+  app.post("/v1/meetings/:meetingId/agenda/late-requests/:requestId/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LATE_APPROVAL_ROLES);
+    const { meetingId, requestId } = lateRequestParam.parse(req.params);
+    const { reason } = agendaLateRequestRejectSchema.parse(req.body);
+    await loadDecidableLateRequest(ctx, meetingId, requestId);
+    const accepted = await commands.agendaLateRequestReject(ctx, meetingId, requestId, reason);
     return reply.code(202).send({ data: accepted });
   });
 

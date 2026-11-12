@@ -44,6 +44,8 @@ export type AgendaItemSubmitInput = z.infer<typeof agendaItemSubmitSchema>;
 export const agendaItemLateSubmitSchema = agendaItemSubmitSchema.extend({
   reason: z.string().trim().min(10).max(1000),
 });
+export const agendaLateRequestDecisionSchema = z.object({ note: z.string().trim().max(1000).optional() });
+export const agendaLateRequestRejectSchema = z.object({ reason: z.string().trim().min(5).max(1000) });
 export type AgendaItemLateSubmitInput = z.infer<typeof agendaItemLateSubmitSchema>;
 
 /** The fields of an agenda item that may be patched (Req 3.1, 3.2). */

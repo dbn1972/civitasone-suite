@@ -19,6 +19,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type {
   AgendaItemSubmitInput,
+  AgendaItemLateSubmitInput,
   AgendaItemUpdateInput,
   AgendaItemWithdrawInput,
   AgendaReorderInput,
@@ -68,6 +69,44 @@ export async function agendaItemSubmit(
   });
   await invalidateAgenda(ctx.tenantId, meetingId);
   return { id: agendaItemId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+async function publishLateRequestCommand(
+  ctx: RequestContext, topic: string, payload: Record<string, unknown>,
+): Promise<void> {
+  await queue.publish(topic, {
+    messageId: randomUUID(),
+    type: topic,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: SCHEMA_VERSION,
+    payload: { tenantId: ctx.tenantId, ...payload },
+  });
+}
+
+/** Store a pending late-inclusion request (secretary / member). The id is minted here for the 202 + polling. */
+export async function agendaLateRequestCreate(
+  ctx: RequestContext, meetingId: string, body: AgendaItemLateSubmitInput,
+): Promise<AgendaCommandAccepted> {
+  const requestId = randomUUID();
+  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequest, { requestId, meetingId, ...body });
+  return { id: requestId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function agendaLateRequestApprove(
+  ctx: RequestContext, meetingId: string, requestId: string, note?: string,
+): Promise<AgendaCommandAccepted> {
+  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestApprove, { requestId, meetingId, ...(note ? { note } : {}) });
+  await invalidateAgenda(ctx.tenantId, meetingId);
+  return { id: requestId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function agendaLateRequestReject(
+  ctx: RequestContext, meetingId: string, requestId: string, reason: string,
+): Promise<AgendaCommandAccepted> {
+  await publishLateRequestCommand(ctx, COMMANDS.agendaLateRequestReject, { requestId, meetingId, reason });
+  return { id: requestId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 /**

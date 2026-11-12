@@ -14,3 +14,18 @@ describe("meetingLifecycle late-agenda strings", () => {
     expect(H[k]!.includes("{date}")).toBe(E[k]!.includes("{date}"));
   });
 });
+
+describe("meetingLifecycle late-request strings", () => {
+  const E = (en as unknown as { meetingLifecycle: Record<string, any> }).meetingLifecycle;
+  const H = (hi as unknown as { meetingLifecycle: Record<string, any> }).meetingLifecycle;
+  const flat = (o: Record<string, any>, p = ""): string[] => Object.entries(o).flatMap(([k, v]) => (typeof v === "object" ? flat(v, `${p}${k}.`) : [`${p}${k}`]));
+  const get = (o: Record<string, any>, path: string) => path.split(".").reduce<any>((a, k) => a?.[k], o) as string;
+  const keys = flat(Object.fromEntries(Object.entries(E).filter(([k]) => k.startsWith("lateReq"))));
+  it("has English and Hindi for every lateReq* key, with matching placeholders", () => {
+    expect(keys.length).toBeGreaterThanOrEqual(17);
+    for (const k of keys) {
+      expect(get(H, k), k).toMatch(/[\u0900-\u097F]/);
+      expect(/\{reason\}/.test(get(H, k))).toBe(/\{reason\}/.test(get(E, k)));
+    }
+  });
+});
