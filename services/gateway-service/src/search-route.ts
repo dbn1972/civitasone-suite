@@ -218,6 +218,9 @@ export function registerSearchRoute(app: FastifyInstance): void {
         // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
         // every level only for knowledge_admin / super_admin.
         includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
+        // The same clearance applies to EVERY knowledge document, tagged or not: a tag (which an author or a
+        // client can set) must never carry a restricted document past it. Non-knowledge records are untouched.
+        knowledgeAccessLevels: untaggedAccessLevels(jwtPayload.roles ?? []),
       });
     } catch (err) {
       // Graceful degradation: search engine unreachable

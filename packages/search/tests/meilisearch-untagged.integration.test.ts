@@ -20,8 +20,9 @@ async function drain(): Promise<void> {
   throw new Error("meilisearch tasks did not drain");
 }
 
-const doc = (id: string, tenantId: string, tags: string[], accessLevel?: string): SearchDocument => ({
-  id, tenantId, documentId: `d-${id}`, title: "leave policy handbook", content: "annual leave policy", tags, ...(accessLevel ? { accessLevel } : {}),
+const doc = (id: string, tenantId: string, tags: string[], accessLevel?: string, kind?: string): SearchDocument => ({
+  id, tenantId, documentId: `d-${id}`, title: "leave policy handbook", content: "annual leave policy", tags,
+  ...(accessLevel ? { accessLevel } : {}), ...(kind ? { kind } : {}),
 });
 
 // FLAKY-SKIP: needs a throwaway Meilisearch (MEILI_TEST_HOST); the CI Tests job has no Meilisearch service (expires: 2027-02-28)
@@ -44,6 +45,14 @@ describe.skipIf(!HOST)("Meilisearch untagged visibility (real engine)", () => {
       doc("r1", "tenant-D", [], "restricted"),
       doc("c1", "tenant-D", [], "confidential"),
       doc("f1", "tenant-D", ["finance"], "confidential"), // tagged: module rule only, unchanged
+      // tenant-E: a knowledge document must not slip past clearance by carrying a module tag
+      doc("kp", "tenant-E", [], "public", "knowledge"),
+      doc("kt-int", "tenant-E", ["finance"], "internal", "knowledge"),
+      doc("kt-res", "tenant-E", ["finance"], "restricted", "knowledge"),   // the bypass attempt
+      doc("kt-conf", "tenant-E", ["finance"], "confidential", "knowledge"), // the bypass attempt
+      doc("ku-res", "tenant-E", [], "restricted", "knowledge"),
+      doc("m1", "tenant-E", ["finance"], "confidential"),                  // module record: no kind
+      doc("m2", "tenant-E", ["finance"], undefined),                      // module record, default level
     ]);
     // A document indexed with no `tags` attribute at all (legacy rows): must count as untagged too.
     await fetch(`${HOST}/indexes/${INDEX}/documents`, {
@@ -109,5 +118,30 @@ describe.skipIf(!HOST)("Meilisearch untagged visibility (real engine)", () => {
   it("CLEARANCE never crosses tenants: tenant-A's admin view contains no tenant-D document", async () => {
     const a = await ids({ q: "leave", tenantId: "tenant-A", tagsAny: ["finance"], includeUntagged: { accessLevels: null } });
     expect(a.some((d) => ["d-p1", "d-n1", "d-r1", "d-c1", "d-f1", "d-x1"].includes(d))).toBe(false);
+  });
+
+  const ENG = { tenantId: "tenant-E", tagsAny: ["finance"], includeUntagged: STD };
+
+  it("KNOWLEDGE CLEARANCE: a tagged restricted/confidential knowledge doc is hidden from a standard user", async () => {
+    const got = await ids({ q: "leave", ...ENG, knowledgeAccessLevels: ["public", "internal"] });
+    expect(got).not.toContain("d-kt-res");
+    expect(got).not.toContain("d-kt-conf");
+    expect(got).not.toContain("d-ku-res");
+    expect(got).toEqual(["d-kp", "d-kt-int", "d-m1", "d-m2"].sort());
+  });
+
+  it("KNOWLEDGE CLEARANCE: knowledge_admin (null) sees them all", async () => {
+    expect(await ids({ q: "leave", tenantId: "tenant-E", tagsAny: ["finance"], includeUntagged: { accessLevels: null }, knowledgeAccessLevels: null }))
+      .toEqual(["d-kp", "d-kt-conf", "d-kt-int", "d-kt-res", "d-ku-res", "d-m1", "d-m2"]);
+  });
+
+  it("NON-KNOWLEDGE RECORDS ARE UNAFFECTED: a confidential module record (no kind) stays visible to a standard user with the module", async () => {
+    const got = await ids({ q: "leave", ...ENG, knowledgeAccessLevels: ["public", "internal"] });
+    expect(got).toContain("d-m1");
+    expect(got).toContain("d-m2");
+  });
+
+  it("an empty level list hides every knowledge document but not module records", async () => {
+    expect(await ids({ q: "leave", ...ENG, knowledgeAccessLevels: [] })).toEqual(["d-m1", "d-m2"]);
   });
 });

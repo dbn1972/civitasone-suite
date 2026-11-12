@@ -87,6 +87,7 @@ export class OpenSearchEngine implements SearchEngine {
                 content: { type: "text", analyzer: "civitas_text" },
                 tags: { type: "keyword" },
                 category: { type: "keyword" },
+                kind: { type: "keyword" },
                 accessLevel: { type: "keyword" },
                 indexedAt: { type: "date" },
               },
@@ -165,6 +166,15 @@ export class OpenSearchEngine implements SearchEngine {
       }
     }
 
+    if (query.knowledgeAccessLevels) {
+      const lv = query.knowledgeAccessLevels.length ? [...query.knowledgeAccessLevels] : ["__none__"];
+      filter.push({
+        bool: {
+          should: [{ bool: { must_not: [{ term: { kind: "knowledge" } }] } }, { terms: { accessLevel: lv } }],
+          minimum_should_match: 1,
+        },
+      });
+    }
     if (query.tagsAny) {
       const anyTag = { terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } };
       if (query.includeUntagged) {
@@ -274,6 +284,7 @@ export class OpenSearchEngine implements SearchEngine {
       content: doc.content,
       tags: doc.tags,
       category: doc.category ?? "",
+      kind: doc.kind ?? "",
       accessLevel: doc.accessLevel ?? "internal",
       indexedAt: new Date().toISOString(),
     };

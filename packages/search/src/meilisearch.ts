@@ -51,7 +51,7 @@ export class MeilisearchEngine implements SearchEngine {
       await this.fetch(`/indexes/${this.indexName}/settings`, {
         method: "PATCH",
         body: JSON.stringify({
-          filterableAttributes: ["tenantId", "category", "tags", "accessLevel"],
+          filterableAttributes: ["tenantId", "category", "tags", "accessLevel", "kind"],
           searchableAttributes: ["title", "content", "tags"],
           sortableAttributes: ["indexedAt"],
         }),
@@ -100,6 +100,13 @@ export class MeilisearchEngine implements SearchEngine {
         parts.push(`(tags IS EMPTY${level})`, `(tags NOT EXISTS${level})`);
       }
       filter.push(parts.length ? `(${parts.join(" OR ")})` : `tags = "__none__"`);
+    }
+    if (query.knowledgeAccessLevels) {
+      // Knowledge documents only: (kind != "knowledge") OR (accessLevel in cleared levels). A record with no
+      // kind (every module record) satisfies the first branch, so it is untouched. A separate array element,
+      // so it is ANDed with the tenant and module clauses.
+      const lv = query.knowledgeAccessLevels.length ? query.knowledgeAccessLevels : ["__none__"];
+      filter.push(`(kind != "knowledge" OR (${lv.map((l) => `accessLevel = "${this.escape(l)}"`).join(" OR ")}))`);
     }
     if (query.accessLevels) {
       // Empty list = matches nothing (fail closed).
@@ -191,6 +198,7 @@ export class MeilisearchEngine implements SearchEngine {
       content: doc.content,
       tags: doc.tags,
       category: doc.category ?? "",
+      kind: doc.kind ?? "",
       accessLevel: doc.accessLevel ?? "internal",
       indexedAt: new Date().toISOString(),
     };

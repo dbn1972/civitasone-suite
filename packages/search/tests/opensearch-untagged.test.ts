@@ -37,4 +37,19 @@ describe("OpenSearch includeUntagged", () => {
     const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], includeUntagged: { accessLevels: [] } });
     expect(JSON.stringify(b.filter)).toContain('"accessLevel":["__none__"]');
   });
+
+  it("knowledgeAccessLevels: knowledge docs must be within the cleared levels; non-knowledge records pass (must_not kind=knowledge)", async () => {
+    const b = await bodyFor({ q: "", tenantId: "t1", tagsAny: ["finance"], knowledgeAccessLevels: ["public", "internal"] });
+    expect(b.must).toContainEqual({ term: { tenantId: "t1" } });
+    expect(b.filter).toContainEqual({
+      bool: {
+        should: [{ bool: { must_not: [{ term: { kind: "knowledge" } }] } }, { terms: { accessLevel: ["public", "internal"] } }],
+        minimum_should_match: 1,
+      },
+    });
+  });
+  it("knowledgeAccessLevels: [] fails closed; null adds nothing", async () => {
+    expect(JSON.stringify((await bodyFor({ q: "", tenantId: "t1", knowledgeAccessLevels: [] })).filter)).toContain('"accessLevel":["__none__"]');
+    expect((await bodyFor({ q: "", tenantId: "t1", knowledgeAccessLevels: null })).filter).toEqual([]);
+  });
 });

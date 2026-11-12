@@ -54,4 +54,15 @@ describe("tagsAny (OR) filter", () => {
   it("includeUntagged without tagsAny changes nothing", async () => {
     expect(await filterFor({ q: "x", tenantId: "t1", includeUntagged: STD })).toEqual(['tenantId = "t1"']);
   });
+
+  it("knowledgeAccessLevels: a separate ANDed clause, scoped by kind so non-knowledge records pass; tagged or not is irrelevant", async () => {
+    const f = await filterFor({ q: "x", tenantId: "t1", tagsAny: ["finance"], knowledgeAccessLevels: ["public", "internal"] });
+    expect(f).toContain('(kind != "knowledge" OR (accessLevel = "public" OR accessLevel = "internal"))');
+    expect(f[0]).toBe('tenantId = "t1"');
+  });
+  it("knowledgeAccessLevels: [] fails closed for knowledge documents; null / absent adds nothing", async () => {
+    expect(await filterFor({ q: "x", tenantId: "t1", knowledgeAccessLevels: [] })).toContain('(kind != "knowledge" OR (accessLevel = "__none__"))');
+    expect(await filterFor({ q: "x", tenantId: "t1", knowledgeAccessLevels: null })).toEqual(['tenantId = "t1"']);
+    expect(await filterFor({ q: "x", tenantId: "t1" })).toEqual(['tenantId = "t1"']);
+  });
 });

@@ -66,6 +66,8 @@ describe("knowledge search module tags are OR-ed (not AND-ed)", () => {
   ])("roles %j -> untagged clearance %j", async (roles, expected) => {
     const { q } = await run(roles as string[]);
     expect(q?.includeUntagged).toEqual({ accessLevels: expected });
+    // the same clearance gates every knowledge document, tagged or not
+    expect(q?.knowledgeAccessLevels).toEqual(expected);
   });
 
   it("a request parameter cannot widen the clearance (accessLevels / includeUntagged / tenantId in the query string are ignored)", async () => {

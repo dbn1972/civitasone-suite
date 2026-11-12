@@ -22,6 +22,12 @@ export interface SearchDocument {
   /** Optional category for filtering. */
   category?: string | undefined;
   /**
+   * What kind of record this is. knowledge-service stamps its own documents `"knowledge"`; module
+   * records (finance, hrms ...) carry none. Lets a query apply access-level clearance to EVERY knowledge
+   * document, whatever tags it carries (see SearchQuery.knowledgeAccessLevels).
+   */
+  kind?: string | undefined;
+  /**
    * Access level of the source document (e.g. public/internal/restricted/confidential).
    * Indexed so a query can be restricted to the levels the caller is cleared for.
    * Defaults to "internal" when omitted.
@@ -51,6 +57,14 @@ export interface SearchQuery {
    * those levels (an empty list shows none), `null` means cleared for every level. Tagged documents are not
    * affected. Default (option absent): untagged documents are not included.
    */
+  /**
+   * Clearance for knowledge documents (`kind = "knowledge"`), applied whether they are tagged or not, so a
+   * tag chosen by an author or a client can never move a restricted document past the clearance check.
+   * A list limits knowledge documents to those access levels (empty = none); `null` = cleared for every
+   * level. `undefined` (absent) applies no knowledge clearance (non-knowledge callers). Non-knowledge
+   * records (no `kind`) are never affected.
+   */
+  knowledgeAccessLevels?: readonly string[] | null | undefined;
   includeUntagged?: { accessLevels: readonly string[] | null } | undefined;
   /**
    * When set, only documents whose indexed accessLevel is in this list are
