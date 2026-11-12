@@ -6,6 +6,11 @@
 --  2. plans.plan_prices: effective-dated, append-only price store. Price per plan and per add-on module, in INR
 --     minor units (paise, net of GST), with the GST rate stored on the row so GST is shown separately on a quote.
 --     Same tenant scoping + FORCED RLS as plans.plans (the plan catalogue is held per tenant).
+-- Price history is effective-dated, close-and-insert: setting a new price closes the previous open row (effective_to) and
+-- inserts a new one; the guard trigger below refuses every other UPDATE and every DELETE. NOTE for tenant erasure: the
+-- trigger also refuses the DELETE a purge would issue, so a future erasure job must run as the owner with the trigger
+-- disabled for that transaction (ALTER TABLE ... DISABLE TRIGGER trg_plan_prices_guard) or drop the tenant schema rows
+-- another way. Decide that before the first erasure run.
 -- Apply as the OWNING service role (tenant_svc), like 0001-0035: the table is created owned by whoever runs this and the
 -- service must own it. Do not apply as a superuser or the immutability trigger and RLS would belong to the wrong role.
 SET lock_timeout = '5s';
