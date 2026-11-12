@@ -216,23 +216,48 @@ function LegacyStockEntryForm() {
   );
 }
 
-/** Picks the form by the tenant's ledger source. A failed or unreadable setting means the stock-service form. */
+type Mode = { state: "loading" } | { state: "stock" } | { state: "inventory"; canAdjust: boolean } | { state: "error" };
+
+/**
+ * Reads which ledger this tenant posts to. A WRITE must never guess: only a clean answer ("inventory", or
+ * "stock" / no field / an older service without the route) picks a form. Any other failure (403, 5xx,
+ * network, unreadable body) is an error state with a retry, so a transient fault cannot post into the
+ * wrong register.
+ */
+async function resolveMode(): Promise<Mode> {
+  try {
+    const res = await fetch("/api/proxy/v1/inventory/ledger-source");
+    if (res.status === 404) return { state: "stock" }; // a service without the route cannot be on the inventory ledger
+    if (!res.ok) return { state: "error" };
+    const body = (await res.json()) as { data?: { ledgerSource?: string; canAdjust?: boolean } } | null;
+    if (!body || typeof body !== "object" || typeof body.data !== "object" || body.data === null) return { state: "error" };
+    return body.data.ledgerSource === "inventory"
+      ? { state: "inventory", canAdjust: body.data.canAdjust !== false }
+      : { state: "stock" };
+  } catch {
+    return { state: "error" };
+  }
+}
+
+/** Picks the form by the tenant's ledger source. */
 export default function NewStockEntryPage() {
   const t = useTranslations("inventoryLedger");
-  const [source, setSource] = useState<"loading" | "stock" | "inventory">("loading");
+  const [mode, setMode] = useState<Mode>({ state: "loading" });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/proxy/v1/inventory/settings");
-        const body = res.ok ? ((await res.json()) as { data?: { ledgerSource?: string } }) : null;
-        if (active) setSource(body?.data?.ledgerSource === "inventory" ? "inventory" : "stock");
-      } catch {
-        if (active) setSource("stock");
-      }
-    })();
+    setMode({ state: "loading" });
+    void resolveMode().then((m) => { if (active) setMode(m); });
     return () => { active = false; };
-  }, []);
-  if (source === "loading") return <p role="status" aria-busy="true" className="sub pad">{t("loading")}</p>;
-  return source === "inventory" ? <InventoryEntryForm /> : <LegacyStockEntryForm />;
+  }, [attempt]);
+  if (mode.state === "loading") return <p role="status" aria-busy="true" className="sub pad">{t("loading")}</p>;
+  if (mode.state === "error") {
+    return (
+      <div role="alert" className="card pad" style={{ maxWidth: 560 }}>
+        <p style={{ margin: "0 0 12px" }}>{t("modeError")}</p>
+        <button type="button" className="btn primary" onClick={() => setAttempt((n) => n + 1)}>{t("retry")}</button>
+      </div>
+    );
+  }
+  return mode.state === "inventory" ? <InventoryEntryForm canAdjust={mode.canAdjust} /> : <LegacyStockEntryForm />;
 }

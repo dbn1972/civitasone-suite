@@ -1,5 +1,5 @@
 import { EmptyState, LoadErrorState, PageHeader } from "@/app/_components/ds";
-import { INVENTORY_SETTINGS_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
+import { INVENTORY_QC_POLICY_ROLES, INVENTORY_SETTINGS_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 import { getInventorySettings } from "../_data";
 import { getInventoryLedgerSource } from "../_dataLedger";
 import { QcPolicyToggle } from "./QcPolicyToggle";
@@ -31,7 +31,7 @@ export default async function InventorySettingsPage() {
   return (
     <>
       <PageHeader title="Inventory policy" subtitle="Controls that apply to every store in your organisation." back="/inventory" />
-      <QcPolicyToggle initial={result.data.qcMakerChecker} />
+      {getSessionRoles().some((r) => INVENTORY_QC_POLICY_ROLES.includes(r)) ? <QcPolicyToggle initial={result.data.qcMakerChecker} /> : null}
       {ledger.source === "error" ? null : <LedgerSourceControl initial={ledger.data} />}
     </>
   );

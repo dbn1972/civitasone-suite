@@ -46,7 +46,7 @@ async function waitForPosting(id: string): Promise<"posted" | "pending"> {
   return "pending";
 }
 
-export function InventoryEntryForm() {
+export function InventoryEntryForm({ canAdjust = true }: { canAdjust?: boolean }) {
   const t = useTranslations("inventoryLedger");
   const router = useRouter();
   const formError = useFormError("stock entry");
@@ -213,7 +213,7 @@ export function InventoryEntryForm() {
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="ie-type">{t("field.type")}</label>
               <select id="ie-type" value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)} style={inputStyle}>
-                {(["receipt", "issue", "transfer", "adjustment"] as const).map((k) => <option key={k} value={k}>{t(`type.${k}`)}</option>)}
+                {(canAdjust ? (["receipt", "issue", "transfer", "adjustment"] as const) : (["receipt", "issue", "transfer"] as const)).map((k) => <option key={k} value={k}>{t(`type.${k}`)}</option>)}
               </select>
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>

@@ -131,6 +131,34 @@ describe("ledgerSource setting", () => {
     expect(snapshot).toContain("\"ledgerSource\":\"inventory\"");
   });
 
+  it("tenant_admin changes ledgerSource only: qcMakerChecker (a segregation-of-duties control) stays with the inventory admins", async () => {
+    const qc = await app.inject({ method: "PUT", url: "/v1/inventory/settings", headers: tenantAdmin(), payload: { qcMakerChecker: true } });
+    expect(qc.statusCode).toBe(403);
+    const mixed = await app.inject({ method: "PUT", url: "/v1/inventory/settings", headers: tenantAdmin(), payload: { qcMakerChecker: false, ledgerSource: "inventory" } });
+    expect(mixed.statusCode).toBe(403);
+    await drain();
+    expect((await settingsOf(T)).qcMakerChecker).toBe(false); // untouched by the refused calls (set to false above by inventory_admin)
+    const admin = await app.inject({ method: "PUT", url: "/v1/inventory/settings", headers: hdr(T, ADMIN, ["inventory_admin"]), payload: { qcMakerChecker: true, ledgerSource: "inventory" } });
+    expect(admin.statusCode).toBe(202);
+    await drain();
+    expect(await settingsOf(T)).toEqual({ qcMakerChecker: true, ledgerSource: "inventory" });
+  });
+
+  it("GET /ledger-source is open to the stock and procurement roles that cannot read the full settings, and says what the caller may do", async () => {
+    for (const role of ["stock_manager", "stock_admin", "procurement_officer", "store_officer"]) {
+      const full = await app.inject({ method: "GET", url: "/v1/inventory/settings", headers: hdr(T, ACTOR, [role]) });
+      expect(full.statusCode, `${role} full settings`).toBe(403);
+      const res = await app.inject({ method: "GET", url: "/v1/inventory/ledger-source", headers: hdr(T, ACTOR, [role]) });
+      expect(res.statusCode, role).toBe(200);
+      // T is on the inventory ledger here: a stock_manager must be told so, not sent to the stock form.
+      expect(res.json().data).toEqual({ ledgerSource: "inventory", canAdjust: false });
+    }
+    expect((await app.inject({ method: "GET", url: "/v1/inventory/ledger-source", headers: hdr(T, ACTOR, ["inventory_manager"]) })).json().data.canAdjust).toBe(true);
+    expect((await app.inject({ method: "GET", url: "/v1/inventory/ledger-source", headers: keeper() })).json().data.canAdjust).toBe(false);
+    expect((await app.inject({ method: "GET", url: "/v1/inventory/ledger-source", headers: hdr(T, ACTOR, ["hr_officer"]) })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/v1/inventory/ledger-source", headers: hdr(T_OTHER, ACTOR, ["stock_manager"]) })).json().data.ledgerSource).toBe("stock");
+  });
+
   it("can be switched back to 'stock'", async () => {
     const back = await app.inject({ method: "PUT", url: "/v1/inventory/settings", headers: tenantAdmin(), payload: { ledgerSource: "stock" } });
     expect(back.statusCode).toBe(202);
@@ -219,6 +247,36 @@ describe("from an item and a store to an issue that reduces the balance (no stoc
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("tenant_admin's read access stops at items, stores, balances, ledger and the settings: no other register is widened", async () => {
+    for (const url of ["/v1/inventory/bins", "/v1/inventory/goods-returns", "/v1/inventory/reservations", "/v1/inventory/substitutes", "/v1/inventory/low-stock"]) {
+      const res = await app.inject({ method: "GET", url, headers: tenantAdmin() });
+      expect(res.statusCode, url).toBe(403);
+    }
+  });
+
+  it("two issues racing for the same stock: exactly one posts, the balance never goes negative", async () => {
+    const st = await app.inject({ method: "POST", url: "/v1/inventory/stores", headers: manager(), payload: { name: "Race Store", code: "RACE" } });
+    const it = await app.inject({ method: "POST", url: "/v1/inventory/items", headers: keeper(), payload: { name: "Race Item", sku: "RACE-1" } });
+    const raceStore = st.json().id as string;
+    const raceItem = it.json().id as string;
+    await drain();
+    await app.inject({ method: "POST", url: "/v1/inventory/receipts", headers: keeper(), payload: { toStoreId: raceStore, postingDate: "2026-11-12", lines: [{ itemId: raceItem, qty: 100, rateMinor: 100 }] } });
+    await drain();
+    const issue = () => app.inject({
+      method: "POST", url: "/v1/inventory/issues", headers: keeper(),
+      payload: { fromStoreId: raceStore, postingDate: "2026-11-12", lines: [{ itemId: raceItem, qty: 60 }] },
+    });
+    const before = mq().dlq.length;
+    const [a, b] = await Promise.all([issue(), issue()]);
+    expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
+    await drain();
+    const posted = await Promise.all([a, b].map(async (r) => (await app.inject({ method: "GET", url: `/v1/inventory/movements/${r.json().id}`, headers: keeper() })).statusCode));
+    expect(posted.sort()).toEqual([200, 404]);
+    expect(mq().dlq.slice(before).filter((d) => d.error.includes("INSUFFICIENT_STOCK"))).toHaveLength(1);
+    const bal = (await app.inject({ method: "GET", url: `/v1/inventory/balances?itemId=${raceItem}&storeId=${raceStore}`, headers: keeper() })).json().data as Array<{ onHandQty: number }>;
+    expect(bal[0]?.onHandQty).toBe(40);
   });
 
   it("tenant_admin can read items, stores, balances and the ledger, but cannot post stock", async () => {

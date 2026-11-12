@@ -236,6 +236,8 @@ export const INVENTORY_BIN_MANAGE_ROLES = ["inventory_manager", "inventory_admin
  * Mirrors inventory-service's SETTINGS_ROLES (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04).
  */
 export const INVENTORY_SETTINGS_ROLES = ["inventory_admin", "super_admin", "tenant_admin"];
+/** The QC maker-checker policy is a segregation-of-duties control: tenant_admin may not change it. */
+export const INVENTORY_QC_POLICY_ROLES = ["inventory_admin", "super_admin"];
 
 /**
  * Who may confirm or remove an inventory <-> stock item link and open the unlinked-items report.

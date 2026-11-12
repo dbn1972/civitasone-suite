@@ -20,11 +20,12 @@ export function mapLedgerSource(payload: unknown): LedgerSource | null {
 }
 
 /**
- * Which ledger the stock screens use for this tenant. Any failure reads as "stock": today's
- * behaviour is never changed by an unreadable setting.
+ * Which ledger the stock screens use for this tenant (narrow read, open to the stock and procurement roles
+ * as well). READS only: any failure reads as "stock", so a register never changes by an unreadable setting.
+ * Writes must not use this fallback (see the new-entry page, which shows an error instead).
  */
 export function getInventoryLedgerSource(): Promise<LoaderResult<LedgerSource>> {
-  return fetchJson<unknown, LedgerSource>("/api/v1/inventory/settings", "stock", {
+  return fetchJson<unknown, LedgerSource>("/api/v1/inventory/ledger-source", "stock", {
     revalidateSeconds: 15,
     telemetryKey: "inventory.ledgerSource",
     mapResponse: mapLedgerSource,

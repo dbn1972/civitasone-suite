@@ -20,12 +20,21 @@ import * as repo from "./repo.js";
 import { grnPrecheck } from "./grn-precheck.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
 import { cache } from "../../shared/infra.js";
+import { hasAnyRole } from "@civitasone/auth";
+import { INVENTORY_ADJUSTMENT_ROLES } from "../../shared/roles.js";
 import { RESOURCE } from "../../topics.js";
 
 const WRITE_ROLES  = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
-const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer", "tenant_admin"];
+const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer"];
+// The item register is also read by tenant_admin (oversight), nothing else is widened for it.
+const ITEM_READER_ROLES = [...READER_ROLES, "tenant_admin"];
+// Roles that may read the stock screens' routing flag only (GET /v1/inventory/ledger-source): the inventory
+// readers plus the stock-service and procurement roles that open the stock entry screen today.
+const LEDGER_SOURCE_READER_ROLES = [...ITEM_READER_ROLES, "stock_manager", "stock_admin", "procurement_officer", "procurement_admin", "store_officer"];
+// qcMakerChecker is a segregation-of-duties control: only the inventory admin roles change it.
+const QC_SETTINGS_ROLES = ["inventory_admin", "super_admin"];
 const BIN_ADMIN_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
-// tenant_admin runs the organisation's policy (including which ledger the stock screens use) but is not a
+// tenant_admin may choose which ledger the stock screens use (ledgerSource) and nothing else; it is not a
 // store operator, so it is NOT added to WRITE_ROLES: it cannot post receipts or issues.
 const SETTINGS_ROLES  = ["inventory_admin", "super_admin", "tenant_admin"];
 const QC_ROLES     = ["inventory_manager", "inventory_admin", "qc_inspector", "super_admin"];
@@ -58,7 +67,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/inventory/items/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, ITEM_READER_ROLES);
     const { id } = idParam.parse(req.params);
     const item = await queries.getItem(ctx.tenantId, id);
     if (!item) throw new HttpError(404, "NOT_FOUND", "item not found");
@@ -67,7 +76,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/inventory/items", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, ITEM_READER_ROLES);
     const q = itemQueryParams.parse(req.query);
     const opts: { categoryId?: string; status?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
     if (q.categoryId !== undefined) opts.categoryId = q.categoryId;
@@ -198,14 +207,25 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
   // ── Tenant inventory policy ───────────────────────────────────────────
   app.get("/v1/inventory/settings", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...READER_ROLES, "tenant_admin"]);
+    requireRole(ctx, ITEM_READER_ROLES);
     return reply.send({ data: await queries.getSettings(ctx.tenantId) });
+  });
+
+  // Narrow read for the stock screens: which ledger this tenant uses, nothing else. Readable by the stock and
+  // procurement roles that cannot read the full settings (they must not be sent to the wrong form).
+  app.get("/v1/inventory/ledger-source", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEDGER_SOURCE_READER_ROLES);
+    const { ledgerSource } = await queries.getSettings(ctx.tenantId);
+    // canAdjust lets the entry form hide the stock-count option from roles the server would refuse.
+    return reply.send({ data: { ledgerSource, canAdjust: hasAnyRole(ctx, [...INVENTORY_ADJUSTMENT_ROLES]) } });
   });
 
   app.put("/v1/inventory/settings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, SETTINGS_ROLES);
     const body = updateSettingsBody.parse(req.body);
+    if (body.qcMakerChecker !== undefined) requireRole(ctx, QC_SETTINGS_ROLES);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateSettings(ctx, body));
   });
 

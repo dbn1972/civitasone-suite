@@ -148,3 +148,16 @@ describe("stock entry on the inventory ledger", () => {
     expect(screen.getByLabelText("प्रविष्टि का प्रकार")).toBeInTheDocument();
   });
 });
+
+describe("who sees the Adjustment option", () => {
+  it("is hidden when the server would refuse it (inventory_user, store_keeper)", async () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><InventoryEntryForm canAdjust={false} /></NextIntlClientProvider>);
+    await screen.findByRole("option", { name: "MAIN · Main Store" });
+    expect(screen.queryByRole("option", { name: "Adjustment (stock count)" })).toBeNull();
+    expect(screen.getByRole("option", { name: "Issue" })).toBeInTheDocument();
+  });
+  it("is offered to the roles that may count", async () => {
+    show();
+    expect(await screen.findByRole("option", { name: "Adjustment (stock count)" })).toBeInTheDocument();
+  });
+});

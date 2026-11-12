@@ -13187,7 +13187,9 @@
     "reconcile": {
       "subtitle": "Totals of receipts, issues, transfers and adjustments posted to your stores. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances.",
       "empty": "Record receipts or issues under New stock entry to see them summarised here."
-    }
+    },
+    "modeError": "We could not check which stock ledger your organisation uses, so nothing was posted. Try again.",
+    "retry": "Try again"
   },
   "payGroupMembers": {
     "backToList": "Back to Pay Groups",
