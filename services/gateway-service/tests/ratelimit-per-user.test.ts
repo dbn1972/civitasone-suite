@@ -11,7 +11,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp, envPositiveInt } from "../src/app.js";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string; // set by vitest.config.ts
 const ENV_KEYS = [
   "GATEWAY_RATE_LIMIT_MAX",
   "GATEWAY_RATE_LIMIT_USER_MAX",
