@@ -20,6 +20,7 @@
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
+    "@civitasone/module-licence": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",

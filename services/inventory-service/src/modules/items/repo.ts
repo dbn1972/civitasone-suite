@@ -16,6 +16,7 @@ import {
   reservations,
   goodsReturns,
   tenantSettings,
+  type LedgerSource,
   type ItemInsert,
   type ItemRow,
   type ItemView,
@@ -276,20 +277,41 @@ export async function setBinActive(
 
 // ── Tenant settings ───────────────────────────────────────────────────────
 
-/** Missing row = defaults (QC maker-checker ON). */
-export async function getTenantSettings(tenantId: string): Promise<{ qcMakerChecker: boolean; version: number }> {
-  const rows = await scopedRead((tx) => tx.select().from(tenantSettings)
-    .where(eq(tenantSettings.tenantId, tenantId)).limit(1));
-  return { qcMakerChecker: rows[0]?.qcMakerChecker ?? true, version: rows[0]?.version ?? 0 };
+export type TenantSettingsView = { qcMakerChecker: boolean; ledgerSource: LedgerSource; version: number };
+export type TenantSettingsPatch = { qcMakerChecker?: boolean | undefined; ledgerSource?: LedgerSource | undefined };
+
+function viewOf(row: { qcMakerChecker: boolean; ledgerSource: string; version: number } | undefined): TenantSettingsView {
+  return {
+    qcMakerChecker: row?.qcMakerChecker ?? true,
+    ledgerSource: row?.ledgerSource === "inventory" ? "inventory" : "stock",
+    version: row?.version ?? 0,
+  };
 }
 
+/** Missing row = defaults (QC maker-checker ON, ledger source "stock" = today's behaviour). */
+export async function getTenantSettings(tenantId: string): Promise<TenantSettingsView> {
+  const rows = await scopedRead((tx) => tx.select().from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId)).limit(1));
+  return viewOf(rows[0]);
+}
+
+/** In-transaction read of every setting (the audit event records the before value). */
+export async function readTenantSettings(tx: Writer, tenantId: string): Promise<TenantSettingsView> {
+  const rows = await tx.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  return viewOf(rows[0]);
+}
+
+/** Only the fields present in `patch` are written; the rest keep their stored (or default) value. */
 export async function upsertTenantSettings(
-  tx: Writer, tenantId: string, patch: { qcMakerChecker: boolean }, actorId: string,
+  tx: Writer, tenantId: string, patch: TenantSettingsPatch, actorId: string,
 ): Promise<void> {
-  await tx.insert(tenantSettings).values({ tenantId, qcMakerChecker: patch.qcMakerChecker, updatedBy: actorId })
+  const fields: Partial<typeof tenantSettings.$inferInsert> = {};
+  if (patch.qcMakerChecker !== undefined) fields.qcMakerChecker = patch.qcMakerChecker;
+  if (patch.ledgerSource !== undefined) fields.ledgerSource = patch.ledgerSource;
+  await tx.insert(tenantSettings).values({ tenantId, ...fields, updatedBy: actorId })
     .onConflictDoUpdate({
       target: tenantSettings.tenantId,
-      set: { qcMakerChecker: patch.qcMakerChecker, updatedAt: new Date(), updatedBy: actorId, version: sql`${tenantSettings.version} + 1` },
+      set: { ...fields, updatedAt: new Date(), updatedBy: actorId, version: sql`${tenantSettings.version} + 1` },
     });
 }
 

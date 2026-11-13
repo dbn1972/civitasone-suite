@@ -65,6 +65,17 @@ export const httpErrorsTotal = new Counter({
   registers: [metricsRegistry],
 });
 
+/**
+ * Module-guard watch-only / shadow would-deny counter (M3): requests the per-module (enforce) decision would have
+ * refused but that were allowed. Labels: route, reason (short stable reason, never a tenant id).
+ */
+export const moduleGuardWouldDenyTotal = new Counter({
+  name: `${prefix}_module_guard_would_deny_total`,
+  help: "Requests the module guard would refuse under enforce but allowed (watch-only / shadow)",
+  labelNames: ["route", "reason"] as const,
+  registers: [metricsRegistry],
+});
+
 // ── Public API (backward-compatible) ───────────────────────────────────────────
 
 /** Record a response metric — called from the onResponse hook. */

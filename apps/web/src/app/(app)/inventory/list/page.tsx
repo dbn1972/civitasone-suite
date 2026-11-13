@@ -1,8 +1,13 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState, LoadErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
+import type { LoaderResult } from "@/app/_data/apiClient";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
 import { getItemLinks } from "../_dataLinks";
+import {
+  getAllInventoryItems, getInventoryBalances, getInventoryLedgerSource, registerRowsFromInventory, type StockRegisterRow,
+} from "../_dataLedger";
 import { itemLabel, nameOrDash } from "../_labels";
 import { stockListStats } from "./listStats";
 import { InventoryStockListClient } from "./InventoryStockListClient";
@@ -32,15 +37,29 @@ const CYCLE_COUNT_COLUMNS = [
   { key: "status" as const, label: "Status", cellType: "status" as const },
 ];
 
+/** Tenants on the inventory ledger: item master + balances from inventory-service, no stock-service call. */
+async function loadInventoryRegister(): Promise<LoaderResult<StockRegisterRow[]>> {
+  const [itemsRes, balancesRes] = await Promise.all([getAllInventoryItems(), getInventoryBalances()]);
+  if (itemsRes.source === "error") return { ...itemsRes, data: [] };
+  // Without balances every item would read "out of stock": that is a failed load, not a zero.
+  if (balancesRes.source === "error") return { ...balancesRes, data: [] };
+  return { data: registerRowsFromInventory(itemsRes.data, balancesRes.data), source: "api" };
+}
+
 export default async function InventoryListPage() {
-  const [{ data: items, source }, pendingRes, linksRes] = await Promise.all([
-    getStockItems(),
+  // Anything but an explicit "inventory" (including an unreadable setting) keeps today's stock-service register.
+  const ledger = await getInventoryLedgerSource();
+  const fromInventory = ledger.source !== "error" && ledger.data === "inventory";
+  const t = fromInventory ? await getTranslations("inventoryLedger") : null;
+  const [itemsRes, pendingRes, linksRes] = await Promise.all([
+    fromInventory ? loadInventoryRegister() : getStockItems(),
     getInventoryCycleCounts("pending_approval"),
-    getItemLinks(),
+    fromInventory ? Promise.resolve(null) : getItemLinks(),
   ]);
+  const { data: items, source } = itemsRes;
   // GAP-INVENTORY-DETAIL-04: which stock items are linked to an item master entry. null when the
   // links could not be read, so no row is mislabelled "not linked".
-  const linkedStockIds = linksRes.source === "error" ? null : linksRes.data.map((l) => l.stockItemId);
+  const linkedStockIds = linksRes === null || linksRes.source === "error" ? null : linksRes.data.map((l) => l.stockItemId);
 
   // GAP-INVENTORY-LIST-01: a failed fetch yields items=[] -- never present that as
   // an unstocked store (zero SKUs, Rs 0 value, "Add stock items"). Stats read
@@ -63,8 +82,8 @@ export default async function InventoryListPage() {
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader
-        title="Stock Items"
-        subtitle="Stock levels per item from the stock service. Items linked to the item master are marked, and show once. The catalogued item master, with categories and reorder policy, is under Item Master."
+        title={t ? t("list.title") : "Stock Items"}
+        subtitle={t ? t("list.subtitle") : "Stock levels per item from the stock service. Items linked to the item master are marked, and show once. The catalogued item master, with categories and reorder policy, is under Item Master."}
       />
       <div aria-label="Inventory stock items">
         <StatGrid>
@@ -90,7 +109,12 @@ export default async function InventoryListPage() {
         ) : null}
 
         {failed ? (
-          <RefreshErrorState error={toHumanError("load", { area: "stock items" })} backHref="/inventory" />
+          // A 403 says "no access" instead of a generic load failure (the stock register has its own role list).
+          itemsRes.status === 403
+            ? <LoadErrorState result={itemsRes} area="stock items" backHref="/inventory" />
+            : <RefreshErrorState error={toHumanError("load", { area: "stock items" })} backHref="/inventory" />
+        ) : fromInventory ? (
+          <InventoryStockListClient items={items} showLinkColumn={false} rowLinkPrefix="/inventory/items/" finderMasters="inventory" />
         ) : (
           <InventoryStockListClient items={items} linkedStockIds={linkedStockIds} />
         )}

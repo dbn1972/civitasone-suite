@@ -16,7 +16,7 @@
  */
 import type { Writer } from "./repo.js";
 import { getConfigValueOnTx, listActiveKeys } from "./repo.js";
-import { effectiveAllowed } from "./domain.js";
+import { effectiveAllowed, COMMITTEE_POLICY_NS, committeeAgendaNoticeKey, parseAgendaNoticeDays } from "./domain.js";
 
 /** Namespace for scalar operational knobs. */
 export const POLICY_NS = "meeting_policy";
@@ -222,4 +222,46 @@ export async function getPolicyString(
 ): Promise<string> {
   const raw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, key);
   return toStringValue(raw) ?? POLICY_STRING_DEFAULTS[key];
+}
+
+
+// ─── Agenda submission notice: committee override → tenant → default ───────────────
+
+/**
+ * Where the effective agenda notice period came from. `default` is the former hard-coded 7 days, so a tenant
+ * (and every committee in it) that has configured nothing behaves exactly as before.
+ */
+export type AgendaNoticeSource = "committee" | "tenant" | "default";
+export interface AgendaNotice { days: number; source: AgendaNoticeSource }
+
+/**
+ * Pure resolution of the agenda notice period from the raw config values.
+ *
+ *   1. a VALID committee override (whole days, 0..365); a malformed stored value is ignored, not trusted;
+ *   2. the tenant's `agenda.submission_deadline_days` exactly as `getPolicyNumber` has always read it;
+ *   3. the documented default, 7.
+ *
+ * Statutory minimum: the code encodes NO minimum for this knob (0 is allowed). The statutory/regulatory
+ * minimum NOTICE of a meeting is a separate rule, `meeting.notice_period_days`, enforced when a meeting is
+ * scheduled (`MEETING_SHORT_NOTICE`, waivable only with a recorded waiver). This knob only decides how long
+ * before the meeting agenda PROPOSALS close; after that, an item still needs chairperson approval
+ * (`MEETING_PAST_DEADLINE`). A committee override cannot weaken either rule.
+ */
+export function resolveAgendaNotice(committeeRaw: unknown, tenantRaw: unknown): AgendaNotice {
+  const fromCommittee = parseAgendaNoticeDays(committeeRaw);
+  if (fromCommittee !== undefined) return { days: fromCommittee, source: "committee" };
+  const fromTenant = toNumber(tenantRaw);
+  if (fromTenant !== undefined) return { days: fromTenant, source: "tenant" };
+  return { days: POLICY_DEFAULTS["agenda.submission_deadline_days"], source: "default" };
+}
+
+/** Effective agenda notice for a committee (or tenant-wide when `committeeId` is null) on a GUC-scoped tx. */
+export async function getAgendaNotice(
+  tx: Writer, tenantId: string, committeeId: string | null | undefined,
+): Promise<AgendaNotice> {
+  const committeeRaw = committeeId
+    ? await getConfigValueOnTx(tx, tenantId, COMMITTEE_POLICY_NS, committeeAgendaNoticeKey(committeeId))
+    : undefined;
+  const tenantRaw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, "agenda.submission_deadline_days");
+  return resolveAgendaNotice(committeeRaw, tenantRaw);
 }

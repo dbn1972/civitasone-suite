@@ -20,6 +20,9 @@ import { resolveApprovalMode } from "../po-approval/mode.js";
 import { loadMatrixTx } from "../po-approval/repo.js";
 import { approvalDecision } from "../po-approval/matrix.js";
 
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
+
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const PO_WORKFLOW_NAME = "Procurement PO Approval";
@@ -43,6 +46,13 @@ class SanctionNotFoundError extends Error {
 
 async function checkSanctionAvailable(sanctionRef: string, required: bigint, tenantId: string): Promise<void> {
   const sanctionId = sanctionRef.replace(/^.*:/, "");
+  // M5: do not call a finance module this tenant did not buy. Not licensed is permanent (DLQ once, like finance's
+  // own 4xx); an unverifiable licence is retryable. No-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce.
+  const gate = await licence.check(tenantId, LICENCE_MODULE.finance, "http", "GET finance/sanctions/:id/available");
+  if (gate.outcome === "deny") {
+    throw new NonRetryableError(`[procurement/po] FINANCE_NOT_LICENSED: finance module is not licensed for this tenant (${gate.reason})`);
+  }
+  if (gate.outcome === "unavailable") throw new FinanceUnavailableError(`finance licence could not be verified: ${gate.reason}`);
   let res: Response;
   try {
     res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${sanctionId}/available`, {

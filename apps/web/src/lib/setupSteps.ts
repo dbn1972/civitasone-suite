@@ -159,7 +159,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     cta: "Set up pay",
     required: false,
     entryHref: "/hr/payroll/structures",
-    moduleKey: "hrms",
+    moduleKey: "payroll",
   },
 ];
 

@@ -20,14 +20,17 @@ import { db } from "../../shared/db.js";
 import { toDomainError } from "../../shared/errors.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import {
-  DomainError, OBSERVABLE_STATUSES, assertMakerCheckerForReportApproval, assertValidReportTransition, reportMakers,
+  DomainError, OBSERVABLE_STATUSES, assertMakerCheckerForReportApproval, assertMakerCheckerForReportRejection,
+  assertRejectionReason, assertValidReportTransition, reportMakers,
 } from "./domain.js";
 import { inspectionReports, observations } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const NOTIFICATION_TOPIC = "notification.send";
 export const REPORT_CREATE_TOPIC = "inspection.report.create";
 export const REPORT_SUBMIT_TOPIC = "inspection.report.submit";
 export const REPORT_APPROVE_TOPIC = "inspection.report.approve";
+export const REPORT_REJECT_TOPIC = "inspection.report.reject";
 export const REPORT_OBSERVATION_ADD_TOPIC = "inspection.report.observation.add";
 
 export interface ReportCreatePayload {
@@ -46,6 +49,8 @@ export interface ReportTransitionPayload {
   id: string;
   tenantId: string;
   approverId?: string | undefined;
+  rejecterId?: string | undefined;
+  reason?: string | undefined;
 }
 
 export interface ObservationAddPayload {
@@ -163,6 +168,50 @@ export function registerReportsConsumers(queue: Queue): void {
         payload: {
           action: "inspection_report.approved", resourceType: "inspection_report", resourceId: p.id,
           details: { from: report.status, to: "approved", submittedBy: report.submittedBy ?? report.updatedBy },
+        },
+      });
+    });
+  });
+
+  // ─── reject: submitted → rejected (maker ≠ checker, mandatory reason) ────
+  queue.subscribe<ReportTransitionPayload>(REPORT_REJECT_TOPIC, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const report = await lockReport(tx, msg.tenantId, p.id);
+      if (report.status === "rejected") return; // redelivery under a fresh messageId
+      let reason: string;
+      try {
+        assertValidReportTransition(report.status, "rejected");
+        assertMakerCheckerForReportRejection(reportMakers(report), msg.actorId);
+        reason = assertRejectionReason(p.reason);
+      } catch (err) { toDomainError(err, DomainError); }
+
+      const now = new Date();
+      await tx.update(inspectionReports)
+        .set({
+          status: "rejected", rejectedAt: now, rejectedBy: msg.actorId, rejectionReason: reason,
+          updatedAt: now, updatedBy: msg.actorId,
+          version: sql`${inspectionReports.version} + 1`,
+        })
+        .where(and(eq(inspectionReports.tenantId, msg.tenantId), eq(inspectionReports.id, p.id)));
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          action: "inspection_report.rejected", resourceType: "inspection_report", resourceId: p.id,
+          details: { from: report.status, to: "rejected", rejectedBy: msg.actorId, reason, submittedBy: report.submittedBy ?? report.updatedBy },
+        },
+      });
+      // Tell the people who must revise it.
+      await enqueue(tx, {
+        topic: NOTIFICATION_TOPIC, eventType: NOTIFICATION_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          type: "inspection.report_rejected",
+          recipientIds: [...new Set([report.inspectorId, report.submittedBy ?? report.updatedBy])],
+          data: { reportId: p.id, inspectionId: report.inspectionId, reason },
         },
       });
     });

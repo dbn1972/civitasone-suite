@@ -11,7 +11,7 @@ import { entryHref, type PickerEntry } from "../linkHelpers";
  * item appears once; choosing an item opens it. Items that exist in one master only stay
  * findable and are labelled as such.
  */
-export function ItemFinder() {
+export function ItemFinder({ masters = "all" }: { masters?: "all" | "inventory" }) {
   const t = useTranslations("inventoryLink");
   const router = useRouter();
   const [picked, setPicked] = useState<PickerEntry | null>(null);
@@ -21,6 +21,7 @@ export function ItemFinder() {
       <ItemPicker
         id="inventory-item-finder"
         value={picked?.key ?? null}
+        masters={masters}
         onChange={(entry) => {
           setPicked(entry);
           if (entry) router.push(entryHref(entry));

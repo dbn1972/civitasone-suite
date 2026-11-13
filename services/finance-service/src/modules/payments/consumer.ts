@@ -502,6 +502,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
     let insertedPayment: PaymentRow | undefined;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // A bank account that is not an active one of this tenant can never become valid by retrying: fail once,
+      // straight to the DLQ, instead of an FK violation retried to exhaustion.
+      if (p.bankAccountId && !(await repo.isActiveBankAccountTx(tx, p.tenantId, p.bankAccountId))) {
+        throw new NonRetryableError(`BANK_ACCOUNT_NOT_FOUND: bankAccountId ${p.bankAccountId} is not an active bank account of tenant ${p.tenantId}`);
+      }
       const bill = await repo.findBillByIdTx(tx, p.billId);
       if (!bill) throw new Error(`bill ${p.billId} not found`);
       if (bill.ddoCode && bill.ddoCode !== p.ddoCode.toUpperCase()) {

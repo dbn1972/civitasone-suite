@@ -51,7 +51,7 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
       .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.userRef, ctx.actorId))));
     if (!emps[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record" });
     const allocs = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
-      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, emps[0]!.id))));
+      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, emps[0]!.id), eq(hrmsLeaveAllocs.status, "active"))));
     return reply.send({ data: allocs.map(a => ({ leaveTypeId: a.leaveTypeId, fy: a.fy, total: a.totalDays, balance: effectiveBalanceDays(a), used: a.totalDays - effectiveBalanceDays(a) })) });
   });
 

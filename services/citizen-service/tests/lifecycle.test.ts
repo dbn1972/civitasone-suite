@@ -222,7 +222,7 @@ describe("Application submit + status history + documents", () => {
 
   it("status update + document upload appear in detail", async () => {
     expect((await patch(`/v1/citizen/applications/${id}/status`, { status: "under_review", note: "checking" }, ofH)).statusCode).toBe(202);
-    expect((await post(`/v1/citizen/applications/${id}/documents`, { docType: "id_proof" }, ofH)).statusCode).toBe(202);
+    expect((await post(`/v1/citizen/applications/${id}/documents`, { docType: "id_proof", filename: "id.pdf", contentType: "application/pdf", sizeBytes: 1024 }, ofH)).statusCode).toBe(202);
     const ok = await waitFor(async () => {
       const d = (await get(`/v1/citizen/applications/${id}`, ofH)).json();
       return Array.isArray(d.documents) && d.documents.length >= 1 && Array.isArray(d.history) && d.history.length >= 1;

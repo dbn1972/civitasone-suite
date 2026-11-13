@@ -12,6 +12,8 @@
  * inventory; a mismatch shows up as reason http_401.
  */
 import { incrementInventoryPrecheckFailopen } from "@civitasone/observability";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const INVENTORY_URL = process.env.INVENTORY_SERVICE_URL ?? "http://127.0.0.1:3025";
 const TIMEOUT_MS = Number(process.env.INVENTORY_PRECHECK_TIMEOUT_MS ?? "1500");
@@ -36,6 +38,9 @@ export interface GrnStockPrecheck {
 
 /** null = could not be checked (inventory unreachable / unexpected reply): caller must not refuse. */
 export async function precheckGrnStock(tenantId: string, skus: string[], storeId?: string): Promise<GrnStockPrecheck | null> {
+  // M5: the pre-check is best-effort. A tenant without the inventory module has no SKUs to check, so skip the call
+  // quietly (no fail-open alarm: this is expected, not an outage). No-op unless the check is on and the tenant is in enforce.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.inventory, "http", "inventory grn-precheck")).allowed) return null;
   try {
     const res = await fetch(`${INVENTORY_URL}/v1/inventory/grn-precheck`, {
       method: "POST",

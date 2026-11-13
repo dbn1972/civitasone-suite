@@ -67,3 +67,10 @@ export async function approveReport(ctx: RequestContext, reportId: string): Prom
   }, randomUUID());
   return { id: reportId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function rejectReport(ctx: RequestContext, reportId: string, reason: string): Promise<Accepted> {
+  await publish("inspection.report.reject", ctx, reportId, {
+    id: reportId, tenantId: ctx.tenantId, rejecterId: ctx.actorId, reason,
+  }, randomUUID());
+  return { id: reportId, status: "accepted", correlationId: ctx.correlationId };
+}

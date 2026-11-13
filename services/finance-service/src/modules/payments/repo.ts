@@ -2,7 +2,7 @@ import { and, eq, sql, inArray, notInArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeHeads } from "../budget/schema.js";
-import { financeBills, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
+import { financeBills, financeBankAccounts, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
@@ -87,6 +87,22 @@ export async function findBillsByVendorAndTenant(vendorId: string, tenantId: str
       .orderBy(desc(financeBills.createdAt))
       .limit(limit)
   );
+}
+
+/**
+ * Is `id` an ACTIVE bank account (payments.finance_bank_accounts) of this tenant? finance_payments.bank_account_id
+ * is a plain FK, which knows nothing about tenants or status, so the route and the consumer check it here first.
+ */
+export async function isActiveBankAccount(tenantId: string, id: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeBankAccounts.id }).from(financeBankAccounts)
+    .where(and(eq(financeBankAccounts.id, id), eq(financeBankAccounts.tenantId, tenantId), eq(financeBankAccounts.status, "active"))).limit(1));
+  return rows.length > 0;
+}
+
+export async function isActiveBankAccountTx(tx: Writer, tenantId: string, id: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: financeBankAccounts.id }).from(financeBankAccounts)
+    .where(and(eq(financeBankAccounts.id, id), eq(financeBankAccounts.tenantId, tenantId), eq(financeBankAccounts.status, "active"))).limit(1);
+  return rows.length > 0;
 }
 
 export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | null> {

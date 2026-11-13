@@ -1194,7 +1194,7 @@ describe("SLA Rules — GET /v1/citizen/sla-rules", () => {
 // DOMAIN LOGIC TESTS
 // ══════════════════════════════════════════════════════════════════════════════
 import { assertGrievanceTransition, inferPriority, inferDepartmentRef, shouldAutoEscalate } from "../src/modules/grievance/domain.js";
-import { assertStatusTransition, isResolvedStatus, computeDeadline, isSlaBreached, assertRequiredDocuments, buildPresignedUploadUrl, toDateString as appDateString } from "../src/modules/application/domain.js";
+import { assertStatusTransition, isResolvedStatus, computeDeadline, isSlaBreached, assertRequiredDocuments, toDateString as appDateString } from "../src/modules/application/domain.js";
 import { computeRtiDeadline, toDateString as rtiDateString } from "../src/modules/rti/domain.js";
 import { aggregateSlaMetrics } from "../src/modules/analytics/domain.js";
 import { stripControlChars, guardCsvInjection, safeText } from "../src/shared/sanitize.js";
@@ -1302,12 +1302,13 @@ describe("application/domain", () => {
     expect(() => assertRequiredDocuments(["id_proof", "photo"], ["id_proof"])).toThrow("MISSING_DOCUMENTS");
   });
 
-  it("buildPresignedUploadUrl", () => {
-    const url = buildPresignedUploadUrl(TENANT, UUID1, "photo");
-    expect(url).toContain(TENANT);
-    expect(url).toContain(UUID1);
-    expect(url).toContain("photo");
-    expect(url).toContain("expires=");
+  it("buildApplicationDocumentKey (replaces the fabricated buildPresignedUploadUrl)", async () => {
+    const { buildApplicationDocumentKey } = await import("../src/modules/application/docs-storage.js");
+    const key = buildApplicationDocumentKey(TENANT, UUID1, "photo.png");
+    expect(key).toContain(TENANT);
+    expect(key).toContain(UUID1);
+    expect(key.endsWith(".png")).toBe(true);
+    expect(key).not.toContain("example.com");
   });
 });
 

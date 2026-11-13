@@ -15,6 +15,9 @@ import { assertOpeningBalancesBalanced, DomainError } from "../masters/domain.js
 import { assertFiscalYearActivationAllowed } from "./domain.js";
 import { loadSettingsTx } from "./repo.js";
 import { financeSettings } from "./schema.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
+import { todayIST } from "../../shared/ist-date.js";
+import { assertBasisSwitchApprovable } from "./domain.js";
 import type { FinanceSettings } from "./domain.js";
 
 /** An open tenant transaction (what db.transaction hands its callback). */
@@ -103,6 +106,10 @@ export async function applyFiscalYearActivation(
   await auditEvent(tx, meta, "activate_fiscal_year", "fiscal_year", p.code, {
     reason: p.reason, closedFiscalYears: closing, ...(p.requestId ? { changeRequestId: p.requestId } : {}),
   });
+  // Owner decision 3: the FY rollover is when an approved accounting-basis switch takes effect.
+  const [activated] = await tx.select({ startDate: fiscalYears.startDate }).from(fiscalYears)
+    .where(and(eq(fiscalYears.tenantId, meta.tenantId), eq(fiscalYears.code, p.code)));
+  if (activated) await applyPendingBasisSwitchTx(tx, meta, String(activated.startDate));
 }
 
 export type OpeningBalanceEntry = {
@@ -165,10 +172,30 @@ export async function applyHoaChange(
 
 /** Upsert the per-tenant settings (shared by the direct update and the approved settings_relax request). */
 export async function applySettingsChange(
-  tx: Tx, meta: ActorMeta, p: { changes: Partial<FinanceSettings>; reason: string; requestId?: string },
+  tx: Tx, meta: ActorMeta, p: { changes: Partial<FinanceSettings>; reason: string; requestId?: string; accountingBasisEffectiveFrom?: string | undefined; todayIst?: string },
 ): Promise<void> {
   const before = await loadSettingsTx(tx, meta.tenantId);
-  const after = { ...before, ...p.changes };
+  // Profiles off: a request raised while they were on (an approval can arrive after the flag is turned off) must not apply
+  // a looser budget control or a dated basis switch. DomainError turns the approval into a recorded rejection.
+  if (!tenantProfilesEnabled()) {
+    if (p.changes.budgetControl !== undefined && p.changes.budgetControl !== before.budgetControl) {
+      throw new DomainError("TENANT_PROFILES_DISABLED", "budget control can be changed only when tenant profiles are enabled");
+    }
+    if (p.accountingBasisEffectiveFrom !== undefined && p.changes.accountingBasis !== undefined && p.changes.accountingBasis !== before.accountingBasis) {
+      throw new DomainError("TENANT_PROFILES_DISABLED", "a dated accounting-basis switch can be applied only when tenant profiles are enabled");
+    }
+  }
+  let after: FinanceSettings = { ...before, ...p.changes };
+  // Owner decision 3 (amended): a basis switch is approved ahead and applied at the FY rollover on the next 1 April, so
+  // here it is only stored as pending. Switching back to the current basis cancels a pending switch. Flag-gated.
+  if (tenantProfilesEnabled() && p.changes.accountingBasis !== undefined) {
+    if (p.changes.accountingBasis !== before.accountingBasis) {
+      assertBasisSwitchApprovable(String(p.accountingBasisEffectiveFrom ?? ""), p.todayIst ?? todayIST());
+      after = { ...after, accountingBasis: before.accountingBasis, pendingAccountingBasis: p.changes.accountingBasis, pendingBasisEffectiveFrom: String(p.accountingBasisEffectiveFrom) };
+    } else {
+      after = { ...after, pendingAccountingBasis: null, pendingBasisEffectiveFrom: null };
+    }
+  }
   await tx.insert(financeSettings).values({ tenantId: meta.tenantId, ...after, updatedBy: meta.actorId })
     .onConflictDoUpdate({
       target: financeSettings.tenantId,
@@ -177,4 +204,34 @@ export async function applySettingsChange(
   await auditEvent(tx, meta, "update_finance_settings", "finance_settings", meta.tenantId, {
     before, after, reason: p.reason, ...(p.requestId ? { changeRequestId: p.requestId } : {}),
   });
+}
+
+/**
+ * Owner decision 3: apply an approved accounting-basis switch at the FY rollover. Called from the fiscal-year activation
+ * and from the year-end close, with the start date of the year that is beginning (a 1 April). No pending switch, or one
+ * whose date has not been reached, is a no-op, so it is safe to call on every rollover and to repeat. No scheduler.
+ */
+export async function applyPendingBasisSwitchTx(tx: Tx, meta: ActorMeta, rolloverDate: string): Promise<boolean> {
+  const before = await loadSettingsTx(tx, meta.tenantId);
+  if (!before.pendingAccountingBasis || !before.pendingBasisEffectiveFrom) return false;
+  // Profiles switched off: a switch approved while they were on must not apply. Drop it (audited) so the books stay as they are.
+  if (!tenantProfilesEnabled()) {
+    await tx.update(financeSettings).set({
+      pendingAccountingBasis: null, pendingBasisEffectiveFrom: null,
+      updatedBy: meta.actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1`,
+    }).where(eq(financeSettings.tenantId, meta.tenantId));
+    await auditEvent(tx, meta, "accounting_basis_switch_cancelled", "finance_settings", meta.tenantId, {
+      pending: before.pendingAccountingBasis, effectiveFrom: before.pendingBasisEffectiveFrom, reason: "tenant profiles disabled", atRollover: rolloverDate,
+    });
+    return false;
+  }
+  if (before.pendingBasisEffectiveFrom > rolloverDate) return false;
+  await tx.update(financeSettings).set({
+    accountingBasis: before.pendingAccountingBasis, pendingAccountingBasis: null, pendingBasisEffectiveFrom: null,
+    updatedBy: meta.actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1`,
+  }).where(eq(financeSettings.tenantId, meta.tenantId));
+  await auditEvent(tx, meta, "accounting_basis_switch_applied", "finance_settings", meta.tenantId, {
+    from: before.accountingBasis, to: before.pendingAccountingBasis, effectiveFrom: before.pendingBasisEffectiveFrom, appliedAtRollover: rolloverDate,
+  });
+  return true;
 }
