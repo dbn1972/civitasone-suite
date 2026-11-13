@@ -1,3 +1,4 @@
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -20,6 +21,7 @@ import { registerTaxProofConsumers } from "./modules/tax-proofs/consumer.js";
 import { startTaxProofPurge } from "./modules/tax-proofs/purge.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerNachReturnConsumers } from "./modules/nach-return/consumer.js";
+import { registerLedgerExportConsumers } from "./modules/ledger-export/consumer.js";
 import { registerDisbursementTransferConsumers } from "./modules/disbursement-transfers/consumer.js";
 import { registerFnfConsumers } from "./modules/fnf/consumer.js";
 import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.js";
@@ -76,6 +78,7 @@ assertPiiKeyAtBoot();
 }
 
 await loadTaxConfig();
+warnIfModuleLookupUnconfigured(pino({ name: "payroll-tenant-modules" }));
 
 registerPayrollConsumers(queue);
 registerPayProfileConsumers(queue);
@@ -89,6 +92,7 @@ registerTaxConsumers(queue);
 registerTaxProofConsumers(queue);
 registerIntegrationConsumers(queue);
 registerNachReturnConsumers(queue);
+registerLedgerExportConsumers(queue);
 registerDisbursementTransferConsumers(queue);
 registerFnfConsumers(queue);
 registerForm16BulkConsumers(queue);

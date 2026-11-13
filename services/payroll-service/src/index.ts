@@ -1,3 +1,5 @@
+import { pino } from "pino";
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { buildApp } from "./app.js";
 import { sqlClient } from "./shared/db.js";
@@ -9,6 +11,7 @@ import { assertPiiKeyAtBoot } from "./shared/pii-crypto.js";
 assertPiiKeyAtBoot();
 
 const app = await buildApp();
+warnIfModuleLookupUnconfigured(pino({ name: "payroll-tenant-modules" }));
 const port = Number(process.env.PORT ?? 3013);
 await app.listen({ port, host: process.env.BIND_HOST ?? "127.0.0.1" });
 app.log.info({ port }, "payroll-service listening");

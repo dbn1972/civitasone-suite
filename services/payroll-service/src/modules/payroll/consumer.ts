@@ -21,7 +21,11 @@ import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.j
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, runActionDenial, runAcceptsComputation, stuckRunHours, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, nextMonthOf, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, EPS_ELIGIBILITY_UNRECORDED, type EpsMembershipFacts, type EpsUnrecordedPolicy } from "./domain.js";
-import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
+import { runApprovedPayload, runDisbursedPayload, istDateOf } from "./run-approved-payload.js";
+import { resolveLedgerMode } from "../ledger-export/mode.js";
+import { accrualJournalLines, settlementJournalLines, voucherNo as journalVoucherNo, payMonthEndDate, type JournalLine } from "../ledger-export/journal.js";
+import { storeJournalTx } from "../ledger-export/repo.js";
+import { tenantHasModule } from "../../shared/tenant-modules.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
 import { ctcProfileEnabled, prorateExpansion } from "../ctc/model.js";
@@ -1181,6 +1185,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[]; netPayAcknowledgements?: NetPayAcknowledgement[]; tdsAcknowledgements?: TdsAcknowledgement[] };
+    // The envelope is authoritative for the tenant; a payload naming another tenant is refused.
+    if (p.tenantId !== msg.tenantId) throw new NonRetryableError(`TENANT_MISMATCH: payroll run ${p.id} approval rejected`);
+    // M9: how this tenant's salary reaches the books (a settings read and, if no override, an admin-service lookup: outside the transaction).
+    const ledgerMode = await resolveLedgerMode(msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);
@@ -1279,6 +1287,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         approvedBy: p.approvedBy,
         approvedAt: new Date(),
         updatedBy: msg.actorId,
+        // M9: the mode this run lives in from now on (disburse, NACH return, reconcile and bank confirmation read it).
+        ledgerMode,
       });
       // S8 G7: project costing (MIS). Off unless the tenant enabled it. It is a
       // reporting layer, so a failure here must never block the salary approval:
@@ -1296,7 +1306,18 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // salary to post; emitting it produced an all-zero journal that finance
       // correctly rejected and dead-lettered. The approval + notification below
       // still proceed; there is simply nothing to accrue to the GL.
-      if (totalGross > 0n) {
+      if (ledgerMode === "export") {
+        // M9: a tenant without Finance. Nothing is sent to finance-service; the journal it would have posted is
+        // stored here for the CSV / Tally export, in this same transaction (one per run: a redelivery adds none).
+        if (totalGross > 0n) {
+          const lines = accrualJournalLines({
+            totalGrossMinor: totalGross, totalNetMinor: totalNet, totalEmployerContribMinor: totalEmployerContrib,
+            edliMinor: employerCharges.edliMinor, epfAdminMinor: employerCharges.epfAdminMinor, upsPoolMinor: employerCharges.upsPoolMinor,
+            employeeDeductionsMinor: deductions.parts,
+          });
+          await storeAndAuditJournal(tx, msg, { runId: p.id, month: run.month, stage: "accrual", postingDate: payMonthEndDate(run.month), lines });
+        }
+      } else if (totalGross > 0n) {
         await enqueue(tx, {
           topic: EVENTS.runApproved, eventType: EVENTS.runApproved,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -1356,6 +1377,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const disburseDenial = runActionDenial("disburse", run.status);
       if (disburseDenial) throw new NonRetryableError(`${disburseDenial.code}: ${disburseDenial.message}`);
       assertRunStatusTransition(run.status, "disbursed");
+      // M9: the run keeps the mode it was approved in, whatever the tenant's mode is now. A run approved before the
+      // column existed (NULL) was approved on the finance path and is disbursed on it.
+      const ledgerMode = run.ledgerMode === "export" ? "export" : "finance";
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
       // listSlipsByRunTx (not listSlipsByRun/scopedRead) — same nested-
@@ -1384,6 +1408,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         grossMinor: run.totalGrossMinor, netMinor: slipNet, ...disbursedEmployeeStatutory,
         ptMinor: ptOfSlips(slips.filter((sl) => sl.status !== "excluded")),
       });
+      if (ledgerMode === "export") {
+        // M9: no finance-service to settle the salary or instruct the bank. The settlement journal is stored for the export
+        // and the bank file / NACH return / confirmation file mark the slips paid (ledger-export/consumer.ts, nach-return).
+        const lines = settlementJournalLines(slipNet);
+        if (lines.length > 0) {
+          await storeAndAuditJournal(tx, msg, { runId: p.id, month: run.month, stage: "disbursement", postingDate: istDateOf(disbursedAt), lines });
+        }
+      } else {
       await enqueue(tx, {
         topic: EVENTS.runDisbursed, eventType: EVENTS.runDisbursed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -1405,6 +1437,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           pfmsTxnId: `PAYROLL-${p.id.slice(0, 8)}`,
         },
       });
+      }
       await audit(tx, msg, "disburse", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
@@ -2175,7 +2208,16 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       deductionCapApplies?: boolean;
       payrollGoLiveDate?: string | null;
       epsUnrecordedPolicy?: EpsUnrecordedPolicy;
+      /** M9: null clears the override (back to derived from Finance), "finance" / "export" forces the mode. */
+      ledgerModeOverride?: "finance" | "export" | null;
+      /** Stamped by the route: the caller holds super_admin. */
+      ledgerModeSuperAdmin?: boolean;
     };
+    // M9: forcing export on a tenant that HAS Finance stops its salary reaching the GL: super_admin only (the route
+    // refuses it with a 403; a command that skips the route is dropped here). Outside the transaction: it may call admin-service.
+    if (p.ledgerModeOverride === "export" && !p.ledgerModeSuperAdmin && (await tenantHasModule(p.tenantId, "finance"))) {
+      throw new NonRetryableError("LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN: forcing export-only mode on a tenant that has Finance needs a super admin");
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // FR 53 percentages are optional on the command: an omitted one keeps
@@ -2258,6 +2300,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       }
       if (p.payrollGoLiveDate !== undefined) {
         await tx.execute(sql`UPDATE payroll.payroll_settings SET payroll_go_live_date = ${p.payrollGoLiveDate}::date WHERE tenant_id = ${p.tenantId}::uuid`);
+      }
+      // M9: the ledger-mode override (null clears it). Audited as its own event with before / after so the switch is traceable.
+      if (p.ledgerModeOverride !== undefined) {
+        const before = (await tx.execute(sql`SELECT ledger_mode_override FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid`)) as unknown as Array<{ ledger_mode_override: string | null }>;
+        await tx.execute(sql`UPDATE payroll.payroll_settings SET ledger_mode_override = ${p.ledgerModeOverride} WHERE tenant_id = ${p.tenantId}::uuid`);
+        await audit(tx, msg, "ledger_mode_changed", "payroll_settings", p.tenantId, { before: before[0]?.ledger_mode_override ?? null, after: p.ledgerModeOverride });
       }
       await enqueue(tx, {
         topic: EVENTS.settingsUpdated, eventType: EVENTS.settingsUpdated,
@@ -3689,6 +3737,23 @@ async function recordDuplicateRunNo(
 // Exported (round2 concurrency fix) so commands.ts's createRun can record
 // the same "create" audit event synchronously, from its own transaction,
 // for a regular run — see that function's doc comment.
+/** M9: store one stage of the run's export journal and audit it (the audit row is only written when a journal was actually added). */
+async function storeAndAuditJournal(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  j: { runId: string; month: string; stage: "accrual" | "disbursement"; postingDate: string; lines: JournalLine[] },
+): Promise<void> {
+  const voucherNo = journalVoucherNo(j.stage, { id: j.runId, month: j.month });
+  const stored = await storeJournalTx(tx as never, {
+    tenantId: msg.tenantId, actorId: msg.actorId, runId: j.runId, stage: j.stage, voucherNo, postingDate: j.postingDate, month: j.month, lines: j.lines,
+  });
+  if (!stored) return;
+  await audit(tx, msg, "journal_exported", "payroll_run", j.runId, {
+    stage: j.stage, voucherNo, postingDate: j.postingDate, lineCount: j.lines.length,
+    totalDebitMinor: j.lines.reduce((a, l) => a + l.debitMinor, 0n).toString(),
+  });
+}
+
 export async function audit(
   tx: Parameters<typeof enqueue>[0],
   msg: { tenantId: string; actorId: string; correlationId: string },

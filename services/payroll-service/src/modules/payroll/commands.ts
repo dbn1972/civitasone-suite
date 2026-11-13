@@ -656,11 +656,11 @@ export async function createSalaryRevision(ctx: RequestContext, body: CreateSala
  * row per tenant), so the accepted envelope's `id` is the tenantId —
  * mirrors upsertDdo/upsertStateRules returning their natural key below.
  */
-export async function updateSettings(ctx: RequestContext, body: UpdateSettingsBody): Promise<Accepted> {
+export async function updateSettings(ctx: RequestContext, body: UpdateSettingsBody, extra: { ledgerModeSuperAdmin?: boolean } = {}): Promise<Accepted> {
   await queue.publish(COMMANDS.settingsUpdate, {
     messageId: randomUUID(), type: COMMANDS.settingsUpdate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { tenantId: ctx.tenantId, ...body },
+    payload: { tenantId: ctx.tenantId, ...body, ...(extra.ledgerModeSuperAdmin ? { ledgerModeSuperAdmin: true } : {}) },
   });
   return { id: ctx.tenantId, status: "accepted", correlationId: ctx.correlationId };
 }
