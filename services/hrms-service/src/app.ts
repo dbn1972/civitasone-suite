@@ -37,6 +37,7 @@ import { reportRoutes } from "./modules/reports/routes.js";
 import { bulkImportRoutes } from "./modules/bulk-import/routes.js";
 import { selfServiceRoutes } from "./modules/self-service/routes.js";
 import { policyAdminRoutes } from "./modules/leave/policy-admin-routes.js";
+import { leaveTypeAdminRoutes } from "./modules/leave/type-admin-routes.js";
 import { policySettingsRoutes } from "./modules/policy-settings/routes.js";
 import { geoAttendanceRoutes } from "./modules/geo-attendance/routes.js";
 import { faceVerificationRoutes } from "./modules/face-verification/routes.js";
@@ -263,6 +264,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(leaveContextRoutes);
     await app.register(leaveTypesReadRoutes);
     await app.register(policyAdminRoutes);
+    await app.register(leaveTypeAdminRoutes);
     await app.register(policySettingsRoutes);
     await app.register(leaveCancelRoutes);
     // UAT T-PERIOD D-14: leave year-end dry run.

@@ -9,6 +9,8 @@
  */
 import { pino } from "pino";
 import { OrgServiceError } from "./org-client.js";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const log = pino({ name: "legal-officer-client" });
 
@@ -31,6 +33,9 @@ export function createHttpOfficerClient(opts: OfficerHttpOptions = {}): OfficerC
   const timeoutMs = opts.timeoutMs ?? Number(process.env.ORG_SERVICE_TIMEOUT_MS ?? 5000);
 
   async function call(ctx: OfficerCallCtx, query: string): Promise<Officer[]> {
+    // M5: do not call an HR module this tenant did not buy (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce).
+    const gate = await licence.check(ctx.tenantId, LICENCE_MODULE.hrms, "http", "hrms employee-summaries");
+    if (!gate.allowed) throw new OrgServiceError("unavailable", gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : "hrms licence could not be verified");
     const secret = opts.secret ?? process.env.INTERNAL_SERVICE_SECRET ?? "";
     if (!secret) throw new OrgServiceError("not_configured", "INTERNAL_SERVICE_SECRET is not set");
     let res: Response;

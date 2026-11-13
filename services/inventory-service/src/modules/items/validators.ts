@@ -100,7 +100,15 @@ export const binStatusBody = z.object({ isActive: z.boolean() });
 export type BinStatusBody = z.infer<typeof binStatusBody>;
 
 /** Per-tenant inventory policy (migration 0023). */
-export const updateSettingsBody = z.object({ qcMakerChecker: z.boolean() });
+const settingsFields = {
+  qcMakerChecker: z.boolean().optional(),
+  // Migration 0027. "stock" = today's behaviour; "inventory" = screens post to this service's ledger.
+  ledgerSource: z.enum(["stock", "inventory"]).optional(),
+};
+const atLeastOneSetting = (b: { qcMakerChecker?: boolean | undefined; ledgerSource?: string | undefined }): boolean =>
+  b.qcMakerChecker !== undefined || b.ledgerSource !== undefined;
+export const updateSettingsBody = z.object(settingsFields)
+  .refine(atLeastOneSetting, { message: "send at least one setting" });
 export type UpdateSettingsBody = z.infer<typeof updateSettingsBody>;
 
 // ── Reservations ──────────────────────────────────────────────────────────
@@ -189,9 +197,8 @@ export const binStatusPayload = binStatusBody.extend({
   id:       z.string().uuid(),
   tenantId: z.string().uuid(),
 });
-export const updateSettingsPayload = updateSettingsBody.extend({
-  tenantId: z.string().uuid(),
-});
+export const updateSettingsPayload = z.object({ ...settingsFields, tenantId: z.string().uuid() })
+  .refine(atLeastOneSetting, { message: "send at least one setting" });
 export const createReservationPayload = createReservationBody.extend({
   id:       z.string().uuid(),
   tenantId: z.string().uuid(),

@@ -77,7 +77,10 @@ async function publishDesk(desk: string, messageId = randomUUID()): Promise<stri
     messageId, type: "notification.send", tenantId: TENANT, actorId: SYSTEM, correlationId: randomUUID(),
     schemaVersion: "1.0", payload: { templateId: TEMPLATE, recipient: desk, recipientId: desk, eventType: EVENT, variables: { a: "b" } },
   });
-  await vi.waitFor(async () => { expect((await audits()).length).toBeGreaterThan(0); }, { timeout: 5000 });
+  // Failure bound only (the poll returns as soon as the audit row exists); the queue is drained first so the
+  // fan-out transaction has fully committed rather than being raced.
+  await queue.drain();
+  await vi.waitFor(async () => { expect((await audits()).length).toBeGreaterThan(0); }, { timeout: 25_000 });
   return messageId;
 }
 /** Stand-in for the relay: hand every fan-out child to the real send consumer. */
@@ -88,7 +91,9 @@ async function relayChildren(): Promise<void> {
       correlationId: randomUUID(), schemaVersion: "1.0", payload: c.payload,
     });
   }
-  await new Promise((r) => setTimeout(r, 600));
+  // Wait for every child delivery to settle in the real send consumer (MemoryQueue.drain: a test aid that
+  // resolves when all in-flight deliveries, including cascaded ones, are done) instead of a fixed 600ms sleep.
+  await queue.drain();
 }
 
 beforeEach(async () => {
@@ -168,7 +173,7 @@ describe("desk fan-out through the real send consumer", () => {
       messageId, type: "notification.send", tenantId: TENANT, actorId: SYSTEM, correlationId: randomUUID(),
       schemaVersion: "1.0", payload: { templateId: TEMPLATE, recipient: "security_control_room", recipientId: "security_control_room", eventType: EVENT },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await queue.drain();
     expect(await children()).toHaveLength(1);
     expect((await audits())).toHaveLength(1);
     await relayChildren();
@@ -183,13 +188,19 @@ describe("desk fan-out through the real send consumer", () => {
     expect((await audits())[0]?.payload).toMatchObject({ outcome: "no_recipients", recipientCount: 0 });
 
     const before = (await audits()).length;
-    setRoleHolderLookupForTests(async () => { throw new Error("identity down"); });
+    let outageLookups = 0;
+    setRoleHolderLookupForTests(async () => { outageLookups++; throw new Error("identity down"); });
     const id = randomUUID();
     await queue.publish("notification.send", {
       messageId: id, type: "notification.send", tenantId: TENANT, actorId: SYSTEM, correlationId: randomUUID(),
       schemaVersion: "1.0", payload: { templateId: TEMPLATE, recipient: "all_users", recipientId: "all_users", eventType: EVENT },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    // The consumer has actually run (and hit the outage) before we assert anything...
+    await vi.waitFor(() => { expect(outageLookups).toBeGreaterThan(0); }, { timeout: 25_000 });
+    // ...then let the queue finish ALL of its retry/backoff attempts (drain), plus a short bounded settle, so a
+    // consumer that swallows the outage and writes an audit afterwards would be caught rather than raced.
+    await queue.drain();
+    await new Promise((r) => setTimeout(r, 500));
     expect((await audits()).length).toBe(before);   // nothing consumed: the queue can retry it
   });
 

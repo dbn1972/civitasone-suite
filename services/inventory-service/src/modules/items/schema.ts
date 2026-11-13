@@ -8,7 +8,7 @@
  *
  * Every table carries tenant_id + a `version` column for optimistic locking.
  */
-import { pgSchema, uuid, varchar, integer, bigint, char, boolean, date, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, integer, bigint, char, boolean, date, timestamp, numeric } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("inventory");
 
@@ -166,10 +166,16 @@ export const goodsReturns = domainSchema.table("goods_returns", {
  * Per-tenant inventory policy (migration 0023). A missing row means defaults.
  * qcMakerChecker: when true (default) the user who recorded a goods return may
  * not record its QC verdict.
+ * ledgerSource (migration 0027): which service owns the stock ledger screens read and post to.
+ * "stock" (default) is the legacy stock-service register; "inventory" posts receipts, issues,
+ * transfers and adjustments straight to this service's own ledger and balances.
  */
+export const LEDGER_SOURCES = ["stock", "inventory"] as const;
+export type LedgerSource = (typeof LEDGER_SOURCES)[number];
 export const tenantSettings = domainSchema.table("tenant_settings", {
   tenantId:       uuid("tenant_id").primaryKey(),
   qcMakerChecker: boolean("qc_maker_checker").notNull().default(true),
+  ledgerSource:   text("ledger_source").notNull().default("stock"),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   updatedBy:      uuid("updated_by").notNull(),
   version:        integer("version").notNull().default(1),

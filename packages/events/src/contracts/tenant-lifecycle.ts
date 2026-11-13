@@ -36,6 +36,9 @@ export const tenantTenantCreated = defineContract({
     status: z.string().min(1).max(24).optional(),
     region: z.string().min(1).max(64).optional(),
     residency: z.string().min(1).max(64).optional(),
+    /** Tenant-type profile switch (optional; absent = the edition default). */
+    profileCode: z.string().min(1).max(32).optional(),
+    profileVersion: z.string().min(1).max(16).optional(),
   }),
 });
 
@@ -53,6 +56,8 @@ export type TenantCreatedEvent = {
   status?: string;
   region?: string;
   residency?: string;
+  profileCode?: string;
+  profileVersion?: string;
 };
 
 /** Directory fields a (possibly v1.0) tenant.tenant.created payload does not carry. `plan` stands in for `edition`. */

@@ -20,11 +20,33 @@
  *
  * Legacy mode (COMPOSITION_ENFORCEMENT!="on") has no mode source, so the mode is
  * always `off`; behaviour there is byte-for-byte the pre-existing fail-open.
+ *
+ * PER-TENANT MODULE MODE (module-sale gap M3, opt-in, default OFF):
+ *   Two module "modes" exist in this file. LEGACY reads the coarse allow-list
+ *   (admin GET /v1/admin/tenants/:id/modules-list): the coarse `hrms` key covers HR,
+ *   Payroll-facing and Recruitment routes together, so they can only be switched on or
+ *   off as a block. COMPOSITION reads the per-module projection (split `hrms-*`
+ *   keys) and has per-tenant off/shadow/enforce. Until now the choice between them was
+ *   ONE process-wide env switch (COMPOSITION_ENFORCEMENT), so a tenant could not be
+ *   trialled on the per-module mode on its own.
+ *
+ *   GATEWAY_TENANT_MODULE_MODE=on (with COMPOSITION_ENFORCEMENT NOT "on") makes the
+ *   choice per tenant, driven by the tenant's composition enforcement mode (the same
+ *   per-tenant value admin-service already stores; default `off`):
+ *     • off     — the LEGACY decision, exactly as today.
+ *     • shadow  — ("watch-only") the LEGACY decision is what is enforced; the
+ *                 per-module (composition, enforce) decision is also computed and, if it
+ *                 would refuse, logged + counted (module_guard_would_deny_total) but the
+ *                 request is ALLOWED. It never blocks anything the legacy mode allows.
+ *     • enforce — the per-module composition decision, fail CLOSED.
+ *   With the env unset (the default) none of this runs: behaviour and admin fetches are
+ *   unchanged. COMPOSITION_ENFORCEMENT=on keeps its process-wide meaning and wins.
  */
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
 import { pino } from "pino";
 import { HRMS_ROUTE_NAMES, resolveHrmsModuleKey } from "./hrms-subroute-map.js";
+import { moduleGuardWouldDenyTotal } from "./response-metrics.js";
 
 const log = pino({ name: "gateway-module-guard" });
 
@@ -142,6 +164,23 @@ const PLATFORM_ROUTES = new Set([
 
 type EnforcementMode = "off" | "shadow" | "enforce";
 
+/** Which admin projection an allow-list comes from: the coarse legacy list or the per-module composition projection. */
+type ModuleSource = "legacy" | "composition";
+
+/** The source the process-wide env switch selects (what every tenant uses unless the per-tenant mode is on). */
+function defaultSource(): ModuleSource {
+  return process.env.COMPOSITION_ENFORCEMENT === "on" ? "composition" : "legacy";
+}
+
+/**
+ * Cache key for a (tenant, source). The default source keeps the bare tenant id (so the existing single-source
+ * behaviour and its tests are untouched); only the per-tenant mode's SECOND source uses a prefixed key. Tenant ids
+ * never contain ":" (canonical UUIDs only reach the loader), so keys cannot collide across tenants.
+ */
+function ck(tenantId: string, source: ModuleSource): string {
+  return source === defaultSource() ? tenantId : `${source}:${tenantId}`;
+}
+
 // In-memory module cache (TTL: 60s) per tenant — now also carries the tenant's
 // effective enforcement mode so the decision and the mode come from one fetch.
 // `outage` is true when the allow-list is unknown because admin-service could not
@@ -236,6 +275,62 @@ export async function checkModuleEnabled(
   // Platform routes bypass the module check in EVERY mode.
   if (PLATFORM_ROUTES.has(routeName)) return true;
 
+  // M3: per-tenant module mode. Opt-in; with the env unset (default) or the process-wide composition switch on,
+  // this is the single-source path below, unchanged.
+  if (process.env.GATEWAY_TENANT_MODULE_MODE === "on" && process.env.COMPOSITION_ENFORCEMENT !== "on") {
+    return checkModuleEnabledPerTenant(req, reply, routeName, pathname);
+  }
+  return decide(req, reply, routeName, pathname, defaultSource());
+}
+
+/**
+ * M3: pick the module mode PER TENANT from the tenant's composition enforcement mode (off | shadow | enforce).
+ * Never relaxes the legacy decision: a request legacy refuses is refused in off AND shadow.
+ */
+async function checkModuleEnabledPerTenant(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  routeName: string,
+  pathname?: string,
+): Promise<boolean> {
+  const tenantId = extractTenantId(req);
+  // No tenant context: the tenant's mode cannot be known, so it is `off` by definition (legacy decision, as today).
+  if (!tenantId) return decide(req, reply, routeName, pathname, "legacy");
+
+  const projection = await getEnabled(tenantId, "composition");
+  const tenantMode: EnforcementMode = projection.mode;
+
+  if (tenantMode === "enforce") return decide(req, reply, routeName, pathname, "composition");
+
+  // off and shadow: the legacy decision is authoritative.
+  const legacyAllowed = await decide(req, reply, routeName, pathname, "legacy");
+  if (!legacyAllowed) return false; // legacy already replied
+  if (tenantMode === "shadow") {
+    // Dry-run the per-module enforce decision against a throwaway reply; record what it would have refused.
+    const probe = new ProbeReply();
+    const wouldAllow = await decide(req, probe as unknown as FastifyReply, routeName, pathname, "composition", "enforce");
+    if (!wouldAllow) recordWouldDeny(req, routeName, `tenant_mode_watch_only:${probe.body?.code ?? "denied"}`);
+  }
+  return true;
+}
+
+/** Minimal reply that records the would-be response instead of sending it (watch-only dry run). */
+class ProbeReply {
+  statusCode = 200;
+  body: { code?: string } | null = null;
+  code(n: number): this { this.statusCode = n; return this; }
+  header(): this { return this; }
+  send(b: { code?: string }): this { this.body = b; return this; }
+}
+
+async function decide(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  routeName: string,
+  pathname: string | undefined,
+  source: ModuleSource,
+  modeOverride?: EnforcementMode,
+): Promise<boolean> {
   // ST-M01-04b: the HRMS surface (`hrms` / `hr` / `careers` registry routes) is
   // proxied under ONE gateway route but served by a service with a core
   // (Workforce Core) surface and many non-core modules. Split the single `hrms`
@@ -251,7 +346,7 @@ export async function checkModuleEnabled(
   // key, so resolving a split key there would 403 every HRMS request; legacy mode
   // therefore always uses the coarse ROUTE_TO_MODULE key.
   const tenantId = extractTenantId(req);
-  const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
+  const useComposition = source === "composition";
   const moduleKey =
     useComposition && HRMS_ROUTE_NAMES.has(routeName) && pathname !== undefined
       ? resolveHrmsModuleKey(pathname)
@@ -270,8 +365,8 @@ export async function checkModuleEnabled(
 
   // Resolve the tenant's effective mode + allow-list. With no tenant we cannot
   // look one up; the mode is therefore `off` by definition (allows below).
-  const resolved = tenantId ? await getEnabled(tenantId) : null;
-  const mode: EnforcementMode = resolved?.mode ?? "off";
+  const resolved = tenantId ? await getEnabled(tenantId, source) : null;
+  const mode: EnforcementMode = modeOverride ?? resolved?.mode ?? "off";
 
   // ── unmapped route ───────────────────────────────────────────────────────
   if (!moduleKey) {
@@ -343,6 +438,7 @@ export async function checkModuleEnabled(
 
 function recordWouldDeny(req: FastifyRequest, routeName: string, reason: string): void {
   shadowWouldDenyCount += 1;
+  moduleGuardWouldDenyTotal.inc({ route: routeName, reason: reason.split(":")[0] ?? reason });
   // Structured log line so the shadow soak is observable before the metric is
   // wired into /metrics. No PII — route name + reason + correlation id only.
   req.log?.warn?.(
@@ -359,8 +455,8 @@ function recordWouldDeny(req: FastifyRequest, routeName: string, reason: string)
  *   { modules: null, mode, configured:false } for an un-onboarded tenant
  *     (configured:false) — same shape, distinguished by `configured`.
  */
-async function getEnabled(tenantId: string): Promise<CacheEntry> {
-  const cached = moduleCache.get(tenantId);
+async function getEnabled(tenantId: string, source: ModuleSource = defaultSource()): Promise<CacheEntry> {
+  const cached = moduleCache.get(ck(tenantId, source));
   if (cached && cached.expires > Date.now()) return cached;
 
   // CLOS3-S5-10: single-flight per (tenant, invalidation generation). Concurrent callers
@@ -368,8 +464,8 @@ async function getEnabled(tenantId: string): Promise<CacheEntry> {
   // invalidateModuleCache() can never re-populate the cache afterwards (its generation
   // is stale). A request that raced an invalidation retries once against the new
   // generation so it does not act on the pre-change allow-list.
-  let entry: CacheEntry = await loadSingleFlight(tenantId);
-  if (entry.stale) entry = await loadSingleFlight(tenantId);
+  let entry: CacheEntry = await loadSingleFlight(tenantId, source);
+  if (entry.stale) entry = await loadSingleFlight(tenantId, source);
   return entry;
 }
 
@@ -377,12 +473,12 @@ async function getEnabled(tenantId: string): Promise<CacheEntry> {
 const moduleGen = new Map<string, number>();
 const inflight = new Map<string, Promise<CacheEntry>>();
 
-function loadSingleFlight(tenantId: string): Promise<CacheEntry> {
+function loadSingleFlight(tenantId: string, source: ModuleSource): Promise<CacheEntry> {
   const gen = moduleGen.get(tenantId) ?? 0;
-  const key = `${tenantId}:${gen}`;
+  const key = `${ck(tenantId, source)}:${gen}`;
   const existing = inflight.get(key);
   if (existing) return existing;
-  const p = loadEntry(tenantId, gen).finally(() => {
+  const p = loadEntry(tenantId, gen, source).finally(() => {
     if (inflight.get(key) === p) inflight.delete(key);
   });
   inflight.set(key, p);
@@ -391,14 +487,15 @@ function loadSingleFlight(tenantId: string): Promise<CacheEntry> {
 
 const TENANT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
+async function loadEntry(tenantId: string, gen: number, source: ModuleSource): Promise<CacheEntry> {
+  const k = ck(tenantId, source);
   const current = (): boolean => (moduleGen.get(tenantId) ?? 0) === gen;
   try {
     // The tenant id is interpolated into the admin-service URL path: only a canonical UUID may reach it, so a
     // crafted x-tenant-id cannot steer the request to another admin-service route (CodeQL js/request-forgery).
     if (!TENANT_UUID_RE.test(tenantId)) throw new Error("invalid tenant id");
     const adminUrl = process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022";
-    const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
+    const useComposition = source === "composition";
     const url = useComposition
       ? `${adminUrl}/v1/admin/composition/internal/${encodeURIComponent(tenantId)}/modules`
       : `${adminUrl}/v1/admin/tenants/${encodeURIComponent(tenantId)}/modules-list`;
@@ -424,7 +521,7 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
 
     const mode: EnforcementMode =
       body.mode === "off" || body.mode === "shadow" || body.mode === "enforce" ? body.mode : "off";
-    if (current()) lastKnownMode.set(tenantId, mode);
+    if (current()) lastKnownMode.set(k, mode);
 
     // Composition mode: a tenant that never onboarded is `configured:false`.
     // modules stay null (unknown) so off/shadow fail open and enforce fails
@@ -432,16 +529,16 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
     if (useComposition && body.configured === false) {
       const entry: CacheEntry = { modules: null, mode, configured: false, expires: Date.now() + CACHE_TTL_MS };
       if (!current()) return { ...entry, stale: true };
-      moduleCache.set(tenantId, entry);
-      lastKnownAllowList.set(tenantId, { modules: null, configured: false, mode, at: Date.now() });
+      moduleCache.set(k, entry);
+      lastKnownAllowList.set(k, { modules: null, configured: false, mode, at: Date.now() });
       return entry;
     }
 
     const modules = new Set<string>(body.data.map((m) => m.name));
     const entry: CacheEntry = { modules, mode, configured: true, expires: Date.now() + CACHE_TTL_MS };
     if (!current()) return { ...entry, stale: true };
-    moduleCache.set(tenantId, entry);
-    lastKnownAllowList.set(tenantId, { modules, configured: true, mode, at: Date.now() });
+    moduleCache.set(k, entry);
+    lastKnownAllowList.set(k, { modules, configured: true, mode, at: Date.now() });
     return entry;
   } catch (err) {
     // Admin outage (including CircuitBreakerOpenError): the module allow-list is
@@ -453,8 +550,8 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
     // lastKnownMode entry) resolves to off — the acceptable availability/safety
     // trade for a genuine cold start, which the grandfather backfill + an
     // explicit mode set are expected to precede in production.
-    const mode = lastKnownMode.get(tenantId) ?? "off";
-    const known = lastKnownAllowList.get(tenantId);
+    const mode = lastKnownMode.get(k) ?? "off";
+    const known = lastKnownAllowList.get(k);
     if (known?.modules && Date.now() - known.at <= STALE_IF_ERROR_MS) {
       // The allow-list itself stays `null` (unknown NOW), so every existing outage contract holds
       // (enforce → 503); checkModuleEnabled consults lastKnownModules ONLY to deny a module this
@@ -481,9 +578,14 @@ async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
  */
 export function invalidateModuleCache(tenantId: string): void {
   moduleGen.set(tenantId, (moduleGen.get(tenantId) ?? 0) + 1);
-  moduleCache.delete(tenantId);
-  lastKnownMode.delete(tenantId);
-  lastKnownAllowList.delete(tenantId);
+  for (const source of ["legacy", "composition"] as const) {
+    // Both keyings (the bare id and the prefixed second-source id), whichever source is the default right now.
+    for (const key of [tenantId, `${source}:${tenantId}`]) {
+      moduleCache.delete(key);
+      lastKnownMode.delete(key);
+      lastKnownAllowList.delete(key);
+    }
+  }
 }
 
 /** Exposed for testing — access to internals */

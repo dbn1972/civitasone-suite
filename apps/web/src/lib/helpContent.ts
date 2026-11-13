@@ -174,7 +174,7 @@ export const HELP_MODULES: HelpModule[] = [
     title: "Payroll",
     summary: "Pay your people correctly — monthly salaries, provident fund and pension, tax, and pay scales.",
     href: "/hr/payroll",
-    moduleKey: "hrms",
+    moduleKey: "payroll",
     major: true,
     tasks: [
       {

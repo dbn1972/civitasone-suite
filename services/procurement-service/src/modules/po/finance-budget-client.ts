@@ -13,6 +13,9 @@
  *                                 consumer re-checks and retries), like the F77
  *                                 workflow pre-check.
  */
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
+
 const FINANCE_URL = process.env.FINANCE_SERVICE_URL ?? "http://localhost:3007";
 const TIMEOUT_MS = 5000;
 
@@ -31,6 +34,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function fetchSanctionBalance(tenantId: string, sanctionRef: string, correlationId?: string): Promise<SanctionBalance> {
   const id = sanctionIdFromRef(sanctionRef);
   if (!UUID_RE.test(id)) return { kind: "not_found" };
+  // M5: do not call a finance module this tenant did not buy (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce).
+  const gate = await licence.check(tenantId, LICENCE_MODULE.finance, "http", "GET finance/sanctions/:id/available");
+  if (!gate.allowed) {
+    return { kind: "unavailable", reason: gate.outcome === "deny" ? "finance module is not licensed for this tenant" : `finance licence could not be verified: ${gate.reason}` };
+  }
   let res: Response;
   try {
     res = await fetch(`${FINANCE_URL}/v1/finance/sanctions/${encodeURIComponent(id)}/available`, {

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../module_gating.dart';
 
 /// App shell with bottom navigation bar + drawer for secondary modules.
 /// Bottom nav: Home, Approvals, Leave, Payslips, Profile
 /// Drawer: Full module list for power users
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
 
@@ -71,18 +74,26 @@ class AppShell extends StatelessWidget {
     ),
   ];
 
-  int _currentIndex(String location) {
-    for (int i = 0; i < _bottomNavItems.length; i++) {
-      if (location.startsWith(_bottomNavItems[i].route)) return i;
+  int _currentIndex(
+      String location, List<({String label, IconData icon, String route})> items) {
+    for (int i = 0; i < items.length; i++) {
+      if (location.startsWith(items[i].route)) return i;
     }
     return 0;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).matchedLocation;
-    final currentIdx = _currentIndex(location);
     final theme = Theme.of(context);
+
+    // M2: menus follow the tenant's module switches (HR, Payroll, Recruitment are
+    // separate). Unknown list (null) shows everything, as before.
+    final enabledModules = ref.watch(enabledModulesProvider).valueOrNull;
+    final bottomItems = _bottomNavItems
+        .where((item) => isRouteAllowed(enabledModules, item.route))
+        .toList();
+    final currentIdx = _currentIndex(location, bottomItems);
 
     return Scaffold(
       // Drawer for power users — full module access
@@ -140,7 +151,8 @@ class AppShell extends StatelessWidget {
                 ),
               ),
             ),
-            for (final item in section.items)
+            for (final item in section.items
+                .where((i) => isRouteAllowed(enabledModules, i.route)))
               ListTile(
                 leading: Icon(item.icon, size: 22),
                 title: Text(item.label),
@@ -187,12 +199,16 @@ class AppShell extends StatelessWidget {
       // Main content
       body: child,
       // Bottom navigation — the core 5 actions
-      bottomNavigationBar: NavigationBar(
+      // (a NavigationBar needs at least two destinations, so it is dropped when
+      // fewer than two stay enabled)
+      bottomNavigationBar: bottomItems.length < 2
+          ? null
+          : NavigationBar(
         selectedIndex: currentIdx,
         onDestinationSelected: (index) {
-          context.go(_bottomNavItems[index].route);
+          context.go(bottomItems[index].route);
         },
-        destinations: _bottomNavItems
+        destinations: bottomItems
             .map((item) => NavigationDestination(
                   icon: Icon(item.icon),
                   label: item.label,

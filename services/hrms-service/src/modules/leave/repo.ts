@@ -161,7 +161,7 @@ export async function findLeaveTypeById(id: string, tenantId: string): Promise<t
 
 export async function listAllocsForEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LeaveAllocRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
-    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)))
+    .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId), eq(hrmsLeaveAllocs.status, "active")))
     .limit(limit));
 }
 
@@ -321,7 +321,7 @@ export async function debitLeaveBalance(tx: Writer, allocId: string, days: numbe
       balanceDays: sql`FLOOR(${effectiveBalanceSql} - ${days}::numeric)::int`,
       updatedAt: new Date(),
     })
-    .where(and(eq(hrmsLeaveAllocs.id, allocId), sql`${effectiveBalanceSql} >= ${days}`))
+    .where(and(eq(hrmsLeaveAllocs.id, allocId), eq(hrmsLeaveAllocs.status, "active"), sql`${effectiveBalanceSql} >= ${days}`))
     .returning({ balanceDays: hrmsLeaveAllocs.balanceDays });
   if (result.length === 0) {
     throw new Error(`INSUFFICIENT_LEAVE_BALANCE: allocation ${allocId} has fewer than ${days} days remaining`);

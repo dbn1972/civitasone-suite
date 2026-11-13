@@ -13,6 +13,9 @@ export const tenants = tenantSchema.table("tenants", {
   name: varchar("name", { length: 200 }).notNull(),
   domain: varchar("domain", { length: 253 }).notNull().unique(),
   edition: varchar("edition", { length: 32 }).notNull(), // govt | psu | private | ngo | section8 | cooperative | small_office
+  // Profile inside the edition (migration 0035; NOT NULL in the DB, filled by a trigger when omitted). Typed optional here so
+  // existing writers need not change.
+  profileCode: varchar("profile_code", { length: 32 }),
   status: varchar("status", { length: 24 }).notNull().default("draft"),
   region: varchar("region", { length: 64 }).notNull(),
   residency: varchar("residency", { length: 64 }).notNull(),

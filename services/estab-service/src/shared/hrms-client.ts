@@ -39,6 +39,8 @@
  * out of scope here; see the PR description.
  */
 import { cache } from "./infra.js";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 // Keep well under typical upstream request timeouts — this must never make a
@@ -104,6 +106,7 @@ export async function getEmployeeDisplayMapByIds(tenantId: string, ids: readonly
 }
 
 async function fetchEmployeeSummaries(tenantId: string, filter?: { ids?: readonly string[]; actorIds?: readonly string[] }): Promise<EmployeeSummary[]> {
+  if (await hrmsBlocked(tenantId, "employee-summaries")) return [];
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
   if (!serviceSecret) return [];
 
@@ -130,6 +133,13 @@ async function fetchEmployeeSummaries(tenantId: string, filter?: { ids?: readonl
   }
 }
 
+/** M5: the reason a call into the HR module must not be made for this tenant, or null. No-op unless the check is on. */
+async function hrmsBlocked(tenantId: string, target: string): Promise<string | null> {
+  const gate = await licence.check(tenantId, LICENCE_MODULE.hrms, "http", target);
+  if (gate.allowed) return null;
+  return gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : `hrms licence could not be verified: ${gate.reason}`;
+}
+
 export class HrmsUnavailableError extends Error {
   readonly code = "HRMS_UNAVAILABLE";
   constructor(message: string) {
@@ -146,6 +156,7 @@ export class HrmsUnavailableError extends Error {
  * this gates attribution, so "can't tell" is never treated as "allow".
  */
 export async function resolveActorEmployeeId(tenantId: string, actorId: string): Promise<string | null> {
+  { const blocked = await hrmsBlocked(tenantId, "actor resolve"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
   if (!serviceSecret) throw new HrmsUnavailableError("internal service secret not configured");
   const url = `${HRMS_URL}/v1/hrms/internal/employees/actor/${encodeURIComponent(actorId)}/resolve`;
@@ -165,6 +176,7 @@ export async function resolveActorEmployeeId(tenantId: string, actorId: string):
 
 /** Point existence check for an hrms employee id (validates a "forward to" target). Fails closed. */
 export async function verifyEmployeeExists(tenantId: string, employeeId: string): Promise<boolean> {
+  { const blocked = await hrmsBlocked(tenantId, "employees/:id/exists"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
   if (!serviceSecret) throw new HrmsUnavailableError("internal service secret not configured");
   let res: Response;

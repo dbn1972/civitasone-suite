@@ -119,3 +119,45 @@ export function effectiveAllowed(configuredKeys: string[], fallback: readonly st
   if (configuredKeys.includes(CONFIGURED_EMPTY_SENTINEL)) return new Set();
   return new Set(configuredKeys);
 }
+
+// ─── Agenda submission notice: per-tenant and per-committee ─────────────────────
+
+/**
+ * Namespace for per-COMMITTEE overrides of a tenant policy knob. The key is
+ * `<policy key>.<committeeId>` (e.g. `agenda.submission_deadline_days.<uuid>`), so a committee override
+ * is an ordinary config entry: same set/deactivate API, audit, versioning and cache as every other key,
+ * and no schema change. Resolution order: committee override → tenant `meeting_policy` → default (7).
+ */
+export const COMMITTEE_POLICY_NS = "meeting_policy_committee";
+
+/** The one knob a committee may override today. */
+export const AGENDA_NOTICE_KEY = "agenda.submission_deadline_days";
+
+/** Bounds for the agenda notice period, in whole days. 0 = proposals accepted up to the meeting start. */
+export const AGENDA_NOTICE_MIN_DAYS = 0;
+export const AGENDA_NOTICE_MAX_DAYS = 365;
+
+const COMMITTEE_AGENDA_KEY_RE = /^agenda\.submission_deadline_days\.([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
+
+/** `agenda.submission_deadline_days.<committeeId>` for a committee. */
+export function committeeAgendaNoticeKey(committeeId: string): string {
+  return `${AGENDA_NOTICE_KEY}.${committeeId.toLowerCase()}`;
+}
+
+/** The committee id a COMMITTEE_POLICY_NS key refers to, or null when the key is not a valid override key. */
+export function committeeIdFromAgendaNoticeKey(configKey: string): string | null {
+  return COMMITTEE_AGENDA_KEY_RE.exec(configKey)?.[1]?.toLowerCase() ?? null;
+}
+
+/**
+ * Coerce a stored/submitted notice value (number, numeric string or `{ value }`) to a whole number of days in
+ * [AGENDA_NOTICE_MIN_DAYS, AGENDA_NOTICE_MAX_DAYS], else `undefined`. Used to VALIDATE writes (a bad value is
+ * refused with 400 rather than silently ignored) and to ignore a malformed stored committee override.
+ */
+export function parseAgendaNoticeDays(v: unknown): number | undefined {
+  let n: unknown = v;
+  if (n && typeof n === "object" && "value" in (n as Record<string, unknown>)) n = (n as Record<string, unknown>).value;
+  if (typeof n === "string" && n.trim() !== "") n = Number(n);
+  if (typeof n !== "number" || !Number.isInteger(n)) return undefined;
+  return n >= AGENDA_NOTICE_MIN_DAYS && n <= AGENDA_NOTICE_MAX_DAYS ? n : undefined;
+}

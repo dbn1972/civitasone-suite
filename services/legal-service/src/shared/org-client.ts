@@ -5,6 +5,8 @@
  * (x-internal + x-tenant-id + x-service-secret). Callers never see the upstream message.
  */
 import { pino } from "pino";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const log = pino({ name: "legal-org-client" });
 
@@ -30,6 +32,9 @@ export function createHttpOrgClient(opts: OrgHttpOptions = {}): OrgClient {
 
   return {
     async listDepartments(ctx) {
+      // M5: do not call an HR module this tenant did not buy (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce).
+      const gate = await licence.check(ctx.tenantId, LICENCE_MODULE.hrms, "http", "hrms departments");
+      if (!gate.allowed) throw new OrgServiceError("unavailable", gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : "hrms licence could not be verified");
       const hit = cache.get(ctx.tenantId);
       if (hit && Date.now() - hit.at < ttlMs) return hit.rows;
       const secret = opts.secret ?? process.env.INTERNAL_SERVICE_SECRET ?? "";
