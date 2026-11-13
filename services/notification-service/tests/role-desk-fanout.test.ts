@@ -195,9 +195,12 @@ describe("desk fan-out through the real send consumer", () => {
       messageId: id, type: "notification.send", tenantId: TENANT, actorId: SYSTEM, correlationId: randomUUID(),
       schemaVersion: "1.0", payload: { templateId: TEMPLATE, recipient: "all_users", recipientId: "all_users", eventType: EVENT },
     });
-    // The consumer has actually run (and hit the outage) before we assert nothing was consumed; the queue
-    // retries with backoff, so wait for the first attempt rather than for the queue to go idle.
+    // The consumer has actually run (and hit the outage) before we assert anything...
     await vi.waitFor(() => { expect(outageLookups).toBeGreaterThan(0); }, { timeout: 25_000 });
+    // ...then let the queue finish ALL of its retry/backoff attempts (drain), plus a short bounded settle, so a
+    // consumer that swallows the outage and writes an audit afterwards would be caught rather than raced.
+    await queue.drain();
+    await new Promise((r) => setTimeout(r, 500));
     expect((await audits()).length).toBe(before);   // nothing consumed: the queue can retry it
   });
 
