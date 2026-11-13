@@ -1,3 +1,5 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 const IDENTITY_URL = process.env.IDENTITY_SERVICE_URL ?? "http://127.0.0.1:3001";
 
@@ -35,7 +37,10 @@ export async function resolvePeople(
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += HRMS_IDS_PER_CALL) chunks.push(ids.slice(i, i + HRMS_IDS_PER_CALL));
   const timeout = Number(process.env.HRMS_LOOKUP_TIMEOUT_MS ?? 2000);
+  // M5: names come from the HR module when the tenant has it; otherwise go straight to the identity directory.
+  const hrmsAllowed = (await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms employee-summaries")).allowed;
   await Promise.all(chunks.map(async (chunk) => {
+    if (!hrmsAllowed) return;
     try {
       const res = await fetchImpl(`${HRMS_URL}/v1/hrms/internal/employee-summaries?actorIds=${chunk.join(",")}`, {
         headers: internalHeaders(tenantId),
