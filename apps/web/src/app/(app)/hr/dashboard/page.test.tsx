@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 
+// M2/M7: the page reads the tenant module list (Payroll switch); unknown list = everything on, as before.
+vi.mock("@/lib/moduleVisibility", () => ({ getEnabledModules: async () => null }));
 vi.mock("../../../_data/loaders", () => ({
   getHRDashboard: vi.fn(),
   getEmployees: vi.fn(),

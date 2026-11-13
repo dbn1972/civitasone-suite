@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
 const getEmployeeByIdMock = vi.fn();
+// M2/M7: the page reads the tenant module list (Payroll switch); unknown list = everything on, as before.
+vi.mock("@/lib/moduleVisibility", () => ({ getEnabledModules: async () => null }));
 vi.mock("../../../../_data/loaders", () => ({ getEmployeeById: (...a: unknown[]) => getEmployeeByIdMock(...a) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 const payGroupMock = vi.fn();
