@@ -175,6 +175,16 @@ export async function applySettingsChange(
   tx: Tx, meta: ActorMeta, p: { changes: Partial<FinanceSettings>; reason: string; requestId?: string; accountingBasisEffectiveFrom?: string | undefined; todayIst?: string },
 ): Promise<void> {
   const before = await loadSettingsTx(tx, meta.tenantId);
+  // Profiles off: a request raised while they were on (an approval can arrive after the flag is turned off) must not apply
+  // a looser budget control or a dated basis switch. DomainError turns the approval into a recorded rejection.
+  if (!tenantProfilesEnabled()) {
+    if (p.changes.budgetControl !== undefined && p.changes.budgetControl !== before.budgetControl) {
+      throw new DomainError("TENANT_PROFILES_DISABLED", "budget control can be changed only when tenant profiles are enabled");
+    }
+    if (p.accountingBasisEffectiveFrom !== undefined && p.changes.accountingBasis !== undefined && p.changes.accountingBasis !== before.accountingBasis) {
+      throw new DomainError("TENANT_PROFILES_DISABLED", "a dated accounting-basis switch can be applied only when tenant profiles are enabled");
+    }
+  }
   let after: FinanceSettings = { ...before, ...p.changes };
   // Owner decision 3 (amended): a basis switch is approved ahead and applied at the FY rollover on the next 1 April, so
   // here it is only stored as pending. Switching back to the current basis cancels a pending switch. Flag-gated.

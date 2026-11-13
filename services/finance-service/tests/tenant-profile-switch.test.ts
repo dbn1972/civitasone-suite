@@ -140,6 +140,25 @@ describe("S2: pending accounting-basis switch, applied at the FY rollover (dispo
     const audit = await scoped(t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${t}::uuid AND payload->>'action' = 'accounting_basis_switch_cancelled'`));
     expect(((audit as any).rows ?? audit).length).toBe(1);
   });
+  it("profiles off at apply time: a relaxed budget control is refused (TENANT_PROFILES_DISABLED) and nothing changes", async () => {
+    const t = randomUUID();
+    delete process.env.TENANT_PROFILES_ENABLED;
+    try {
+      await expect(scoped(t, (tx) => applySettingsChange(tx, meta(t), { changes: { budgetControl: "advisory" }, reason: "Relax the budget control" })))
+        .rejects.toMatchObject({ code: "TENANT_PROFILES_DISABLED" });
+      // the stored value sent unchanged is still fine
+      await scoped(t, (tx) => applySettingsChange(tx, meta(t), { changes: { budgetControl: "mandatory" }, reason: "Keep the budget control" }));
+    } finally { process.env.TENANT_PROFILES_ENABLED = "true"; }
+    expect((await read(t)).budgetControl).toBe("mandatory");
+  });
+  it("profiles off at apply time: a dated basis switch is refused and the basis stays", async () => {
+    const t = randomUUID();
+    delete process.env.TENANT_PROFILES_ENABLED;
+    try {
+      await expect(request(t, "2026-10-15", "2027-04-01")).rejects.toMatchObject({ code: "TENANT_PROFILES_DISABLED" });
+    } finally { process.env.TENANT_PROFILES_ENABLED = "true"; }
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingAccountingBasis: null });
+  });
   it("a stale approval is refused and the basis stays", async () => {
     const t = randomUUID();
     await expect(request(t, "2027-04-01", "2027-04-01")).rejects.toThrow(/BASIS_SWITCH_STALE/);

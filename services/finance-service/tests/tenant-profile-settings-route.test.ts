@@ -86,6 +86,13 @@ describe("PUT /v1/finance/settings budgetControl", () => {
     expect(p.changes).toMatchObject({ fyCreateAsDraft: true });
   });
 
+  it("flag off: a body holding only the unchanged budgetControl is acknowledged without publishing", async () => {
+    delete process.env.TENANT_PROFILES_ENABLED;
+    const { res, sent } = await put({ budgetControl: "mandatory", reason: REASON });
+    expect(res.statusCode).toBe(202);
+    expect(sent).toHaveLength(0);
+  });
+
   it("flag on: relaxing is held as a settings_relax change request for a second admin", async () => {
     process.env.TENANT_PROFILES_ENABLED = "true";
     const { res, sent } = await put({ budgetControl: "advisory", reason: REASON });

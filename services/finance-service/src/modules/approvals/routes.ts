@@ -81,6 +81,8 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(422, "TENANT_PROFILES_DISABLED", "budget control can be changed only when tenant profiles are enabled");
       }
       delete defined.budgetControl;
+      // Nothing else to change: acknowledge without publishing an empty update.
+      if (Object.keys(defined).length === 0 && accountingBasisEffectiveFrom === undefined) return reply.code(202).send({ status: "accepted" });
     }
 
     // Owner decision 3 (2026-11-06): a basis switch takes effect only from 1 April. Gated by TENANT_PROFILES_ENABLED so
