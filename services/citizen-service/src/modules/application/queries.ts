@@ -2,6 +2,8 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as portalRepo from "../portal/repo.js";
 import type { ApplicationRow } from "./schema.js";
+import { toDocumentView } from "./docs-storage.js";
+import { confirmUploads } from "./docs-confirm.js";
 
 /** Cache JSON-roundtrips timestamp/date columns to ISO strings; coerce safely. */
 function toIso(v: Date | string): string {
@@ -24,7 +26,7 @@ function normalizeApplicationDates<T extends ApplicationRow>(a: T): T {
   };
 }
 
-export async function getApplication(tenantId: string, id: string): Promise<(ApplicationRow & { history: Awaited<ReturnType<typeof repo.listStatusHistory>>; documents: Awaited<ReturnType<typeof repo.listDocuments>> }) | null> {
+export async function getApplication(tenantId: string, id: string): Promise<(ApplicationRow & { history: Awaited<ReturnType<typeof repo.listStatusHistory>>; documents: ReturnType<typeof toDocumentView>[] }) | null> {
   const app = await cache.getOrLoad<ApplicationRow | null>(
     cache.makeKey(tenantId, "application", id),
     () => repo.findApplicationById(id),
@@ -34,7 +36,8 @@ export async function getApplication(tenantId: string, id: string): Promise<(App
     repo.listStatusHistory(id),
     repo.listDocuments(id),
   ]);
-  return { ...normalizeApplicationDates(app), history, documents };
+  // The storage key / any URL never leaves the service: legacy rows are `available: false`.
+  return { ...normalizeApplicationDates(app), history, documents: (await confirmUploads(tenantId, documents)).map(toDocumentView) };
 }
 
 export async function listApplications(tenantId: string, citizenId: string): Promise<ApplicationRow[]> {
