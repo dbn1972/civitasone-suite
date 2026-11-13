@@ -43,6 +43,7 @@ export async function reindexTenant(
       tags: (r.tags as string[] | null) ?? [],
       category: r.category == null ? undefined : String(r.category),
       accessLevel: r.accessLevel == null ? "restricted" : String(r.accessLevel),
+      kind: "knowledge",
     }));
     await engine.bulkIndex(docs);
     total += docs.length;

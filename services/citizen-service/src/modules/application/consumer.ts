@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -11,7 +11,11 @@ import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
 import { enqueuePackNotifications, resolveCitizenAddress } from "../catalogue/notification-bindings.js";
-import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
+import { pino } from "pino";
+import { keyBelongsToApplication } from "./docs-storage.js";
+import { assertStatusTransition, assertRequiredDocuments, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
+
+const log = pino({ name: "citizen-application-consumer" });
 
 export function registerApplicationConsumers(rawQueue: Queue): void {
   // #146 NOBYPASSRLS: every handler must run inside the message's tenant
@@ -128,8 +132,24 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationDocUpload, async (msg) => {
-    const p = msg.payload as { id: string; applicationId: string; tenantId: string; docType: string; ownerCitizenId?: string | null };
-    const docUrl = buildPresignedUploadUrl(p.tenantId, p.applicationId, p.docType);
+    const p = msg.payload as {
+      id: string; applicationId: string; tenantId: string; docType: string; ownerCitizenId?: string | null;
+      storageKey?: string; contentType?: string; sizeBytes?: number; filename?: string;
+    };
+    // The envelope tenant (set from the verified request context) is authoritative; a payload that
+    // names a different tenant is refused, and every write below uses the envelope tenant.
+    if (p.tenantId !== msg.tenantId) {
+      throw new NonRetryableError(`application document payload tenant '${p.tenantId}' does not match message tenant '${msg.tenantId}'`);
+    }
+    // A command queued before migration 0046 carries no object key (its presigned URL was fabricated).
+    // There is nothing real to record; never store a made-up link.
+    if (!p.storageKey || !keyBelongsToApplication(p.storageKey, msg.tenantId, p.applicationId)) {
+      log.warn(
+        { tenantId: msg.tenantId, correlationId: msg.correlationId, applicationId: p.applicationId, docType: p.docType },
+        "application document command has no valid object key for this application - not recorded (pre-0046 command?)",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P0-1: re-assert that the target application belongs to the verified owner.
@@ -137,8 +157,9 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!app) return;
       if (p.ownerCitizenId != null && app.citizenId !== p.ownerCitizenId) return;
       await repo.insertDocument(tx, {
-        id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
-        docType: p.docType, docUrl,
+        id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId,
+        docType: p.docType, storageKey: p.storageKey!,
+        contentType: p.contentType ?? null, sizeBytes: p.sizeBytes ?? null, originalFilename: p.filename ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "doc_upload", "citizen_application", p.applicationId);

@@ -28,7 +28,7 @@ import { deductionHeadFallbackTx } from "../integrations/payroll-deductions.js";
 import { payrollAccrualLines, payrollAccrualJournalCommand, payrollAccrualVoucherNo, payrollSettlementEntries, payrollSettlementVoucherNo, postingDatesOnDisbursal, type PayrollRunApprovedPayload, type PayrollRunDisbursedPayload } from "../integrations/payroll-accrual.js";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
-import { needsBudgetProvision, noBudgetProvisionError } from "../budget/provision.js";
+import { needsBudgetProvision, noBudgetProvisionError, provisionAction, loadBudgetControlTx } from "../budget/provision.js";
 import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -296,7 +296,10 @@ async function postJournal(
   // (NO_BUDGET_PROVISION) -- it used to be treated as "not budget-controlled" and posted. A debit to a non-expenditure
   // head (asset, liability, receipts side) with no budget row is still not budget-controlled; see budget/provision.ts
   // for the non-cash journal types that never draw on a provision.
-  {
+  // Tenant-type profile switch: mandatory (every existing tenant) is the behaviour described above; advisory posts with an
+  // audit row instead of refusing; off skips the whole check, utilisation tracking included.
+  const budgetControl = await loadBudgetControlTx(tx, journal.tenantId);
+  if (budgetControl !== "off") {
     const fy = fyFromDate(journal.postingDate);
     const perHeadDebit = new Map<string, bigint>();
     for (const l of journal.lines) {
@@ -314,7 +317,18 @@ async function postJournal(
       );
       if (!budget) {
         const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
-        if (head && needsBudgetProvision(head, journal)) throw noBudgetProvisionError(head.code, fy);
+        if (head && needsBudgetProvision(head, journal)) {
+          if (provisionAction(budgetControl, true) === "refuse") throw noBudgetProvisionError(head.code, fy);
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "finance", action: "post_journal_budget_advisory", resourceType: "journal",
+              resourceId: journal.id, outcome: "success",
+              headId, headCode: head.code, fy, requestedMinor: requested.toString(), reason: "NO_PROVISION",
+            },
+          });
+        }
         continue; // a non-expenditure head is not budget-controlled
       }
       const available = availableBalance({ reMinor: budget.reMinor, utilisedMinor: budget.utilisedMinor });
@@ -335,6 +349,19 @@ async function postJournal(
             },
           });
         }
+        await budgetRepo.incrementBudgetUtilisedForced(
+          tx as Parameters<typeof budgetRepo.incrementBudgetUtilisedForced>[0], budget.id, requested, msg.actorId,
+        );
+      } else if (budgetControl === "advisory" && requested > available) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "finance", action: "post_journal_budget_advisory", resourceType: "budget",
+            resourceId: budget.id, outcome: "success",
+            headId, fy, requestedMinor: requested.toString(), availableMinor: available.toString(), reason: "OVERDRAW",
+          },
+        });
         await budgetRepo.incrementBudgetUtilisedForced(
           tx as Parameters<typeof budgetRepo.incrementBudgetUtilisedForced>[0], budget.id, requested, msg.actorId,
         );

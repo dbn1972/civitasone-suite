@@ -27,8 +27,9 @@ import {
   requiredPayOption, type DeputationMoneyTerms,
 } from "./domain.js";
 import { buildEmployeePayFeed } from "./feed.js";
+import { payProfileBulkRoutes } from "./bulk.js";
 
-const WRITE_ROLES = ["hr_admin", "payroll_admin", "super_admin"];
+export const WRITE_ROLES = ["hr_admin", "payroll_admin", "super_admin"];
 const READ_ROLES = ["hr_admin", "hr_officer", "payroll_admin", "payroll_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const profileParam = z.object({ profileId: z.string().uuid() });
@@ -84,7 +85,7 @@ async function mustEmployee(tenantId: string, id: string) {
 }
 
 /** Latest locked (approved/disbursed) payroll month; fail closed if payroll is unreachable. */
-async function lockedThrough(tenantId: string): Promise<string | null> {
+export async function loadLockedThrough(tenantId: string): Promise<string | null> {
   try {
     return await fetchPayrollLockedThrough(tenantId);
   } catch (err) {
@@ -99,11 +100,13 @@ async function lockedThrough(tenantId: string): Promise<string | null> {
  * Full validation of a (requested or pending) assignment against current
  * state. Shared by request and approve so an approval re-checks everything.
  */
-async function assertAssignable(tenantId: string, input: {
+export async function assertAssignable(tenantId: string, input: {
   employeeId: string; payProfile: (typeof PAY_PROFILES)[number]; effectiveFrom: string;
   deputationId: string | null; consolidatedMonthlyMinor: bigint | null;
   /** Request: overrides merged over the deputation's terms. Approve: the stored approved copy. */
   termsOverride?: Partial<DeputationMoneyTerms>; termsSnapshot?: DeputationMoneyTerms | null;
+  /** G6 bulk: the locked period read once by the caller (skips the per-row payroll call). Undefined = read it. */
+  lockedThroughOverride?: string | null;
 }): Promise<DeputationMoneyTerms | null> {
   const emp = await mustEmployee(tenantId, input.employeeId);
   const engagement = (await loadTypeCategoryResolver(tenantId))(emp.employeeType);
@@ -124,10 +127,36 @@ async function assertAssignable(tenantId: string, input: {
     deputation: live && snapshot ? applyMoneyTerms(live, snapshot) : live,
     deputationIdGiven: input.deputationId != null,
     consolidatedMonthlyMinor: input.consolidatedMonthlyMinor,
-    lockedThrough: await lockedThrough(tenantId),
+    lockedThrough: input.lockedThroughOverride !== undefined ? input.lockedThroughOverride : await loadLockedThrough(tenantId),
   });
   if (error) throw new HttpError(error === "PERIOD_LOCKED" ? 409 : 422, error, `pay profile not assignable: ${error}`);
   return snapshot;
+}
+
+/**
+ * Everything a decision (approve / reject) must satisfy before it is queued: the request exists and is still pending,
+ * the decider is not its requester (maker-checker), and an approval is still assignable and orders after the
+ * employee's active profile. Shared by the single routes and the G6 bulk decision. Throws HttpError.
+ */
+export async function assertDecidable(ctx: { tenantId: string; actorId: string }, profileId: string, decision: "approve" | "reject", lockedThroughOverride?: string | null): Promise<void> {
+  const row = await repo.findById(ctx.tenantId, profileId);
+  if (!row) throw new HttpError(404, "NOT_FOUND", "pay profile request not found");
+  if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `pay profile request is already ${row.status}`);
+  if (row.requestedBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a pay profile change must be decided by someone other than its requester");
+  }
+  if (decision === "approve") {
+    if (!isPayProfile(row.payProfile)) throw new HttpError(422, "UNKNOWN_PROFILE", row.payProfile);
+    await assertAssignable(ctx.tenantId, {
+      employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
+      deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
+      termsSnapshot: row.deputationTerms ?? null,
+      ...(lockedThroughOverride !== undefined ? { lockedThroughOverride } : {}),
+    });
+    const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
+    const plan = planApproval(row, active);
+    if ("error" in plan) throw new HttpError(409, plan.error, "a new pay profile must start after the employee's current one");
+  }
 }
 
 export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
@@ -189,23 +218,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       requireRole(ctx, WRITE_ROLES);
       const { profileId } = profileParam.parse(req.params);
       const body = decisionBody.parse(req.body ?? {});
-      const row = await repo.findById(ctx.tenantId, profileId);
-      if (!row) throw new HttpError(404, "NOT_FOUND", "pay profile request not found");
-      if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `pay profile request is already ${row.status}`);
-      if (row.requestedBy === ctx.actorId) {
-        throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a pay profile change must be decided by someone other than its requester");
-      }
-      if (decision === "approve") {
-        if (!isPayProfile(row.payProfile)) throw new HttpError(422, "UNKNOWN_PROFILE", row.payProfile);
-        await assertAssignable(ctx.tenantId, {
-          employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
-          deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
-          termsSnapshot: row.deputationTerms ?? null,
-        });
-        const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
-        const plan = planApproval(row, active);
-        if ("error" in plan) throw new HttpError(409, plan.error, "a new pay profile must start after the employee's current one");
-      }
+      await assertDecidable(ctx, profileId, decision);
       const accepted = await commands.decidePayProfile(ctx, profileId, decision, body.note ?? null);
       return reply.code(202).send(accepted);
     });
@@ -243,6 +256,8 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       .filter((x): x is NonNullable<typeof x> => x !== null);
     return reply.send({ month, data });
   });
+
+  await payProfileBulkRoutes(app);
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;

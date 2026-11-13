@@ -15,7 +15,9 @@ import * as commands from "./commands.js";
 import { submitChangeRequest } from "./commands.js";
 import { scopedRead } from "../../shared/db.js";
 import type { FinanceSettings } from "./domain.js";
-import { alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl } from "./domain.js";
+import { todayIST } from "../../shared/ist-date.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
+import { resolveBasisEffectiveFrom, BUDGET_CONTROLS, alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl } from "./domain.js";
 import type { ChangeRequestRow } from "./schema.js";
 import { assertPeriodFyOpenHttp } from "../period-close/routes.js";
 
@@ -40,6 +42,10 @@ const settingsBody = z.object({
   debtInterestExpenseHeadId: z.string().uuid().nullable().optional(),
   debtBankHeadId: z.string().uuid().nullable().optional(),
   accountingBasis: z.enum(["cash", "accrual"]).optional(),
+  // Tenant-type profile switch. coaTemplate and profileCode are deliberately NOT settable here.
+  budgetControl: z.enum(BUDGET_CONTROLS).optional(),
+  // Owner decision 3: optional; when profiles are enabled it must be the next 1 April (default), applied at the FY rollover.
+  accountingBasisEffectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
 }).refine((b) => Object.entries(b).some(([k, v]) => k !== "reason" && v !== undefined), { message: "no setting supplied" });
 
@@ -63,10 +69,33 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, DECIDER_ROLES);
     const body = settingsBody.parse(req.body);
-    const { reason, ...changes } = body;
+    const { reason, accountingBasisEffectiveFrom, ...changes } = body;
     // exactOptionalPropertyTypes: drop undefined keys
     const defined = Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)) as Partial<FinanceSettings>;
     const current = await repo.readSettings(ctx.tenantId);
+
+    // Budget control is part of the tenant-profile switch: with TENANT_PROFILES_ENABLED off it cannot be changed (it stays
+    // mandatory for every tenant, today's behaviour). The value it already has is a harmless no-op.
+    if (!tenantProfilesEnabled() && defined.budgetControl !== undefined) {
+      if (defined.budgetControl !== current.budgetControl) {
+        throw new HttpError(422, "TENANT_PROFILES_DISABLED", "budget control can be changed only when tenant profiles are enabled");
+      }
+      delete defined.budgetControl;
+      // Nothing else to change: acknowledge without publishing an empty update.
+      if (Object.keys(defined).length === 0 && accountingBasisEffectiveFrom === undefined) return reply.code(202).send({ status: "accepted" });
+    }
+
+    // Owner decision 3 (2026-11-06): a basis switch takes effect only from 1 April. Gated by TENANT_PROFILES_ENABLED so
+    // the UAT server behaves as before until the owner turns profiles on.
+    let resolvedBasisFrom: string | undefined;
+    const basisSwitch = defined.accountingBasis !== undefined && defined.accountingBasis !== current.accountingBasis;
+    if (basisSwitch && tenantProfilesEnabled()) {
+      try { resolvedBasisFrom = resolveBasisEffectiveFrom(accountingBasisEffectiveFrom, todayIST()); } catch (err) {
+        if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+        throw err;
+      }
+    }
+    const requestExtras = basisSwitch && tenantProfilesEnabled() ? { accountingBasisEffectiveFrom: resolvedBasisFrom } : {};
 
     // GL heads: the merged set must be all-or-none and valid (exist, right type, distinct).
     const merged = { ...current, ...defined };
@@ -85,13 +114,13 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
     // Switching a control OFF is itself held for a DIFFERENT admin (turning one ON stays direct), so a single
     // admin cannot disable the second-approver rule and then act alone.
     if (isRelaxingControl(current, defined)) {
-      return reply.code(202).send(await submitChangeRequest(ctx, "settings_relax", "settings", { changes: defined }, reason));
+      return reply.code(202).send(await submitChangeRequest(ctx, "settings_relax", "settings", { changes: defined, ...requestExtras }, reason));
     }
     const id = randomUUID();
     await queue.publish(COMMANDS.financeSettingsUpdate, {
       messageId: id, type: COMMANDS.financeSettingsUpdate,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, changes: defined, reason },
+      payload: { id, tenantId: ctx.tenantId, changes: defined, reason, ...requestExtras },
     });
     return reply.code(202).send({ id, status: "accepted" });
   });

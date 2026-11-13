@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { NAMESPACE_PATTERN, KEY_PATTERN } from "./domain.js";
+import {
+  NAMESPACE_PATTERN, KEY_PATTERN, COMMITTEE_POLICY_NS, AGENDA_NOTICE_KEY, AGENDA_NOTICE_MIN_DAYS, AGENDA_NOTICE_MAX_DAYS,
+  committeeIdFromAgendaNoticeKey, parseAgendaNoticeDays,
+} from "./domain.js";
 
 export const configIdParam = z.object({ id: z.string().uuid() });
 // UAT W8-B: namespace / key are validated HERE (zod -> 400). They used to be checked only by the
@@ -26,6 +29,16 @@ export const setConfigBody = z.object({
   effectiveFrom:   z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveFrom must be YYYY-MM-DD").optional(),
   effectiveTo:     z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveTo must be YYYY-MM-DD").optional(),
   expectedVersion: z.coerce.number().int().min(1).optional(),
+}).superRefine((b, ctx) => {
+  // The agenda notice period is validated on write: a bad value used to be silently ignored at read time.
+  const tenantLevel = b.namespace === "meeting_policy" && b.configKey === AGENDA_NOTICE_KEY;
+  const committeeLevel = b.namespace === COMMITTEE_POLICY_NS;
+  if (committeeLevel && committeeIdFromAgendaNoticeKey(b.configKey) === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["configKey"], message: `${COMMITTEE_POLICY_NS} keys must be "${AGENDA_NOTICE_KEY}.<committeeId>"` });
+  }
+  if ((tenantLevel || committeeLevel) && parseAgendaNoticeDays(b.value) === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: `value must be a whole number of days between ${AGENDA_NOTICE_MIN_DAYS} and ${AGENDA_NOTICE_MAX_DAYS}` });
+  }
 });
 export type SetConfigBody = z.infer<typeof setConfigBody>;
 

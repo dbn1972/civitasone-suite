@@ -224,7 +224,7 @@ export async function listLeaveRequestDetailsByIds(tenantId: string, ids: string
 export async function listLeaveAllocations(tenantId: string, limit: number, employeeIds?: string[]) {
   if (employeeIds && employeeIds.length === 0) return [];
   const { scopedRead } = await import("../../shared/db.js");
-  const conditions = [eq(hrmsLeaveAllocs.tenantId, tenantId)];
+  const conditions = [eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.status, "active")];
   if (employeeIds) conditions.push(inArray(hrmsLeaveAllocs.employeeId, employeeIds));
   const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(and(...conditions)).limit(limit));
   return rows.map(r => ({ id: r.id, employeeId: r.employeeId, leaveTypeId: r.leaveTypeId, fy: r.fy, totalDays: r.totalDays, balanceDays: effectiveBalanceDays(r) }));

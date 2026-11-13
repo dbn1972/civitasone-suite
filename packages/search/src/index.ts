@@ -16,7 +16,7 @@
  */
 
 export type { SearchEngine, SearchEngineConfig, SearchDocument, SearchQuery, SearchResponse, SearchResult } from "./types.js";
-export { MeilisearchEngine, type MeilisearchOptions } from "./meilisearch.js";
+export { MeilisearchEngine, SearchFilterError, type MeilisearchOptions } from "./meilisearch.js";
 export { OpenSearchEngine, type OpenSearchOptions } from "./opensearch.js";
 export {
   publishSearchIndex,

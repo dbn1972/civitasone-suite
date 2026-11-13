@@ -33,6 +33,7 @@
  * must be answered to the caller, and one transaction holds the row locks, the
  * writes and the audit outbox event.
  */
+import { maskValue } from "../../shared/pii-mask.js";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import type { RequestContext } from "@civitasone/types";
@@ -270,10 +271,10 @@ export async function approvePensionSchemeChange(ctx: RequestContext, changeId: 
     }
     const retro = retroPeriods(c.effectiveFrom, today);
     await audit(tx, ctx, "pension_scheme_change", c.employeeId, {
-      oldValue: { pensionScheme: c.fromScheme, ...(empPatch.uanNumber ? { uanNumber: emp.uanNumber ?? null } : {}),
+      oldValue: { pensionScheme: c.fromScheme, ...(empPatch.uanNumber ? { uanNumber: emp.uanNumber ? maskValue(emp.uanNumber) ?? null : null } : {}),
         ...(c.kind === "membership" || c.epfFirstJoinedOn != null || c.epfVoluntaryJointOption != null || c.epsMember != null
           ? { epfFirstJoinedOn: emp.epfFirstJoinedOn ?? null, epfVoluntaryJointOption: emp.epfVoluntaryJointOption, epsMember: emp.epsMember ?? null } : {}) },
-      newValue: { pensionScheme: c.toScheme, effectiveFrom: c.effectiveFrom, appliedNow: applyNow, kind: c.kind, ...(empPatch.uanNumber ? { uanNumber: empPatch.uanNumber } : {}),
+      newValue: { pensionScheme: c.toScheme, effectiveFrom: c.effectiveFrom, appliedNow: applyNow, kind: c.kind, ...(empPatch.uanNumber ? { uanNumber: maskValue(empPatch.uanNumber) ?? null } : {}),
         ...(c.epfFirstJoinedOn != null ? { epfFirstJoinedOn: c.epfFirstJoinedOn } : {}),
         ...(c.epfVoluntaryJointOption != null ? { epfVoluntaryJointOption: c.epfVoluntaryJointOption } : {}),
         ...(c.epsMember != null ? { epsMember: c.epsMember } : {}),

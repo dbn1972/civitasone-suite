@@ -37,7 +37,7 @@ const BALANCE_ROLES = [
   "stock_manager", "stock_admin", "procurement_officer", "super_admin",
 ];
 /** Readers include the stock-service roles, because the stock register uses the picker too. */
-const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer", "stock_manager", "stock_admin", "procurement_officer"];
+const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer", "stock_manager", "stock_admin", "procurement_officer", "tenant_admin"];
 
 function view(l: ItemStockLinkRow) {
   return {
@@ -230,11 +230,13 @@ export async function itemLinkRoutes(app: FastifyInstance): Promise<void> {
     const invHits = await repo.searchInventoryItems(ctx.tenantId, q.q, q.limit);
     let stockHits: StockItem[] = [];
     let stockAvailable = true;
-    try {
-      stockHits = (await searchStockItems(ctx.tenantId, q.q, q.limit)).map(toStock);
-    } catch (err) {
-      if (!(err instanceof StockUnavailableError)) throw err;
-      stockAvailable = false;
+    if (q.masters !== "inventory") {
+      try {
+        stockHits = (await searchStockItems(ctx.tenantId, q.q, q.limit)).map(toStock);
+      } catch (err) {
+        if (!(err instanceof StockUnavailableError)) throw err;
+        stockAvailable = false;
+      }
     }
 
     const [linksOfInv, linksOfStock] = await Promise.all([
@@ -249,6 +251,7 @@ export async function itemLinkRoutes(app: FastifyInstance): Promise<void> {
 
     let entries = mergePicker(invHits, stockHits, links, invById);
     if (q.masters === "stock") entries = entries.filter((e) => e.stockItemId !== null);
+    if (q.masters === "inventory") entries = entries.filter((e) => e.inventoryItemId !== null);
     return reply.send({ data: entries.slice(0, q.limit), stockAvailable });
   });
 

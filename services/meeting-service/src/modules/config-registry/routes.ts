@@ -15,6 +15,10 @@ import {
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import * as presets from "./presets.js";
+import { COMMITTEE_POLICY_NS, AGENDA_NOTICE_KEY, committeeAgendaNoticeKey, committeeIdFromAgendaNoticeKey } from "./domain.js";
+import { resolveAgendaNotice } from "./policy.js";
+import { getCommitteeById } from "../committee/repo.js";
+import { z } from "zod";
 
 // Config is administrative metadata: only tenant/super admins may write it.
 const CONFIG_WRITE_ROLES = ["tenant_admin", "super_admin"];
@@ -27,6 +31,13 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_WRITE_ROLES);
     const body = setConfigBody.parse(req.body);
+    // A per-committee override must name a committee of this tenant (404 before anything is published).
+    if (body.namespace === COMMITTEE_POLICY_NS) {
+      const committeeId = committeeIdFromAgendaNoticeKey(body.configKey);
+      if (!committeeId || !(await getCommitteeById(ctx.tenantId, committeeId))) {
+        throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee not found");
+      }
+    }
     const result = await commands.setConfig(ctx, body);
     return reply.code(202).send(result);
   });
@@ -50,6 +61,21 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
     const item = await repo.getConfig(ctx.tenantId, namespace, key);
     if (!item) throw new HttpError(404, "CONFIG_NOT_FOUND", `no config ${namespace}/${key}`);
     return reply.send({ item, source: "db" });
+  });
+
+  // The EFFECTIVE agenda submission notice for a committee, and where it comes from
+  // (committee override → tenant setting → default 7 days).
+  app.get("/v1/meetings/committees/:committeeId/agenda-notice", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONFIG_READ_ROLES);
+    const { committeeId } = z.object({ committeeId: z.string().uuid() }).parse(req.params);
+    if (!(await getCommitteeById(ctx.tenantId, committeeId))) throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee not found");
+    const [committeeItem, tenantItem] = await Promise.all([
+      repo.getConfig(ctx.tenantId, COMMITTEE_POLICY_NS, committeeAgendaNoticeKey(committeeId)),
+      repo.getConfig(ctx.tenantId, "meeting_policy", AGENDA_NOTICE_KEY),
+    ]);
+    const notice = resolveAgendaNotice(committeeItem?.active ? committeeItem.value : undefined, tenantItem?.active ? tenantItem.value : undefined);
+    return reply.send({ data: { committeeId, submissionDeadlineDays: notice.days, source: notice.source } });
   });
 
   // Apply a VERTICAL PRESET (onboarding): seed the tenant's policy for a vertical

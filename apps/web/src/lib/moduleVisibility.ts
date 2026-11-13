@@ -9,6 +9,7 @@
  * about hiding when we simply don't know.
  */
 import { getNavModules } from "@/app/_data/loaders";
+import { moduleSwitches, type ModuleSwitches } from "./moduleMatch";
 
 /**
  * Returns the set of enabled module keys for the current tenant, or null when it
@@ -24,4 +25,22 @@ export async function getEnabledModules(): Promise<string[] | null> {
   return names.length > 0 ? names : null;
 }
 
-export { PLATFORM_MODULE_KEYS, isModuleEnabled } from "./moduleMatch";
+/**
+ * The three HR-area switches (HR, Payroll, Recruitment) for the current tenant.
+ * Unknown list (load error / un-onboarded tenant) -> all three on, so with
+ * Payroll on or the list unknown behaviour is unchanged. Server-side only.
+ */
+export async function getModuleSwitches(roles?: readonly string[]): Promise<ModuleSwitches> {
+  return moduleSwitches(await getEnabledModules(), roles);
+}
+
+export {
+  PLATFORM_MODULE_KEYS,
+  isModuleEnabled,
+  moduleSwitches,
+  hrAreaSwitchForHref,
+  HR_SWITCH,
+  PAYROLL_SWITCH,
+  RECRUITMENT_SWITCH,
+} from "./moduleMatch";
+export type { ModuleSwitches } from "./moduleMatch";
