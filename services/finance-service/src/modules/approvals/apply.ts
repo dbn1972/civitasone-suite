@@ -203,7 +203,19 @@ export async function applySettingsChange(
  */
 export async function applyPendingBasisSwitchTx(tx: Tx, meta: ActorMeta, rolloverDate: string): Promise<boolean> {
   const before = await loadSettingsTx(tx, meta.tenantId);
-  if (!before.pendingAccountingBasis || !before.pendingBasisEffectiveFrom || before.pendingBasisEffectiveFrom > rolloverDate) return false;
+  if (!before.pendingAccountingBasis || !before.pendingBasisEffectiveFrom) return false;
+  // Profiles switched off: a switch approved while they were on must not apply. Drop it (audited) so the books stay as they are.
+  if (!tenantProfilesEnabled()) {
+    await tx.update(financeSettings).set({
+      pendingAccountingBasis: null, pendingBasisEffectiveFrom: null,
+      updatedBy: meta.actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1`,
+    }).where(eq(financeSettings.tenantId, meta.tenantId));
+    await auditEvent(tx, meta, "accounting_basis_switch_cancelled", "finance_settings", meta.tenantId, {
+      pending: before.pendingAccountingBasis, effectiveFrom: before.pendingBasisEffectiveFrom, reason: "tenant profiles disabled", atRollover: rolloverDate,
+    });
+    return false;
+  }
+  if (before.pendingBasisEffectiveFrom > rolloverDate) return false;
   await tx.update(financeSettings).set({
     accountingBasis: before.pendingAccountingBasis, pendingAccountingBasis: null, pendingBasisEffectiveFrom: null,
     updatedBy: meta.actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1`,

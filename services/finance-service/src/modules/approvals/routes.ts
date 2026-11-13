@@ -74,6 +74,15 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
     const defined = Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)) as Partial<FinanceSettings>;
     const current = await repo.readSettings(ctx.tenantId);
 
+    // Budget control is part of the tenant-profile switch: with TENANT_PROFILES_ENABLED off it cannot be changed (it stays
+    // mandatory for every tenant, today's behaviour). The value it already has is a harmless no-op.
+    if (!tenantProfilesEnabled() && defined.budgetControl !== undefined) {
+      if (defined.budgetControl !== current.budgetControl) {
+        throw new HttpError(422, "TENANT_PROFILES_DISABLED", "budget control can be changed only when tenant profiles are enabled");
+      }
+      delete defined.budgetControl;
+    }
+
     // Owner decision 3 (2026-11-06): a basis switch takes effect only from 1 April. Gated by TENANT_PROFILES_ENABLED so
     // the UAT server behaves as before until the owner turns profiles on.
     let resolvedBasisFrom: string | undefined;

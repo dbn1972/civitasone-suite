@@ -128,6 +128,18 @@ describe("S2: pending accounting-basis switch, applied at the FY rollover (dispo
     await expect(request(t, "2026-10-15", "2027-01-01")).rejects.toThrow(/BASIS_SWITCH_MID_YEAR/);
     expect((await read(t)).pendingAccountingBasis).toBeNull();
   });
+  it("profiles switched off: a pending switch is cancelled (audited) at the next rollover and the basis stays", async () => {
+    const t = randomUUID();
+    await request(t, "2026-10-15", "2027-04-01");
+    expect((await read(t)).pendingAccountingBasis).toBe("accrual");
+    delete process.env.TENANT_PROFILES_ENABLED;
+    try {
+      expect(await rollover(t, "2027-04-01")).toBe(false);
+    } finally { process.env.TENANT_PROFILES_ENABLED = "true"; }
+    expect(await read(t)).toMatchObject({ accountingBasis: "cash", pendingAccountingBasis: null, pendingBasisEffectiveFrom: null });
+    const audit = await scoped(t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${t}::uuid AND payload->>'action' = 'accounting_basis_switch_cancelled'`));
+    expect(((audit as any).rows ?? audit).length).toBe(1);
+  });
   it("a stale approval is refused and the basis stays", async () => {
     const t = randomUUID();
     await expect(request(t, "2027-04-01", "2027-04-01")).rejects.toThrow(/BASIS_SWITCH_STALE/);

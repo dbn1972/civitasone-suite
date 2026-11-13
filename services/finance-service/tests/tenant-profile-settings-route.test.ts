@@ -64,3 +64,37 @@ describe("PUT /v1/finance/settings accounting-basis switch", () => {
     expect(String(sent[0]!.env.payload.payload.accountingBasisEffectiveFrom)).toMatch(/^\d{4}-04-01$/);
   });
 });
+
+describe("PUT /v1/finance/settings budgetControl", () => {
+  it("flag off: a change is refused 422 TENANT_PROFILES_DISABLED and nothing is published", async () => {
+    delete process.env.TENANT_PROFILES_ENABLED;
+    for (const budgetControl of ["advisory", "off"]) {
+      const { res, sent } = await put({ budgetControl, reason: REASON });
+      expect(res.statusCode).toBe(422);
+      expect(JSON.stringify(res.json())).toContain("TENANT_PROFILES_DISABLED");
+      expect(sent).toHaveLength(0);
+    }
+  });
+
+  it("flag off: the stored value sent unchanged is a no-op (accepted, budgetControl not applied)", async () => {
+    delete process.env.TENANT_PROFILES_ENABLED;
+    const { res, sent } = await put({ budgetControl: "mandatory", fyCreateAsDraft: true, reason: REASON });
+    expect(res.statusCode).toBe(202);
+    expect(sent).toHaveLength(1);
+    const p = sent[0]!.env.payload as unknown as { changes: Record<string, unknown> };
+    expect(p.changes).not.toHaveProperty("budgetControl");
+    expect(p.changes).toMatchObject({ fyCreateAsDraft: true });
+  });
+
+  it("flag on: relaxing is held as a settings_relax change request for a second admin", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const { res, sent } = await put({ budgetControl: "advisory", reason: REASON });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ status: "pending_approval" });
+    expect(sent).toHaveLength(1);
+    const p = sent[0]!.env.payload as unknown as { kind: string; payload: { changes: Record<string, unknown> } };
+    expect(p.kind).toBe("settings_relax");
+    expect(p.payload.changes).toMatchObject({ budgetControl: "advisory" });
+  });
+});
+
