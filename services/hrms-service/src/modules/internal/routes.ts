@@ -517,7 +517,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       .where(and(eq(hrmsEmployees.id, q.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId))).limit(1)))[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
     const allocations = await scopedRead((tx) => tx.select({ balanceDays: hrmsLeaveAllocs.balanceDays, balanceDaysExact: hrmsLeaveAllocs.balanceDaysExact }).from(hrmsLeaveAllocs)
-      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, q.employeeId))));
+      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, q.employeeId), eq(hrmsLeaveAllocs.status, "active"))));
     return reply.send({
       employeeId: q.employeeId,
       completedYears: completedYearsOfService(emp.dateOfJoining, q.separationDate),

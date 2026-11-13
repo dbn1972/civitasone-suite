@@ -52,6 +52,26 @@ export type CityClass = "X" | "Y" | "Z";
 
 export interface SlipInput {
   basicMinor: bigint;
+  /**
+   * S8 SEAM 1 (per-employee PF wage basis). "ceiling" (default, omitted ==
+   * today): EPF on min(PF wage, wage ceiling). "actual": the employee/employer
+   * EPF contribution is on the actual PF wage above the ceiling too (voluntary
+   * contribution on higher wages). EPS wage stays at the ceiling either way.
+   * See statutory-seams.ts for the legal naming and the VERIFY notes.
+   */
+  pfWageBasis?: "ceiling" | "actual";
+  /**
+   * S8 SEAM 2 (LWF). Present only when the run has resolved a Labour Welfare
+   * Fund contribution as DUE this month for this employee (flag on, state rule
+   * found, frequency month matches). Omitted == no LWF line, as today.
+   */
+  lwf?: { employeeMinor: bigint; employerMinor: bigint };
+  /**
+   * S8 SEAM 3 (ESI contribution period). true == the employee was ESI-covered
+   * earlier in the same contribution period, so ESI continues even though this
+   * month gross is over the ceiling. Omitted/false == today (gross test only).
+   */
+  esiContinuation?: boolean;
   /** Dearness Allowance rate in basis points (e.g. 5000 = 50.00%). */
   daRateBps?: bigint;
   /** HRA city classification (X=metro 24/27/30, Y=16/18/20, Z=8/9/10). */
@@ -311,6 +331,9 @@ export interface SlipResult {
   tdsLiabilityMinor: bigint;
   tdsExcessMinor: bigint;
   tdsShortfallMinor: bigint;
+  /** S8 SEAM 2: present only when an LWF contribution was applied this month. */
+  lwfEmployeeMinor?: bigint;
+  lwfEmployerMinor?: bigint;
 }
 
 /**
@@ -476,9 +499,10 @@ export function epsEligibility(facts: EpsMembershipFacts, dateOfJoining: string)
 export type EpsUnrecordedPolicy = "advisory" | "block";
 export const EPS_ELIGIBILITY_UNRECORDED = "EPS_ELIGIBILITY_UNRECORDED";
 
-export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig): EpfEmployerCharges {
+export function epfEmployerCharges(pensionBaseMinor: bigint, cfg: StatutoryConfig, pfWageBasis: "ceiling" | "actual" = "ceiling"): EpfEmployerCharges {
   const base = pensionBaseMinor > 0n ? pensionBaseMinor : 0n;
-  const pfWageMinor = base > cfg.pfWageCapMinor ? cfg.pfWageCapMinor : base;
+  // S8 SEAM 1: "actual" -> the EPF wage (and A/c 2 admin charge on it) is uncapped; EDLI wage stays capped.
+  const pfWageMinor = pfWageBasis !== "actual" && base > cfg.pfWageCapMinor ? cfg.pfWageCapMinor : base;
   const edliWageMinor = base > cfg.edliWageCapMinor ? cfg.edliWageCapMinor : base;
   return {
     pfWageMinor,
@@ -684,7 +708,8 @@ export function computeSlip(input: SlipInput): SlipResult {
     npsEmployerMinor = pct(npsPensionBaseMinor, UPS_ER_INDIVIDUAL_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
-    const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
+    // S8 SEAM 1: "actual" lifts the cap for this employee's EPF only (EPS wage below stays capped).
+    const pfWage    = input.pfWageBasis !== "actual" && pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
     pfEmployeeMinor = pct(pfWage, statutoryConfig.pfRatePct);
     pfEmployerMinor = pct(pfWage, statutoryConfig.pfRatePct);
     const epsWage   = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
@@ -694,13 +719,17 @@ export function computeSlip(input: SlipInput): SlipResult {
   }
 
   // Engagement gate: ESI only when the type's policy allows it AND under the cap.
-  const esiApplicable    = statutoryEsi && grossMinor <= statutoryConfig.esiWageCapMinor;
+  // S8 SEAM 3: esiContinuation (contribution-period memory) keeps an already-covered employee in until period end.
+  const esiApplicable    = statutoryEsi && (grossMinor <= statutoryConfig.esiWageCapMinor || input.esiContinuation === true);
   const esiMinor         = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployeeRateBps) / 10000n) : 0n;
   const esiEmployerMinor = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployerRateBps) / 10000n) : 0n;
 
   // T-STAT M-PT-BASIS: PT slab on the monthly salary (gross less LOP) when a resolver is given.
   const pt = roundRupee(input.ptForSalaryMinor ? input.ptForSalaryMinor(grossMinor - lopMinor) : ptMinor);
   if (pt > 0n) deductions.push({ code: "PT", name: "Professional Tax", type: "deduction", amountMinor: pt });
+  // S8 SEAM 2: Labour Welfare Fund, a fixed (non-recovery) statutory deduction; employer share is informational.
+  const lwfEmployeeMinor = input.lwf ? input.lwf.employeeMinor : 0n;
+  if (lwfEmployeeMinor > 0n) deductions.push({ code: "LWF", name: "Labour Welfare Fund", type: "deduction", amountMinor: lwfEmployeeMinor });
 
   // Monthly TDS (Sec 192) on real annual TAXABLE income: regime-aware, with
   // Sec 16 std deduction + PT, Sec 10(13A) HRA exemption, and Chapter VI-A (old regime).
@@ -883,6 +912,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     esiMinor, esiEmployerMinor, ptMinor: pt, tdsMinor,
     gpfMinor, npsEmployeeMinor, npsEmployerMinor, npsPensionBaseMinor, annualTaxableMinor, negativeNet,
     tdsLiabilityMinor: s192.liabilityMinor, tdsExcessMinor: s192.excessMinor, tdsShortfallMinor,
+    ...(input.lwf ? { lwfEmployeeMinor, lwfEmployerMinor: input.lwf.employerMinor } : {}),
   };
 }
 

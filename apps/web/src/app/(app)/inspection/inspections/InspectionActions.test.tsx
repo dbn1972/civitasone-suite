@@ -33,10 +33,9 @@ describe("InspectionRowAction", () => {
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="scheduled" />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
-    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/transition");
+    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/start");
     expect((fetchSpy.mock.calls[0]![1] as RequestInit).method).toBe("POST");
     expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toEqual({
-      targetState: "in_progress",
       remarks: "Started from inspection hub",
     });
     expect(refreshMock).toHaveBeenCalled();
@@ -94,9 +93,8 @@ describe("InspectionRowAction", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
-    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/transition");
+    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/complete");
     expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toEqual({
-      targetState: "completed",
       remarks: "Fire exits clear; extinguishers serviced.",
     });
   });

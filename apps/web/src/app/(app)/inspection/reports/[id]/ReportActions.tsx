@@ -10,21 +10,28 @@ import { useFormError } from "@/lib/useFormError";
 import { OBSERVATION_SEVERITIES, SEVERITY_KEYS } from "../reportMeta";
 
 /**
- * UAT Phase 2 C3 (J13): the report workflow actions — Submit (draft), Approve
- * (submitted; never by the report's maker — the service re-checks under a row
- * lock) and Add observation (draft / submitted). Every call is a 202: the page
+ * UAT Phase 2 C3 (J13): the report workflow actions — Submit (draft) / Resubmit
+ * (rejected), Approve and Reject-with-reason (submitted; never by the report's
+ * maker — the service re-checks under a row lock) and Add observation (draft /
+ * submitted / rejected). Every call is a 202: the page
  * shows "received" and a manual refresh, never a fake success.
  */
 export function ReportActions({
   reportId,
   canSubmit,
+  resubmit = false,
   canApprove,
+  canReject = false,
   isOwnReport,
   canObserve,
 }: {
   reportId: string;
   canSubmit: boolean;
+  /** The report was rejected: Submit becomes "Resubmit" (the inspector revises, then submits again). */
+  resubmit?: boolean;
   canApprove: boolean;
+  /** Reviewing officer on a submitted report; the reason is mandatory and sent as `reason`. */
+  canReject?: boolean;
   isOwnReport: boolean;
   canObserve: boolean;
 }) {
@@ -39,7 +46,7 @@ export function ReportActions({
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function post(action: "submit" | "approve" | "observations", body?: Record<string, unknown>) {
+  async function post(action: "submit" | "approve" | "reject" | "observations", body?: Record<string, unknown>) {
     const res = await fetch(`/api/proxy/v1/inspection/reports/${encodeURIComponent(reportId)}/${action}`, {
       method: "POST",
       headers: body ? { "content-type": "application/json" } : undefined,
@@ -48,10 +55,10 @@ export function ReportActions({
     if (res.status !== 202 && !res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
   }
 
-  async function transition(action: "submit" | "approve") {
+  async function transition(action: "submit" | "approve" | "reject", reason?: string) {
     setError("");
     try {
-      await post(action);
+      await post(action, action === "reject" ? { reason: (reason ?? "").trim() } : undefined);
       accepted.accept();
       router.refresh();
     } catch (err) {
@@ -92,11 +99,11 @@ export function ReportActions({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {canSubmit ? (
           <ActionButton
-            label={t("submitLabel")}
+            label={resubmit ? t("resubmitLabel") : t("submitLabel")}
             className="btn primary"
-            confirmTitle={t("submitConfirmTitle")}
-            confirmDescription={t("submitConfirmDescription")}
-            confirmLabel={t("submitLabel")}
+            confirmTitle={resubmit ? t("resubmitConfirmTitle") : t("submitConfirmTitle")}
+            confirmDescription={resubmit ? t("resubmitConfirmDescription") : t("submitConfirmDescription")}
+            confirmLabel={resubmit ? t("resubmitLabel") : t("submitLabel")}
             onConfirm={() => transition("submit")}
           />
         ) : null}
@@ -108,6 +115,19 @@ export function ReportActions({
             confirmDescription={t("approveConfirmDescription")}
             confirmLabel={t("approveLabel")}
             onConfirm={() => transition("approve")}
+          />
+        ) : null}
+        {canReject && !isOwnReport ? (
+          <ActionButton
+            label={t("rejectLabel")}
+            className="btn ghost"
+            danger
+            requireReason
+            reasonLabel={t("rejectReasonLabel")}
+            confirmTitle={t("rejectConfirmTitle")}
+            confirmDescription={t("rejectConfirmDescription")}
+            confirmLabel={t("rejectLabel")}
+            onConfirm={(reason) => transition("reject", reason)}
           />
         ) : null}
         {canApprove && isOwnReport ? (

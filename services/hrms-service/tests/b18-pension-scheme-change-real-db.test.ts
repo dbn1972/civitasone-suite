@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { db, sqlClient } from "../src/shared/db.js";
 import { buildApp } from "../src/app.js";
 import { todayIST } from "../src/shared/ist.js";
+import { decryptPii } from "../src/shared/pii-crypto.js";
 import { applyDuePensionSchemeChangesOnce } from "../src/modules/employee/pension-scheme-scheduler.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -51,7 +52,9 @@ let app: FastifyInstance;
 
 async function empRow(id: string) {
   const r = await asTenant((tx) => tx.execute(sql`SELECT pension_scheme, uan_number, version FROM employee.hrms_employees WHERE id = ${id}::uuid`)) as unknown as Array<{ pension_scheme: string; uan_number: string | null; version: number }>;
-  return r[0]!;
+  // G6 (migration 0268): uan_number is encrypted at rest; this helper returns the clear value, as the column type does.
+  const row = r[0]!;
+  return { ...row, uan_number: row.uan_number == null ? null : decryptPii(row.uan_number) };
 }
 async function audits(employeeId: string): Promise<Array<Record<string, unknown>>> {
   const rows = await asTenant((tx) => tx.execute(sql`SELECT payload FROM _outbox.messages WHERE topic = ${"audit.event.record"} AND tenant_id = ${TENANT}
@@ -143,7 +146,11 @@ describe("D1: maker-checker change NPS -> EPF effective this month", () => {
     expect(await empRow(C1)).toMatchObject({ pension_scheme: "EPF", uan_number: UAN1 });
     const a = await audits(C1);
     expect(a.map((x) => x.action)).toEqual(["pension_scheme_change_request", "pension_scheme_change"]);
-    expect(a[1]).toMatchObject({ oldValue: { pensionScheme: "NPS", uanNumber: null }, newValue: { pensionScheme: "EPF", uanNumber: UAN1 }, reason: REASON });
+    expect(a[1]).toMatchObject({ oldValue: { pensionScheme: "NPS", uanNumber: null }, newValue: { pensionScheme: "EPF", uanNumber: "********0401" }, reason: REASON });
+    // G6: the audit carries the UAN masked, never in clear, and the requested UAN is encrypted at rest.
+    expect(JSON.stringify(a)).not.toContain(UAN1);
+    const held = await asTenant((tx) => tx.execute(sql`SELECT uan_number FROM employee.hrms_pension_scheme_changes WHERE id = ${changeId}::uuid`)) as unknown as Array<{ uan_number: string }>;
+    expect(held[0]!.uan_number).toMatch(/^enc:v2:/);
     const again = await decide(changeId, "reject", { note: "too late" });
     expect(again.statusCode).toBe(409);
     expect(again.json().code).toBe("PENSION_SCHEME_CHANGE_NOT_PENDING");

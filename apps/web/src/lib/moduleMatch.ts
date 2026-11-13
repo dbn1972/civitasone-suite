@@ -32,10 +32,106 @@ export const PLATFORM_MODULE_KEYS = new Set([
 ]);
 
 /**
+ * M2 (module-sale gap): the HR area is THREE separately licensable switches.
+ *
+ *   hrms        HR core (employees, attendance, leave, appraisal, learning ...)
+ *   payroll     Payroll (/hr/payroll/*, payslips, pay group on the employee page)
+ *   recruitment Recruitment (/hr/recruitment, JD templates)
+ *
+ * A screen asks `isModuleEnabled(list, "payroll")` etc. The tenant list is the
+ * composition projection of gateway route-keys (GET /v1/admin/composition/
+ * my-modules) OR, for legacy tenants, the config.admin_module_configs names.
+ * Which list entries turn each switch on is this ONE table, matched EXACTLY
+ * (no prefix / substring / contains matching - that is what used to turn
+ * neighbours on: "hrms-payroll" enabled Payroll, "hrms-contracts" enabled
+ * Contracts, "hrms" enabled "hr", ...).
+ *
+ *   entry in the tenant list        HR   Payroll  Recruitment
+ *   ------------------------------  ---  -------  -----------
+ *   hrms   (legacy blanket key)     on   on       on     <- compat rule: one
+ *   hr     (legacy alias of hrms)   on   on       on        blanket switch keeps
+ *                                                            showing all three
+ *   workforce_core                  -    -        -   <- Workforce Core alone (the
+ *                                                         SmartTransfer standalone SKU)
+ *                                                         has never opened the /hr area
+ *                                                         (ST-M01-04b); `employee`
+ *                                                         always also projects hrms-*
+ *                                                         sub-keys, so HRIS tenants are on
+ *   hrms-leave / -attendance /      on   -        -
+ *     -appraisal / -self-service /
+ *     -training / -social /
+ *     -disciplinary / -deputation /
+ *     -contracts / -assessment /
+ *     -id-cards / -ai / -rti /
+ *     -workforce-planning /
+ *     -board-intake / -competency
+ *   payroll                         -    on       -
+ *   hrms-recruitment                -    -        on
+ *   hrms-payroll                    -    -        -   <- NOT the Payroll switch:
+ *                                                         composition module
+ *                                                         `employee` projects it
+ *                                                         for tenants WITHOUT
+ *                                                         Payroll
+ */
+export const HR_SWITCH = "hrms";
+export const PAYROLL_SWITCH = "payroll";
+export const RECRUITMENT_SWITCH = "recruitment";
+
+/** Legacy blanket keys: one switch for the whole HR area (compat rule, not a substring match). */
+const LEGACY_HR_BLANKET: readonly string[] = ["hrms", "hr"];
+
+/** Entries that turn each HR-area switch on. Exact match only. Exported for the tests and docs. */
+export const SWITCH_ENABLERS: Readonly<Record<string, readonly string[]>> = {
+  [HR_SWITCH]: [
+    ...LEGACY_HR_BLANKET,
+    "hrms-leave",
+    "hrms-attendance",
+    "hrms-appraisal",
+    "hrms-self-service",
+    "hrms-training",
+    "hrms-social",
+    "hrms-disciplinary",
+    "hrms-deputation",
+    "hrms-contracts",
+    "hrms-assessment",
+    "hrms-id-cards",
+    "hrms-ai",
+    "hrms-rti",
+    "hrms-workforce-planning",
+    "hrms-board-intake",
+    "hrms-competency",
+  ],
+  [PAYROLL_SWITCH]: [...LEGACY_HR_BLANKET, "payroll"],
+  [RECRUITMENT_SWITCH]: [...LEGACY_HR_BLANKET, "hrms-recruitment"],
+};
+
+/** Screen keys that are spellings of a switch ("hr" is the old spelling of the HR switch). */
+const SWITCH_KEY_ALIASES: Readonly<Record<string, string>> = { hr: HR_SWITCH };
+
+/**
+ * Exact-match aliases for every other module key: key -> extra list entries that
+ * also enable it. Express renames / singular-plural pairs here, never by substring.
+ *   estab <-> establishment   (route name vs gateway key)
+ *   recommendation(s), journey(s)   (singular / plural spellings, GAP-*-HOME)
+ *   revenue -> finance        (composition projects revenue to the finance key)
+ */
+export const MODULE_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  estab: ["establishment"],
+  establishment: ["estab"],
+  recommendation: ["recommendations"],
+  recommendations: ["recommendation"],
+  journey: ["journeys"],
+  journeys: ["journey"],
+  revenue: ["finance"],
+};
+
+export type ModuleSwitches = { hr: boolean; payroll: boolean; recruitment: boolean };
+
+/**
  * True when a module should be visible. A null moduleKey is always visible
- * (platform/overview). A null enabled-list means "unknown" → show all.
- * Matching is lenient: a module is enabled if any enabled name contains, or is
- * contained by, the key (handles "hrms" vs "hr", "establishment" vs "estab").
+ * (platform/overview). A null enabled-list means "unknown" -> show all.
+ * Matching is EXACT: a list entry equal to the key, an entry in the key's alias
+ * table, or (for the three HR-area switches) an entry in SWITCH_ENABLERS.
  *
  * Super admins and platform admins bypass module gating entirely.
  */
@@ -50,49 +146,34 @@ export function isModuleEnabled(
   if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
   const key = moduleKey.toLowerCase();
   // ST-M01-02: platform module keys are ALWAYS visible, in every tenant
-  // composition. These mirror the gateway's PLATFORM_ROUTES
-  // (services/gateway-service/src/module-guard.ts) and the standalone platform
-  // layer (SMARTTRANSFER-MASTER-SPEC-v3 §1: identity, admin, audit, notification,
-  // workflow, DOCUMENT/eOffice, queue, policy, tenant). The gateway lets these
-  // through in enforce mode as platform routes; the web nav/ModuleGate must
-  // agree, or a composed/standalone tenant whose projection omits "documents"
-  // would hide a platform screen the API happily serves. Additive — can only
-  // ENABLE visibility, never hide a module.
-  // The Sidebar passes platformAlwaysOn:false: it has always listed a platform
-  // entry (Documents, Workflow) only when the tenant list names it.
+  // composition (mirrors the gateway's PLATFORM_ROUTES). Additive - can only
+  // ENABLE visibility. The Sidebar passes platformAlwaysOn:false: it has always
+  // listed a platform entry (Documents, Workflow) only when the tenant list names it.
   if (opts.platformAlwaysOn !== false && PLATFORM_MODULE_KEYS.has(key)) return true;
-  if (!enabled) return true; // unknown → show all
-  // GAP-RECOMMENDATIONS-HOME-04: the recommendations route/nav gate on the key
-  // "recommendation" (singular) while a tenant's entitlement flag may be named
-  // either "recommendation" or "recommendations". The existing bidirectional
-  // substring match below already resolves this (one contains the other), but
-  // only incidentally; this explicit alias pair makes the singular/plural
-  // equivalence a deliberate, tested contract rather than relying on `includes`
-  // happening to line up. It is strictly additive — it can only ENABLE a match
-  // (never hide a module), so no tenant with a legacy flag name is affected, and
-  // the lenient fallback for every other module is left untouched.
-  const RECOMMENDATION_ALIASES = new Set(["recommendation", "recommendations"]);
-  if (RECOMMENDATION_ALIASES.has(key)) {
-    if (enabled.some((name) => RECOMMENDATION_ALIASES.has(name))) return true;
-  }
-  // GAP-JOURNEYS-HOME-03: the journeys route/nav use moduleKey "journey" while
-  // a tenant flag may be registered as the plural "journeys" (or vice versa).
-  // The lenient contains-match below already resolves this pair, but it is
-  // ambiguous (it would also match on any shared substring). Pin the intended
-  // singular/plural equivalences explicitly so the decision is recorded and
-  // cannot silently change if the fallback is ever tightened. This is additive:
-  // the existing lenient fallback is unchanged, so no other module's gating
-  // (e.g. "hrms" ⊇ "hr", "establishment"/"estab") is affected.
-  const MODULE_ALIASES: Record<string, string[]> = {
-    journey: ["journeys"],
-    journeys: ["journey"],
-    // UAT-P3 (S-02): admin-service composition/gateway-map.ts projects the
-    // "revenue" composition module to the "finance" gateway key (there is no
-    // "revenue" gateway key), so a composed tenant with revenue switched on
-    // never carried "revenue" and the module stayed hidden. Additive only.
-    revenue: ["finance"],
-  };
+  if (!enabled) return true; // unknown -> show all
+  const switchKey = SWITCH_KEY_ALIASES[key] ?? key;
+  const enablers = SWITCH_ENABLERS[switchKey];
+  if (enablers) return enabled.some((name) => enablers.includes(name));
   const aliases = MODULE_ALIASES[key] ?? [];
-  if (enabled.some((name) => name === key || aliases.includes(name))) return true;
-  return enabled.some((name) => name === key || name.includes(key) || key.includes(name));
+  return enabled.some((name) => name === key || aliases.includes(name));
+}
+
+/** The three HR-area switches for a tenant list (same rules as isModuleEnabled). */
+export function moduleSwitches(enabled: string[] | null, roles?: readonly string[]): ModuleSwitches {
+  return {
+    hr: isModuleEnabled(enabled, HR_SWITCH, roles),
+    payroll: isModuleEnabled(enabled, PAYROLL_SWITCH, roles),
+    recruitment: isModuleEnabled(enabled, RECRUITMENT_SWITCH, roles),
+  };
+}
+
+/**
+ * Which switch gates an /hr/... tile or route. Payroll and Recruitment screens
+ * hide when their switch is off; every other HR path follows the HR switch.
+ */
+export function hrAreaSwitchForHref(href: string): string {
+  if (href === "/hr/payroll" || href.startsWith("/hr/payroll/")) return PAYROLL_SWITCH;
+  if (href === "/hr/recruitment" || href.startsWith("/hr/recruitment/") || href === "/hr/jd-templates" || href.startsWith("/hr/jd-templates/"))
+    return RECRUITMENT_SWITCH;
+  return HR_SWITCH;
 }

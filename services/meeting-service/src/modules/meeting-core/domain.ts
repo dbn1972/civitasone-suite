@@ -491,3 +491,79 @@ export function generateMeetingNumber(input: {
 export function meetingNumberPrefix(committeeCode?: string | null): string {
   return (committeeCode ?? "").trim().toUpperCase() || "MTG";
 }
+
+
+// ─── Recording an already-held meeting ───────────────────────────────────────────
+
+/**
+ * Who may record a held meeting: meeting admins and secretaries. (The ordinary create/edit group, kept
+ * explicit here so the route and the consumer apply the same list.)
+ */
+export const RECORD_HELD_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin", "admin"] as const;
+
+/**
+ * How far back a held meeting may be recorded, in years (env `MEETING_RECORD_HELD_MAX_PAST_YEARS`, default 10).
+ * Deliberately wider than the 1-year window for scheduling a new meeting: this path exists to enter history.
+ */
+export const RECORD_HELD_DEFAULT_MAX_PAST_YEARS = 10;
+
+/** Ceiling on a single recorded sitting, minutes (same cap as a scheduled meeting). */
+export const RECORD_HELD_MAX_DURATION_MINUTES = 24 * 60;
+
+/**
+ * Authority to record a held meeting, from the verified token roles and the meeting being recorded:
+ *   - "admin"            tenant-wide meeting admin;
+ *   - "named_secretary"  a `committee_secretary` who is the meeting's own secretary;
+ *   - "needs_standing"   a `committee_secretary` who is not — allowed only with the committee's `secretary`
+ *                        standing on its roster (a DB check the caller makes);
+ *   - "none"             anyone else.
+ * Mirrors `assertMeetingOwnership` (an unrelated secretary may not act on someone else's committee).
+ */
+export function recordHeldAuthority(
+  roles: readonly string[] | undefined | null,
+  actorId: string,
+  secretaryId: string,
+): "admin" | "named_secretary" | "needs_standing" | "none" {
+  if (holdsMeetingAdminRole(roles)) return "admin";
+  if (!Array.isArray(roles) || !roles.includes("committee_secretary")) return "none";
+  return actorId === secretaryId ? "named_secretary" : "needs_standing";
+}
+
+/**
+ * The times of a held meeting: scheduled, actual start and actual end must all be in the PAST (never in the
+ * future), the end must follow the start, and the sitting must not exceed a day. Pure; `now` is injected.
+ * @throws MEETING_DATE_IN_FUTURE (422) | VALIDATION_FAILED (400)
+ */
+export function assertHeldMeetingTimes(t: { scheduledAt: Date; actualStartAt: Date; actualEndAt: Date; now: Date }): number {
+  const named = [["scheduledAt", t.scheduledAt], ["actualStartAt", t.actualStartAt], ["actualEndAt", t.actualEndAt]] as const;
+  for (const [field, at] of named) {
+    if (Number.isNaN(at.getTime())) throw httpError("VALIDATION_FAILED", `${field} is not a valid date-time`, { field });
+    if (at.getTime() > t.now.getTime()) {
+      throw httpError("MEETING_DATE_IN_FUTURE", `${field} is in the future; only a meeting that has already been held can be recorded here (use scheduling for a future meeting)`, {
+        field, value: at.toISOString(), now: t.now.toISOString(),
+      });
+    }
+  }
+  if (t.actualEndAt.getTime() <= t.actualStartAt.getTime()) {
+    throw httpError("VALIDATION_FAILED", "actualEndAt must be after actualStartAt", { field: "actualEndAt" });
+  }
+  const minutes = Math.max(1, Math.round((t.actualEndAt.getTime() - t.actualStartAt.getTime()) / 60_000));
+  if (minutes > RECORD_HELD_MAX_DURATION_MINUTES) {
+    throw httpError("VALIDATION_FAILED", `a sitting cannot exceed ${RECORD_HELD_MAX_DURATION_MINUTES} minutes; record a multi-day meeting as separate sittings`, { field: "actualEndAt" });
+  }
+  return minutes;
+}
+
+/** An attendee's check-in/out must fall within an hour either side of the recorded sitting. */
+export function assertHeldAttendeeTimes(
+  a: { employeeId: string; checkInAt: Date; checkOutAt: Date | null },
+  sitting: { actualStartAt: Date; actualEndAt: Date },
+): void {
+  const slack = 60 * 60_000;
+  const lo = sitting.actualStartAt.getTime() - slack;
+  const hi = sitting.actualEndAt.getTime() + slack;
+  const bad = (d: Date | null) => d !== null && (Number.isNaN(d.getTime()) || d.getTime() < lo || d.getTime() > hi);
+  if (bad(a.checkInAt) || bad(a.checkOutAt) || (a.checkOutAt !== null && a.checkOutAt.getTime() < a.checkInAt.getTime())) {
+    throw httpError("ATTENDANCE_INVALID_TIMESTAMP", "attendee check-in/check-out must lie within an hour of the recorded sitting, and check-out must follow check-in", { employeeId: a.employeeId });
+  }
+}

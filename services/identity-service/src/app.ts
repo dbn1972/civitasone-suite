@@ -10,6 +10,7 @@ import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { HttpError } from "./shared/context.js";
 import { userRoutes } from "./modules/users/routes.js";
+import { onboardingRoutes } from "./modules/users/onboarding-routes.js";
 import { userInternalRoutes } from "./modules/users/internal-routes.js";
 import { rbacRoutes } from "./modules/rbac/routes.js";
 import { sessionRoutes } from "./modules/sessions/routes.js";
@@ -69,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 
   await app.register(userRoutes);
+  await app.register(onboardingRoutes);
   await app.register(userInternalRoutes);
   await app.register(rbacRoutes);
   await app.register(sessionRoutes);

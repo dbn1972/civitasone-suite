@@ -14,6 +14,7 @@ import * as repo from "./repo.js";
 import { assertTransition, type TenantView } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { tenantCreatedEventPayload } from "./events.js";
+import { defaultProfileCode, PROFILE_CATALOGUE_VERSION } from "@civitasone/tenant-profile";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -32,6 +33,7 @@ export function registerTenantConsumers(rawQueue: Queue): void {
       const policyReason = p.policyReason ?? null;
       await repo.insert(tx, {
         id: p.id, tenantId: p.id, name: p.name, domain: p.domain, edition: p.edition,
+        profileCode: p.profileCode ?? defaultProfileCode(p.edition),
         status: "draft", region: p.region, residency: p.residency,
         isolationTier, policyVersion, policyReason, settings: p.settings ?? {},
         createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
@@ -113,6 +115,7 @@ export function registerTenantConsumers(rawQueue: Queue): void {
     adminEmail: string;
     adminName: string;
     edition: string;
+    profileCode?: string;
   }>(COMMANDS.onboardTenant, async (msg) => {
     await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -134,6 +137,9 @@ export function registerTenantConsumers(rawQueue: Queue): void {
         adminEmail: p.adminEmail,
         adminName: p.adminName,
         edition: p.edition,
+        // Tenant-type profile switch: the stored profile is authoritative; the payload's is only a fallback.
+        profileCode: cur.profileCode ?? p.profileCode ?? defaultProfileCode(p.edition),
+        profileVersion: PROFILE_CATALOGUE_VERSION,
       }, "onboard", p.tenantId);
     }));
     await cache.invalidate(keyFor(msg.payload.tenantId));

@@ -48,14 +48,14 @@ function actionForStatus(status: string): ActionSpec | null {
     case "scheduled":
       return {
         label: "Start",
-        path: "transition",
-        body: { targetState: "in_progress", remarks: "Started from inspection hub" },
+        path: "start",
+        body: { remarks: "Started from inspection hub" },
       };
     case "in_progress":
       return {
         label: "Complete",
-        path: "transition",
-        body: { targetState: "completed" },
+        path: "complete",
+        body: {},
         requireRemarks: true,
         confirmTitle: "Complete this inspection?",
         confirmDescription:

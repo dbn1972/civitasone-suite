@@ -7,6 +7,10 @@ import { toHumanError } from "@/lib/messages";
 import { PrintExportButton } from "../../stock/_components/PrintExportButton";
 import { STOCK_LEDGER_LIMIT, capNote } from "../_limits";
 import { StockLedgerTable } from "./StockLedgerTable";
+import { getTranslations } from "next-intl/server";
+import { getInventoryLedger } from "../_data";
+import { INVENTORY_LEDGER_LIMIT } from "../_limits";
+import { getInventoryLedgerSource, movementRowsFromInventoryLedger } from "../_dataLedger";
 
 type LedgerEntry = {
   id: string;
@@ -63,16 +67,31 @@ export default async function InventoryReconcilePage(
   const to = isoDate(searchParams?.to);
   // GAP-INVENTORY-RECONCILE-05: the service default page is only 100 rows, so
   // ask for its maximum and say so when even that page is full.
-  const { data: ledger, source } = await getStockLedger({ limit: STOCK_LEDGER_LIMIT, ...(from ? { from } : {}), ...(to ? { to } : {}) });
-
-  // GAP-INVENTORY-RECONCILE-03: the ledger carries only an item id, so join the
-  // stock item master for the real item code (SKU) and name. Best-effort: a
-  // failed lookup keeps the mapper's short-id fallback.
-  const stockItems = await loadStockItemNames(new Set(ledger.flatMap((e) => (e.itemId ? [e.itemId] : []))));
-  const entries = ledger.map((e) => {
-    const item = e.itemId ? stockItems.get(e.itemId) : undefined;
-    return item ? { ...e, itemCode: item.itemCode, itemName: item.name } : e;
-  });
+  // Tenants on the inventory ledger summarise inventory-service movements; anything else (including an
+  // unreadable setting) keeps the stock-service ledger exactly as before.
+  const ledgerSource = await getInventoryLedgerSource();
+  const fromInventory = ledgerSource.source !== "error" && ledgerSource.data === "inventory";
+  const t = fromInventory ? await getTranslations("inventoryLedger") : null;
+  const limit = fromInventory ? INVENTORY_LEDGER_LIMIT : STOCK_LEDGER_LIMIT;
+  let source: "api" | "error";
+  let entries: ReturnType<typeof movementRowsFromInventoryLedger> | Awaited<ReturnType<typeof getStockLedger>>["data"];
+  if (fromInventory) {
+    const res = await getInventoryLedger({ ...(from ? { from } : {}), ...(to ? { to } : {}) });
+    source = res.source === "error" ? "error" : "api";
+    entries = movementRowsFromInventoryLedger(res.data);
+  } else {
+    const res = await getStockLedger({ limit: STOCK_LEDGER_LIMIT, ...(from ? { from } : {}), ...(to ? { to } : {}) });
+    source = res.source === "error" ? "error" : "api";
+    const ledger = res.data;
+    // GAP-INVENTORY-RECONCILE-03: the ledger carries only an item id, so join the
+    // stock item master for the real item code (SKU) and name. Best-effort: a
+    // failed lookup keeps the mapper's short-id fallback.
+    const stockItems = await loadStockItemNames(new Set(ledger.flatMap((e) => (e.itemId ? [e.itemId] : []))));
+    entries = ledger.map((e) => {
+      const item = e.itemId ? stockItems.get(e.itemId) : undefined;
+      return item ? { ...e, itemCode: item.itemCode, itemName: item.name } : e;
+    });
+  }
   const hasEntries = entries.length > 0;
 
   const receipts = entries.filter((e) => e.type === "receipt");
@@ -89,8 +108,8 @@ export default async function InventoryReconcilePage(
   const totalOut = issues.reduce((s, e) => s - e.signedQuantity, 0);
   const netQty = entries.reduce((s, e) => s + e.signedQuantity, 0);
 
-  const rows = entries as LedgerEntry[];
-  const note = capNote(entries.length, STOCK_LEDGER_LIMIT, "stock ledger movements");
+  const rows = entries as unknown as LedgerEntry[];
+  const note = capNote(entries.length, limit, "stock ledger movements");
 
   return (
     <div className="wrap">
@@ -102,7 +121,7 @@ export default async function InventoryReconcilePage(
           not), so it is titled for what it computes. Physical variances live under Cycle Counts. */}
       <PageHeader
         title="Stock Movements Summary"
-        subtitle="Totals of receipts, issues and adjustments from the stock ledger. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances."
+        subtitle={t ? t("reconcile.subtitle") : "Totals of receipts, issues and adjustments from the stock ledger. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances."}
         actions={source === "error" ? <DataSourceBadge source={source} /> : <PrintExportButton label="Print" documentTitle="Stock Movements Summary" />}
       />
       <form method="get" aria-label="Filter by posting date" style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", margin: "0 0 12px" }}>
@@ -128,7 +147,7 @@ export default async function InventoryReconcilePage(
         <EmptyState
           icon="📦"
           title={from || to ? "No stock movements in this period" : "No stock movements yet"}
-          message={from || to ? "Try a wider date range." : "Record receipts or issues in Stock to see them summarised here."}
+          message={from || to ? "Try a wider date range." : t ? t("reconcile.empty") : "Record receipts or issues in Stock to see them summarised here."}
         />
       ) : (
         <>

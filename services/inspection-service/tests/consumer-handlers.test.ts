@@ -166,8 +166,8 @@ vi.mock("../src/modules/evidence/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/execution/repo.js", () => ({
-  findInspectionById: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID }),
-  findInspectionByIdTx: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID }),
+  findInspectionById: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID, assignedInspectors: ["11111111-2222-3333-4444-555555555555"] }),
+  findInspectionByIdTx: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID, assignedInspectors: ["11111111-2222-3333-4444-555555555555"] }),
   findInspections: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   updateInspectionState: vi.fn().mockResolvedValue({ id: "insp-1", state: "in_progress", version: 2 }),
   insertHistory: vi.fn().mockResolvedValue(undefined),
@@ -499,7 +499,7 @@ describe("Execution consumers", () => {
   it("threads the pre-read version into updateInspectionState and rejects a concurrent-modification conflict (null return) as NonRetryableError", async () => {
     const { findInspectionByIdTx, updateInspectionState } = await import("../src/modules/execution/repo.js");
     (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "insp-1", state: "scheduled", version: 5, tenantId: TENANT_ID,
+      id: "insp-1", state: "scheduled", version: 5, tenantId: TENANT_ID, assignedInspectors: ["11111111-2222-3333-4444-555555555555"],
     });
     // null is the guarded-UPDATE's controlled "the row moved" signal (mirrors
     // assignment/repo.ts submitTourPlan/approveTourPlan) — distinct from a
@@ -534,7 +534,7 @@ describe("Execution consumers", () => {
     const { isNonRetryable } = await import("@civitasone/queue");
     const { findInspectionByIdTx, updateInspectionState } = await import("../src/modules/execution/repo.js");
     (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID,
+      id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID, assignedInspectors: ["11111111-2222-3333-4444-555555555555"],
     });
     (updateInspectionState as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("connection terminated unexpectedly"),

@@ -22,6 +22,12 @@ export const COMMANDS = {
   employeeSeparate:     "hrms.employee.separate",
   employeeUpdate:       "hrms.employee.update",
   leaveTypeCreate:      "hrms.leave_type.create",
+  // S8-G3: organisation-defined leave types (modules/leave/type-admin-*.ts)
+  leaveTypeUpdate:        "hrms.leave_type.update",
+  leaveTypeChangeRequest: "hrms.leave_type.change_request",
+  leaveTypeChangeDecide:  "hrms.leave_type.change_decide",
+  leaveTypeReactivate:    "hrms.leave_type.reactivate",
+  leaveCustomRulesSet:    "hrms.leave.custom_rules.set",
   leaveAllocate:        "hrms.leave.allocate",
   leaveApply:           "hrms.leave.apply",
   leaveApprove:         "hrms.leave.approve",
