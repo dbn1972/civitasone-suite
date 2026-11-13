@@ -327,14 +327,14 @@ export default function LeaveTypesClient() {
               <thead>
                 <tr>
                   {["colCode", "colName", "colBuiltIn", "colCategory", "colAllocs", "colOpen", "colStatus", "colActions"].map((k) => (
-                    <th key={k} scope="col" style={{ textAlign: "left", padding: "8px 10px", fontSize: 12 }}>{t(k)}</th>
+                    <th key={k} scope="col" style={{ textAlign: "start", padding: "8px 10px", fontSize: 12 }}>{t(k)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((lt) => (
                   <tr key={lt.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <th scope="row" style={{ textAlign: "left", padding: "8px 10px" }}>{lt.code}</th>
+                    <th scope="row" style={{ textAlign: "start", padding: "8px 10px" }}>{lt.code}</th>
                     <td style={{ padding: "8px 10px" }}>{lt.name}</td>
                     <td style={{ padding: "8px 10px" }}>{lt.systemCode ?? t("custom")}</td>
                     <td style={{ padding: "8px 10px" }}>{lt.category ? label("categories", lt.category) : "—"}</td>

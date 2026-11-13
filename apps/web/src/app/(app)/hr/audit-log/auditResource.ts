@@ -70,6 +70,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "leave_application",
   "leave_special",
   "leave_tenant_config", // GAP-HR-LEAVE-APPLY-05
+  "leave_custom_rules_switch", // hrms leave type-admin consumer (custom-rules switch)
   "leave_type",
   "loan",
   "ltc_exemption",
