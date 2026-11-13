@@ -32,7 +32,10 @@ import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistence
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
 import { registerPtVersionConsumers } from "./pt-versions-consumer.js";
+import { registerStatutorySeamsConsumers } from "./statutory-seams-consumer.js";
 import { slabsInForce, ptYtdMinors } from "./pt-versions-repo.js";
+import { pfWageBasisFor, lwfDueForMonth, esiContinuesInPeriod, esiContributionPeriodStart, type PfWageBasis } from "./statutory-seams.js";
+import { resolveSeamFlags, pfWageBasisRowsByEmployee, lwfRulesByState, lwfAlreadyAppliedEmployees, esiCoveredMonthsByEmployee, insertLwfLedger } from "./statutory-seams-repo.js";
 import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type PtSlab } from "./pt-versions-domain.js";
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
@@ -1031,6 +1034,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerFin03Consumers(queue);
   registerPtVersionConsumers(queue);
+  registerStatutorySeamsConsumers(queue);
   registerPayGroupConsumers(queue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
@@ -2455,6 +2459,20 @@ async function processPayrollRun(
     const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes, ptAsOf);
     // Article 276(2): PT already deducted this FY, per employee, for the annual cap.
     const ptYtdByEmployee = await ptYtdMinors(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
+    // S8 statutory seams (opt-in, statutory-seams.ts). Flags default OFF and the PF-basis table is empty
+    // unless an administrator sets a per-employee option, so a tenant that uses none of it computes as before.
+    const s8Flags = await resolveSeamFlags(tx as unknown as typeof db, p.tenantId);
+    const s8PfBasisRows = await pfWageBasisRowsByEmployee(tx as unknown as typeof db, p.tenantId, runEmployeeIds);
+    const s8LwfRules = s8Flags.lwfDeductionEnabled && (p.runType ?? "regular") === "regular"
+      ? await lwfRulesByState(tx as unknown as typeof db, p.tenantId, distinctStateCodes, p.month) : null;
+    // LWF is a regular-run deduction, once per employee per period: other run types and employees with a live
+    // ledger row for the month from another run get none. Employees it could not be applied to are warned about.
+    const s8LwfOn = s8Flags.lwfDeductionEnabled && (p.runType ?? "regular") === "regular";
+    const s8LwfApplied = s8LwfOn
+      ? await lwfAlreadyAppliedEmployees(tx as unknown as typeof db, p.tenantId, p.month, runEmployeeIds, p.id) : new Set<string>();
+    const s8LwfUnknown: string[] = [];
+    const s8EsiCovered = s8Flags.esiContributionPeriodEnabled
+      ? await esiCoveredMonthsByEmployee(tx as unknown as typeof db, p.tenantId, runEmployeeIds, esiContributionPeriodStart(p.month), p.month) : null;
 
     // Gender-specific PT: employees whose gender HRMS does not hold (or holds as a value no slab
     // targets) while the slabs in force ARE gender-specific are paid on the 'all' slabs only; they
@@ -2783,6 +2801,7 @@ async function processPayrollRun(
           : prevSalaryMinor > 0n ? { declaration: { prevEmployerSalaryMinor: prevSalaryMinor } } : {}),
         rawComponents: plan.applyRunStructure ? rawComponents : [],
         components: adHoc,
+        ...s8SeamParams(emp, p.month, s8PfBasisRows, s8LwfRules, s8EsiCovered, s8LwfApplied, s8LwfUnknown),
       });
 
       // P3: record loan repayments for the EMI that was ACTUALLY withheld after
@@ -3074,6 +3093,14 @@ async function processPayrollRun(
         employees: retroSkipped.slice(0, 50),
       });
     }
+    if (s8LwfUnknown.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "LWF_RULE_UNKNOWN",
+        message: `${s8LwfUnknown.length} employee(s) have no state of employment in HRMS, or their state has no Labour Welfare Fund rule, while LWF deduction is on; no LWF was deducted for them`,
+        count: s8LwfUnknown.length,
+        employees: s8LwfUnknown.slice(0, 50),
+      });
+    }
     if (ptStateUnknownEmployees.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "PT_STATE_UNKNOWN",
@@ -3308,6 +3335,30 @@ async function processPensionRun(
   });
 }
 
+/**
+ * S8 seams: the optional computeAndInsertSlip params for one run employee. Returns {} (nothing added to the
+ * call) unless the employee has a PF-basis row, or the matching tenant flag is on and the seam applies.
+ */
+function s8SeamParams(
+  emp: { id: string; employeeNo?: string | null; stateCode?: string | null },
+  month: string,
+  pfBasisRows: Awaited<ReturnType<typeof pfWageBasisRowsByEmployee>>,
+  lwfRules: Awaited<ReturnType<typeof lwfRulesByState>> | null,
+  esiCovered: Awaited<ReturnType<typeof esiCoveredMonthsByEmployee>> | null,
+  lwfApplied: ReadonlySet<string>,
+  lwfUnknown: string[],
+) {
+  const out: { pfWageBasis?: PfWageBasis; lwf?: { employeeMinor: bigint; employerMinor: bigint; stateCode: string; frequency: string }; esiContinuation?: boolean } = {};
+  if (pfWageBasisFor(pfBasisRows.get(emp.id), month) === "actual") out.pfWageBasis = "actual";
+  const state = emp.stateCode?.trim().toUpperCase();
+  const rule = lwfRules && state ? lwfRules.get(state) : undefined;
+  if (lwfRules && (!state || !rule)) lwfUnknown.push(emp.employeeNo ?? emp.id);
+  const due = lwfApplied.has(emp.id) ? null : lwfDueForMonth(rule, month);
+  if (due && rule && state) out.lwf = { ...due, stateCode: state, frequency: rule.frequency };
+  if (esiCovered && esiContinuesInPeriod(month, esiCovered.get(emp.id))) out.esiContinuation = true;
+  return out;
+}
+
 export async function computeAndInsertSlip(
   tx: Parameters<typeof repo.insertSlip>[0],
   msg: { actorId: string },
@@ -3348,6 +3399,12 @@ export async function computeAndInsertSlip(
     /** Review SF1: EPF membership facts + joining date for EPS eligibility; omitted = EPS-eligible (legacy). */
     epfFacts?: EpsMembershipFacts;
     dateOfJoining?: string;
+    /** S8 SEAM 1: omitted == "ceiling" (today). */
+    pfWageBasis?: PfWageBasis;
+    /** S8 SEAM 2: LWF due this month for this employee (flag on); omitted == none. */
+    lwf?: { employeeMinor: bigint; employerMinor: bigint; stateCode: string; frequency: string };
+    /** S8 SEAM 3: covered earlier in this ESI contribution period (flag on); omitted == false. */
+    esiContinuation?: boolean;
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -3393,6 +3450,9 @@ export async function computeAndInsertSlip(
     ...(params.earningsOverride ? { earningsOverride: params.earningsOverride } : {}),
     ...(params.payProfile ? { payProfile: params.payProfile } : {}),
     ...(params.hraFloorMinor != null ? { hraFloorMinor: params.hraFloorMinor } : {}),
+    ...(params.pfWageBasis === "actual" ? { pfWageBasis: "actual" as const } : {}),
+    ...(params.lwf ? { lwf: { employeeMinor: params.lwf.employeeMinor, employerMinor: params.lwf.employerMinor } } : {}),
+    ...(params.esiContinuation ? { esiContinuation: true } : {}),
   });
   const slipId = randomUUID();
   const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
@@ -3403,7 +3463,7 @@ export async function computeAndInsertSlip(
   // min(Basic + DA, PF wage ceiling), the same figure computeSlip applied the
   // 12% to (it used to store the uncapped Basic + DA). With it, the employer-
   // only EDLI / admin charges (D5). Only meaningful when PF applied.
-  const epfCharges = epfEmployerCharges(pensionBaseMinor, statutoryConfig);
+  const epfCharges = epfEmployerCharges(pensionBaseMinor, statutoryConfig, params.pfWageBasis === "actual" ? "actual" : "ceiling");
   const pfWageMinor = pfApplied ? epfCharges.pfWageMinor : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
@@ -3432,6 +3492,14 @@ export async function computeAndInsertSlip(
     pfWageMinor,
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
+  // S8 SEAM 2: the LWF amounts applied (employee deduction + employer share) for the liability register.
+  if (params.lwf && result.lwfEmployeeMinor != null && result.lwfEmployerMinor != null) {
+    await insertLwfLedger(tx as unknown as typeof db, {
+      tenantId: params.tenantId, slipId, runId: params.runId, employeeId: params.employeeId,
+      stateCode: params.lwf.stateCode, period: params.month, frequency: params.lwf.frequency,
+      employeeMinor: result.lwfEmployeeMinor, employerMinor: result.lwfEmployerMinor,
+    });
+  }
   if (result.gpfMinor > 0n) {
     await statutoryRepo.insertGpf(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
