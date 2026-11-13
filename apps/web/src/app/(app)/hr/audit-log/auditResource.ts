@@ -87,9 +87,12 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "pay_matrix",
   "payroll_arrear",
   "payroll_bonus",
+  "payroll_component", // pay-components consumer (structure component create/update/(de)activate)
   "payroll_correction",
   "payroll_costing_rule",
+  "payroll_ctc_template", // pay-components consumer (CTC template create)
   "payroll_ddo",
+  "payroll_employee_pf_wage_basis", // statutory-seams consumer (PF wage-basis request/approve/reject)
   "payroll_flex_election",
   "payroll_flex_plan",
   "payroll_input",
@@ -104,6 +107,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_salary_revision",
   "payroll_settings",
   "payroll_state_rules",
+  "payroll_statutory_seams", // statutory-seams consumer (LWF/ESI flags request/approve)
   "payroll_structure",
   "pension",
   "perquisite_component",
