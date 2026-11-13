@@ -5045,6 +5045,7 @@
     "selectEmployeeError": "Select the employee this leave is for.",
     "applyForMyself": "Apply for myself",
     "selectEmployeeFirst": "Select an employee first",
+    "zeroDayReason": "The selected dates are holidays or weekends; no leave days to apply",
     "previewBlockedTitle": "This request can't be submitted yet",
     "balanceAfterMessage": "Balance after this request: {count, plural, one {# day} other {# days}}.",
     "directCountNote": "Counted as entered for this leave type — weekends and holidays are not adjusted.",

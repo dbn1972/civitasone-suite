@@ -12,7 +12,7 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveLeaveReadScope } from "../../shared/self-scope.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
-import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
+import { validateLeaveRequest, getHolidaysInRange, countWorkingDaysExcludingHolidays, countCalendarDays, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -29,6 +29,10 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 // Mirrors policy-admin-routes.ts HR_ADMIN_ROLES: leave-entitlement policy is an HR-admin call.
 const LEAVE_CONFIG_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
+
+/** Code + message for a request whose dates are all holidays/weekends (0 leave days to debit). */
+export const LEAVE_NO_WORKING_DAYS = "LEAVE_NO_WORKING_DAYS";
+export const LEAVE_NO_WORKING_DAYS_MESSAGE = "The selected dates are holidays or weekends; no leave days to apply";
 
 function leaveGender(raw: string | null | undefined): "male" | "female" | "other" | undefined {
   const g = (raw ?? "").trim().toLowerCase();
@@ -62,6 +66,12 @@ interface LeaveEvaluation {
   warnings: string[];
   /** Blocking reasons; empty means the application is acceptable. */
   violations: LeaveViolation[];
+  /**
+   * true only when the CCS rules engine produced the count. A non-engine code is still counted by the
+   * server under the type's own rule (computedDays is set) but is reported as engineApplied:false.
+   * Absent = derive from computedDays (engine path).
+   */
+  engineApplied?: boolean;
   /** Holiday dates (tenant calendar) inside the requested range. */
   holidaysInRange: string[];
   /** The allocation balance the request is checked against (0.5 granularity). */
@@ -180,13 +190,35 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // balance is still enforced HERE -- the consumer's identical check runs
     // after the 202 has already been returned, so a shortfall used to vanish
     // silently (GAP-HR-LEAVE-APPLY-04).
+    //
+    // The client's day count is never trusted for a full-day request. The type's OWN counting rule decides:
+    // the tenant's policy row for this leave type + employee type (`working_days` or `calendar`); a type
+    // with no active policy row falls back to the column default, `calendar` (weekends and holidays count).
+    //   - calendar:     days = toDate - fromDate + 1 (always >= 1, so never the zero-day refusal);
+    //   - working_days: weekends and tenant holidays are excluded; zero is refused with
+    //                   LEAVE_NO_WORKING_DAYS, the same as the engine path.
+    // The server's count REPLACES a disagreeing client count (an inflated or a deflated one) for the balance
+    // check and the persisted debit, exactly as the engine path already does. Half-day / short leave
+    // (dayPart != full, only CL, so never reaches here) keeps its 0.5 semantics: the client value stands.
+    let serverDays: number | null = null;
+    let holidaysInRange: string[] = [];
+    if (body.dayPart === "full") {
+      const policyRow = await repo.findTenantLeavePolicy(tenantId, body.leaveTypeId, emp.employeeType ?? "");
+      if (policyRow?.countMethod === "working_days") {
+        holidaysInRange = await getHolidaysInRange(tenantId, body.fromDate, body.toDate);
+        serverDays = countWorkingDaysExcludingHolidays(body.fromDate, body.toDate, new Set(holidaysInRange));
+        if (serverDays <= 0) return { ...violation(LEAVE_NO_WORKING_DAYS, LEAVE_NO_WORKING_DAYS_MESSAGE), computedDays: 0, holidaysInRange, engineApplied: false };
+      } else {
+        serverDays = countCalendarDays(body.fromDate, body.toDate);
+      }
+    }
     try {
-      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, body.daysApplied);
+      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, serverDays ?? body.daysApplied);
     } catch (err) {
-      if (err instanceof DomainError) return violation(err.code, err.message);
+      if (err instanceof DomainError) return { ...violation(err.code, err.message), computedDays: serverDays, holidaysInRange, engineApplied: false };
       throw err;
     }
-    return { computedDays: null, warnings: [], violations: [], holidaysInRange: [], balance };
+    return { computedDays: serverDays, warnings: [], violations: [], holidaysInRange, balance, engineApplied: false };
   }
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = customRules
@@ -226,7 +258,12 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // persists/debits *this*, not the raw client-submitted daysApplied.
     computedDays: result.computedDays,
     warnings: result.warnings,
-    violations: result.valid ? [] : result.errors.map((message) => ({ code: "LEAVE_RULE_VIOLATION", message })),
+    violations: result.valid
+      // A request whose every date is a holiday or weekend would debit 0 days. The shape check
+      // (daysApplied > 0) used to catch it only AFTER this, as a bare 400 VALIDATION_FAILED; refuse it
+      // here with a specific code so preview (valid:false) and submit (422) say the same thing.
+      ? (result.computedDays <= 0 ? [{ code: LEAVE_NO_WORKING_DAYS, message: LEAVE_NO_WORKING_DAYS_MESSAGE }] : [])
+      : result.errors.map((message) => ({ code: "LEAVE_RULE_VIOLATION", message })),
     holidaysInRange: result.holidaysInRange,
     balance,
   };
@@ -377,7 +414,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       computedDays,
       // false for a leave code outside the CCS engine (e.g. EOL/MED) -- the
       // day count is then the client-submitted one, shown as approximate.
-      engineApplied: evaluation.computedDays != null,
+      engineApplied: evaluation.engineApplied ?? evaluation.computedDays != null,
       warnings: evaluation.warnings,
       violations: evaluation.violations,
       holidaysInRange: evaluation.holidaysInRange,
