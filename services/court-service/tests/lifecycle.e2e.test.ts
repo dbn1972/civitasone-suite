@@ -52,7 +52,10 @@ async function GET(url: string, actor = MAKER): Promise<{ code: number; json: an
   const res = await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${tok(actor)}` } });
   return { code: res.statusCode, json: res.statusCode < 300 ? res.json() : undefined };
 }
-async function waitFor(pred: () => Promise<boolean>, tries = 60, gap = 25): Promise<boolean> {
+// `tries` is only a failure bound: the loop returns the moment `pred` holds. 60 x 25ms (1.5s) was shorter than one
+// queue -> consumer -> RLS-transaction hop on a starved shared CI runner, so step 7 reported "not issued" while the
+// consumer was still working. 800 x 25ms = 20s (inside the 30s test timeout) still fails if it never happens.
+async function waitFor(pred: () => Promise<boolean>, tries = 800, gap = 25): Promise<boolean> {
   for (let i = 0; i < tries; i++) { if (await pred()) return true; await new Promise((r) => setTimeout(r, gap)); }
   return false;
 }

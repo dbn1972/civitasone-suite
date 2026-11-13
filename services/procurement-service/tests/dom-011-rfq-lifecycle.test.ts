@@ -65,7 +65,11 @@ function awardRfqAs(actorId: string, rfqId: string, responseId: string) {
   return runWithTenant(TENANT, () => commands.awardRfq(ctxAs(actorId), rfqId, { responseId }));
 }
 
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 300)); await q.stop(); }
+// MemoryQueue.drain() resolves once every in-flight delivery (and anything it cascades) has settled. The previous
+// fixed 300ms sleep stopped the queue before a loaded runner had committed the consumer's write, so the next
+// read saw no rows (items[0] undefined) -- a race on the consumer's own completion, not cross-test DB state: every
+// read is keyed by the test's own rfqId.
+async function drain(q: MemoryQueue) { await q.drain(); await q.stop(); }
 
 /**
  * withTenantConsumer wraps each handler in runWithTenant(msg.tenantId, ...)
