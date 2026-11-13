@@ -17,17 +17,11 @@
  * GET /v1/admin/composition/internal/:tenantId/modules), cached per tenant via
  * the shared read-through Cache so the hot path is one Redis lookup.
  */
-import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
+import { compositionProjectionSource } from "@civitasone/module-licence";
 import type { RequestContext } from "@civitasone/types";
 import { cache } from "./infra.js";
 import { HttpError } from "./context.js";
 import { MODULE_KEY, SERVICE } from "../topics.js";
-
-const entitlementBreaker = new CircuitBreaker({
-  name: "smarttransfer-entitlement-admin",
-  failureThreshold: 3,
-  recoveryMs: 10_000,
-});
 
 /** How long an enablement decision is cached (seconds). */
 const ENTITLEMENT_TTL_SECONDS = 30;
@@ -43,33 +37,22 @@ const ENTITLEMENT_TTL_SECONDS = 30;
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// M5: the projection fetch (URL, tenant-id validation, internal headers, 2 s timeout, circuit breaker) is the SHARED
+// one in @civitasone/module-licence, also used by the cross-module licence check in the other services. This file keeps
+// only what is SmartTransfer-specific: it ignores the tenant's enforcement mode and ALWAYS fails closed.
+const projection = compositionProjectionSource({ caller: `${SERVICE}-entitlement` });
+
 async function fetchEnabled(tenantId: string): Promise<boolean> {
-  // A tenant id that is not a UUID never reaches the URL (fail CLOSED), and the
-  // value is path-encoded, so it can only address the composition endpoint.
+  // A tenant id that is not a UUID never reaches the URL (fail CLOSED).
   if (!UUID_RE.test(tenantId)) return false;
-  const adminUrl = process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022";
-  const url = `${adminUrl}/v1/admin/composition/internal/${encodeURIComponent(tenantId)}/modules`;
-  const secret = process.env.INTERNAL_SERVICE_SECRET ?? "";
-  const headers: Record<string, string> = {
-    "x-internal": "1",
-    "x-tenant-id": tenantId,
-    "x-service-secret": secret,
-    "x-internal-caller": `${SERVICE}-entitlement`,
-  };
   try {
-    const body = await entitlementBreaker.call(async () => {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(2000) });
-      if (!res.ok) throw new Error(`admin-service ${res.status}`);
-      return (await res.json()) as { configured?: boolean; data?: Array<{ name: string }> };
-    });
-    // configured:false means the tenant never onboarded. Unlike the gateway's
-    // legacy fail-OPEN safeguard, this NEW service fails CLOSED on it.
-    if (body.configured === false) return false;
-    const modules = new Set((body.data ?? []).map((m) => m.name));
-    return modules.has(MODULE_KEY);
-  } catch (err) {
-    // Breaker open, timeout, non-2xx, or network error → fail CLOSED.
-    if (err instanceof CircuitBreakerOpenError) return false;
+    const snap = await projection.load(tenantId);
+    // configured:false means the tenant never onboarded. Unlike the gateway's legacy fail-OPEN safeguard, this NEW
+    // service fails CLOSED on it.
+    if (!snap.configured) return false;
+    return snap.modules?.has(MODULE_KEY) ?? false;
+  } catch {
+    // Breaker open, timeout, non-2xx, or network error -> fail CLOSED.
     return false;
   }
 }

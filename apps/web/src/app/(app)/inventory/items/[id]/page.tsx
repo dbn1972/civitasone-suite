@@ -4,6 +4,8 @@ import { PageHeader, LoadErrorState, StatusPill, DataTable, EmptyState, Card } f
 import { INVENTORY_ITEM_LINK_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 import { formatMoney } from "@/lib/formatters";
 import { getInventoryItemDetail, getItemStockLink } from "../../_dataLinks";
+import { getInventoryLedgerSource, getInventoryItemBalances } from "../../_dataLedger";
+import { getInventoryStoreOptions } from "../../_data";
 import { balanceTotals, hasNoRows } from "../../linkHelpers";
 import { ItemLinkActions } from "./ItemLinkActions";
 
@@ -25,7 +27,27 @@ const WAREHOUSE_COLUMNS = (t: (k: string) => string) => [
 export default async function InventoryItemDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const t = await getTranslations("inventoryLink");
-  const [itemRes, linkRes] = await Promise.all([getInventoryItemDetail(params.id), getItemStockLink(params.id)]);
+  // Tenants on the inventory ledger hold stock here, not in the stock register: show balances per store
+  // instead of a stock-register link (which they have none of). Anything else keeps the link card.
+  const ledger = await getInventoryLedgerSource();
+  const fromInventory = ledger.source !== "error" && ledger.data === "inventory";
+  const tl = fromInventory ? await getTranslations("inventoryLedger") : null;
+  const [itemRes, linkRes, balancesRes, storesRes] = await Promise.all([
+    getInventoryItemDetail(params.id),
+    fromInventory ? Promise.resolve({ data: null, source: "api" } as Awaited<ReturnType<typeof getItemStockLink>>) : getItemStockLink(params.id),
+    fromInventory ? getInventoryItemBalances(params.id) : Promise.resolve(null),
+    fromInventory ? getInventoryStoreOptions() : Promise.resolve(null),
+  ]);
+  const storeName = new Map((storesRes?.data ?? []).map((s) => [s.id, s.name]));
+  const storeRows = (balancesRes?.data ?? []).map((b) => ({
+    id: b.storeId,
+    store: storeName.get(b.storeId) ?? b.storeId.slice(0, 8),
+    qty: b.onHandQty.toLocaleString("en-IN"),
+    value: formatMoney(b.valueMinor),
+  }));
+  const totalQty = (balancesRes?.data ?? []).reduce((n, b) => n + b.onHandQty, 0);
+  let totalValue = 0n;
+  for (const b of balancesRes?.data ?? []) { try { totalValue += BigInt(b.valueMinor); } catch { /* skip an unparseable value */ } }
 
   if (itemRes.source === "error" && itemRes.status !== 404) {
     return (
@@ -67,6 +89,35 @@ export default async function InventoryItemDetailPage(props: { params: Promise<{
         actions={canManage ? <Link href="/inventory/items/unlinked" className="btn">{t("detail.unlinkedItemsReport")}</Link> : undefined}
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
+        {fromInventory && tl ? (
+          <Card title={tl("item.heading")}>
+            <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {balancesRes === null || balancesRes.source === "error" ? (
+                <LoadErrorState result={balancesRes ?? { data: [], source: "error" as const }} area="stock on hand" />
+              ) : (
+                <>
+                  <div className="fields">
+                    <div className="fld"><div className="l">{tl("item.onHand")}</div><div className="v">{totalQty.toLocaleString("en-IN")}</div></div>
+                    <div className="fld"><div className="l">{tl("item.value")}</div><div className="v">{formatMoney(totalValue)}</div></div>
+                  </div>
+                  {storeRows.length === 0 ? (
+                    <EmptyState icon="📦" title={tl("item.noBalances")} message="" />
+                  ) : (
+                    <DataTable
+                      columns={[
+                        { key: "store" as const, label: tl("item.store") },
+                        { key: "qty" as const, label: tl("item.qty"), align: "right" as const },
+                        { key: "value" as const, label: tl("item.value"), align: "right" as const },
+                      ]}
+                      rows={storeRows}
+                      pageSize={10}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </Card>
+        ) : (
         <Card title={t("detail.heading")}>
           <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {linkFailed ? (
@@ -109,6 +160,7 @@ export default async function InventoryItemDetailPage(props: { params: Promise<{
             ) : null}
           </div>
         </Card>
+        )}
         <Card title={item.name}>
           <div className="fields pad">
             <div className="fld"><div className="l">{t("detail.sku")}</div><div className="v">{item.sku ?? "—"}</div></div>

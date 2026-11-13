@@ -17,6 +17,10 @@ export type TenantView = {
   policyReason?: "policy_mapped" | "fallback_default" | "manual_override" | null;
   settings: Record<string, unknown>;
   version: number;
+  /** Profile inside the edition (migration 0035); the edition default when an older row/payload lacks it. */
+  profileCode?: string;
+  /** Read API only: the resolved profile block (see tenant/profile.ts withProfile). */
+  profile?: ReturnType<typeof import("@civitasone/tenant-profile").describeProfile>;
 };
 
 const ALLOWED: Record<TenantStatus, TenantStatus[]> = {

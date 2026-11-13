@@ -37,7 +37,7 @@ import * as repo from "./repo.js";
 
 export const EMPLOYEE_PII_REVEAL_OP = "employee_pii_reveal__0";
 
-type EmployeeColumn = "pan" | "aadhaarRef" | "mobile" | "bankAccountNo";
+type EmployeeColumn = "pan" | "aadhaarRef" | "mobile" | "bankAccountNo" | "uanNumber";
 
 /** API field name -> employee row column + roles allowed to reveal it. */
 export const REVEALABLE_EMPLOYEE_FIELDS: Record<string, { column: EmployeeColumn; roles: string[] }> = {
@@ -46,6 +46,8 @@ export const REVEALABLE_EMPLOYEE_FIELDS: Record<string, { column: EmployeeColumn
   bankAccountNo: { column: "bankAccountNo", roles: ["hr_admin", "super_admin"] },
   // bankIfsc is intentionally absent (owner decision 3, 2026-10-14): the IFSC is a
   // public branch code returned in full, so there is nothing to reveal (422).
+  // G6 (owner decision 5): HR and payroll roles may see the full UAN (it feeds the EPF ECR); audited like the rest.
+  uanNumber: { column: "uanNumber", roles: ["hr_admin", "payroll_admin", "payroll_officer", "super_admin"] },
   phone: { column: "mobile", roles: ["hr_admin", "hr_officer", "super_admin"] },
 };
 

@@ -3,9 +3,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
-import { idParam, citizenIdQuery, submitApplicationBody, statusUpdateBody, docUploadBody } from "./validators.js";
+import { idParam, docIdParam, citizenIdQuery, submitApplicationBody, statusUpdateBody, docUploadBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { presignDocumentDownload } from "./docs-download.js";
 
 const CITIZEN_ROLES  = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 const OFFICER_ROLES  = ["citizen_officer", "citizen_admin", "super_admin"];
@@ -38,6 +39,17 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     if (!owner) throw new HttpError(404, "NOT_FOUND", "application not found");
     assertOwnership(ctx, owner.citizenId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.uploadDocument(ctx, id, { ...body, ownerCitizenId: owner.citizenId }));
+  });
+
+  // Short-lived presigned download for one application document. Applicant (own application) or an
+  // officer of the same tenant; a foreign application/document is a 404; a legacy row is 409.
+  app.get("/v1/citizen/applications/:id/documents/:docId/download", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id, docId } = docIdParam.parse(req.params);
+    const result = await presignDocumentDownload(ctx, id, docId);
+    req.log.info({ tenantId: ctx.tenantId, actorId: ctx.actorId, applicationId: id, docId, event: "application_document_download" }, "application document download url issued");
+    return reply.header("cache-control", "no-store").send(result);
   });
 
   app.get("/v1/citizen/applications/:id", async (req, reply) => {

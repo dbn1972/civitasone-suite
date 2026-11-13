@@ -31,7 +31,10 @@ export const SEVERITY_KEYS: Record<string, string> = {
 };
 
 /** Statuses a report may still receive observations in (reports/domain.ts OBSERVABLE_STATUSES). */
-export const OBSERVABLE_STATUSES = new Set(["draft", "submitted"]);
+export const OBSERVABLE_STATUSES = new Set(["draft", "submitted", "rejected"]);
+
+/** Statuses the inspector may (re)submit from (reports/domain.ts SUBMITTABLE_STATUSES). */
+export const SUBMITTABLE_STATUSES = new Set(["draft", "rejected"]);
 
 /**
  * The officers who may NOT approve a report (reports/domain.ts reportMakers):

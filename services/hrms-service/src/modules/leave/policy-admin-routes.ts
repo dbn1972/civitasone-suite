@@ -18,6 +18,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { hrmsLeavePolicyRules } from "./policy-schema.js";
 import { hrmsLeaveTypes } from "./schema.js";
+import { LEAVE_RULE_EMPLOYEE_TYPES, canonicalLeaveEmployeeType } from "./employee-type-alias.js";
 
 /**
  * GAP-HR-LEAVE-POLICIES-01/02: mirrors the web's
@@ -31,7 +32,8 @@ import { hrmsLeaveTypes } from "./schema.js";
  */
 const HR_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
-const employeeTypeEnum = z.enum(["permanent", "contractual", "vendor_deputed", "deputation", "consultant", "temporary", "intern", "apprentice", "volunteer"]);
+// S8-G3: accepts every value of the unified vocabulary; `contract` (the employee record's spelling) is stored as `contractual`.
+const employeeTypeEnum = z.enum(LEAVE_RULE_EMPLOYEE_TYPES).transform(canonicalLeaveEmployeeType);
 const countMethodEnum = z.enum(["calendar", "working_days"]);
 
 const createPolicyBody = z.object({
@@ -50,6 +52,8 @@ const createPolicyBody = z.object({
   prefixSuffixRule: z.boolean().default(false),
   sandwichRule: z.boolean().default(false),
   proRataOnJoining: z.boolean().default(true),
+  // S8-G3: probation is a rule property (default false; the migration back-filled true for CL rules).
+  allowedInProbation: z.boolean().default(false),
 });
 
 // GAP-HR-LEAVE-POLICIES-04: a policy could be deactivated (DELETE, below)
@@ -101,6 +105,7 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
         prefixSuffixRule: r.prefixSuffixRule,
         sandwichRule: r.sandwichRule,
         proRataOnJoining: r.proRataOnJoining,
+        allowedInProbation: r.allowedInProbation,
         isActive: r.isActive,
       })),
     });
