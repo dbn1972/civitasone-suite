@@ -49,7 +49,10 @@ describe("CAP-038 comments", () => {
     const internalView = await waitFor(async () => {
       const g = await app.inject({ method: "GET", url: `/v1/workflow/comments?entityType=case&entityId=${entityId}&viewer=internal`, headers: { authorization: `Bearer ${tok()}` } });
       const roots = g.json().data as Array<{ comment: { id: string }; replies: unknown[] }>;
-      return roots?.length >= 2 ? roots : null;
+      // The reply and the external note are applied by the queue consumer independently of each other, so wait for
+      // BOTH (two roots, and the reply threaded under the first) -- two roots alone does not imply the reply landed.
+      const threaded = (roots?.find((n) => n.comment.id === rootId)?.replies.length ?? 0) >= 1;
+      return roots?.length >= 2 && threaded ? roots : null;
     });
     const rootNode = internalView.find((n) => n.comment.id === rootId);
     expect(rootNode?.replies.length).toBeGreaterThanOrEqual(1);
