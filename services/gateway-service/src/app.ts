@@ -157,6 +157,34 @@ export function verifiedUserRateLimitKey(req: FastifyRequest): string {
   return `uip:${req.ip ?? "unknown"}`;
 }
 
+const WINDOW_UNIT_MS: Record<string, number> = {
+  ms: 1, msec: 1, msecs: 1, millisecond: 1, milliseconds: 1,
+  s: 1000, sec: 1000, secs: 1000, second: 1000, seconds: 1000,
+  m: 60_000, min: 60_000, mins: 60_000, minute: 60_000, minutes: 60_000,
+  h: 3_600_000, hr: 3_600_000, hrs: 3_600_000, hour: 3_600_000, hours: 3_600_000,
+  d: 86_400_000, day: 86_400_000, days: 86_400_000,
+};
+
+/**
+ * Rate-limit window env var -> milliseconds. Accepts a positive integer (ms) or a
+ * "<n> <unit>" string the @fastify/rate-limit parser also understands ("1 minute",
+ * "30 seconds", "500ms"), and requires >= 1000 ms. Anything empty, zero, negative
+ * or unparseable returns the default, so a bad value can neither yield a
+ * zero-length (unlimited) window nor throw at boot.
+ */
+export function envWindowMs(name: string, fallback = "1 minute"): number {
+  const parse = (raw: string): number | null => {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*([a-z]*)\s*$/i.exec(raw);
+    if (!m) return null;
+    const u = (m[2] ?? "").toLowerCase();
+    const unit = u === "" ? 1 : WINDOW_UNIT_MS[u];
+    if (!unit) return null;
+    const ms = Math.trunc(Number(m[1] ?? "NaN") * unit);
+    return Number.isFinite(ms) && ms >= 1000 ? ms : null;
+  };
+  return parse(process.env[name] ?? "") ?? (parse(fallback) as number);
+}
+
 /** Positive-integer env var, else the default (a typo must not disable the limiter). */
 export function envPositiveInt(name: string, fallback: number): number {
   const n = Number(process.env[name]);
@@ -664,7 +692,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     hook: "preHandler",
     keyGenerator: verifiedTenantRateLimitKey,
     max: envPositiveInt("GATEWAY_RATE_LIMIT_TENANT_MAX", 1000),
-    timeWindow: process.env.GATEWAY_RATE_LIMIT_TENANT_WINDOW ?? "1 minute",
+    timeWindow: envWindowMs("GATEWAY_RATE_LIMIT_TENANT_WINDOW"),
     ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });
 
@@ -678,7 +706,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     hook: "preHandler",
     keyGenerator: verifiedUserRateLimitKey,
     max: envPositiveInt("GATEWAY_RATE_LIMIT_USER_MAX", 200),
-    timeWindow: process.env.GATEWAY_RATE_LIMIT_USER_WINDOW ?? "1 minute",
+    timeWindow: envWindowMs("GATEWAY_RATE_LIMIT_USER_WINDOW"),
     nameSpace: "fastify-rate-limit-user-",
     ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });

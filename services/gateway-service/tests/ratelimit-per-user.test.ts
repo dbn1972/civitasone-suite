@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { randomInt, randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
-import { buildApp, envPositiveInt } from "../src/app.js";
+import { buildApp, envPositiveInt, envWindowMs } from "../src/app.js";
 
 const SECRET = process.env.JWT_SECRET as string; // set by vitest.config.ts
 const ENV_KEYS = [
@@ -174,5 +174,20 @@ describe("per-user gateway rate limit", () => {
     expect(envPositiveInt("GATEWAY_RATE_LIMIT_USER_MAX", 200)).toBe(200);
     process.env.GATEWAY_RATE_LIMIT_USER_MAX = "7.9";
     expect(envPositiveInt("GATEWAY_RATE_LIMIT_USER_MAX", 200)).toBe(7);
+  });
+
+  it("envWindowMs rejects empty, zero, negative, sub-second and garbage windows (falls back to 1 minute) and accepts valid ones", () => {
+    const n = "GATEWAY_RATE_LIMIT_USER_WINDOW";
+    for (const bad of ["0", "", "   ", "garbage", "-5", "-1 minute", "0 seconds", "500", "1 fortnight", "NaN", "1e9 x"]) {
+      process.env[n] = bad;
+      expect(envWindowMs(n), `value ${JSON.stringify(bad)}`).toBe(60_000);
+    }
+    delete process.env[n];
+    expect(envWindowMs(n)).toBe(60_000);
+    const good: Array<[string, number]> = [["30 seconds", 30_000], ["1 minute", 60_000], ["2 min", 120_000], ["20 second", 20_000], ["1000", 1000], ["5m", 300_000]];
+    for (const [v, ms] of good) {
+      process.env[n] = v;
+      expect(envWindowMs(n), v).toBe(ms);
+    }
   });
 });
