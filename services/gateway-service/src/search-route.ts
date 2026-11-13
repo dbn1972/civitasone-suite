@@ -9,7 +9,7 @@
  * Validates: Requirements 19.2, 19.3, 19.4, 19.7
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
+import { createSearchEngine, type SearchEngine, type SearchQuery, type SearchResponse } from "@civitasone/search";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 
@@ -92,6 +92,15 @@ const ALL_MODULES = [
  * platform_admin gets all modules.
  * Other roles get a union of their mapped modules.
  */
+/** Roles cleared for every access level (mirrors knowledge-service documents/clearance.ts CLEARANCE_ALL_ROLES). */
+const CLEARANCE_ALL_ROLES = ["knowledge_admin", "super_admin"];
+const STANDARD_ACCESS_LEVELS = ["public", "internal"];
+
+/** Access levels of UNTAGGED knowledge documents the caller may see; `null` = every level. */
+export function untaggedAccessLevels(roles: string[]): string[] | null {
+  return roles.some((r) => CLEARANCE_ALL_ROLES.includes(r)) ? null : STANDARD_ACCESS_LEVELS;
+}
+
 export function resolveUserModules(roles: string[]): string[] {
   const adminRoles = ["super_admin", "tenant_admin", "platform_admin"];
   if (roles.some((r) => adminRoles.includes(r))) {
@@ -140,6 +149,58 @@ function getEngine(): SearchEngine {
 /** Allow injection for testing. */
 export function setSearchEngine(e: SearchEngine | null): void {
   engine = e;
+  ready = new WeakMap();
+}
+
+// ── Lazy, memoised index readiness ────────────────────────────────────────────
+// The clearance filters need `kind` / `accessLevel` to be FILTERABLE on the index. That is only applied by
+// engine.initialize(), which nothing calls at runtime, so an index created before `kind` existed answers
+// every filtered search with `invalid_search_filter` (-> 503 for ALL global search). The gateway therefore
+// readies the index lazily: once per process before the first search (memoised), a failure is forgotten so
+// a later search tries again, and a search refused with invalid_search_filter gets ONE repair + ONE retry.
+// The query is NEVER sent without its filters: dropping them would leak restricted documents.
+let ready = new WeakMap<SearchEngine, Promise<void>>();
+// In-flight repairs: concurrent invalid_search_filter results share ONE settings PATCH.
+const repairing = new WeakMap<SearchEngine, Promise<void>>();
+
+function ensureEngineReady(e: SearchEngine): Promise<void> {
+  if (!e.ensureReady) return Promise.resolve();
+  let p = ready.get(e);
+  if (!p) {
+    p = e.ensureReady().catch((err: unknown) => {
+      ready.delete(e); // not memoised: the next search retries
+      log.warn({ err: err instanceof Error ? err.message : "unknown" }, "search index readiness failed — will retry on a later search");
+    });
+    ready.set(e, p);
+  }
+  return p;
+}
+
+function isFilterNotReady(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "invalid_search_filter";
+}
+
+async function searchWithRepair(e: SearchEngine, q: SearchQuery): Promise<SearchResponse> {
+  await ensureEngineReady(e);
+  try {
+    return await e.search(q);
+  } catch (err) {
+    if (!isFilterNotReady(err) || !e.ensureReady) throw err;
+    log.warn("search filter not ready on the index — applying index settings once and retrying once");
+    let repair = repairing.get(e);
+    if (!repair) {
+      repair = e.ensureReady().finally(() => repairing.delete(e));
+      repairing.set(e, repair);
+    }
+    try {
+      await repair;
+    } catch (repairErr) {
+      log.warn({ err: repairErr instanceof Error ? repairErr.message : "unknown" }, "search index repair failed");
+      throw err;
+    }
+    ready.set(e, Promise.resolve());
+    return e.search(q); // the SAME filtered query; a second failure propagates (503), never an unfiltered fallback
+  }
 }
 
 // ── Route Registration ────────────────────────────────────────────────────────
@@ -195,7 +256,7 @@ export function registerSearchRoute(app: FastifyInstance): void {
     // ── Execute Search ─────────────────────────────────────────────────────
     let searchResponse: SearchResponse;
     try {
-      searchResponse = await getEngine().search({
+      searchResponse = await searchWithRepair(getEngine(), {
         q: query,
         tenantId,
         limit: pageSize,
@@ -203,6 +264,15 @@ export function registerSearchRoute(app: FastifyInstance): void {
         // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
         // is AND, which returned nothing for a user with more than one module (and for every admin).
         tagsAny: userModules,
+        // Knowledge articles are indexed without module tags: untagged documents are visible to every user
+        // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
+        // Untagged documents are further limited to the caller's clearance, derived from the caller's OWN roles
+        // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
+        // every level only for knowledge_admin / super_admin.
+        includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
+        // The same clearance applies to EVERY knowledge document, tagged or not: a tag (which an author or a
+        // client can set) must never carry a restricted document past it. Non-knowledge records are untouched.
+        knowledgeAccessLevels: untaggedAccessLevels(jwtPayload.roles ?? []),
       });
     } catch (err) {
       // Graceful degradation: search engine unreachable
@@ -219,10 +289,12 @@ export function registerSearchRoute(app: FastifyInstance): void {
     const results: GlobalSearchResult[] = [];
     for (const hit of searchResponse.hits) {
       // Each hit has tags array; the module is stored as a tag
-      const module = hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown";
+      // Untagged documents (knowledge articles) belong to no module and are tenant-wide.
+      const untagged = hit.tags.length === 0;
+      const module = untagged ? "knowledge" : (hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown");
 
-      // Double-check module permission (defense-in-depth)
-      if (!userModules.includes(module)) continue;
+      // Double-check module permission (defense-in-depth): a TAGGED hit must match one of the user's modules.
+      if (!untagged && !userModules.includes(module)) continue;
 
       results.push({
         id: hit.documentId,

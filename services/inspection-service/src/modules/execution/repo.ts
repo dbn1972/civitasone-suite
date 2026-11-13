@@ -88,9 +88,12 @@ export async function findInspectionByIdTx(
 export async function findInspections(
   tenantId: string,
   pagination: PaginationInput,
+  planId?: string,
 ): Promise<PaginatedResult<InspectionRow>> {
   return scopedRead(async (tx) => {
-    const whereClause = eq(inspections.tenantId, tenantId);
+    const whereClause = planId
+      ? and(eq(inspections.tenantId, tenantId), eq(inspections.planId, planId))
+      : eq(inspections.tenantId, tenantId);
 
     const [countResult, data] = await Promise.all([
       tx.select({ count: sql<number>`count(*)::int` })

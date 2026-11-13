@@ -477,12 +477,14 @@ export async function replaceRealmRoles(
     const token = await getAdminToken(cfg);
     const existing = await findUser(cfg, token, u.tenantId, u.email);
     if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    const missing: string[] = [];
     const lookup = async (names: string[]) => {
       const out: Array<{ id: string; name: string }> = [];
       for (const name of names) {
         const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, { headers: { authorization: `Bearer ${token}` } });
         if (res.status === 200) out.push((await res.json()) as { id: string; name: string });
-        else if (res.status !== 404) throw new Error(`keycloak role lookup failed: ${res.status} (role=${name})`);
+        else if (res.status === 404) missing.push(name);
+        else throw new Error(`keycloak role lookup failed: ${res.status} (role=${name})`);
       }
       return out;
     };
@@ -499,10 +501,198 @@ export async function replaceRealmRoles(
       if (!post.ok && post.status !== 204) throw new Error(`keycloak role-mapping assign failed: ${post.status}`);
     }
     await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
-    return { ok: true, kcUserId: existing.id };
+    return { ok: true, kcUserId: existing.id, ...(missing.length ? { reason: `skipped (not in realm catalog): ${missing.join(", ")}` } : {}) };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_role_replace_failed", tenantId: u.tenantId, email: u.email });
     log?.warn({ tenantId: u.tenantId, email: u.email, err: String(err) }, "keycloak role replacement failed (degraded)");
     return { ok: false, reason: String(err) };
+  }
+}
+
+
+// ─── Usable logins on create (migration 0034 flow) ───────────────────────────────────────────
+
+export type LoginProfileResult = KcResult & { emailSet?: boolean; emailConflict?: boolean; attributesSet?: boolean };
+
+/**
+ * Make a federated realm user usable as a login: stamp the tenant / identity attributes the token
+ * mappers and the HR login-link read (tenantId, tid, identity_user_id, email_addr), mark the email
+ * verified, and set the realm `email` so the user can sign in with it and receive an action email.
+ *
+ * Safety: the user is found by the tenant-namespaced username (never by email), an existing
+ * `identity_user_id` that names a DIFFERENT identity user is never overwritten, and an email already
+ * owned by another realm user (realm duplicateEmailsAllowed=false, e.g. the same address in another tenant)
+ * is reported as emailConflict, never forced. Idempotent. Best-effort: never throws.
+ */
+export async function applyLoginProfile(
+  u: { id: string; tenantId: string; email: string; name: string },
+  log?: { warn: (o: unknown, m: string) => void },
+): Promise<LoginProfileResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const found = await findUser(cfg, token, u.tenantId, u.email);
+    if (!found) return { ok: false, reason: "user not present in keycloak" };
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    const getRes = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${found.id}`, { headers: { authorization: `Bearer ${token}` } });
+    if (!getRes.ok) throw new Error(`keycloak user read failed: ${getRes.status}`);
+    const rep = (await getRes.json()) as { username: string; email?: string; attributes?: Record<string, string[]> };
+    const attrs = { ...(rep.attributes ?? {}) };
+    const existingIdentity = attrs.identity_user_id ?? [];
+    if (existingIdentity.length > 0 && !existingIdentity.includes(u.id)) {
+      return { ok: false, kcUserId: found.id, reason: "identity_user_id_mismatch: realm user already belongs to a different identity user" };
+    }
+    attrs.tenantId = [u.tenantId];
+    attrs.tid = [u.tenantId];
+    attrs.identity_user_id = [u.id];
+    attrs.email_addr = [u.email];
+    const [firstName, ...rest] = u.name.trim().split(/\s+/);
+    const base = {
+      username: rep.username, enabled: true, emailVerified: true,
+      firstName: firstName ?? u.name, lastName: rest.join(" ") || (firstName ?? u.name), attributes: attrs,
+    };
+    const wantEmail = !rep.email;
+    let put = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${found.id}`, {
+      method: "PUT", headers, body: JSON.stringify(wantEmail ? { ...base, email: u.email.toLowerCase() } : base),
+    });
+    let emailConflict = false;
+    if (put.status === 409 && wantEmail) {
+      emailConflict = true;
+      put = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${found.id}`, { method: "PUT", headers, body: JSON.stringify(base) });
+    }
+    if (!put.ok && put.status !== 204) throw new Error(`keycloak profile update failed: ${put.status}`);
+    return {
+      ok: true, kcUserId: found.id, tenantVerified: true, attributesSet: true,
+      emailSet: Boolean(rep.email) || !emailConflict, emailConflict,
+      ...(emailConflict ? { reason: "email_conflict: another realm user already owns this email" } : {}),
+    };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_login_profile_failed", userId: u.id });
+    log?.warn({ userId: u.id, err: String(err) }, "keycloak login profile failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/** Current realm role NAMES mapped directly on a federated user. Read-only, best-effort. */
+export async function getRealmRoleNames(u: { tenantId: string; email: string }, opts: { effective?: boolean } = {}): Promise<KcResult & { roles?: string[]; enabled?: boolean }> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm${opts.effective ? "/composite" : ""}`, { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`keycloak role-mappings read failed: ${res.status}`);
+    const arr = (await res.json()) as Array<{ name: string }>;
+    return { ok: true, kcUserId: existing.id, roles: arr.map((r) => r.name), enabled: existing.enabled };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_role_read_failed", tenantId: u.tenantId, email: u.email });
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * Preferred first-password path: Keycloak emails the user its own "update your password" action link
+ * (UPDATE_PASSWORD, with a lifespan). We never see or set a password. Needs the realm to have SMTP and the
+ * realm user to have an email; when either is missing the call reports why (mail_not_configured / no_email) so
+ * the caller can fall back to the single-use link, instead of pretending a mail went out.
+ */
+export async function sendSetPasswordEmail(
+  u: { tenantId: string; email: string },
+  lifespanSeconds: number,
+  log?: { warn: (o: unknown, m: string) => void },
+): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    const rep = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, { headers: { authorization: `Bearer ${token}` } });
+    if (!rep.ok) throw new Error(`keycloak user read failed: ${rep.status}`);
+    if (!((await rep.json()) as { email?: string }).email) return { ok: false, kcUserId: existing.id, reason: "no_email" };
+    const mail = await kcFetch(
+      `${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/execute-actions-email?lifespan=${Math.max(60, Math.floor(lifespanSeconds))}`,
+      { method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(["UPDATE_PASSWORD"]) },
+    );
+    if (!mail.ok && mail.status !== 204) return { ok: false, kcUserId: existing.id, reason: `mail_not_configured: keycloak answered ${mail.status}` };
+    return { ok: true, kcUserId: existing.id, reason: "set-password email requested" };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_set_password_email_failed", tenantId: u.tenantId, email: u.email });
+    log?.warn({ tenantId: u.tenantId, err: String(err) }, "keycloak set-password email failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * Set a user's FIRST (or replacement) password from a redeemed single-use token. The password only passes
+ * through this function into Keycloak's reset-password call; it is never stored, logged or returned, and no
+ * error message built here includes it. A 400 is Keycloak's password policy refusing it.
+ */
+export async function setUserPassword(
+  u: { tenantId: string; email: string },
+  password: string,
+  opts: { firstPasswordOnly: boolean } = { firstPasswordOnly: true },
+): Promise<KcResult & { policyRejected?: boolean }> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: false, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    if (!existing.enabled) return { ok: false, kcUserId: existing.id, reason: "user_disabled" };
+    if (opts.firstPasswordOnly) {
+      // Re-checked at redeem time (not only at issue time): the user may have set a password another way since.
+      const cr = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/credentials`, { headers: { authorization: `Bearer ${token}` } });
+      if (!cr.ok) throw new Error(`keycloak credential read failed: ${cr.status}`);
+      if (((await cr.json()) as Array<{ type?: string }>).some((c) => c.type === "password")) {
+        return { ok: false, kcUserId: existing.id, reason: "password_already_set" };
+      }
+    }
+    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/reset-password`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ type: "password", value: password, temporary: false }),
+    });
+    if (res.status === 400) return { ok: false, kcUserId: existing.id, policyRejected: true, reason: "password_policy" };
+    if (!res.ok && res.status !== 204) throw new Error(`keycloak set password failed: ${res.status}`);
+    // The password is set; clear any pending UPDATE_PASSWORD so the user is not asked again at first login.
+    // Best-effort: the password IS set at this point, so a failure here must not be reported as "try again".
+    try {
+      const cleanup = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+        method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ requiredActions: [], emailVerified: true }),
+      });
+      if (!cleanup.ok && cleanup.status !== 204) captureError(new Error(`keycloak post-set cleanup failed: ${cleanup.status}`), { service: "identity", event: "keycloak_set_password_cleanup_failed", tenantId: u.tenantId });
+    } catch (err) {
+      captureError(err, { service: "identity", event: "keycloak_set_password_cleanup_failed", tenantId: u.tenantId });
+    }
+    return { ok: true, kcUserId: existing.id };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_set_password_failed", tenantId: u.tenantId });
+    return { ok: false, reason: "keycloak_unavailable" };
+  }
+}
+
+/**
+ * Does the realm user already have a password credential? Used to keep the set-password link a FIRST-password
+ * tool: a link can never be used to take over an account that already has a password (that is what the emailed
+ * reset is for). Fails closed: if this cannot be determined the caller must refuse.
+ */
+export async function userHasPassword(u: { tenantId: string; email: string }): Promise<KcResult & { hasPassword?: boolean }> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: false, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/credentials`, { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`keycloak credential read failed: ${res.status}`);
+    const creds = (await res.json()) as Array<{ type?: string }>;
+    return { ok: true, kcUserId: existing.id, hasPassword: creds.some((c) => c.type === "password") };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_credential_read_failed", tenantId: u.tenantId });
+    return { ok: false, reason: "keycloak_unavailable" };
   }
 }

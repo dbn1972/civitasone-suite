@@ -23,6 +23,12 @@ interface Props {
   items: StockItem[];
   /** Stock item ids that are linked to an item master entry; null when the links could not be loaded. */
   linkedStockIds?: string[] | null;
+  /** Where a row opens. Stock-register rows open /inventory/<stockId>; item-master rows open /inventory/items/<id>. */
+  rowLinkPrefix?: string;
+  /** False for item-master rows: they have no stock-register side, so a "linked" badge would be meaningless. */
+  showLinkColumn?: boolean;
+  /** Which masters the finder searches. */
+  finderMasters?: "all" | "inventory";
 }
 
 const COLUMNS = [
@@ -40,7 +46,7 @@ const COLUMNS = [
 
 const SEG_OPTIONS = ["All items", "Low stock"];
 
-export function InventoryStockListClient({ items, linkedStockIds = null }: Props) {
+export function InventoryStockListClient({ items, linkedStockIds = null, rowLinkPrefix = "/inventory/", showLinkColumn = true, finderMasters = "all" }: Props) {
   const t = useTranslations("inventoryLink");
   const [active, setActive] = useState("All items");
   const linked = linkedStockIds === null ? null : new Set(linkedStockIds);
@@ -53,7 +59,7 @@ export function InventoryStockListClient({ items, linkedStockIds = null }: Props
     itemLink: linkState(i.id, linked),
   }));
 
-  const columns = [
+  const columns = !showLinkColumn ? COLUMNS : [
     ...COLUMNS.slice(0, -1),
     {
       key: "itemLink" as const,
@@ -74,7 +80,7 @@ export function InventoryStockListClient({ items, linkedStockIds = null }: Props
         </div>
       }
     >
-      <ItemFinder />
+      <ItemFinder masters={finderMasters} />
       {items.length === 0 ? (
         <EmptyState
           icon="📦"
@@ -85,7 +91,7 @@ export function InventoryStockListClient({ items, linkedStockIds = null }: Props
         <DataTable
           columns={columns}
           rows={rows}
-          rowLinkPrefix="/inventory/"
+          rowLinkPrefix={rowLinkPrefix}
           rowLinkKey="id"
           identifyingColumnKey="name"
           sortable

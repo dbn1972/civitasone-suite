@@ -1,6 +1,7 @@
 import { PageHeader } from "@/app/_components/ds";
 import { getInventoryItems } from "../_data";
 import { getItemLinks } from "../_dataLinks";
+import { getInventoryLedgerSource } from "../_dataLedger";
 import { ItemsTable } from "../ItemsTable";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -14,7 +15,12 @@ export const dynamic = "force-dynamic";
 // derives zero-filled stats from a failed fetch.
 export default async function InventoryItemsPage() {
   const t = await getTranslations("inventoryLink");
-  const [{ data, source }, linksRes] = await Promise.all([getInventoryItems(), getItemLinks()]);
+  const ledger = await getInventoryLedgerSource();
+  const fromInventory = ledger.source !== "error" && ledger.data === "inventory";
+  const [{ data, source }, linksRes] = await Promise.all([
+    getInventoryItems(),
+    fromInventory ? Promise.resolve({ source: "error" as const, data: [] }) : getItemLinks(),
+  ]);
   // null when the links could not be read: the table then claims nothing about link status.
   const linkedItemIds = linksRes.source === "error" ? null : linksRes.data.map((l) => l.inventoryItemId);
   const canCreate = getSessionRoles().some((r) => INVENTORY_WRITE_ROLES.includes(r));
@@ -30,12 +36,12 @@ export default async function InventoryItemsPage() {
         subtitle="Catalogued stock items with categories, units and reorder policy."
         actions={
           <>
-            {canLink ? <Link href="/inventory/items/unlinked" className="btn">{t("detail.unlinkedItemsReport")}</Link> : null}
+            {canLink && !fromInventory ? <Link href="/inventory/items/unlinked" className="btn">{t("detail.unlinkedItemsReport")}</Link> : null}
             {canCreate ? <Link href="/inventory/items/new" className="btn primary">+ New item</Link> : null}
           </>
         }
       />
-      <ItemsTable items={data} source={source} linkedItemIds={linkedItemIds} />
+      <ItemsTable items={data} source={source} linkedItemIds={linkedItemIds} showLinkColumn={!fromInventory} />
     </>
   );
 }

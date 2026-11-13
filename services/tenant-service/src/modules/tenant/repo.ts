@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { tenants, tenantQuotas, type TenantRow, type TenantInsert, type TenantQuotaRow } from "./schema.js";
+import { defaultProfileCode } from "@civitasone/tenant-profile";
 import type { TenantView } from "./domain.js";
 
 function toView(r: TenantRow): TenantView {
@@ -16,6 +17,7 @@ function toView(r: TenantRow): TenantView {
     name: r.name,
     domain: r.domain,
     edition: r.edition as TenantView["edition"],
+    profileCode: r.profileCode ?? defaultProfileCode(r.edition),
     status: r.status as TenantView["status"],
     region: r.region,
     residency: r.residency,

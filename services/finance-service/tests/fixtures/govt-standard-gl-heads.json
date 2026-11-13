@@ -1,0 +1,184 @@
+{
+  "standard": [
+    {
+      "code": "1100",
+      "name": "Cash / Bank",
+      "classification": "asset"
+    },
+    {
+      "code": "1101",
+      "name": "Bank - Salary Disbursement",
+      "classification": "asset"
+    },
+    {
+      "code": "1200",
+      "name": "Fixed Assets (Gross)",
+      "classification": "capital"
+    },
+    {
+      "code": "1250",
+      "name": "Accumulated Depreciation",
+      "classification": "capital"
+    },
+    {
+      "code": "1300",
+      "name": "Accounts Receivable",
+      "classification": "asset"
+    },
+    {
+      "code": "2050",
+      "name": "Accounts Payable (Control)",
+      "classification": "liability",
+      "isControl": true
+    },
+    {
+      "code": "2060",
+      "name": "Deposits / Retention (Control)",
+      "classification": "liability"
+    },
+    {
+      "code": "2101",
+      "name": "Net Salary Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2102",
+      "name": "Statutory Deductions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2104",
+      "name": "GPF Subscriptions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2105",
+      "name": "NPS Employee Contributions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2106",
+      "name": "EPF Employee Contributions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2107",
+      "name": "ESI Employee Contributions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2108",
+      "name": "Professional Tax Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "2200",
+      "name": "TDS Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "3100",
+      "name": "Accumulated Fund (surplus brought forward)",
+      "classification": "equity"
+    },
+    {
+      "code": "2103",
+      "name": "Employer Contributions Payable",
+      "classification": "liability"
+    },
+    {
+      "code": "4100",
+      "name": "Citizen Service Fees",
+      "classification": "income"
+    },
+    {
+      "code": "4090",
+      "name": "Refunds (Contra Revenue)",
+      "classification": "income"
+    },
+    {
+      "code": "4001",
+      "name": "Revenue Income",
+      "classification": "income"
+    },
+    {
+      "code": "4010",
+      "name": "Billing Revenue",
+      "classification": "income"
+    },
+    {
+      "code": "4200",
+      "name": "Gain/Loss on Asset Disposal",
+      "classification": "expense"
+    },
+    {
+      "code": "4300",
+      "name": "Forfeited Deposits Income",
+      "classification": "income"
+    },
+    {
+      "code": "4310",
+      "name": "Sale Proceeds of Assets",
+      "classification": "income"
+    },
+    {
+      "code": "2202",
+      "name": "General Education",
+      "classification": "expense",
+      "hoaCode": "220201101010101000"
+    },
+    {
+      "code": "5001",
+      "name": "Salary Expense",
+      "classification": "expense"
+    },
+    {
+      "code": "5002",
+      "name": "Employer Contributions Expense",
+      "classification": "expense"
+    },
+    {
+      "code": "5100",
+      "name": "Depreciation Expense",
+      "classification": "expense"
+    },
+    {
+      "code": "5101",
+      "name": "Statutory Depreciation Expense",
+      "classification": "expense"
+    },
+    {
+      "code": "5200",
+      "name": "Impairment Loss",
+      "classification": "expense"
+    },
+    {
+      "code": "6100",
+      "name": "TDS Expense",
+      "classification": "expense"
+    }
+  ],
+  "accrualStores": [
+    {
+      "code": "1400",
+      "name": "Stores / Inventory",
+      "classification": "asset"
+    },
+    {
+      "code": "2080",
+      "name": "Goods Received Not Invoiced (GRNI)",
+      "classification": "liability"
+    },
+    {
+      "code": "2085",
+      "name": "Stores Receipts Suspense",
+      "classification": "liability"
+    },
+    {
+      "code": "5300",
+      "name": "Stores Consumed",
+      "classification": "expense"
+    }
+  ],
+  "billHeadHoa": "220201101010101000"
+}

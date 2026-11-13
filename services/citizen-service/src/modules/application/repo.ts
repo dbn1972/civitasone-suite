@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenApplications, citizenAppDocuments, citizenStatusHistory,
@@ -39,6 +39,22 @@ export async function listDocuments(applicationId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(citizenAppDocuments).where(eq(citizenAppDocuments.applicationId, applicationId)));
+}
+
+/** One document of an application, tenant + application scoped (RLS GUC injected by db.transaction). */
+export async function findDocument(tenantId: string, applicationId: string, docId: string) {
+  const rows = await db.transaction((tx) => tx.select().from(citizenAppDocuments).where(and(
+    eq(citizenAppDocuments.id, docId),
+    eq(citizenAppDocuments.applicationId, applicationId),
+    eq(citizenAppDocuments.tenantId, tenantId),
+  )).limit(1));
+  return rows[0] ?? null;
+}
+
+/** Record that the object behind a document was seen to exist. Idempotent; tenant scoped. */
+export async function markDocumentConfirmed(tenantId: string, docId: string): Promise<void> {
+  await db.transaction((tx) => tx.update(citizenAppDocuments).set({ confirmedAt: new Date() })
+    .where(and(eq(citizenAppDocuments.id, docId), eq(citizenAppDocuments.tenantId, tenantId), isNull(citizenAppDocuments.confirmedAt))));
 }
 
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {

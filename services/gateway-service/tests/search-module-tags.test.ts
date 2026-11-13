@@ -49,4 +49,59 @@ describe("knowledge search module tags are OR-ed (not AND-ed)", () => {
     expect(q?.tags).toBeUndefined();
     expect(q?.tenantId).toBe(TENANT);
   });
+
+  it("asks the engine to include untagged documents; the tenant still comes from the token", async () => {
+    const { q } = await run(["finance_officer"]);
+    expect(q?.includeUntagged).toEqual({ accessLevels: ["public", "internal"] });
+    expect(q?.tenantId).toBe(TENANT);
+  });
+
+  // The untagged clearance comes from the caller's OWN roles (knowledge-service's rule), never a parameter.
+  it.each([
+    [["finance_officer"], ["public", "internal"]],
+    [["hr_officer", "finance_officer"], ["public", "internal"]],
+    [["knowledge_admin"], null],
+    [["super_admin"], null],
+    [["knowledge_admin", "finance_officer"], null],
+  ])("roles %j -> untagged clearance %j", async (roles, expected) => {
+    const { q } = await run(roles as string[]);
+    expect(q?.includeUntagged).toEqual({ accessLevels: expected });
+    // the same clearance gates every knowledge document, tagged or not
+    expect(q?.knowledgeAccessLevels).toEqual(expected);
+  });
+
+  it("a request parameter cannot widen the clearance (accessLevels / includeUntagged / tenantId in the query string are ignored)", async () => {
+    const { e, calls } = engine();
+    setSearchEngine(e);
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 200 }));
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/v1/search?q=budget&accessLevels=confidential&includeUntagged=true&levels=all&tenantId=other", headers: { authorization: `Bearer ${tok(["finance_officer"])}` } });
+    await app.close();
+    vi.unstubAllGlobals();
+    expect(calls[0]?.includeUntagged).toEqual({ accessLevels: ["public", "internal"] });
+    expect(calls[0]?.accessLevels).toBeUndefined();
+    expect(calls[0]?.tenantId).toBe(TENANT);
+  });
+});
+
+describe("untagged hits are returned as tenant-wide knowledge; tagged hits stay module-gated", () => {
+  afterEach(() => setSearchEngine(null));
+  const hit = (documentId: string, tags: string[]) => ({
+    id: documentId, documentId, title: `t-${documentId}`, content: "plain text body", tags, score: 1, highlights: undefined,
+  });
+  it("keeps an untagged hit (module=knowledge), keeps a matching tagged hit, drops a tagged hit outside the user's modules", async () => {
+    const e = {
+      initialize: vi.fn(), index: vi.fn(), bulkIndex: vi.fn(), remove: vi.fn(), removeAll: vi.fn(), close: vi.fn(), healthy: vi.fn(),
+      search: vi.fn(async () => ({ hits: [hit("u1", []), hit("f1", ["finance"]), hit("x1", ["payroll-secret-module"])], totalHits: 3, processingTimeMs: 1 })),
+    } as unknown as SearchEngine;
+    setSearchEngine(e);
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 200 }));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/v1/search?q=budget", headers: { authorization: `Bearer ${tok(["finance_officer"])}` } });
+    await app.close();
+    vi.unstubAllGlobals();
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data as Array<{ id: string; module: string }>;
+    expect(data.map((d) => [d.id, d.module])).toEqual([["u1", "knowledge"], ["f1", "finance"]]);
+  });
 });

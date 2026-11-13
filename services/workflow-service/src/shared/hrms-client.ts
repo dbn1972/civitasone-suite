@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 
 export type ReportingLine = {
@@ -19,6 +22,8 @@ const NONE: ReportingLine = { fullName: null, manager: null };
  * enrichment and must never block or fail a delegation write.
  */
 export async function fetchReportingLine(tenantId: string, actorId: string): Promise<ReportingLine> {
+  // M5: best-effort enrichment; skip the call when the tenant did not buy the HR module.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms reporting-line")).allowed) return NONE;
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (!secret) return NONE;
   try {

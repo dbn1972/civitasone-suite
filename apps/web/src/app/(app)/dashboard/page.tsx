@@ -9,6 +9,7 @@ import { visibleModules } from "./visibleModules";
 import { SelfServiceCard } from "./SelfServiceCard";
 import { getTranslations } from "next-intl/server";
 import { getEnabledModules } from "@/lib/moduleVisibility";
+import { isModuleEnabled, PAYROLL_SWITCH } from "@/lib/moduleMatch";
 import { WORKFLOW_ANALYTICS_ROLES, WORKFLOW_TASK_ROLES } from "@/lib/auth/workRoles";
 
 export default async function DashboardPage() {
@@ -20,6 +21,9 @@ export default async function DashboardPage() {
   // the user back to sign-in rather than showing an access-request message.
   const sessionUnreadable = roles.length === 0; // ux-001-ok: session-cookie check, not a fetch
   const modules = sessionUnreadable ? [] : visibleModules(roles);
+  // M2: the Payroll shortcut follows the Payroll switch (unknown list = on, unchanged).
+  const enabledModules = await getEnabledModules();
+  const payrollEnabled = isModuleEnabled(enabledModules, PAYROLL_SWITCH, roles);
 
   return (
     <>
@@ -39,7 +43,7 @@ export default async function DashboardPage() {
         }
       />
       {/* UAT-P3 (S-02): employees get their self-service links first. */}
-      {roles.includes("employee") ? <SelfServiceCard roles={roles} enabledModules={await getEnabledModules()} /> : null}
+      {roles.includes("employee") ? <SelfServiceCard roles={roles} enabledModules={enabledModules} /> : null}
       <Link
         href="/setup"
         aria-label={t("setupBannerTitle")}
@@ -72,7 +76,7 @@ export default async function DashboardPage() {
           <ArrowRight aria-hidden="true" size={14} style={{ color: "var(--primary-d)" }} />
         </div>
       </Link>
-      <RoleCommandCenter />
+      <RoleCommandCenter payrollEnabled={payrollEnabled} />
       <section aria-labelledby="dash-modules-h">
         <div className="card-h" style={{ marginBottom: 12 }}>
           <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("yourModules")}</h2>

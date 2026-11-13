@@ -24,6 +24,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidTransition,
   assertMakerCheckerForFinalization,
+  mayConduct,
   DomainError,
   type InspectionState,
 } from "./domain.js";
@@ -130,6 +131,14 @@ export function registerExecutionConsumers(queue: Queue): void {
         if (targetState === "under_review" || targetState === "finalized") {
           throw new NonRetryableError(
             `Cannot transition to ${targetState} via generic transition; use ${targetState === "under_review" ? "submit-review" : "finalize"}`,
+          );
+        }
+
+        // 1c. Conducting (-> in_progress / completed) belongs to the assigned inspector or an admin; the route
+        // checked the same, this is the authoritative re-check. No stamped roles = no admin bypass.
+        if (!mayConduct(inspection.assignedInspectors, msg.actorId, p.actorRoles, { from: currentState, to: targetState })) {
+          throw new NonRetryableError(
+            `Actor ${msg.actorId} is not an assigned inspector of inspection ${p.inspectionId} and holds no admin role; cannot move it to '${targetState}'`,
           );
         }
 

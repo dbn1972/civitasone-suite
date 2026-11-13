@@ -87,6 +87,7 @@ export class OpenSearchEngine implements SearchEngine {
                 content: { type: "text", analyzer: "civitas_text" },
                 tags: { type: "keyword" },
                 category: { type: "keyword" },
+                kind: { type: "keyword" },
                 accessLevel: { type: "keyword" },
                 indexedAt: { type: "date" },
               },
@@ -165,8 +166,33 @@ export class OpenSearchEngine implements SearchEngine {
       }
     }
 
+    if (query.knowledgeAccessLevels) {
+      const lv = query.knowledgeAccessLevels.length ? [...query.knowledgeAccessLevels] : ["__none__"];
+      filter.push({
+        bool: {
+          should: [{ bool: { must_not: [{ term: { kind: "knowledge" } }] } }, { terms: { accessLevel: lv } }],
+          minimum_should_match: 1,
+        },
+      });
+    }
     if (query.tagsAny) {
-      filter.push({ terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } });
+      const anyTag = { terms: { tags: query.tagsAny.length ? query.tagsAny : ["__none__"] } };
+      if (query.includeUntagged) {
+        // tags IN [...] OR no tags. This bool sits in `filter` next to the tenant `term` in `must`, so
+        // the tenant constraint is still ANDed.
+        const lv = query.includeUntagged.accessLevels;
+        const untagged: Record<string, unknown> = {
+          bool: {
+            must_not: [{ exists: { field: "tags" } }],
+            // Untagged documents are limited to the caller's clearance (null = every level). Missing level
+            // or an empty list matches nothing (fail closed).
+            ...(lv === null ? {} : { filter: [{ terms: { accessLevel: lv.length ? [...lv] : ["__none__"] } }] }),
+          },
+        };
+        filter.push({ bool: { should: [anyTag, untagged], minimum_should_match: 1 } });
+      } else {
+        filter.push(anyTag);
+      }
     }
 
     const start = Date.now();
@@ -258,6 +284,7 @@ export class OpenSearchEngine implements SearchEngine {
       content: doc.content,
       tags: doc.tags,
       category: doc.category ?? "",
+      kind: doc.kind ?? "",
       accessLevel: doc.accessLevel ?? "internal",
       indexedAt: new Date().toISOString(),
     };

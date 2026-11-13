@@ -94,6 +94,10 @@ export const COMMANDS = {
   ptVersionCreate:        "payroll.pt_version.create",
   ptVersionDecide:        "payroll.pt_version.decide",
   ptCheckerSet:           "payroll.pt_checker.set",
+  // S8 statutory seams (statutory-seams-consumer.ts)
+  s8SeamFlagsSet:         "payroll.s8_seam_flags.set",
+  s8PfBasisSet:           "payroll.s8_pf_basis.set",
+  s8ChangeDecide:         "payroll.s8_change.decide",
   payGroupUpdate:         "payroll.paygroup.update",
   payGroupSetActive:      "payroll.paygroup.set_active",
   // GAP-PAYROLL-PAY-GROUPS-03: effective-dated pay-group membership

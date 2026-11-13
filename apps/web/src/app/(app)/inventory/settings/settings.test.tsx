@@ -94,3 +94,11 @@ describe("settings page access", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
+
+describe("QC policy control is not shown to tenant_admin", () => {
+  it("tenant_admin sees the page but not the segregation-of-duties toggle", async () => {
+    auth.getSessionRoles.mockReturnValue(["tenant_admin"]);
+    render(await SettingsPage());
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+});

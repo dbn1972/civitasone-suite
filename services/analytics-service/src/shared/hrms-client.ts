@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 /**
  * analytics-service -> hrms-service display enrichment (SF-17b).
  *
@@ -19,6 +22,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type Summary = { fullName?: unknown; userRef?: unknown };
 
 async function fetchChunk(tenantId: string, actorIds: string[]): Promise<Summary[]> {
+  // M5: display-only name lookup; skip the call when the tenant did not buy the HR module.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms employee-summaries")).allowed) return [];
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (!secret) return [];
   try {

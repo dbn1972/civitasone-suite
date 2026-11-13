@@ -34,6 +34,37 @@ describe("ReportActions", () => {
     await waitFor(() => expect(calls(spy)).toContainEqual([`/api/proxy/v1/inspection/reports/${ID}/approve`, "POST", undefined]));
   });
 
+  it("Reject requires a reason, then POSTs /reports/:id/reject with it", async () => {
+    const spy = mockFetch();
+    render(<ReportActions reportId={ID} canSubmit={false} canApprove canReject isOwnReport={false} canObserve={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject report" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Reject report" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/Reason for rejection/), { target: { value: "  Grade not supported by observations  " } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    const [url, init] = spy.mock.calls[0]!;
+    expect(String(url)).toBe(`/api/proxy/v1/inspection/reports/${ID}/reject`);
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ reason: "Grade not supported by observations" });
+  });
+
+  it("does not offer Reject on the officer's own report (maker-checker)", () => {
+    render(<ReportActions reportId={ID} canSubmit={false} canApprove canReject isOwnReport canObserve={false} />);
+    expect(screen.queryByRole("button", { name: "Reject report" })).toBeNull();
+  });
+
+  it("a rejected report offers Resubmit, which POSTs /submit", async () => {
+    const spy = mockFetch();
+    render(<ReportActions reportId={ID} canSubmit resubmit canApprove={false} isOwnReport canObserve />);
+    expect(screen.queryByRole("button", { name: "Submit for review" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Resubmit for review" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resubmit for review" }));
+    await waitFor(() => expect(calls(spy)).toContainEqual([`/api/proxy/v1/inspection/reports/${ID}/submit`, "POST", undefined]));
+  });
+
   it("Add observation validates, then POSTs the observation", async () => {
     const spy = mockFetch();
     render(<ReportActions reportId={ID} canSubmit={false} canApprove={false} isOwnReport canObserve />);
