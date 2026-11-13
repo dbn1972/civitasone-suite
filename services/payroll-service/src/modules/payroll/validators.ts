@@ -286,6 +286,10 @@ export const createReimbursementBody = z.object({
   // and was actually uploaded). Bill/receipt images and PDFs only -- never
   // file bytes through this API.
   attachmentKeys: z.array(z.string().min(1).max(400)).max(REIMBURSEMENT_ATTACHMENT_MAX).optional(),
+  // Receipt policy: true = the filer signs a self-declaration in place of a
+  // receipt (honoured only where the tenant's rule for the category allows it
+  // for this amount; recorded on the claim and in the audit trail).
+  selfDeclaration: z.boolean().optional(),
 });
 export type CreateReimbursementBody = z.infer<typeof createReimbursementBody>;
 
