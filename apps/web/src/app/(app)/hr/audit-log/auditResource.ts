@@ -157,6 +157,8 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
   "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
   "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
+  "payroll_ctc_template", // S8-G1/G2 pay-components consumer: CTC template create
+  "payroll_component", // S8-G2 pay-components consumer: component create/update/(de)activate
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

@@ -18,6 +18,11 @@ export type StructureView = {
 };
 export type CheckIssue = { code: string; field: string; message: string };
 export type StructureCheck = { errors: CheckIssue[]; warnings: CheckIssue[] };
+/** The structure plus its components, as the components endpoint returns it. */
+export type StructureData = { structure: StructureView; components: ComponentRow[] };
+
+/** Components endpoint for one structure. */
+const componentsUrl = (id: string) => `v1/payroll/structures/${encodeURIComponent(id)}/components`;
 
 const inr = (paise: string) => (Number(paise) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
@@ -34,9 +39,9 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
   // The write is a 202 and a consumer applies it. Poll the structure until the expected change is visible; if it
   // never shows up (the consumer refused it, for example after a concurrent change) the notice says it is still
   // processing instead of claiming success. Synchronous refusals (validation, lock, duplicate) arrive as the 4xx below.
-  const expectRef = useRef<(d: { structure: StructureView; components: ComponentRow[] }) => boolean>(() => true);
-  const accepted = useAcceptedWrite<unknown, { structure: StructureView; components: ComponentRow[] }>({
-    poll: () => browserJson<{ structure: StructureView; components: ComponentRow[] }>(`v1/payroll/structures/${encodeURIComponent(structure.id)}/components`),
+  const expectRef = useRef<(d: StructureData) => boolean>(() => true);
+  const accepted = useAcceptedWrite<unknown, StructureData>({
+    poll: (): Promise<StructureData> => browserJson(componentsUrl(structure.id)),
     isDone: (d) => expectRef.current(d),
   });
   const kind = structure.kind;
@@ -56,7 +61,7 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
   const set = <K extends keyof ComponentForm>(k: K, v: ComponentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const issueText = (i: CheckIssue) => (t.has(`check_${i.code}`) ? t(`check_${i.code}`) : i.message);
 
-  async function send(fn: () => Promise<unknown>, okText: string, done: () => void, expectChange: (d: { structure: StructureView; components: ComponentRow[] }) => boolean = () => true) {
+  async function send(fn: () => Promise<unknown>, okText: string, done: () => void, expectChange: (d: StructureData) => boolean = () => true) {
     setBusy(true);
     setDialogError(undefined);
     try {
