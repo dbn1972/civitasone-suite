@@ -15,6 +15,7 @@ import * as tenderRepo from "../tender/repo.js";
 import { assertCanDispatch, assertPoRejectable, assertTransitionAllowed, assertSanctionRefPresent, poTotalMinor, DomainError as PoDomainError, PO_APPROVAL_DEFINITION_CODE } from "./domain.js";
 import { fetchSanctionBalance, rupeesFromMinor } from "./finance-budget-client.js";
 import * as poRepo from "./repo.js";
+import { resolveApprovalMode } from "../po-approval/mode.js";
 import { assertWorkflowConfigured } from "../../shared/workflow-client.js";
 import { zodFieldErrors } from "@civitasone/schemas/http";
 import { idempotentCreate } from "../../shared/idempotency.js";
@@ -183,10 +184,13 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     // UAT T-EDGE TE-09: one PO per X-Idempotency-Key. The checks run inside, so a replay
     // is answered with the first 202 instead of being refused by the commitment it made.
     const accepted = await idempotentCreate(ctx, "procurement.po.create", body, async () => {
-      assertPoSanction(body);
+      // M10: a tenant without Finance (local approval mode) has no sanction to cite or check and no PO approval
+      // workflow task; its POs are approved under the threshold matrix. Every other tenant: exactly as before.
+      const localApproval = (await resolveApprovalMode(ctx.tenantId)) === "local";
+      if (!localApproval) assertPoSanction(body);
       await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
-      await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-      const budgetSkipped = await assertPoBudget(ctx, body);
+      if (!localApproval) await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+      const budgetSkipped = localApproval ? null : await assertPoBudget(ctx, body);
       await assertIndentUsable(ctx.tenantId, body.indentRef, body.items);
       const created = await commands.createPo(ctx, body);
       // Review #2446 (4): the synchronous sanction-balance check failed open
@@ -292,10 +296,13 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     // UAT T-EDGE TE-09: one PO per X-Idempotency-Key. The checks run inside, so a replay
     // is answered with the first 202 instead of being refused by the commitment it made.
     const accepted = await idempotentCreate(ctx, "procurement.po.create", body, async () => {
-      assertPoSanction(body);
+      // M10: a tenant without Finance (local approval mode) has no sanction to cite or check and no PO approval
+      // workflow task; its POs are approved under the threshold matrix. Every other tenant: exactly as before.
+      const localApproval = (await resolveApprovalMode(ctx.tenantId)) === "local";
+      if (!localApproval) assertPoSanction(body);
       await assertVendorEligible(ctx.tenantId, body.vendorId, { tenderId: body.tenderId, gemOrderRef: body.gemOrderRef });
-      await assertPoApprovalWorkflowConfigured(ctx.tenantId);
-      const budgetSkipped = await assertPoBudget(ctx, body);
+      if (!localApproval) await assertPoApprovalWorkflowConfigured(ctx.tenantId);
+      const budgetSkipped = localApproval ? null : await assertPoBudget(ctx, body);
       await assertIndentUsable(ctx.tenantId, body.indentRef, body.items);
       const created = await commands.createPo(ctx, body);
       // Review #2446 (4): the synchronous sanction-balance check failed open

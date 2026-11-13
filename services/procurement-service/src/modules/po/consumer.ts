@@ -16,6 +16,9 @@ import { assertIndentApproved, DomainError as IndentDomainError } from "../inden
 import { allocateDocNo } from "../../shared/numbering.js";
 import { closeWorkflowForRef } from "../../shared/workflow-close.js";
 import { notifyMakerOfRefusal } from "../../shared/refusal-notify.js";
+import { resolveApprovalMode } from "../po-approval/mode.js";
+import { loadMatrixTx } from "../po-approval/repo.js";
+import { approvalDecision } from "../po-approval/matrix.js";
 
 import { LICENCE_MODULE } from "@civitasone/module-licence";
 import { licence } from "../../shared/licence.js";
@@ -153,10 +156,12 @@ export function registerPoConsumers(queue: Queue): void {
       items: Array<{ itemCode: string; description: string; quantity: number; unit: string; unitPriceMinor: string | number; itemType?: string; gstRateBp?: number; hsnSac?: string }>;
     };
     const totalMinor = p.items.reduce((s, i) => s + BigInt(i.unitPriceMinor) * BigInt(i.quantity), 0n);
+    // M10: a tenant without Finance (local approval mode) is not asked for a sanction and finance-service is never called.
+    const localApproval = (await resolveApprovalMode(p.tenantId)) === "local";
 
     // #14: non-trivial PO value MUST carry a sanctionRef. Missing → reject (not a
     // budget shortfall) and do not write a PO.
-    if (!p.sanctionRef && totalMinor > SANCTION_REQUIRED_ABOVE_MINOR) {
+    if (!p.sanctionRef && totalMinor > SANCTION_REQUIRED_ABOVE_MINOR && !localApproval) {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await enqueue(tx, {
@@ -170,7 +175,7 @@ export function registerPoConsumers(queue: Queue): void {
     }
 
     // Budget check: call finance-service BEFORE any DB write (no DB call inside txn)
-    if (p.sanctionRef) {
+    if (p.sanctionRef && !localApproval) {
       try {
         await checkSanctionAvailable(p.sanctionRef, totalMinor, p.tenantId);
       } catch (err) {
@@ -283,6 +288,8 @@ export function registerPoConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertPoItems(tx, itemRows);
+      // M10: local approval mode has no workflow task: the PO waits in draft for PATCH /pos/:id/approve under the matrix.
+      if (!localApproval) {
       const wfId = randomUUID();
       await enqueue(tx, {
         topic: WORKFLOW_CREATE, eventType: WORKFLOW_CREATE,
@@ -299,17 +306,37 @@ export function registerPoConsumers(queue: Queue): void {
           refId: p.id,
         },
       });
+      }
       await audit(tx, msg, "create", "po", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
 
   queue.subscribe(COMMANDS.poApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; localApproval?: { reason?: string; approverRoles: string[] } };
+    // M10: a local approval (PATCH /pos/:id/approve, tenant without Finance) is re-checked here: the mode, and the
+    // threshold matrix for the PO's value. An approval from the workflow task carries no such marker: unchanged.
+    const local = p.localApproval;
+    const approvalMode = await resolveApprovalMode(p.tenantId);
+    if (local && approvalMode !== "local") {
+      throw new NonRetryableError("LOCAL_APPROVAL_NOT_ENABLED: this tenant approves purchase orders through the finance-sanction workflow");
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
+      // M10: in a local-approval tenant the threshold matrix is the ONLY approval path. An approval without the local marker
+      // (a workflow task raised before the switch, or any other publisher of this topic) carries no roles to check against
+      // the matrix, so it is refused: the maker is told, and the PO is approved through PATCH /pos/:id/approve instead.
+      if (!local && approvalMode === "local") {
+        await enqueue(tx, {
+          topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { poId: p.id, poNo: po.poNo, reason: "this tenant approves purchase orders under the approval limits; approve it from the purchase order page", code: "LOCAL_APPROVAL_REQUIRED" },
+        });
+        await audit(tx, msg, "approval_rejected_local_mode", "po", p.id);
+        return;
+      }
       // SoD (#9): the approver must differ from the PO creator. Self-approval is
       // rejected — emit a rejection event instead of approving.
       try {
@@ -326,6 +353,19 @@ export function registerPoConsumers(queue: Queue): void {
         }
         throw err;
       }
+      if (local) {
+        const matrix = await loadMatrixTx(tx, p.tenantId);
+        const decision = approvalDecision(BigInt(po.totalMinor), local.approverRoles ?? [], matrix.bands);
+        if (!decision.ok) {
+          await enqueue(tx, {
+            topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { poId: p.id, poNo: po.poNo, reason: `a purchase order of this value must be approved by: ${decision.requiredRoles.join(", ")}`, code: "APPROVAL_LEVEL_INSUFFICIENT" },
+          });
+          await audit(tx, msg, "approval_rejected_matrix", "po", p.id, { requiredRoles: decision.requiredRoles, totalMinor: String(po.totalMinor) });
+          return;
+        }
+      }
       assertTransitionAllowed(po.status ?? "draft", "approved");
       await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "approved", updatedBy: msg.actorId });
       await enqueue(tx, {
@@ -333,7 +373,16 @@ export function registerPoConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { poId: p.id, poNo: po.poNo, vendorId: po.vendorId, totalMinor: String(po.totalMinor) },
       });
-      await audit(tx, msg, "approve", "po", p.id);
+      if (local) {
+        const matrix = await loadMatrixTx(tx, p.tenantId);
+        const band = approvalDecision(BigInt(po.totalMinor), local.approverRoles ?? [], matrix.bands).band;
+        await audit(tx, msg, "approve", "po", p.id, {
+          path: "local", ...(local.reason ? { reason: local.reason } : {}), approverRoles: local.approverRoles,
+          band: { upToMinor: band.upToMinor === null ? null : band.upToMinor.toString(), approverRoles: band.approverRoles }, totalMinor: String(po.totalMinor),
+        });
+      } else {
+        await audit(tx, msg, "approve", "po", p.id);
+      }
       // F102: a direct approve closes the still-open inbox task.
       await closeWorkflowForRef(tx, msg, "procurement_po", p.id, "approve");
     });

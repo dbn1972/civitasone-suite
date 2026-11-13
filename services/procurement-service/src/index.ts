@@ -3,6 +3,7 @@ import { registerGracefulShutdown, signalReady } from "@civitasone/observability
 import { buildApp } from "./app.js";
 import { validatePiiEncKey } from "./shared/validate-env.js";
 import { sqlClient } from "./shared/db.js";
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 
 // Fail-fast: validate PII_ENC_KEY before any other initialization (Req 2.6)
 const piiKeyError = validatePiiEncKey(process.env.PII_ENC_KEY);
@@ -12,6 +13,7 @@ if (piiKeyError) {
   process.exit(1);
 }
 
+warnIfModuleLookupUnconfigured(pino({ name: "procurement-tenant-modules" }));
 const app = await buildApp();
 const port = Number(process.env.PORT ?? 3008);
 await app.listen({ port, host: process.env.BIND_HOST ?? "127.0.0.1" });

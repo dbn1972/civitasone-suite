@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { runWithTenant } from "@civitasone/db";
 import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
@@ -10,6 +11,7 @@ import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { registerIndentConsumers }   from "./modules/indent/consumer.js";
 import { registerVendorConsumers }   from "./modules/vendor/consumer.js";
 import { registerPoConsumers }       from "./modules/po/consumer.js";
+import { registerPoApprovalConsumers } from "./modules/po-approval/consumer.js";
 import { registerEOfficeDecisionConsumers } from "./modules/po/eoffice-consumer.js";
 import { registerAwardEOfficeConsumers } from "./modules/tender/eoffice-consumer.js";
 import { registerGrnConsumers }      from "./modules/grn/consumer.js";
@@ -29,6 +31,7 @@ import { registerThreeWayMatchConsumers } from "./modules/three-way-match/consum
 import { registerVendorBlacklistConsumers } from "./modules/vendor-blacklist/consumer.js";
 
 const log = pino({ name: "procurement-worker" });
+warnIfModuleLookupUnconfigured(log);
 
 // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
 // scanner DSN must be present and distinct from DATABASE_URL so relay/purge
@@ -74,6 +77,7 @@ assertPiiKeyConfigured();
 registerIndentConsumers(queue);
 registerVendorConsumers(queue);
 registerPoConsumers(queue);
+registerPoApprovalConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
 registerAwardEOfficeConsumers(queue);
 registerGrnConsumers(queue);
