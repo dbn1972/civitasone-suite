@@ -8,6 +8,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 import { findTenantLeavePolicy } from "./repo.js";
+import { leaveEmployeeTypeCandidates } from "./employee-type-alias.js";
 import type { LeavePolicyRuleRow } from "./policy-schema.js";
 import { dayPartUnits, type LeaveDayPart } from "./domain.js";
 
@@ -69,6 +70,21 @@ export interface LeaveValidationInput {
    * caller (routes.ts) -- this engine only enforces the calendar rules.
    */
   dayPart?: LeaveDayPart;
+  /**
+   * S8-G3: resolve the rule from the tenant's rows instead of the hard-coded catalogue gate.
+   * Set ONLY when the tenant has switched `custom_leave_rules_enabled` on; undefined/false keeps
+   * the engine byte-for-byte as it was (proved by rules-engine-flag-off-parity.test.ts).
+   * Resolution order: tenant rule for (type, employee type) -> built-in default for the type's
+   * `systemCode` (if any) -> NO_LEAVE_RULE. In this mode `leaveCode` is the tenant's own code and
+   * the built-in behaviours (CL half-day, ML/PL/CCL gender checks, probation-CL) key on `systemCode`.
+   */
+  customRules?: boolean;
+  /** Custom mode: the leave type's `system_code` (built-in behaviour it maps to), or null. */
+  systemCode?: string | null;
+  /** Custom mode: display name of the tenant's leave type (used in messages). */
+  leaveTypeName?: string;
+  /** Custom mode: the leave type's own gender restriction (a tenant rule's wins when set). */
+  typeGenderRestriction?: "male" | "female" | null;
 }
 
 export interface ValidationResult {
@@ -242,20 +258,44 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
 
   // Find the default (platform catalog) policy — also serves as the guard
   // against a leave code the engine doesn't know about at all.
-  const defaultPolicy = LEAVE_POLICIES.find(p => p.code === input.leaveCode);
-  if (!defaultPolicy) {
+  // S8-G3: `custom` is true only for a tenant that opted in. `sysCode` is the built-in behaviour the
+  // checks below key on: the leave code itself on the legacy path (identical to before), the type's
+  // `system_code` (possibly null) on the row-based path.
+  const custom = input.customRules === true;
+  const sysCode: string | null = custom ? (input.systemCode ?? null) : input.leaveCode;
+  const defaultPolicy = LEAVE_POLICIES.find(p => p.code === sysCode);
+  if (!defaultPolicy && !custom) {
     return { valid: false, errors: [`Unknown leave code: ${input.leaveCode}`], warnings: [], computedDays: 0, holidaysInRange: [], workingDaysInRange: 0 };
   }
 
   // DOM-009: prefer the tenant's admin-configured policy for this leave type
   // + employee type; fall back to the platform default catalog above for
   // tenants who never customized this combination.
-  const tenantRow = input.leaveTypeId
-    ? await findTenantLeavePolicy(input.tenantId, input.leaveTypeId, input.rawEmployeeType ?? input.employeeType)
-    : null;
+  let tenantRow: LeavePolicyRuleRow | null = null;
+  if (input.leaveTypeId) {
+    if (custom) {
+      // S8-G3: `contract` / `contractual` are the same employee type.
+      for (const cand of leaveEmployeeTypeCandidates(input.rawEmployeeType ?? input.employeeType)) {
+        tenantRow = await findTenantLeavePolicy(input.tenantId, input.leaveTypeId, cand);
+        if (tenantRow) break;
+      }
+    } else {
+      tenantRow = await findTenantLeavePolicy(input.tenantId, input.leaveTypeId, input.rawEmployeeType ?? input.employeeType);
+    }
+  }
+  if (custom && !defaultPolicy && !tenantRow) {
+    const label = input.leaveTypeName ?? input.leaveCode;
+    return { valid: false, errors: [`NO_LEAVE_RULE: no leave rule is defined for ${label} (${input.leaveCode}) for ${input.rawEmployeeType ?? input.employeeType} employees`], warnings: [], computedDays: 0, holidaysInRange: [], workingDaysInRange: 0 };
+  }
+  // Custom mode with no built-in behind the type: a neutral base the tenant row overrides entirely.
+  const baseline: LeavePolicy = defaultPolicy ?? {
+    code: input.leaveCode as LeaveCategory, name: input.leaveTypeName ?? input.leaveCode,
+    maxDaysPerYear: 0, carryForward: false, maxAccumulation: 0, encashable: false, countMethod: "calendar",
+    maxContinuousDays: 365, minServiceYears: 0, applicableTo: [input.employeeType], prefixSuffixRule: false, sandwichRule: false,
+  };
   const policy: LeavePolicy = tenantRow
-    ? tenantPolicyToEngine(tenantRow, defaultPolicy, input.employeeType)
-    : defaultPolicy;
+    ? tenantPolicyToEngine(tenantRow, custom && input.leaveTypeName ? { ...baseline, name: input.leaveTypeName, code: input.leaveCode as LeaveCategory } : baseline, input.employeeType)
+    : baseline;
 
   // R1: Eligibility by employee type
   if (!policy.applicableTo.includes(input.employeeType)) {
@@ -263,7 +303,14 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
   }
 
   // R2: Probation check
-  if (input.isOnProbation && input.leaveCode !== "CL") {
+  if (custom) {
+    // S8-G3: probation is a rule property. A tenant rule says so itself; with no tenant rule only the
+    // built-in Casual Leave is allowed (the legacy behaviour).
+    const allowedInProbation = tenantRow ? tenantRow.allowedInProbation === true : sysCode === "CL";
+    if (input.isOnProbation && !allowedInProbation) {
+      errors.push(`${policy.name} cannot be availed during probation`);
+    }
+  } else if (input.isOnProbation && input.leaveCode !== "CL") {
     errors.push(`Only Casual Leave (CL) is allowed during probation. ${policy.name} cannot be availed`);
   }
 
@@ -274,14 +321,21 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
   }
 
   // R4: CCL gender + children check
-  if (input.leaveCode === "CCL") {
+  if (sysCode === "CCL") {
     if (input.gender !== "female") errors.push("Child Care Leave is available only for women employees");
     if ((input.childrenCount ?? 0) >= 2) errors.push("CCL not available for employees with 2 or more surviving children");
   }
 
   // R5: Paternity/Maternity gender check
-  if (input.leaveCode === "ML" && input.gender === "male") errors.push("Maternity Leave is for women employees only");
-  if (input.leaveCode === "PL" && input.gender === "female") errors.push("Paternity Leave is for male employees only");
+  if (sysCode === "ML" && input.gender === "male") errors.push("Maternity Leave is for women employees only");
+  if (sysCode === "PL" && input.gender === "female") errors.push("Paternity Leave is for male employees only");
+  if (custom && sysCode !== "ML" && sysCode !== "PL" && sysCode !== "CCL") {
+    // S8-G3: a tenant-defined gender restriction (the rule row's wins over the type's).
+    const restricted = tenantRow?.genderRestriction ?? input.typeGenderRestriction ?? null;
+    if ((restricted === "male" || restricted === "female") && input.gender && input.gender !== "other" && input.gender !== restricted) {
+      errors.push(`${policy.name} is available to ${restricted === "female" ? "women" : "men"} only`);
+    }
+  }
 
   // Get holidays from DB for accurate calculation
   const holidaysInRange = await getHolidaysInRange(input.tenantId, input.fromDate, input.toDate);
@@ -296,7 +350,7 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
     // Half-day / short leave: one working day, charged 0.5. A weekend or a
     // holiday has nothing to take half of, so it is rejected (never silently
     // converted); sandwich / prefix-suffix rules cannot apply to a single day.
-    if (input.leaveCode !== "CL") errors.push("Half-day and short leave can only be taken as Casual Leave (CL)");
+    if (sysCode !== "CL") errors.push("Half-day and short leave can only be taken as Casual Leave (CL)");
     if (input.fromDate !== input.toDate) errors.push("A half-day or short leave must be a single date");
     workingDaysInRange = countWorkingDaysExcludingHolidays(input.fromDate, input.fromDate, holidaySet);
     if (workingDaysInRange === 0) errors.push(`${input.fromDate} is a weekend or holiday; a half-day or short leave must fall on a working day`);

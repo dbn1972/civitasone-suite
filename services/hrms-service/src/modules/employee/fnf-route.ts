@@ -79,6 +79,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       .where(and(
         eq(hrmsLeaveAllocs.tenantId, ctx.tenantId),
         eq(hrmsLeaveAllocs.employeeId, id),
+        eq(hrmsLeaveAllocs.status, "active"),
       )));
     // Exact (half-day aware) balance: the shared helper the internal snapshot payroll verifies against uses too.
     const totalLeaveBalance = totalLeaveBalanceDays(allocations);

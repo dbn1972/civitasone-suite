@@ -20,6 +20,8 @@ export const hrmsLeavePolicyRules = leaveSchema.table("hrms_leave_policy_rules",
   prefixSuffixRule:            boolean("prefix_suffix_rule").notNull().default(false),
   sandwichRule:                boolean("sandwich_rule").notNull().default(false),
   proRataOnJoining:            boolean("pro_rata_on_joining").notNull().default(true),
+  // S8-G3 (migration 0266): probation used to be a hard-coded "CL only" check; now a rule property.
+  allowedInProbation:          boolean("allowed_in_probation").notNull().default(false),
   isActive:                    boolean("is_active").notNull().default(true),
   createdAt:                   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:                   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
