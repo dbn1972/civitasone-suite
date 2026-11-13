@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
 import { MemoryQueue, type Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const RUN_DB = process.env.DATABASE_URL ?? process.env.DB_URL;
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -121,7 +122,7 @@ describe.skipIf(!RUN_DB)("DELETE /identity/sessions/:id — cross-tenant isolati
       payload: { id: aSession },
     } as never);
 
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
 
     const [row] = await runWithTenant(TENANT_A, () => db.transaction((tx: any) =>
       tx.select().from(sessions).where(and(eq(sessions.tenantId, TENANT_A), eq(sessions.id, aSession)))));

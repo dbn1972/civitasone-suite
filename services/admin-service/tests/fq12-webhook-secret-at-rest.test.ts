@@ -25,6 +25,7 @@ import { signPayload } from "../src/modules/webhooks/commands.js";
 import { signForWebhook, verifyForWebhook, SECRET_MASK } from "../src/modules/webhooks/secret-store.js";
 import { backfillWebhookSecrets, countUnsealedWebhookSecrets } from "../src/modules/webhooks/secret-backfill.js";
 import { isSealed, openSecret, sealSecret } from "../src/shared/secret-crypto.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const JWT = process.env.JWT_SECRET as string;
 const T = randomUUID();
@@ -40,7 +41,7 @@ async function waitFor<V>(fn: () => Promise<V>, ok: (v: V) => boolean, timeoutMs
   const deadline = Date.now() + timeoutMs;
   let last = await fn();
   while (!ok(last) && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     last = await fn();
   }
   return last;
@@ -123,7 +124,7 @@ describe("FQ12-SEC webhook secrets are sealed at rest", () => {
       expect(res.statusCode).toBe(503);
       expect(res.json().code).toBe("ENCRYPTION_UNAVAILABLE");
       expect(res.body).not.toMatch(/whsec_/);
-      await new Promise((r) => setTimeout(r, 200));
+      await drainAllQueues();
       const after = await inTenant((tx) => tx.select({ id: webhooks.id }).from(webhooks).where(eq(webhooks.tenantId, T)));
       expect(after.length).toBe(before.length);
     } finally {

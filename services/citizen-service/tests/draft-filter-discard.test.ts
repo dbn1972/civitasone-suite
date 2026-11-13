@@ -13,6 +13,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerApplicationConsumers } from "../src/modules/application/consumer.js";
 import * as catalogueRepo from "../src/modules/catalogue/repo.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerApplicationConsumers(queue);
 await queue.start();
@@ -124,7 +125,7 @@ describe("intake drafts: server-side filter + owner-scoped discard", () => {
     const id = await saveDraft(CITIZEN_A, SERVICE_1, KEY_1, { name: "mine" });
     const del = await app.inject({ method: "DELETE", url: `/v1/citizen/intake/drafts/${id}`, headers: hdr(tok(CITIZEN_B, ["citizen"])) });
     expect(del.statusCode).toBe(404);
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     const still = await app.inject({ method: "GET", url: `/v1/citizen/intake/drafts/${id}`, headers: hdr(tok(CITIZEN_A, ["citizen"])) });
     expect(still.statusCode).toBe(200);
   });

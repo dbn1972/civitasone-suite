@@ -23,6 +23,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { queue as sharedQueue } from "../src/shared/infra.js";
 import { normalizeDomain, registerDomainBody } from "../src/modules/custom-domains/validators.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const T = randomUUID();
 const T2 = randomUUID();
@@ -112,7 +113,7 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
     const deadline = Date.now() + timeoutMs;
     let last = await fn();
     while (!ok(last) && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 50));
+      await drainAllQueues();
       last = await fn();
     }
     return last;
@@ -233,7 +234,7 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: attackerId, tenantId: T2, domain: `${host.toUpperCase()}.`, verificationMethod: "dns_cname", verificationToken: TOKEN },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     const t2Rows = await runWithTenant(T2, () => db.transaction((tx) => tx.select().from(customDomains).where(eq(customDomains.tenantId, T2))));
     expect(t2Rows).toEqual([]);
 
@@ -306,7 +307,7 @@ describe("custom-domains verify consumer: fail closed against the DB", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: dotsId, tenantId: T, domain: "...", verificationMethod: "dns_txt", verificationToken: TOKEN },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await readRow(dotsId)).toEqual([]);
   });
 });

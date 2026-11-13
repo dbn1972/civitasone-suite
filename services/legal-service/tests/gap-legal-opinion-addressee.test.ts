@@ -17,13 +17,14 @@ import { registerOpinionConsumers } from "../src/modules/opinions/consumer.js";
 import { setOrgClient, OrgServiceError } from "../src/shared/org-client.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { useFakeOrg, TEST_DEPT_ID, TEST_DEPT_NAME } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000d1501";
 const ACTOR = "00000000-aaaa-4000-8000-0000000d1501";
 const LEGACY = "33333333-cccc-4000-8000-0000000d1501";
 const auth = (roles: string[] = ["legal_officer"]) => ({ authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s" }, SECRET, 3600)}`, "x-tenant-id": TENANT });
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

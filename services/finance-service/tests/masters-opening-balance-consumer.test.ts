@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, dbTransactionFn, insertValuesMock, onConflictDoNothingMock, returningMock, markProcessedMock } = vi.hoisted(() => {
   // .onConflictDoNothing() now returns a chainable `.returning(...)` (masters/
@@ -73,7 +74,7 @@ function makeMsg(payload: Record<string, unknown>) {
     actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload,
   };
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 150));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

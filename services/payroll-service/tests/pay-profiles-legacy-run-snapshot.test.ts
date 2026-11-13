@@ -69,6 +69,7 @@ import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -174,7 +175,7 @@ async function seed(): Promise<void> {
 async function waitForRun(runId: string): Promise<void> {
   const deadline = Date.now() + 30_000;
   for (;;) {
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
     const rows = (await asTenant((tx) => tx.execute(sql`SELECT status, last_error FROM payroll.payroll_runs WHERE id = ${runId}::uuid`))) as unknown as Array<{ status: string; last_error: string | null }>;
     if (rows[0]?.status === "failed") throw new Error(`run failed: ${rows[0].last_error}`);
     const n = (await asTenant((tx) => tx.execute(sql`SELECT count(*)::int AS n FROM payroll.payroll_register WHERE run_id = ${runId}::uuid`))) as unknown as Array<{ n: number }>;

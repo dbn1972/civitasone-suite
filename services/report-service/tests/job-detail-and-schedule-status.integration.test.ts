@@ -22,6 +22,7 @@ import { jobs } from "../src/modules/jobs/schema.js";
 import { registerJobConsumers } from "../src/modules/jobs/consumer.js";
 import { registerScheduledConsumers } from "../src/modules/scheduled/consumer.js";
 import { buildResultPreview, RESULT_PREVIEW_ROWS } from "../src/modules/render/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
@@ -38,7 +39,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>): Promise<T> {
   while (Date.now() < deadline) {
     const v = await fn();
     if (v) return v;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error("condition not met in time");
 }

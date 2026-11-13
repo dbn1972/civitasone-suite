@@ -26,6 +26,7 @@ import { permits, permitActions } from "../src/modules/permits/schema.js";
 import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "8d4edc9a-0e0a-4f83-8c6b-1bfdee59fc89";
@@ -155,7 +156,7 @@ describe("shop.permit.issue_notice consumer — happy path (integration)", () =>
       tenantId: TENANT, actorId: OFFICER_ACTOR, correlationId: "corr-notice-1", schemaVersion: "1.0",
       payload: { id: noticeId, permitId: EXISTING_PERMIT_ID, noticeDetails: { reason: "fire safety" } },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant((tx) =>

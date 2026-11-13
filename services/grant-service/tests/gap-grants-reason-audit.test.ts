@@ -18,6 +18,7 @@ import { registerApplicationConsumers } from "../src/modules/application/consume
 import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
 import { randomUUID } from "node:crypto";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ACTOR = "10000000-aaaa-4000-8000-0000000000a1";
@@ -39,7 +40,7 @@ const wrap = (type: string, payload: Record<string, unknown>) => ({
   messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR,
   correlationId: "corr-reason", schemaVersion: "1.0", payload,
 });
-const settle = () => new Promise((r) => setTimeout(r, 500));
+const settle = () => drainAllQueues();
 
 async function wipe() {
   await scoped(async (tx) => {

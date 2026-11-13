@@ -18,6 +18,7 @@ import { resolveFeatureFlag } from "../src/modules/config/domain.js";
 import { aggregateHealth } from "../src/modules/health/domain.js";
 import { redactLogLine } from "../src/modules/health/operations.js";
 import { breakGlassExpiresAt, BREAK_GLASS_TTL_MS } from "../src/modules/support/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 /**
  * Test-harness fix: `new MemoryQueue()` used directly here (not the
@@ -124,7 +125,7 @@ describe("tenant consumer — CQRS (integration)", () => {
         edition: "psu", status: "draft", region: "ap-south-1", residency: "IN", settings: {}, version: 1,
       },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const [rows, outbox] = await runWithTenant(T1_ID, () =>
@@ -476,7 +477,7 @@ describe("tenant edition change — lifecycle consumer apply + idempotency (inte
     }, "corr-ed-1");
     await q.publish(COMMANDS.tenantLifecycleRequest, env);
     await q.publish(COMMANDS.tenantLifecycleRequest, env); // duplicate delivery
-    await new Promise((r) => setTimeout(r, 700));
+    await drainAllQueues();
     await q.stop();
 
     const [rows, audits] = await runWithTenant(T_ED, () =>
@@ -513,7 +514,7 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
     }, "c-sus");
     await q.publish(COMMANDS.tenantLifecycleRequest, susEnv);
     await q.publish(COMMANDS.tenantLifecycleRequest, susEnv); // duplicate
-    await new Promise((r) => setTimeout(r, 600));
+    await drainAllQueues();
 
     let rows = await runWithTenant(T_SUS, () =>
       db.transaction((tx) => tx.select().from(adminTenants).where(eq(adminTenants.id, T_SUS))));
@@ -523,7 +524,7 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
     await q.publish(COMMANDS.tenantLifecycleRequest, lifecycleCmd(T_SUS, MSG_REACT, {
       requestId: "eeee0003-2222-4000-8000-000000000003", kind: "reactivate", reason: "dues cleared",
     }, "c-react"));
-    await new Promise((r) => setTimeout(r, 600));
+    await drainAllQueues();
     await q.stop();
 
     rows = await runWithTenant(T_SUS, () =>
@@ -566,10 +567,10 @@ describe("config feature-flag create — idempotent insert (integration)", () =>
       payload: { flagKey: FLAG, enabled: true },
     });
     await q.publish(COMMANDS.featureFlagCreate, mk(MSG_A));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     // second, genuinely distinct command for the SAME flag key — must not throw.
     await q.publish(COMMANDS.featureFlagCreate, mk(MSG_B));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const [rows, seenA, seenB] = await runWithTenant(PLATFORM, () =>

@@ -20,6 +20,7 @@ import { grantInstallments, grantDisbursements, grantPfmsRecords } from "../src/
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerDisbursementConsumers } from "../src/modules/disbursement/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // Unique ids per file: vitest runs files in parallel against one shared DB and wipe()/seed()
 // are tenant/scheme-wide, so files MUST NOT share TENANT/SCHEME (see PR for V4-D-03/04/05 flake).
@@ -83,7 +84,7 @@ async function send(q: Queue, topic: string, payload: Record<string, unknown>): 
   while (Date.now() < deadline) {
     const rows = await scopedQuery((tx) => tx.select().from(processed).where(eq(processed.messageId, m.messageId)));
     if (rows.length === 1) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error(`message on ${topic} was never processed`);
 }

@@ -31,6 +31,7 @@ import {
 } from "../src/modules/exports/signing.js";
 import { computeRiskScore, riskBand } from "../src/modules/risk/domain.js";
 import { assertCanTransition, isClosable, DomainError } from "../src/modules/observation/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // ───────────────────────────────────────────────────────────────────────────
 // 1. Tamper-evident hash chain (pure) — uses the current 6-arg content-bound API.
@@ -355,7 +356,7 @@ describe("DB-backed audit ledger", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { service: "policy", action: "create", resourceType: "role", resourceId: "r1", outcome: "success" },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
@@ -397,9 +398,9 @@ describe("DB-backed audit ledger", () => {
       payload: { service: "s", action: "a", resourceType: "r", resourceId: "x", outcome: "success" },
     };
     await q.publish("audit.event.ingest", env);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.publish("audit.event.ingest", { ...env }); // redelivery, same messageId
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(tenant, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, tenant))));
@@ -416,7 +417,7 @@ describe("DB-backed audit ledger", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { service: "s", action: "a", resourceType: "r", resourceId: "b1", outcome: "success" },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
 
     const aRows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));

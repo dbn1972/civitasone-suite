@@ -22,6 +22,7 @@ import * as repo from "../src/modules/payroll/repo.js";
 import { resolveTemplateForMonth } from "../src/modules/pay-components/rules.js";
 import { runWithTenant } from "@civitasone/db";
 import { scopedRead } from "../src/shared/db.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
@@ -85,7 +86,7 @@ describe("flag OFF (default): existing tenants see no change", () => {
     expect((await get(`/v1/payroll/structures/${sid}/components`)).statusCode).toBe(404);
     expect((await get("/v1/payroll/ctc-templates")).statusCode).toBe(404);
     expect((await post(`/v1/payroll/structures/${sid}/lock`, {}, checker)).statusCode).toBe(404);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     expect(await comps(sid)).toHaveLength(0);
   });
 

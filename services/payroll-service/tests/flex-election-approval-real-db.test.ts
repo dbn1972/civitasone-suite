@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const H = vi.hoisted(() => ({ names: new Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>(), own: {} as Record<string, string> }));
 
@@ -90,12 +91,12 @@ async function until<T>(fn: () => Promise<T>, pred: (v: T) => boolean, ms = 4000
   const end = Date.now() + ms;
   let v = await fn();
   while (!pred(v) && Date.now() < end) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     v = await fn();
   }
   return v;
 }
-const settle = () => new Promise((r) => setTimeout(r, 300));
+const settle = () => drainAllQueues();
 
 async function etagOf(id: string): Promise<string> {
   return runWithTenant(TENANT, () => db.transaction(async (tx) =>

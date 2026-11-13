@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const mockTx = {
   insert: vi.fn().mockReturnValue({
@@ -104,7 +105,7 @@ describe("DashboardsConsumer — createDashboard", () => {
         layout: {},
       },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
     // Should emit domain event + audit event (2 enqueue calls)
     expect(enqueueMock).toHaveBeenCalledTimes(2);
@@ -122,7 +123,7 @@ describe("DashboardsConsumer — createDashboard", () => {
       schemaVersion: "1.0",
       payload: { id, name: "Dup", description: null, status: "active", ownerId: ACTOR, visibility: "private", layout: {} },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 });
@@ -139,7 +140,7 @@ describe("DashboardsConsumer — updateDashboard", () => {
       schemaVersion: "1.0",
       payload: { dashboardId: id, expectedVersion: 1, patch: { name: "Updated" } },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
   });
 });
@@ -156,7 +157,7 @@ describe("DashboardsConsumer — addWidget", () => {
       schemaVersion: "1.0",
       payload: { widgetId: id, dashboardId: randomUUID(), title: "Chart", vizType: "bar", spec: {}, position: 0 },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
   });
 });
@@ -173,7 +174,7 @@ describe("DashboardsConsumer — shareDashboard", () => {
       schemaVersion: "1.0",
       payload: { shareId: id, dashboardId: randomUUID(), principalId: randomUUID(), access: "view" },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
   });
 });
@@ -190,7 +191,7 @@ describe("DashboardsConsumer — deleteDashboard", () => {
       schemaVersion: "1.0",
       payload: { dashboardId },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
     expect(mockTx.delete).toHaveBeenCalled();
     // Emits dashboardDeleted domain event + audit event (2 enqueue calls) —
@@ -214,7 +215,7 @@ describe("DashboardsConsumer — deleteDashboard", () => {
       schemaVersion: "1.0",
       payload: { dashboardId },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
     // Only the failure-audit enqueue — no dashboardDeleted domain event.
     expect(enqueueMock).toHaveBeenCalledTimes(1);
@@ -231,7 +232,7 @@ describe("DashboardsConsumer — deleteDashboard", () => {
       schemaVersion: "1.0",
       payload: { dashboardId: randomUUID() },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(mockTx.delete).not.toHaveBeenCalled();
     expect(enqueueMock).not.toHaveBeenCalled();
   });

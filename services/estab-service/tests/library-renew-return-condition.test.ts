@@ -15,6 +15,7 @@ import { estabLibraryBooks, estabIssues } from "../src/modules/facilities/schema
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerFacilitiesConsumers } from "../src/modules/facilities/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function mint(sub: string, roles: string[], tid: string): string {
@@ -81,7 +82,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 600));
+const settle = () => drainAllQueues();
 
 function cmd(type: string, tenantId: string, actor: string, payload: Record<string, unknown>, messageId = randomUUID()) {
   return q.publish(type, { messageId, type, tenantId, actorId: actor, correlationId: `corr-${messageId}`, schemaVersion: "1.0", payload });

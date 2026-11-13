@@ -11,6 +11,7 @@ import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
 import { MemoryQueue, type Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0000-4000-8000-0000000021a1";
@@ -88,7 +89,7 @@ describe("session IP reveal + user-agent shortening (owner decision #21)", () =>
     expect(r.json()).toEqual({ id: sid, ipAddress: "10.1.2.3" });
     expect(r.headers["cache-control"]).toBe("no-store");
     await infraQueue.drain?.();
-    await new Promise((res) => setTimeout(res, 300));
+    await drainAllQueues();
     const after = await revealAudits(TENANT);
     expect(after.length).toBe(before + 1);
     expect(after.at(-1)!.payload).toMatchObject({ service: "identity", resourceType: "session", resourceId: sid, reason: REASON });
@@ -103,7 +104,7 @@ describe("session IP reveal + user-agent shortening (owner decision #21)", () =>
       expect(r.statusCode).toBe(403);
       expect(r.body).not.toContain("10.1.2.3");
     }
-    await new Promise((res) => setTimeout(res, 200));
+    await drainAllQueues();
     expect((await revealAudits(TENANT)).length).toBe(before);
   });
 

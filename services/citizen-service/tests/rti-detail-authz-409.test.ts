@@ -25,6 +25,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerRtiConsumers } from "../src/modules/rti/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerRtiConsumers(queue);
 await queue.start();
@@ -53,7 +54,7 @@ async function waitReady(url: string) {
   for (let i = 0; i < 40; i++) {
     const r = await app.inject({ method: "GET", url, headers: ofH });
     if (r.statusCode === 200) return;
-    await new Promise((res) => setTimeout(res, 50));
+    await drainAllQueues();
   }
   throw new Error(`waitReady timeout for ${url}`);
 }

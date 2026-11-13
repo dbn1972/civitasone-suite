@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -286,7 +287,7 @@ describe("allowance-rules API", () => {
     while (Date.now() < deadline) {
       rows = await q(sql`SELECT hra_floor_x_minor::text, hra_floor_y_minor, change_reason FROM statutory.allowance_rule_config WHERE tenant_id = ${TENANT}::uuid AND effective_from = '2027-04-01'`);
       if (rows.length) break;
-      await new Promise((r) => setTimeout(r, 200));
+      await drainAllQueues();
     }
     expect(rows).toEqual([{ hra_floor_x_minor: "600000", hra_floor_y_minor: null, change_reason: payload.changeReason }]);
     const audits = await q(sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record'

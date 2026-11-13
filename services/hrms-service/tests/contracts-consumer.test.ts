@@ -8,6 +8,7 @@ import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { uuidV5 } from "../src/shared/ids.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const H = vi.hoisted(() => {
   const mockTx = {
@@ -153,7 +154,7 @@ function makeRenewal(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 120));
+const settle = () => drainAllQueues();
 
 let q: InstanceType<typeof MemoryQueue>;
 

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const mockTx = {
   insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoNothing: vi.fn().mockResolvedValue([]) }) }),
@@ -64,7 +65,7 @@ describe("MetricsConsumer — saveMetric", () => {
       schemaVersion: "1.0",
       payload: { id, name: "Revenue Sum", metricKey: "finance.revenue_sum", spec: { agg: "sum" } },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
     // Should emit metricSaved event + audit event
     expect(enqueueMock).toHaveBeenCalledTimes(2);
@@ -82,7 +83,7 @@ describe("MetricsConsumer — saveMetric", () => {
       schemaVersion: "1.0",
       payload: { id, name: "Dup", metricKey: "dup.key", spec: {} },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 });

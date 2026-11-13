@@ -18,6 +18,7 @@ import { registerContractConsumers } from "../src/modules/contracts/consumer.js"
 import { registerRateConsumers }     from "../src/modules/rate/consumer.js";
 import { assertCanAmend }            from "../src/modules/contracts/domain.js";
 import { EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
 const TENANT  = "11111111-aaaa-4000-8000-000000000003";
@@ -88,7 +89,7 @@ describe("Contract consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, CON_1))));
@@ -132,7 +133,7 @@ describe("Rate contract consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const rcs = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractRateContracts).where(eq(contractRateContracts.id, RC_1))));

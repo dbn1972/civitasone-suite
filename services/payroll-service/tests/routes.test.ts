@@ -9,6 +9,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-2222-4000-8000-000000000022";
@@ -217,7 +218,7 @@ describe("Payroll disbursement — requires approval state (route + domain)", ()
       payload: { id: RUN_DISBURSE_TEST, tenantId: TENANT },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainAllQueues();
     await q.stop();
 
     // The run must still be in 'processing' — disburse was rejected by state machine

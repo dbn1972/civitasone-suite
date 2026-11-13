@@ -24,6 +24,7 @@ import * as caseQueries from "../src/modules/cases/queries.js";
 import { cache } from "../src/shared/infra.js";
 import { COMMANDS } from "../src/topics.js";
 import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 // GAP-LEGAL-CASES-NEW-02: creating a case now requires filingDate + a department from the org hierarchy.
 useFakeOrg();
 
@@ -47,7 +48,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 async function drain(): Promise<void> {
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainAllQueues();
 }
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

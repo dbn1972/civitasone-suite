@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, dbTransactionFn, enqueuedMessages, markProcessedMock, publish, repoMock } = vi.hoisted(() => {
   const _mockTx = {};
@@ -45,7 +46,7 @@ import { COMMANDS } from "../src/topics.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

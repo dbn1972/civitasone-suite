@@ -28,6 +28,7 @@ import * as collectionRepo from "../src/modules/collection/repo.js";
 import * as hotspotsRepo from "../src/modules/analytics/repo.js";
 import { COMMANDS } from "../src/topics.js";
 import { hdr, waitFor, TENANT_A, ACTOR_A } from "./support.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const N = 50;
 
@@ -134,7 +135,7 @@ describe("a retried command persists exactly once", () => {
     await waitFor(async () => (await KINDS[0]!.read(id)) != null, 15000);
     const first = await KINDS[0]!.read(id);
     await publishComplaint(messageId, id);
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     expect(await countRows(id)).toBe(1);
     expect(await KINDS[0]!.read(id)).toBe(first);
   });

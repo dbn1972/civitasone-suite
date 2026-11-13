@@ -8,6 +8,7 @@
  * - GET /v1/payroll/tax/form16/bulk-download (happy path, 400, 401, 403, 404)
  */
 import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // UAT ux-docs: Form 16 is issued only with a configured deductor (else 422
 // FORM16_EMPLOYER_NOT_CONFIGURED). These scenarios run with one configured.
@@ -76,7 +77,7 @@ vi.mock("../src/shared/hrms-client.js", () => ({
   resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
     actorId === "aaaaaaaa-bbbb-4000-8000-0000000000f1" ? "aaaaaaaa-bbbb-4000-8000-000000000001" : null),
   fetchPayrollInput: vi.fn(async () => {
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     return { month: "2024-03", employees: [], lopDays: {} };
   }),
   HrmsUnavailableError: class HrmsUnavailableError extends Error {

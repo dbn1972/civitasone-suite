@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const EMPLOYEE_BY_ACTOR = new Map<string, string>();
 const UPLOADED = new Map<string, { contentLength: number; contentType: string }>();
@@ -78,12 +79,12 @@ async function until<T>(fn: () => Promise<T>, pred: (v: T) => boolean, ms = 4000
   const end = Date.now() + ms;
   let v = await fn();
   while (!pred(v) && Date.now() < end) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     v = await fn();
   }
   return v;
 }
-const settle = () => new Promise((r) => setTimeout(r, 300));
+const settle = () => drainAllQueues();
 
 async function auditsFor(resourceId: string, action?: string): Promise<Row[]> {
   const rows = await q(sql`

@@ -4,6 +4,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import {
   resolveDelegationRecipients, formatIstDate, formatPeriod, DELEGATION_CREATED, DELEGATION_REVOKED,
 } from "../src/modules/domain-events/delegation-notice.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: async (fn: (tx: unknown) => Promise<void>) => { await fn({}); } },
@@ -78,7 +79,7 @@ describe("delegation notice consumer", () => {
     expect(sends.filter((p) => p.recipientId === MGR).map((p) => p.channel)).toEqual(["in_app"]);
     expect(sends.every((p) => p.eventType === DELEGATION_CREATED)).toBe(true);
     await q.publish(DELEGATION_CREATED, env); // redelivery
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(outbox.sent.filter((m) => m.topic === "notification.send")).toHaveLength(2);
   });
 });

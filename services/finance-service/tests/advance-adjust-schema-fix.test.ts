@@ -38,6 +38,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeAdvances } from "../src/modules/payments/schema.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-2222-4000-8000-000000000088";
@@ -54,7 +55,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 5000): Promise<boolean> 
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return true;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   return false;
 }

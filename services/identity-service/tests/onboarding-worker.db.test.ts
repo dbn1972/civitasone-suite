@@ -15,6 +15,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { registerUserConsumers } from "../src/modules/users/consumer.js";
 import { putSettings } from "../src/modules/users/onboarding-repo.js";
 import { installFakeKeycloak, KC_URL } from "./helpers/fake-keycloak.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const T = randomUUID();
 const ACTOR = randomUUID();
@@ -85,7 +86,7 @@ describe("switched OFF (today's behaviour)", () => {
     const email = "off@dept.gov.in";
     const id = await createCmd(email);
     await until(() => Boolean(kcUser(email)));
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const u = kcUser(email)!;
     expect(u.roles.size).toBe(0);
     expect(kc.calls.some((c) => c.path.includes("/role-mappings"))).toBe(false);
