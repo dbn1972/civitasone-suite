@@ -420,6 +420,21 @@ export class MemoryQueue implements Queue {
     }
     this.retryTimers.clear();
     this.handlers.clear();
+    // Graceful stop: publish() is fire-and-forget, so a handler that has already
+    // STARTED (e.g. a DB transaction under CI load) is still running when stop()
+    // is called. Returning now let callers observe pre-handler state (the
+    // "sleep N ms; stop(); assert" idiom flaked on slow runners). Wait for the
+    // already-started deliveries to settle; retry backoffs were cancelled above
+    // so this cannot wait on a retry. Bounded so a wedged handler can never hang
+    // shutdown.
+    if (this.inflight.size > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        this.drain(),
+        new Promise<void>((resolve) => { timer = setTimeout(resolve, 10_000); }),
+      ]);
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /** Backoff wait for deliver()'s retry loop, cancellable from stop(). */
