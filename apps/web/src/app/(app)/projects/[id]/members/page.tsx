@@ -4,7 +4,10 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { resolveUsers } from "@/lib/directory/resolveUsers";
+import { employeeDisplayLabel, resolveEmployeeNames } from "@/app/_data/employeeNames";
+import { getTranslations } from "next-intl/server";
 import { AddMemberForm } from "./AddMemberForm";
+import { AddEmployeeMemberForm } from "./AddEmployeeMemberForm";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 
 export default async function ProjectMembersPage(props: { params: Promise<{ id: string }> }) {
@@ -16,7 +19,10 @@ export default async function ProjectMembersPage(props: { params: Promise<{ id: 
   // the shared tenant-scoped user directory (server-side, batched, non-PII).
   // Fail-soft: an unresolved id renders as a short id via UserRef, never a
   // guessed name. The full id stays available in the UserRef title for copy.
-  const names = errored ? new Map<string, string>() : await resolveUsers(members.map((m) => m.userId));
+  const names = errored ? new Map<string, string>() : await resolveUsers(members.flatMap((m) => (m.userId ? [m.userId] : [])));
+  // S8 G7: employee-only members (contract staff with no login) carry an HRMS employee id instead.
+  const t = await getTranslations("projectStaffCost");
+  const employeeNames = errored ? new Map() : await resolveEmployeeNames(members.flatMap((m) => (m.employeeId && !m.userId ? [m.employeeId] : [])));
 
   // GAP-PROJECTS-DETAIL-MEMBERS-02: only project managers/officers (project-service
   // PROJ_ROLES) may add/remove members; the server already 403s others. Hide the
@@ -46,6 +52,11 @@ export default async function ProjectMembersPage(props: { params: Promise<{ id: 
       {canManage && !errored && (
         <Card title="Add Member" padding>
           <AddMemberForm projectId={params.id} />
+        </Card>
+      )}
+      {canManage && !errored && (
+        <Card title={t("addEmployeeCard")} padding>
+          <AddEmployeeMemberForm projectId={params.id} />
         </Card>
       )}
       <Card title="Team Members">
@@ -78,7 +89,14 @@ export default async function ProjectMembersPage(props: { params: Promise<{ id: 
                         (UserRef) instead of a bare UUID. userId stays in the title for
                         copy; an unresolved id falls back to a short id, never a guess. */}
                     <td style={{ fontSize: "0.9rem" }}>
-                      <UserRef id={m.userId} name={names.get(m.userId) ?? null} />
+                      {m.userId ? (
+                        <UserRef id={m.userId} name={names.get(m.userId) ?? null} />
+                      ) : (
+                        <>
+                          {employeeDisplayLabel(employeeNames, m.employeeId, t("unknownEmployee"))}{" "}
+                          <span style={{ color: "var(--ink2)", fontSize: "0.78rem" }}>({t("noLoginBadge")})</span>
+                        </>
+                      )}
                     </td>
                     <td>
                       <span
@@ -108,7 +126,7 @@ export default async function ProjectMembersPage(props: { params: Promise<{ id: 
                         <RemoveMemberButton
                           projectId={params.id}
                           memberId={m.id}
-                          memberLabel={names.get(m.userId) ?? m.userId}
+                          memberLabel={(m.userId ? names.get(m.userId) ?? m.userId : employeeDisplayLabel(employeeNames, m.employeeId, t("unknownEmployee")))}
                         />
                       </td>
                     )}

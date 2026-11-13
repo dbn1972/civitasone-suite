@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import type { LoaderResult } from "@/app/_data/apiClient";
@@ -109,6 +110,8 @@ export default async function CostingPage(
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel={t("backLabel")}
       />
+      {/* S8 G7: costing by project / cost centre, per employee and date. */}
+      <p style={{ margin: "0 0 12px" }}><Link href="/hr/payroll/project-costing">{t("projectCostingLink")}</Link></p>
 
       <StatGrid>
         <StatCard icon="📊" iconBg="var(--infobg)" label={t("statAllocations")} value={noReport ? null : reportRows.length} />

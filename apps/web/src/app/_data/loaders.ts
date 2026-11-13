@@ -7697,7 +7697,10 @@ export async function getProjectTasks(projectId: string): Promise<LoaderResult<P
 export type ProjectMemberRow = {
   id: string;
   projectId: string;
-  userId: string;
+  /** null for an employee-only member (S8 G7: contract staff without a login). */
+  userId: string | null;
+  /** HRMS employee id (S8 G7); null for a login-only member. */
+  employeeId?: string | null;
   role: string;
   createdAt: string;
 };

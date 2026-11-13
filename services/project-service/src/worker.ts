@@ -16,6 +16,7 @@ import { registerEscalationConsumers }     from "./modules/escalation/consumer.j
 import { registerEvidenceConsumers }      from "./modules/evidence/consumer.js";
 import { registerSchedulingConsumers }    from "./modules/scheduling/consumer.js";
 import { registerF3ProjectConsumers }   from "./modules/project/f3-consumer.js";
+import { registerStaffCostConsumers }   from "./modules/staff-cost/consumer.js";
 
 const log = pino({ name: "project-worker" });
 
@@ -44,6 +45,8 @@ registerEscalationConsumers(queue);
 registerEvidenceConsumers(queue);
 registerSchedulingConsumers(queue);
 registerF3ProjectConsumers(queue);
+// S8 G7: per-project staff-cost totals from payroll (aggregates only).
+registerStaffCostConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

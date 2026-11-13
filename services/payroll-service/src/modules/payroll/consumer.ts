@@ -1,4 +1,5 @@
 import { minorToWireNumber } from "../../shared/money.js";
+import { recordRunCostLinesTx as recordRunProjectCostLinesTx } from "../project-costing/service.js";
 import { lockDaRates } from "../da-rates/rules.js";
 import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
@@ -1277,6 +1278,17 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         approvedAt: new Date(),
         updatedBy: msg.actorId,
       });
+      // S8 G7: project costing (MIS). Off unless the tenant enabled it. It is a
+      // reporting layer, so a failure here must never block the salary approval:
+      // it runs in a savepoint, a failure is audited and can be redone with
+      // POST /v1/payroll/project-costing/runs/:runId/generate.
+      try {
+        await (tx as unknown as { transaction: <T>(f: (sp: unknown) => Promise<T>) => Promise<T> })
+          .transaction((sp) => recordRunProjectCostLinesTx(sp as never, msg, { id: p.id, month: run.month }));
+      } catch (err) {
+        log.error({ err, runId: p.id }, "project costing failed for an approved run; salary approval is unaffected");
+        await audit(tx, msg, "project_cost_failed", "payroll_run", p.id, { error: (err as Error).message.slice(0, 300) });
+      }
       // INT-FIX: only emit the finance GL accrual trigger when the run actually
       // accrued something. A run approved with zero slips (gross == 0) has no
       // salary to post; emitting it produced an all-zero journal that finance
