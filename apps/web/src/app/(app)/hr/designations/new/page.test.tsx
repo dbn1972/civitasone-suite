@@ -8,27 +8,33 @@ vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles,
 }));
 
+// S8-G4: the page is now async (it asks for the tenant's pay scale). Government default here.
+vi.mock("@/app/_data/gradeBands", () => ({
+  getPayScaleKind: async () => "cpc7",
+  getGradeBands: async () => ({ bands: [], failed: false }),
+}));
+
 import NewDesignationPage from "./page";
 
-function renderPage() {
+async function renderPage() {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <NewDesignationPage />
+      {await NewDesignationPage()}
     </NextIntlClientProvider>,
   );
 }
 
 describe("NewDesignationPage — role gating (Problem A)", () => {
-  it("shows an honest permission-denied state for 'employee' instead of a live-but-doomed form", () => {
+  it("shows an honest permission-denied state for 'employee' instead of a live-but-doomed form", async () => {
     mockRoles = ["employee"];
-    renderPage();
+    await renderPage();
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(screen.queryByText("Add Designation")).not.toBeInTheDocument();
   });
 
-  it("renders the real Add Designation form for hr_admin", () => {
+  it("renders the real Add Designation form for hr_admin", async () => {
     mockRoles = ["hr_admin"];
-    renderPage();
+    await renderPage();
     expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
     // "Add Designation" text is ambiguous here (page heading, form-internal
     // heading, and submit button all share it) — the Code field is the
@@ -36,9 +42,9 @@ describe("NewDesignationPage — role gating (Problem A)", () => {
     expect(screen.getByLabelText(/code/i)).toBeInTheDocument();
   });
 
-  it("denies hr_officer (masters-routes.ts's HR_ROLES excludes it)", () => {
+  it("denies hr_officer (masters-routes.ts's HR_ROLES excludes it)", async () => {
     mockRoles = ["hr_officer"];
-    renderPage();
+    await renderPage();
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
   });
 });

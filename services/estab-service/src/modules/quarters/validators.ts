@@ -29,6 +29,9 @@ export const applyAllotmentBody = z.object({
   employeeRef:     z.string().uuid(),
   designation:     z.string().max(120).optional(),
   payLevel:        z.string().max(16).optional(),
+  // S8-G4: for a tenant on private grade bands `payLevel` carries the band code (C2, T3 ...) and `rank` its
+  // numeric rank, because a code is not a number. Omitted == the unchanged behaviour (score from payLevel).
+  rank:            z.number().int().min(0).max(9999).optional(),
   seniorityMonths: z.number().int().nonnegative().default(0),
 });
 export type ApplyAllotmentBody = z.infer<typeof applyAllotmentBody>;

@@ -249,6 +249,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
   await app.register((await import("./modules/employee/employee-types-routes.js")).employeeTypeRoutes);
+  // S8-G4: private grade bands (C2/T3/M2 ...) for tenants not on the 7th CPC pay matrix.
+  await app.register((await import("./modules/grade-bands/routes.js")).gradeBandRoutes);
   await app.register((await import("./modules/employee/engagement-policy.js")).engagementPolicyRoutes);
   // GAP-ADMIN-BULK-SCAN-02: scan-link target (lookup + scanned-documents read).
   const { scanLinkRoutes } = await import("./modules/employee/scan-link-routes.js");

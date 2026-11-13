@@ -43,6 +43,16 @@ export function assertMakerChecker(applicantRef: string, approverActorId: string
 // ── Eligibility ───────────────────────────────────────────────────────────
 
 /**
+ * The number that stands for an applicant's seniority in the eligibility score. A government applicant
+ * carries a 7th CPC pay level as text ("14" -> 14, anything unparsable -> 0). A tenant on private grade bands
+ * (S8-G4) cannot: "C2" is not a number, so the caller sends the band's numeric `rank` and that wins.
+ * With no `rank` this is exactly the parse the consumer always did.
+ */
+export function eligibilityRankOf(p: { payLevel?: string | undefined; rank?: number | undefined }): number {
+  return p.rank ?? (parseInt(p.payLevel ?? "0", 10) || 0);
+}
+
+/**
  * Compute eligibility score based on pay level and seniority months.
  * Higher pay level = higher priority; tie-broken by seniority.
  * Weights are NOT hardcoded — they come from config/master data.

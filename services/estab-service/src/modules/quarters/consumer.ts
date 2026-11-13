@@ -16,7 +16,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
-import { assertValidTransition, assertMakerChecker, computeEligibilityScore, findApplicableRate, computeOverstayPenalty, DomainError } from "./domain.js";
+import { assertValidTransition, assertMakerChecker, computeEligibilityScore, eligibilityRankOf, findApplicableRate, computeOverstayPenalty, DomainError } from "./domain.js";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { estabQuarters, estabQuarterAllotments, estabLicenceFeeRates, estabOverstayPenalties } from "./schema.js";
@@ -104,10 +104,10 @@ export function registerQuarterConsumers(queue: Queue): void {
     try {
       const p = msg.payload as {
         id: string; tenantId: string; quarterId: string; employeeRef: string;
-        designation?: string; payLevel?: string; seniorityMonths?: number;
+        designation?: string; payLevel?: string; rank?: number; seniorityMonths?: number;
       };
       const score = computeEligibilityScore(
-        parseInt(p.payLevel ?? "0", 10) || 0,
+        eligibilityRankOf(p), // S8-G4: an explicit band rank wins; otherwise the payLevel string is parsed as before
         p.seniorityMonths ?? 0,
       );
       await db.transaction(async (tx) => {

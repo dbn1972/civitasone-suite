@@ -11,6 +11,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
+import { getPolicy } from "../policy-settings/repo.js";
+import { findBand } from "../grade-bands/repo.js";
 import {
   countActiveEmployeesByDeptTx,
   departmentUsageTx,
@@ -67,6 +69,8 @@ const createDesignationBody = z.object({
   // "" in the DB, not NULL, so "cleared" and "never set" became visibly
   // different values).
   payGrade: z.string().max(30).optional().nullable(),
+  // S8-G4: optional link to a tenant grade band (employee.hrms_grade_bands). null clears it.
+  gradeBandId: z.string().uuid().optional().nullable(),
 });
 
 // Update schema: level 0 means "unclassified / cleared" (the web sends 0 for a
@@ -74,6 +78,43 @@ const createDesignationBody = z.object({
 const updateDesignationBody = createDesignationBody.partial().extend({
   level: z.number().int().min(0, "Pay level must be between 0 and 18.").max(18, "Pay level must be between 1 and 18.").optional(),
 });
+
+// S8-G4: a tenant on private grade bands (policy pay_scale.kind = 'private_bands') is not on the 7th CPC
+// pay matrix, so the 1-18 rule does not apply to its designations' `level` (kept only as a legacy,
+// unused number). The relaxed bound below is a typo guard, not a statement of policy.
+const BAND_TENANT_MAX_LEVEL = 99;
+const bandTenantLevel = z.number().int().min(0).max(BAND_TENANT_MAX_LEVEL, `Level must be between 0 and ${BAND_TENANT_MAX_LEVEL}.`).optional();
+const createDesignationBodyBands = createDesignationBody.extend({ level: bandTenantLevel });
+const updateDesignationBodyBands = updateDesignationBody.extend({ level: bandTenantLevel });
+
+/**
+ * Validate a designation body by the tenant's pay scale. GOVERNMENT PATH IS UNCHANGED: the strict
+ * (1-18) schema is tried first and, when it accepts the body, no policy is read at all. Only a body
+ * rejected on `level` consults the tenant's pay_scale policy, and only a 'private_bands' tenant gets
+ * the relaxed schema; for everyone else the original ZodError is rethrown untouched.
+ */
+async function parseDesignationBody<T>(
+  tenantId: string, raw: unknown, strict: z.ZodType<T, z.ZodTypeDef, unknown>, relaxed: z.ZodType<T, z.ZodTypeDef, unknown>,
+): Promise<T> {
+  const first = strict.safeParse(raw);
+  if (first.success) return first.data;
+  if (!first.error.issues.some((i) => i.path[0] === "level")) throw first.error;
+  const scale = await getPolicy(tenantId, "pay_scale");
+  if (scale.kind !== "private_bands") throw first.error;
+  return relaxed.parse(raw);
+}
+
+/** A band a designation points at must exist in THIS tenant and be active. */
+async function assertUsableBand(tenantId: string, gradeBandId: string | null | undefined): Promise<void> {
+  if (!gradeBandId) return;
+  const band = await scopedRead((tx) => findBand(tx, tenantId, gradeBandId));
+  if (!band) {
+    throw new HttpError(422, "GRADE_BAND_NOT_FOUND", "That grade band does not exist.");
+  }
+  if (!band.isActive) {
+    throw new HttpError(422, "GRADE_BAND_INACTIVE", `Grade band ${band.code} is inactive; reactivate it or pick another band.`);
+  }
+}
 
 /**
  * GAP-HR-DEPARTMENTS-01: the department list never said how many employees
@@ -271,7 +312,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/designations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = createDesignationBody.parse(req.body);
+    const body = await parseDesignationBody(ctx.tenantId, req.body, createDesignationBody, createDesignationBodyBands);
+    await assertUsableBand(ctx.tenantId, body.gradeBandId);
     // GAP-HR-DESIGNATIONS-NEW-02: this used to publish and answer 202 with
     // no uniqueness check at all, so two designations could silently share
     // a code (case-insensitive). Synchronous, tenant-scoped, so the caller
@@ -294,7 +336,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    updateDesignationBody.parse(req.body);
+    const patch = await parseDesignationBody(ctx.tenantId, req.body, updateDesignationBody, updateDesignationBodyBands);
+    await assertUsableBand(ctx.tenantId, patch.gradeBandId);
 
     // Synchronous pre-check (existence) — same reasoning as departments PATCH
     // above (also not tenant-scoped in the original code being converted).

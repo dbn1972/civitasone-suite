@@ -47,6 +47,7 @@ import { registerHolidayConsumers }    from "./modules/holidays/consumer.js";
 import { registerIdCardConsumers }     from "./modules/id-cards/consumer.js";
 import { registerMedicalConsumers }    from "./modules/medical/consumer.js";
 import { registerScanLinkConsumers } from "./modules/employee/scan-link-consumer.js";
+import { registerGradeBandConsumers } from "./modules/grade-bands/consumer.js";
 import { registerOutsourcedConsumers } from "./modules/outsourced/consumer.js";
 import { registerPayMatrixConsumers }  from "./modules/pay-matrix/consumer.js";
 import { registerPensionConsumers }    from "./modules/pension/consumer.js";
@@ -102,6 +103,7 @@ export function registerConsumers(queue: Queue, profile: ModuleProfile): void {
   registerOnboardingTemplateConsumers(queue);
   registerHolidayConsumers(queue);
   registerScanLinkConsumers(queue); // hr_employee scan-link target (document bulk-scan)
+  registerGradeBandConsumers(queue); // S8-G4: private grade bands
   registerReservationConsumers(queue);
   registerSeniorityConsumers(queue);
   registerServiceBookConsumers(queue);
