@@ -280,6 +280,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
+    // The optional disbursing account must be an active bank account of THIS tenant (the consumer re-checks and
+    // dead-letters nothing: it throws NonRetryable). Same 422 whether it never existed or belongs to another tenant.
+    if (body.bankAccountId && !(await repo.isActiveBankAccount(ctx.tenantId, body.bankAccountId))) {
+      throw new HttpError(422, "BANK_ACCOUNT_NOT_FOUND", "bankAccountId is not an active bank account of this office");
+    }
     // Synchronous pre-check of the segregation-of-duties rules (the consumer stays authoritative): the common case
     // gets an immediate 409, not a silent 202. The payer must be neither the officer who lodged the bill (maker !=
     // checker) nor the officer who passed it (passer != payer).
