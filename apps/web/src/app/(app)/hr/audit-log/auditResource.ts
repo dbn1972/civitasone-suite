@@ -157,6 +157,9 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
   "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
   "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
+  "payroll_employee_pf_wage_basis", // S8 PF wage-basis change request / approve / reject (payroll statutory-seams consumer)
+  "payroll_s8_change_request", // S8 statutory-seams change-request decision refused / rejected
+  "payroll_statutory_seams", // S8 LWF / ESI-period flag request / approve (payroll statutory-seams consumer)
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */
