@@ -111,6 +111,10 @@ export async function listSlipsByTenant(
       tdsShortfallMinor: payrollSlips.tdsShortfallMinor,
       tdsShortfallFinal: payrollSlips.tdsShortfallFinal,
       recoveryDeferredMinor: payrollSlips.recoveryDeferredMinor,
+      ctcTemplateId: payrollSlips.ctcTemplateId,
+      ctcTemplateVersion: payrollSlips.ctcTemplateVersion,
+      employerEsiMinor: payrollSlips.employerEsiMinor,
+      gratuityProvisionMinor: payrollSlips.gratuityProvisionMinor,
       month: payrollRuns.month,
       runDeptId: payrollRuns.departmentId,
     })

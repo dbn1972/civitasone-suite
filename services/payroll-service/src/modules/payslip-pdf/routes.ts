@@ -310,6 +310,9 @@ export async function loadSlipDocument(ctx: ReturnType<typeof resolveContext>, i
         gpfMinor: BigInt(slip.gpfMinor), npsEmployeeMinor: BigInt(slip.npsEmployeeMinor), npsEmployerMinor: BigInt(slip.npsEmployerMinor),
         isUps, upsPoolMinor,
         esiMinor: BigInt(slip.esiMinor), tdsMinor: BigInt(slip.tdsMinor),
+        // S8 G1: present only on a ctc_contract slip (NULL columns elsewhere), so every other slip is unchanged.
+        ...(slip.employerEsiMinor != null ? { employerEsiMinor: BigInt(slip.employerEsiMinor) } : {}),
+        ...(slip.gratuityProvisionMinor != null ? { gratuityProvisionMinor: BigInt(slip.gratuityProvisionMinor) } : {}),
       },
     };
     return { slip, run, template, vars, docInput };

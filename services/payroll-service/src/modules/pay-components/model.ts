@@ -68,6 +68,20 @@ export interface ComponentSpec {
   payslipOrder: number | null;
 }
 
+/**
+ * Owner decision (10 Nov 2026, second set): loss of pay applies to every component by default, EXCEPT fixed
+ * reimbursements (phone, conveyance, ...) which default to not reduced. A reimbursement here is a fixed, non-taxable
+ * earning. Employer costs are not paid to the employee, so loss of pay does not apply to them (the engine prorates them
+ * by days out of service only). A run structure never honours the flag, so its default stays false.
+ * Only the DEFAULT: an explicit value from the author always wins.
+ */
+export function defaultLopApplicable(kind: StructureKind, c: Pick<ComponentSpec, "componentType" | "calc" | "isTaxable">): boolean {
+  if (kind !== "ctc_template") return false;
+  if (c.componentType !== "earning") return false;
+  const fixedReimbursement = c.calc === "fixed" && !c.isTaxable;
+  return !fixedReimbursement;
+}
+
 export type SpecIssue = { code: string; field: string; message: string };
 
 /** Validate one component against the structure kind it is being written to. Empty array = valid. isNew=false (an edit) skips the code rules. */

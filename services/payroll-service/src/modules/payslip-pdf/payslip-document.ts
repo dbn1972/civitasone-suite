@@ -52,6 +52,9 @@ export interface PayslipDocInput {
     upsPoolMinor?: bigint;
     esiMinor: bigint;
     tdsMinor: bigint;
+    /** S8 G1 (ctc_contract slips only; absent / zero elsewhere): employer ESI, and the gratuity accrual (never paid on the slip). */
+    employerEsiMinor?: bigint;
+    gratuityProvisionMinor?: bigint;
   };
   generatedAt?: Date;
 }
@@ -89,6 +92,8 @@ export function payslipSections(input: PayslipDocInput): { earnings: SlipRow[]; 
       : { label: "NPS (employer contribution)", amountMinor: input.slip.npsEmployerMinor });
   }
   if (input.slip.pfEmployerMinor > 0n) employer.push({ label: "EPF + EPS (employer contribution)", amountMinor: input.slip.pfEmployerMinor });
+  if ((input.slip.employerEsiMinor ?? 0n) > 0n) employer.push({ label: "ESI (employer contribution)", amountMinor: input.slip.employerEsiMinor! });
+  if ((input.slip.gratuityProvisionMinor ?? 0n) > 0n) employer.push({ label: "Gratuity provision (accrued, not paid)", amountMinor: input.slip.gratuityProvisionMinor! });
   return { earnings, deductions, employer };
 }
 

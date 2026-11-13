@@ -113,6 +113,11 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   payProfile:            varchar("pay_profile", { length: 32 }),
   profileSnapshot:       jsonb("profile_snapshot").$type<Record<string, unknown>>(),
   pfWageMinor:           bigint("pf_wage_minor", { mode: "bigint" }),
+  // S8 G1 (migration 0168): NULL on every slip that is not a ctc_contract slip.
+  ctcTemplateId:         uuid("ctc_template_id"),
+  ctcTemplateVersion:    integer("ctc_template_version"),
+  employerEsiMinor:      bigint("employer_esi_minor", { mode: "bigint" }),
+  gratuityProvisionMinor: bigint("gratuity_provision_minor", { mode: "bigint" }),
   // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): the TDS signals the
   // approver must see -- presumed months, excess, capped shortfall (final: the
   // last FY / separation month, not recoverable by payroll), deferred recovery.

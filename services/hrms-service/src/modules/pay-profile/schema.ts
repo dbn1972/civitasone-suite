@@ -1,6 +1,6 @@
 import { uuid, varchar, bigint, date, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { employeeSchema } from "../employee/schema.js";
-import type { DeputationMoneyTerms } from "./domain.js";
+import type { DeputationMoneyTerms, CtcTerms } from "./domain.js";
 
 /**
  * PAY-PROFILES: effective-dated, maker-checker pay profile per employee
@@ -19,6 +19,8 @@ export const hrmsPayProfiles = employeeSchema.table("hrms_pay_profiles", {
   consolidatedMonthlyMinor: bigint("consolidated_monthly_minor", { mode: "bigint" }),
   /** Deputation money terms approved with this profile (deputation profiles only). */
   deputationTerms:          jsonb("deputation_terms").$type<DeputationMoneyTerms>(),
+  /** S8 G1 (migration 0269): approved CTC terms (ctc_contract profiles only). */
+  ctcTerms:                 jsonb("ctc_terms").$type<CtcTerms>(),
   orderRef:                 varchar("order_ref", { length: 120 }),
   remarks:                  text("remarks"),
   requestedBy:              uuid("requested_by").notNull(),

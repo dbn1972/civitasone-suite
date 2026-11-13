@@ -125,6 +125,18 @@ export const deputationFeedSchema = z.object({
 });
 export type DeputationFeed = z.infer<typeof deputationFeedSchema>;
 
+/** S8 G1: the approved CTC terms of a ctc_contract profile (HRMS hrms_pay_profiles.ctc_terms). Money as digit strings. */
+export const ctcFeedSchema = z.object({
+  annualFixedMinor: digits,
+  annualVariableTargetMinor: digits.nullable().optional(),
+  /** lineage root of the payroll ctc_template; the version in force for the month is resolved by payroll. */
+  templateLineageId: z.string().uuid(),
+  epfWagePolicy: z.enum(["ceiling", "actual"]),
+  gratuityProvisionOn: z.boolean(),
+  overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: digits })).max(10),
+});
+export type CtcFeed = z.infer<typeof ctcFeedSchema>;
+
 export const payProfileFeedSchema = z.object({
   profile: z.enum(PAY_PROFILES),
   source: z.enum(["assigned", "default"]),
@@ -133,6 +145,7 @@ export const payProfileFeedSchema = z.object({
   consolidatedMonthlyMinor: digits.optional(),
   changedWithinMonth: z.boolean(),
   deputation: deputationFeedSchema.optional(),
+  ctc: ctcFeedSchema.optional(),
 });
 export type PayProfileFeed = z.infer<typeof payProfileFeedSchema>;
 
