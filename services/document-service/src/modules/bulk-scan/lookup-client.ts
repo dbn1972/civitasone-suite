@@ -10,6 +10,8 @@ import { CircuitBreaker } from "@civitasone/circuit-breaker";
 import { TARGET_SERVICE, lookupResponseSchema, type LinkTarget, type LinkService, type LookupCandidate } from "@civitasone/scan-link";
 import { pino } from "pino";
 import { errMessage } from "./scrub.js";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
 
 const log = pino({ name: "bulk-scan-lookup", level: process.env.LOG_LEVEL ?? "info" });
 
@@ -55,6 +57,11 @@ export function lookupQueryFor(a: LookupArgs): URLSearchParams {
 
 export async function lookupTarget(ctx: { tenantId: string; correlationId: string }, a: LookupArgs): Promise<LookupResult> {
   const svc = TARGET_SERVICE[a.target];
+  // M5: do not look up in a module (hrms / finance / estab) this tenant did not buy (no-op unless the check is on and the tenant is in enforce).
+  const licenceKey = svc === "hrms" ? LICENCE_MODULE.hrms : svc === "finance" ? LICENCE_MODULE.finance : LICENCE_MODULE.estab;
+  if (!(await licence.check(ctx.tenantId, licenceKey, "http", `scan-link lookup ${svc}`)).allowed) {
+    return { data: [], error: { code: "TARGET_UNAVAILABLE", target: a.target } };
+  }
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (!secret) return { data: [], error: { code: "LOOKUP_NOT_CONFIGURED", target: a.target } };
   try {

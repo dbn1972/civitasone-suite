@@ -143,8 +143,23 @@ describe("UAT F70: two-level offer approval needs two distinct non-maker approve
 
     // Both requests read the offer at stage 0 with no approvals yet -- exactly the
     // UAT timing (the async write had not landed when the second click arrived).
-    const first = await approve(offerId, A_H());
-    const second = await approve(offerId, A_H());
+    // MemoryQueue delivers on setTimeout(0), so on a loaded runner the first
+    // approve's consumer could land BEFORE the second request read the offer and
+    // the second then (correctly) got 409. Hold publishes until both requests
+    // have been accepted so the stale-read window is deterministic, then replay.
+    const mq = queue as unknown as MemoryQueue;
+    const realPublish = mq.publish.bind(mq);
+    const held: Array<Parameters<MemoryQueue["publish"]>> = [];
+    mq.publish = (async (...args: Parameters<MemoryQueue["publish"]>) => { held.push(args); return "held"; }) as MemoryQueue["publish"];
+    let first: Awaited<ReturnType<typeof approve>>;
+    let second: Awaited<ReturnType<typeof approve>>;
+    try {
+      first = await approve(offerId, A_H());
+      second = await approve(offerId, A_H());
+    } finally {
+      mq.publish = realPublish;
+    }
+    for (const args of held) await realPublish(...args);
     expect(first.statusCode, first.body).toBe(200);
     expect(second.statusCode, second.body).toBe(200);
     await drain();

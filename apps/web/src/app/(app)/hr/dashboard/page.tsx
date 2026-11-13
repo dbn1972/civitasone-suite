@@ -13,6 +13,8 @@ import { toHumanError } from "@/lib/messages";
 import { employeeDisplayName, employeeInitials } from "@/lib/employeeName";
 import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour, formatInIST } from "@/lib/formatters";
 import { payrollDaysLeft } from "./payrollDaysLeft";
+import { getEnabledModules } from "@/lib/moduleVisibility";
+import { isModuleEnabled, PAYROLL_SWITCH } from "@/lib/moduleMatch";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { MyKPIStrip } from "./_components/MyKPIStrip";
@@ -257,11 +259,13 @@ export default async function HRDashboardPage() {
   // check exactly (PAYROLL_STAFF_ROLES above) -- gates whether PayrollBanner
   // shows a "Start Run" link a manager would only reach a dead-end
   // PermissionDenied wall from.
+  // M2/M7: the Payroll switch hides the banner and the "Run Payroll" shortcut when the tenant has no Payroll.
+  const payrollEnabled = isModuleEnabled(await getEnabledModules(), PAYROLL_SWITCH, roles);
   const canRunPayroll = roles.some((r) => PAYROLL_STAFF_ROLES.includes(r));
   // GAP-HR-DASHBOARD-05: can the viewer open /hr/payroll at all (it renders
   // PermissionDenied outside PAYROLL_READER_ROLES)? Gates the "Run Payroll"
   // quick action, which would otherwise lead hr_officer/manager to that wall.
-  const canViewPayroll = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  const canViewPayroll = payrollEnabled && roles.some((r) => PAYROLL_READER_ROLES.includes(r));
   // GAP-HR-DASHBOARD-08: safe non-decision fallback -- whether a manager
   // should see tenant-wide KPIs/dept-chart/leave-inbox at all (vs scoped to
   // direct reports) is a real DPDP-relevant access decision this fix does
@@ -360,7 +364,7 @@ export default async function HRDashboardPage() {
               close (was unconditional on every HR-staff load); canRunPayroll
               hides "Start Run ->" for a manager who'd only reach a dead-end
               PermissionDenied wall from it. */}
-          {daysLeft <= 7 && (
+          {payrollEnabled && daysLeft <= 7 && (
             <PayrollBanner
               daysLeft={daysLeft}
               monthName={monthName}

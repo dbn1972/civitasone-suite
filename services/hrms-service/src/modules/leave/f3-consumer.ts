@@ -66,6 +66,7 @@ export function registerF3_leave_Consumers(queue: Queue): void {
               prefixSuffixRule: body.prefixSuffixRule ?? false,
               sandwichRule: body.sandwichRule ?? false,
               proRataOnJoining: body.proRataOnJoining ?? true,
+              allowedInProbation: body.allowedInProbation ?? false,
               createdBy: msg.actorId,
               updatedBy: msg.actorId,
             };
@@ -86,6 +87,7 @@ export function registerF3_leave_Consumers(queue: Queue): void {
                       prefixSuffixRule: body.prefixSuffixRule,
                       sandwichRule: body.sandwichRule,
                       proRataOnJoining: body.proRataOnJoining,
+                      allowedInProbation: body.allowedInProbation,
                       updatedBy: msg.actorId,
                       updatedAt: new Date(),
                       isActive: true,

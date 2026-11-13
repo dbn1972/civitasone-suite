@@ -11,7 +11,7 @@ import { RESOURCE } from "../../topics.js";
 
 const WRITE_ROLES  = ["inventory_manager", "inventory_admin", "super_admin"];
 // UAT b24: + the procurement receiving roles (GRN form store picker), read-only.
-const READER_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "audit_officer", "super_admin", "procurement_officer", "procurement_admin", "store_officer"];
+const READER_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "audit_officer", "super_admin", "procurement_officer", "procurement_admin", "store_officer", "tenant_admin"];
 
 export async function storeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/inventory/stores", async (req, reply) => {

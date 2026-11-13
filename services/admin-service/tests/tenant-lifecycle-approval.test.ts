@@ -74,7 +74,10 @@ async function eventRows(eventType: string) {
     tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T), eq(outboxMessages.eventType, eventType)))));
 }
 
-async function waitFor<V>(read: () => Promise<V>, ok: (v: V) => boolean, ms = 4000): Promise<V> {
+// `ms` is only the failure bound: the poll returns the moment `ok` holds, so a healthy run never waits for it.
+// The route -> queue -> consumer -> outbox hops run on a starved shared CI runner (4 vCPUs, 4 packages at once),
+// where 4s was shorter than one hop; 25s (inside the 30s test timeout) still fails loudly if the consumer never reaches the awaited state.
+async function waitFor<V>(read: () => Promise<V>, ok: (v: V) => boolean, ms = 25_000): Promise<V> {
   const t0 = Date.now();
   for (;;) {
     const v = await read();
@@ -376,7 +379,9 @@ describe("reactivate, edit, reject, scheduling", () => {
     const id = (res.json() as { id: string }).id;
     await waitFor(requests, (r) => r.length === 1);
     expect((await tenantRow()).name).toBe("Lifecycle Office");
-    await post(`/lifecycle-requests/${id}/decision`, bearer(APPR_SA, ["super_admin"]), { decision: "approve" });
+    expect((await post(`/lifecycle-requests/${id}/decision`, bearer(APPR_SA, ["super_admin"]), { decision: "approve" })).statusCode).toBe(202);
+    // Await the request's own terminal state (the consumer finished its transaction), then read the tenant.
+    await waitFor(requests, (r) => r[0]?.status === "executed");
     await waitFor(tenantRow, (t) => t.name === "Renamed Office");
     const [audit] = await auditRows("edit");
     expect(audit!.payload).toMatchObject({ oldValue: { name: "Lifecycle Office" }, newValue: { name: "Renamed Office" } });
