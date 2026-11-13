@@ -157,6 +157,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
   "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
   "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
+  "contract_config", // S8-G5 per-tenant contract config update (f3-consumer) and projection reconcile
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */
