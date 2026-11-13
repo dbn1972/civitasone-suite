@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import { parseStoredPolicy, receiptPolicySchema } from "./repo.js";
 
 const log = pino({ name: "payroll-reimbursement-receipt-policy-consumer" });
