@@ -42,7 +42,7 @@ const config: GatewayRuntimeConfig = {
   cbFailureThreshold: Number(process.env.GATEWAY_CB_FAILURE_THRESHOLD ?? 5),
   cbRecoveryMs: Number(process.env.GATEWAY_CB_RECOVERY_MS ?? 15_000),
   rateLimitMax: Number(process.env.GATEWAY_RATE_LIMIT_MAX ?? 1000),
-  rateLimitTenantMax: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
+  rateLimitTenantMax: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 1000),
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
   bodyLimitBytes: Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576),
 };
