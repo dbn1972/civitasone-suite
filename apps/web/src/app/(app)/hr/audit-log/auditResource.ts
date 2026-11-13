@@ -161,6 +161,8 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_employee_pf_wage_basis", // S8 PF wage-basis change request / approve / reject (payroll statutory-seams consumer)
   "payroll_s8_change_request", // S8 statutory-seams change-request decision refused / rejected
   "payroll_statutory_seams", // S8 LWF / ESI-period flag request / approve (payroll statutory-seams consumer)
+  "payroll_ctc_template", // S8-G1/G2 pay-components consumer: CTC template create
+  "payroll_component", // S8-G2 pay-components consumer: component create/update/(de)activate
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */
