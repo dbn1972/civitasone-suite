@@ -141,7 +141,6 @@ export const EVENTS = {
   dscConfigRemoved:       "payroll.dsc_config.removed",
   sponsorConfigUpserted:  "payroll.sponsor_config.upserted",
   bankFileSigningUpdated: "payroll.bank_file_signing.updated",
-  reimbursementReceiptPolicyUpdated: "payroll.reimbursement_receipt_policy.updated",
   letterheadUpserted:     "payroll.letterhead.upserted",
   returnFilingRecorded:   "payroll.return_filing.recorded",
 } as const;

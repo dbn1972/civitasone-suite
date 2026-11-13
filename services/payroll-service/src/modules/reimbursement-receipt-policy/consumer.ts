@@ -56,11 +56,6 @@ export function registerReceiptPolicyConsumers(queue: Queue): void {
            WHERE tenant_id = ${tenantId}::uuid
         `);
         await enqueue(tx, {
-          topic: EVENTS.reimbursementReceiptPolicyUpdated, eventType: EVENTS.reimbursementReceiptPolicyUpdated,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { tenantId, version: newVersion },
-        });
-        await enqueue(tx, {
           topic: AUDIT, eventType: AUDIT,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: {
