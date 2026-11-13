@@ -14,11 +14,12 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { isExitedStatus } from "../employee/status.js";
 import * as importRepo from "./repo.js";
 import { RECORD_CHUNK_SIZE, type BulkImportItem, type BulkImportRecordItem } from "./command.js";
+import { bulkSensitiveImportEnabled } from "../../shared/s8-flags.js";
+import { aadhaarColumnErrors, sealCreatePayload, sensitiveFieldsPresent, sensitiveRowErrors, sensitiveRowShape } from "./sensitive.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
-const bulkImportBody = z.object({
-  employees: z.array(z.object({
+const bulkImportRow = z.object({
     // UAT b23: same trim / non-blank / date-window rules as POST /v1/hrms/employees (bundle 21 fixed
     // only the single-row create path; the bulk path stored "  " names, padded numbers, year 2999).
     employeeNo: zTrimmedCode(32, "employee number"),
@@ -48,14 +49,27 @@ const bulkImportBody = z.object({
     // snapshot (payroll-service's response shape is not confirmable from
     // hrms-service), so guessing at one risked silently mis-assigning pay.
     managerEmployeeNo: zTrimmedCode(32, "manager employee number").optional(),
-  })).min(1).max(500),
 });
+const bulkImportBody = z.object({ employees: z.array(bulkImportRow).min(1).max(500) });
+// G6 (Section 8, flag HRMS_S8_BULK_IMPORT_ENABLED): the same row plus the optional sensitive columns.
+const bulkImportBodySensitive = z.object({ employees: z.array(bulkImportRow.extend(sensitiveRowShape)).min(1).max(500) });
 
 export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/employees/bulk", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = bulkImportBody.parse(req.body);
+    const sensitiveOn = bulkSensitiveImportEnabled();
+    // Aadhaar stays out (owner decision 5): refuse the column outright, naming it, before any other validation.
+    if (sensitiveOn) {
+      const aadhaar = aadhaarColumnErrors((req.body as { employees?: unknown } | undefined)?.employees);
+      if (aadhaar.length > 0) {
+        return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors: aadhaar, correlationId: ctx.correlationId });
+      }
+    }
+    const body = (sensitiveOn ? bulkImportBodySensitive : bulkImportBody).parse(req.body) as z.infer<typeof bulkImportBodySensitive>;
+    // ?dryRun=true (flag on): run every check below and answer, with no side effect (nothing queued, no batch recorded).
+    // Honoured only with the flag on: flag off, the parameter is ignored exactly as before this change.
+    const dryRun = sensitiveOn && (req.query as { dryRun?: string } | undefined)?.dryRun === "true";
     const batchId = randomUUID();
 
     // Validate all rows before queueing. Both checks report through
@@ -143,8 +157,20 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       }
     });
 
+    // G6: pairing, in-file and in-tenant duplicate checks for PAN / UAN / bank account. Values are compared in memory
+    // and only ever reported masked (sensitive.ts).
+    if (sensitiveOn && body.employees.some((e) => e.pan || e.uanNumber || e.bankAccountNo || e.bankIfsc)) {
+      const held = await scopedRead((tx) => tx.select({ pan: hrmsEmployees.pan, uanNumber: hrmsEmployees.uanNumber, bankAccountNo: hrmsEmployees.bankAccountNo })
+        .from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)));
+      const collect = (k: "pan" | "uanNumber" | "bankAccountNo") => new Set(held.map((h) => h[k]).filter((v): v is string => !!v));
+      fieldErrors.push(...sensitiveRowErrors(body.employees, { pan: collect("pan"), uanNumber: collect("uanNumber"), bankAccountNo: collect("bankAccountNo") }));
+    }
+
     if (fieldErrors.length > 0) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, correlationId: ctx.correlationId });
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, ...(dryRun ? { dryRun: true } : {}), correlationId: ctx.correlationId });
+    }
+    if (dryRun) {
+      return reply.code(200).send({ dryRun: true, ok: true, rowCount: body.employees.length, correlationId: ctx.correlationId });
     }
 
     // GAP-HR-EMPLOYEES-IMPORT-02: this route only publishes (CQRS -- see f3-leftover-hrms-cqrs.test.ts). The record
@@ -155,14 +181,17 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     const items: BulkImportRecordItem[] = body.employees.map((emp, idx) => {
       const { managerEmployeeNo, ...rest } = emp;
       const id = randomUUID();
+      const create = {
+        id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
+        ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
+      };
       return {
         id, rowNo: idx + 1, employeeNo: emp.employeeNo,
-        create: {
-          id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
-          ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
-        },
+        // Sealed with the HRMS PII envelope so the queue never holds a clear PAN / account / UAN (no-op for a row without them).
+        create: sensitiveOn ? sealCreatePayload(create) : create,
       };
     });
+    const sensitiveFields = sensitiveOn ? sensitiveFieldsPresent(body.employees) : [];
     const total = items.length;
     const chunks: BulkImportRecordItem[][] = [];
     for (let i = 0; i < total; i += RECORD_CHUNK_SIZE) chunks.push(items.slice(i, i + RECORD_CHUNK_SIZE));
@@ -174,7 +203,7 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     let published = 0;
     try {
       for (const chunk of chunks) {
-        await queue.publish(COMMANDS.employeeBulkImportRecord, envelope(COMMANDS.employeeBulkImportRecord, { batchId, total, items: chunk }));
+        await queue.publish(COMMANDS.employeeBulkImportRecord, envelope(COMMANDS.employeeBulkImportRecord, { batchId, total, items: chunk, ...(sensitiveFields.length > 0 ? { sensitiveFields } : {}) }));
         published++;
       }
     } catch (err) {

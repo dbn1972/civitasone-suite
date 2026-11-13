@@ -33,6 +33,8 @@ export interface BulkImportRecordPayload {
   /** Rows in the whole batch, not just in this command. */
   total: number;
   items: BulkImportRecordItem[];
+  /** G6: NAMES of the sensitive columns the file carried (pan, uanNumber, ...), for the audit event. Never values. */
+  sensitiveFields?: string[];
 }
 
 /** hrms.employee.bulk_import.not_queued -- these rows were never handed to the queue; record them as failed. */
