@@ -13110,6 +13110,88 @@
       "network": "Network error. Please try again."
     }
   },
+  "inventoryLedger": {
+    "loading": "Loading…",
+    "title": "New stock entry",
+    "subtitle": "Record a receipt, issue, transfer or adjustment against your stores.",
+    "back": "Issues",
+    "noStores": "No stores exist yet. Add a store under Inventory before recording stock.",
+    "type": {
+      "receipt": "Receipt",
+      "issue": "Issue",
+      "transfer": "Transfer",
+      "adjustment": "Adjustment (stock count)"
+    },
+    "field": {
+      "type": "Entry type",
+      "date": "Posting date",
+      "item": "Item",
+      "store": "Store",
+      "fromStore": "From store",
+      "toStore": "To store",
+      "storePlaceholder": "Choose a store",
+      "qty": "Quantity",
+      "countedQty": "Counted quantity",
+      "rate": "Rate (₹ per unit)",
+      "reasonCode": "Reason code (optional)",
+      "reasonCodeRequired": "Reason code",
+      "refNo": "Reference no.",
+      "notes": "Notes"
+    },
+    "hint": {
+      "onHand": "On hand in this store: {qty}"
+    },
+    "error": {
+      "item": "Choose an item.",
+      "store": "Choose a store.",
+      "toStore": "Choose a different store to transfer to.",
+      "qty": "Enter a whole number of units.",
+      "reasonCode": "Enter a reason code for the adjustment.",
+      "rate": "Rate must be zero or a positive amount with at most 2 decimals.",
+      "insufficient": "Only {qty} unit(s) are on hand in this store."
+    },
+    "action": {
+      "post": "Post entry",
+      "posting": "Posting…"
+    },
+    "confirm": {
+      "title": "Post this stock entry?",
+      "description": "This posts a {type} of {qty} unit(s) to the stock ledger and cannot be undone. Provide a reason for the audit trail.",
+      "reasonLabel": "Reason / reference",
+      "cancel": "Cancel"
+    },
+    "result": {
+      "posted": "Stock entry posted.",
+      "pending": "The entry was submitted but has not been posted yet. If the store does not hold enough stock it will be rejected. Check the Issues register in a minute."
+    },
+    "list": {
+      "title": "Stock Items",
+      "subtitle": "Stock levels per item from your item master and stores, summed over all stores."
+    },
+    "settings": {
+      "title": "Stock ledger",
+      "help": "Choose which ledger the stock entry screen posts to and the stock list reads from.",
+      "saved": "Stock ledger saved.",
+      "option": {
+        "stock": "Stock register (legacy): items and warehouses are kept separately and linked to the item master.",
+        "inventory": "Inventory: post receipts, issues and transfers directly against the item master and stores. Nothing to link."
+      }
+    },
+    "item": {
+      "heading": "Stock on hand",
+      "onHand": "On-hand quantity",
+      "value": "Stock value",
+      "store": "Store",
+      "qty": "Quantity",
+      "noBalances": "No stock has been received into any store yet."
+    },
+    "reconcile": {
+      "subtitle": "Totals of receipts, issues, transfers and adjustments posted to your stores. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances.",
+      "empty": "Record receipts or issues under New stock entry to see them summarised here."
+    },
+    "modeError": "We could not check which stock ledger your organisation uses, so nothing was posted. Try again.",
+    "retry": "Try again"
+  },
   "payGroupMembers": {
     "backToList": "Back to Pay Groups",
     "errorTitle": "Pay group",

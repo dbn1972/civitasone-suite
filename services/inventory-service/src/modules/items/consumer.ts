@@ -168,13 +168,18 @@ export function registerItemConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Read the prior value inside the same transaction so the audit event records what changed.
-      const beforeValue = await repo.readQcMakerChecker(tx, p.tenantId);
-      await repo.upsertTenantSettings(tx, p.tenantId, { qcMakerChecker: p.qcMakerChecker }, msg.actorId);
+      const prior = await repo.readTenantSettings(tx, p.tenantId);
+      await repo.upsertTenantSettings(tx, p.tenantId, { qcMakerChecker: p.qcMakerChecker, ledgerSource: p.ledgerSource }, msg.actorId);
+      // The audit record carries only the settings that were sent: before and after, nothing else.
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      if (p.qcMakerChecker !== undefined) { before.qcMakerChecker = prior.qcMakerChecker; after.qcMakerChecker = p.qcMakerChecker; }
+      if (p.ledgerSource !== undefined) { before.ledgerSource = prior.ledgerSource; after.ledgerSource = p.ledgerSource; }
       await emit(
         tx, msg, EVENTS.settingsUpdated,
-        { before: { qcMakerChecker: beforeValue }, after: { qcMakerChecker: p.qcMakerChecker } },
+        { before, after },
         "update", "inventory_settings", p.tenantId, false,
-        { before: { qcMakerChecker: beforeValue }, after: { qcMakerChecker: p.qcMakerChecker } },
+        { before, after },
       );
     });
   });
