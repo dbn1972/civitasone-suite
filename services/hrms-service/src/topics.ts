@@ -202,6 +202,8 @@ export const COMMANDS = {
   contractRenewalBulk:     "hrms.contract.renewal.bulk",
   contractExpiryDetect:    "hrms.contract.expiry.detect",
   contractAutoSeparate:    "hrms.contract.auto_separate",
+  // S8 G5: rebuild the employee contract/project read-model for one tenant (opt-in per tenant).
+  contractProjectionReconcile: "hrms.contract.projection.reconcile",
   // F3 leftover — generic route-write command bus for residual sync lifts
   f3RouteWrite: "hrms.f3.route_write",
   leaveCancel: "hrms.leave.cancel",

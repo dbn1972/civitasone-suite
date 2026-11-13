@@ -3,8 +3,8 @@ import { pino } from "pino";
 import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { COMMANDS, SERVICE } from "../../topics.js";
 import { hrmsContractConfig } from "./schema.js";
 const log = pino({ name: "hrms-f3-contracts", serializers: SAFE_LOG_SERIALIZERS });
 
@@ -56,6 +56,26 @@ export function registerF3_contracts_Consumers(queue: Queue): void {
               insertValues.schedulerTimeUtc = body.schedulerTimeUtc;
               updateSet.schedulerTimeUtc = body.schedulerTimeUtc;
             }
+        if (body.lapseAction !== undefined) {
+          insertValues.lapseAction = body.lapseAction;
+          updateSet.lapseAction = body.lapseAction;
+        }
+        if (body.graceDays !== undefined) {
+          insertValues.graceDays = body.graceDays;
+          updateSet.graceDays = body.graceDays;
+        }
+        if (body.notifyRoles !== undefined) {
+          insertValues.notifyRoles = body.notifyRoles;
+          updateSet.notifyRoles = body.notifyRoles;
+        }
+        if (body.employeeProjectionEnabled !== undefined) {
+          insertValues.employeeProjectionEnabled = body.employeeProjectionEnabled;
+          updateSet.employeeProjectionEnabled = body.employeeProjectionEnabled;
+        }
+        if (body.weeklyDigestEnabled !== undefined) {
+          insertValues.weeklyDigestEnabled = body.weeklyDigestEnabled;
+          updateSet.weeklyDigestEnabled = body.weeklyDigestEnabled;
+        }
             const updated = await tx
                     .insert(hrmsContractConfig)
                     .values(insertValues as typeof hrmsContractConfig.$inferInsert)
@@ -64,6 +84,31 @@ export function registerF3_contracts_Consumers(queue: Queue): void {
                       set: updateSet,
                     })
                     .returning();
+                  // S8 G5: the policy change is audited (who set lapse_action / routing, and to what).
+                  await enqueue(tx, {
+                    topic: "audit.event.record",
+                    eventType: "audit.event.record",
+                    tenantId: p.tenantId,
+                    actorId: msg.actorId,
+                    correlationId: msg.correlationId,
+                    payload: {
+                      service: SERVICE, action: "config_update", resourceType: "contract_config",
+                      resourceId: p.tenantId, outcome: "success",
+                      changed: Object.keys(body).filter((k) => body[k] !== undefined),
+                      ...(body.lapseAction !== undefined ? { lapseAction: body.lapseAction } : {}),
+                    },
+                  });
+                  // Turning the employee read-model on (or re-saving config while on) rebuilds it for this tenant.
+                  if (body.employeeProjectionEnabled === true) {
+                    await enqueue(tx, {
+                      topic: COMMANDS.contractProjectionReconcile,
+                      eventType: COMMANDS.contractProjectionReconcile,
+                      tenantId: p.tenantId,
+                      actorId: msg.actorId,
+                      correlationId: msg.correlationId,
+                      payload: { tenantId: p.tenantId },
+                    });
+                  }
                   return updated[0] ?? null;
           }
         }

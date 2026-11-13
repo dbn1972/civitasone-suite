@@ -87,6 +87,14 @@ export const hrmsContractConfig = contractsSchema.table("hrms_contract_config", 
   approvalChain:         jsonb("approval_chain").notNull().default([]),
   autoSeparationEnabled: boolean("auto_separation_enabled").notNull().default(true),
   schedulerTimeUtc:      varchar("scheduler_time_utc", { length: 5 }).notNull().default("02:00"),
+  // S8 G5 (migration 0267). What an unrenewed lapse does: "auto_separate" (default, today) or "flag_only"
+  // (never separates; flags HR, escalates after grace_days). notify_roles adds the project / line manager to the
+  // alert routing; employee_projection_enabled turns on the employee read-model; weekly_digest_enabled the HR digest.
+  lapseAction:               varchar("lapse_action", { length: 16 }).notNull().default("auto_separate"),
+  graceDays:                 integer("grace_days").notNull().default(0),
+  notifyRoles:               jsonb("notify_roles").notNull().default([]),
+  employeeProjectionEnabled: boolean("employee_projection_enabled").notNull().default(false),
+  weeklyDigestEnabled:       boolean("weekly_digest_enabled").notNull().default(false),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:               integer("version").notNull().default(1),

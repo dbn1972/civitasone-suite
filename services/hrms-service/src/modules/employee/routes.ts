@@ -121,7 +121,11 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const managerScope = PAYROLL_DIRECTORY_ROLES.some((r) => ctx.roles.includes(r))
       ? undefined
       : await resolveManagerScope(ctx, req);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses));
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses, (q.contractEndBefore || q.projectId || q.contractStatus) ? {
+      ...(q.contractEndBefore ? { contractEndBefore: q.contractEndBefore } : {}),
+      ...(q.projectId ? { projectId: q.projectId } : {}),
+      ...(q.contractStatus ? { contractStatus: q.contractStatus } : {}),
+    } : undefined));
   });
 
   // UX-R5 (names, not ids): name + designation for the maker / checker / officer ids a record screen holds.

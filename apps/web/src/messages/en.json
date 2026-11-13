@@ -19884,6 +19884,28 @@
     "adminOnly": "Only a procurement admin can change the approval limits.",
     "pendingNote": "A super admin has asked to switch this organisation to local approval, which drops the budget-sanction rule. A second, different super admin must save the same choice to confirm it."
   },
+  "employeeContract": {
+    "title": "Contract and project",
+    "fieldStatus": "Contract status",
+    "fieldStart": "Contract start",
+    "fieldEnd": "Contract end",
+    "fieldRenewals": "Renewals so far",
+    "fieldProject": "Primary project",
+    "fieldProjectManager": "Project manager",
+    "fieldCostCenter": "Reporting cost centre",
+    "daysLeft": "{count, plural, one {# day left} other {# days left}}",
+    "daysOver": "{count, plural, one {# day past end date} other {# days past end date}}",
+    "status": {
+      "active": "Active",
+      "expiring": "Expiring",
+      "escalated": "Escalated",
+      "expired": "Expired",
+      "renewed": "Renewed",
+      "terminated": "Terminated"
+    },
+    "colContractEnd": "Contract ends",
+    "colProject": "Project"
+  },
   "leaveTypes": {
     "title": "Leave Types",
     "subtitle": "Define the leave types your organisation uses. Retiring a type needs a second administrator's approval and never deletes history.",
