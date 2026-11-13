@@ -28,7 +28,9 @@ export function registerSearchConsumers(queue: Queue): void {
       documentId: p.documentId,
       title: p.title,
       content: p.content,
-      tags: p.tags,
+      // Client-supplied tags are ignored: a tag is a module label that widens who may see a hit, so a
+      // knowledge document is never tagged by its submitter (it is clearance-filtered by access level).
+      tags: [],
     });
   });
 

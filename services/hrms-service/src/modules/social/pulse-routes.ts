@@ -477,8 +477,8 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
          FROM leave.hrms_leave_allocs a
          JOIN me ON me.id = a.employee_id
          JOIN leave.hrms_leave_types t ON t.id = a.leave_type_id AND t.tenant_id = a.tenant_id
-         WHERE a.tenant_id = $2
-           AND a.fy = (SELECT MAX(a2.fy) FROM leave.hrms_leave_allocs a2 WHERE a2.tenant_id = $2 AND a2.employee_id = me.id)
+         WHERE a.tenant_id = $2 AND a.status = 'active'
+           AND a.fy = (SELECT MAX(a2.fy) FROM leave.hrms_leave_allocs a2 WHERE a2.tenant_id = $2 AND a2.employee_id = me.id AND a2.status = 'active')
          ORDER BY t.code`,
         [ctx.actorId, ctx.tenantId],
       ));

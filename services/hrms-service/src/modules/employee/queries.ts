@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { maskValue } from "../../shared/pii-mask.js";
+import { uanMaskedEnabled } from "../../shared/s8-flags.js";
 import * as repo from "./repo.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 import type { EmployeeRow } from "./schema.js";
@@ -200,7 +201,9 @@ export async function getEmployeeDetail(id: string, tenantId: string, opts: { in
     // EmployeeDetailSchema (packages/schemas/src/web.ts), which apps/web's
     // loader validates this response against -- without that, these would
     // round-trip over HTTP fine and then get silently stripped client-side.
-    ...(emp.uanNumber      ? { uanNumber: emp.uanNumber }              : {}),
+    // G6: with HRMS_S8_UAN_MASK_ENABLED the UAN is masked like PAN / bank account; the clear value is only available
+    // through the audited reveal (POST /v1/hrms/pii/reveal, field uanNumber). Flag off: unchanged.
+    ...(emp.uanNumber      ? { uanNumber: uanMaskedEnabled() ? maskValue(emp.uanNumber)! : emp.uanNumber } : {}),
     ...(emp.esicIpNumber   ? { esicIpNumber: emp.esicIpNumber }        : {}),
     ...(emp.pran           ? { pran: emp.pran }                        : {}),
     ...(emp.pensionScheme  ? { pensionScheme: emp.pensionScheme }      : {}),

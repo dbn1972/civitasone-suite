@@ -5,12 +5,14 @@
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { withProfile } from "./profile.js";
 import type { TenantView } from "./domain.js";
 import type { TenantQuotaView } from "./repo.js";
 import type { UpdateQuotasBody } from "./validators.js";
 
 export async function getTenant(id: string): Promise<TenantView | null> {
-  return cache.getOrLoad<TenantView>(cache.makeKey(id, RESOURCE, id), () => repo.findById(id));
+  const view = await cache.getOrLoad<TenantView>(cache.makeKey(id, RESOURCE, id), () => repo.findById(id));
+  return view ? withProfile(view) : null;
 }
 
 export async function getTenantByDomain(tenantId: string, domain: string): Promise<TenantView | null> {

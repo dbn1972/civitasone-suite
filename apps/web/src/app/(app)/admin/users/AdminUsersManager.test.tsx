@@ -228,3 +228,33 @@ describe("AdminUsersManager", () => {
     expect(patches()).toHaveLength(0);
   });
 });
+
+
+describe("AdminUsersManager - set-password link", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("asks the server for a one-time link, shows it once, and keeps it out of the page afterwards", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ token: "TENANT.SECRET", url: "https://app.example/auth/set-password#token=TENANT.SECRET", expiresAt: "2030-01-01T10:00:00.000Z" }), { status: 201 }));
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" currentUserId="u-me" />);
+    fireEvent.click(screen.getByRole("button", { name: "Set-password link" }));
+    expect(await screen.findByDisplayValue(/auth\/set-password#token=/)).toBeInTheDocument();
+    const [url, init] = spy.mock.calls[0]!;
+    expect(url).toBe("/api/proxy/v1/admin/users/u-other/password-setup-link");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(screen.getByText(/can be used/i)).toHaveTextContent(/once/);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByDisplayValue(/auth\/set-password#token=/)).not.toBeInTheDocument());
+  });
+
+  it("is disabled for a user who cannot sign in (not active)", () => {
+    render(<AdminUsersManager initialUsers={[{ ...other, status: "suspended" }]} roles={roles} source="api" currentUserId="u-me" />);
+    expect(screen.getByRole("button", { name: "Set-password link" })).toBeDisabled();
+  });
+
+  it("explains a user whose login is not ready yet, without showing a link", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ code: "KEYCLOAK_NOT_LINKED" }), { status: 409 }));
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" currentUserId="u-me" />);
+    fireEvent.click(screen.getByRole("button", { name: "Set-password link" }));
+    expect(await screen.findByText(/login is not ready yet/i)).toBeInTheDocument();
+  });
+});

@@ -1190,7 +1190,8 @@ export class SqsQueue implements Queue {
             msg = JSON.parse(sqsMsg.Body ?? "{}") as CommandEnvelope;
           } catch {
             // Unparseable poison message — dead-letter immediately, never loop.
-            await this.routeToDlq(topic, sqsMsg.Body ?? "", "unparseable_body");
+            // Not safely parked in the DLQ => leave the source message to redeliver rather than lose it.
+            if (!(await this.routeToDlq(topic, sqsMsg.Body ?? "", "unparseable_body"))) continue;
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             continue;
           }
@@ -1209,7 +1210,7 @@ export class SqsQueue implements Queue {
               correlationId: msg.correlationId,
               traceparent: msg.traceparent,
             });
-            await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
+            if (!(await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope", { msg, error: `invalid_envelope: ${parsed.error}` }))) continue;
             // G-ASYNC-1: still attributable to a command if the envelope at
             // least carries messageId/tenantId despite failing validation.
             // FF-01 I2: record it BEFORE deleting the message.
@@ -1241,7 +1242,11 @@ export class SqsQueue implements Queue {
                 incrementConsumerError(this.service, topic);
                 captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
                 this.logHandlerError(topic, msg, receiveCount, err);
-                await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
+                if (!(await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error", { msg, error: err }))) {
+                  // Not parked in the DLQ: keep the source message (it redelivers) instead of deleting it.
+                  nonRetryableHandled = true;
+                  break;
+                }
                 // FF-01 I2: the result must be durable BEFORE the message is
                 // removed, so a lost outcome can never hide behind an
                 // already-deleted message.
@@ -1271,7 +1276,7 @@ export class SqsQueue implements Queue {
           // message stops looping invisibly. (Native SQS RedrivePolicy also does
           // this; this is the app-level safety net for parity in LocalStack.)
           if (receiveCount >= this.maxReceiveCount) {
-            await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded");
+            if (!(await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded", { msg, error: lastError }))) continue;
             // FF-01 I2: record the 'failed' result BEFORE deleting the message.
             await this.emitOutcome(topic, {
               messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "failed",
@@ -1350,26 +1355,50 @@ export class SqsQueue implements Queue {
     );
   }
 
-  private async routeToDlq(topic: string, body: string, reason: string): Promise<void> {
+  /**
+   * Park a message in the topic DLQ. Resolves true once it is there, false if it could not be written; callers must then
+   * NOT delete the source message (it redelivers). The extra `dlqLastError` attribute is diagnostic only: if SQS rejects
+   * the send with it, the send is retried once without it, so a bad attribute value can never cost the message.
+   */
+  private async routeToDlq(
+    topic: string,
+    body: string,
+    reason: string,
+    ctx?: { msg?: CommandEnvelope | null; error?: unknown },
+  ): Promise<boolean> {
     try {
       const dlqUrl = await this.getOrCreateDlq(topic);
-      await this.client.send(new SendMessageCommand({
-        QueueUrl: dlqUrl,
-        MessageBody: body,
-        MessageAttributes: {
-          dlqReason: { DataType: "String", StringValue: reason },
-          originTopic: { DataType: "String", StringValue: topic },
-        },
-      }));
+      // The last handler error, so an operator reading the DLQ sees WHY and not just "max_receive_count_exceeded".
+      const lastError = dlqErrorText(ctx?.error);
+      const base = {
+        dlqReason: { DataType: "String", StringValue: reason },
+        originTopic: { DataType: "String", StringValue: topic },
+      };
+      try {
+        await this.client.send(new SendMessageCommand({
+          QueueUrl: dlqUrl,
+          MessageBody: body,
+          MessageAttributes: { ...base, ...(lastError ? { dlqLastError: { DataType: "String", StringValue: lastError } } : {}) },
+        }));
+      } catch (err) {
+        if (!lastError) throw err;
+        this.logHandlerError(topic, ctx?.msg ?? null, 0, err);
+        await this.client.send(new SendMessageCommand({ QueueUrl: dlqUrl, MessageBody: body, MessageAttributes: base }));
+      }
       // OPS-1 / PERF-004: DLQ routing is observable (metric + structured log),
       // broken down by why the message was dead-lettered.
       incrementDlqMessage(topic, reason);
       // eslint-disable-next-line no-console -- structured operational error log
       console.error(
-        JSON.stringify({ level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason }),
+        JSON.stringify({
+          level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason,
+          messageId: ctx?.msg?.messageId, correlationId: ctx?.msg?.correlationId,
+        }),
       );
+      return true;
     } catch (err) {
-      this.logHandlerError(topic, null, 0, err);
+      this.logHandlerError(topic, ctx?.msg ?? null, 0, err);
+      return false;
     }
   }
 
@@ -1378,6 +1407,32 @@ export class SqsQueue implements Queue {
       await this.client.send(new DeleteMessageCommand({ QueueUrl: url, ReceiptHandle: receiptHandle }));
     } catch { /* best-effort */ }
   }
+}
+
+/** Max length of the last-error text attached to a dead-lettered message. */
+export const DLQ_LAST_ERROR_MAX_CHARS = 256;
+
+/**
+ * Last handler error as a short string for the DLQ `dlqLastError` attribute: first line only (no stack); characters
+ * outside SQS's allowed set (control characters such as ANSI escapes, lone surrogates) removed; e-mail addresses, PAN-like
+ * tokens and digit runs of 9+ (account / Aadhaar / phone numbers, also when space- or hyphen-separated) masked; truncated
+ * on a code-point boundary. Masking is best effort -- it cannot recognise every kind of personal data -- so error
+ * messages thrown into the queue should still not embed it. Returns undefined when there is nothing to show.
+ */
+export function dlqErrorText(err: unknown): string | undefined {
+  if (err === undefined || err === null) return undefined;
+  const raw = err instanceof Error ? `${err.name !== "Error" ? `${err.name}: ` : ""}${err.message}` : String(err);
+  const text = (raw.split(/\r?\n/)[0] ?? "")
+    // SQS allows #x9 | #xA | #xD | #x20-#xD7FF | #xE000-#xFFFD | #x10000-#x10FFFF; with /u a lone surrogate is one code point.
+    .replace(/[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, "")
+    .replace(/\t/g, " ")
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]")
+    .replace(/\b[A-Za-z]{5}\d{4}[A-Za-z]\b/g, "[id]")
+    .replace(/\d(?:[ -]?\d){8,}/g, "[num]")
+    .trim();
+  if (!text) return undefined;
+  const points = Array.from(text);
+  return points.length > DLQ_LAST_ERROR_MAX_CHARS ? `${points.slice(0, DLQ_LAST_ERROR_MAX_CHARS - 1).join("")}…` : text;
 }
 
 /**

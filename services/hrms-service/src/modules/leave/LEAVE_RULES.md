@@ -72,3 +72,11 @@
 | Contractual | Project Lead | HR Admin | — |
 | Deputation | Host Org RO | Host Org HOD | Parent Org copy |
 
+
+
+## Organisation-defined leave types (S8-G3)
+
+- Leave types are data. `leave.hrms_leave_types.system_code` links a type to a built-in behaviour (CL half-day, ML/PL/CCL gender checks); `NULL` means the type is resolved from the tenant's rule rows only.
+- The row-based resolver is **off** unless the tenant sets `leave.hrms_leave_tenant_config.custom_leave_rules_enabled` (`PUT /v1/hrms/leave-config/custom-rules`). Off, the engine is the unchanged catalogue path (proved byte-identical by `rules-engine-flag-off-parity.test.ts`).
+- On: tenant rule for (type, employee type; `contract` == `contractual`) -> built-in default for `system_code` -> `NO_LEAVE_RULE`. Probation is `allowed_in_probation` on the rule (no rule: only built-in CL).
+- Deactivating a type, and ending or reinstating one allocation, are requests (`leave.hrms_leave_type_changes`) decided by a different admin. Approval ends/restores allocations in one transaction (`status` `ended`/`active`, nothing deleted; reinstate restores the balance exactly as it was at end and needs an active type). An ended allocation is excluded from balances, apply, FNF encashment, year-end, reports and the chatbot/assistant readers; a year-end run skips a target year whose allocation was ended.

@@ -50,7 +50,9 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   dateOfBirth:      date("date_of_birth"),
   gender:           varchar("gender", { length: 16 }),
   pan:              encryptedText("pan"),
-  uanNumber:        varchar("uan_number", { length: 12 }),
+  // G6 (Section 8, owner decision 5): encrypted at rest like pan / bank_account_no (was plaintext varchar(12);
+  // migration 0268 widens the column, new writes are sealed, existing plaintext rows still read until backfilled).
+  uanNumber:        encryptedText("uan_number"),
   hraCityClass:     varchar("hra_city_class", { length: 1 }).notNull().default("X"),
   taxRegime:        varchar("tax_regime", { length: 4 }).notNull().default("new"),
   aadhaarRef:       encryptedText("aadhaar_ref"),
@@ -230,7 +232,8 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
   toScheme:      varchar("to_scheme", { length: 8 }).notNull(),
   effectiveFrom: date("effective_from").notNull(),
   reason:        text("reason").notNull(),
-  uanNumber:     varchar("uan_number", { length: 12 }),
+  // G6: encrypted at rest (migration 0268); legacy plaintext rows still read.
+  uanNumber:     encryptedText("uan_number"),
   status:        varchar("status", { length: 16 }).notNull().default("pending"),
   // change (maker-checker request) | initial | correction (history backfill rows)
   kind:          varchar("kind", { length: 16 }).notNull().default("change"),

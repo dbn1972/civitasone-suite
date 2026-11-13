@@ -97,9 +97,14 @@ const CENTERS: Array<{
   },
 ];
 
-export function RoleCommandCenter() {
+/** M2: shortcuts that belong to the Payroll switch (hidden when Payroll is off). */
+const PAYROLL_ACTION_HREFS = new Set(["/hr/payroll"]);
+
+export function RoleCommandCenter({ payrollEnabled = true }: { payrollEnabled?: boolean } = {}) {
   const roles = getSessionRoles();
-  const centers = CENTERS.filter((c) => c.match(roles));
+  const centers = CENTERS.filter((c) => c.match(roles)).map((c) =>
+    payrollEnabled ? c : { ...c, actions: c.actions.filter((a) => !PAYROLL_ACTION_HREFS.has(a.href)) },
+  );
   if (centers.length === 0) return null;
   // UAT b23: the working inbox is /approvals; only roles workflow-service lets read tasks can use it.
   const canUseApprovals = roles.some((r) => WORKFLOW_TASK_ROLES.includes(r));

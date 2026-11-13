@@ -68,17 +68,19 @@ export type NavGroupDef = {
 const HR_NON_EMPLOYEE_ROLES = HR_ROLES.filter((r) => r !== "employee");
 
 const HR = "hrms";
+/** M2: Payroll and Recruitment are their own switches (see moduleMatch.ts); HR core stays on `hrms`. */
+const PAYROLL = "payroll";
 
 /** The employee self-service menu (S-02). Also rendered as a dashboard card. */
 export const SELF_SERVICE_ITEMS: NavItemDef[] = [
   // hr/layout.tsx HR_ROLES (the apply page has no narrower gate).
   { id: "myLeave", label: "My leave", href: "/hr/leave/apply", moduleKey: HR, rolesAllowed: HR_ROLES },
   // hr/payroll/my-slips/page.tsx PermissionDenied on PAYROLL_EMPLOYEE_ROLES.
-  { id: "myPayslips", label: "My payslips", href: "/hr/payroll/my-slips", moduleKey: HR, rolesAllowed: PAYROLL_EMPLOYEE_ROLES },
+  { id: "myPayslips", label: "My payslips", href: "/hr/payroll/my-slips", moduleKey: PAYROLL, rolesAllowed: PAYROLL_EMPLOYEE_ROLES },
   // hr/attendance/page.tsx: every HR_ROLES role gets the self check-in card.
   { id: "myAttendance", label: "My attendance", href: "/hr/attendance", moduleKey: HR, rolesAllowed: HR_ROLES },
   // hr/payroll/tax-declaration/page.tsx: own declaration for every HR_ROLES role.
-  { id: "myTaxDeclaration", label: "My tax declaration", href: "/hr/payroll/tax-declaration", moduleKey: HR, rolesAllowed: HR_ROLES },
+  { id: "myTaxDeclaration", label: "My tax declaration", href: "/hr/payroll/tax-declaration", moduleKey: PAYROLL, rolesAllowed: HR_ROLES },
   // hr/service-book/page.tsx: "My Service Book" (postings, pay, leave record) of the signed-in employee.
   { id: "myProfile", label: "My profile", href: "/hr/service-book", moduleKey: HR, rolesAllowed: HR_ROLES },
 ];
@@ -120,11 +122,11 @@ export const NAV_GROUPS: NavGroupDef[] = [
       // hr/leave/approvals/page.tsx PermissionDenied on HR_STAFF_MANAGER_ROLES.
       { id: "hrLeaveApprovals", label: "Leave approvals", href: "/hr/leave/approvals", moduleKey: HR, rolesAllowed: HR_STAFF_MANAGER_ROLES },
       // hr/payroll/page.tsx PermissionDenied on PAYROLL_RUN_READER_ROLES.
-      { id: "hrPayrollRuns", label: "Payroll runs", href: "/hr/payroll", moduleKey: HR, rolesAllowed: PAYROLL_RUN_READER_ROLES },
+      { id: "hrPayrollRuns", label: "Payroll runs", href: "/hr/payroll", moduleKey: PAYROLL, rolesAllowed: PAYROLL_RUN_READER_ROLES },
       // hr/payroll/salary-slips/page.tsx SALARY_ADMIN_ROLES (the same list the HR hub tile uses).
-      { id: "hrSalarySlips", label: "Salary slips", href: "/hr/payroll/salary-slips", moduleKey: HR, rolesAllowed: HR_TILE_ROLE_OVERRIDES["/hr/payroll/salary-slips"] },
+      { id: "hrSalarySlips", label: "Salary slips", href: "/hr/payroll/salary-slips", moduleKey: PAYROLL, rolesAllowed: HR_TILE_ROLE_OVERRIDES["/hr/payroll/salary-slips"] },
       // hr/payroll/ddos/page.tsx PermissionDenied on PAYROLL_READER_ROLES (= PAYROLL_SALARY_ADMIN_ROLES).
-      { id: "hrDdos", label: "DDOs", href: "/hr/payroll/ddos", moduleKey: HR, rolesAllowed: PAYROLL_SALARY_ADMIN_ROLES },
+      { id: "hrDdos", label: "DDOs", href: "/hr/payroll/ddos", moduleKey: PAYROLL, rolesAllowed: PAYROLL_SALARY_ADMIN_ROLES },
     ],
   },
   {

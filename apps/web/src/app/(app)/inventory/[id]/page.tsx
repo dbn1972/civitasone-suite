@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getInventoryLedgerSource } from "../_dataLedger";
 import { getStockItemById } from "../../../_data/loaders";
 import {
   StatusPill,
@@ -35,6 +37,10 @@ export default async function StockItemDetailPage(
   }
 ) {
   const params = await props.params;
+  // A stock-register item page has no meaning for a tenant that keeps stock in inventory: it has no
+  // stock-register items. Send it to its stock list instead of querying stock-service.
+  const ledgerSource = await getInventoryLedgerSource();
+  if (ledgerSource.source !== "error" && ledgerSource.data === "inventory") redirect("/inventory/list");
   const result = await getStockItemById(params.id);
   const { data: item } = result;
 

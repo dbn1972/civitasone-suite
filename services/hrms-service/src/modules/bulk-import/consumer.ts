@@ -21,7 +21,7 @@ const AUDIT = "audit.event.record";
  */
 async function recordChunk(
   msg: CommandEnvelope,
-  p: { batchId: string; total: number; items: BulkImportItem[] },
+  p: { batchId: string; total: number; items: BulkImportItem[]; sensitiveFields?: string[] },
   failedWith?: ImportFailureCode,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
@@ -34,7 +34,8 @@ async function recordChunk(
     // Once per batch, by whichever chunk created the header (chunks may be consumed in any order / in parallel).
     if (createdHeader) {
       await emitAudit(tx, { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
-        "hrms.employee.bulk_import_requested", "employee_import_batch", p.batchId, { total: p.total });
+        "hrms.employee.bulk_import_requested", "employee_import_batch", p.batchId,
+        { total: p.total, ...(p.sensitiveFields && p.sensitiveFields.length > 0 ? { sensitiveFields: p.sensitiveFields } : {}) });
     }
     return true;
   });

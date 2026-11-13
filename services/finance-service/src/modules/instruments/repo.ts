@@ -1,6 +1,7 @@
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { lastFourDigits } from "./account-mask.js";
+import { financeBankAccounts } from "../payments/schema.js";
 
 export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import {
@@ -86,6 +87,33 @@ export async function findByNumber(tenantId: string, type: string, no: string): 
 }
 
 /**
+ * An instrument's bankAccountId is an account of the office's bank-account master
+ * (payments.finance_bank_accounts, what POST /v1/finance/bank-accounts writes). Rows
+ * written before that was settled may name a treasury.finance_banks id instead (the
+ * existing fp02 / ml08 tests seed it), so those are still resolved as a fallback for
+ * every id the master does not hold. Both lookups are tenant-scoped.
+ */
+async function accountNosByIdTx(tx: Writer, tenantId: string, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const t = tx as typeof db;
+  const master = await t
+    .select({ id: financeBankAccounts.id, accountNo: financeBankAccounts.accountNo })
+    .from(financeBankAccounts)
+    .where(and(eq(financeBankAccounts.tenantId, tenantId), inArray(financeBankAccounts.id, ids)));
+  for (const r of master) out.set(r.id, r.accountNo);
+  const rest = ids.filter((id) => !out.has(id));
+  if (rest.length > 0) {
+    const legacy = await t
+      .select({ id: financeBanks.id, accountNo: financeBanks.accountNo })
+      .from(financeBanks)
+      .where(and(eq(financeBanks.tenantId, tenantId), inArray(financeBanks.id, rest)));
+    for (const r of legacy) out.set(r.id, r.accountNo);
+  }
+  return out;
+}
+
+/**
  * Last four digits of each referenced bank account, keyed by bank id
  * (GAP-FINANCE-TREASURY-CHEQUES-05). Tenant-scoped; the full account number
  * never leaves this function.
@@ -93,13 +121,10 @@ export async function findByNumber(tenantId: string, type: string, no: string): 
 export async function accountLast4ByBankId(tenantId: string, bankIds: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (bankIds.length === 0) return out;
-  const rows = await scopedRead((tx) => tx
-    .select({ id: financeBanks.id, accountNo: financeBanks.accountNo })
-    .from(financeBanks)
-    .where(and(eq(financeBanks.tenantId, tenantId), inArray(financeBanks.id, bankIds))));
-  for (const r of rows) {
-    const last4 = lastFourDigits(r.accountNo);
-    if (last4) out.set(r.id, last4);
+  const accounts = await scopedRead((tx) => accountNosByIdTx(tx as Writer, tenantId, bankIds));
+  for (const [id, accountNo] of accounts) {
+    const last4 = lastFourDigits(accountNo);
+    if (last4) out.set(id, last4);
   }
   return out;
 }
@@ -226,10 +251,5 @@ export async function staleTx(tx: Writer, tenantId: string, id: string, actorId:
 
 /** The clear account number behind an instrument's bank id (decrypted). Only the audited reveal path calls this. */
 export async function accountNoForInstrumentTx(tx: Writer, tenantId: string, bankAccountId: string): Promise<string | null> {
-  const rows = await tx
-    .select({ accountNo: financeBanks.accountNo })
-    .from(financeBanks)
-    .where(and(eq(financeBanks.tenantId, tenantId), eq(financeBanks.id, bankAccountId)))
-    .limit(1);
-  return rows[0]?.accountNo ?? null;
+  return (await accountNosByIdTx(tx, tenantId, [bankAccountId])).get(bankAccountId) ?? null;
 }

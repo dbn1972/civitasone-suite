@@ -31,12 +31,6 @@ export function assertRequiredDocuments(required: string[], provided: string[]):
   }
 }
 
-/** Pre-signed S3 upload URL (60 min expiry) — binary never stored in DB. */
-export function buildPresignedUploadUrl(tenantId: string, applicationId: string, docType: string): string {
-  const expiry = Date.now() + 60 * 60 * 1000;
-  return `https://s3.example.com/${tenantId}/applications/${applicationId}/${docType}?expires=${expiry}`;
-}
-
 export function assertStatusTransition(from: string, to: ApplicationStatus): void {
   const allowed: Record<string, ApplicationStatus[]> = {
     submitted:    ["under_review", "pending_docs", "rejected"],

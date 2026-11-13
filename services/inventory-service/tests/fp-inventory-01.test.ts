@@ -138,7 +138,7 @@ describe("GAP-INVENTORY-GOODS-RETURNS-DETAIL-04: QC maker != checker", () => {
   it("settings default to ON; reading needs a reader role", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/inventory/settings", headers: mgr(T1, MAKER) });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ qcMakerChecker: true });
+    expect(res.json().data).toEqual({ qcMakerChecker: true, ledgerSource: "stock" }); // ledgerSource added by migration 0027
     const denied = await app.inject({ method: "GET", url: "/v1/inventory/settings", headers: hdr(T1, MAKER, ["citizen"]) });
     expect(denied.statusCode).toBe(403);
   });
