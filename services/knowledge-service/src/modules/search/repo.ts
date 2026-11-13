@@ -185,6 +185,7 @@ export async function indexDocument(tenantId: string, doc: { id: string; documen
       content: doc.content,
       tags: doc.tags,
       accessLevel,
+      kind: "knowledge",
     });
   } catch {
     // Search engine down — local index is source of truth; relay job will catch up
