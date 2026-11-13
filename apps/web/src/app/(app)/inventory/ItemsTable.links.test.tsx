@@ -29,3 +29,12 @@ describe("item master link-status column filters on the badge text, not the uuid
     expect(screen.getAllByText("Link status unavailable")).toHaveLength(2);
   });
 });
+
+describe("item master on the inventory ledger", () => {
+  it("has no link column: nothing to link to", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ItemsTable items={ITEMS} linkedItemIds={null} showLinkColumn={false} /></NextIntlClientProvider>);
+    expect(screen.getByText("Gel Pen")).toBeInTheDocument();
+    expect(screen.queryByText("Link status unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not linked")).not.toBeInTheDocument();
+  });
+});

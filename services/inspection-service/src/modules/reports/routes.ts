@@ -5,15 +5,19 @@
  * POST /v1/inspection/reports                    — create report
  * GET  /v1/inspection/reports/:id                — get report detail
  * POST /v1/inspection/reports/:id/observations   — add observation
- * POST /v1/inspection/reports/:id/submit         — submit for review
+ * POST /v1/inspection/reports/:id/submit         — submit (or resubmit a rejected report) for review
  * POST /v1/inspection/reports/:id/approve        — approve report
+ * POST /v1/inspection/reports/:id/reject         — reject report with a mandatory reason (reviewing officer)
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
-import { DomainError, assertMakerCheckerForReportApproval, reportMakers } from "./domain.js";
+import {
+  DomainError, OBSERVABLE_STATUSES, REJECTION_REASON_MAX, REJECTION_REASON_MIN, SUBMITTABLE_STATUSES,
+  assertMakerCheckerForReportApproval, assertMakerCheckerForReportRejection, reportMakers,
+} from "./domain.js";
 
 const INSPECTOR_ROLES = ["inspector", "reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
 const REVIEWER_ROLES  = ["reviewing_officer", "inspection_admin", "tenant_admin", "super_admin"];
@@ -36,6 +40,12 @@ const observationBody = z.object({
   description: z.string().min(1).max(4000),
   location:    z.string().max(256).optional(),
   evidenceIds: z.array(z.string().uuid()).optional(),
+});
+
+const rejectBody = z.object({
+  reason: z.string({ required_error: "reason is required" }).trim()
+    .min(REJECTION_REASON_MIN, `reason must be at least ${REJECTION_REASON_MIN} characters`)
+    .max(REJECTION_REASON_MAX),
 });
 
 const listQuery = z.object({
@@ -94,7 +104,7 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     const { id } = idParam.parse(req.params);
     const report = await repo.findReportById(ctx.tenantId, id);
     if (!report) throw new HttpError(404, "NOT_FOUND", "inspection report not found");
-    if (!["draft", "submitted"].includes(report.status)) {
+    if (!OBSERVABLE_STATUSES.includes(report.status)) {
       throw new HttpError(409, "CONFLICT", "cannot add observations to a finalized report");
     }
     const body = observationBody.parse(req.body);
@@ -115,7 +125,7 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     const { id } = idParam.parse(req.params);
     const report = await repo.findReportById(ctx.tenantId, id);
     if (!report) throw new HttpError(404, "NOT_FOUND", "inspection report not found");
-    if (report.status !== "draft") throw new HttpError(409, "CONFLICT", "report is not in draft status");
+    if (!SUBMITTABLE_STATUSES.includes(report.status)) throw new HttpError(409, "CONFLICT", "report is not in draft or rejected status");
     const result = await commands.submitReport(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -136,6 +146,26 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       throw err;
     }
     const result = await commands.approveReport(ctx, id);
+    return reply.code(202).send({ data: result });
+  });
+
+  // Reject report: the approving officer only; never the report's own inspector, author or submitter.
+  app.post("/v1/inspection/reports/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVIEWER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectBody.parse(req.body ?? {});
+    const report = await repo.findReportById(ctx.tenantId, id);
+    if (!report) throw new HttpError(404, "NOT_FOUND", "inspection report not found");
+    if (report.status !== "submitted") throw new HttpError(409, "CONFLICT", "report is not in submitted status");
+    // Fail fast on self-rejection; the consumer re-checks under a row lock (authoritative).
+    try {
+      assertMakerCheckerForReportRejection(reportMakers(report), ctx.actorId);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(403, err.code, err.message);
+      throw err;
+    }
+    const result = await commands.rejectReport(ctx, id, body.reason);
     return reply.code(202).send({ data: result });
   });
 }

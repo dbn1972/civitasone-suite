@@ -16,6 +16,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
 import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { registerCompOffConsumers } from "./comp-off-consumer.js";
+import { registerLeaveTypeAdminConsumers } from "./type-admin-consumer.js";
 
 const log = pino({ name: "hrms-leave-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
@@ -34,10 +35,12 @@ const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 export function registerLeaveConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerCompOffConsumers(rawQueue);
+  registerLeaveTypeAdminConsumers(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string; maxDays: number;
       isEncashable: boolean; carryForward: boolean; lopFractionBps: number;
+      systemCode?: string | null; category?: string | null; genderRestriction?: string | null; description?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -49,6 +52,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         // 10000/fully-unpaid when the caller omits it) -- see schema.ts's
         // doc comment on this column.
         lopFractionBps: p.lopFractionBps,
+        systemCode: p.systemCode ?? null, category: p.category ?? null,
+        genderRestriction: p.genderRestriction ?? null, description: p.description ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "leave_type", p.id);
@@ -175,6 +180,25 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       }
       const alloc = await repo.findAllocByIdTx(tx, p.allocId);
       if (!alloc) throw new Error(`leave alloc ${p.allocId} not found`);
+      if (alloc.status === "ended") {
+        // S8-G3: the allocation was ended between the 202 and now. Record it as a refused application
+        // (committed, not retried) rather than debiting an ended allocation.
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "hrms", action: "apply", resourceType: "leave_app", resourceId: p.id, outcome: "failure",
+            metadata: { reason: "ALLOCATION_ENDED", allocId: p.allocId, employeeId: p.employeeId, leaveTypeId: p.leaveTypeId } },
+        });
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.apply_failed", recipient: p.employeeId, recipientId: p.employeeId,
+            variables: { leaveAppId: p.id, reason: "ALLOCATION_ENDED", fromDate: p.fromDate, toDate: p.toDate },
+          }),
+        });
+        return;
+      }
       try {
         assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: effectiveBalanceDays(alloc) }, p.daysApplied);
       } catch (err) {

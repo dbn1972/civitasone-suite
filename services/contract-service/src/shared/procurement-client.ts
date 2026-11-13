@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 /**
  * D4c #25 (GAP-PROCUREMENT-CONTRACTS-NEW-06): read-only client to procurement-service
  * that resolves the purchase-order reference a contract quotes. contract-service and
@@ -22,6 +25,10 @@ export type ResolvedPo = { id: string; poNo: string; status: string };
 
 /** The tenant's real PO for `ref` (uuid, procurement_po:<uuid> or PO number), or null when none exists. */
 export async function resolvePoRef(tenantId: string, ref: string, correlationId?: string): Promise<ResolvedPo | null> {
+  const gate = await licence.check(tenantId, LICENCE_MODULE.procurement, "http", "procurement pos/resolve");
+  if (!gate.allowed) {
+    throw new ProcurementUnavailableError(gate.outcome === "deny" ? "procurement module is not licensed for this tenant" : `procurement licence could not be verified: ${gate.reason}`);
+  }
   let res: Response;
   try {
     res = await fetch(`${PROCUREMENT_URL}/v1/procurement/pos/resolve?ref=${encodeURIComponent(ref)}`, {

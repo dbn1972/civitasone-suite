@@ -13,7 +13,8 @@ export const fileRtiBody = z.object({
 export type FileRtiBody = z.infer<typeof fileRtiBody>;
 
 export const respondRtiBody = z.object({
-  responseUrl: z.string().url().max(2048),
+  // http(s) only: z.string().url() alone accepts javascript:/data:/file: which the web renders as a link.
+  responseUrl: z.string().url().max(2048).refine((u) => /^https?:\/\//i.test(u), { message: "responseUrl must be an http(s) URL" }),
 });
 export type RespondRtiBody = z.infer<typeof respondRtiBody>;
 

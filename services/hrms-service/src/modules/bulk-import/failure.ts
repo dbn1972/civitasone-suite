@@ -15,6 +15,10 @@ export const IMPORT_FAILURE = {
   INVALID_REFERENCE: "INVALID_REFERENCE",
   /** A value broke a column constraint or type. */
   INVALID_VALUE: "INVALID_VALUE",
+  /** A sealed PAN/bank/UAN names a PII key id this service does not hold (keyring gap after rotation). */
+  PII_KEY_UNKNOWN: "PII_KEY_UNKNOWN",
+  /** A sealed value could not be opened (tampered / wrong key). */
+  PII_UNREADABLE: "PII_UNREADABLE",
   /** The row was recorded but could not be put on the queue (route-side). */
   NOT_QUEUED: "NOT_QUEUED",
   /** Anything else: retries were exhausted or the failure is not one of the above. */

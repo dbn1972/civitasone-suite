@@ -56,6 +56,8 @@ export const meetings = meetingSchema.table("meetings", {
   financialYear:        varchar("financial_year", { length: 7 }),
   /** Set by migration 0014 on a pre-F81 duplicate-numbered test meeting; such rows are outside the number UNIQUE index. */
   testDataArchivedAt:   timestamp("test_data_archived_at", { withTimezone: true }),
+  /** Migration 0016: set only by POST /v1/meetings/record-held; scopes the unique index uq_meetings_recorded_held. */
+  recordedHeldAt:       timestamp("recorded_held_at", { withTimezone: true }),
   createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:            uuid("created_by").notNull(),

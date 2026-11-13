@@ -37,7 +37,8 @@ describe("wizard step model (R7.4, R13.3)", () => {
     const byKey = Object.fromEntries(WIZARD_STEPS.map((s) => [s.key, s]));
     expect(byKey["finance-year-coa"].moduleKey).toBe("finance");
     expect(byKey["leave-policies"].moduleKey).toBe("hrms");
-    expect(byKey["pay-structure"].moduleKey).toBe("hrms");
+    // M2: the pay-structure step belongs to the Payroll switch, not the HR switch.
+    expect(byKey["pay-structure"].moduleKey).toBe("payroll");
   });
 
   it("scopes the required departments step to the HRMS module (GAP-SETUP-HOME-01)", () => {

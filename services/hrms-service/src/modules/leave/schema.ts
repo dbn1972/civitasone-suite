@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, char, varchar, boolean, date, timestamp, numeric,
+  pgSchema, uuid, text, integer, char, varchar, boolean, date, timestamp, numeric, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const leaveSchema = pgSchema("leave");
@@ -30,6 +30,14 @@ export const hrmsLeaveTypes = leaveSchema.table("hrms_leave_types", {
   // See migrations/0151_leave_type_lop_fraction.sql for the backfill of
   // existing types and the evidence behind each one.
   lopFractionBps: integer("lop_fraction_bps").notNull().default(10000),
+  // S8-G3 (migration 0266): leave types are data. is_active hides a type from apply/allocate
+  // while keeping its history; system_code links a tenant type to a built-in engine behaviour
+  // (NULL = purely tenant-defined, resolved from the tenant's policy-rule rows).
+  isActive:     boolean("is_active").notNull().default(true),
+  systemCode:   varchar("system_code", { length: 8 }),
+  category:     varchar("category", { length: 16 }),
+  genderRestriction: varchar("gender_restriction", { length: 8 }),
+  description:  text("description"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -49,6 +57,11 @@ export const hrmsLeaveAllocs = leaveSchema.table("hrms_leave_allocs", {
   // NULL = never fractionally touched; readers use effectiveBalanceDays().
   // balance_days keeps FLOOR(exact) as a safe whole-day shadow.
   balanceDaysExact: numeric("balance_days_exact", { precision: 6, scale: 1 }),
+  // S8-G3 (migration 0266): an allocation is ENDED (soft), never deleted.
+  status:       varchar("status", { length: 12 }).notNull().default("active"),
+  endedOn:      date("ended_on", { mode: "string" }),
+  endedReason:  text("ended_reason"),
+  endedBy:      uuid("ended_by"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -108,6 +121,8 @@ export const hrmsLeaveTenantConfig = leaveSchema.table("hrms_leave_tenant_config
   tenantId:         uuid("tenant_id").primaryKey(),
   halfDayEnabled:   boolean("half_day_enabled").notNull().default(false),
   shortLeaveEnabled: boolean("short_leave_enabled").notNull().default(false),
+  // S8-G3 (migration 0266): row-based leave resolver. Default OFF == the unchanged engine path.
+  customLeaveRulesEnabled: boolean("custom_leave_rules_enabled").notNull().default(false),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),
@@ -135,4 +150,27 @@ export const hrmsCompOff = leaveSchema.table("hrms_comp_off", {
 });
 export type CompOffRow = typeof hrmsCompOff.$inferSelect;
 
-export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions, hrmsLeaveTenantConfig, hrmsCompOff };
+// S8-G3 (migration 0266): maker-checker request to deactivate a leave type (and end its allocations).
+export const hrmsLeaveTypeChanges = leaveSchema.table("hrms_leave_type_changes", {
+  id:            uuid("id").primaryKey(),
+  tenantId:      uuid("tenant_id").notNull(),
+  leaveTypeId:   uuid("leave_type_id").notNull(),
+  allocId:       uuid("alloc_id"),
+  action:        varchar("action", { length: 24 }).notNull(),
+  status:        varchar("status", { length: 12 }).notNull().default("pending"),
+  reason:        text("reason").notNull(),
+  impact:        jsonb("impact").notNull().default({}),
+  requestedBy:   uuid("requested_by").notNull(),
+  decidedBy:     uuid("decided_by"),
+  decidedAt:     timestamp("decided_at", { withTimezone: true }),
+  decisionNote:  text("decision_note"),
+  appliedSummary: jsonb("applied_summary"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  updatedBy:     uuid("updated_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+export type LeaveTypeChangeRow = typeof hrmsLeaveTypeChanges.$inferSelect;
+
+export const schema = { hrmsLeaveTypeChanges, hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions, hrmsLeaveTenantConfig, hrmsCompOff };

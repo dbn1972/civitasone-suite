@@ -15,7 +15,8 @@ export async function searchIndex(ctx: RequestContext, body: IndexDocumentBody):
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    // `tags` from the caller is dropped here (and ignored again by the consumer): see consumer.ts.
+    payload: { id, tenantId: ctx.tenantId, ...body, tags: [] },
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

@@ -28,6 +28,8 @@ export interface InspectionTransitionPayload {
   inspectionId: string;
   targetState: string;
   remarks?: string | undefined;
+  /** Verified token roles stamped by the route (never from the client); the consumer re-checks conducting rights. */
+  actorRoles?: string[] | undefined;
 }
 
 /** POST /inspections/:id/submit-review — submit for review. */
@@ -75,6 +77,7 @@ export async function publishInspectionTransition(
 ): Promise<{ accepted: true; messageId: string }> {
   const msg = envelope(ctx, COMMANDS.inspectionTransition, {
     ...payload,
+    actorRoles: [...ctx.roles],
     tenantId: ctx.tenantId,
   });
   await queue.publish(COMMANDS.inspectionTransition, msg);

@@ -6,7 +6,7 @@ import type { PickerEntry } from "@/app/(app)/inventory/linkHelpers";
  * master and the stock-service item master, and returns a linked pair as a single entry, so
  * a user never sees the same item twice. Returns [] on any non-ok response.
  */
-export type ItemMasters = "all" | "stock";
+export type ItemMasters = "all" | "stock" | "inventory";
 
 export async function searchItemEntries(
   query: string,

@@ -71,9 +71,13 @@ async function post(url: string, tok: string, payload: unknown) {
   });
 }
 
-/** MemoryQueue delivery is async — give the consumer a beat to apply the write. */
+/**
+ * MemoryQueue delivery is async. Wait until every in-flight delivery (including cascaded ones) has fully
+ * settled via MemoryQueue.drain() instead of racing a fixed sleep, which flaked on a loaded CI runner.
+ */
 async function flush() {
-  await new Promise((r) => setTimeout(r, 250));
+  const { queue } = await import("../src/shared/infra.js");
+  await (queue as unknown as { drain(): Promise<void> }).drain();
 }
 
 async function seedTicket(tenantId: string, status: string, assigneeId: string | null = null): Promise<string> {

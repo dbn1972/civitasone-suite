@@ -109,7 +109,13 @@ describe("link request: matching", () => {
     const audits = await auditsFor(TA, linkId);
     expect(audits).toHaveLength(1);
     expect(audits[0]!.payload).toMatchObject({ service: "finance", action: "scan_link_linked", resourceType: "finance_bill", resourceId: ids.billA, outcome: "success" });
-    expect(JSON.stringify(audits[0]!.payload)).not.toContain("0091"); // no reference text in the audit
+    // No reference text in the audit. The payload carries random UUIDs whose hex can contain "0091" by chance
+    // (it did: ...-00916bd4), so a bare substring check on the raw JSON is flaky. Strip every UUID first, then keep
+    // the strict `not.toContain("0091")` on the remainder: it still catches BILL-2026-0091, INV-0091, 20260091, etc.
+    const stripped = JSON.stringify(audits[0]!.payload).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>");
+    expect(stripped).toContain("scan_link_linked"); // self-check: stripping removed ids only, the other fields are still there
+    expect(stripped).toContain("<uuid>");
+    expect(stripped).not.toContain("0091"); // no reference text in the audit
     expect(await resultsFor(TA, "finance.scan-link.result", linkId)).toHaveLength(1);
   });
 

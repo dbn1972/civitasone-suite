@@ -20,6 +20,8 @@ import * as queries from "./queries.js";
 import { fetchOpenTaskRefIds } from "../../shared/workflow-client.js";
 import { assertDayPartAllowed, assertSufficientLeaveBalance, blockingOverlaps, effectiveBalanceDays, DomainError } from "./domain.js";
 import { allocationPeriodRefusal } from "./allocation-period.js";
+import { getCustomLeaveRulesEnabled } from "./type-admin-repo.js";
+import { leaveEngineBucket } from "./employee-type-alias.js";
 import { idempotentCreate } from "../../shared/idempotency.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -31,6 +33,13 @@ const LEAVE_CONFIG_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "pl
 /** Code + message for a request whose dates are all holidays/weekends (0 leave days to debit). */
 export const LEAVE_NO_WORKING_DAYS = "LEAVE_NO_WORKING_DAYS";
 export const LEAVE_NO_WORKING_DAYS_MESSAGE = "The selected dates are holidays or weekends; no leave days to apply";
+
+function leaveGender(raw: string | null | undefined): "male" | "female" | "other" | undefined {
+  const g = (raw ?? "").trim().toLowerCase();
+  if (g === "male" || g === "m") return "male";
+  if (g === "female" || g === "f") return "female";
+  return g ? "other" : undefined;
+}
 
 /** One reason a leave application cannot be accepted (what a submit answers with 422). */
 interface LeaveViolation {
@@ -94,6 +103,8 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
   const balance = effectiveBalanceDays(alloc);
   const violation = (code: string, message: string): LeaveEvaluation =>
     ({ computedDays: null, warnings: [], violations: [{ code, message }], holidaysInRange: [], balance });
+  // S8-G3: an allocation ended by an admin (type deactivated / allocation ended) cannot be drawn on.
+  if (alloc.status === "ended") return violation("ALLOCATION_ENDED", "this leave allocation has been ended and can no longer be used");
   // UAT T-EDGE TE-03 (L06): one allocation is one leave year; a request crossing its end
   // (31 Mar -> 1 Apr on a 2026-27 allocation) is refused with the boundary instead of
   // debiting next-year days from this year.
@@ -102,7 +113,11 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
   const types = await repo.listLeaveTypesByTenant(tenantId);
   const lt = types.find((t) => t.id === body.leaveTypeId);
   if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
+  // S8-G3: a deactivated type is hidden from apply (history is preserved, new applications are not).
+  if (lt.isActive === false) return violation("LEAVE_TYPE_INACTIVE", `${lt.name} is no longer an active leave type`);
   const code = (lt.code ?? "").toUpperCase();
+  // S8-G3: per-tenant opt-in (default OFF) to the row-based resolver; OFF == the unchanged path below.
+  const customRules = (await scopedRead((tx) => getCustomLeaveRulesEnabled(tx, tenantId))) === true;
   const [emp] = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId)));
   if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
   // IDOR guard + reporting-line-scoped manager exemption:
@@ -153,7 +168,7 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
   // (default OFF) and by the leave type (CL only); anything else is whole-day.
   if (body.dayPart !== "full") {
     try {
-      assertDayPartAllowed(body.dayPart, code, await repo.getLeaveTenantConfig(tenantId));
+      assertDayPartAllowed(body.dayPart, customRules ? (lt.systemCode ?? "") : code, await repo.getLeaveTenantConfig(tenantId));
     } catch (err) {
       if (err instanceof DomainError) return violation(err.code, err.message);
       throw err;
@@ -170,7 +185,7 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
       `leave dates ${body.fromDate}..${body.toDate} overlap an existing ${clash.status} application (${clash.fromDate}..${clash.toDate}, id ${clash.id})`,
     );
   }
-  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) {
+  if (!customRules && !LEAVE_POLICIES.some((pol) => pol.code === code)) {
     // Outside the CCS engine: the client-submitted day count stands, but the
     // balance is still enforced HERE -- the consumer's identical check runs
     // after the 202 has already been returned, so a shortfall used to vanish
@@ -206,8 +221,13 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     return { computedDays: serverDays, warnings: [], violations: [], holidaysInRange, balance, engineApplied: false };
   }
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
-  const empType = (allowed as string[]).includes(emp.employeeType ?? "")
-    ? (emp.employeeType as EmployeeType) : "permanent";
+  const empType = customRules
+    ? leaveEngineBucket(emp.employeeType ?? "permanent")
+    : (allowed as string[]).includes(emp.employeeType ?? "")
+      ? (emp.employeeType as EmployeeType) : "permanent";
+  const genderPart: { gender?: "male" | "female" | "other" } = {};
+  const g = customRules ? leaveGender(emp.gender) : undefined;
+  if (g) genderPart.gender = g;
   const result = await validateLeaveRequest({
     employeeType: empType,
     leaveCode: code as LeaveCategory,
@@ -225,6 +245,13 @@ async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof a
     // instead of only ever using the hardcoded default catalog.
     leaveTypeId: body.leaveTypeId,
     rawEmployeeType: emp.employeeType ?? undefined,
+    // S8-G3 (only read when customRules is true).
+    customRules,
+    // The legacy path has never passed gender; only the opted-in resolver does (its gender rules need it).
+    ...genderPart,
+    systemCode: lt.systemCode ?? null,
+    leaveTypeName: lt.name,
+    typeGenderRestriction: (lt.genderRestriction as "male" | "female" | null) ?? null,
   });
   return {
     // BUG-1 fix: hand back the rules-engine's validated day count so the caller

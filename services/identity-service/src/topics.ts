@@ -8,6 +8,8 @@ export const COMMANDS = {
   revealSessionIp: "identity.session.reveal_ip",
   revokeAllSessions: "identity.session.revoke_all",
   resetCredential: "identity.user.reset_password",
+  /** Usable logins: change a user's tenant-grantable realm roles (audited). */
+  setUserRoles:    "identity.user.roles.set",
   enableMfa:       "identity.mfa.enable",
   setupMfa:        "identity.mfa.setup",
   mfaVerifyFail:   "identity.mfa.verify_fail",
