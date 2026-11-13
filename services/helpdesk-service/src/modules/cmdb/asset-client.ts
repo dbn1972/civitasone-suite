@@ -5,6 +5,8 @@
  * return an unverified linkage. The ticket is still accepted.
  */
 import { pino } from "pino";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
 
 const logger = pino({ name: "helpdesk:cmdb" });
 
@@ -33,6 +35,9 @@ export interface AssetLinkResult {
  * NEVER throws — graceful degradation is enforced.
  */
 export async function verifyAsset(assetId: string, tenantId: string): Promise<AssetLinkResult> {
+  // M5: do not call an asset module this tenant did not buy; the ticket is accepted with unverified linkage, as for an outage.
+  const gate = await licence.check(tenantId, LICENCE_MODULE.assets, "http", "asset-service");
+  if (!gate.allowed) return { assetId, verified: false, error: gate.outcome === "deny" ? "asset_module_not_licensed" : "asset_licence_unverified" };
   // CLOS3-S5-09: service-to-service credentials, read at call time (never hardcoded).
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (!secret) {

@@ -338,6 +338,9 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       email: z.string().email().max(254),
       name: z.string().min(1).max(200),
       empCode: z.string().max(64).optional(),
+      // Usable-logins tenants: tenant-grantable roles for the new user. Validated against the allow-list and
+      // the caller's own authority by identity-service (it is the owner of that rule); this layer only forwards.
+      roles: z.array(z.string().min(1).max(64)).max(10).optional(),
     });
     const parsed = createBody.safeParse(req.body);
     if (!parsed.success) {

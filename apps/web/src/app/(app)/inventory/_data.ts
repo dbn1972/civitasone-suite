@@ -182,10 +182,12 @@ export type InventoryMovementType = "receipt" | "issue" | "transfer" | "adjustme
  * mixed rows (GAP-INVENTORY-ISSUES-02).
  */
 export async function getInventoryLedger(
-  opts: { movementType?: InventoryMovementType } = {},
+  opts: { movementType?: InventoryMovementType; from?: string; to?: string } = {},
 ): Promise<LoaderResult<InventoryLedgerRow[]>> {
   const qs = new URLSearchParams({ limit: String(INVENTORY_LEDGER_LIMIT) });
   if (opts.movementType) qs.set("movementType", opts.movementType);
+  if (opts.from) qs.set("from", opts.from);
+  if (opts.to) qs.set("to", opts.to);
   const res = await fetchJson<Envelope<InventoryLedgerRow>, InventoryLedgerRow[]>(
     `/api/v1/inventory/ledger?${qs.toString()}`,
     [],

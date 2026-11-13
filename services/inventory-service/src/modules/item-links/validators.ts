@@ -36,8 +36,10 @@ export const linkLookupQuery = z.object({
 export const pickerQuery = z.object({
   q:       z.string().trim().max(100).default(""),
   limit:   z.coerce.number().int().positive().max(50).default(20),
-  /** `stock` narrows to items that have a stock-service side (linked or stock-only), for stock entry forms. */
-  masters: z.enum(["all", "stock"]).default("all"),
+  /** `stock` narrows to items that have a stock-service side (linked or stock-only), for stock entry forms.
+   *  `inventory` searches the item master only and never calls stock-service (entry forms of a tenant whose
+   *  ledger source is "inventory"). */
+  masters: z.enum(["all", "stock", "inventory"]).default("all"),
 });
 
 export const unmatchedQuery = z.object({

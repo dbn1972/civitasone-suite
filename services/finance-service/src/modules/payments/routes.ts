@@ -19,7 +19,7 @@ import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { actorsQuery } from "./validators.js";
-import { assertProvisionHttp } from "../budget/provision.js";
+import { assertProvisionHttp, attachBudgetWarnings } from "../budget/provision.js";
 import { todayIST } from "../../shared/ist-date.js";
 import { idempotentCreate } from "../../shared/idempotency.js";
 import { findHeadByIdAndTenant } from "../budget/repo.js";
@@ -272,7 +272,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       assertBillApprovable(bill.status, bill.stage ?? "section");
     } catch (err) { toDomain(err, 409); }
     // UAT T-PERIOD D-03 (GFR): a bill is not passed against a head with no budget provision for the FY of the bill.
-    await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "bill");
+    attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "bill"));
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
   });
 
@@ -280,6 +280,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
+    // The optional disbursing account must be an active bank account of THIS tenant (the consumer re-checks and
+    // dead-letters nothing: it throws NonRetryable). Same 422 whether it never existed or belongs to another tenant.
+    if (body.bankAccountId && !(await repo.isActiveBankAccount(ctx.tenantId, body.bankAccountId))) {
+      throw new HttpError(422, "BANK_ACCOUNT_NOT_FOUND", "bankAccountId is not an active bank account of this office");
+    }
     // Synchronous pre-check of the segregation-of-duties rules (the consumer stays authoritative): the common case
     // gets an immediate 409, not a silent 202. The payer must be neither the officer who lodged the bill (maker !=
     // checker) nor the officer who passed it (passer != payer).
@@ -291,7 +296,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       } catch (err) { toDomain(err, 409); }
     }
     // UAT T-PERIOD D-03 (GFR): no payment against a head that has no budget provision for the FY it is charged to.
-    if (bill) await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment");
+    if (bill) attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment"));
     // UAT T-EDGE TE-09: one payment per X-Idempotency-Key (same body replays, other body 422).
     return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.payment.initiate", body, () => commands.initiatePayment(ctx, body)));
   });

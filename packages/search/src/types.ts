@@ -22,6 +22,12 @@ export interface SearchDocument {
   /** Optional category for filtering. */
   category?: string | undefined;
   /**
+   * What kind of record this is. knowledge-service stamps its own documents `"knowledge"`; module
+   * records (finance, hrms ...) carry none. Lets a query apply access-level clearance to EVERY knowledge
+   * document, whatever tags it carries (see SearchQuery.knowledgeAccessLevels).
+   */
+  kind?: string | undefined;
+  /**
    * Access level of the source document (e.g. public/internal/restricted/confidential).
    * Indexed so a query can be restricted to the levels the caller is cleared for.
    * Defaults to "internal" when omitted.
@@ -43,6 +49,23 @@ export interface SearchQuery {
   tags?: string[] | undefined;
   /** Optional tag filter (OR logic): the document must carry AT LEAST ONE of these tags. Combined with `tags` by AND. */
   tagsAny?: string[] | undefined;
+  /**
+   * Only meaningful with `tagsAny`. When true, documents that carry NO tags at all also qualify
+   * (`tags IN tagsAny OR (tags IS EMPTY AND accessLevel IN accessLevels)`). The tenant filter is always ANDed
+   * outside this clause, so untagged documents are visible only inside their own tenant. `accessLevels` is
+   * the caller's clearance for those untagged documents and is REQUIRED (no default): a list limits them to
+   * those levels (an empty list shows none), `null` means cleared for every level. Tagged documents are not
+   * affected. Default (option absent): untagged documents are not included.
+   */
+  /**
+   * Clearance for knowledge documents (`kind = "knowledge"`), applied whether they are tagged or not, so a
+   * tag chosen by an author or a client can never move a restricted document past the clearance check.
+   * A list limits knowledge documents to those access levels (empty = none); `null` = cleared for every
+   * level. `undefined` (absent) applies no knowledge clearance (non-knowledge callers). Non-knowledge
+   * records (no `kind`) are never affected.
+   */
+  knowledgeAccessLevels?: readonly string[] | null | undefined;
+  includeUntagged?: { accessLevels: readonly string[] | null } | undefined;
   /**
    * When set, only documents whose indexed accessLevel is in this list are
    * retrieved (applied inside the engine query). Documents indexed without a
@@ -89,6 +112,11 @@ export interface SearchEngine {
   initialize(config?: SearchEngineConfig): Promise<void>;
   /** Index a single document (upsert). */
   index(doc: SearchDocument): Promise<void>;
+  /**
+   * Optional: make the index search-ready (create it, apply settings, wait for them), THROWING on failure.
+   * Lets a caller initialise lazily, memoise success and retry failure. Not all providers need it.
+   */
+  ensureReady?(): Promise<void>;
   /** Index multiple documents in bulk. */
   bulkIndex(docs: SearchDocument[]): Promise<void>;
   /** Search for documents. */

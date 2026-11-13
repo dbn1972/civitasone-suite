@@ -70,6 +70,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "leave_application",
   "leave_special",
   "leave_tenant_config", // GAP-HR-LEAVE-APPLY-05
+  "leave_custom_rules_switch", // hrms leave type-admin consumer (custom-rules switch)
   "leave_type",
   "loan",
   "ltc_exemption",
@@ -87,12 +88,9 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "pay_matrix",
   "payroll_arrear",
   "payroll_bonus",
-  "payroll_component", // pay-components consumer (structure component create/update/(de)activate)
   "payroll_correction",
   "payroll_costing_rule",
-  "payroll_ctc_template", // pay-components consumer (CTC template create)
   "payroll_ddo",
-  "payroll_employee_pf_wage_basis", // statutory-seams consumer (PF wage-basis request/approve/reject)
   "payroll_flex_election",
   "payroll_flex_plan",
   "payroll_input",
@@ -107,7 +105,6 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_salary_revision",
   "payroll_settings",
   "payroll_state_rules",
-  "payroll_statutory_seams", // statutory-seams consumer (LWF/ESI flags request/approve)
   "payroll_structure",
   "pension",
   "perquisite_component",
@@ -161,6 +158,11 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
   "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
   "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
+  "payroll_employee_pf_wage_basis", // S8 PF wage-basis change request / approve / reject (payroll statutory-seams consumer)
+  "payroll_s8_change_request", // S8 statutory-seams change-request decision refused / rejected
+  "payroll_statutory_seams", // S8 LWF / ESI-period flag request / approve (payroll statutory-seams consumer)
+  "payroll_ctc_template", // S8-G1/G2 pay-components consumer: CTC template create
+  "payroll_component", // S8-G2 pay-components consumer: component create/update/(de)activate
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

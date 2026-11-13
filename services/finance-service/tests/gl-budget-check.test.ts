@@ -53,6 +53,7 @@ class TestMemoryQueue {
 // Module mocks
 // ---------------------------------------------------------------------------
 const {
+  budgetControlRef,
   mockTx,
   dbTransactionFn,
   enqueueMock,
@@ -67,9 +68,16 @@ const {
   incrementBudgetUtilisedGuardedMock,
   incrementBudgetUtilisedForcedMock,
 } = vi.hoisted(() => {
-  const _mockTx = { execute: vi.fn(async () => []) };
+  // Tenant-type profile switch: the budget block now reads the tenant's budget_control from gl.finance_settings.
+  // `budgetControlRef.value` undefined = no settings row (reads as mandatory, the pre-existing behaviour).
+  const _budgetControlRef: { value: string | undefined } = { value: undefined };
+  const _mockTx = {
+    execute: vi.fn(async () => []),
+    select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => (_budgetControlRef.value === undefined ? [] : [{ m: _budgetControlRef.value }]) }) }) })),
+  };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
+    budgetControlRef: _budgetControlRef,
     mockTx: _mockTx,
     dbTransactionFn: _dbTransactionFn as any,
     enqueueMock: vi.fn(async () => undefined) as any,
@@ -206,6 +214,7 @@ async function buildQueue(): Promise<TestMemoryQueue> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  budgetControlRef.value = undefined;
   markProcessedMock.mockResolvedValue(true);
   findJournalByIdTxMock.mockResolvedValue(null);
   findHeadByCodeTxMock.mockImplementation(async (_tx: unknown, _tenantId: string, code: string) => ({
@@ -405,5 +414,78 @@ describe("DOM-007 — GL posting path budget check", () => {
       expect(incrementBudgetUtilisedGuardedMock).toHaveBeenCalledTimes(1);
       expect(budgetRow.utilisedMinor).toBe(250_000n); // unchanged — NOT 400,000
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tenant-type profile switch (docs/design/TENANT-PROFILE-SWITCH.md, S3): budget control mandatory | advisory | off.
+// The DOM-007 / D-03 tests above run with NO settings row, which reads as mandatory: they are the proof that an
+// existing tenant behaves exactly as before. The cases below cover the explicit modes.
+// ---------------------------------------------------------------------------
+describe("budget control modes (tenant profile switch)", () => {
+  const rowFor = (headId: string, reMinor: bigint, utilisedMinor = 0n) => ({
+    id: "budget-row-9", tenantId: TENANT, headId, fy: "2025-26",
+    beMinor: reMinor, reMinor, allocatedMinor: reMinor, utilisedMinor, currency: "INR",
+  });
+  const advisoryAudits = () => enqueueMock.mock.calls.filter(
+    ([, m]: [unknown, { topic: string; payload: Record<string, unknown> }]) => m.topic === AUDIT_TOPIC && m.payload.action === "post_journal_budget_advisory",
+  );
+
+  it("an explicit mandatory row behaves exactly like no row: NO_BUDGET_PROVISION, nothing posted", async () => {
+    budgetControlRef.value = "mandatory";
+    const q = await buildQueue();
+    await expect(q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 1_000)))).rejects.toThrow(/NO_BUDGET_PROVISION/);
+    expect(insertJournalMock).not.toHaveBeenCalled();
+    expect(advisoryAudits()).toHaveLength(0);
+  });
+
+  it("an unknown stored value reads as mandatory (never looser)", async () => {
+    budgetControlRef.value = "relaxed";
+    const q = await buildQueue();
+    await expect(q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 1_000)))).rejects.toThrow(/NO_BUDGET_PROVISION/);
+  });
+
+  it("advisory: an expenditure debit with no provision posts, with an audit row instead of a refusal", async () => {
+    budgetControlRef.value = "advisory";
+    const q = await buildQueue();
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 2_40_000)));
+    expect(insertJournalMock).toHaveBeenCalled();
+    expect(insertJournalMock.mock.calls[0]![1].budgetOverride).toBe(false);
+    const audits = advisoryAudits();
+    expect(audits).toHaveLength(1);
+    expect(audits[0]![1].payload).toMatchObject({ reason: "NO_PROVISION", headCode: "5010", fy: "2025-26", requestedMinor: "240000" });
+    expect(incrementBudgetUtilisedGuardedMock).not.toHaveBeenCalled();
+  });
+
+  it("advisory: an overdraw posts through the forced increment and is audited as OVERDRAW", async () => {
+    budgetControlRef.value = "advisory";
+    findBudgetTxMock.mockImplementation(async (_tx: unknown, headId: string) => headId === fakeHeadUuid(EXPENSE_CODE) ? rowFor(headId, 1_00_000n) : null);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 1_50_000)));
+    expect(insertJournalMock).toHaveBeenCalled();
+    expect(incrementBudgetUtilisedForcedMock).toHaveBeenCalledWith(expect.anything(), "budget-row-9", 150_000n, ACTOR);
+    expect(incrementBudgetUtilisedGuardedMock).not.toHaveBeenCalled();
+    expect(advisoryAudits()[0]![1].payload).toMatchObject({ reason: "OVERDRAW", requestedMinor: "150000", availableMinor: "100000" });
+  });
+
+  it("advisory: a within-budget debit takes the normal guarded path and writes no advisory audit", async () => {
+    budgetControlRef.value = "advisory";
+    findBudgetTxMock.mockImplementation(async (_tx: unknown, headId: string) => headId === fakeHeadUuid(EXPENSE_CODE) ? rowFor(headId, 5_00_000n, 1_00_000n) : null);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 1_50_000)));
+    expect(incrementBudgetUtilisedGuardedMock).toHaveBeenCalledWith(expect.anything(), "budget-row-9", 150_000n, ACTOR);
+    expect(advisoryAudits()).toHaveLength(0);
+  });
+
+  it("off: no provision needed, no check, no utilisation tracking, no audit", async () => {
+    budgetControlRef.value = "off";
+    findBudgetTxMock.mockImplementation(async (_tx: unknown, headId: string) => headId === fakeHeadUuid(EXPENSE_CODE) ? rowFor(headId, 1_00_000n) : null);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload({}, 9_99_00_000)));
+    expect(insertJournalMock).toHaveBeenCalled();
+    expect(findBudgetTxMock).not.toHaveBeenCalled();
+    expect(incrementBudgetUtilisedGuardedMock).not.toHaveBeenCalled();
+    expect(incrementBudgetUtilisedForcedMock).not.toHaveBeenCalled();
+    expect(advisoryAudits()).toHaveLength(0);
   });
 });
