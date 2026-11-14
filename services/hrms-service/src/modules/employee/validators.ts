@@ -39,6 +39,10 @@ export const employeeListQuery = listQuerySchema.extend({
   // DIRECTORY_ROLES gate and PII-free response shape as the existing list
   // (see routes.ts's DIRECTORY_ROLES comment / queries.listEmployees).
   q: z.string().trim().min(1).max(100).optional(),
+  // S8 G5: filters over the contract/project read-model (filled only for tenants that opted in).
+  contractEndBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
+  projectId: z.string().uuid().optional(),
+  contractStatus: z.enum(["active", "expiring", "escalated", "expired", "renewed", "terminated"]).optional(),
   // GAP-HR-SF-06: optional batch id lookup for the picker's resolve(ids)
   // adapter -- pre-populates an edit form's label for an id it already has
   // (this is the fix for GAP-HR-EMPLOYEES-DETAIL-EDIT-04's blank-on-every-

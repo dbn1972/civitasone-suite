@@ -38,7 +38,8 @@ export const createComponentBody = z.object({
   countsForPfWage: componentFields.countsForPfWage.default(false),
   countsForEsiWage: componentFields.countsForEsiWage.default(false),
   countsForGratuity: componentFields.countsForGratuity.default(false),
-  lopApplicable: componentFields.lopApplicable.default(false),
+  // omitted => defaultLopApplicable(kind, spec) (owner decision 10 Nov 2026, second set); applied in the create route
+  lopApplicable: componentFields.lopApplicable.optional(),
   payslipOrder: componentFields.payslipOrder.optional(),
 }).strict();
 export type CreateComponentBody = z.infer<typeof createComponentBody>;
@@ -104,7 +105,7 @@ export function specFromCreate(b: CreateComponentBody): ComponentSpec {
     fixedMinor: b.fixedMinor != null ? BigInt(b.fixedMinor) : null,
     employerCostClass, costPlacement: b.costPlacement as CostPlacement,
     countsForPfWage: b.countsForPfWage, countsForEsiWage: b.countsForEsiWage, countsForGratuity: b.countsForGratuity,
-    lopApplicable: b.lopApplicable, payslipOrder: b.payslipOrder ?? null,
+    lopApplicable: b.lopApplicable ?? false, payslipOrder: b.payslipOrder ?? null,
   };
 }
 

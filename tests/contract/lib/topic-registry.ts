@@ -121,7 +121,8 @@ function collectTsFiles(dir: string, acc: string[] = []): string[] {
     if (
       entry.name === "node_modules" ||
       entry.name === "dist" ||
-      entry.name === "tests"
+      entry.name === "tests" ||
+      entry.name === "__tests__"
     ) {
       continue;
     }

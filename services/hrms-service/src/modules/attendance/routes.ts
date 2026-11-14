@@ -712,7 +712,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
     await assertSelfOrHr(ctx, q.employeeId, "check WFH eligibility");
     const policy = await getPolicy(ctx.tenantId, "wfh_eligibility");
-    const { payLevel } = await resolveEmployeePayLevel(ctx.tenantId, q.employeeId);
+    const resolved = await resolveEmployeePayLevel(ctx.tenantId, q.employeeId);
+    const { payLevel } = resolved;
     // GAP-HR-WFH-01: the figure is DAYS used this ISO week (union of the
     // employee's pending/approved ranges clamped to the week), not the number
     // of request rows -- a Mon-Tue request is 2 days, and a request that began
@@ -731,7 +732,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       payLevel,
       maxPayLevel: policy.maxPayLevel,
       enforceGazettedExclusion: policy.enforceGazettedExclusion,
-      gazetted: isGazettedForWfh(payLevel, policy),
+      gazetted: isGazettedForWfh(payLevel, policy, resolved),
+      // S8-G4 (additive): only meaningful on a private-bands tenant; a government tenant gets payScale 'cpc7' and nulls.
+      payScale: resolved.scale ?? "cpc7",
+      bandCode: resolved.bandCode ?? null,
+      bandRank: resolved.bandRank ?? null,
+      maxBandRank: policy.maxBandRank ?? null,
       weeklyWfhCount: wfhDaysUsedInWeek(week, today),
       weeklyCap: WFH_WEEKLY_DAY_CAP,
       // The week (Monday-Sunday, "YYYY-MM-DD") the count above describes. The
@@ -774,10 +780,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // slip through" philosophy already used by the overtime future-date guard
     // above, not a display-facing date computation.
     const wfhPolicy = await getPolicy(ctx.tenantId, "wfh_eligibility");
-    const { payLevel } = await resolveEmployeePayLevel(ctx.tenantId, body.employeeId);
-    if (isGazettedForWfh(payLevel, wfhPolicy)) {
-      throw new HttpError(422, "GAZETTED_NOT_ELIGIBLE",
-        `work from home is not available at pay Level ${payLevel} (eligible up to Level ${wfhPolicy.maxPayLevel})`);
+    const resolvedLevel = await resolveEmployeePayLevel(ctx.tenantId, body.employeeId);
+    const { payLevel } = resolvedLevel;
+    if (isGazettedForWfh(payLevel, wfhPolicy, resolvedLevel)) {
+      throw new HttpError(422, "GAZETTED_NOT_ELIGIBLE", resolvedLevel.scale === "private_bands"
+        ? `work from home is not available for grade band ${resolvedLevel.bandCode ?? ""} (eligible up to band rank ${wfhPolicy.maxBandRank})`
+        : `work from home is not available at pay Level ${payLevel} (eligible up to Level ${wfhPolicy.maxPayLevel})`);
     }
     const capError = (weekStart: string, days: number): HttpError => new HttpError(422, "WEEKLY_WFH_CAP_REACHED",
       `this request would put ${days} WFH days in the week starting ${weekStart}; the DoPT OM 2022 limit is ${WFH_WEEKLY_DAY_CAP} days per week`);

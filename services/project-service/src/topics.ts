@@ -26,6 +26,7 @@ export const COMMANDS = {
   taskUpdate:              "project.task.update",
   memberAdd:               "project.member.add",
   memberRemove:            "project.member.remove",
+  memberRoleChange:        "project.member.role_change",
   escalationAct:           "project.escalation.act",
 } as const;
 
@@ -58,6 +59,10 @@ export const CONSUMED_EVENTS = {
   // PENDING_REVIEW triage item — see modules/board-intake/consumer.ts. Payload:
   // { decisionId, meetingId, text, projectRef?, authority?, effectiveDate?, committeeId? }.
   boardDecisionProject: "meeting.decision.project",
+  // S8 G7: payroll publishes per-project cost TOTALS (no employee id) when a run is approved or a
+  // back-dated allocation is reclassified. Payload: { kind, sourceId, postings: [{ projectId, costMonth,
+  // grossMinor, employerCostMinor, totalCostMinor, headcount }] } - see modules/staff-cost/consumer.ts.
+  projectCostPosted: "payroll.project_cost.posted",
 } as const;
 
 export const SERVICE = "project";

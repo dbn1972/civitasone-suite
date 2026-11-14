@@ -8,7 +8,7 @@ import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserJson } from "@/lib/api/browserClient";
 import {
   COMPONENT_CALC_TYPES, COST_PLACEMENTS, EMPLOYER_COST_CLASSES, RUN_CALC_TYPES, STATUTORY_DERIVED_CLASSES,
-  emptyForm, formFromRow, parseComponentForm,
+  emptyForm, formFromRow, parseComponentForm, withLopDefault,
   type ComponentForm, type ComponentRow, type FormErrors, type StructureKind,
 } from "@/lib/payComponents";
 
@@ -58,7 +58,12 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
   const ids = { code: useId(), name: useId(), type: useId(), calc: useId(), pb: useId(), pc: useId(), fx: useId(), cls: useId(), pl: useId() };
 
   const base = `v1/payroll/structures/${encodeURIComponent(structure.id)}`;
-  const set = <K extends keyof ComponentForm>(k: K, v: ComponentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
+  // Owner decision 2: the loss-of-pay box follows the default rule until the user touches it.
+  const LOP_DEFAULT_KEYS: ReadonlyArray<keyof ComponentForm> = ["calc", "isTaxable", "componentType", "employerCostClass"];
+  const set = <K extends keyof ComponentForm>(k: K, v: ComponentForm[K]) => setForm((f) => {
+    const next = { ...f, [k]: v, ...(k === "lopApplicable" ? { lopTouched: true } : {}) };
+    return LOP_DEFAULT_KEYS.includes(k) ? withLopDefault(kind, next) : next;
+  });
   const issueText = (i: CheckIssue) => (t.has(`check_${i.code}`) ? t(`check_${i.code}`) : i.message);
 
   async function send(fn: () => Promise<unknown>, okText: string, done: () => void, expectChange: (d: StructureData) => boolean = () => true) {
@@ -220,7 +225,7 @@ export function ComponentManager({ structure, components, check, canWrite, canLo
         <Field id={ids.type} label={t("typeLabel")}>
           <Select id={ids.type} value={form.componentType} onChange={(e) => {
             const v = e.target.value as ComponentForm["componentType"];
-            setForm((f) => ({ ...f, componentType: v, employerCostClass: v === "employer_cost" ? f.employerCostClass : "", calc: v !== "earning" && f.calc === "balancing" ? "" : f.calc }));
+            setForm((f) => withLopDefault(kind, { ...f, componentType: v, employerCostClass: v === "employer_cost" ? f.employerCostClass : "", calc: v !== "earning" && f.calc === "balancing" ? "" : f.calc }));
           }}>
             {typeOptions.map((o) => <option key={o} value={o}>{t(`type_${o}`)}</option>)}
           </Select>

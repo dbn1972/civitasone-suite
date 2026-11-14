@@ -66,6 +66,10 @@ export function InventoryEntryForm({ canAdjust = true }: { canAdjust?: boolean }
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const outcome = useRef<{ id: string; state: "posted" | "pending" } | null>(null);
+  // The delayed redirect after a posted entry must not outlive the form: a timer left running after unmount
+  // would navigate a user who has already moved on (and leaks into whatever runs next, e.g. the next test).
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(redirectTimer.current), []);
 
   const itemId = picked?.inventoryItemId ?? "";
   // The store the stock leaves (issue, transfer) or is counted in (adjustment).
@@ -158,7 +162,7 @@ export function InventoryEntryForm({ canAdjust = true }: { canAdjust?: boolean }
         setIsError(false);
         setMessage(t("result.posted"));
         router.refresh();
-        setTimeout(() => router.push(`/inventory/movements/${done.id}`), 700);
+        redirectTimer.current = setTimeout(() => router.push(`/inventory/movements/${done.id}`), 700);
         return;
       }
       // Accepted but not visible yet: say so plainly instead of claiming success.

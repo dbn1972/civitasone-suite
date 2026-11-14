@@ -7,12 +7,13 @@ import { AddEmployeeWizard } from "./AddEmployeeWizard";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { getGradeBands, getPayScaleKind } from "@/app/_data/gradeBands";
 
 type Dept = { id: string; name: string };
 // `level` (optional — a designation need not have one) feeds Step2's
 // computed Service Group (GAP-HR-EMPLOYEES-NEW-05); GET /v1/hrms/designations
 // already returns it today, this type just didn't ask for it before.
-type Desig = { id: string; name: string; level?: number | null };
+type Desig = { id: string; name: string; level?: number | null; gradeBandId?: string | null };
 type EmpSummary = { id: string; name: string; designationName?: string };
 
 /**
@@ -67,6 +68,10 @@ export default async function NewEmployeePage() {
     getEmployeeTypes(),
   ]);
 
+  // S8-G4: a private-bands tenant sees the designation's grade band in step 2 instead of the Group A/B/C classification.
+  const payScale = await getPayScaleKind();
+  const gradeBands = payScale === "private_bands" ? (await getGradeBands(true)).bands : [];
+
   const departments = deptResult.data ?? [];
   const designations = desigResult.data ?? [];
   const employeeTypes = empTypesResult.data ?? [];
@@ -93,6 +98,8 @@ export default async function NewEmployeePage() {
         departments={departments}
         designations={designations}
         employeeTypes={employeeTypes}
+        payScale={payScale}
+        gradeBands={gradeBands}
       />
     </div>
   );

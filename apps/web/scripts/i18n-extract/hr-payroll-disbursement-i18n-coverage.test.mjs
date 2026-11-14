@@ -88,6 +88,7 @@ describe("hr/payroll/disbursement i18n coverage (UX-017 tranche 9)", () => {
       "nachReturnForm",
       "sponsorBankConfigForm",
       "dscConfigForm",
+      "ledgerExportPanel",
       // "bankFileForm" was dropped from en.json/hi.json in #1757 (disbursement gap closure; the
       // wizard uses "bankFileWizard"), so it is no longer a live namespace.
     ];
