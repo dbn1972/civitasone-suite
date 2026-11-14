@@ -9,6 +9,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 
+/** Mutable so a test can tighten the tenant's offline age limit. Default: effectively unbounded (fixed 2026-01 fixtures). */
+let offlineMaxAgeHours = 1_000_000;
 const markProcessedMock = vi.fn(async () => true);
 const enqueueMock = vi.fn(async () => undefined);
 const isRevokedMock = vi.fn(async () => false);
@@ -68,7 +70,9 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
+  getPolicyNumber: async (_tx: unknown, _t: string, key: string) => (key === "check_in.offline_max_age_hours" ? offlineMaxAgeHours : 0),
 }));
 
 vi.mock("../src/modules/digital-pass/revocation-store.js", () => ({
@@ -128,7 +132,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       700,
     );
     expect(markProcessedMock).toHaveBeenCalledTimes(1); // one attempt, no retries
@@ -143,7 +147,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkOutRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       700,
     );
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
@@ -159,7 +163,7 @@ describe("check-in consumers: DomainError is non-retryable, infrastructure error
     await publishAndFlush(
       queue,
       COMMANDS.checkInRecord,
-      { passId: PASS_ID, gateId: GATE_ID, timestamp: WITHIN_WINDOW.toISOString() },
+      { passId: PASS_ID, gateId: GATE_ID, offlineRecorded: true, timestamp: WITHIN_WINDOW.toISOString() },
       1500,
     );
     expect(markProcessedMock.mock.calls.length).toBeGreaterThan(1); // retried

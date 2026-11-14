@@ -105,6 +105,7 @@ vi.mock("../src/shared/outbox.js", () => ({
   enqueue: (...a: unknown[]) => enqueueMock(...a),
 }));
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getAutoApproveCategories: (...a: unknown[]) => getAutoApproveCategoriesMock(...a),
 }));
 

@@ -8,6 +8,7 @@
  * See design.md "QR Code Generation (RS256-Signed JWT)" and
  * "Property 10: Pass Revocation Invalidates QR".
  */
+import { endOfDayInZone, resolveTimeZone } from "../../shared/tz.js";
 import { signPassQr, type PassQrPayload } from "../../shared/qr-crypto.js";
 
 export class DomainError extends Error {
@@ -58,6 +59,8 @@ export const RECURRING_MAX_MS = 90 * 24 * 60 * 60 * 1000;
 export interface ValidityCaps {
   multiDayMaxMs?: number;
   recurringMaxMs?: number;
+  /** IANA zone for "end of the day" (tenant `tenant.time_zone`); default Asia/Kolkata. */
+  timeZone?: string;
 }
 
 /**
@@ -80,15 +83,8 @@ export function computeValidityWindow(
   const recurringMaxMs = caps.recurringMaxMs ?? RECURRING_MAX_MS;
   if (passType === "single") {
     const validFrom = requestedFrom;
-    const validUntil = new Date(
-      requestedFrom.getFullYear(),
-      requestedFrom.getMonth(),
-      requestedFrom.getDate(),
-      23,
-      59,
-      59,
-      999,
-    );
+    // End of the visit's day in the tenant's zone (NOT the host's: a UTC host ended passes at 05:29 IST next day).
+    const validUntil = endOfDayInZone(requestedFrom, resolveTimeZone(caps.timeZone));
     return { validFrom, validUntil };
   }
 
