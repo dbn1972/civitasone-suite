@@ -9,6 +9,8 @@ export const COMMANDS = {
   // ── plans ──────────────────────────────────────────────────────────
   planCreate: "tenant.plan.create",
   planUpdate: "tenant.plan.update",
+  /** M6: add an effective-dated price for a plan or an add-on module. */
+  planPriceSet: "tenant.plan.price_set",
   // ── subscriptions ──────────────────────────────────────────────────
   subscriptionCreate: "tenant.subscription.create",
   subscriptionUpgrade: "tenant.subscription.upgrade",
@@ -45,6 +47,7 @@ export const EVENTS = {
   // ── plans ──────────────────────────────────────────────────────────
   planCreated: "tenant.plan.created",
   planUpdated: "tenant.plan.updated",
+  planPriceRecorded: "tenant.plan.price_recorded",
   // ── subscriptions ──────────────────────────────────────────────────
   subscriptionCreated: "tenant.subscription.created",
   subscriptionUpgraded: "tenant.subscription.upgraded",

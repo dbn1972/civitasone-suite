@@ -10,6 +10,7 @@ import { registerDocumentsConsumers } from "./modules/documents/consumer.js";
 import { registerCategoriesConsumers } from "./modules/categories/consumer.js";
 import { registerRetentionConsumers } from "./modules/retention/consumer.js";
 import { registerSearchConsumers } from "./modules/search/consumer.js";
+import { registerGlobalSearchConsumer } from "./modules/search/global-consumer.js";
 import { registerVersionsConsumers } from "./modules/versions/consumer.js";
 import { registerSharingConsumers } from "./modules/sharing/consumer.js";
 import { startAssistantRetentionPurge } from "./modules/assistant/retention.js";
@@ -33,6 +34,8 @@ registerDocumentsConsumers(queue);
 registerCategoriesConsumers(queue);
 registerRetentionConsumers(queue);
 registerSearchConsumers(queue);
+// Cross-module search: indexes search.index.update events that carry a catalogue entityType (per-tenant flag, default off).
+registerGlobalSearchConsumer(queue);
 registerVersionsConsumers(queue);
 registerSharingConsumers(queue);
 

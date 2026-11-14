@@ -5,9 +5,15 @@
  * all its required dependencies are auto-enabled (possibly in "thin" mode
  * where only the API/data layer is active, not full UI).
  *
+ * SINGLE SOURCE: the `requires` lists are NOT maintained here. They are derived from the module catalogue
+ * (module-catalogue.ts hardDeps, which is verified against the service code by tests/module-catalogue-drift.test.ts)
+ * through PRODUCT_TO_CATALOGUE / CATALOGUE_REF below. Edit the catalogue, never this list.
+ *
  * Foundation modules (identity, tenant, policy, audit, notification, workflow,
  * queue, gateway, install) are ALWAYS enabled and not listed here as selectable.
  */
+
+import { CATALOGUE_BY_ID } from "./module-catalogue.js";
 
 export interface ModuleDef {
   /** Module identifier (matches service name without "-service" suffix) */
@@ -34,7 +40,7 @@ export interface ModuleDef {
   foundation?: boolean;
 }
 
-export const MODULE_MANIFEST: ModuleDef[] = [
+const MANIFEST_ENTRIES: ModuleDef[] = [
   // ── Foundation (always on) ──────────────────────────────────────────────
   { id: "identity", name: "Identity & Auth", description: "Users, authentication, Keycloak OIDC/SAML", requires: [], foundation: true },
   { id: "tenant", name: "Tenant Management", description: "Multi-tenant provisioning and isolation", requires: [], foundation: true },
@@ -77,43 +83,43 @@ export const MODULE_MANIFEST: ModuleDef[] = [
     id: "payroll",
     name: "Payroll",
     description: "Salary computation, 7th CPC, TDS, PF, disbursement",
-    requires: ["hrms:employees", "hrms:attendance", "finance:gl"],
+    requires: [],
   },
   {
     id: "procurement",
     name: "Procurement",
     description: "Indent → Tender → PO → GRN → 3-way match",
-    requires: ["finance:budgets", "finance:bills"],
+    requires: [],
   },
   {
     id: "contract",
     name: "Contract Management",
     description: "Agreement lifecycle, milestones, penalties",
-    requires: ["finance:bills", "procurement"],
+    requires: [],
   },
   {
     id: "asset",
     name: "Fixed Assets",
     description: "Asset register, depreciation, disposal",
-    requires: ["finance:gl", "procurement"],
+    requires: [],
   },
   {
     id: "stock",
     name: "Stock & Stores",
     description: "Consumable inventory, FIFO/moving-avg valuation",
-    requires: ["procurement"],
+    requires: [],
   },
   {
     id: "inventory",
     name: "Warehouse Management",
     description: "Warehouse, bins, issue/receipt, stock transfer",
-    requires: ["stock"],
+    requires: [],
   },
   {
     id: "estab",
     name: "Establishment (eOffice)",
     description: "DAK, files, green notes, DSC, dispatch",
-    requires: ["hrms:employees"],
+    requires: [],
   },
 
   // ── Domain-Specific ────────────────────────────────────────────────────
@@ -150,19 +156,19 @@ export const MODULE_MANIFEST: ModuleDef[] = [
     id: "grant",
     name: "Grant Management",
     description: "Scheme management, applications, disbursement",
-    requires: ["finance:gl", "citizen:applications"],
+    requires: [],
   },
   {
     id: "project",
     name: "Project Management",
     description: "Works/capital projects, milestones, utilization",
-    requires: ["finance:budgets"],
+    requires: [],
   },
   {
     id: "works",
     name: "Works & Billing",
     description: "Engineering works lifecycle — proposal, approval, BoQ, tender, execution, billing",
-    requires: ["finance:gl", "finance:budgets"],
+    requires: [],
     subModules: [
       { id: "proposal", name: "Work Proposals", description: "Work registration, COA, splitting" },
       { id: "boq", name: "Bill of Quantities", description: "SR items, measurements, recapitulation" },
@@ -181,7 +187,7 @@ export const MODULE_MANIFEST: ModuleDef[] = [
     id: "court",
     name: "Court Case Tracking",
     description: "Hearing dates, orders, case history",
-    requires: ["legal"],
+    requires: [],
   },
   {
     id: "meeting",
@@ -252,3 +258,80 @@ export const MODULE_MANIFEST: ModuleDef[] = [
     requires: [],
   },
 ];
+
+/**
+ * Plan/provisioning products (this file's ids) -> the catalogue modules they consist of. Several catalogue
+ * modules can live in one product (hrms covers employee..ess), and two products can share one catalogue
+ * module (stock and inventory are the two services of the catalogue module `inventory`).
+ */
+export const PRODUCT_TO_CATALOGUE: Readonly<Record<string, readonly string[]>> = {
+  finance: ["finance", "budget", "treasury"],
+  hrms: ["employee", "attendance", "leave", "recruitment", "appraisal", "career", "ess"],
+  payroll: ["payroll", "loans", "benefits", "separation"],
+  procurement: ["procurement"],
+  contract: ["contract"],
+  asset: ["asset"],
+  stock: ["inventory"],
+  inventory: ["inventory"],
+  estab: ["employee"],
+  citizen: ["citizen"],
+  legal: ["legal"],
+  crm: ["crm"],
+  helpdesk: ["helpdesk"],
+  grant: ["grant"],
+  project: ["project"],
+  works: ["works"],
+  billing: ["billing"],
+  court: ["court"],
+  meeting: ["meeting"],
+  visitor: ["visitor"],
+  telephony: ["telephony"],
+  analytics: ["analytics"],
+  knowledge: ["knowledge"],
+};
+
+/** Catalogue module -> the manifest reference a dependent product uses (sub-module slice = thin mode). */
+const CATALOGUE_REF: Readonly<Record<string, string>> = {
+  employee: "hrms:employees",
+  attendance: "hrms:attendance",
+  leave: "hrms:leave",
+  recruitment: "hrms:careers",
+  finance: "finance:gl",
+  budget: "finance:budgets",
+  treasury: "finance:treasury",
+  revenue: "finance",
+  procurement: "procurement",
+  contract: "contract",
+  inventory: "stock",
+  asset: "asset",
+  works: "works",
+  project: "project",
+  grant: "grant",
+  citizen: "citizen",
+  legal: "legal",
+  court: "court",
+  meeting: "meeting",
+  payroll: "payroll",
+};
+
+/** Structural pairs: one catalogue module implemented by two products. */
+const STRUCTURAL_REQUIRES: Readonly<Record<string, readonly string[]>> = { inventory: ["stock"], estab: ["hrms:employees"] };
+
+function deriveRequires(productId: string): string[] {
+  const mods = PRODUCT_TO_CATALOGUE[productId];
+  if (!mods) return [];
+  const out = new Set<string>(STRUCTURAL_REQUIRES[productId] ?? []);
+  for (const id of mods) {
+    for (const dep of CATALOGUE_BY_ID.get(id)?.hardDeps ?? []) {
+      const d = CATALOGUE_BY_ID.get(dep);
+      if (!d || d.isCore || mods.includes(dep)) continue;
+      const ref = CATALOGUE_REF[dep];
+      if (!ref) throw new Error(`module-manifest: no manifest reference for catalogue module ${dep} (required by ${productId})`);
+      // a product never lists itself (stock <-> inventory share a catalogue module)
+      if (ref.split(":")[0] !== productId) out.add(ref);
+    }
+  }
+  return [...out].sort();
+}
+
+export const MODULE_MANIFEST: ModuleDef[] = MANIFEST_ENTRIES.map((m) => ({ ...m, requires: deriveRequires(m.id) }));

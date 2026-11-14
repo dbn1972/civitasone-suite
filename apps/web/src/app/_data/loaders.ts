@@ -5946,6 +5946,28 @@ export async function getAdminRoleById(id: string): Promise<LoaderResult<RoleDet
   });
 }
 
+/**
+ * M4: the module-settings capability + catalogue view. `source` is "catalogue" only when admin-service runs with
+ * MODULE_SOURCE=catalogue; otherwise (or on any error) the page keeps today's behaviour.
+ */
+export const ModuleSettingsSchema = z.object({
+  source: z.enum(["legacy", "catalogue"]),
+  modules: z.array(z.object({
+    id: z.string(), name: z.string(), cluster: z.string(), enabled: z.boolean(),
+    source: z.enum(["user", "dep", "core"]).nullable(),
+    hardDeps: z.array(z.string()), softDeps: z.array(z.string()), requiredBy: z.array(z.string()),
+  })),
+});
+export type ModuleSettings = z.infer<typeof ModuleSettingsSchema>;
+export async function getModuleSettings(): Promise<LoaderResult<ModuleSettings>> {
+  return fetchJson<unknown, ModuleSettings>("/api/v1/admin/composition/settings", { source: "legacy", modules: [] }, {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.module_settings",
+    responseSchema: ModuleSettingsSchema,
+    mapResponse: (p) => p as ModuleSettings,
+  });
+}
+
 export async function getTenantModules(): Promise<LoaderResult<TenantModule[]>> {
   // GAP-TENANT-ADMIN-SETTINGS-01: ?detail=1 asks admin-service for every module
   // row with its real enabled flag. The bare endpoint returns only the enabled

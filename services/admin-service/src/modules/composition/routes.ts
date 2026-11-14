@@ -18,7 +18,9 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
-import { toGatewayKeys } from "./gateway-map.js";
+import { toGatewayKeys, recruitmentSplitOn, RECRUITMENT_SPLIT_BUNDLE } from "./gateway-map.js";
+import { planApplyRequiresApproval, refuseDirectEntitlementWrite } from "./plan-apply.js";
+import { catalogueIsSource } from "./single-source.js";
 import {
   buildRegistry,
   resolveComposition,
@@ -140,6 +142,35 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // M4: what the tenant-admin module settings page needs. `source` is the capability flag: "legacy" (default, the
+  // older admin_module_configs switches stay authoritative and the page keeps using them) or "catalogue"
+  // (MODULE_SOURCE=catalogue: this catalogue is the only switch). In catalogue mode it lists every sellable
+  // module with whether the tenant has it, WHY (user pick / pulled in as a hard dependency), what it requires
+  // (hard, non-core), what it merely uses when present (soft) and which enabled modules need it.
+  app.get("/v1/admin/composition/settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    if (!catalogueIsSource()) return reply.send({ source: "legacy", modules: [] });
+    const [reg, userModules] = await Promise.all([registryFor(ctx.tenantId), repo.getUserModules(ctx.tenantId)]);
+    const comp = resolveComposition(reg, userModules);
+    const entry = new Map(comp.entries.map((e) => [e.id, e.source]));
+    const nonCore = (ids: string[]): string[] => ids.filter((id) => reg.get(id) && !reg.get(id)!.isCore);
+    const modules = [...reg.values()]
+      .filter((m) => !m.isCore)
+      .sort((a, b) => a.layer - b.layer || a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        cluster: m.cluster,
+        enabled: entry.has(m.id),
+        source: entry.get(m.id) ?? null,
+        hardDeps: nonCore(m.hardDeps),
+        softDeps: nonCore(m.softDeps),
+        requiredBy: comp.moduleIds.filter((id) => id !== m.id && reg.get(id)!.hardDeps.includes(m.id)),
+      }));
+    return reply.send({ source: "catalogue", modules });
+  });
+
   // Effective composition for the caller's tenant.
   app.get("/v1/admin/composition/tenant", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -226,6 +257,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/onboard", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { profile } = safeParse(onboardBody, req.body);
     const profiles = await repo.loadProfiles(ctx.tenantId);
     const chosen = profiles.find((p) => p.code === profile);
@@ -279,6 +311,10 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/apply-plan", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    // M6: with PLAN_APPLY_MAKER_CHECKER=on a plan is applied only through the approval flow (plan-apply.ts).
+    if (planApplyRequiresApproval()) {
+      throw new HttpError(409, "PLAN_APPLY_REQUIRES_APPROVAL", "applying a plan needs approval: POST /v1/admin/composition/plan-applications");
+    }
     const result = applyPlanBody.safeParse(req.body);
     if (!result.success) {
       const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -312,6 +348,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/modules/:id/enable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { id } = safeParse(moduleParam, req.params);
     const reg = await registryFor(ctx.tenantId);
     if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);
@@ -325,10 +362,16 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/bundles/:code/enable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { code } = safeParse(bundleParam, req.params);
     const bundles = await repo.loadBundles(ctx.tenantId);
     const bundle = bundles.find((b) => b.code === code);
     if (!bundle) throw new HttpError(404, "UNKNOWN_BUNDLE", `unknown bundle: ${code}`);
+    // M8: with the split off, `career` still borrows the recruitment gateway key, so this bundle would silently include
+    // the recruitment surface. Refuse it until HRMS_RECRUITMENT_SPLIT=on makes the offer true.
+    if (code === RECRUITMENT_SPLIT_BUNDLE && !recruitmentSplitOn()) {
+      throw new HttpError(409, "BUNDLE_REQUIRES_RECRUITMENT_SPLIT", "this bundle can be sold only while HRMS_RECRUITMENT_SPLIT is on");
+    }
     const reg = await registryFor(ctx.tenantId);
     let nextUser = await repo.getUserModules(ctx.tenantId);
     for (const id of bundle.moduleIds) {
@@ -343,6 +386,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/modules/:id/disable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { id } = safeParse(moduleParam, req.params);
     const reg = await registryFor(ctx.tenantId);
     if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);
