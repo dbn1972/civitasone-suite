@@ -81,7 +81,9 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
+  getPolicyNumber: async () => 0,
 }));
 
 vi.mock("../src/modules/digital-pass/revocation-store.js", () => ({

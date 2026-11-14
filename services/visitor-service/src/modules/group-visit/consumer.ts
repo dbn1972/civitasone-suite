@@ -40,7 +40,7 @@ import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { generatePass, computeValidityWindow } from "../digital-pass/domain.js";
 import { validateGroupSize, confirmBulkCheckIn } from "./domain.js";
-import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
+import { getPolicyNumber, getTenantTimeZone, MS_PER_DAY } from "../config-registry/policy.js";
 import { isBlacklisted } from "../blacklist/screening-store.js";
 // BUG FIX (group bulk check-in bypassed the evacuation roster and check-in
 // state machine): groupBulkCheckIn used to force-write digitalPasses.status
@@ -171,7 +171,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
         (p.passType as "single" | "multi_day" | "recurring" | "event") ?? "single",
         scheduledDate,
         p.passType !== "single" ? new Date(scheduledDate.getTime() + 24 * 60 * 60 * 1000) : undefined,
-        { multiDayMaxMs, recurringMaxMs },
+        { multiDayMaxMs, recurringMaxMs, timeZone: await getTenantTimeZone(tx, p.tenantId) },
       );
 
       for (const member of memberScreening) {

@@ -48,7 +48,9 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 }));
 // Auto-print badge OFF: the audit must still be emitted.
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
+  getPolicyNumber: async () => 0,
 }));
 
 const { registerCheckInConsumers } = await import("../src/modules/check-in/consumer.js");

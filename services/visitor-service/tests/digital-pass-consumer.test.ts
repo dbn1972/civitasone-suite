@@ -87,6 +87,7 @@ vi.mock("../src/modules/digital-pass/revocation-store.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyNumber: async () => 7,
   MS_PER_DAY: 86_400_000,
 }));

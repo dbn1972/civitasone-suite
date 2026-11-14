@@ -89,6 +89,7 @@ vi.mock("../src/modules/visit-request/domain.js", () => ({
 
 /* ─── Mock config-registry policy (used by visit-request) ─── */
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyNumber: vi.fn(async () => 1),
   MS_PER_HOUR: 3600000,
   MS_PER_DAY: 86400000,
@@ -118,6 +119,9 @@ vi.mock("../src/modules/check-in/repo.js", () => ({
 vi.mock("../src/modules/check-in/commands.js", () => ({
   checkInRecord: vi.fn(async () => fakeAccepted),
   checkOutRecord: vi.fn(async () => fakeAccepted),
+}));
+vi.mock("../src/modules/check-in/preflight.js", () => ({
+  assertPassCheckInAllowed: vi.fn(async () => new Date().toISOString()),
 }));
 vi.mock("../src/modules/check-in/gate-sync.js", () => ({
   loadGateSyncSnapshot: vi.fn(async () => ({ revokedPassIds: [], blacklistHashes: [], watchlistHashes: [] })),
