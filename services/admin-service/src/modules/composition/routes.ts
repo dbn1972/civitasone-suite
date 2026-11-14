@@ -19,6 +19,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { toGatewayKeys } from "./gateway-map.js";
+import { planApplyRequiresApproval, refuseDirectEntitlementWrite } from "./plan-apply.js";
 import { catalogueIsSource } from "./single-source.js";
 import {
   buildRegistry,
@@ -256,6 +257,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/onboard", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { profile } = safeParse(onboardBody, req.body);
     const profiles = await repo.loadProfiles(ctx.tenantId);
     const chosen = profiles.find((p) => p.code === profile);
@@ -309,6 +311,10 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/apply-plan", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    // M6: with PLAN_APPLY_MAKER_CHECKER=on a plan is applied only through the approval flow (plan-apply.ts).
+    if (planApplyRequiresApproval()) {
+      throw new HttpError(409, "PLAN_APPLY_REQUIRES_APPROVAL", "applying a plan needs approval: POST /v1/admin/composition/plan-applications");
+    }
     const result = applyPlanBody.safeParse(req.body);
     if (!result.success) {
       const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -342,6 +348,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/modules/:id/enable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { id } = safeParse(moduleParam, req.params);
     const reg = await registryFor(ctx.tenantId);
     if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);
@@ -355,6 +362,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/bundles/:code/enable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { code } = safeParse(bundleParam, req.params);
     const bundles = await repo.loadBundles(ctx.tenantId);
     const bundle = bundles.find((b) => b.code === code);
@@ -373,6 +381,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/composition/modules/:id/disable", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    refuseDirectEntitlementWrite(); // M6: PLAN_APPLY_MAKER_CHECKER=on closes every direct entitlement write
     const { id } = safeParse(moduleParam, req.params);
     const reg = await registryFor(ctx.tenantId);
     if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);

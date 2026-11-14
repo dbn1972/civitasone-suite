@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreatePlanBody, UpdatePlanBody } from "./validators.js";
+import type { CreatePlanBody, UpdatePlanBody, SetPriceBody } from "./validators.js";
 import type { PlanView } from "./repo.js";
 import { jsonSafe } from "../../shared/json-safe.js";
 
@@ -26,6 +26,7 @@ export async function planCreate(ctx: RequestContext, body: CreatePlanBody): Pro
     maxUsers: body.maxUsers,
     maxStorageGb: body.maxStorageGb,
     enabledModules: body.enabledModules,
+    catalogueModules: body.catalogueModules,
     priceMinor: BigInt(body.priceMinor),
     billingCycle: body.billingCycle,
     features: body.features,
@@ -58,4 +59,19 @@ export async function planUpdate(ctx: RequestContext, planId: string, body: Upda
     payload: { id: planId, ...body },
   });
   return { id: planId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** M6: record a new price. Rules are re-checked by the consumer against the stored rows. */
+export async function priceSet(ctx: RequestContext, body: SetPriceBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.planPriceSet, {
+    messageId: id,
+    type: COMMANDS.planPriceSet,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

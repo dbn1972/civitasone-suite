@@ -17,6 +17,8 @@ export interface PlanView {
   maxUsers: number;
   maxStorageGb: number;
   enabledModules: string[];
+  /** M6: catalogue module ids; null = derived from enabledModules. */
+  catalogueModules: string[] | null;
   priceMinor: bigint;
   billingCycle: "monthly" | "quarterly" | "annual";
   features: Record<string, unknown>;
@@ -33,6 +35,7 @@ function toView(r: PlanRow): PlanView {
     maxUsers: r.maxUsers,
     maxStorageGb: r.maxStorageGb,
     enabledModules: r.enabledModules,
+    catalogueModules: r.catalogueModules ?? null,
     priceMinor: r.priceMinor,
     billingCycle: r.billingCycle,
     features: r.features,
@@ -55,6 +58,12 @@ export async function findByIdScoped(tenantId: string, id: string): Promise<Plan
   const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(plans)
     .where(and(eq(plans.id, id), eq(plans.tenantId, tenantId))).limit(1)));
   return rows[0] ? toView(rows[0]) : null;
+}
+
+/** Every plan of the tenant's plan catalogue (tenant-scoped transaction; plans.plans is FORCE-RLS'd). */
+export async function findAllScoped(tenantId: string): Promise<PlanView[]> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(plans).where(eq(plans.tenantId, tenantId))));
+  return rows.map(toView);
 }
 
 export async function findByCode(code: string): Promise<PlanView | null> {

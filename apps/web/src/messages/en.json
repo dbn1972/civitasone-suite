@@ -237,6 +237,10 @@
         "title": "Editions",
         "description": "Edition catalog and module bundles"
       },
+      "planPricing": {
+        "title": "Plans and prices",
+        "description": "Modules in each plan, price and GST"
+      },
       "entitlements": {
         "title": "Entitlements",
         "description": "Module limits and overrides"
@@ -14513,6 +14517,28 @@
     "downloading": "Opening…",
     "downloadAria": "Download {name}",
     "reviewLink": "Open bulk scan review (to unlink a wrongly filed document)"
+  },
+  "planPricing": {
+    "title": "Plans, modules and prices",
+    "area": "plan pricing",
+    "subtitle": "Each plan is sold as a set of modules. Needed modules are added automatically. Prices are in rupees; GST is shown separately.",
+    "includes": "Modules in the plan",
+    "addedAutomatically": "Added automatically (needed by the above)",
+    "none": "None",
+    "netPrice": "Price before GST",
+    "gst": "GST",
+    "totalPrice": "Total with GST",
+    "billingCycle": "Billing",
+    "noPrice": "No price set yet",
+    "cycle": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "annual": "Yearly"
+    },
+    "empty": {
+      "title": "No plans yet",
+      "message": "Create a plan first. Then set its modules and its price."
+    }
   },
   "bulkScan": {
     "action": {
