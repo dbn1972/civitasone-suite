@@ -6,6 +6,7 @@
  *  - every step leaves an audit event; a rejection changes nothing;
  *  - default behaviour is untouched: with PLAN_APPLY_MAKER_CHECKER unset the direct apply-plan route works exactly as before.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
@@ -106,7 +107,7 @@ describe("M6 plan application: maker-checker + audit", () => {
 
     // the consumer re-checks even if the route is bypassed (a decide command published with the maker as actor)
     await queue.publish(COMMANDS.compositionPlanApplyDecide, {
-      messageId: "c6000000-aaaa-4000-8000-000000000001", type: COMMANDS.compositionPlanApplyDecide, tenantId: T, actorId: MAKER,
+      messageId: randomUUID(), type: COMMANDS.compositionPlanApplyDecide, tenantId: T, actorId: MAKER,
       correlationId: "c6-bypass", schemaVersion: "1.0", payload: { tenantId: T, requestId: id, decision: "approve" },
     });
     await drain();

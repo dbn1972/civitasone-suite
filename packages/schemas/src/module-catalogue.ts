@@ -143,7 +143,7 @@ export const MODULE_CATALOGUE: readonly CatalogueModule[] = [
     screens: ["Works estimate", "BOQ", "RA bill"], sortOrder: 270,
     services: ["works-service"], gatewayKeys: ["projects"] },
   { id: "project", name: "Project Management", layer: 2, isCore: false, cluster: "delivery",
-    hardDeps: ["config"], softDeps: ["grant", "finance", "meeting"],
+    hardDeps: ["config"], softDeps: ["grant", "finance", "meeting", "employee", "payroll"],
     screens: ["Projects", "WBS", "Milestones"], sortOrder: 280,
     services: ["project-service"], gatewayKeys: ["projects"] },
   { id: "grant", name: "Grants & Schemes", layer: 3, isCore: false, cluster: "delivery",

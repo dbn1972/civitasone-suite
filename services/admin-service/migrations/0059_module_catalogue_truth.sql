@@ -93,7 +93,7 @@ FROM (VALUES
   ('citizen', ARRAY['workflow']::text[], ARRAY['finance','employee']::text[], '{}'::text[]),
   ('employee', ARRAY['org','config']::text[], ARRAY['payroll','meeting','citizen']::text[], '{}'::text[]),
   ('procurement', ARRAY['finance','budget','workflow']::text[], ARRAY['contract','legal','inventory','meeting','employee']::text[], '{}'::text[]),
-  ('project', ARRAY['config']::text[], ARRAY['grant','finance','meeting']::text[], '{}'::text[]),
+  ('project', ARRAY['config']::text[], ARRAY['grant','finance','meeting','employee','payroll']::text[], '{}'::text[]),
   ('analytics', ARRAY['config']::text[], ARRAY['finance','procurement','grant','employee','meeting','court','visitor']::text[], '{}'::text[]),
   ('inspection', ARRAY['employee','workflow']::text[], ARRAY['leave']::text[], '{}'::text[]),
   ('helpdesk', '{}'::text[], ARRAY['citizen','crm','asset','knowledge','telephony']::text[], '{}'::text[]),

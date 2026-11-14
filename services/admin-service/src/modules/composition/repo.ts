@@ -39,6 +39,18 @@ export interface ProfileRow {
 
 export async function loadRegistry(tenantId: string): Promise<ModuleDef[]> {
   const rows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select().from(moduleRegistry)));
+  return mapRegistryRows(rows);
+}
+
+/**
+ * Same read, on a caller-supplied transaction. Callers that are already inside db.transaction() MUST use this:
+ * loadRegistry() opens its own scopedRead() and a nested checkout can deadlock the pool (TX-011).
+ */
+export async function loadRegistryTx(tx: Pick<typeof db, "select">): Promise<ModuleDef[]> {
+  return mapRegistryRows(await tx.select().from(moduleRegistry));
+}
+
+function mapRegistryRows(rows: (typeof moduleRegistry.$inferSelect)[]): ModuleDef[] {
   return rows
     .map((r) => ({
       id: r.id,

@@ -220,7 +220,7 @@ export function registerCompositionConsumers(queue: Queue): void {
             return;
           }
           // re-validate against the registry as it is NOW (it may have changed since the request)
-          const reg = buildRegistry(await repo.loadRegistry(p.tenantId));
+          const reg = buildRegistry(await repo.loadRegistryTx(tx));
           const userModules = resolveComposition(reg, req.moduleIds).entries.filter((e) => e.source === "user").map((e) => e.id).sort();
           const before = (await tx.select({ id: tenantEntitlement.moduleId }).from(tenantEntitlement)
             .where(and(eq(tenantEntitlement.tenantId, p.tenantId), eq(tenantEntitlement.source, "user")))).map((r) => r.id).sort();
