@@ -29,6 +29,7 @@ import { subscribeConsumers } from "../src/worker.js";
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
 import { canonicalOrderContent } from "../src/modules/order-issuance/dsc-verify.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const RUN = process.env.COURT_E2E === "1";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -188,7 +189,7 @@ describe.skipIf(!RUN)("GAP-COURT-ORDERS-02 server-side DSC verification (real DB
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe("DSC_VERIFICATION_FAILED");
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect((await readOrder(issueBadOrderId))?.status).toBe("pending_approval");
   });
 });

@@ -138,6 +138,15 @@ vi.mock("../src/shared/outbox.js", async () => {
 });
 
 /** Extract the interpolated bind values from a drizzle-orm sql`...` template. */
+/** The SQL text of a drizzle sql`...` template (static chunks only, nested templates flattened, binds as "?"). */
+function sqlText(query: any): string {
+  return (query.queryChunks as unknown[]).map((c: any) => {
+    if (c && typeof c === "object" && Array.isArray(c.value)) return (c.value as string[]).join("");
+    if (c && typeof c === "object" && Array.isArray(c.queryChunks)) return sqlText(c);
+    return "?";
+  }).join("");
+}
+
 function paramsOf(query: any): unknown[] {
   return (query.queryChunks as unknown[]).filter(
     (c) => !(c && typeof c === "object" && Array.isArray((c as { value?: unknown }).value)),
@@ -312,8 +321,16 @@ describe("Reimbursement CQRS", () => {
       payload: { id: "reimb-1", tenantId: TENANT, employeeId: EMPLOYEE, category: "food", amountMinor: 250000, period: "2026-07", billDate: null, billRef: null },
     });
 
-    expect(executedQueries).toHaveLength(1);
-    const params = paramsOf(executedQueries[0]);
+    // The consumer now also reads the tenant receipt policy (rule + version) before inserting. Classify every
+    // statement by its SQL text: exactly ONE write -- the INSERT into payroll_reimbursements, carrying the claim
+    // id -- and everything else must be a read-only SELECT (a stray UPDATE/DELETE/second INSERT must fail here).
+    const texts = executedQueries.map(sqlText);
+    const inserts = executedQueries.filter((q) => /^\s*INSERT\s+INTO\s+payroll\.payroll_reimbursements\b/i.test(sqlText(q)));
+    expect(inserts).toHaveLength(1);
+    const others = texts.filter((t) => !/^\s*INSERT\s+INTO\s+payroll\.payroll_reimbursements\b/i.test(t));
+    expect(others.filter((t) => !/^\s*SELECT\b/i.test(t))).toEqual([]);
+    expect(paramsOf(inserts[0])).toContain("reimb-1");
+    const params = paramsOf(inserts[0]);
     expect(params).toContain("food");
     expect(params).toContain(250000);
 

@@ -389,9 +389,9 @@ describe("digital-pass/domain", () => {
     it("single: valid through end of calendar day", () => {
       const { validFrom, validUntil } = computeValidityWindow("single", baseFrom);
       expect(validFrom).toEqual(baseFrom);
-      expect(validUntil.getDate()).toBe(baseFrom.getDate());
-      expect(validUntil.getHours()).toBe(23);
-      expect(validUntil.getMinutes()).toBe(59);
+      // End of the visit's calendar day in the default zone (Asia/Kolkata), independent of the host TZ:
+      // 09:00Z is 14:30 IST on 15 Jun, so the pass runs to 23:59:59.999 IST = 18:29:59.999Z.
+      expect(validUntil.toISOString()).toBe("2025-06-15T18:29:59.999Z");
     });
 
     it("multi_day: caps at 7 days", () => {

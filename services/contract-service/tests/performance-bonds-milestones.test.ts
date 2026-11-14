@@ -14,6 +14,7 @@ import {
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const MAKER = "00000000-bbbb-4000-8000-0000000000b1";
 const CHECKER = "00000000-bbbb-4000-8000-0000000000b2";
@@ -48,7 +49,7 @@ async function waitForContractStatus(id: string, want: string): Promise<void> {
     const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(contractContracts).where(eq(contractContracts.id, id))));
     if (row?.status === want) return;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   throw new Error(`contract ${id} did not reach status ${want}`);
 }
@@ -58,7 +59,7 @@ async function waitForMilestone(id: string, want: string) {
     const [ms] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(contractMilestones).where(eq(contractMilestones.id, id))));
     if (ms?.status === want) return ms;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   const [ms] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
     tx.select().from(contractMilestones).where(eq(contractMilestones.id, id))));
@@ -144,7 +145,7 @@ describe("milestones + performance bonds (CQRS integration)", () => {
       const bonds = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
         tx.select().from(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, bondId))));
       if (bonds[0]?.status === "held") { held = true; expect(bonds[0]?.amountMinor).toBe(450_000n); break; }
-      await new Promise((r) => setTimeout(r, 100));
+      await drainAllQueues();
     }
     expect(held).toBe(true);
 

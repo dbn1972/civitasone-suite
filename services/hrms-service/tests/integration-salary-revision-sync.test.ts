@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
@@ -73,7 +74,7 @@ async function buildQueue(): Promise<MemoryQueue> {
   return q;
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

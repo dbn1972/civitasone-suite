@@ -318,3 +318,73 @@ export type ListSeriesQuery = z.infer<typeof listSeriesQuerySchema>;
 export const meetingIdParam = z.object({ meetingId: uuid });
 export const meetingTypeIdParam = z.object({ meetingTypeId: uuid });
 export const seriesIdParam = z.object({ seriesId: uuid });
+
+
+// ─── Record a held meeting (POST /v1/meetings/record-held) ───────────────────────────
+
+const HELD_PARTICIPANT_ROLES = ["chairperson", "member", "secretary", "special_invitee", "observer", "presenter"] as const;
+const HELD_ATTENDANCE_STATUSES = ["present", "absent", "joined_late", "left_early", "attending_via_vc"] as const;
+const HELD_ATTENDANCE_MODES = ["in_person", "vc"] as const;
+const HELD_MINUTES_TEMPLATES = ["verbatim", "summary", "resolution_only"] as const;
+
+/** One person who was (or was not) at the meeting. Check-in defaults to the actual start. */
+const heldAttendee = z.object({
+  employeeId: uuid,
+  role: z.enum(HELD_PARTICIPANT_ROLES),
+  status: z.enum(HELD_ATTENDANCE_STATUSES).default("present"),
+  mode: z.enum(HELD_ATTENDANCE_MODES).default("in_person"),
+  isMandatory: z.boolean().optional(),
+  checkInAt: isoDateTime.optional(),
+  checkOutAt: isoDateTime.optional(),
+});
+
+/**
+ * Record a meeting that has ALREADY been held: its date is in the past and it goes straight to
+ * `minutes_pending` with its attendees and a minutes draft, instead of being scheduled in the future and
+ * patched. `scheduledAt` defaults to `actualStartAt`. Every date-time must be in the past (the route and the
+ * consumer both refuse a future one). For a committee meeting quorum is computed from the attendees against
+ * the committee's rule; for a meeting without a committee, `quorumEstablished` states it (default false).
+ */
+export const recordHeldMeetingSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  type: meetingType,
+  description: z.string().trim().max(20_000).optional(),
+  committeeId: uuid.optional(),
+  chairpersonId: uuid,
+  secretaryId: uuid,
+  convenerId: uuid.optional(),
+  venue: z.string().trim().max(1_000).optional(),
+  vcEnabled: z.boolean().optional(),
+  confidentialityLevel: confidentialityLevel.optional(),
+  fileReference: z.string().trim().max(200).optional(),
+  scheduledAt: isoDateTime.optional(),
+  actualStartAt: isoDateTime,
+  actualEndAt: isoDateTime,
+  quorumEstablished: z.boolean().optional(),
+  attendees: z.array(heldAttendee).min(1).max(500),
+  minutes: z.object({
+    content: z.string().trim().min(1).max(200_000),
+    templateType: z.enum(HELD_MINUTES_TEMPLATES).optional(),
+  }),
+}).superRefine((b, ctx) => {
+  const now = Date.now();
+  const at = (v: string | undefined) => (v ? new Date(v).getTime() : NaN);
+  for (const field of ["scheduledAt", "actualStartAt", "actualEndAt"] as const) {
+    const t = at(b[field]);
+    if (!Number.isNaN(t) && t > now) {
+      fieldIssue(ctx, "DATE_IN_FUTURE", `${field} is in the future; only a meeting that has already been held can be recorded here`);
+    }
+  }
+  if (at(b.actualEndAt) <= at(b.actualStartAt)) fieldIssue(ctx, "DATE_ORDER", "actualEndAt must be after actualStartAt");
+  const fail = checkDateWindow(istToday(new Date(b.actualStartAt)), {
+    min: addYears(istToday(), -yearsFromEnv("MEETING_RECORD_HELD_MAX_PAST_YEARS", 10)),
+    max: istToday(),
+  }, "meeting date");
+  if (fail) fieldIssue(ctx, fail.code, fail.message);
+  const seen = new Set<string>();
+  for (const a of b.attendees) {
+    if (seen.has(a.employeeId)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `attendee ${a.employeeId} is listed more than once` });
+    seen.add(a.employeeId);
+  }
+});
+export type RecordHeldMeetingInput = z.infer<typeof recordHeldMeetingSchema>;

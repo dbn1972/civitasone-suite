@@ -18,6 +18,7 @@ import { queryRuns } from "../src/modules/queries/schema.js";
 import { exportJobs } from "../src/modules/exports/schema.js";
 import { registerExportConsumer } from "../src/modules/exports/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // Mock @civitasone/storage so we don't need a real S3/MinIO instance.
 vi.mock("@civitasone/storage", () => ({
@@ -68,7 +69,7 @@ async function waitForExportJob(id: string, timeoutMs = 5000) {
     );
     const job = rows[0];
     if (job && (job.status === "completed" || job.status === "failed")) return job;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   // Final attempt
   const rows = await asTenant((tx) =>
@@ -227,7 +228,7 @@ describe("ExportConsumer", () => {
       await publishExport(exportId, queryRunId, "csv");
 
       // Wait briefly for potential reprocessing
-      await new Promise((r) => setTimeout(r, 500));
+      await drainAllQueues();
 
       // Verify the job was NOT reprocessed (updatedAt unchanged, status stable)
       const rows = await asTenant((tx) =>

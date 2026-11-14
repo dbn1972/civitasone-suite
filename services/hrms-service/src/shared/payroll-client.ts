@@ -6,6 +6,8 @@
  * resilience — if payroll-service is down, callers degrade gracefully.
  */
 import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const PAYROLL_URL = process.env.PAYROLL_SERVICE_URL ?? "http://127.0.0.1:3013";
 const SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? "";
@@ -83,6 +85,7 @@ export class PayrollUnavailableError extends Error {
  * callers fail CLOSED (never assume "nothing is locked").
  */
 export async function fetchPayrollLockedThrough(tenantId: string): Promise<string | null> {
+  await assertPayrollLicensed(tenantId, "GET payroll/internal/locked-through");
   const url = `${PAYROLL_URL}/v1/payroll/internal/locked-through`;
   let res: Response;
   try {
@@ -112,6 +115,7 @@ export async function fetchFnfTaxBreakdown(
   tenantId: string,
   params: FnfTaxBreakdownParams,
 ): Promise<FnfTaxBreakdownResult> {
+  await assertPayrollLicensed(tenantId, "GET payroll/internal/fnf-tax-breakdown");
   const qs = new URLSearchParams();
   qs.set("employeeId", params.employeeId);
   qs.set("separationDate", params.separationDate);
@@ -164,4 +168,15 @@ export async function fetchFnfTaxBreakdown(
 
   const body = (await res.json()) as { data: FnfTaxBreakdownResult };
   return body.data;
+}
+
+/**
+ * M5: a call INTO the payroll module is refused when the tenant did not buy it (no-op unless MODULE_LICENCE_CHECK=on and
+ * the tenant is in enforce). Throws PayrollUnavailableError, so every caller keeps failing CLOSED exactly as for an outage.
+ */
+async function assertPayrollLicensed(tenantId: string, target: string): Promise<void> {
+  const gate = await licence.check(tenantId, LICENCE_MODULE.payroll, "http", target);
+  if (!gate.allowed) {
+    throw new PayrollUnavailableError(gate.outcome === "deny" ? "payroll module is not licensed for this tenant" : `payroll licence could not be verified: ${gate.reason}`);
+  }
 }

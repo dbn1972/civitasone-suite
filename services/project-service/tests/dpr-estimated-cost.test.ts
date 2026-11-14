@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const H = vi.hoisted(() => ({
   dprs: [] as Array<Record<string, unknown>>,
@@ -100,7 +101,7 @@ describe("DPR estimated cost (whole paise)", () => {
       });
     await send(12_500_000_000);
     await send(undefined);
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
     const rows = H.insertDpr.mock.calls.map((c) => (c as unknown as [unknown, Record<string, unknown>])[1]);
     expect(rows[0]!.estimatedCostMinor).toBe(12_500_000_000n);
     expect(rows[1]!.estimatedCostMinor).toBeNull();

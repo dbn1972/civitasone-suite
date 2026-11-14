@@ -23,6 +23,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { registerPlanningConsumers } from "../src/modules/planning/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "5a5a5a5a-1111-4000-8000-0000000000a1";
 const OTHER  = "5b5b5b5b-2222-4000-8000-0000000000b2";
@@ -41,7 +42,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
 }
 
 async function drain(q: MemoryQueue) {
-  await new Promise<void>((r) => setTimeout(r, 400));
+  await drainAllQueues();
   await q.stop();
 }
 

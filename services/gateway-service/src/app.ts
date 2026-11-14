@@ -128,6 +128,69 @@ function verifiedTenantRateLimitKey(req: FastifyRequest): string {
   return `ip:${req.ip ?? "unknown"}`;
 }
 
+/**
+ * Per-USER rate-limit key (first tier on /api/*). One busy user must not starve
+ * the other users of the same tenant, so the bucket is the verified token
+ * subject, scoped to its tenant. Same trust rules as verifiedTenantRateLimitKey:
+ * only server-verified identity is used, never a client-supplied header.
+ *
+ *   1. req.jwtPayload.sub (+ tid)  -> "user:<tid>:<sub>"
+ *   2. api-key request (no subject) -> "tip:<tenant>:<ip>"  (tenant + IP)
+ *   3. anything unauthenticated     -> "uip:<ip>"
+ *
+ * Prefixes differ from the tenant-ceiling keys ("tenant:" / "ip:") so a request
+ * is never counted twice in the same Redis key by the two tiers.
+ */
+export function verifiedUserRateLimitKey(req: FastifyRequest): string {
+  const jwt = (req as FastifyRequest & { jwtPayload?: CivitasJwtPayload })
+    .jwtPayload;
+  if (jwt?.sub) return `user:${jwt.tid ?? "none"}:${jwt.sub}`;
+
+  if ((req as FastifyRequest & { apiKeyAuthenticated?: boolean })
+    .apiKeyAuthenticated) {
+    const verified = req.headers["x-tenant-id"];
+    if (typeof verified === "string" && verified) {
+      return `tip:${verified}:${req.ip ?? "unknown"}`;
+    }
+  }
+
+  return `uip:${req.ip ?? "unknown"}`;
+}
+
+const WINDOW_UNIT_MS: Record<string, number> = {
+  ms: 1, msec: 1, msecs: 1, millisecond: 1, milliseconds: 1,
+  s: 1000, sec: 1000, secs: 1000, second: 1000, seconds: 1000,
+  m: 60_000, min: 60_000, mins: 60_000, minute: 60_000, minutes: 60_000,
+  h: 3_600_000, hr: 3_600_000, hrs: 3_600_000, hour: 3_600_000, hours: 3_600_000,
+  d: 86_400_000, day: 86_400_000, days: 86_400_000,
+};
+
+/**
+ * Rate-limit window env var -> milliseconds. Accepts a positive integer (ms) or a
+ * "<n> <unit>" string the @fastify/rate-limit parser also understands ("1 minute",
+ * "30 seconds", "500ms"), and requires >= 1000 ms. Anything empty, zero, negative
+ * or unparseable returns the default, so a bad value can neither yield a
+ * zero-length (unlimited) window nor throw at boot.
+ */
+export function envWindowMs(name: string, fallback = "1 minute"): number {
+  const parse = (raw: string): number | null => {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*([a-z]*)\s*$/i.exec(raw);
+    if (!m) return null;
+    const u = (m[2] ?? "").toLowerCase();
+    const unit = u === "" ? 1 : WINDOW_UNIT_MS[u];
+    if (!unit) return null;
+    const ms = Math.trunc(Number(m[1] ?? "NaN") * unit);
+    return Number.isFinite(ms) && ms >= 1000 ? ms : null;
+  };
+  return parse(process.env[name] ?? "") ?? (parse(fallback) as number);
+}
+
+/** Positive-integer env var, else the default (a typo must not disable the limiter). */
+export function envPositiveInt(name: string, fallback: number): number {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n >= 1 ? Math.trunc(n) : fallback;
+}
+
 async function proxyHandler(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -620,12 +683,31 @@ export async function buildApp(): Promise<FastifyInstance> {
   // applied to any route (the proxy's /api/* had no config.rateLimit), so it
   // was inert even before considering the keyGenerator bug. See SEC-008 in the
   // gap report for how that was confirmed.
+  // Per-tenant SAFETY CEILING (above the per-user tier). Registered first so the
+  // per-user tier's x-ratelimit-* headers (the tighter, normally-binding limit)
+  // are the ones the client sees on a normal response.
+  // GATEWAY_RATE_LIMIT_TENANT_MAX (default 1000) / GATEWAY_RATE_LIMIT_TENANT_WINDOW.
   await app.register(rateLimit, {
     global: false,
     hook: "preHandler",
     keyGenerator: verifiedTenantRateLimitKey,
-    max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
-    timeWindow: "1 minute",
+    max: envPositiveInt("GATEWAY_RATE_LIMIT_TENANT_MAX", 1000),
+    timeWindow: envWindowMs("GATEWAY_RATE_LIMIT_TENANT_WINDOW"),
+    ...(rateLimitClient ? { redis: rateLimitClient } : {}),
+  });
+
+  // Per-USER tier: the bucket the UI actually exercises. One user (token
+  // subject) cannot exhaust the budget of the other users in the tenant. Falls
+  // back to tenant+IP (api key) or IP (unauthenticated). Same preHandler-stage
+  // reasoning as above: the key needs the verified identity.
+  // GATEWAY_RATE_LIMIT_USER_MAX (default 200) / GATEWAY_RATE_LIMIT_USER_WINDOW.
+  await app.register(rateLimit, {
+    global: false,
+    hook: "preHandler",
+    keyGenerator: verifiedUserRateLimitKey,
+    max: envPositiveInt("GATEWAY_RATE_LIMIT_USER_MAX", 200),
+    timeWindow: envWindowMs("GATEWAY_RATE_LIMIT_USER_WINDOW"),
+    nameSpace: "fastify-rate-limit-user-",
     ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });
   // Phase 1 hyperscale: per-tenant configurable quota enforcement.

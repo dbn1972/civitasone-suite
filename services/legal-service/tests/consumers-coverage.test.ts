@@ -24,6 +24,7 @@ import { cache } from "../src/shared/infra.js";
 import { assertCanRespond, DomainError } from "../src/modules/notices/domain.js";
 import { DomainError as SettlementDomainError } from "../src/modules/settlements/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000c01";
 const TENANT  = "11111111-aaaa-4000-8000-000000000c01";
@@ -41,7 +42,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
 }
 
 async function drain(): Promise<void> {
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainAllQueues();
 }
 
 async function wipe(): Promise<void> {

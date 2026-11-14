@@ -20,12 +20,28 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { runWithTenant, countQueriesDuring } from "@civitasone/db";
+import { runWithTenant, addQueryDebugListener, removeQueryDebugListener } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import * as repo from "../src/modules/payroll/repo.js";
 import { generateRetroArrears, prefetchRetroArrearsTx } from "../src/modules/payroll/consumer.js";
 
 afterAll(async () => { await sqlClient.end(); });
+
+/**
+ * Counts the statements the CODE UNDER TEST issues. postgres-js also runs its own
+ * driver-bootstrap statements (the pg_type array-type fetch) on every connection it
+ * opens, and the debug hook reports those too. Under load the pool can open or recycle a
+ * connection in the middle of a measurement, which added one such statement to one side of
+ * a "same number of queries" comparison. That statement is not a query of the code under
+ * test, so it is excluded by its text; every other statement still counts.
+ */
+const DRIVER_BOOTSTRAP = /\bpg_catalog\.pg_type\b/i;
+async function countAppQueries<T>(fn: () => Promise<T>): Promise<{ result: T; queryCount: number }> {
+  let queryCount = 0;
+  const listener = (_conn: number, query: string) => { if (!DRIVER_BOOTSTRAP.test(query)) queryCount++; };
+  addQueryDebugListener(listener);
+  try { return { result: await fn(), queryCount }; } finally { removeQueryDebugListener(listener); }
+}
 
 const R = (rupees: number): bigint => BigInt(rupees) * 100n;
 type Tx = typeof db;
@@ -38,7 +54,7 @@ async function drawn(tenant: string, emp: string, month: string, l: Lines): Prom
   const actor = randomUUID(); const runId = randomUUID();
   await inTenant(tenant, async (tx) => {
     await repo.insertRun(tx as never, {
-      id: runId, tenantId: tenant, runNo: `R2-${month}-${runId.slice(0, 6)}`, month, departmentId: null,
+      id: runId, tenantId: tenant, runNo: `R2-${month}-${runId}`, month, departmentId: null,
       structureId: randomUUID(), runType: "regular", ddoCode: `R2-${runId.slice(0, 8)}`, totalGrossMinor: 0n, totalNetMinor: 0n,
       currency: "INR", status: "disbursed", createdBy: actor, updatedBy: actor,
     });
@@ -166,7 +182,7 @@ describe("T-STAT review SF3: the arrears step reads its inputs once per run", ()
     const small = randomUUID(); const large = randomUUID();
     const smallIds = await seed(small, 3);
     const largeIds = await seed(large, 20);
-    const pre = async (tenant: string, ids: string[]) => countQueriesDuring(() =>
+    const pre = async (tenant: string, ids: string[]) => countAppQueries(() =>
       inTenant(tenant, (tx) => prefetchRetroArrearsTx(tx, tenant, ids, "2026-09")));
     const a = await pre(small, smallIds);
     const b = await pre(large, largeIds);
@@ -175,9 +191,9 @@ describe("T-STAT review SF3: the arrears step reads its inputs once per run", ()
 
     // With the run prefetch, settling one employee issues exactly one INSERT (plus the tx wrapper).
     const prefetch = b.result;
-    const per = await countQueriesDuring(() => inTenant(large, (tx) =>
+    const per = await countAppQueries(() => inTenant(large, (tx) =>
       generateRetroArrears(tx, large, largeIds[0]!, "2026-09", "X", randomUUID(), undefined, { prefetch })));
-    const empty = await countQueriesDuring(() => inTenant(large, async () => undefined));
+    const empty = await countAppQueries(() => inTenant(large, async () => undefined));
     expect(per.queryCount - empty.queryCount).toBe(1);
     expect(rows(await raised(large, largeIds[0]!))).toEqual([["2026-08", "ARREAR", R(3700), R(3100)]]);
   });

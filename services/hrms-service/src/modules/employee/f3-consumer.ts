@@ -13,6 +13,7 @@ import { hrmsEmployees } from "./schema.js";
 import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
+import { syncEmployee } from "../../shared/global-search.js";
 const log = pino({ name: "hrms-f3-employee", serializers: SAFE_LOG_SERIALIZERS });
 
 /** Central audit topic (same constant/payload shape as ./consumer.ts). */
@@ -160,6 +161,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                       eq(hrmsEmployees.version, emp.version),
                       eq(hrmsEmployees.status, "probation"),
                     ));
+            await syncEmployee(tx, targetId, p.tenantId);
             break;
           }
           case "employee_agent1_gap_routes__2": {
@@ -175,6 +177,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                   await tx.update(hrmsEmployees)
                     .set({ status: body.revertToStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
+                  await syncEmployee(tx, targetId, p.tenantId);
                   return { id: targetId, status: body.revertToStatus };
           }
           case "employee_agent1_gap_routes__3": {
@@ -327,6 +330,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             await tx.insert(hrmsDesignations).values({
                   id, tenantId: p.tenantId, code: body.code, name: body.name,
                   level: body.level ?? 0, payGrade: body.payGrade ?? null,
+                  gradeBandId: body.gradeBandId ?? null,
                   createdBy: msg.actorId, updatedBy: msg.actorId,
                 });
             break;
@@ -379,6 +383,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             if (body.name !== undefined) desigPatch.name = body.name;
             if (body.level !== undefined) desigPatch.level = body.level;
             if (body.payGrade !== undefined) desigPatch.payGrade = body.payGrade;
+            if (body.gradeBandId !== undefined) desigPatch.gradeBandId = body.gradeBandId;
             await tx.update(hrmsDesignations)
                   .set({ ...desigPatch, updatedBy: msg.actorId } as never)
                   .where(eq(hrmsDesignations.id, targetId));

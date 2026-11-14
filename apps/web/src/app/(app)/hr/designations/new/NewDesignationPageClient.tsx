@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
 import { AddDesignationForm } from "./AddDesignationForm";
+import type { GradeBand, PayScaleKind } from "@/lib/gradeBands";
 
 /**
  * The interactive part of /hr/designations/new (useRouter + the form's
@@ -18,7 +19,7 @@ import { AddDesignationForm } from "./AddDesignationForm";
  * designations in a row (and the timeout was never cleared on unmount).
  * The redirect is now an explicit, user-driven choice instead.
  */
-export function NewDesignationPageClient() {
+export function NewDesignationPageClient({ payScale = "cpc7", bands = [] }: { payScale?: PayScaleKind; bands?: GradeBand[] } = {}) {
   const t = useTranslations("addDesignationForm");
   const router = useRouter();
   const [justAdded, setJustAdded] = useState(false);
@@ -33,6 +34,8 @@ export function NewDesignationPageClient() {
         backLabel={t("pageBackLabel")}
       />
       <AddDesignationForm
+        payScale={payScale}
+        bands={bands}
         codeInputRef={codeInputRef}
         onCancel={() => { router.push("/hr/designations"); }}
         onSuccess={() => {

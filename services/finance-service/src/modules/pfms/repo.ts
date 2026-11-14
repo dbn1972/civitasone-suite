@@ -91,15 +91,15 @@ export async function getTenantConfigTx(tx: Writer, tenantId: string) {
  *                     PRIOR BUG (fixed here, found on review of the initial
  *                     500-error fix): this used to resolve "account" via
  *                     p.bank_account_id -> treasury.finance_banks.id instead.
- *                     That FK (fk_fpayments_bank) is real, but
- *                     treasury.finance_banks holds the DEPARTMENT's own
- *                     disbursing/treasury account -- see bank-recon/repo.ts:
+ *                     That FK (fk_fpayments_bank, since repointed
+ *                     to payments.finance_bank_accounts by migration 0165) holds
+ *                     the DEPARTMENT's own disbursing account -- see bank-recon/repo.ts:
  *                     which of the office's OWN accounts a payment was
  *                     disbursed FROM, for bank-statement reconciliation, not
  *                     who it was paid TO. Joining it into "account" silently
  *                     printed the department's own account into a government
  *                     NEFT beneficiary file instead of the vendor's, with no
- *                     error of any kind. bank_account_id / treasury.finance_banks
+ *                     error of any kind. bank_account_id / the bank-account master
  *                     are no longer joined here at all: nothing else in this
  *                     function used them, and resolving the beneficiary's own
  *                     bank details must never depend on whether a treasury

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zIsoDate, DATE_WINDOWS, istToday, fieldIssue, FIELD_CODES } from "@civitasone/schemas/validators";
 import { LEAVE_DAY_PARTS } from "./domain.js";
+import { SYSTEM_CODES, LEAVE_TYPE_CATEGORIES } from "./type-admin-validators.js";
 
 /** UAT T-EDGE (TE-03 / TE-07): leave dates may be at most 1 year back and 2 years ahead (IST today). */
 export const leaveDateWindow = () => DATE_WINDOWS.leave(istToday());
@@ -18,6 +19,11 @@ export const createLeaveTypeBody = z.object({
   // same fail-safe as the column default, so a type created without an
   // explicit classification is never silently treated as paid.
   lopFractionBps: z.number().int().min(0).max(10000).default(10000),
+  // S8-G3: organisation-defined types. All optional; omitted == the previous behaviour.
+  systemCode:        z.enum(SYSTEM_CODES).nullable().optional(),
+  category:          z.enum(LEAVE_TYPE_CATEGORIES).nullable().optional(),
+  genderRestriction: z.enum(["male", "female"]).nullable().optional(),
+  description:       z.string().trim().max(1000).nullable().optional(),
 });
 export type CreateLeaveTypeBody = z.infer<typeof createLeaveTypeBody>;
 

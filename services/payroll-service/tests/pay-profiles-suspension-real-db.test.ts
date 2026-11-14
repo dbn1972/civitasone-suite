@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -101,7 +102,7 @@ beforeAll(async () => {
   runId = res.json().data?.id ?? res.json().id;
   const deadline = Date.now() + 30_000;
   for (;;) {
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
     const [run] = await q(sql`SELECT status, last_error FROM payroll.payroll_runs WHERE id = ${runId}::uuid`);
     const regs = await q(sql`SELECT 1 FROM payroll.payroll_register WHERE run_id = ${runId}::uuid LIMIT 1`);
     if (run?.status === "failed") throw new Error(`run failed: ${run.last_error as string}`);

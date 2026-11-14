@@ -32,3 +32,17 @@ export async function drainOrFail(
     if (timer) clearTimeout(timer);
   }
 }
+
+/**
+ * Drain every live MemoryQueue in this test file's context (registered by the
+ * MemoryQueue constructor). Use where a test used to sleep a fixed time after
+ * publishing and the queue handle is not at hand. Fails (never hangs/passes
+ * silently) if a handler does not settle within timeoutMs.
+ */
+export async function drainAllQueues(timeoutMs = 20_000, label = "drainAllQueues()"): Promise<void> {
+  const set = (globalThis as { __civitasMemoryQueues?: Set<unknown> }).__civitasMemoryQueues;
+  if (!set) return;
+  for (let pass = 0; pass < 3; pass++) {
+    await Promise.all([...set].map((q) => drainOrFail(q, timeoutMs, label)));
+  }
+}

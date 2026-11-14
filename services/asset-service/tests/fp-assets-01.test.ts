@@ -30,6 +30,7 @@ import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
 import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
 import { assetPolicies, assetClaims } from "../src/modules/insurance/schema.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 import { resetFinanceCache } from "../src/shared/finance-client.js";
 
 // Storage is mocked: claim attachments are verified to exist (HEAD) before a claim accepts them.
@@ -47,7 +48,6 @@ const auth = (tid = T1, sub = MAKER, roles?: string[]) => ({ authorization: `Bea
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const asTenant = <T>(tid: string, fn: (tx: Tx) => Promise<T>): Promise<T> => runWithTenant(tid, () => db.transaction(fn)) as Promise<T>;
-const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 let app: FastifyInstance;
 let q: MemoryQueue;
@@ -58,7 +58,7 @@ async function f3(op: string, payload: Record<string, unknown>, tid = T1, actor 
     correlationId: "corr-fp01", schemaVersion: "1.0",
     payload: { op, tenantId: tid, ...payload },
   });
-  await wait(450);
+  await drainOrFail(q);
 }
 const outboxFor = async (tid: string, topic: string, pred: (p: Record<string, any>) => boolean) =>
   (await asTenant(tid, (tx) => tx.select().from(outbox).where(and(eq(outbox.tenantId, tid), eq(outbox.topic, topic)))))
@@ -222,7 +222,7 @@ describe("GAP-ASSETS-LOCATIONS-02/-03: deactivate, reactivate, asset -> location
       messageId: randomUUID(), type: COMMANDS.assetCreate, tenantId: T1, actorId: MAKER, correlationId: "c", schemaVersion: "1.0",
       payload: { id, tenantId: T1, name: "Desk", code: "DESK-LOC", categoryId: randomUUID(), acquisitionCost: 5000, acquisitionDate: "2025-01-01", location: "Block A", locationId: PARENT },
     });
-    await wait(450);
+    await drainOrFail(q);
     const [a] = await asTenant(T1, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, id)));
     expect(a!.locationId).toBe(PARENT);
     expect(a!.location).toBe("Block A");
@@ -284,7 +284,7 @@ describe("GAP-ASSETS-SCAN-06: barcode uniqueness, tenant-scoped scan, scan log",
       messageId: randomUUID(), type: COMMANDS.assetTagBarcode, tenantId: T1, actorId: MAKER, correlationId: "c", schemaVersion: "1.0",
       payload: { id: loser, tenantId: T1, barcode: "BC-HELD" }, // bypasses the route pre-check, as a true race would
     });
-    await wait(500);
+    await drainOrFail(q);
     const [row] = await asTenant(T1, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, loser)));
     expect(row!.barcode).toBeNull();
     const [kept] = await asTenant(T1, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, holder)));
@@ -315,7 +315,7 @@ describe("GAP-ASSETS-MAINTENANCE-NEW-06: one open work order per asset + type", 
   it("409s an identical open work order, allows a different type, and allows a new one once the first is completed", async () => {
     const first = randomUUID();
     await createWo(first, "breakdown");
-    await wait(450);
+    await drainOrFail(q);
     const dup = await app.inject({ method: "POST", url: "/v1/assets/work-orders", headers: auth(), payload: { assetId: asset, scheduledDate: "2026-10-21", maintenanceType: "breakdown" } });
     expect(dup.statusCode).toBe(409);
     expect(JSON.parse(dup.body).code).toBe("DUPLICATE_OPEN_WORK_ORDER");
@@ -328,7 +328,7 @@ describe("GAP-ASSETS-MAINTENANCE-NEW-06: one open work order per asset + type", 
 
   it("the unique index lets exactly one of two racing creates persist (and the default type counts as corrective)", async () => {
     await Promise.all([createWo(randomUUID()), createWo(randomUUID())]);
-    await wait(700);
+    await drainOrFail(q);
     const rows = await asTenant(T1, (tx) => tx.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.assetId, asset), eq(assetWorkOrders.maintenanceType, "corrective"))));
     expect(rows).toHaveLength(1);
     const route = await app.inject({ method: "POST", url: "/v1/assets/work-orders", headers: auth(), payload: { assetId: asset, scheduledDate: "2026-10-23" } });
@@ -395,7 +395,7 @@ const forceSettings = (patch: Record<string, unknown>) => asTenant(T1, (tx) => t
 const getSettings = async () => JSON.parse((await app.inject({ method: "GET", url: "/v1/assets/settings", headers: auth() })).body) as Record<string, any>;
 const glEvent = async (topic: string, payload: Record<string, unknown>, tid = T1) => {
   await q.publish(topic, { messageId: randomUUID(), type: topic, tenantId: tid, actorId: MAKER, correlationId: "c", schemaVersion: "1.0", payload });
-  await wait(450);
+  await drainOrFail(q);
 };
 
 describe("GL heads: no defaults, validated against finance, per-tenant settings", () => {
@@ -586,7 +586,7 @@ describe("impairment / revaluation heads: per-tenant, validated, no env defaults
       });
     await attempt("impairment", { id: randomUUID(), assetId: id, amountMinor: 100000, bookValueBefore: "1000000", bookValueAfter: "900000", accumulatedDep: "0", reason: "x", eventDate: "2026-06-01" });
     await attempt("revaluation", { id: randomUUID(), assetId: id, bookValueBefore: "1000000", bookValueAfter: "1100000", delta: "100000", isUpward: true, accumulatedDep: "0", reason: "x", eventDate: "2026-06-01" });
-    await wait(450);
+    await drainOrFail(q);
     expect(await asTenant(T1, (tx) => tx.select().from(assetImpairments).where(eq(assetImpairments.assetId, id)))).toHaveLength(0); // no event row either
     expect(await bookValue(id)).toBe(1_000_000n); // the transaction rolled back with the missing head
     expect((await glOf("asset_impairment")).length).toBe(before);
@@ -1081,7 +1081,7 @@ describe("GAP-ASSETS-INSURANCE-CLAIMS-06: claim attachments are the caller's own
       messageId: randomUUID(), type: COMMANDS.insuranceClaimCreate, tenantId: T1, actorId: MAKER, correlationId: "c", schemaVersion: "1.0",
       payload: { id, tenantId: T1, policyId: POLICY, assetId: randomUUID(), claimDate: "2026-09-01", claimAmountMinor: 1000, currency: "INR", notes: "Line one\nLine two", attachments: [att] },
     });
-    await wait(500);
+    await drainOrFail(q);
     const [row] = await asTenant(T1, (tx) => tx.select().from(assetClaims).where(eq(assetClaims.id, id)));
     expect(row!.attachments).toEqual([att]);
     expect(row!.notes).toBe("Line one\nLine two");

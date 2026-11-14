@@ -33,6 +33,10 @@ export const COMMANDS = {
   // after dot-to-dash (`admin-composition-apply_plan`), well under the 45-char
   // queue-truncation limit (D-ST-19).
   compositionApplyPlan: "admin.composition.apply_plan",
+  // M6 — maker-checker around the applier: request a plan application, then approve/reject it. Approval performs the
+  // same write as compositionApplyPlan. Names are <= 45 chars after dot-to-dash (D-ST-19).
+  compositionPlanApplyRequest: "admin.composition.plan_apply_request",
+  compositionPlanApplyDecide: "admin.composition.plan_apply_decide",
   // ST-M01-02 — set a tenant's module-gating enforcement mode (off|shadow|enforce).
   // Payload: { tenantId, mode }. Published by PUT
   // /v1/admin/composition/:tenantId/enforcement-mode (-> 202); consumed by

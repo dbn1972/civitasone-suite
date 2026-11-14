@@ -16,6 +16,7 @@ import { samlModuleSchema } from "../modules/saml/schema.js";
 import { webauthnModuleSchema } from "../modules/webauthn/schema.js";
 import { scimModuleSchema } from "../modules/scim/schema.js";
 import { operatorsModuleSchema } from "../modules/operators/schema.js";
+import { onboardingModuleSchema } from "../modules/users/onboarding-schema.js";
 import { outboxSchema } from "./outbox.js";
 import { kcReconcileSchema } from "./kc-reconcile.js";
 
@@ -34,6 +35,8 @@ const SCHEMA = {
   ...scimModuleSchema,
   // Migration 0028: maker-checker requests for platform operators.
   ...operatorsModuleSchema,
+  // Migration 0034: usable-logins switch + single-use set-password tokens.
+  ...onboardingModuleSchema,
   ...outboxSchema,
   ...kcReconcileSchema,
 };

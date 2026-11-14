@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { likePattern } from "../../shared/search.js";
 import { procurementPos, procurementPoItems, type PoRow, type PoInsert } from "./schema.js";
+import { syncPo } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 /** Executor surface for raw guarded SQL (FOR UPDATE row lock). */
@@ -108,10 +109,12 @@ export async function listPosByTenant(tenantId: string, limit = 100, offset = 0,
 
 export async function insertPo(tx: Writer, row: PoInsert): Promise<void> {
   await tx.insert(procurementPos).values(row);
+  if (row.id) await syncPo(tx, row.id, row.tenantId);
 }
 
 export async function updatePo(tx: Writer, id: string, patch: Partial<PoInsert>): Promise<void> {
   await tx.update(procurementPos).set({ ...patch, updatedAt: new Date() }).where(eq(procurementPos.id, id));
+  await syncPo(tx, id);
 }
 
 /** Optimistic-locked update (#16): bumps version, fails if `expectedVersion` is stale. */
@@ -123,6 +126,7 @@ export async function updatePoVersioned(tx: Writer, id: string, expectedVersion:
   if (res.length === 0) {
     throw new Error(`OPTIMISTIC_LOCK_CONFLICT: po ${id} was modified concurrently (expected version ${expectedVersion})`);
   }
+  await syncPo(tx, id);
 }
 
 export async function insertPoItems(tx: Writer, items: (typeof procurementPoItems.$inferInsert)[]): Promise<void> {

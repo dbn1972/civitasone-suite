@@ -1,5 +1,7 @@
 import type { EntityOption } from "@/app/_components/ds";
 import { failStrict, type StrictOpt } from "./strict";
+import { fetchAllPages } from "@/lib/fetchAllPages";
+import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
 
 type IdentityUserRow = { id: string; name: string; designation?: string };
 
@@ -19,11 +21,16 @@ function toOption(row: IdentityUserRow): EntityOption {
  * <select> with a silent raw-ID fallback on fetch failure.
  */
 async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<IdentityUserRow[]> {
-  const res = await fetch("/api/proxy/v1/identity/users?limit=200", { signal });
-  failStrict(res, opts);
-  if (!res.ok) return [];
-  const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
-  return Array.isArray(body) ? body : (body.data ?? []);
+  // The list answers at most 200 rows per call; walk the pages so a tenant with more users is searchable in full.
+  const all = await fetchAllPages(async (limit, offset) => {
+    const res = await fetch(`/api/proxy/v1/identity/users?limit=${limit}&offset=${offset}`, { signal });
+    failStrict(res, opts);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
+    return Array.isArray(body) ? body : (body.data ?? []);
+  });
+  if (all && !all.complete) recordLoaderFallback({ key: "entity-picker.identity-users", reason: "truncated", path: "/api/proxy/v1/identity/users", timestamp: new Date().toISOString() });
+  return all ? all.rows : [];
 }
 
 export async function searchIdentityUsers(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {

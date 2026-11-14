@@ -60,6 +60,8 @@ export const onboardTenantBody = z.object({
   residency: z.string().min(2).max(64),
   adminEmail: z.string().email().max(254),
   adminName: z.string().min(2).max(200),
+  // Profile inside the edition, e.g. govt_small_office. Optional: the edition default applies (see tenant/profile.ts).
+  profile: z.string().regex(/^[a-z][a-z0-9_]{1,31}$/).optional(),
 });
 export type OnboardTenantBody = z.infer<typeof onboardTenantBody>;
 

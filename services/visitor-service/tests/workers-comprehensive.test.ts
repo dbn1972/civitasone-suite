@@ -48,6 +48,7 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 vi.mock("../src/modules/config-registry/policy.js", () => ({
+  getTenantTimeZone: async () => "Asia/Kolkata",
   getPolicyBoolean: async () => false,
   getPolicyNumber: async () => 24,
   getAutoApproveCategories: async () => new Set(["vip"]),

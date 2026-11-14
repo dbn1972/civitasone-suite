@@ -19,6 +19,7 @@ import { scoped } from "./_tenant.js";
 import { financeAdvances, financeUC } from "../src/modules/payments/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000077";
@@ -50,7 +51,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 

@@ -280,4 +280,5 @@ export const NO_CONSUMER_BY_DESIGN: Record<string, string> = {
   "works.contractor.updated": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — contractor updated audit/status fact in the works lifecycle history (review-2 u11); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "project.fund_release.sod_violation": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — fund release sod violation audit/status fact in the project lifecycle history (review-2 u18); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "inventory.custodian.created": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — custodian created audit/status fact in the inventory lifecycle history (review-2 u16); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
+  "tenant.plan.price_recorded": `${NO_CONSUMER_CATEGORY} — 2026-11-14 — plan price recorded audit/status fact in the plan-pricing history (same payload is also written to the audit trail); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
 };

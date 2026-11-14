@@ -26,7 +26,9 @@ const tok = (roles: string[], tenant = TENANT) => ({ authorization: `Bearer ${si
 const asAdmin = () => tok(["legal_admin"]);
 const asOfficer = () => tok(["legal_officer"]);
 const asAuditor = () => tok(["audit_officer"]);
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+// Wait for every in-flight MemoryQueue delivery (incl. cascaded ones) to settle instead of racing a fixed
+// sleep, which flaked on a loaded CI runner (consumer had not yet committed the row).
+const drain = (): Promise<void> => (queue as unknown as { drain(): Promise<void> }).drain();
 const ADV = { name: "Adv. Kavita Rao", barEnrolmentNo: "D/1234/2011", contact: "9876543210" };
 
 async function wipe(tenant: string): Promise<void> {

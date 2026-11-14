@@ -102,10 +102,11 @@ function toIso(v: unknown): string | null {
 }
 
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(20),
+  limit: z.coerce.number().int().min(1).max(200, "limit must be at most 200; request further rows with offset").default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+// GET /v1/admin/users: limit is 1..200 (listQuery above); anything higher is a 400 that says so, never an empty list.
 const userListQuery = listQuery.extend({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["active", "suspended", "locked", "deactivated"]).optional(),
@@ -328,7 +329,10 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       ? (body as { rows?: unknown[]; total?: number; counts?: Record<string, number> }) : null;
     const rows = Array.isArray(body) ? body : Array.isArray(searched?.rows) ? searched!.rows! : [];
     const total = typeof searched?.total === "number" ? searched.total : rows.length;
-    return reply.send({ data: rows, meta: { ...pageMeta(q.limit, q.offset, total), ...(searched?.counts ? { counts: searched.counts } : {}) } });
+    // Explicit paging facts so a caller never has to guess whether there is more: offset/limit echoed, hasMore, and
+    // nextOffset (null on the last page or past the end). `page` assumes offset is a multiple of limit; offset is the truth.
+    const nextOffset = rows.length > 0 && q.offset + rows.length < total ? q.offset + rows.length : null;
+    return reply.send({ data: rows, meta: { ...pageMeta(q.limit, q.offset, total), limit: q.limit, offset: q.offset, hasMore: nextOffset !== null, nextOffset, ...(searched?.counts ? { counts: searched.counts } : {}) } });
   });
 
   app.post("/v1/admin/users", async (req, reply) => {
@@ -338,6 +342,9 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       email: z.string().email().max(254),
       name: z.string().min(1).max(200),
       empCode: z.string().max(64).optional(),
+      // Usable-logins tenants: tenant-grantable roles for the new user. Validated against the allow-list and
+      // the caller's own authority by identity-service (it is the owner of that rule); this layer only forwards.
+      roles: z.array(z.string().min(1).max(64)).max(10).optional(),
     });
     const parsed = createBody.safeParse(req.body);
     if (!parsed.success) {
@@ -611,15 +618,20 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuery.parse(req.query);
     const { status, body } = await callUpstream<unknown>(
       req, ctx, "GET", identityBaseUrl(),
-      `/identity/users?tenantId=${encodeURIComponent(ctx.tenantId)}&limit=${q.limit}&offset=${q.offset}`,
+      `/identity/users/search?tenantId=${encodeURIComponent(ctx.tenantId)}&limit=${q.limit}&offset=${q.offset}`,
     );
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
-    const rows = (Array.isArray(body) ? body : []) as Array<{ id: string; name: string; email: string; mfaEnabled: boolean }>;
+    // identity-service's search is tenant-scoped and returns the real total of the tenant's users; an older identity-service
+    // answers a bare array (no total), in which case the total can only be the rows returned.
+    const searched = body && typeof body === "object" && !Array.isArray(body) ? (body as { rows?: unknown[]; total?: number }) : null;
+    const rows = (Array.isArray(body) ? body : Array.isArray(searched?.rows) ? searched!.rows! : []) as Array<{ id: string; name: string; email: string; mfaEnabled: boolean }>;
+    const total = typeof searched?.total === "number" ? searched.total : rows.length;
     // department/enrolledAt are not tracked at this layer — left honestly
     // blank/null rather than invented (the existing UsersTable component
     // already renders department as "—" unconditionally for the same reason).
     const data = rows.map((u) => ({ id: u.id, name: u.name, email: u.email, department: "", mfaStatus: mfaStatusLabel(u.mfaEnabled), enrolledAt: null }));
-    return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
+    const nextOffset = data.length > 0 && q.offset + data.length < total ? q.offset + data.length : null;
+    return reply.send({ data, meta: { ...pageMeta(q.limit, q.offset, total), limit: q.limit, offset: q.offset, hasMore: nextOffset !== null, nextOffset } });
   });
 
   // ─── Roles — real, forwarded to identity-service's RBAC store ───

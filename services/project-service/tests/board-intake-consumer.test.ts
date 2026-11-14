@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, dbTransactionFn, enqueuedMessages, insertMock, markProcessedMock, runWithTenantMock } = vi.hoisted(() => {
   const _mockTx = {};
@@ -57,7 +58,7 @@ function makeMsg(payload: Record<string, unknown>, messageId = randomUUID()) {
     correlationId: randomUUID(), schemaVersion: "1.0", payload,
   };
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

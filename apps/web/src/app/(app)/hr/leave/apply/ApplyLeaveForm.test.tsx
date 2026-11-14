@@ -595,3 +595,72 @@ describe("ApplyLeaveForm — half-day / short leave (GAP-HR-LEAVE-APPLY-05)", ()
     await waitFor(() => expect(screen.queryByLabelText(/duration/i)).toBeNull());
   });
 });
+
+/**
+ * A request whose dates are all holidays / weekends debits 0 days: the preview marks it invalid with a
+ * clear reason, Submit is disabled and nothing is sent -- in English and in Hindi. The reason is
+ * localised by the server's violation CODE (the server message itself is English-only), and a
+ * 0-day preview from an older server (valid:true) is blocked client-side too.
+ */
+describe("ApplyLeaveForm — zero-day request (holidays / weekends only)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(fetchOrQueue).mockReset();
+  });
+
+  const ZERO_DAY_PREVIEW = {
+    valid: false, computedDays: 0, engineApplied: true, warnings: [],
+    violations: [{ code: "LEAVE_NO_WORKING_DAYS", message: "The selected dates are holidays or weekends; no leave days to apply" }],
+    balance: 10, balanceAfter: 10,
+  };
+
+  async function renderAndFill(locale: "en" | "hi", messages: Record<string, unknown>) {
+    const view = render(
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <ApplyLeaveForm employees={EMPLOYEES} initialEmployeeId="emp-1" canPickEmployee />
+      </NextIntlClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    const byId = (id: string) => view.container.querySelector(`#${id}`) as HTMLInputElement;
+    fireEvent.change(byId("leave-type"), { target: { value: "a1" } });
+    fireEvent.change(byId("leave-from"), { target: { value: "2027-01-26" } }); // Republic Day
+    fireEvent.change(byId("leave-to"), { target: { value: "2027-01-26" } });
+    return view;
+  }
+  const submitBtn = (c: HTMLElement) => c.querySelector("button[type=submit]") as HTMLButtonElement;
+
+  it("English: shows 'The selected dates are holidays or weekends; no leave days to apply', disables Submit, no 'will debit 0 days'", async () => {
+    const fetchMock = stubContextAndPreview({ context: EL_CONTEXT, preview: ZERO_DAY_PREVIEW });
+    const view = await renderAndFill("en", enMessages as never);
+    await waitForPreviewFetch(fetchMock);
+    const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
+    expect(alert).toHaveTextContent("The selected dates are holidays or weekends; no leave days to apply");
+    expect(submitBtn(view.container)).toBeDisabled();
+    expect(screen.queryByText(/this will debit/i)).not.toBeInTheDocument();
+    fireEvent.submit(submitBtn(view.container).closest("form")!);
+    expect(fetchOrQueue).not.toHaveBeenCalled();
+  });
+
+  it("Hindi: the same block, with the Hindi reason (not the English server string)", async () => {
+    const hi = (await import("@/messages/hi.json")).default;
+    const fetchMock = stubContextAndPreview({ context: EL_CONTEXT, preview: ZERO_DAY_PREVIEW });
+    const view = await renderAndFill("hi", hi as never);
+    await waitForPreviewFetch(fetchMock);
+    const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
+    expect(alert).toHaveTextContent("चयनित तिथियाँ अवकाश या सप्ताहांत हैं; आवेदन करने के लिए कोई अवकाश दिवस नहीं है");
+    expect(alert).not.toHaveTextContent("holidays or weekends");
+    expect(submitBtn(view.container)).toBeDisabled();
+  });
+
+  it("an older server that answers valid:true with computedDays 0 is still blocked, with the same reason", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: EL_CONTEXT,
+      preview: { valid: true, computedDays: 0, engineApplied: true, warnings: [], violations: [] },
+    });
+    const view = await renderAndFill("en", enMessages as never);
+    await waitForPreviewFetch(fetchMock);
+    const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
+    expect(alert).toHaveTextContent("The selected dates are holidays or weekends; no leave days to apply");
+    expect(submitBtn(view.container)).toBeDisabled();
+  });
+});

@@ -17,6 +17,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { users } from "../src/modules/users/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerUserConsumers } from "../src/modules/users/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const T = "e1111111-1111-4000-8000-0000000000c1";
 const ACTOR = "e0000000-0000-4000-8000-0000000000ca";
@@ -54,7 +55,7 @@ describe("GAP-TENANT-ADMIN-USERS-07 — invite/create is least-privilege and aud
         // No initialRealmRoles on the admin-invite path => least privilege.
       },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const row = await runWithTenant(T, () => db.transaction(async (tx) =>

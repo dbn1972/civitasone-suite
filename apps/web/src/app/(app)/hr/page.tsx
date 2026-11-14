@@ -4,10 +4,19 @@ import { PageHeader } from "../../_components/ds";
 import { HRHubNavigation } from "./_components/HRHubNavigation";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { hasHrTileAccess } from "@/lib/auth/hrTileAccess";
+import { getEnabledModules } from "@/lib/moduleVisibility";
+import { hrAreaSwitchForHref, isModuleEnabled } from "@/lib/moduleMatch";
+import { getPayScaleKind } from "@/app/_data/gradeBands";
 
 export default async function Page() {
 	const t = await getTranslations("hr");
 	const roles = getSessionRoles();
+	// M2: Payroll and Recruitment tiles follow their own module switch (unknown list = show all).
+	const enabledModules = await getEnabledModules();
+	// S8-G4: the Grade Bands tile only appears for a tenant that has switched to private grade bands, so a
+	// government tenant's HR hub is unchanged. (The page itself is always reachable by an HR admin at
+	// /hr/grade-bands, which is also where the switch lives.) Only asked when the role could use the tile.
+	const showGradeBands = hasHrTileAccess("/hr/grade-bands", roles) && (await getPayScaleKind()) === "private_bands";
 
 	/**
 	 * Tiles grouped by category for progressive disclosure.
@@ -180,6 +189,7 @@ export default async function Page() {
 			tiles: [
 				{ title: t("departments"), href: "/hr/departments", description: t("departmentsDesc") },
 				{ title: t("designations"), href: "/hr/designations", description: t("designationsDesc") },
+				...(showGradeBands ? [{ title: t("gradeBands"), href: "/hr/grade-bands", description: t("gradeBandsDesc") }] : []),
 				{ title: t("locations"), href: "/hr/locations", description: t("locationsDesc") },
 				{ title: t("officeLocations"), href: "/hr/office-locations", description: t("officeLocationsDesc") },
 				{ title: t("employeeTypes"), href: "/hr/employee-types", description: t("employeeTypesDesc") },
@@ -193,7 +203,7 @@ export default async function Page() {
 	// roles -- see hrTileAccess.ts for what's covered and why. Server checks
 	// at each destination are unchanged; this only removes a dead-end link.
 	const visibleCategories = hrCategories
-		.map((cat) => ({ ...cat, tiles: cat.tiles.filter((tile) => hasHrTileAccess(tile.href, roles)) }))
+		.map((cat) => ({ ...cat, tiles: cat.tiles.filter((tile) => hasHrTileAccess(tile.href, roles) && isModuleEnabled(enabledModules, hrAreaSwitchForHref(tile.href), roles)) }))
 		.filter((cat) => cat.tiles.length > 0);
 
 	return (

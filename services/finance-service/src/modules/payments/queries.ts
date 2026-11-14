@@ -318,6 +318,8 @@ export async function getBillDetail(id: string, tenantId: string) {
     amountDisplay: formatMinor(netMinor),
     submittedDate: todayIST(new Date(row.createdAt as unknown as string)),
     status: mapBillStatus(row.status),
+    // The vendor's own invoice number (the detail page's "Invoice no." field); absent for GRN / older bills.
+    ...(row.vendorBillNo ? { invoiceNo: row.vendorBillNo } : {}),
     poRef: row.poRef ?? undefined,
     poNumber: row.poNumber ?? undefined,
     grnRef: row.grnRef ?? undefined,

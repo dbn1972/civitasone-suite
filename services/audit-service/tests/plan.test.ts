@@ -32,6 +32,7 @@ import { registerPlanConsumers } from "../src/modules/plan/consumer.js";
 import { assertCanStart, DomainError } from "../src/modules/plan/domain.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -208,7 +209,7 @@ describe("Plan consumer — CQRS integration (planCreate, planItemCreate, planSt
         area: "Finance Department", periodFrom: "2026-04-01", periodTo: "2027-03-31", riskLevel: "high",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditPlans).where(eq(auditPlans.id, PLAN_1))));
@@ -231,7 +232,7 @@ describe("Plan consumer — CQRS integration (planCreate, planItemCreate, planSt
         scheduledFrom: "2026-05-01", scheduledTo: "2026-05-15",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditPlanItems).where(eq(auditPlanItems.id, ITEM_1))));
@@ -313,14 +314,14 @@ describe("Plan consumer — CQRS integration (planCreate, planItemCreate, planSt
     registerPlanConsumers(q1);
     await q1.start();
     await q1.publish(COMMANDS.planCreate, envelope);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q1.stop();
 
     const q2 = wireTenantAwareQueue(new MemoryQueue());
     registerPlanConsumers(q2);
     await q2.start();
     await q2.publish(COMMANDS.planCreate, { ...envelope, correlationId: "corr-plan-5b" });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q2.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditPlans).where(eq(auditPlans.id, PLAN_2))));

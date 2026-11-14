@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // ─── Mock infrastructure ─────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ function makeMsg(type: string, payload: Record<string, unknown>, actorId = ACTOR
     correlationId: `corr-${randomUUID()}`, schemaVersion: "1.0", payload,
   };
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -14,6 +14,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { scheduledJobs, jobExecutionHistory } from "../src/modules/scheduled-jobs/schema.js";
 import { checkTarget } from "../src/modules/scheduled-jobs/targets.js";
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { buildApp } = await import("../src/app.js");
 
@@ -163,7 +164,7 @@ describe("operator reasons + conditional transitions (SCHEDULED-JOBS-01)", () =>
     const [a, b] = await Promise.all([send(), send()]);
     expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
     await until(async () => (await history(job.id)).length >= 1);
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     expect(await history(job.id)).toHaveLength(1);
 
     const gone = await createJob("gone", "admin-service", "admin.noop");
@@ -172,7 +173,7 @@ describe("operator reasons + conditional transitions (SCHEDULED-JOBS-01)", () =>
       messageId: DEAD_RUN_NOW_MESSAGE_ID, type: "admin.scheduled_job.run_now", tenantId: TA, actorId: ACTOR,
       correlationId: "c", schemaVersion: "1.0", payload: { jobId: gone.id, tenantId: TA },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     expect(await history(gone.id)).toHaveLength(0);
   });
 

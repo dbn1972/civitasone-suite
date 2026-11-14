@@ -19,13 +19,14 @@ import { COURT_MASTER } from "../src/config/courts.js";
 import { setOrgClient } from "../src/shared/org-client.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { fakeOrg, useFakeOrg, TEST_DEPT_ID, TEST_DEPT_NAME } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitas_32chr_xx".padEnd(32, "x");
 const TENANT = "11111111-aaaa-4000-8000-0000000d1101";
 const ACTOR = "00000000-aaaa-4000-8000-0000000d1101";
 const token = (roles: string[]) => signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s" }, process.env.JWT_SECRET ?? SECRET, 3600);
 const auth = (roles: string[] = ["legal_officer"]) => ({ authorization: `Bearer ${token(roles)}`, "x-tenant-id": TENANT });
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 const today = new Date().toISOString().slice(0, 10);
 
 async function wipe(): Promise<void> {

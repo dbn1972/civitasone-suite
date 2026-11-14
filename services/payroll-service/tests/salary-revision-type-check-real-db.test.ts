@@ -24,6 +24,7 @@ import { runWithTenant, withTenantScope } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "50000000-1756-4000-8000-000000000001";
 const ACTOR = "60000000-1756-4000-8000-000000000001";
@@ -34,7 +35,7 @@ function rowsOf(result: unknown): Array<Record<string, unknown>> {
   return Array.from(result as Iterable<Record<string, unknown>>);
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 300));
+const settle = () => drainAllQueues();
 
 async function publishRevision(q: MemoryQueue, id: string, employeeId: string, revisionType: string): Promise<void> {
   await runWithTenant(TENANT, async () => {

@@ -17,6 +17,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerEngagementConsumers } from "../src/modules/engagement/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerEngagementConsumers(queue);
 await queue.start();
@@ -355,7 +356,7 @@ describe("surveys — list/create/publish/respond, owner-scoped responses", () =
 // ═════════════════ maker-checker + create-conflict (review round 1) ═════════════════
 const ADMIN_2 = "77777777-0000-4000-8000-000000000041";
 const admin2 = () => hdr(tok(TENANT_A, ADMIN_2, ["citizen_admin"]));
-const settle = () => new Promise((r) => setTimeout(r, 400));
+const settle = () => drainAllQueues();
 const cmd = (topic: string, actorId: string, payload: Record<string, unknown>) =>
   queue.publish(topic, {
     messageId: randomUUID(), type: topic, tenantId: TENANT_A, actorId,

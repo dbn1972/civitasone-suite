@@ -173,6 +173,8 @@ export type SearchIndexUpdatePayload = {
   status: string;
   /** Whether to index/update or remove from index. */
   action: "upsert" | "delete";
+  /** Global-search catalogue type (additive, optional). Absent on legacy events. */
+  entityType?: string;
 };
 
 export const SEARCH_INDEX = {

@@ -23,7 +23,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { assertProvisionHttp } from "./provision.js";
+import { assertProvisionHttp, attachBudgetWarnings } from "./provision.js";
 import { todayIST } from "../../shared/ist-date.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -168,7 +168,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createSanctionBody.parse(req.body);
     // UAT T-PERIOD D-03 (GFR): an expenditure sanction needs a budget provision for the head in the current FY (IST).
-    await assertProvisionHttp(ctx.tenantId, [body.headId], todayIST(), "sanction");
+    attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [body.headId], todayIST(), "sanction"));
     // UAT T-EDGE TE-02: and within what the head allocation still has available.
     await commands.assertSanctionCreatable(ctx, body.headId, BigInt(body.amountMinor));
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSanction(ctx, body));
@@ -194,7 +194,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const body = approveSanctionBody.parse(req.body ?? {});
     // UAT T-PERIOD D-03: the provision may have been withdrawn (or the year changed) since the sanction was raised.
     const sanction = await repo.findSanctionByIdAndTenant(id, ctx.tenantId);
-    if (sanction) await assertProvisionHttp(ctx.tenantId, [sanction.headId], todayIST(), "sanction");
+    if (sanction) attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [sanction.headId], todayIST(), "sanction"));
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id, body.reason));
   });
 

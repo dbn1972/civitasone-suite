@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -91,7 +92,7 @@ async function runMonth(tenant: string, structure: string, month: string, emps: 
   const runId = (res.json().data?.id ?? res.json().id) as string;
   const deadline = Date.now() + 30_000;
   for (;;) {
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const [run] = await q(tenant, sql`SELECT status, last_error FROM payroll.payroll_runs WHERE id = ${runId}::uuid`);
     const regs = await q(tenant, sql`SELECT 1 FROM payroll.payroll_register WHERE run_id = ${runId}::uuid LIMIT 1`);
     if (run?.status === "failed") throw new Error(`run failed: ${String(run.last_error)}`);
@@ -306,7 +307,7 @@ describe("maker != checker (tenant switch ON, the default)", () => {
     expect(r.statusCode).toBe(403);
     expect((r.json() as { code: string }).code).toBe("SELF_APPROVAL_FORBIDDEN");
     await publishDecision(tenant, ACTOR, id, "approved"); // straight at the consumer
-    await new Promise((res) => setTimeout(res, 600));
+    await drainAllQueues();
     expect(await outcomeOf(tenant, id)).toMatchObject({ status: "pending_approval" });
     expect(await versionsOf(tenant, "MH")).toHaveLength(1);
   }, 60_000);
@@ -339,7 +340,7 @@ describe("maker != checker (tenant switch ON, the default)", () => {
     const id = await submit(tenant, "MH", "2099-05-01");
     await Promise.all([publishDecision(tenant, CHECKER, id, "approved"), publishDecision(tenant, CHECKER_2, id, "approved"), publishDecision(tenant, CHECKER, id, "rejected")]);
     await until(() => outcomeOf(tenant, id), (o) => o.status !== "pending_approval");
-    await new Promise((res) => setTimeout(res, 800));
+    await drainAllQueues();
     const status = (await outcomeOf(tenant, id)).status;
     expect(["applied", "declined"]).toContain(status);
     expect((await versionsOf(tenant, "MH")).filter((v) => v.eff === "2099-05-01")).toHaveLength(status === "applied" ? 1 : 0);
@@ -383,7 +384,7 @@ describe("maker != checker (tenant switch ON, the default)", () => {
     expect((await decide(tenant, ACTOR, reqId, "approve")).statusCode).toBe(403); // not by its maker
     // a second "turn off" request while one is pending creates no second row
     await put(ACTOR, { makerCheckerEnabled: false, reason: "Asking again while it is pending" });
-    await new Promise((res) => setTimeout(res, 500));
+    await drainAllQueues();
     expect((await q(tenant, sql`SELECT 1 FROM payroll.payroll_pt_version_requests WHERE kind = 'checker_off' AND status = 'pending_approval'`))).toHaveLength(1);
 
     expect((await decide(tenant, CHECKER, reqId, "approve")).statusCode).toBe(202);
@@ -432,7 +433,7 @@ describe("switch ON again cancels a pending turn-off request", () => {
       messageId: randomUUID(), type: COMMANDS.ptVersionDecide, tenantId: tenant, actorId: CHECKER, correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenantId: tenant, id: offId, decision: "approved", note: null },
     });
-    await new Promise((res) => setTimeout(res, 600));
+    await drainAllQueues();
     expect((await state()).makerChecker).toBe(true);
 
     // a decision made by someone else is reported as such to the other would-be decider

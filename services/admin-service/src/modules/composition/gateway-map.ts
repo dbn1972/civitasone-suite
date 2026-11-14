@@ -130,9 +130,28 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   market: ["market"],
 };
 
+/**
+ * M8 (HRMS without Recruitment). The `career` module (Transfer & Promotion) has no recruitment routes of its own: its
+ * transfer and promotion routes are core Workforce Core paths. Borrowing the `hrms-recruitment` key (map above) means a
+ * client sold career WITHOUT recruitment reaches the whole recruitment surface, so Recruitment cannot be offered per
+ * client. With HRMS_RECRUITMENT_SPLIT=on `career` projects to `workforce_core` instead, and only the `recruitment`
+ * module unlocks the recruitment key. Default (unset) = the projection above, byte for byte. APAR (`appraisal` ->
+ * hrms-appraisal) and the employee data-reveal (core) never used the recruitment key.
+ */
+export function recruitmentSplitOn(): boolean {
+  return process.env.HRMS_RECRUITMENT_SPLIT === "on";
+}
+/** The offer bundle that is only sellable while the split is on (it would otherwise still reach recruitment through `career`). */
+export const RECRUITMENT_SPLIT_BUNDLE = "hr_no_recruitment";
+const CAREER_KEYS_WHEN_SPLIT: readonly string[] = ["workforce_core"];
+
 /** Project a set of composition module ids to distinct, sorted gateway route-keys. */
 export function toGatewayKeys(moduleIds: Iterable<string>): string[] {
   const keys = new Set<string>();
-  for (const id of moduleIds) for (const k of COMPOSITION_TO_GATEWAY_KEYS[id] ?? []) keys.add(k);
+  const split = recruitmentSplitOn();
+  for (const id of moduleIds) {
+    const mapped = split && id === "career" ? CAREER_KEYS_WHEN_SPLIT : (COMPOSITION_TO_GATEWAY_KEYS[id] ?? []);
+    for (const k of mapped) keys.add(k);
+  }
   return [...keys].sort();
 }

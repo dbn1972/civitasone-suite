@@ -7,6 +7,7 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DesignationsTable } from "./DesignationsTable";
 import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { getGradeBands, getPayScaleKind } from "@/app/_data/gradeBands";
 
 /**
  * Mirrors the HR_ROLES guard on PATCH/DELETE /v1/hrms/designations/:id.
@@ -14,7 +15,7 @@ import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
  */
 const DESIGNATION_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
-type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null; usageCount?: number } & Record<string, unknown>;
+type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null; gradeBandId?: string | null; usageCount?: number } & Record<string, unknown>;
 
 async function getDesignations(withUsage: boolean): Promise<LoaderResult<Designation[]>> {
   try {
@@ -49,6 +50,11 @@ export default async function DesignationsPage() {
   const roles = getSessionRoles();
   const canEdit = roles.some((r) => DESIGNATION_ADMIN_ROLES.includes(r));
   const result = await getDesignations(canEdit);
+  // S8-G4: a tenant on private grade bands sees a band column instead of the 7th CPC level / service group.
+  // Anything unreadable resolves to the government default, so this screen is unchanged for those tenants.
+  const payScale = await getPayScaleKind();
+  const bandMode = payScale === "private_bands";
+  const bands = bandMode ? (await getGradeBands(true)).bands : [];
   const { data: items } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
@@ -64,16 +70,23 @@ export default async function DesignationsPage() {
     <div className="page-main wrap">
       <PageHeader
         title={t("title")}
-        subtitle={t("subtitle")}
+        subtitle={bandMode ? t("subtitleBands") : t("subtitle")}
         back="/hr"
         backLabel={t("backLabel")}
         help="hr"
         actions={
           canEdit ? (
-            <Link href="/hr/designations/new" style={newBtnStyle}>
-              <span aria-hidden="true" style={{ marginInlineEnd: 6 }}>+</span>
-              {t("newBtn")}
-            </Link>
+            <>
+              {bandMode && (
+                <Link href="/hr/grade-bands" style={{ ...newBtnStyle, background: "transparent", color: "var(--primary)", border: "1px solid var(--primary)", marginInlineEnd: 8 }}>
+                  {t("manageBandsLink")}
+                </Link>
+              )}
+              <Link href="/hr/designations/new" style={newBtnStyle}>
+                <span aria-hidden="true" style={{ marginInlineEnd: 6 }}>+</span>
+                {t("newBtn")}
+              </Link>
+            </>
           ) : undefined
         }
       />
@@ -84,7 +97,9 @@ export default async function DesignationsPage() {
             had failed to load; a real icon distinguishes "0 rows" from "no
             data". */}
         <StatCard icon="⚠️" iconBg="var(--warnbg)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
-        <StatCard icon="🎚️" iconBg="var(--bg)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
+        {bandMode
+          ? <StatCard icon="🎚️" iconBg="var(--bg)" label={t("statBandsInUseLabel")} value={errored ? "—" : new Set(items.map((d) => d.gradeBandId).filter(Boolean)).size} />
+          : <StatCard icon="🎚️" iconBg="var(--bg)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />}
       </StatGrid>
 
       <Card title={errored ? t("title") : t("cardTitleWithCount", { count: items.length })}>
@@ -99,7 +114,7 @@ export default async function DesignationsPage() {
             message={t("emptyMessage")}
           />
         ) : (
-          <DesignationsTable items={items} canEdit={canEdit} />
+          <DesignationsTable items={items} canEdit={canEdit} payScale={payScale} bands={bands} />
         )}
       </Card>
     </div>

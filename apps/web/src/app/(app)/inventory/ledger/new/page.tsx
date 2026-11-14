@@ -10,10 +10,14 @@
  * register together; a linked pair is one item). Only items that exist on the stock side
  * can be posted here, and the stock-service id is what the entry carries. An optional
  * ?itemId= query param (a stock item id, passed from a stock item detail page) preselects it.
+ *
+ * A tenant whose inventory setting `ledgerSource` is "inventory" gets InventoryEntryForm instead, which posts
+ * to inventory-service with inventory items and stores. Every other tenant (the default) gets the form below.
  */
 import { todayIST } from "@/lib/formatters";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -23,6 +27,7 @@ import { ItemPicker } from "@/app/_components/ItemPicker";
 import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
 import type { PickerEntry } from "../../linkHelpers";
+import { InventoryEntryForm } from "./InventoryEntryForm";
 
 const ENTRY_LABELS: Record<string, string> = {
   receipt: "Receipt",
@@ -33,7 +38,7 @@ const ENTRY_LABELS: Record<string, string> = {
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
-export default function NewStockEntryPage() {
+function LegacyStockEntryForm() {
   const router = useRouter();
   const params = useSearchParams();
   const presetItemId = params.get("itemId") ?? "";
@@ -209,4 +214,50 @@ export default function NewStockEntryPage() {
       />
     </>
   );
+}
+
+type Mode = { state: "loading" } | { state: "stock" } | { state: "inventory"; canAdjust: boolean } | { state: "error" };
+
+/**
+ * Reads which ledger this tenant posts to. A WRITE must never guess: only a clean answer ("inventory", or
+ * "stock" / no field / an older service without the route) picks a form. Any other failure (403, 5xx,
+ * network, unreadable body) is an error state with a retry, so a transient fault cannot post into the
+ * wrong register.
+ */
+async function resolveMode(): Promise<Mode> {
+  try {
+    const res = await fetch("/api/proxy/v1/inventory/ledger-source");
+    if (res.status === 404) return { state: "stock" }; // a service without the route cannot be on the inventory ledger
+    if (!res.ok) return { state: "error" };
+    const body = (await res.json()) as { data?: { ledgerSource?: string; canAdjust?: boolean } } | null;
+    if (!body || typeof body !== "object" || typeof body.data !== "object" || body.data === null) return { state: "error" };
+    return body.data.ledgerSource === "inventory"
+      ? { state: "inventory", canAdjust: body.data.canAdjust !== false }
+      : { state: "stock" };
+  } catch {
+    return { state: "error" };
+  }
+}
+
+/** Picks the form by the tenant's ledger source. */
+export default function NewStockEntryPage() {
+  const t = useTranslations("inventoryLedger");
+  const [mode, setMode] = useState<Mode>({ state: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setMode({ state: "loading" });
+    void resolveMode().then((m) => { if (active) setMode(m); });
+    return () => { active = false; };
+  }, [attempt]);
+  if (mode.state === "loading") return <p role="status" aria-busy="true" className="sub pad">{t("loading")}</p>;
+  if (mode.state === "error") {
+    return (
+      <div role="alert" className="card pad" style={{ maxWidth: 560 }}>
+        <p style={{ margin: "0 0 12px" }}>{t("modeError")}</p>
+        <button type="button" className="btn primary" onClick={() => setAttempt((n) => n + 1)}>{t("retry")}</button>
+      </div>
+    );
+  }
+  return mode.state === "inventory" ? <InventoryEntryForm canAdjust={mode.canAdjust} /> : <LegacyStockEntryForm />;
 }

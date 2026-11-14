@@ -22,6 +22,7 @@ import { MemoryQueue, type Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { isSessionDenylisted, __setDenylistStoreForTests } from "@civitasone/auth/denylist";
 import { MemoryCache } from "@civitasone/cache";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const RUN_DB = process.env.DATABASE_URL ?? process.env.DB_URL;
 
@@ -115,7 +116,7 @@ describe.skipIf(!RUN_DB)("sessions consumer — SEC-006 denylist wiring (real co
     registerSessionConsumers(wireTenantAwareQueue(q));
     await q.start();
     await q.publish(COMMANDS.revokeSession, envelope(COMMANDS.revokeSession, randomUUID(), { id: sid }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     // The DB row flipped (pre-existing behaviour)... findById reads inside a
@@ -142,7 +143,7 @@ describe.skipIf(!RUN_DB)("sessions consumer — SEC-006 denylist wiring (real co
     registerSessionConsumers(wireTenantAwareQueue(q));
     await q.start();
     await q.publish(COMMANDS.revokeAllSessions, envelope(COMMANDS.revokeAllSessions, randomUUID(), { userId }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx: any) =>
@@ -162,7 +163,7 @@ describe.skipIf(!RUN_DB)("sessions consumer — SEC-006 denylist wiring (real co
     registerSessionConsumers(wireTenantAwareQueue(q));
     await q.start();
     await q.publish(COMMANDS.revokeSession, envelope(COMMANDS.revokeSession, randomUUID(), { id: revokedSid }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     expect(await isSessionDenylisted(revokedSid)).toBe(true);

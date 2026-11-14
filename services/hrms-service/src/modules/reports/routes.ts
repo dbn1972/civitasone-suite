@@ -31,7 +31,7 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REPORT_ROLES);
     z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const allocs = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
-      .where(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId)));
+      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.status, "active"))));
     const summary = allocs.map(a => ({
       employeeId: a.employeeId,
       leaveTypeId: a.leaveTypeId,

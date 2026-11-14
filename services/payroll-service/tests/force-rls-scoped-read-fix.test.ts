@@ -46,6 +46,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -89,7 +90,7 @@ async function seedDaRateZero(tenantId: string): Promise<void> {
 async function waitWhileProcessing(tenantId: string, runId: string, maxMs = 6000): Promise<void> {
   const deadline = Date.now() + maxMs;
   for (;;) {
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const rows = (await runWithTenant(tenantId, () =>
       db.transaction((tx) => tx.execute(sql`SELECT status, last_error FROM payroll.payroll_runs WHERE id = ${runId}::uuid`)),
     )) as unknown as Array<{ status: string; last_error: string | null }>;
@@ -326,7 +327,7 @@ describe("Bug 1 (resolveDdoDepartments) + Bug 2 (processPensionRun pensioners) +
 
     let persistedFloor: number | undefined;
     for (let i = 0; i < 15; i++) {
-      await new Promise((r) => setTimeout(r, 200));
+      await drainAllQueues();
       const getRes = await app.inject({ method: "GET", url: "/v1/payroll/settings", headers: { authorization: `Bearer ${token(tenant)}` } });
       expect(getRes.statusCode).toBe(200);
       persistedFloor = getRes.json().protectedNetFloorMinor;

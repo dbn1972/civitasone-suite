@@ -10,6 +10,7 @@
 import type { MemoryQueue } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
 import { queue } from "../src/shared/infra.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 export const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -45,7 +46,7 @@ export async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<vo
   while (Date.now() - start < ms) {
     if (await fn()) return;
     await drainQueue();
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error("waitFor timeout");
 }

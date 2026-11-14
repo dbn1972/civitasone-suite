@@ -10,6 +10,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerHearingConsumers } from "../src/modules/hearings/consumer.js";
 import { listCourtOrderSummaries } from "../src/modules/hearings/queries.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 /**
  * GAP-LEGAL-COURT-ORDERS-NEW-01: an order recorded with complianceRequired +
@@ -62,7 +63,7 @@ describe("record order compliance fields (GAP-LEGAL-COURT-ORDERS-NEW-01)", () =>
         complianceRequired: true, complianceDeadline: "2026-03-03",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await queue.stop();
 
     const row = await runWithTenant(TENANT, () => db.transaction(async (tx) => {

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 import { ProjectDetailNav } from "./ProjectDetailNav";
 
 /**
@@ -17,6 +18,7 @@ export default async function ProjectDetailLayout(
   }
 ) {
   const params = await props.params;
+  const t = await getTranslations("projectStaffCost");
 
   const {
     children
@@ -24,7 +26,7 @@ export default async function ProjectDetailLayout(
 
   return (
     <>
-      <ProjectDetailNav projectId={params.id} />
+      <ProjectDetailNav projectId={params.id} staffCostLabel={t("navLabel")} />
       {children}
     </>
   );

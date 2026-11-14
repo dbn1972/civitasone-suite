@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/module_gating.dart';
 import '../../core/providers.dart';
 
 /// Employee self-service profile screen.
@@ -228,6 +229,10 @@ class _EmployeeProfileScreenState
       (label: 'Vacancies', icon: Icons.work, route: '/hr/vacancies', color: colorScheme.secondary),
       (label: 'Grievances', icon: Icons.feedback, route: '/hr/grievances', color: colorScheme.tertiary),
     ];
+    // M2/M7: hide the Payslips / Vacancies shortcuts when their module is off.
+    final enabledModules = ref.watch(enabledModulesProvider).valueOrNull;
+    final visibleActions =
+        actions.where((a) => isRouteAllowed(enabledModules, a.route)).toList();
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -247,7 +252,7 @@ class _EmployeeProfileScreenState
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               childAspectRatio: 1,
-              children: actions.map((a) {
+              children: visibleActions.map((a) {
                 return InkWell(
                   onTap: () => context.push(a.route),
                   borderRadius: BorderRadius.circular(12),

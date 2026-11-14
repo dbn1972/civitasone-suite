@@ -19,6 +19,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { createHttpOfficerClient, setOfficerClient, type OfficerClient } from "../src/shared/officer-client.js";
 import { OrgServiceError } from "../src/shared/org-client.js";
 import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? globalThis.crypto.randomUUID();
 const TENANT = "11111111-aaaa-4000-8000-0000000f4001";
@@ -27,7 +28,7 @@ const PEER = crypto.randomUUID();
 const OUTSIDER = crypto.randomUUID();
 const GHOST = crypto.randomUUID();
 const tok = (sub: string, roles: string[]) => ({ authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET, 3600)}`, "x-tenant-id": TENANT });
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 
 describe("officer client (HRMS employee directory)", () => {
   const CTX = { tenantId: TENANT, correlationId: "c1" };

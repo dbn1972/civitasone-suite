@@ -25,6 +25,7 @@ import {
   resetConsentLookup,
 } from "../src/modules/deliveries/consumer.js";
 import { registerBulkConsumers } from "../src/modules/bulk/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "cccccccc-7777-4000-8000-0000000000c1";
 const TEMPLATE = "cccccccc-7777-4000-8000-0000000000c2";
@@ -144,7 +145,7 @@ async function send(payload: Record<string, unknown>): Promise<void> {
     messageId: randomUUID(), type: "notification.send", tenantId: TENANT, actorId: SYSTEM,
     correlationId: randomUUID(), schemaVersion: "1.0", payload,
   });
-  await new Promise((r) => setTimeout(r, 400));
+  await drainAllQueues();
 }
 
 let sendSpy: ReturnType<typeof vi.spyOn>;

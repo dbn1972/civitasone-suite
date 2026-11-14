@@ -22,6 +22,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { registerContactCommunicationConsumer } from "../src/modules/communications/contact-activity-consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TOPIC = "notification.contact_activity.recorded";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -162,7 +163,7 @@ describe("notification.contact_activity.recorded -> crm.contact_communications",
       async () => (await projRows(TENANT_A, CONTACT_A)).some((r) => r.message_id === messageId));
     // Redeliver identical envelope messageId.
     await publish(payload, { tenantId: TENANT_A, messageId: envId });
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
     const rows = await tenantQuery(TENANT_A).select(
       "select count(*)::int as n from crm.contact_communications where message_id = $1", [messageId]);
     expect(rows[0]?.n).toBe(1);
@@ -180,7 +181,7 @@ describe("notification.contact_activity.recorded -> crm.contact_communications",
         "select 1 from crm.contact_communications where campaign_recipient_id = $1", [recipientId])).length > 0);
     // Same person-level send, fresh hub messageId + fresh envelope id -> must not double-count.
     await publish({ ...base, messageId: "m-second" }, { tenantId: TENANT_A, messageId: randomUUID() });
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
     const rows = await tenantQuery(TENANT_A).select(
       "select count(*)::int as n from crm.contact_communications where campaign_recipient_id = $1", [recipientId]);
     expect(rows[0]?.n).toBe(1);
@@ -236,7 +237,7 @@ describe("notification.contact_activity.recorded -> crm.contact_communications",
 
     // Give the queue ample time: were these rethrown, retries+backoff would still
     // be in flight and eventually DLQ — either way, no row must ever land.
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     const rows = await projRows(TENANT_A, subject);
     expect(rows.length).toBe(0);
 

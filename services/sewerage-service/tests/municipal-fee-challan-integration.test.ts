@@ -48,6 +48,7 @@ import { registerBillingConsumers } from "../src/modules/billing/consumer.js";
 import { sewerageDesludgingBookings } from "../src/modules/desludging/schema.js";
 import { registerDesludgingConsumers } from "../src/modules/desludging/consumer.js";
 import { COMMANDS as SEWERAGE_COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // Platform default tenant — the same tenant finance-service's migration 0070
 // seeds the 0075 municipal-fee receipt head for (see
@@ -128,7 +129,7 @@ async function awaitJournal(journalId: string, q: MemoryQueue): Promise<any> {
     if (row) return row;
     await drainOutbox(finance.db, q, "finance-service");
     await q.drain();
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
   }
   return undefined;
 }

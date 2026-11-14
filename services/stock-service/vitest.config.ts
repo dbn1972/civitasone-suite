@@ -21,6 +21,10 @@ export default defineConfig({
             })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // Tests never reach a real inventory-service (the GRN consumer reads ledgerSource from it); an unreachable
+      // address reads as "setting unreadable" = today's behaviour.
+      INVENTORY_SERVICE_URL: "http://127.0.0.1:9",
+      LEDGER_SOURCE_TIMEOUT_MS: "500",
     },
     coverage: {
       provider: "v8",

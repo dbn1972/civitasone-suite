@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "../../shared/licence.js";
+
 /**
  * srn module — read-only client to procurement-service for the GRN status
  * that gates SRN creation (Req 1.1). inventory-service and procurement-service
@@ -36,6 +39,10 @@ export interface RemoteGrn {
  * must not treat that the same as "GRN not found".
  */
 export async function fetchGrn(tenantId: string, grnId: string): Promise<RemoteGrn | null> {
+  const gate = await licence.check(tenantId, LICENCE_MODULE.procurement, "http", "procurement grn");
+  if (!gate.allowed) {
+    throw new ProcurementUnavailableError(gate.outcome === "deny" ? "procurement module is not licensed for this tenant" : `procurement licence could not be verified: ${gate.reason}`);
+  }
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET ?? "";
   let res: Response;
   try {
@@ -70,6 +77,8 @@ export interface GrnReference {
  * and the receipt is still posted without the references.
  */
 export async function fetchGrnReference(tenantId: string, grnId: string): Promise<GrnReference | null> {
+  // M5: display reference only; skip the call when the tenant did not buy procurement.
+  if (!(await licence.check(tenantId, LICENCE_MODULE.procurement, "http", "procurement grn reference")).allowed) return null;
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET ?? "";
   try {
     const res = await fetch(`${PROCUREMENT_URL}/v1/procurement/grns/${encodeURIComponent(grnId)}`, {

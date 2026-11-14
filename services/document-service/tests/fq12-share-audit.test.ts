@@ -15,6 +15,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { queue as appQueue } from "../src/shared/infra.js";
 import { registerSharingConsumers } from "../src/modules/sharing/consumer.js";
 import { fileShares } from "../src/modules/sharing/schema.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const T = randomUUID();
@@ -29,7 +30,7 @@ async function waitFor<V>(fn: () => Promise<V>, ok: (v: V) => boolean, timeoutMs
   const deadline = Date.now() + timeoutMs;
   let last = await fn();
   while (!ok(last) && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     last = await fn();
   }
   return last;

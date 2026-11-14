@@ -23,6 +23,7 @@ import { registerApplicationConsumers } from "../src/modules/applications/consum
 import * as appRepo from "../src/modules/applications/repo.js";
 import * as nocRepo from "../src/modules/nocs/repo.js";
 import { hdr, drainQueue, OFFICER_ROLES, TENANT_A } from "./support.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 let app: FastifyInstance;
 
@@ -68,7 +69,7 @@ describe("application number generation — no collisions under concurrency", ()
     );
     for (const res of responses) expect(res.statusCode).toBe(202);
     await drainQueue();
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     await drainQueue();
 
     const ids = responses.map((r) => (r.json() as { id: string }).id);

@@ -16,6 +16,8 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, type DrizzleTx } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { disbursementTransfers } from "./schema.js";
+import { runLedgerModeTx } from "../ledger-export/mode.js";
+import { markSlipsPaidFromSettledTransfersTx } from "../ledger-export/repo.js";
 import type { ReconcilePayload, RetryPayload } from "./commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -132,6 +134,13 @@ export async function handleReconcile(msg: Msg): Promise<void> {
         code: "INVALID_STATE", toStatus: p.outcome, reason: p.reason, manual: true,
       });
       return;
+    }
+    // M9: a transfer reconciled as paid on a run approved in export-only mode marks its slip paid (finance never will).
+    if (after.status === "success" && (await runLedgerModeTx(tx, after.runId)) === "export") {
+      const paid = await markSlipsPaidFromSettledTransfersTx(tx, { tenantId: msg.tenantId, actorId: msg.actorId, runId: after.runId });
+      if (paid.length > 0) {
+        await audit(tx, msg, "slips_marked_paid", "payroll_run", after.runId, "success", { source: "manual_reconcile", transferId: after.id, slipsMarkedPaid: paid.length });
+      }
     }
     await audit(tx, msg, "disbursement_transfer_reconciled", "disbursement_transfer", after.id, "success", {
       runId: after.runId,

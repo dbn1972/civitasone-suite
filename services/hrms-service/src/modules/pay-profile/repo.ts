@@ -19,6 +19,7 @@ export function toPayProfileRow(r: PayProfileDbRow): PayProfileRow {
     consolidatedMonthlyMinor: r.consolidatedMonthlyMinor,
     requestedBy: r.requestedBy,
     deputationTerms: r.deputationTerms ?? null,
+    ctcTerms: r.ctcTerms ?? null,
   };
 }
 

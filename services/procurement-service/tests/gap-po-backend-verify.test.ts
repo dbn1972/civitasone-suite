@@ -26,6 +26,7 @@ import { procurementPos, procurementPoAmendments } from "../src/modules/po/schem
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-7777-4000-8000-000000000099";
@@ -39,7 +40,7 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function seedPo(id: string, status: string): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

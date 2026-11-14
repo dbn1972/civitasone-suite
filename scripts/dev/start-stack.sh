@@ -265,9 +265,15 @@ sleep 3
 # failures. AUTH_RATE_LIMIT_MAX (10/min on /api/identity/*) is raised for the
 # same reason: a re-run of the verifier inside one minute tripped it. Both are
 # raised for this dev/verification stack only (overridable), never in ecosystem.config.js.
+#
+# GATEWAY_RATE_LIMIT_USER_MAX: #2539 added a per-USER tier (default 200/min) on
+# the /api/* proxy routes. The sweep is one user, so it is the binding bucket now
+# (the tenant ceiling above is 1000 by default and no longer the limit that trips):
+# without this override ~106 of 294 routes 429. Same dev/verification-only scope.
 start_svc gateway-service  "$ROOT/services/gateway-service"      8080 dist/index.js \
   DATABASE_URL="postgres://gateway_svc:gateway_dev_pw@localhost:5435/civitas_gateway" \
   GATEWAY_RATE_LIMIT_TENANT_MAX="${GATEWAY_RATE_LIMIT_TENANT_MAX:-100000}" \
+  GATEWAY_RATE_LIMIT_USER_MAX="${GATEWAY_RATE_LIMIT_USER_MAX:-100000}" \
   AUTH_RATE_LIMIT_MAX="${AUTH_RATE_LIMIT_MAX:-100000}"
 
 # ── Health check ──────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { registerEOfficeDecisionConsumers } from "../src/modules/po/eoffice-consumer.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT  = "8e8e8e8e-1111-4000-8000-0000000000e1";
 const MAKER   = "8f8f8f8f-0000-4000-8000-000000000001";
@@ -68,7 +69,7 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function seedPo(id: string, createdBy: string): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

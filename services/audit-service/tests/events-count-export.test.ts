@@ -24,6 +24,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditEvents } from "../src/modules/events/schema.js";
 import { registerAuditConsumers } from "../src/modules/events/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // Set by this package's vitest config (env.JWT_SECRET); never a literal here.
 const SECRET = process.env.JWT_SECRET as string;
@@ -102,7 +103,7 @@ beforeAll(async () => {
     const n = (await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT))))).length;
     const m = (await runWithTenant(OTHER_TENANT, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, OTHER_TENANT))))).length;
     if (n >= 6 && m >= 1) break;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   await q.stop();
 });

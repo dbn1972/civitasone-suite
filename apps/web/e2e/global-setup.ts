@@ -1603,6 +1603,15 @@ const DYNAMIC: Record<string, (url: URL) => unknown> = {
       (!q || `${u.name} ${u.email} ${u.empCode ?? ''}`.toLowerCase().includes(q)) && (!status || u.status === status));
     return { data: rows, meta: { page: 1, pageSize: 25, total: rows.length, counts: { active: 2, suspended: 1, locked: 0, deactivated: 0 } } };
   },
+  // The admin users screen reads the gateway's /api/v1/admin/users/search, which is identity-service's search:
+  // { rows, total, counts, limit, offset, hasMore, nextOffset } (no data/meta envelope).
+  '/api/v1/admin/users/search': (url) => {
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const status = url.searchParams.get('status');
+    const rows = ADMIN_USER_ROWS.filter((u) =>
+      (!q || `${u.name} ${u.email} ${u.empCode ?? ''}`.toLowerCase().includes(q)) && (!status || u.status === status));
+    return { rows, total: rows.length, counts: { active: 2, suspended: 1, locked: 0, deactivated: 0 }, limit: 25, offset: 0, hasMore: false, nextOffset: null };
+  },
 };
 
 type Override = { status: number; body?: unknown };
@@ -1626,6 +1635,7 @@ const SCENARIOS: Record<string, Record<string, Override>> = {
     '/api/v1/admin/roles': EMPTY_LIST,
     '/api/v1/admin/permissions': EMPTY_LIST,
     '/api/v1/admin/users': { status: 200, body: { data: [], meta: { page: 1, pageSize: 25, total: 0, counts: { active: 0, suspended: 0, locked: 0, deactivated: 0 } } } },
+    '/api/v1/admin/users/search': { status: 200, body: { rows: [], total: 0, counts: { active: 0, suspended: 0, locked: 0, deactivated: 0 }, limit: 25, offset: 0, hasMore: false, nextOffset: null } },
     '/api/v1/tenants': EMPTY_LIST,
     '/api/v1/admin/editions': { status: 200, body: { data: [], total: 0, generatedAt: '2026-10-24T05:30:00.000Z' } },
     '/api/v1/admin/org-hierarchy-levels': EMPTY_LIST,

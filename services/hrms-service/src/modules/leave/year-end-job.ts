@@ -106,7 +106,7 @@ async function loadSnapshot(tx: ScopedTx, tenantId: string, runDate: string): Pr
   if (typeIds.length > 0) {
     const allocRows = await rows(tx, sql`SELECT id::text AS id, employee_id::text AS employee_id, leave_type_id::text AS leave_type_id, fy, total_days,
         COALESCE(balance_days_exact, balance_days::numeric)::text AS balance
-      FROM leave.hrms_leave_allocs WHERE tenant_id = ${tenantId}::uuid
+      FROM leave.hrms_leave_allocs WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
         AND leave_type_id IN (${sql.join(typeIds.map((id) => sql`${id}::uuid`), sql`, `)})`);
     for (const a of allocRows) {
       const list = allocsByEmployee.get(String(a.employee_id)) ?? [];
@@ -187,6 +187,13 @@ async function applyEmployeeOps(tx: ScopedTx, tenantId: string, runDate: string,
   let applied = 0;
   for (const op of ops) {
     if (skip.has(op.leaveTypeId)) continue;
+    // S8-G3: the target year's allocation was ENDED by an admin (the planner only sees active rows). Leave the
+    // source untouched and write nothing -- not a race, and re-planning would hit the same row forever.
+    if (!op.targetAllocId) {
+      const ended = await rows(tx, sql`SELECT 1 FROM leave.hrms_leave_allocs WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+        AND leave_type_id = ${op.leaveTypeId}::uuid AND fy = ${op.targetLabel} AND status = 'ended' LIMIT 1`);
+      if (ended.length > 0) continue;
+    }
     if (op.sourceAllocId) {
       await tx.execute(sql`UPDATE leave.hrms_leave_allocs SET balance_days = 0, balance_days_exact = NULL, updated_at = now(), updated_by = ${actorId}::uuid
         WHERE id = ${op.sourceAllocId}::uuid AND tenant_id = ${tenantId}::uuid`);

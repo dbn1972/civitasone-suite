@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const H = vi.hoisted(() => ({
   own: {} as Record<string, string>,
@@ -79,7 +80,7 @@ const rowsOf = (r: unknown): Row[] => Array.from(r as Iterable<Row>);
 let app: Awaited<ReturnType<typeof buildApp>>;
 const handlers = new Map<string, (m: unknown) => Promise<void>>();
 
-const settle = () => new Promise((r) => setTimeout(r, 350));
+const settle = () => drainAllQueues();
 async function until<T>(fn: () => Promise<T>, pred: (v: T) => boolean, ms = 4000): Promise<T> {
   const end = Date.now() + ms;
   let v = await fn();

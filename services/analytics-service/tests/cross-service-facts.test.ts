@@ -22,6 +22,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { factEvents, type FactEventRow } from "../src/modules/facts/schema.js";
 import { registerFactsConsumers } from "../src/modules/facts/consumer.js";
 import { INBOUND } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT_A = randomUUID();
 const TENANT_B = randomUUID();
@@ -155,7 +156,7 @@ describe("cross-service fact ingestion — one live event per wired type", () =>
     await waitForFacts(TENANT_A, 9);
     await publish(INBOUND.courtCaseRegistered, payload, { messageId }); // duplicate delivery
     // give the duplicate a chance to (not) insert
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const rows = await factsFor(TENANT_A);
     const dupes = rows.filter((r) => r.dedupeKey === messageId);
     expect(dupes.length).toBe(1);

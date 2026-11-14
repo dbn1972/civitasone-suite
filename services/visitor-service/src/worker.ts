@@ -22,6 +22,7 @@ import { startNightlyAggregation } from "./modules/analytics/nightly-aggregation
 import { registerBlacklistConsumers } from "./modules/blacklist/consumer.js";
 import { registerVisitRequestConsumers }  from "./modules/visit-request/consumer.js";
 import { registerDigitalPassConsumers }   from "./modules/digital-pass/consumer.js";
+import { logNonRetryableRefusals } from "./shared/domain-rejection.js";
 import { registerCheckInConsumers } from "./modules/check-in/consumer.js";
 import { registerIdentityConsumers }        from "./modules/identity/consumer.js";
 import { registerGroupVisitConsumers }    from "./modules/group-visit/consumer.js";
@@ -75,7 +76,7 @@ assertPiiKeyConfigured();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+    rawSubscribe(topic, logNonRetryableRefusals(async (msg: any) => { await runWithTenant(msg.tenantId, () => handler(msg)); }, topic));
 }
 
 // Module consumer registrations — added one per module as each is scaffolded.

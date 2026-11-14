@@ -20,6 +20,7 @@ import { procurementGrns, procurementGrnItems } from "../src/modules/grn/schema.
 import { registerGrnConsumers } from "../src/modules/grn/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "9c900000-1111-4000-8000-000000000001";
@@ -35,7 +36,7 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function seedGrn(
   id: string,

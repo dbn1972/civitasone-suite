@@ -11,7 +11,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, normaliseVendorBillNo, vendorBillNoKey, vendorBillNoUniqueEnabled, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import { assertBillDdoConfigured } from "../masters/ddo-commands.js";
 import * as ucRepo from "./uc-repo.js";
@@ -19,7 +19,7 @@ import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { actorsQuery } from "./validators.js";
-import { assertProvisionHttp } from "../budget/provision.js";
+import { assertProvisionHttp, attachBudgetWarnings } from "../budget/provision.js";
 import { todayIST } from "../../shared/ist-date.js";
 import { idempotentCreate } from "../../shared/idempotency.js";
 import { findHeadByIdAndTenant } from "../budget/repo.js";
@@ -107,6 +107,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const detail = await queries.getBillDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "bill not found");
     sendValidated(reply, BillDetailSchema, detail);
+  });
+
+  // Outcome of a bill lodged with POST /v1/finance/bills (which answers 202 before the worker runs): created, refused with
+  // the worker's code and reason (e.g. DUPLICATE_VENDOR_BILL_NO), or still pending / unknown.
+  app.get("/v1/finance/bills/:id/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    return reply.send({ id, ...(await scopedRead((tx) => repo.findBillOutcome(tx, ctx.tenantId, id))) });
   });
 
   app.get("/v1/finance/advances", async (req, reply) => {
@@ -217,7 +226,20 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     // UAT b24: an unconfigured DDO used to be a 202 that dead-lettered UNKNOWN_DDO in the worker.
     await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
     // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
-    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, () => commands.createBill(ctx, body)));
+    return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, async () => {
+      // The vendor's invoice number (body.billNo): with FINANCE_VENDOR_BILL_NO_UNIQUE on, the same vendor cannot lodge it
+      // twice (a rejected bill does not count). Inside the idempotent section so a replay of the SAME request still replays.
+      const vendorBillNo = normaliseVendorBillNo(body.billNo);
+      if (vendorBillNo && vendorBillNoUniqueEnabled()) {
+        const dup = await scopedRead((tx) => repo.findDuplicateVendorBill(tx, ctx.tenantId, body.vendorId, vendorBillNoKey(vendorBillNo)));
+        if (dup) {
+          throw new HttpError(409, "DUPLICATE_VENDOR_BILL_NO", `this vendor's bill number ${vendorBillNo} was already lodged as ${dup.billNo}`, [
+            { field: "billNo", message: `Already lodged for this vendor as ${dup.billNo}.` },
+          ]);
+        }
+      }
+      return commands.createBill(ctx, body);
+    }));
   });
 
   // Sample data ("try it"): add clearly-marked [SAMPLE] bills, or clear them.
@@ -272,7 +294,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       assertBillApprovable(bill.status, bill.stage ?? "section");
     } catch (err) { toDomain(err, 409); }
     // UAT T-PERIOD D-03 (GFR): a bill is not passed against a head with no budget provision for the FY of the bill.
-    await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "bill");
+    attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "bill"));
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
   });
 
@@ -280,6 +302,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
+    // The optional disbursing account must be an active bank account of THIS tenant (the consumer re-checks and
+    // dead-letters nothing: it throws NonRetryable). Same 422 whether it never existed or belongs to another tenant.
+    if (body.bankAccountId && !(await repo.isActiveBankAccount(ctx.tenantId, body.bankAccountId))) {
+      throw new HttpError(422, "BANK_ACCOUNT_NOT_FOUND", "bankAccountId is not an active bank account of this office");
+    }
     // Synchronous pre-check of the segregation-of-duties rules (the consumer stays authoritative): the common case
     // gets an immediate 409, not a silent 202. The payer must be neither the officer who lodged the bill (maker !=
     // checker) nor the officer who passed it (passer != payer).
@@ -291,7 +318,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       } catch (err) { toDomain(err, 409); }
     }
     // UAT T-PERIOD D-03 (GFR): no payment against a head that has no budget provision for the FY it is charged to.
-    if (bill) await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment");
+    if (bill) attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, [bill.headId], bill.billDate ?? todayIST(new Date(bill.createdAt)), "payment"));
     // UAT T-EDGE TE-09: one payment per X-Idempotency-Key (same body replays, other body 422).
     return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.payment.initiate", body, () => commands.initiatePayment(ctx, body)));
   });

@@ -3,6 +3,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
 import { inForceRows } from "./pt-versions-repo.js";
 import { todayIst } from "./pt-versions-domain.js";
+import { payComponentsEnabled } from "../pay-components/model.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
   type PayrollRunRow, type PayrollRunInsert, type PayrollSlipRow,
@@ -42,8 +43,9 @@ export async function listRunsByTenant(tenantId: string, limit = 50, month?: str
 }
 
 export async function listStructuresByTenant(tenantId: string, limit = 50) {
+  // Section 8 G2: CTC templates are not run structures; every pre-existing row has kind = run.
   return scopedRead((tx) => tx.select().from(payrollStructures)
-    .where(eq(payrollStructures.tenantId, tenantId))
+    .where(and(eq(payrollStructures.tenantId, tenantId), eq(payrollStructures.kind, "run")))
     .limit(limit));
 }
 
@@ -109,6 +111,10 @@ export async function listSlipsByTenant(
       tdsShortfallMinor: payrollSlips.tdsShortfallMinor,
       tdsShortfallFinal: payrollSlips.tdsShortfallFinal,
       recoveryDeferredMinor: payrollSlips.recoveryDeferredMinor,
+      ctcTemplateId: payrollSlips.ctcTemplateId,
+      ctcTemplateVersion: payrollSlips.ctcTemplateVersion,
+      employerEsiMinor: payrollSlips.employerEsiMinor,
+      gratuityProvisionMinor: payrollSlips.gratuityProvisionMinor,
       month: payrollRuns.month,
       runDeptId: payrollRuns.departmentId,
     })
@@ -134,8 +140,10 @@ export async function listSlipsByTenant(
  * per-invocation, so two racing identical commands are NOT deduped by markProcessed(); the second
  * one blocks here until the first commits and then sees the already-advanced status.
  */
-export async function findRunByIdForUpdateTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {
-  const rows = await (tx as typeof db).select().from(payrollRuns).where(eq(payrollRuns.id, id)).limit(1).for("update");
+export async function findRunByIdForUpdateTx(tx: Writer, id: string, tenantId?: string): Promise<PayrollRunRow | null> {
+  // `tenantId` (when given) is defence in depth beyond RLS: the run must belong to the message's tenant.
+  const where = tenantId ? and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)) : eq(payrollRuns.id, id);
+  const rows = await (tx as typeof db).select().from(payrollRuns).where(where).limit(1).for("update");
   return rows[0] ?? null;
 }
 
@@ -145,13 +153,22 @@ export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunR
 }
 
 export async function listComponentsByStructure(structureId: string, tenantId: string) {
-  return scopedRead((tx) => tx.select().from(payrollComponents)
-    .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId))));
+  // Section 8 G2: a deactivated component is never paid (every pre-existing row is active).
+  return scopedRead(async (tx) => {
+    // Section 8 G2 (flag on only): a share lock on the structure row, so a component edit (which takes FOR UPDATE)
+    // cannot land between this read and the end of the transaction. Skipped entirely while the flag is off.
+    if (payComponentsEnabled()) await tx.execute(sql`SELECT 1 FROM payroll.payroll_structures WHERE id = ${structureId}::uuid AND tenant_id = ${tenantId}::uuid FOR SHARE`);
+    return tx.select().from(payrollComponents)
+      .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId), eq(payrollComponents.isActive, true)));
+  });
 }
 
 export async function listComponentsByTenant(tenantId: string, limit: number) {
+  // Section 8 G2: components of CTC templates are managed on their own screen, not in the run-structure grid.
   return scopedRead((tx) => tx.select().from(payrollComponents)
-    .where(eq(payrollComponents.tenantId, tenantId)).limit(limit));
+    .where(and(eq(payrollComponents.tenantId, tenantId), sql`NOT EXISTS (
+      SELECT 1 FROM payroll.payroll_structures s WHERE s.id = ${payrollComponents.structureId} AND s.kind = 'ctc_template')`))
+    .limit(limit));
 }
 
 /** FR 53: the run's pay-suspended employees (payroll.payroll_run_suspensions, migration 0057). */

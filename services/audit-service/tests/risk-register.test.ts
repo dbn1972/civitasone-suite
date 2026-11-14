@@ -23,6 +23,7 @@ import {
 } from "../src/modules/risk-register/schema.js";
 import { auditRisks } from "../src/modules/risk/schema.js";
 import { registerRiskRegisterConsumers } from "../src/modules/risk-register/consumer.js";
+import { drainOrFail } from "../../../vitest.drain";
 import { COMMANDS } from "../src/topics.js";
 import {
   computeResidualScore, computeNextReviewDate, isReviewDue, assertDifferentActor,
@@ -110,7 +111,8 @@ async function pump(q: Queue, topic: string, actorId: string, tenantId: string, 
     messageId: randomUUID(), type: topic, tenantId, actorId,
     correlationId: "c", schemaVersion: "1.0", payload: { tenantId, ...payload },
   });
-  await new Promise<void>((r) => setTimeout(r, 200));
+  // Deterministic quiescence (MemoryQueue.drain), not a fixed sleep that races CI contention.
+  await drainOrFail(q);
 }
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
