@@ -24,10 +24,10 @@ describe("permissions catalogue", () => {
   });
   it("hr sees employees only; procurement sees indents/POs/bills only", () => {
     expect(entityTypesForRoles(["hr_officer"])).toEqual(["hrms.employee"]);
-    expect(entityTypesForRoles(["procurement_officer"]).sort()).toEqual(["finance.bill", "procurement.indent", "procurement.po"]);
+    expect(entityTypesForRoles(["procurement_officer"]).sort()).toEqual(["contracts.contract", "finance.bill", "procurement.indent", "procurement.po"]);
   });
-  it("tenant_admin has no implicit access: only roles the owning module lists count", () => {
-    expect(entityTypesForRoles(["tenant_admin"])).toEqual([]);
+  it("tenant_admin sees only meeting.meeting (no blanket access; only entity types whose owning module lists the role count); super_admin sees all", () => {
+    expect(entityTypesForRoles(["tenant_admin"])).toEqual(["meeting.meeting"]); // meeting-service's READ_ROLES lists tenant_admin
     expect(entityTypesForRoles(["super_admin"]).sort()).toEqual([...GLOBAL_ENTITY_TYPE_LIST].sort());
   });
   it("unknown roles are ignored", () => {

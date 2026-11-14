@@ -1,5 +1,6 @@
 import { eq, and, desc, asc, sql, ilike, or, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { syncFile } from "../../shared/global-search.js";
 import {
   estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments,
   estabInwardMovements,
@@ -377,10 +378,12 @@ export async function listDispatchByFile(fileId: string, tenantId: string) {
 
 export async function insertFile(tx: Writer, row: FileInsert): Promise<void> {
   await tx.insert(estabFiles).values(row);
+  if (row.id) await syncFile(tx, row.id, row.tenantId);
 }
 
 export async function updateFile(tx: Writer, id: string, patch: Partial<FileInsert>): Promise<void> {
   await tx.update(estabFiles).set({ ...patch, updatedAt: new Date() }).where(eq(estabFiles.id, id));
+  await syncFile(tx, id);
 }
 
 export async function updateInward(tx: Writer, id: string, patch: Partial<InwardInsert>): Promise<void> {

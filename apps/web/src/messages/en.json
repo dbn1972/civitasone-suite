@@ -5925,7 +5925,11 @@
         "financeVendor": "Vendors",
         "hrmsEmployee": "Employees",
         "procurementIndent": "Indents",
-        "procurementPo": "Purchase orders"
+        "procurementPo": "Purchase orders",
+        "contractsContract": "Contracts",
+        "meetingMeeting": "Meetings",
+        "estabFile": "Establishment files",
+        "citizenApplication": "Citizen applications"
       }
     },
     "page": {

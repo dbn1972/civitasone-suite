@@ -1,6 +1,7 @@
 import { eq, and, lte, gte, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { contractContracts, contractAmendments, contractMilestones, contractPerformanceBonds, type ContractRow, type ContractInsert } from "./schema.js";
+import { syncContract } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -114,10 +115,12 @@ export async function findContractByIdForUpdateTx(tx: Writer, id: string): Promi
 
 export async function insertContract(tx: Writer, row: ContractInsert): Promise<void> {
   await tx.insert(contractContracts).values(row);
+  if (row.id) await syncContract(tx, row.id, row.tenantId);
 }
 
 export async function updateContract(tx: Writer, id: string, patch: Partial<ContractInsert>): Promise<void> {
   await tx.update(contractContracts).set({ ...patch, updatedAt: new Date() }).where(eq(contractContracts.id, id));
+  await syncContract(tx, id);
 }
 
 export async function insertAmendment(tx: Writer, row: typeof contractAmendments.$inferInsert): Promise<void> {
