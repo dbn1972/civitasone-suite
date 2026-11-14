@@ -47,6 +47,7 @@ import {
   resolveExpenseCode,
 } from "./auto-journal.js";
 import { randomUUID } from "node:crypto";
+import { syncVoucher } from "../../shared/global-search.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -151,6 +152,7 @@ async function postSimplifiedJournal(
     createdBy: input.actorId,
     updatedBy: input.actorId,
   });
+  await syncVoucher(tx, input.journalId, input.tenantId);
 
   for (const line of input.lines) {
     // Guaranteed present — populated in the validation pass above for every

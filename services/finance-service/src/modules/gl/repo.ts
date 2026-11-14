@@ -3,11 +3,13 @@ import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
+import { syncVoucher } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insertJournal(tx: Writer, row: JournalInsert): Promise<void> {
   await tx.insert(financeJournals).values(row);
+  if (row.id) await syncVoucher(tx, row.id, row.tenantId);
 }
 
 export async function insertLedgerLine(tx: Writer, row: LedgerInsert): Promise<void> {
@@ -69,6 +71,7 @@ export async function markJournalReversed(tx: Writer, id: string, reversedByUpda
   await tx.update(financeJournals)
     .set({ status: "reversed", updatedBy: reversedByUpdatedBy, updatedAt: new Date() })
     .where(eq(financeJournals.id, id));
+  await syncVoucher(tx, id);
 }
 
 /**
@@ -85,6 +88,7 @@ export async function markPendingJournalPosted(tx: Writer, id: string, fields: {
   await tx.update(financeJournals)
     .set({ status: "posted", voucherNo: fields.voucherNo, updatedBy: fields.updatedBy, updatedAt: new Date() })
     .where(eq(financeJournals.id, id));
+  await syncVoucher(tx, id);
 }
 
 /**
@@ -96,6 +100,7 @@ export async function markPendingJournalRejected(tx: Writer, id: string, fields:
     .set({ status: "rejected", rejectionReason: fields.reason, updatedBy: fields.updatedBy, updatedAt: new Date() })
     .where(and(eq(financeJournals.id, id), eq(financeJournals.status, "pending_approval")))
     .returning({ id: financeJournals.id });
+  if (rows.length > 0) await syncVoucher(tx, id);
   return rows.length > 0;
 }
 

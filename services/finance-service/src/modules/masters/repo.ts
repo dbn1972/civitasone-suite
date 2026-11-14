@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { financePao, financeDdo, financeVendors, type PaoRow, type DdoRow, type VendorRow } from "./schema.js";
+import { syncVendor } from "../../shared/global-search.js";
 
 export type Reader = Pick<typeof db, "select">;
 
@@ -106,6 +107,7 @@ export async function createVendor(tenantId: string, input: VendorWriteInput, ac
     }).returning();
     const row = rows[0];
     if (!row) throw new Error("VENDOR_INSERT_FAILED: insert returned no row");
+    await syncVendor(tx, row.id, tenantId);
     return row;
   });
 }
@@ -179,6 +181,7 @@ export async function updateVendor(
       ))
       .returning();
     const row = updated[0] ?? null;
+    if (row) await syncVendor(tx, row.id, tenantId);
     if (row && onUpdated) await onUpdated(tx, row);
     return row;
   });

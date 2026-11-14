@@ -5916,7 +5916,16 @@
       "footerCount": "{count, plural, one {# परिणाम} other {# परिणाम}}",
       "navigate": "चुनें",
       "open": "खोलें",
-      "close": "बंद करें"
+      "close": "बंद करें",
+      "recordsPartial": "कुछ अभिलेख अभी खोजे नहीं जा सके। शेष परिणाम दिखाए जा रहे हैं।",
+      "types": {
+        "financeVoucher": "वाउचर",
+        "financeBill": "बिल",
+        "financeVendor": "विक्रेता",
+        "hrmsEmployee": "कर्मचारी",
+        "procurementIndent": "इंडेंट",
+        "procurementPo": "क्रय आदेश"
+      }
     },
     "page": {
       "approvals": "मेरे अनुमोदन",

@@ -4,6 +4,7 @@ import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
+import { syncEmployee } from "../../shared/global-search.js";
 import {
   hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions, hrmsPensionSchemeChanges,
   type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
@@ -195,6 +196,7 @@ export async function listEmployeeTenantIds(tx: Writer): Promise<string[]> {
 
 export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<void> {
   await tx.insert(hrmsEmployees).values(row);
+  if (row.id) await syncEmployee(tx, row.id, row.tenantId);
 }
 
 // GAP-HR-CONFIRMATION-05
@@ -247,6 +249,7 @@ export async function designationExistsTx(tx: Writer, id: string, tenantId: stri
 
 export async function updateEmployee(tx: Writer, id: string, patch: Partial<EmployeeInsert>): Promise<void> {
   await tx.update(hrmsEmployees).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsEmployees.id, id));
+  await syncEmployee(tx, id);
 }
 
 /**
@@ -284,6 +287,7 @@ export async function updateEmployeeIfStatus(
     ));
   const rowCount = (res as { rowCount?: number; count?: number }).rowCount
     ?? (res as { count?: number }).count ?? 0;
+  if (rowCount > 0) await syncEmployee(tx, id, tenantId);
   return rowCount > 0;
 }
 
@@ -386,6 +390,7 @@ export async function updateEmployeeVersioned(
       `employee ${id} was modified by another writer since version ${expectedVersion} was read; refusing to apply this write blindly`,
     );
   }
+  await syncEmployee(tx, id, tenantId);
 }
 
 /**

@@ -9,7 +9,10 @@
  * Validates: Requirements 19.2, 19.3, 19.4, 19.7
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createSearchEngine, type SearchEngine, type SearchQuery, type SearchResponse } from "@civitasone/search";
+import {
+  createSearchEngine, GlobalSearchIndex, GLOBAL_ENTITY_TYPES, entityTypesForRoles, isGlobalSearchEnabled,
+  type GlobalSearchHit, type SearchEngine, type SearchQuery, type SearchResponse,
+} from "@civitasone/search";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 
@@ -128,11 +131,16 @@ export interface GlobalSearchResult {
   description: string | null;
   status: string;
   snippet: string;
+  /** Cross-module records only (tenant flag on): catalogue type, English group label and the record page path. */
+  entityType?: string;
+  entityLabel?: string;
+  href?: string;
 }
 
 export interface GlobalSearchResponse {
   data: GlobalSearchResult[];
-  meta: { page: number; pageSize: number; total: number };
+  /** `recordsUnavailable` is set only when the cross-module index failed while the knowledge search worked. */
+  meta: { page: number; pageSize: number; total: number; recordsUnavailable?: boolean };
 }
 
 // ── Search Engine Singleton ───────────────────────────────────────────────────
@@ -203,6 +211,33 @@ async function searchWithRepair(e: SearchEngine, q: SearchQuery): Promise<Search
   }
 }
 
+let globalIndex: Pick<GlobalSearchIndex, "search"> | null = null;
+
+function getGlobalIndex(): Pick<GlobalSearchIndex, "search"> {
+  if (!globalIndex) globalIndex = new GlobalSearchIndex();
+  return globalIndex;
+}
+
+/** Allow injection for testing. */
+export function setGlobalSearchIndex(i: Pick<GlobalSearchIndex, "search"> | null): void {
+  globalIndex = i;
+}
+
+function toGlobalResult(h: GlobalSearchHit): GlobalSearchResult {
+  return {
+    id: h.entityId,
+    module: h.module,
+    name: h.title,
+    refNumber: h.refNumber || null,
+    description: h.summary || null,
+    status: h.status,
+    snippet: h.summary || h.refNumber || "",
+    entityType: h.entityType,
+    entityLabel: GLOBAL_ENTITY_TYPES[h.entityType].label,
+    href: h.href,
+  };
+}
+
 // ── Route Registration ────────────────────────────────────────────────────────
 
 export function registerSearchRoute(app: FastifyInstance): void {
@@ -245,7 +280,14 @@ export function registerSearchRoute(app: FastifyInstance): void {
 
     // ── Permission Filtering ───────────────────────────────────────────────
     const userModules = resolveUserModules(jwtPayload.roles ?? []);
-    if (userModules.length === 0) {
+
+    // ── Cross-module records (per-tenant flag, default off) ────────────────
+    // The tenant comes ONLY from the verified JWT, the entity types ONLY from the caller's JWT roles via the
+    // catalogue; the client controls neither. Flag off => none of this runs and the response is unchanged.
+    const globalOn = isGlobalSearchEnabled(tenantId);
+    const globalTypes = globalOn ? entityTypesForRoles(jwtPayload.roles ?? []) : [];
+
+    if (userModules.length === 0 && globalTypes.length === 0) {
       // User has no module access — return empty results
       return reply.code(200).send({
         data: [],
@@ -254,35 +296,52 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     // ── Execute Search ─────────────────────────────────────────────────────
-    let searchResponse: SearchResponse;
-    try {
-      searchResponse = await searchWithRepair(getEngine(), {
-        q: query,
-        tenantId,
-        limit: pageSize,
-        offset,
-        // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
-        // is AND, which returned nothing for a user with more than one module (and for every admin).
-        tagsAny: userModules,
-        // Knowledge articles are indexed without module tags: untagged documents are visible to every user
-        // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
-        // Untagged documents are further limited to the caller's clearance, derived from the caller's OWN roles
-        // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
-        // every level only for knowledge_admin / super_admin.
-        includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
-        // The same clearance applies to EVERY knowledge document, tagged or not: a tag (which an author or a
-        // client can set) must never carry a restricted document past it. Non-knowledge records are untouched.
-        knowledgeAccessLevels: untaggedAccessLevels(jwtPayload.roles ?? []),
-      });
-    } catch (err) {
-      // Graceful degradation: search engine unreachable
-      log.warn(
-        { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
-        "Search engine unreachable — returning SEARCH_UNAVAILABLE",
-      );
-      return reply.code(503).send({
-        error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
-      });
+    let searchResponse: SearchResponse = { hits: [], totalHits: 0, processingTimeMs: 0 };
+    if (userModules.length > 0) {
+      try {
+        searchResponse = await searchWithRepair(getEngine(), {
+          q: query,
+          tenantId,
+          limit: pageSize,
+          offset,
+          // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
+          // is AND, which returned nothing for a user with more than one module (and for every admin).
+          tagsAny: userModules,
+          // Knowledge articles are indexed without module tags: untagged documents are visible to every user
+          // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
+          // Untagged documents are further limited to the caller's clearance, derived from the caller's OWN roles
+          // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
+          // every level only for knowledge_admin / super_admin.
+          includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
+          // The same clearance applies to EVERY knowledge document, tagged or not: a tag (which an author or a
+          // client can set) must never carry a restricted document past it. Non-knowledge records are untouched.
+          knowledgeAccessLevels: untaggedAccessLevels(jwtPayload.roles ?? []),
+        });
+      } catch (err) {
+        // Graceful degradation: search engine unreachable
+        log.warn(
+          { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
+          "Search engine unreachable — returning SEARCH_UNAVAILABLE",
+        );
+        return reply.code(503).send({
+          error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
+        });
+      }
+    }
+
+    let globalResults: GlobalSearchResult[] = [];
+    let globalTotal = 0;
+    let globalFailed = false;
+    if (globalTypes.length > 0) {
+      try {
+        const g = await getGlobalIndex().search({ tenantId, q: query, entityTypes: globalTypes, limit: pageSize, offset });
+        globalResults = g.hits.map(toGlobalResult);
+        globalTotal = g.totalHits;
+      } catch (err) {
+        // The cross-module index is additive: its failure must not take down knowledge search.
+        globalFailed = true;
+        log.warn({ correlationId: req.id, err: err instanceof Error ? err.message : "unknown" }, "Cross-module search failed");
+      }
     }
 
     // ── Transform and filter results by module permission ──────────────────
@@ -308,11 +367,12 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     const response: GlobalSearchResponse = {
-      data: results,
+      data: globalOn ? [...globalResults, ...results] : results,
       meta: {
         page,
         pageSize,
-        total: searchResponse.totalHits,
+        total: searchResponse.totalHits + globalTotal,
+        ...(globalFailed ? { recordsUnavailable: true } : {}),
       },
     };
 
