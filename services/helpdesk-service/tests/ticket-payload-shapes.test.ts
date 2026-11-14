@@ -17,6 +17,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tickets } from "../src/modules/tickets/schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/infra.js", async () => {
   const { MemoryQueue } = await import("@civitasone/queue");
@@ -58,7 +59,7 @@ async function cleanup() {
     }),
   );
 }
-const flush = () => new Promise((r) => setTimeout(r, 300));
+const flush = () => drainAllQueues();
 
 let app: FastifyInstance;
 beforeAll(async () => {

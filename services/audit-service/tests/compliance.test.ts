@@ -24,6 +24,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerComplianceConsumers } from "../src/modules/compliance/consumer.js";
 import { runAgeingSweep } from "../src/modules/compliance/jobs.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // checklist-routes.ts publishes checklistCreate/checklistComplete onto the
 // real `queue` singleton from shared/infra.js and answers 202 as soon as the
@@ -325,7 +326,7 @@ describe("Compliance consumer — COMMANDS.pendingRegisterCreate", () => {
         dueDate: "2020-01-01",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () =>

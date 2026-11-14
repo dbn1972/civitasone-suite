@@ -9,9 +9,12 @@ import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/em
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
+import { getEnabledModules } from "@/lib/moduleVisibility";
+import { isModuleEnabled, PAYROLL_SWITCH } from "@/lib/moduleMatch";
 import { EmployeeLoginLinkCard } from "./EmployeeLoginLinkCard";
 import { EmployeePensionSchemeCard, type SchemeChange } from "./EmployeePensionSchemeCard";
 import { EmployeeOpeningYtdCard } from "./EmployeeOpeningYtdCard";
+import { EmployeeContractCard } from "./EmployeeContractCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getTranslations } from "next-intl/server";
@@ -40,6 +43,18 @@ async function getCostCenterName(id: string): Promise<string | null> {
       const rows = (p as { data?: { id: string; name?: string; code?: string }[] } | null)?.data;
       const row = rows?.find((x) => x.id === id);
       return row ? (row.name ?? row.code ?? null) : null;
+    },
+  });
+  return r.data;
+}
+
+/** S8 G5: the project manager's display name (names, not ids). Same gate as the directory; a failed lookup just omits the row. */
+async function getOfficerName(id: string): Promise<string | null> {
+  const r = await fetchJson<unknown, string | null>(`/api/v1/hrms/employees/officers?ids=${id}`, null, {
+    telemetryKey: "hr.employee.projectmanager",
+    mapResponse: (p) => {
+      const rows = (p as { data?: { id: string; name?: string }[] } | null)?.data;
+      return rows?.find((x) => x.id === id)?.name ?? null;
     },
   });
   return r.data;
@@ -264,9 +279,12 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
   // else never meets a 403 card. Lifecycle lists are HR-staff-only on the backend (hrms-service lifecycle
   // HR_ROLES), so only those roles ask: everyone else would just collect a 403 and a permanent, misleading
   // "history unavailable".
-  const [costCenterName, payGroupResult, lifecycle, schemeChanges] = await Promise.all([
+  // M2/M7: a tenant without the Payroll module never issues the payroll-service pay-group request
+  // and sees no payroll cards/links on the profile (Payroll on or list unknown = unchanged).
+  const payrollEnabled = isModuleEnabled(await getEnabledModules(), PAYROLL_SWITCH, roles);
+  const [costCenterName, payGroupResult, lifecycle, schemeChanges, projectManagerName] = await Promise.all([
     canAdminister && employee.costCenterId ? getCostCenterName(employee.costCenterId) : Promise.resolve(null),
-    roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? getEmployeePayGroup(params.id) : Promise.resolve(null),
+    payrollEnabled && roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? getEmployeePayGroup(params.id) : Promise.resolve(null),
     canAdminister ? getLifecycleEvents(params.id) : Promise.resolve<LifecycleResult>({ events: [], unavailable: false }),
     // UAT b18: pension scheme change history (hrms READER_ROLES include every HR staff role).
     canAdminister
@@ -278,6 +296,8 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
           },
         })
       : Promise.resolve(null),
+    // S8 G5: only asked when the record carries a contract projection with a project manager.
+    employee.contractId && employee.projectManagerId ? getOfficerName(employee.projectManagerId) : Promise.resolve(null),
   ]);
 
   // Build base lifecycle events from known fields
@@ -345,9 +365,11 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
             <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionApplyLeave")}
             </Link>
-            <Link href={`/hr/payroll/salary-slips?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              {t("actionSalarySlips")}
-            </Link>
+            {payrollEnabled && (
+              <Link href={`/hr/payroll/salary-slips?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+                {t("actionSalarySlips")}
+              </Link>
+            )}
             <Link href={`/hr/attendance?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionViewAttendance")}
             </Link>
@@ -575,6 +597,8 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
       )}
 
       {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
+      {/* S8 G5: contract end + project (read-model; renders nothing for a record without a contract). */}
+      <EmployeeContractCard employee={employee} projectManagerName={projectManagerName} costCenterName={canAdminister ? costCenterName : null} />
       {showInsurance && <DeferredMedicalInsurance employeeId={params.id} canReveal={canRevealInsurance} canEdit={canEditInsurance} />}
       {canLinkLogin && <EmployeeLoginLinkCard employeeId={params.id} />}
       {/* UAT b18: pension scheme change (maker: HR staff; checker: HR admin tier). */}
@@ -591,7 +615,7 @@ export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
       )}
 
       {/* PR #2459 review B1: opening YTD (pre-go-live / previous employer) for s.192 TDS. Maker: payroll staff; checker: payroll admin. */}
-      {roles.some((r) => PAYROLL_STAFF_ROLES.includes(r)) && (
+      {payrollEnabled && roles.some((r) => PAYROLL_STAFF_ROLES.includes(r)) && (
         <EmployeeOpeningYtdCard
           employeeId={params.id}
           canEnter={roles.some((r) => PAYROLL_STAFF_ROLES.includes(r))}

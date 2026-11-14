@@ -9,6 +9,8 @@
  * in this service.
  */
 import { pino } from "pino";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const log = pino({ name: "asset-finance-client" });
 
@@ -71,6 +73,11 @@ async function financeAccumDepCode(tenantId: string, secret: string, signal: Abo
 }
 
 export async function validateHead(tenantId: string, kind: HeadKind, code: string, correlationId?: string): Promise<HeadCheck> {
+  // M5: do not call a finance module this tenant did not buy (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce).
+  const gate = await licence.check(tenantId, LICENCE_MODULE.finance, "http", "GET finance/accounts");
+  if (!gate.allowed) {
+    return { ok: false, reason: "UNAVAILABLE", detail: gate.outcome === "deny" ? "finance module is not licensed for this tenant" : `finance licence could not be verified: ${gate.reason}` };
+  }
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (!secret) return { ok: false, reason: "UNAVAILABLE", detail: "INTERNAL_SERVICE_SECRET is not configured" };
   const controller = new AbortController();

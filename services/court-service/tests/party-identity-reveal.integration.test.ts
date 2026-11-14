@@ -14,6 +14,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue as appQueue } from "../src/shared/infra.js";
 import { caseParties } from "../src/modules/case-registry/schema.js";
 import { registerPartyConsumers } from "../src/modules/party/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const T = randomUUID();
@@ -163,7 +164,7 @@ describe("party identity reveal (owner decision #32)", () => {
     });
     await publish();
     await publish();
-    await new Promise((r) => setTimeout(r, 800));
+    await drainAllQueues();
     const rows = await sqlClient.begin(async (sql) => {
       await sql`select set_config('app.tenant_id', ${T}, true)`;
       return sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${T} AND topic = 'audit.event.record' AND payload->>'action' = 'party_identity_revealed'`;

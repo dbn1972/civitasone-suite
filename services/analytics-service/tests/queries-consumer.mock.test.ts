@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const mockTx = {
   insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoNothing: vi.fn().mockResolvedValue([]) }) }),
@@ -93,7 +94,7 @@ describe("QueriesConsumer — runQuery", () => {
         version: 1,
       },
     });
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
   });
 
@@ -109,7 +110,7 @@ describe("QueriesConsumer — runQuery", () => {
       schemaVersion: "1.0",
       payload: { id, dashboardId: null, queryName: "q", status: "queued", kind: "adhoc", spec: {}, result: null, resultRows: 0, error: null, version: 1 },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     // enqueue should still not be called (markProcessed returned false → early return)
     expect(enqueueMock).not.toHaveBeenCalled();
   });
@@ -127,7 +128,7 @@ describe("QueriesConsumer — scheduleQuery", () => {
       schemaVersion: "1.0",
       payload: { id, name: "daily-report", spec: { metric: "event_count", dimensions: [], filters: [], limit: 50 }, cadence: "daily", enabled: true },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     expect(markProcessedMock).toHaveBeenCalled();
     expect(enqueueMock).toHaveBeenCalled();
   });

@@ -27,6 +27,7 @@ import { safeText, stripControlChars, guardCsvInjection } from "../src/shared/sa
 import { mapRtiStatus, isRtiOverdue } from "../src/modules/rti/queries.js";
 import { computeSlaDueAt, computeSlaStatus } from "../src/modules/helpdesk/sla.js";
 import { computeRtiDeadline } from "../src/modules/rti/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerPortalConsumers(queue);
 registerGrievanceConsumers(queue);
@@ -63,7 +64,7 @@ async function get(url: string, headers: any) {
 async function waitFor(predicate: () => Promise<boolean>, tries = 60) {
   for (let i = 0; i < tries; i++) {
     if (await predicate()) return true;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   return false;
 }
@@ -222,7 +223,7 @@ describe("Application submit + status history + documents", () => {
 
   it("status update + document upload appear in detail", async () => {
     expect((await patch(`/v1/citizen/applications/${id}/status`, { status: "under_review", note: "checking" }, ofH)).statusCode).toBe(202);
-    expect((await post(`/v1/citizen/applications/${id}/documents`, { docType: "id_proof" }, ofH)).statusCode).toBe(202);
+    expect((await post(`/v1/citizen/applications/${id}/documents`, { docType: "id_proof", filename: "id.pdf", contentType: "application/pdf", sizeBytes: 1024 }, ofH)).statusCode).toBe(202);
     const ok = await waitFor(async () => {
       const d = (await get(`/v1/citizen/applications/${id}`, ofH)).json();
       return Array.isArray(d.documents) && d.documents.length >= 1 && Array.isArray(d.history) && d.history.length >= 1;
@@ -354,7 +355,7 @@ describe("Idempotency — replayed grievance.register does not duplicate", () =>
     // Re-publishing assign twice with the same body — terminal row count stays 1.
     await patch(`/v1/citizen/grievances/${gid}/assign`, { assignedTo: ASSIGNEE }, ofH);
     await patch(`/v1/citizen/grievances/${gid}/assign`, { assignedTo: ASSIGNEE }, ofH);
-    await new Promise((res) => setTimeout(res, 300));
+    await drainAllQueues();
     const after = await sqlAsTenant(TENANT, (sql) => sql`select count(*)::int as c from grievance.citizen_grievances where id = ${gid}`);
     expect(after[0].c).toBe(1);
   }, 20000);

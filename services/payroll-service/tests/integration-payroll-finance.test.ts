@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the consumer.
@@ -172,7 +173,7 @@ async function buildQueue(): Promise<MemoryQueue> {
   return q;
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 200));
+const settle = () => drainAllQueues();
 
 // ---------------------------------------------------------------------------
 beforeEach(() => {

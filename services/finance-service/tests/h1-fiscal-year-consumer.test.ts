@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const h = vi.hoisted(() => {
   // Table-aware mock: approvals/apply.ts reads fiscal years, settings, period rows and an opening-balance count.
@@ -50,7 +51,7 @@ import { registerMastersConsumers } from "../src/modules/masters/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
 const TENANT = "10000000-aaaa-4000-8000-0000000a1fc1";
-const settle = () => new Promise<void>((r) => setTimeout(r, 150));
+const settle = () => drainAllQueues();
 const msg = (type: string, payload: Record<string, unknown>) => ({
   messageId: randomUUID(), type, tenantId: TENANT, actorId: randomUUID(), correlationId: randomUUID(), schemaVersion: "1.0", payload,
 });

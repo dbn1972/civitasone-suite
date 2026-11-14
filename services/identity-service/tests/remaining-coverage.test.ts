@@ -19,6 +19,7 @@ import { mfaConfigs } from "../src/modules/mfa/schema.js";
 import { users } from "../src/modules/users/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -169,7 +170,7 @@ describe("MFA consumer — enableMfa integration", () => {
       payload: { id: MFA_CFG_ID, userId: MFA_USER, method: "totp", tenantId: MFA_TENANT },
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await drainAllQueues();
     await q.stop();
 
     // Verify mfa config was inserted

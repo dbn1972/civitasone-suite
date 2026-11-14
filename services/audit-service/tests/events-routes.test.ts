@@ -26,6 +26,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditEvents } from "../src/modules/events/schema.js";
 import { registerAuditConsumers } from "../src/modules/events/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -81,7 +82,7 @@ beforeAll(async () => {
     payload: { service: "policy", action: "create", resourceType: "role", resourceId: "r2", outcome: "success" },
   });
 
-  await new Promise((r) => setTimeout(r, 400));
+  await drainAllQueues();
   await q.stop();
 
   const rows = await runWithTenant(TENANT, () => db.transaction((tx) =>

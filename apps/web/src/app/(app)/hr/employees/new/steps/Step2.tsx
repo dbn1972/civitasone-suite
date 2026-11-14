@@ -10,11 +10,12 @@ import {
   grid2,
 } from "../wizardTypes";
 import { serviceGroup, type ServiceGroup } from "@/lib/payLevels";
+import { bandLabel, type GradeBand, type PayScaleKind } from "@/lib/gradeBands";
 import { Field, Select, Input, EntityPicker } from "@/app/_components/ds";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 
 type Dept = { id: string; name: string };
-type Desig = { id: string; name: string; level?: number | null };
+type Desig = { id: string; name: string; level?: number | null; gradeBandId?: string | null };
 type EmployeeTypeOption = { code: string; name: string };
 
 interface Props {
@@ -29,6 +30,9 @@ interface Props {
   // passes a real array, including an explicit `[]` on a genuine fetch
   // failure, which is the case this gap is actually about).
   employeeTypes?: EmployeeTypeOption[];
+  /** S8-G4: 'private_bands' shows the designation's grade band in place of the Group A/B/C service group. Default == unchanged. */
+  payScale?: PayScaleKind;
+  gradeBands?: GradeBand[];
   onChange: <K extends keyof WizardData>(key: K, value: WizardData[K]) => void;
   onBlur: (field: keyof WizardData) => void;
 }
@@ -68,23 +72,33 @@ const LEGACY_LABEL_KEY: Record<string, "empTypePermanent" | "empTypeContractual"
   apprentice: "empTypeApprenticeTrainee",
 };
 
-export function Step2({ data, errors, departments, designations, employeeTypes, onChange, onBlur }: Props) {
+export function Step2({ data, errors, departments, designations, employeeTypes, payScale = "cpc7", gradeBands = [], onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
+  const bandMode = payScale === "private_bands";
 
-  const selectedLevel = designations.find((d) => d.id === data.designationId)?.level ?? null;
-  const computedGroup = serviceGroup(selectedLevel);
+  const selectedDesignation = designations.find((d) => d.id === data.designationId);
+  const selectedLevel = selectedDesignation?.level ?? null;
+  // A band tenant has no 7th CPC Group A/B/C: that government classification must not show for private bands.
+  const computedGroup = bandMode ? null : serviceGroup(selectedLevel);
+  const selectedBand = bandMode ? gradeBands.find((b) => b.id === selectedDesignation?.gradeBandId) ?? null : null;
 
   // Keep data.grade in sync with the computed group as the designation
   // selection changes (including on restoring an in-progress draft) — but
   // never clobber a manual MTS/Contractual pick with a stale computed value.
   useEffect(() => {
+    if (bandMode) {
+      // The employee's service grade follows the designation's band (cleared when the designation has none).
+      const next = selectedBand?.code ?? "";
+      if (data.grade !== next) onChange("grade", next);
+      return;
+    }
     if (computedGroup) {
       if (data.grade !== computedGroup) onChange("grade", computedGroup);
     } else if (data.grade === "Group-A" || data.grade === "Group-B" || data.grade === "Group-C") {
       onChange("grade", "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedGroup]);
+  }, [computedGroup, bandMode, selectedBand?.code]);
 
   // GAP-HR-EMPLOYEES-NEW-06: `employeeTypes === undefined` means the prop
   // was never passed (today, only pre-existing tests that don't exercise
@@ -153,10 +167,22 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
           </Select>
         </Field>
 
-        {/* Grade / Service Group */}
+        {/* Grade / Service Group (or, for a private-bands tenant, the designation's grade band) */}
         <div style={fieldWrap}>
-          <span id="w-grade-label" style={labelStyle}>{t("payGradeLabel")}</span>
-          {computedGroup ? (
+          <span id="w-grade-label" style={labelStyle}>{bandMode ? t("gradeBandLabel") : t("payGradeLabel")}</span>
+          {bandMode ? (
+            <>
+              <div
+                id="w-grade"
+                role="status"
+                aria-labelledby="w-grade-label"
+                style={{ ...inputStyle, display: "flex", alignItems: "center", background: "var(--bg)" }}
+              >
+                {selectedBand ? bandLabel(selectedBand) : "\u2014"}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--mut)" }}>{selectedBand ? t("gradeBandComputedNote") : t("gradeBandNone")}</span>
+            </>
+          ) : computedGroup ? (
             <>
               <div
                 id="w-grade"

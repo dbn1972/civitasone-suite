@@ -10,6 +10,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerRateEngineConsumers } from "../src/modules/rate-engine/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerRateEngineConsumers(queue);
 await queue.start();
@@ -71,7 +72,7 @@ describe("CLOS3-S1-11 rate slab replace-set", () => {
 
     // Same set again (what the autosave used to do every 2s): nothing new.
     expect((await put("2026-04-01", set1)).statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 250));
+    await drainAllQueues();
     expect(await slabs()).toHaveLength(1);
 
     // Edit: old slab end-dated at the new effectiveFrom, new one is the only live slab from then.
@@ -92,7 +93,7 @@ describe("CLOS3-S1-11 rate slab replace-set", () => {
       { slabType: "band", bandFrom: "500", bandTo: "2000", rateValue: "20" },
     ]);
     expect(bad.statusCode).toBe(202); // async: accepted, rejected by the consumer
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const after = await slabs();
     expect(after).toHaveLength(before.length);
     expect(after.filter((r) => r.isActive && r.effectiveTo === null).map((r) => r.id)).toEqual(

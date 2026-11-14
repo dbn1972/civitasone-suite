@@ -330,6 +330,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             await tx.insert(hrmsDesignations).values({
                   id, tenantId: p.tenantId, code: body.code, name: body.name,
                   level: body.level ?? 0, payGrade: body.payGrade ?? null,
+                  gradeBandId: body.gradeBandId ?? null,
                   createdBy: msg.actorId, updatedBy: msg.actorId,
                 });
             break;
@@ -382,6 +383,7 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             if (body.name !== undefined) desigPatch.name = body.name;
             if (body.level !== undefined) desigPatch.level = body.level;
             if (body.payGrade !== undefined) desigPatch.payGrade = body.payGrade;
+            if (body.gradeBandId !== undefined) desigPatch.gradeBandId = body.gradeBandId;
             await tx.update(hrmsDesignations)
                   .set({ ...desigPatch, updatedBy: msg.actorId } as never)
                   .where(eq(hrmsDesignations.id, targetId));

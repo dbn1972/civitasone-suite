@@ -15,6 +15,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditEvents } from "../src/modules/events/schema.js";
 import { registerAuditConsumers } from "../src/modules/events/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -62,7 +63,7 @@ beforeAll(async () => {
   for (let i = 0; i < 50; i++) {
     const n = (await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT))))).length;
     if (n >= 4) break;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   await q.stop();
 });

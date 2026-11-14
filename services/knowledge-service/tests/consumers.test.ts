@@ -357,3 +357,25 @@ describe("search commands", () => {
     expect(infra.queue.publish).toHaveBeenCalledWith(COMMANDS.searchRemoveDocument, expect.objectContaining({ tenantId: "t1" }));
   });
 });
+
+describe("client-supplied tags on the search.index command path are ignored", () => {
+  beforeEach(() => { vi.clearAllMocks(); mockMarkProcessed.mockResolvedValue(true); });
+
+  it("the command drops tags before publishing", async () => {
+    const { searchIndex } = await import("../src/modules/search/commands.js");
+    const infra = await import("../src/shared/infra.js");
+    const ctx = { tenantId: "t1", actorId: "actor-1", correlationId: "corr-9" } as never;
+    await searchIndex(ctx, { documentId: "doc-1", title: "Restricted plan", content: "x", tags: ["finance", "hrms"] });
+    const env = vi.mocked(infra.queue.publish).mock.calls.at(-1)![1] as { payload: { tags: string[] } };
+    expect(env.payload.tags).toEqual([]);
+  });
+
+  it("the consumer ignores tags even when a message carries them (published before this change, or hand-crafted)", async () => {
+    const h = makeHarness();
+    registerSearchConsumers(h.queue);
+    await h.deliver(COMMANDS.searchIndex, msg(COMMANDS.searchIndex, "t1", {
+      id: "idx-9", tenantId: "t1", documentId: "doc-9", title: "Restricted plan", content: "x", tags: ["finance"],
+    }));
+    expect(searchRepo.indexDocument).toHaveBeenCalledWith("t1", expect.objectContaining({ documentId: "doc-9", tags: [] }));
+  });
+});

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { serviceGroup, payLevelSchema, SERVICE_GROUP_BANDS, type ServiceGroup } from "@/lib/payLevels";
+import { bandLabel, type GradeBand, type PayScaleKind } from "@/lib/gradeBands";
 
 // `& Record<string, unknown>` satisfies DataTable's `T extends
 // Record<string, unknown>` generic constraint -- same pattern already used
@@ -16,6 +17,8 @@ type Designation = {
   name: string;
   level: number;
   payGrade: string | null;
+  /** S8-G4: the private grade band this designation sits in (band tenants only). */
+  gradeBandId?: string | null;
   /**
    * GAP-HR-DESIGNATIONS-02: how many records (employees, seniority lists,
    * workforce posts, requisitions, ...) still reference this designation.
@@ -80,7 +83,16 @@ function parseEditLevel(raw: string): { ok: true; value: number } | { ok: false 
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function DesignationsTable({ items, canEdit = false }: { items: Designation[]; canEdit?: boolean }) {
+export function DesignationsTable({
+  items, canEdit = false, payScale = "cpc7", bands = [],
+}: {
+  items: Designation[];
+  canEdit?: boolean;
+  /** S8-G4: 'private_bands' swaps the 7th CPC level / service-group columns for a grade-band column. Default == unchanged. */
+  payScale?: PayScaleKind;
+  bands?: GradeBand[];
+}) {
+  const bandMode = payScale === "private_bands";
   const t = useTranslations("designationsTable");
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Designation[]>(items);
@@ -93,6 +105,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
   // `Number('')` the way the previous numeric state was.
   const [editLevel, setEditLevel] = useState("");
   const [editPayGrade, setEditPayGrade] = useState("");
+  const [editBandId, setEditBandId] = useState("");
   const [saving, setSaving] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -110,6 +123,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
     setEditName(item.name);
     setEditLevel(item.level > 0 ? String(item.level) : "");
     setEditPayGrade(item.payGrade ?? "");
+    setEditBandId(item.gradeBandId ?? "");
     setRowError(null);
   }
 
@@ -123,7 +137,8 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       setRowError(t("rowErrorRequired"));
       return;
     }
-    const parsedLevel = parseEditLevel(editLevel);
+    // Band tenants have no 7th CPC level on this screen: the level is left untouched (never sent).
+    const parsedLevel = bandMode ? ({ ok: true, value: 0 } as const) : parseEditLevel(editLevel);
     if (!parsedLevel.ok) {
       setRowError(t("rowErrorLevelInteger"));
       return;
@@ -143,7 +158,9 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       const res = await fetch(`/api/proxy/v1/hrms/designations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: editCode, name: editName, level: parsedLevel.value, payGrade: payGradeValue }),
+        body: JSON.stringify(bandMode
+          ? { code: editCode, name: editName, payGrade: payGradeValue, gradeBandId: editBandId === "" ? null : editBandId }
+          : { code: editCode, name: editName, level: parsedLevel.value, payGrade: payGradeValue }),
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
@@ -155,7 +172,9 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       setLocalItems((prev) =>
         prev.map((d) =>
           d.id === id
-            ? { ...d, code: editCode, name: editName, level: parsedLevel.value, payGrade: payGradeValue }
+            ? (bandMode
+              ? { ...d, code: editCode, name: editName, payGrade: payGradeValue, gradeBandId: editBandId === "" ? null : editBandId }
+              : { ...d, code: editCode, name: editName, level: parsedLevel.value, payGrade: payGradeValue })
             : d,
         ),
       );
@@ -239,6 +258,35 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
           <span style={{ fontWeight: 500 }}>{item.name}</span>
         ),
     },
+    ...(bandMode ? [
+    {
+      key: "gradeBandId" as const,
+      label: t("colBand"),
+      render: (item: Designation) => {
+        const current = bands.find((b) => b.id === item.gradeBandId);
+        if (editingId === item.id) {
+          // Active bands, plus the band this designation already has even if it was switched off since.
+          const options = bands.filter((b) => b.isActive || b.id === item.gradeBandId);
+          return (
+            <select
+              aria-label={t("bandAriaLabel")}
+              value={editBandId}
+              onChange={(e) => setEditBandId(e.target.value)}
+              style={{ ...inputStyle, maxWidth: 220 }}
+            >
+              <option value="">{t("bandNoneOption")}</option>
+              {options.map((b) => (
+                <option key={b.id} value={b.id}>{bandLabel(b)}{b.isActive ? "" : ` ${t("bandInactiveSuffix")}`}</option>
+              ))}
+            </select>
+          );
+        }
+        return current
+          ? <span style={{ fontWeight: 700 }}>{current.code}<span style={{ fontWeight: 400, color: "var(--mut)" }}> {current.name !== current.code ? `\u2014 ${current.name}` : ""}</span></span>
+          : <span style={{ color: "var(--mut)" }}>{t("bandNone")}</span>;
+      },
+    },
+    ] : [
     {
       key: "level" as const,
       label: t("colPayLevel"),
@@ -292,6 +340,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
         return <span style={groupBadgeStyle(grp)} title={grp ? t("serviceGroupIndicativeTitle") : undefined}>{grp ?? "—"}</span>;
       },
     },
+    ]),
     {
       key: "payGrade" as const,
       label: t("colPayGrade"),
@@ -402,7 +451,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
           so, and print the bands it uses, instead of presenting it as
           recorded data. */}
       <p style={{ margin: "10px 2px 0", fontSize: 12, color: "var(--mut)" }}>
-        {t("serviceGroupNote", { bands: serviceGroupBandsText })}
+        {bandMode ? t("bandNote") : t("serviceGroupNote", { bands: serviceGroupBandsText })}
       </p>
 
       <ConfirmDialog

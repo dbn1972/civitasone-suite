@@ -18,6 +18,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerOpinionConsumers } from "../src/modules/opinions/consumer.js";
 import { registerReminderConsumers } from "../src/modules/reminders/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000b20a4";
@@ -34,7 +35,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
   q.subscribe = ((topic: string, handler: Handler) => raw(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
   return q;
 }
-const drain = () => new Promise<void>((r) => setTimeout(r, 300));
+const drain = () => drainAllQueues();
 
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

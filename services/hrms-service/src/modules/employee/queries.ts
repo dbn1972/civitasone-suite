@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { maskValue } from "../../shared/pii-mask.js";
+import { uanMaskedEnabled } from "../../shared/s8-flags.js";
 import * as repo from "./repo.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 import type { EmployeeRow } from "./schema.js";
@@ -12,6 +13,24 @@ export async function getEmployee(id: string, tenantId: string): Promise<Employe
     cache.makeKey(tenantId, "employee", id),
     () => repo.findById(id, tenantId)
   );
+}
+
+/**
+ * S8 G5: the contract/project read-model fields, only when the row carries a projection (so a tenant that never
+ * opted in gets the exact payload it got before). Dates are the DB date strings.
+ */
+function contractFields(r: EmployeeRow) {
+  if (!r.contractId) return {};
+  return {
+    contractId: r.contractId,
+    ...(r.contractStartDate ? { contractStartDate: r.contractStartDate } : {}),
+    ...(r.contractEndDate ? { contractEndDate: r.contractEndDate } : {}),
+    ...(r.contractStatus ? { contractStatus: r.contractStatus } : {}),
+    ...(r.contractRenewalCount !== null && r.contractRenewalCount !== undefined ? { contractRenewalCount: r.contractRenewalCount } : {}),
+    ...(r.primaryProjectId ? { primaryProjectId: r.primaryProjectId } : {}),
+    ...(r.projectCode ? { projectCode: r.projectCode } : {}),
+    ...(r.projectName ? { projectName: r.projectName } : {}),
+  };
 }
 
 export type EmployeeDetailShape = {
@@ -47,6 +66,16 @@ export type EmployeeDetailShape = {
   pensionScheme?: string;
   /** UAT b18 D3: missing statutory ids for that scheme, e.g. ["UAN_MISSING"] for an EPF member; absent when complete. */
   statutoryIncomplete?: string[];
+  /** S8 G5 read-model (contract + project snapshot); present only for tenants that opted in. */
+  contractId?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractStatus?: string;
+  contractRenewalCount?: number;
+  primaryProjectId?: string;
+  projectCode?: string;
+  projectName?: string;
+  projectManagerId?: string;
 };
 
 /**
@@ -172,7 +201,9 @@ export async function getEmployeeDetail(id: string, tenantId: string, opts: { in
     // EmployeeDetailSchema (packages/schemas/src/web.ts), which apps/web's
     // loader validates this response against -- without that, these would
     // round-trip over HTTP fine and then get silently stripped client-side.
-    ...(emp.uanNumber      ? { uanNumber: emp.uanNumber }              : {}),
+    // G6: with HRMS_S8_UAN_MASK_ENABLED the UAN is masked like PAN / bank account; the clear value is only available
+    // through the audited reveal (POST /v1/hrms/pii/reveal, field uanNumber). Flag off: unchanged.
+    ...(emp.uanNumber      ? { uanNumber: uanMaskedEnabled() ? maskValue(emp.uanNumber)! : emp.uanNumber } : {}),
     ...(emp.esicIpNumber   ? { esicIpNumber: emp.esicIpNumber }        : {}),
     ...(emp.pran           ? { pran: emp.pran }                        : {}),
     ...(emp.pensionScheme  ? { pensionScheme: emp.pensionScheme }      : {}),
@@ -182,6 +213,9 @@ export async function getEmployeeDetail(id: string, tenantId: string, opts: { in
     // paise -- a safe integer for any real salary; anything beyond 2^53 paise is
     // dropped rather than rounded into a wrong figure.
     // The conversion is exact: Number.isSafeInteger guards it (paise, serialised as a JSON number).
+    // S8 G5: contract + project snapshot, and the project manager id that sits beside it.
+    ...contractFields(emp),
+    ...(emp.contractId && emp.projectManagerId ? { projectManagerId: emp.projectManagerId } : {}),
     ...(opts.includePay && Number.isSafeInteger(Number(emp.basicMinor)) ? { basicMinor: Number(emp.basicMinor) } : {}), // precision-ok
   };
 }
@@ -226,7 +260,7 @@ export async function getEmployeeDetail(id: string, tenantId: string, opts: { in
  * cannot be added yet (no column); see docs/SECURITY.md's Directory Fields
  * note for the recorded policy and this gap.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[], status?: string, excludeStatuses?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; total?: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[], status?: string, excludeStatuses?: string[], cf?: repo.ContractFilters): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string; contractEndDate?: string; contractStatus?: string; projectCode?: string; projectName?: string }>; pagination: { hasMore: boolean; pageSize: number; total?: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
@@ -258,6 +292,7 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
           ...(designation ? { designation } : {}),
           ...(grade ? { grade } : {}),
           ...(r.email ? { email: r.email } : {}),
+          ...listContractFields(r),
         };
       }),
       pagination: { hasMore: false, pageSize: rows.length },
@@ -274,10 +309,13 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
   // change does not affect and must not invalidate.
   // GAP-HR-LEAVE-ALLOCATE-04: "v3" -- the page is now name-ordered and carries
   // a real `total`; an entry cached under "v2" is unordered and has no total.
-  return cache.listOrLoad(tenantId, "employee", `list:v3:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}:${status ?? ""}:${excludeStatuses && excludeStatuses.length > 0 ? [...excludeStatuses].sort().join("+") : ""}`, async () => {
+  return cache.listOrLoad(tenantId, "employee", `list:v3:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}:${status ?? ""}:${excludeStatuses && excludeStatuses.length > 0 ? [...excludeStatuses].sort().join("+") : ""}${cfKey(cf)}`, async () => {
     const [rows, total] = await Promise.all([
-      repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status, excludeStatuses),
-      repo.countByTenant(tenantId, employeeType, managerScope, q, status, excludeStatuses),
+      // The S8 G5 filters are passed only when set, so every existing call keeps its exact argument list.
+      cf ? repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status, excludeStatuses, cf)
+         : repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status, excludeStatuses),
+      cf ? repo.countByTenant(tenantId, employeeType, managerScope, q, status, excludeStatuses, cf)
+         : repo.countByTenant(tenantId, employeeType, managerScope, q, status, excludeStatuses),
     ]);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
@@ -299,6 +337,7 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
           ...(designation ? { designation } : {}),
           ...(grade ? { grade } : {}),
           ...(r.email ? { email: r.email } : {}),
+          ...listContractFields(r),
         };
       }),
       pagination: {
@@ -311,6 +350,23 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
       },
     };
   });
+}
+
+/** S8 G5: the four directory columns (contract end, status, project) -- only when the row carries a projection. */
+function listContractFields(r: EmployeeRow) {
+  if (!r.contractId) return {};
+  return {
+    ...(r.contractEndDate ? { contractEndDate: r.contractEndDate } : {}),
+    ...(r.contractStatus ? { contractStatus: r.contractStatus } : {}),
+    ...(r.projectCode ? { projectCode: r.projectCode } : {}),
+    ...(r.projectName ? { projectName: r.projectName } : {}),
+  };
+}
+
+/** Cache-key suffix for the S8 G5 filters; empty when none are set, so existing keys are unchanged. */
+function cfKey(cf?: repo.ContractFilters): string {
+  if (!cf || (!cf.contractEndBefore && !cf.projectId && !cf.contractStatus)) return "";
+  return `:cf=${cf.contractEndBefore ?? ""}|${cf.projectId ?? ""}|${cf.contractStatus ?? ""}`;
 }
 
 export type OfficerRef = { id: string; name: string; designation: string | null };

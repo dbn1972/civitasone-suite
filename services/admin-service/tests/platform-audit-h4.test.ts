@@ -17,6 +17,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { featureFlags } from "../src/modules/feature-flags/schema.js";
 import { registerFeatureFlagConsumers } from "../src/modules/feature-flags/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 function wireTenantAwareQueue(q: Queue): Queue {
   const rawSubscribe = q.subscribe.bind(q);
@@ -67,7 +68,7 @@ describe("feature-flag kill consumer -- reason in audit (GAP-ADMIN-FEATURE-FLAGS
       ...base, messageId: MSG_CREATE, type: COMMANDS.featureFlagManageCreate, correlationId: "corr-ff-c",
       payload: { id: FLAG_ID, tenantId: T1, key: "h4_kill_reason", name: "Kill reason", description: "", enabled: true, rolloutPercent: 100, targetSegments: [] }, // gitleaks:allow -- feature-flag key fixture, not a secret
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.publish("admin.feature_flag.kill", {
       ...base, messageId: MSG_KILL, type: "admin.feature_flag.kill", correlationId: "corr-ff-k",
       payload: { flagId: FLAG_ID, tenantId: T1, reason: "INC-77 payment outage" },

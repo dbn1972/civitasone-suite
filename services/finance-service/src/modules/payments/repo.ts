@@ -2,7 +2,7 @@ import { and, eq, sql, inArray, notInArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeHeads } from "../budget/schema.js";
-import { financeBills, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
+import { financeBills, financeBankAccounts, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 import { syncBill } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -90,6 +90,22 @@ export async function findBillsByVendorAndTenant(vendorId: string, tenantId: str
   );
 }
 
+/**
+ * Is `id` an ACTIVE bank account (payments.finance_bank_accounts) of this tenant? finance_payments.bank_account_id
+ * is a plain FK, which knows nothing about tenants or status, so the route and the consumer check it here first.
+ */
+export async function isActiveBankAccount(tenantId: string, id: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeBankAccounts.id }).from(financeBankAccounts)
+    .where(and(eq(financeBankAccounts.id, id), eq(financeBankAccounts.tenantId, tenantId), eq(financeBankAccounts.status, "active"))).limit(1));
+  return rows.length > 0;
+}
+
+export async function isActiveBankAccountTx(tx: Writer, tenantId: string, id: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: financeBankAccounts.id }).from(financeBankAccounts)
+    .where(and(eq(financeBankAccounts.id, id), eq(financeBankAccounts.tenantId, tenantId), eq(financeBankAccounts.status, "active"))).limit(1);
+  return rows.length > 0;
+}
+
 export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | null> {
   const rows = await (tx as typeof db).select().from(financeBills).where(eq(financeBills.id, id)).limit(1);
   return rows[0] ?? null;
@@ -159,6 +175,53 @@ export async function updatePayment(tx: Writer, id: string, patch: Partial<Payme
   if (row && typeof patch.status === "string") {
     await appendPaymentEvent(tx, { tenantId: row.tenantId, paymentId: id, status: patch.status, actorId: patch.updatedBy });
   }
+}
+
+/**
+ * An earlier bill of the SAME vendor carrying the same vendor bill number (case / spacing-insensitive). A rejected bill
+ * does not count: the vendor may re-submit the invoice after a rejection. `excludeId` skips the bill itself on a re-drive.
+ */
+export async function findDuplicateVendorBill(
+  tx: Exec, tenantId: string, vendorId: string, key: string, excludeId?: string,
+): Promise<{ id: string; billNo: string; status: string } | null> {
+  const r = await tx.execute(sql`
+    SELECT id::text AS id, bill_no AS "billNo", status
+    FROM payments.finance_bills
+    WHERE tenant_id = ${tenantId}::uuid AND vendor_id = ${vendorId}::uuid
+      AND vendor_bill_no IS NOT NULL
+      AND lower(regexp_replace(btrim(vendor_bill_no), '\\s+', ' ', 'g')) = ${key}
+      AND status <> 'rejected'
+      AND (${excludeId ?? null}::uuid IS NULL OR id <> ${excludeId ?? null}::uuid)
+    ORDER BY created_at LIMIT 1`);
+  const rows = (Array.isArray(r) ? r : ((r as { rows?: unknown[] } | undefined)?.rows ?? [])) as Array<{ id: string; billNo: string; status: string }>;
+  return rows[0] ?? null;
+}
+
+/**
+ * Where a bill lodged with POST /v1/finance/bills ended up. The route answers 202 before the worker has run, so a bill the
+ * worker refuses (e.g. DUPLICATE_VENDOR_BILL_NO from a race the route pre-check could not see) is otherwise invisible:
+ * it is created ("created"), refused with the code and reason the worker raised on finance.bill.rejected ("rejected"),
+ * or not decided / unknown ("pending").
+ */
+export async function findBillOutcome(
+  tx: Exec, tenantId: string, billId: string,
+): Promise<{ state: "created"; billNo: string } | { state: "rejected"; code: string; reason: string } | { state: "pending" }> {
+  const rowsOf = (r: unknown) => (Array.isArray(r) ? r : ((r as { rows?: unknown[] } | undefined)?.rows ?? [])) as Array<Record<string, unknown>>;
+  const bill = rowsOf(await tx.execute(sql`SELECT bill_no FROM payments.finance_bills WHERE tenant_id = ${tenantId}::uuid AND id = ${billId}::uuid LIMIT 1`))[0];
+  if (bill) return { state: "created", billNo: String(bill.bill_no) };
+  const rej = rowsOf(await tx.execute(sql`
+    SELECT payload->>'code' AS code, payload->>'reason' AS reason FROM _outbox.messages
+    WHERE tenant_id = ${tenantId}::uuid AND topic = 'finance.bill.rejected' AND payload->>'billId' = ${billId}
+    ORDER BY created_at DESC LIMIT 1`))[0];
+  if (rej) {
+    const code = String(rej.code ?? "BILL_REFUSED");
+    // the worker prefixes its reason with the code ("DUPLICATE_VENDOR_BILL_NO: ..."): show the sentence only
+    const raw = String(rej.reason ?? "");
+    const prefix = `${code}:`;
+    const reason = raw.startsWith(prefix) ? raw.slice(prefix.length).trimStart() : raw;
+    return { state: "rejected", code, reason };
+  }
+  return { state: "pending" };
 }
 
 export async function insertBill(tx: Writer, row: BillInsert): Promise<void> {

@@ -19,6 +19,7 @@ import { queue } from "../src/shared/infra.js";
 import { tenantScoped } from "../src/shared/tenant-queue.js";
 import { registerIdentityProviderConsumers } from "../src/modules/identity-providers/consumer.js";
 import { IDP_COMMANDS } from "../src/modules/identity-providers/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const T_A = randomUUID();
@@ -260,7 +261,7 @@ describe("consumer", () => {
     await queue.publish(IDP_COMMANDS.create, msg);
     await queue.publish(IDP_COMMANDS.create, msg);
     await waitFor(async () => (await list("idp", A())).body.data.find((p) => p.id === providerId));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const rows = await asTenant(T_A, (sql) => sql<Array<{ n: number }>>`SELECT count(*)::int AS n FROM identity_providers.providers WHERE id = ${providerId}`);
     expect(rows[0]!.n).toBe(1);
     const audits = await asTenant(T_A, (sql) => sql<Array<{ payload: unknown }>>`
@@ -319,7 +320,7 @@ describe("consumer", () => {
       messageId: randomUUID(), type: IDP_COMMANDS.remove, tenantId: T_B, actorId: ACTOR_B, correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenantId: T_B, providerId: aRow.id, kind: "idp" },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect((await list("idp", A())).body.data.some((p) => p.id === aRow.id)).toBe(true);
   });
 });

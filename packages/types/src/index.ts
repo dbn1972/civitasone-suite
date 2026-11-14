@@ -1161,6 +1161,16 @@ export type EmployeeDetail = {
   pensionScheme?: string;
   /** UAT b18: statutory ids missing for that scheme, e.g. ["UAN_MISSING"]; absent when complete. */
   statutoryIncomplete?: string[];
+  /** S8 G5 read-model (contract + project snapshot); present only for tenants that opted in. */
+  contractId?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractStatus?: string;
+  contractRenewalCount?: number;
+  primaryProjectId?: string;
+  projectCode?: string;
+  projectName?: string;
+  projectManagerId?: string;
 };
 
 // Procurement types
@@ -3170,7 +3180,7 @@ export type FinanceDebtDetail = {
 /** A maker-checker change request (fiscal-year activation, opening balances, HoA change). */
 export type FinanceChangeRequest = {
   id: string;
-  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax" | "period_reopen";
+  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax" | "period_reopen" | "ar_opening_balance";
   subjectKey: string;
   payload: Record<string, unknown>;
   reason: string;
@@ -3373,3 +3383,4 @@ export type FinanceVendorSummary = {
 export const REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES: readonly string[] = ["medical", "lta", "travel"];
 
 export * from "./gatewayPublic.js";
+export * from "./reimbursementReceiptPolicy.js";

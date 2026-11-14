@@ -19,6 +19,7 @@ import * as insuranceRepo from "../src/modules/insurance/repo.js";
 import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import { outboxMessages } from "../src/shared/outbox.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000ab030001";
@@ -115,7 +116,7 @@ async function applyDecide(id: string, decision: "approve" | "settle" | "reject"
     tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml3", schemaVersion: "1.0",
     payload: { id, tenantId: TENANT, decision, ...extra },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainAllQueues();
   await q.stop();
 }
 
@@ -128,7 +129,7 @@ async function applyPolicyUpdate(id: string, patchBody: Record<string, unknown>)
     tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml3-pol", schemaVersion: "1.0",
     payload: { id, tenantId: TENANT, ...patchBody },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainAllQueues();
   await q.stop();
 }
 

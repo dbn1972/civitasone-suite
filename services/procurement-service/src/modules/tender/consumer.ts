@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SANCTION_REQUIRED_ABOVE_MINOR } from "../../shared/sanction-threshold.js";
+import { resolveApprovalMode } from "../po-approval/mode.js";
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -232,6 +233,8 @@ export function registerTenderConsumers(queue: Queue): void {
   // 6. Award — L1 over qualified, non-blacklisted bidders → emit PO create.
   queue.subscribe(COMMANDS.tenderAward, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; sanctionRef?: string };
+    // M10: a tenant without Finance (local approval mode) has no sanction to cite: the award is not held for one.
+    const localApproval = (await resolveApprovalMode(p.tenantId)) === "local";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const t = await repo.findTenderByIdTx(tx, p.id, p.tenantId);
@@ -280,7 +283,7 @@ export function registerTenderConsumers(queue: Queue): void {
       // resulting poCreate (SANCTION_REQUIRED) while the tender is already marked
       // awarded → permanent divergence. Fail the award in-txn instead.
       const sanctionRef = p.sanctionRef ?? t.sanctionRef ?? null;
-      if (!sanctionRef && winner.amountMinor > SANCTION_REQUIRED_ABOVE_MINOR) {
+      if (!sanctionRef && winner.amountMinor > SANCTION_REQUIRED_ABOVE_MINOR && !localApproval) {
         throw new DomainError(
           "SANCTION_REQUIRED",
           `award value ${winner.amountMinor} paise (> Rs 1,000) requires a sanctionRef; tender stays pre-award`,

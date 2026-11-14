@@ -1,5 +1,6 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { assertProvisionTx, NO_BUDGET_PROVISION } from "../budget/provision.js";
 import { captureError } from "@civitasone/observability";
 import { financeBillCreate } from "@civitasone/events/contracts";
@@ -11,7 +12,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, resolveThreeWayTolerancePct, DomainError } from "./domain.js";
+import { normalisePoNumber, normaliseVendorBillNo, vendorBillNoKey, vendorBillNoUniqueEnabled, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, resolveThreeWayTolerancePct, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -133,7 +134,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       id: string; tenantId: string; billNo: string; vendorId: string; headId?: string; headCode?: string;
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
-      netMinor: number; poRef?: string; poNumber?: string; grnRef?: string; billDate?: string;
+      netMinor: number; vendorBillNo?: string; poRef?: string; poNumber?: string; grnRef?: string; billDate?: string;
       poAmountMinor?: string; grnAmountMinor?: string;
     };
     // GAP-FINANCE-EXPENDITURE-BILLS-06: display snapshot of the human PO number (grn.accepted carries it).
@@ -210,6 +211,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // Budget appropriation control: locate the head allocation for the bill's FY.
       const billFy = fyFromDate(billDate);
       const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, headId, billFy);
+      // The vendor's own invoice number (sent by POST /v1/finance/bills only). With FINANCE_VENDOR_BILL_NO_UNIQUE on, a
+      // second non-rejected bill of the same vendor with the same number is refused, under a per-vendor-number lock so two
+      // concurrent submissions cannot both pass. Checked before the internal number is allocated, so a refusal burns none.
+      const vendorBillNo = normaliseVendorBillNo(p.vendorBillNo);
+      if (vendorBillNo && vendorBillNoUniqueEnabled()) {
+        const key = vendorBillNoKey(vendorBillNo);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-bill-no:${p.tenantId}:${p.vendorId}:${key}`}))`);
+        const dup = await repo.findDuplicateVendorBill(tx as unknown as Parameters<typeof repo.findDuplicateVendorBill>[0], p.tenantId, p.vendorId, key, p.id);
+        if (dup) {
+          throw new NonRetryableError(`DUPLICATE_VENDOR_BILL_NO: vendor bill number ${vendorBillNo} was already lodged for this vendor as ${dup.billNo}`);
+        }
+      }
       // P1-1: gapless, strictly-sequential bill number from the shared atomic
       // allocator (per tenant+FY+series). The caller-supplied billNo is ignored
       // as the authoritative number; a rolled-back create does not consume one.
@@ -230,6 +243,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
+        ...(vendorBillNo ? { vendorBillNo } : {}),
         headId, ddoCode: resolvedDdoCode.toUpperCase(),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
@@ -502,6 +516,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
     let insertedPayment: PaymentRow | undefined;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // A bank account that is not an active one of this tenant can never become valid by retrying: fail once,
+      // straight to the DLQ, instead of an FK violation retried to exhaustion.
+      if (p.bankAccountId && !(await repo.isActiveBankAccountTx(tx, p.tenantId, p.bankAccountId))) {
+        throw new NonRetryableError(`BANK_ACCOUNT_NOT_FOUND: bankAccountId ${p.bankAccountId} is not an active bank account of tenant ${p.tenantId}`);
+      }
       const bill = await repo.findBillByIdTx(tx, p.billId);
       if (!bill) throw new Error(`bill ${p.billId} not found`);
       if (bill.ddoCode && bill.ddoCode !== p.ddoCode.toUpperCase()) {

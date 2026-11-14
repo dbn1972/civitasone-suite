@@ -17,6 +17,8 @@ export const COMMANDS = {
   poReject:        "procurement.po.reject",
   poDispatch:      "procurement.po.dispatch",
   poSubmitApproval: "procurement.po.submit_approval",
+  // M10: change the local PO approval mode override / threshold matrix (tenant without Finance).
+  poApprovalSettingsUpdate: "procurement.po_approval_settings.update",
   gemOrderCreate:  "procurement.gem_order.create",
   grnCreate:       "procurement.grn.create",
   grnAccept:       "procurement.grn.accept",

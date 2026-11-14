@@ -24,11 +24,12 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import {
   PAY_PROFILES, isPayProfile, planApproval, resolveProfileForMonth, validateProfileRequest, applyMoneyTerms, moneyTermsOf,
-  requiredPayOption, type DeputationMoneyTerms,
+  requiredPayOption, type DeputationMoneyTerms, type CtcTerms,
 } from "./domain.js";
 import { buildEmployeePayFeed } from "./feed.js";
+import { payProfileBulkRoutes } from "./bulk.js";
 
-const WRITE_ROLES = ["hr_admin", "payroll_admin", "super_admin"];
+export const WRITE_ROLES = ["hr_admin", "payroll_admin", "super_admin"];
 const READ_ROLES = ["hr_admin", "hr_officer", "payroll_admin", "payroll_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const profileParam = z.object({ profileId: z.string().uuid() });
@@ -56,6 +57,15 @@ const requestBody = z.object({
     parentDaRateBps: z.number().int().min(0).max(100000).nullable(),
     parentPensionScheme: z.enum(["GPF", "NPS", "EPF"]).nullable(),
   }).partial().optional(),
+  /** S8 G1 (flag S8_CTC_PROFILE_ENABLED): the CTC terms of a ctc_contract profile. Annual, paise, digit strings. */
+  ctcTerms: z.object({
+    annualFixedMinor: minorString,
+    annualVariableTargetMinor: minorString.nullable().default(null),
+    templateLineageId: z.string().uuid(),
+    epfWagePolicy: z.enum(["ceiling", "actual"]).default("ceiling"),
+    gratuityProvisionOn: z.boolean().default(true),
+    overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: minorString })).max(10).default([]),
+  }).strict().optional(), // strict: there is no ESI opt-out (owner decision 10 Nov 2026), so esiOptOut is a 400, not silently ignored
   orderRef: z.string().max(120).optional(),
   remarks: z.string().max(2000).optional(),
 });
@@ -69,6 +79,7 @@ function serialize(r: Awaited<ReturnType<typeof repo.findById>>) {
     deputationId: r.deputationId,
     consolidatedMonthlyMinor: r.consolidatedMonthlyMinor == null ? null : r.consolidatedMonthlyMinor.toString(),
     deputationTerms: r.deputationTerms ?? null,
+    ...(r.ctcTerms ? { ctcTerms: r.ctcTerms } : {}),
     orderRef: r.orderRef, remarks: r.remarks,
     requestedBy: r.requestedBy, decidedBy: r.decidedBy, decidedAt: r.decidedAt, decisionNote: r.decisionNote,
     createdAt: r.createdAt,
@@ -84,7 +95,7 @@ async function mustEmployee(tenantId: string, id: string) {
 }
 
 /** Latest locked (approved/disbursed) payroll month; fail closed if payroll is unreachable. */
-async function lockedThrough(tenantId: string): Promise<string | null> {
+export async function loadLockedThrough(tenantId: string): Promise<string | null> {
   try {
     return await fetchPayrollLockedThrough(tenantId);
   } catch (err) {
@@ -99,11 +110,15 @@ async function lockedThrough(tenantId: string): Promise<string | null> {
  * Full validation of a (requested or pending) assignment against current
  * state. Shared by request and approve so an approval re-checks everything.
  */
-async function assertAssignable(tenantId: string, input: {
+export async function assertAssignable(tenantId: string, input: {
   employeeId: string; payProfile: (typeof PAY_PROFILES)[number]; effectiveFrom: string;
   deputationId: string | null; consolidatedMonthlyMinor: bigint | null;
   /** Request: overrides merged over the deputation's terms. Approve: the stored approved copy. */
   termsOverride?: Partial<DeputationMoneyTerms>; termsSnapshot?: DeputationMoneyTerms | null;
+  /** S8 G1: the CTC terms of the request / the stored approved copy. */
+  ctcTerms?: CtcTerms | null;
+  /** G6 bulk: the locked period read once by the caller (skips the per-row payroll call). Undefined = read it. */
+  lockedThroughOverride?: string | null;
 }): Promise<DeputationMoneyTerms | null> {
   const emp = await mustEmployee(tenantId, input.employeeId);
   const engagement = (await loadTypeCategoryResolver(tenantId))(emp.employeeType);
@@ -124,10 +139,38 @@ async function assertAssignable(tenantId: string, input: {
     deputation: live && snapshot ? applyMoneyTerms(live, snapshot) : live,
     deputationIdGiven: input.deputationId != null,
     consolidatedMonthlyMinor: input.consolidatedMonthlyMinor,
-    lockedThrough: await lockedThrough(tenantId),
+    lockedThrough: input.lockedThroughOverride !== undefined ? input.lockedThroughOverride : await loadLockedThrough(tenantId),
+    ...(input.ctcTerms ? { ctcTerms: input.ctcTerms } : {}),
   });
   if (error) throw new HttpError(error === "PERIOD_LOCKED" ? 409 : 422, error, `pay profile not assignable: ${error}`);
   return snapshot;
+}
+
+/**
+ * Everything a decision (approve / reject) must satisfy before it is queued: the request exists and is still pending,
+ * the decider is not its requester (maker-checker), and an approval is still assignable and orders after the
+ * employee's active profile. Shared by the single routes and the G6 bulk decision. Throws HttpError.
+ */
+export async function assertDecidable(ctx: { tenantId: string; actorId: string }, profileId: string, decision: "approve" | "reject", lockedThroughOverride?: string | null): Promise<void> {
+  const row = await repo.findById(ctx.tenantId, profileId);
+  if (!row) throw new HttpError(404, "NOT_FOUND", "pay profile request not found");
+  if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `pay profile request is already ${row.status}`);
+  if (row.requestedBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a pay profile change must be decided by someone other than its requester");
+  }
+  if (decision === "approve") {
+    if (!isPayProfile(row.payProfile)) throw new HttpError(422, "UNKNOWN_PROFILE", row.payProfile);
+    await assertAssignable(ctx.tenantId, {
+      employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
+      deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
+      termsSnapshot: row.deputationTerms ?? null,
+      ...(row.ctcTerms ? { ctcTerms: row.ctcTerms } : {}),
+      ...(lockedThroughOverride !== undefined ? { lockedThroughOverride } : {}),
+    });
+    const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
+    const plan = planApproval(row, active);
+    if ("error" in plan) throw new HttpError(409, plan.error, "a new pay profile must start after the employee's current one");
+  }
 }
 
 export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
@@ -135,12 +178,17 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    const rawTerms = (req.body as { ctcTerms?: Record<string, unknown> } | null | undefined)?.ctcTerms;
+    if (rawTerms && typeof rawTerms === "object" && "esiOptOut" in rawTerms) {
+      throw new HttpError(400, "ESI_OPT_OUT_NOT_ALLOWED", "ctcTerms.esiOptOut: ESI opt-out is not allowed; ESI cannot be waived by the employee");
+    }
     const body = requestBody.parse(req.body);
     const consolidated = body.consolidatedMonthlyMinor != null ? BigInt(body.consolidatedMonthlyMinor) : null;
     const deputationTerms = await assertAssignable(ctx.tenantId, {
       employeeId: id, payProfile: body.payProfile, effectiveFrom: body.effectiveFrom,
       deputationId: body.deputationId ?? null, consolidatedMonthlyMinor: consolidated,
       ...(body.deputationTerms ? { termsOverride: body.deputationTerms as Partial<DeputationMoneyTerms> } : {}),
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
     });
     const history = await repo.listByEmployee(ctx.tenantId, id);
     if (history.some((r) => r.status === "pending")) {
@@ -155,6 +203,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       deputationId: body.deputationId ?? null,
       consolidatedMonthlyMinor: body.consolidatedMonthlyMinor ?? null,
       deputationTerms,
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
       orderRef: body.orderRef ?? null,
       remarks: body.remarks ?? null,
     });
@@ -189,23 +238,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       requireRole(ctx, WRITE_ROLES);
       const { profileId } = profileParam.parse(req.params);
       const body = decisionBody.parse(req.body ?? {});
-      const row = await repo.findById(ctx.tenantId, profileId);
-      if (!row) throw new HttpError(404, "NOT_FOUND", "pay profile request not found");
-      if (row.status !== "pending") throw new HttpError(409, "NOT_PENDING", `pay profile request is already ${row.status}`);
-      if (row.requestedBy === ctx.actorId) {
-        throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a pay profile change must be decided by someone other than its requester");
-      }
-      if (decision === "approve") {
-        if (!isPayProfile(row.payProfile)) throw new HttpError(422, "UNKNOWN_PROFILE", row.payProfile);
-        await assertAssignable(ctx.tenantId, {
-          employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
-          deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
-          termsSnapshot: row.deputationTerms ?? null,
-        });
-        const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
-        const plan = planApproval(row, active);
-        if ("error" in plan) throw new HttpError(409, plan.error, "a new pay profile must start after the employee's current one");
-      }
+      await assertDecidable(ctx, profileId, decision);
       const accepted = await commands.decidePayProfile(ctx, profileId, decision, body.note ?? null);
       return reply.code(202).send(accepted);
     });
@@ -243,6 +276,8 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       .filter((x): x is NonNullable<typeof x> => x !== null);
     return reply.send({ month, data });
   });
+
+  await payProfileBulkRoutes(app);
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;

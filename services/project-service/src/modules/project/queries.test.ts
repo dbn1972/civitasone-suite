@@ -32,6 +32,7 @@ function projectRow(overrides: Partial<ProjectRow>): ProjectRow {
     // different so a regression back to dprCostMinor is caught, not just
     // coincidentally equal.
     dprCostMinor: 5000000n, sanctionedMinor: 4500000n, sanctionRef: null,
+    costCenterId: null,
     currency: "INR", status: "active",
     startDate: "2026-01-01", endDate: "2027-12-31",
     physicalPct: "0.00", financialPct: "0.00",

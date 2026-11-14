@@ -25,6 +25,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { createRiskBody } from "../src/modules/risk/validators.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -324,10 +325,10 @@ describe("GAP-AUDIT-RISK-REGISTER-07 — POST /v1/audit/risks writes exactly one
         likelihood: "likely", impact: "major",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 700));
+    await drainOrFail(q);
     // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
     await relayOnce(dbInstR as never, q, 100, "audit-service");
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");

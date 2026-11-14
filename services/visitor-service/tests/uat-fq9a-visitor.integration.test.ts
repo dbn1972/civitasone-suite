@@ -25,6 +25,7 @@ import { devices } from "../src/modules/device-registry/schema.js";
 import { badgeTemplates } from "../src/modules/badge-print/schema.js";
 import { recurringPasses } from "../src/modules/recurring-pass/schema.js";
 import { digitalPasses } from "../src/modules/digital-pass/schema.js";
+import { visitRequests } from "../src/modules/visit-request/schema.js";
 import { blacklistEntries } from "../src/modules/blacklist/schema.js";
 import { registerDeviceRegistryConsumers } from "../src/modules/device-registry/consumer.js";
 import { registerBadgePrintConsumers } from "../src/modules/badge-print/consumer.js";
@@ -300,10 +301,24 @@ describe("#8 unknown gate / location is rejected synchronously", () => {
     spy.mockRestore();
   }, 20000);
 
-  it("POST /check-ins with a real gate is still accepted", async () => {
+  it("POST /check-ins with a real gate and a real, in-window pass is still accepted", async () => {
+    // Since the sync pre-flight (UNKNOWN_PASS / window) a random passId is refused; seed a valid pass.
+    const passId = randomUUID();
+    const vrId = randomUUID();
+    await inTenant(() => db.transaction(async (tx) => {
+      await tx.insert(visitRequests).values({
+        id: vrId, tenantId: TENANT, locationId: LOCATION, hostEmployeeId: randomUUID(),
+        visitorName: "FQ9A Visitor", visitorPhone: "+911234567890", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(digitalPasses).values({
+        id: passId, tenantId: TENANT, visitRequestId: vrId, locationId: LOCATION, passNumber: "FQ9A" + Math.floor(Math.random() * 1e6),
+        passType: "single", status: "active", qrJwt: "x", validFrom: new Date(Date.now() - 3_600_000), validUntil: new Date(Date.now() + 3_600_000),
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
     const spy = vi.spyOn(appQueue, "publish").mockImplementation(async () => undefined as never);
     const app = await buildApp();
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-ins", headers: adminHeaders(), payload: { passId: randomUUID(), gateId: GATE } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-ins", headers: adminHeaders(), payload: { passId, gateId: GATE } });
     await app.close();
     spy.mockRestore();
     expect(res.statusCode).toBe(202);

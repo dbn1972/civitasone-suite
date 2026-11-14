@@ -14,6 +14,7 @@ import type { PayrollInputEmployee, PayProfile } from "../../shared/hrms-client.
 import type { CityClass, PensionScheme, SlipPayProfile, DeputationStationType } from "../payroll/domain.js";
 import { deputationAllowanceMinor } from "../payroll/domain.js";
 import type { AllowanceRules } from "./allowance-rules.js";
+import { CtcError, expandCtc, type CtcPlan, type CtcPlanContext } from "../ctc/model.js";
 
 export interface EmployeePayPlan {
   profile: PayProfile;
@@ -36,6 +37,8 @@ export interface EmployeePayPlan {
   daRateBps: bigint;
   pensionScheme: PensionScheme;
   hraFloorMinor: bigint;
+  /** S8 G1: the CTC expansion of a ctc_contract employee (absent for every other profile). */
+  ctc?: CtcPlan;
   /** Persisted on the slip (payroll_slips.profile_snapshot). */
   snapshot: Record<string, unknown>;
 }
@@ -57,6 +60,8 @@ export function planEmployeePay(
   month: string,
   centralDaRateBps: bigint,
   rules: AllowanceRules,
+  /** S8 G1: present only when the CTC flag is on; absent == ctc_contract is refused exactly as before. */
+  ctcContext?: CtcPlanContext,
 ): PlanResult {
   const cityClass: CityClass = emp.cityClass ?? "X";
   const feed = emp.payProfile;
@@ -87,7 +92,10 @@ export function planEmployeePay(
   }
 
   if (profile === "ctc_contract") {
-    return fail("CTC_PROFILE_NOT_SUPPORTED", emp, "the ctc_contract pay profile is computed by the CTC module, which is not deployed yet (PAY-PROFILES PR3)");
+    if (!ctcContext) {
+      return fail("CTC_PROFILE_NOT_SUPPORTED", emp, "the ctc_contract pay profile is computed by the CTC module, which is not deployed yet (PAY-PROFILES PR3)");
+    }
+    return planCtc(emp, feed, base, ctcContext);
   }
 
   if (profile === "consolidated_contract") {
@@ -177,6 +185,60 @@ export function planEmployeePay(
         allowanceBasis: preview.basis,
         allowanceRule: rule ? { rateBps: rule.rateBps.toString(), capMinor: rule.capMinor.toString() } : null,
         fixedAllowanceMinor: dep.fixedAllowanceMinor,
+      },
+    },
+  };
+}
+
+/**
+ * S8 G1: plan a ctc_contract employee. The template is the LOCKED version resolved for the month (never read
+ * directly); a missing template, missing terms or an unsolvable CTC (negative balancing line, no BASIC) fails
+ * the employee by name, fail-closed like every other plan failure. Whole-run fault isolation is an owner
+ * decision (design Q12) and deliberately NOT changed here.
+ */
+function planCtc(
+  emp: PayrollInputEmployee,
+  feed: PayrollInputEmployee["payProfile"],
+  base: Record<string, unknown>,
+  ctx: CtcPlanContext,
+): PlanResult {
+  const terms = feed?.ctc;
+  if (!terms) return fail("CTC_TERMS_MISSING", emp, "ctc_contract profile carries no CTC terms");
+  const tpl = ctx.templates.get(terms.templateLineageId);
+  if (!tpl) return fail("CTC_TEMPLATE_NOT_FOUND", emp, `no locked CTC template version of ${terms.templateLineageId} takes effect by this month`);
+  const e = emp as { statutoryPf?: boolean; statutoryEsi?: boolean };
+  const pfApplicable = e.statutoryPf !== false;
+  const esiEligible = e.statutoryEsi !== false; // no employee opt-out (owner decision 10 Nov 2026); the engagement gate only
+  let expansion;
+  try {
+    expansion = expandCtc({
+      lines: tpl.lines, cfg: ctx.cfg, pfApplicable, statutoryEsi: e.statutoryEsi !== false,
+      terms: {
+        annualFixedMinor: BigInt(terms.annualFixedMinor),
+        annualVariableTargetMinor: terms.annualVariableTargetMinor != null ? BigInt(terms.annualVariableTargetMinor) : null,
+        epfWagePolicy: terms.epfWagePolicy, gratuityProvisionOn: terms.gratuityProvisionOn,
+        overrides: terms.overrides.map((o) => ({ code: o.code, monthlyMinor: BigInt(o.monthlyMinor) })),
+      },
+    });
+  } catch (err) {
+    if (err instanceof CtcError) return fail(err.code, emp, err.message.replace(/^\[[A-Z_]+\] /, ""));
+    throw err;
+  }
+  const template = { lineageId: terms.templateLineageId, structureId: tpl.structureId, templateVersion: tpl.templateVersion, effectiveFrom: tpl.effectiveFrom };
+  return {
+    ok: true,
+    plan: {
+      profile: "ctc_contract", slipProfile: { kind: "ctc_contract" },
+      profileBasicMinor: expansion.basicMinor,
+      // No revision-driven basic (a CTC revision is a new profile row; retro arrears are phase 2) and no run structure:
+      // the breakup lives on the profile. Calendar-day proration, as consolidated pay.
+      applyRevisions: false, applyRunStructure: false, lopMode: "prorate", arrearDaBasis: "central",
+      daRateBps: 0n, pensionScheme: "EPF", hraFloorMinor: 0n,
+      ctc: { expansion, template, pfApplicable, esiEligible },
+      snapshot: {
+        ...base, hraFloorMinor: "0",
+        ctcTemplate: { ...template, annualFixedMinor: terms.annualFixedMinor, epfWagePolicy: terms.epfWagePolicy, gratuityProvisionOn: terms.gratuityProvisionOn },
+        ctcOverrides: terms.overrides,
       },
     },
   };

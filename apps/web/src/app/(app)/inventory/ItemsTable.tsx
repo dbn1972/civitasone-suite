@@ -36,8 +36,8 @@ const columns: Col[] = [
  * links could not be loaded (then no row claims to be linked or unlinked).
  */
 export function ItemsTable({
-  items, source = "api", linkedItemIds = null,
-}: { items: InventoryItemRow[]; source?: "api" | "error"; linkedItemIds?: string[] | null }) {
+  items, source = "api", linkedItemIds = null, showLinkColumn = true,
+}: { items: InventoryItemRow[]; source?: "api" | "error"; linkedItemIds?: string[] | null; showLinkColumn?: boolean }) {
   const t = useTranslations("inventoryLink");
   const linked = linkedItemIds === null ? null : new Set(linkedItemIds);
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryItemRow[]>(
@@ -47,7 +47,8 @@ export function ItemsTable({
     (d) => d.length === 0,
   );
 
-  const columnsWithLink: Col[] = [
+  // Tenants on the inventory ledger have no stock-register side to link to: no link column for them.
+  const columnsWithLink: Col[] = !showLinkColumn ? columns : [
     ...columns.slice(0, -1),
     {
       key: "linkState",

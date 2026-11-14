@@ -24,6 +24,7 @@ import { procurementPos } from "../src/modules/po/schema.js";
 import { registerIndentConsumers } from "../src/modules/indent/consumer.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "7c7c7c7c-f102-4000-8000-000000000102";
 const MAKER = randomUUID();
@@ -42,7 +43,7 @@ async function deliver(type: string, payload: Record<string, unknown>, actorId =
   registerPoConsumers(q);
   await q.start();
   await q.publish(type, { messageId: randomUUID(), type, tenantId: TENANT, actorId, correlationId: `corr-${type}`, schemaVersion: "1.0", payload });
-  await new Promise<void>((r) => setTimeout(r, 400));
+  await drainAllQueues();
   await q.stop();
 }
 const inTenant = <T>(fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>) =>

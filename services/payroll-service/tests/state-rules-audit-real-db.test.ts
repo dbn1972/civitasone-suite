@@ -22,6 +22,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // vitest.config.ts sets JWT_SECRET for every suite.
 const SECRET = process.env.JWT_SECRET as string;
@@ -43,7 +44,7 @@ async function until<T>(fn: () => Promise<T>, pred: (v: T) => boolean, ms = 5000
   const end = Date.now() + ms;
   let v = await fn();
   while (!pred(v) && Date.now() < end) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     v = await fn();
   }
   return v;
@@ -75,7 +76,7 @@ describe("POST /v1/payroll/statutory/state-rules -- role gate and before/after a
       const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(randomUUID(), roles), payload: { stateCode: "GA", lwfEmployee: 4000 } });
       expect(res.statusCode, roles.join(",")).toBe(403);
     }
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     expect(await lwfRow("GA")).toBeUndefined();
     expect(await stateAudits("GA")).toHaveLength(0);
   });

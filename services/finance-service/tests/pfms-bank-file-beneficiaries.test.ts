@@ -54,7 +54,7 @@ import { financeVendors } from "../src/modules/masters/schema.js";
 import { financeBills } from "../src/modules/payments/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financePfms } from "../src/modules/payments/schema.js";
-import { financeBanks } from "../src/modules/treasury/schema.js";
+import { financeBankAccounts } from "../src/modules/payments/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-0000000000fc";
@@ -75,7 +75,7 @@ const PFMS_BUSINESS_ID = "PFMS-TEST-BANKFILE-001";
 // from DEPT_ACCOUNT_NO below on purpose: the review's exact proof scenario.
 const VENDOR_ACCOUNT_NO = "220099887766"; // seeded cleartext -- must round-trip through encryptedText
 const VENDOR_IFSC = "VEND0009988";
-// The DEPARTMENT's own treasury/disbursing account (treasury.finance_banks) --
+// The DEPARTMENT's own disbursing account (payments.finance_bank_accounts) --
 // linked to PAYMENT_WITH_BANK via bank_account_id, and must NEVER appear
 // anywhere in the generated bank file.
 const DEPT_ACCOUNT_NO = "500011002200";
@@ -91,7 +91,7 @@ async function cleanup() {
   await scoped(TENANT, (tx) => tx.delete(financeBills).where(eq(financeBills.id, BILL)));
   await scoped(TENANT, (tx) => tx.delete(financeBills).where(eq(financeBills.id, BILL2)));
   await scoped(TENANT, (tx) => tx.delete(financeBills).where(eq(financeBills.id, BILL3)));
-  await scoped(TENANT, (tx) => tx.delete(financeBanks).where(eq(financeBanks.id, BANK)));
+  await scoped(TENANT, (tx) => tx.delete(financeBankAccounts).where(eq(financeBankAccounts.id, BANK)));
   await scoped(TENANT, (tx) => tx.delete(financeVendors).where(eq(financeVendors.id, VENDOR)));
   await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD)));
 }
@@ -109,15 +109,15 @@ beforeAll(async () => {
     bankAccountNo: VENDOR_ACCOUNT_NO, ifsc: VENDOR_IFSC,
     createdBy: ACTOR, updatedBy: ACTOR,
   }));
-  // The table bank_account_id is actually FK'd to (fk_fpayments_bank) --
-  // NOT payments.finance_bank_accounts. This is the DEPARTMENT's own
-  // treasury account -- real and resolvable, but must never leak into the
-  // beneficiary "Account Number"/"IFSC" fields. accountNo is `encryptedText`;
-  // inserting through the drizzle table encrypts it transparently, the same
+  // The table bank_account_id is FK'd to (fk_fpayments_bank_account, migration
+  // 0165): payments.finance_bank_accounts, the bank-account master. This is the
+  // DEPARTMENT's own account -- real and resolvable, but must never leak into the
+  // beneficiary "Account Number"/"IFSC" fields. accountNo/ifsc are `encryptedText`;
+  // inserting through the drizzle table encrypts them transparently, the same
   // way the real bank-account-creation path does.
-  await scoped(TENANT, (tx) => tx.insert(financeBanks).values({
-    id: BANK, tenantId: TENANT, name: "Treasury Single Account",
-    accountNo: DEPT_ACCOUNT_NO, createdBy: ACTOR, updatedBy: ACTOR,
+  await scoped(TENANT, (tx) => tx.insert(financeBankAccounts).values({
+    id: BANK, tenantId: TENANT, bankName: "Treasury Single Account",
+    accountNo: DEPT_ACCOUNT_NO, ifsc: "TRSY0000001", createdBy: ACTOR,
   }));
   await scoped(TENANT, (tx) => tx.insert(financeBills).values({
     id: BILL, tenantId: TENANT, billNo: "BILL/BANKFILE/001", vendorId: VENDOR, headId: HEAD,

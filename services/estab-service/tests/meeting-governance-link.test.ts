@@ -13,6 +13,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue as appQueue } from "../src/shared/infra.js";
 import { registerCommitteeConsumers } from "../src/modules/committee/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "c0ff33aa-0000-4000-8000-000000000d30";
@@ -68,7 +69,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 600));
+const settle = () => drainAllQueues();
 const link = (meetingId: string, governanceMeetingId: string | null, tid = TENANT, messageId = randomUUID()) =>
   q.publish(LINK_TOPIC, { messageId, type: LINK_TOPIC, tenantId: tid, actorId: ACTOR, correlationId: `c-${messageId}`, schemaVersion: "1.0", payload: { meetingId, tenantId: tid, governanceMeetingId } });
 const detail = async (id: string, tid = TENANT) => app.inject({ method: "GET", url: `/v1/estab/meetings/${id}`, headers: hdr(tid) });

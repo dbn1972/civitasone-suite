@@ -1,6 +1,7 @@
 import {
   pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, jsonb, date, boolean,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const paymentsSchema = pgSchema("payments");
 
@@ -10,6 +11,9 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull(),
   billNo:      text("bill_no").notNull(),
+  // Migration 0168: the number printed on the VENDOR's invoice (the caller's billNo on POST /v1/finance/bills). NULL for
+  // GRN / works bills and older bills. bill_no above is the internal gapless BILL/<fy>/<seq> number.
+  vendorBillNo: text("vendor_bill_no"),
   vendorId:    uuid("vendor_id").notNull(),
   headId:      uuid("head_id").notNull(),
   sanctionRef: uuid("sanction_ref"),
@@ -48,6 +52,27 @@ export const financeGrnMatch = paymentsSchema.table("finance_grn_match", {
   grnAmountMinor: bigint("grn_amount_minor", { mode: "bigint" }).notNull().default(0n),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * The bank-account master (migration 0066) -- the office's own accounts that
+ * POST /v1/finance/bank-accounts writes. finance_payments.bank_account_id
+ * references this table (migration 0165, fk_fpayments_bank_account).
+ * masters/bank-routes.ts keeps its own identical definition for the CRUD routes.
+ */
+export const financeBankAccounts = paymentsSchema.table("finance_bank_accounts", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  bankName:    varchar("bank_name", { length: 200 }).notNull(),
+  branchName:  varchar("branch_name", { length: 200 }),
+  accountNo:   encryptedText("account_no").notNull(),
+  ifsc:        encryptedText("ifsc").notNull(),
+  accountType: varchar("account_type", { length: 20 }).notNull().default("current"),
+  purpose:     varchar("purpose", { length: 64 }),
+  status:      varchar("status", { length: 12 }).notNull().default("active"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  version:     integer("version").notNull().default(1),
 });
 
 export const financePayments = paymentsSchema.table("finance_payments", {

@@ -25,7 +25,9 @@ const id = (s: string): string => {
 };
 
 let q: MemoryQueue;
-const settle = () => new Promise((r) => setTimeout(r, 250));
+// Wait for every in-flight MemoryQueue delivery to fully settle (MemoryQueue.drain) rather than racing a
+// fixed 250ms sleep, which flaked on a loaded CI runner (consumer had not yet committed the status change).
+const settle = (): Promise<void> => q.drain();
 
 /**
  * #146: billing_svc is NOBYPASSRLS and the domain tables + outbox carry FORCE

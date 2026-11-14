@@ -19,6 +19,7 @@ import * as repo from "../src/modules/fleet/repo.js";
 import { registerFleetConsumers } from "../src/modules/fleet/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000e2";
@@ -145,7 +146,7 @@ describe("GAP-ASSETS-FLEET-MAINTENANCE-05 complete / cancel", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml02-cancel", schemaVersion: "1.0",
       payload: { id: openJob, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
 
     const row = await runWithTenant(TENANT, () => repo.findMaintenanceById(openJob, TENANT));
@@ -161,7 +162,7 @@ describe("GAP-ASSETS-FLEET-MAINTENANCE-05 complete / cancel", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml02-cancel-done", schemaVersion: "1.0",
       payload: { id: doneJob, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
     expect((await runWithTenant(TENANT, () => repo.findMaintenanceById(doneJob, TENANT)))?.status).toBe("completed");
   });

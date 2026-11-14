@@ -7,7 +7,7 @@ import { mapAdminUsers } from "./mapAdminUsers";
 
 export default async function PlatformUsersPage() {
   requireAnyRole(PLATFORM_ADMIN_ROLES, "/dashboard");
-  const [{ data: raw, source }, { data: rolesCatalogue }] = await Promise.all([
+  const [{ data: raw, source, truncated }, { data: rolesCatalogue }] = await Promise.all([
     getAdminUsers(),
     getAdminRolesList(),
   ]);
@@ -51,6 +51,11 @@ export default async function PlatformUsersPage() {
         <StatCard icon="⛔" tone="bad" label="Suspended" value={suspended} />
         <StatCard icon="🔐" tone="info" label="MFA enabled" value={mfaOn} />
       </div>
+      {truncated ? (
+        <div role="status" style={{ margin: "0 0 12px", padding: "10px 14px", border: "1px solid var(--warn, #b45309)", borderRadius: 8 }}>
+          This list is truncated: only the first {users.length.toLocaleString("en-IN")} users are shown. Totals and counts cover those users only.
+        </div>
+      ) : null}
       <UserManagementPage
         users={users}
         source={source}

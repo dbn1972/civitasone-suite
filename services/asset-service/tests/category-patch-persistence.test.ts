@@ -24,6 +24,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -72,7 +73,7 @@ async function createCategory(token: string, tenantId: string, actorId: string, 
       depMethod: "SLM", depRate: 10, usefulLifeYears: 5,
     },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainAllQueues();
   await q.stop();
 
   // The HTTP route itself must answer 202 (CQRS), not 201.
@@ -94,7 +95,7 @@ async function applyCategoryUpdate(tenantId: string, actorId: string, id: string
     tenantId, actorId, correlationId: "corr-cat-upd", schemaVersion: "1.0",
     payload: { id, tenantId, name },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainAllQueues();
   await q.stop();
 }
 

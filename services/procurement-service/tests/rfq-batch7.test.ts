@@ -25,6 +25,7 @@ import { registerRfqConsumers } from "../src/modules/rfq/consumer.js";
 import * as queries from "../src/modules/rfq/queries.js";
 import * as vendorQueries from "../src/modules/vendor/queries.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT   = "b7a70000-1111-4000-8000-000000000001";
 const CREATOR  = "b7a70000-2222-4000-8000-000000000001";
@@ -44,7 +45,7 @@ function newQueue(): MemoryQueue {
   return q;
 }
 
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 350)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function createRfq(opts: { closingDate: string; vendorIds: string[]; fewerVendorsJustification?: string }): Promise<{ rfqId: string; itemId: string }> {
   const rfqId = randomUUID();

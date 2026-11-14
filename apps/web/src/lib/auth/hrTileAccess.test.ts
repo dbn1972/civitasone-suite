@@ -4,7 +4,7 @@ import { HR_ROLES, LEAVE_POLICY_ADMIN_ROLES } from "./workRoles";
 
 /**
  * The complete set of tile hrefs on the HR hub (hr/page.tsx's hrCategories),
- * copied verbatim (88 slots across 13 categories, 86 unique hrefs -- leave
+ * copied verbatim (89 slots across 13 categories, 87 unique hrefs -- leave
  * policies and holidays each appear once under their own category and once
  * again under Setup). Kept as a flat literal here, independent of
  * hrCategories itself, because hr/page.tsx cannot export that array (Next.js
@@ -53,7 +53,7 @@ const ALL_HR_HUB_HREFS = [
   // catCommunication
   "/hr/social-feed",
   // catSetup (leave-policies, holidays repeat from above)
-  "/hr/departments", "/hr/designations", "/hr/locations", "/hr/office-locations", "/hr/leave-policies",
+  "/hr/departments", "/hr/designations", "/hr/grade-bands" /* S8-G4: shown only to a private-bands tenant */, "/hr/locations", "/hr/office-locations", "/hr/leave-policies",
   "/hr/holidays", "/hr/employee-types", "/hr/audit-log",
 ];
 
@@ -70,6 +70,7 @@ const HIDDEN_FROM_EMPLOYEE = [
   "/hr/interns",
   "/hr/outsourced", // GAP-HR-OUTSOURCED-01: HR-only register (contract values)
   "/hr/office-locations",
+  "/hr/grade-bands", // S8-G4: grade-bands/routes.ts read roles exclude a plain employee
   "/hr/leave-policies",
   "/hr/onboarding",
   "/hr/rti",
@@ -84,12 +85,12 @@ const HIDDEN_FROM_EMPLOYEE = [
 ];
 
 describe("hasHrTileAccess", () => {
-  it("has exactly 88 tile slots / 86 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
-    expect(ALL_HR_HUB_HREFS.length).toBe(88);
-    expect(UNIQUE_HR_HUB_HREFS.length).toBe(86);
+  it("has exactly 89 tile slots / 87 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
+    expect(ALL_HR_HUB_HREFS.length).toBe(89);
+    expect(UNIQUE_HR_HUB_HREFS.length).toBe(87);
   });
 
-  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 86 tiles", () => {
+  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 87 tiles", () => {
     for (const href of UNIQUE_HR_HUB_HREFS) {
       expect(hasHrTileAccess(href, ["hr_admin"])).toBe(true);
     }

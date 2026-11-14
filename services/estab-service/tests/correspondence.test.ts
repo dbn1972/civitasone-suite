@@ -15,6 +15,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { estabCorrespondence, estabFilePuc } from "../src/modules/correspondence/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerCorrespondenceConsumers } from "../src/modules/correspondence/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 /**
  * Test-harness fix: `new MemoryQueue()` used directly here (not the
@@ -70,7 +71,7 @@ async function wipe() {
   );
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 400));
+const settle = () => drainAllQueues();
 
 describe("Correspondence — CSMOP page numbering & PUC", () => {
   beforeAll(async () => { await wipe(); });

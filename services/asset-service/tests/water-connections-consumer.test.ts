@@ -24,6 +24,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerWaterConnectionConsumers } from "../src/modules/water-connections/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -73,7 +74,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
     expect(res.statusCode).toBe(202);
     applicationId = res.json().data.id;
     expect(applicationId).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterApplications).where(eq(assetWaterApplications.id, applicationId)));
     expect(rows).toHaveLength(1);
@@ -120,9 +121,9 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       payload: { id, tenantId: TENANT_A, applicantName: "Idem Test", applicantPhone: "9000000000", connectionType: "commercial" },
     });
     await publish();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await publish(); // replay
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterApplications).where(eq(assetWaterApplications.id, id)));
@@ -139,7 +140,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(submitRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     let rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterApplications).where(eq(assetWaterApplications.id, applicationId)));
     expect(rows[0]?.status).toBe("submitted");
 
@@ -149,7 +150,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       payload: { report: { feasible: false, reason: "no main line within 200m" } },
     });
     expect(feasRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterApplications).where(eq(assetWaterApplications.id, applicationId)));
     expect(rows[0]?.status).toBe("feasibility_check");
     expect(rows[0]?.feasibilityReport).toMatchObject({ feasible: false });
@@ -160,7 +161,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       payload: { reason: "no main line within 200m" },
     });
     expect(rejectRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterApplications).where(eq(assetWaterApplications.id, applicationId)));
     expect(rows[0]?.status).toBe("rejected");
     expect(rows[0]?.rejectionReason).toBe("no main line within 200m");
@@ -173,14 +174,14 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       payload: { applicantName: "Second Applicant", applicantPhone: "9123456780", connectionType: "domestic", pipeSize: "20mm" },
     });
     const applicationId2 = appId2Res.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const approveRes = await app.inject({
       method: "POST", url: `/v1/assets/water/applications/${applicationId2}/approve`,
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(approveRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const installRes = await app.inject({
       method: "POST", url: `/v1/assets/water/applications/${applicationId2}/install`,
@@ -189,7 +190,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
     });
     expect(installRes.statusCode).toBe(202);
     const connectionId = installRes.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const connRows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterConnections).where(eq(assetWaterConnections.id, connectionId)));
     expect(connRows).toHaveLength(1);
@@ -223,7 +224,7 @@ describe("Water-connections consumer — CQRS wiring (integration)", () => {
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(activateRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const activatedRows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterConnections).where(eq(assetWaterConnections.id, connectionId)));
     expect(activatedRows[0]?.status).toBe("active");
@@ -243,7 +244,7 @@ describe("Water-connections — cross-tenant RLS isolation", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-rls-wc-1", schemaVersion: "1.0",
       payload: { id: applicationIdA, tenantId: TENANT_A, applicantName: "RLS Test", applicantPhone: "9988776655", connectionType: "domestic" },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
   });
   afterAll(async () => {

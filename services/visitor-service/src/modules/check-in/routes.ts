@@ -38,6 +38,7 @@ import { listActiveVisitors } from "./repo.js";
 import { getDeviceBoundToGate } from "../device-registry/repo.js";
 import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { assertGateExists } from "../location/references.js";
+import { assertPassCheckInAllowed } from "./preflight.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
 // Gate-terminal roles: security personnel operating gates + admin staff. The plain
@@ -195,6 +196,8 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
     const body = checkInBody.parse(req.body);
     // UAT FQ9 #8: an unknown gate is a 422 here, not a 202 followed by a silent dead-letter.
     await assertGateExists(ctx.tenantId, body.gateId);
+    // Returns the instant the check-in is judged (and recorded) at: server time unless a bounded offline record.
+    const effectiveAt = await assertPassCheckInAllowed(ctx.tenantId, body.passId, { offlineRecorded: body.offlineRecorded, timestamp: body.timestamp }, ctx.correlationId, ctx.actorId);
 
     const accepted = await commands.checkInRecord(ctx, {
       passId: body.passId,
@@ -202,7 +205,7 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
       ...(body.gateTerminalId !== undefined ? { gateTerminalId: body.gateTerminalId } : {}),
       offlineRecorded: body.offlineRecorded ?? false,
       ...(body.verificationMethod !== undefined ? { verificationMethod: body.verificationMethod } : {}),
-      ...(body.timestamp !== undefined ? { timestamp: body.timestamp } : {}),
+      ...(effectiveAt ? { timestamp: effectiveAt } : {}),
     });
     return reply.code(202).send({ data: accepted });
   });

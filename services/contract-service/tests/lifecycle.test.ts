@@ -26,6 +26,7 @@ import {
 import { createContractBody } from "../src/modules/contracts/validators.js";
 import { listContracts } from "../src/modules/contracts/queries.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const MAKER   = "00000000-aaaa-4000-8000-0000000000a1";
 const CHECKER = "00000000-aaaa-4000-8000-0000000000a2";
@@ -53,7 +54,7 @@ function pub(q: MemoryQueue, type: string, actorId: string, payload: Record<stri
     correlationId: "corr-" + messageId.slice(0, 8), schemaVersion: "1.0", payload,
   });
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 400));
+const settle = () => drainAllQueues();
 
 async function status(id: string): Promise<string | undefined> {
   const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(contractContracts).where(eq(contractContracts.id, id))));

@@ -21,6 +21,10 @@
 import type { Writer } from "./repo.js";
 import { getConfigValueOnTx, listActiveKeys } from "./repo.js";
 import { effectiveAllowed } from "./domain.js";
+import { resolveTimeZone } from "../../shared/tz.js";
+
+/** String-valued visitor_policy key: the tenant's IANA timezone. */
+export const TENANT_TIME_ZONE_KEY = "tenant.time_zone";
 
 /** Namespace for scalar operational knobs. */
 export const POLICY_NS = "visitor_policy";
@@ -48,6 +52,10 @@ export const POLICY_DEFAULTS = {
   // Check-in / overstay (check-in/overstay-worker.ts, check-in/domain.ts).
   "check_in.overstay_escalation_hours":    2,
   "check_in.overstay_grace_minutes":       0,
+  // Check-in validity window (check-in/window.ts): admit up to N minutes after validUntil. 0 = strict.
+  "check_in.expiry_grace_minutes":         0,
+  // Offline-recorded check-ins (gate terminal offline): max age of the client-claimed timestamp.
+  "check_in.offline_max_age_hours":        12,
   // Waiting-in-lobby reminder window (check-in/waiting-reminder-worker.ts).
   "check_in.waiting_reminder_minutes":     10,
   "check_in.waiting_reminder_upper_minutes": 15,
@@ -65,6 +73,9 @@ export const POLICY_BOOL_DEFAULTS = {
   // printJobCreate for the visitor's badge on a successful check-in. Defaults
   // ON; a tenant can disable per-site by setting this false.
   "check_in.auto_print_badge":             true,
+  // Check-in window (check-in/window.ts): admit from 00:00 IST of the pass's first day rather than
+  // from the scheduled time. Defaults OFF (strict, previous behaviour).
+  "check_in.allow_from_start_of_day":      false,
 } as const;
 
 export type PolicyNumberKey = keyof typeof POLICY_DEFAULTS;
@@ -139,6 +150,11 @@ export async function getPolicyNumber(
 ): Promise<number> {
   const raw = await getConfigValueOnTx(tx, tenantId, POLICY_NS, key);
   return toNumber(raw) ?? POLICY_DEFAULTS[key];
+}
+
+/** Tenant IANA timezone (`tenant.time_zone`), falling back to Asia/Kolkata when unset or invalid. */
+export async function getTenantTimeZone(tx: Writer, tenantId: string): Promise<string> {
+  return resolveTimeZone(await getConfigValueOnTx(tx, tenantId, POLICY_NS, TENANT_TIME_ZONE_KEY));
 }
 
 export async function getPolicyBoolean(

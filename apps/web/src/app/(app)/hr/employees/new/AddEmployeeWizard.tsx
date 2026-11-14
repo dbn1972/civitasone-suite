@@ -1,5 +1,6 @@
 "use client";
 
+import type { GradeBand, PayScaleKind } from "@/lib/gradeBands";
 import { useState, useEffect, useCallback } from "react";
 import { isIndianStateCode } from "@/lib/india/states";
 import Link from "next/link";
@@ -30,7 +31,7 @@ import {
 
 type Dept = { id: string; name: string };
 // `level` feeds Step2's computed Service Group (GAP-HR-EMPLOYEES-NEW-05).
-type Desig = { id: string; name: string; level?: number | null };
+type Desig = { id: string; name: string; level?: number | null; gradeBandId?: string | null };
 type EmpSummary = { id: string; name: string; designationName?: string };
 // GAP-HR-EMPLOYEES-NEW-06: see Step2.tsx's own doc comment -- optional so
 // every existing caller/test that doesn't exercise this field keeps
@@ -41,6 +42,9 @@ interface Props {
   departments: Dept[];
   designations: Desig[];
   employeeTypes?: EmployeeTypeOption[];
+  /** S8-G4: 'private_bands' shows the designation's grade band instead of the Group A/B/C service group. Default == unchanged. */
+  payScale?: PayScaleKind;
+  gradeBands?: GradeBand[];
 }
 
 const TOTAL_STEPS = 5;
@@ -144,7 +148,7 @@ export function buildPayload(data: WizardData): Record<string, unknown> {
 }
 
 // ── Wizard component ─────────────────────────────────────────────────────────
-export function AddEmployeeWizard({ departments, designations, employeeTypes }: Props) {
+export function AddEmployeeWizard({ departments, designations, employeeTypes, payScale, gradeBands }: Props) {
   const t = useTranslations("employeeWizard");
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(WIZARD_INIT);
@@ -416,6 +420,8 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
             departments={departments}
             designations={designations}
             employeeTypes={employeeTypes}
+            {...(payScale ? { payScale } : {})}
+            {...(gradeBands ? { gradeBands } : {})}
             onChange={onChange}
             onBlur={onBlur}
           />

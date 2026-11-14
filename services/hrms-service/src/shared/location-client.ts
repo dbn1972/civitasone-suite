@@ -35,3 +35,39 @@ export async function fetchLocationDescendantIds(tenantId: string, locationId: s
     return { ok: false, reason: "unavailable" };
   }
 }
+
+export type LocationLookup =
+  | { ok: true; id: string; status: string }
+  | { ok: false; reason: "not_found" | "unavailable" };
+
+/**
+ * Existence + status of one location in the caller's OWN tenant, read from
+ * location-service's read-only hierarchy endpoint (the same trusted internal
+ * boundary as above; the tenant is sent as x-tenant-id so a location id from
+ * another tenant answers 404, exactly like an unknown id). Fails CLOSED: any
+ * other error, timeout or malformed body is "unavailable" so a caller refuses
+ * rather than assigning an employee to a location it could not verify.
+ */
+export async function fetchLocation(tenantId: string, locationId: string): Promise<LocationLookup> {
+  try {
+    const res = await fetch(`${LOCATION_URL}/v1/locations/${encodeURIComponent(locationId)}/hierarchy`, {
+      headers: {
+        "x-internal": "1",
+        "x-internal-caller": "hrms-service",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 404) return { ok: false, reason: "not_found" };
+    if (!res.ok) return { ok: false, reason: "unavailable" };
+    const body = (await res.json()) as { location?: { id?: unknown; tenantId?: unknown; status?: unknown } };
+    const loc = body.location;
+    if (!loc || loc.id !== locationId || typeof loc.status !== "string") return { ok: false, reason: "unavailable" };
+    // Defence in depth: never trust the owning side's scoping alone.
+    if (typeof loc.tenantId === "string" && loc.tenantId !== tenantId) return { ok: false, reason: "not_found" };
+    return { ok: true, id: loc.id, status: loc.status };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}

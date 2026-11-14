@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
@@ -85,7 +86,7 @@ const CHECKER = "30000000-cccc-4000-8000-000000000001";
 function makeMsg(type: string, payload: Record<string, unknown>, actorId = ACTOR) {
   return { messageId: randomUUID(), type, tenantId: TENANT, actorId, correlationId: randomUUID(), schemaVersion: "1.0", payload };
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => {
   vi.clearAllMocks();

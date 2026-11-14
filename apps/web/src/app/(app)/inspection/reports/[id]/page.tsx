@@ -7,7 +7,7 @@ import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { getInspectionReportById } from "../../_data/loaders";
 import {
-  OBSERVABLE_STATUSES, REPORT_INSPECTOR_ROLES, REPORT_REVIEWER_ROLES, REPORT_STATUS_KEYS, REPORT_TYPE_KEYS, SEVERITY_KEYS, reportMakers,
+  OBSERVABLE_STATUSES, REPORT_INSPECTOR_ROLES, REPORT_REVIEWER_ROLES, REPORT_STATUS_KEYS, REPORT_TYPE_KEYS, SEVERITY_KEYS, SUBMITTABLE_STATUSES, reportMakers,
 } from "../reportMeta";
 import { ReportActions } from "./ReportActions";
 
@@ -76,14 +76,27 @@ export default async function InspectionReportPage(props: { params: Promise<{ id
           <dd>{report.submittedAt ? formatIndianDate(report.submittedAt) : "—"}</dd>
           <dt>{t("fieldApproved")}</dt>
           <dd>{report.approvedAt ? formatIndianDate(report.approvedAt) : "—"}</dd>
+          {state === "rejected" ? (
+            <>
+              <dt>{t("fieldRejected")}</dt>
+              <dd>{report.rejectedAt ? formatIndianDate(report.rejectedAt) : "—"}</dd>
+              <dt>{t("fieldRejectionReason")}</dt>
+              <dd style={{ whiteSpace: "pre-wrap" }}>{report.rejectionReason || "—"}</dd>
+            </>
+          ) : null}
         </dl>
       </Card>
-      {(isInspector || isReviewer) && state !== "approved" && state !== "rejected" ? (
+      {state === "rejected" ? (
+        <p role="note" style={{ margin: "12px 0", fontSize: 14, color: "var(--bad)" }}>{t("rejectedNote")}</p>
+      ) : null}
+      {(isInspector || isReviewer) && state !== "approved" ? (
         <Card>
           <ReportActions
             reportId={report.id}
-            canSubmit={isInspector && state === "draft"}
+            canSubmit={isInspector && SUBMITTABLE_STATUSES.has(state)}
+            resubmit={state === "rejected"}
             canApprove={isReviewer && state === "submitted"}
+            canReject={isReviewer && state === "submitted"}
             isOwnReport={me !== null && reportMakers(report).includes(me)}
             canObserve={isInspector && OBSERVABLE_STATUSES.has(state)}
           />

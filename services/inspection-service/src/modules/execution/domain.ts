@@ -133,3 +133,26 @@ export function assertMakerCheckerForFinalization(
     );
   }
 }
+
+/** Token roles that may act for an inspector (start / complete / resume) without being assigned to it. */
+export const CONDUCT_OVERRIDE_ROLES = ["inspection_admin", "tenant_admin", "super_admin"] as const;
+
+/** Target states that mean "conducting" the inspection (as opposed to reviewing it). */
+export const CONDUCT_TARGET_STATES: readonly string[] = ["in_progress", "completed"];
+
+/**
+ * Conducting rule shared by /start, /complete and the generic /transition: the actor is one of the
+ * inspection's assigned inspectors, or holds an admin role. The one exception is the reviewer's
+ * "return for revision" edge (under_review -> in_progress), which is a review action, not conducting.
+ */
+export function mayConduct(
+  assignedInspectors: unknown,
+  actorId: string,
+  actorRoles: readonly string[] | undefined | null,
+  edge?: { from: string; to: string },
+): boolean {
+  if (edge && !CONDUCT_TARGET_STATES.includes(edge.to)) return true;
+  if (edge && edge.from === "under_review") return true;
+  if (Array.isArray(actorRoles) && actorRoles.some((r) => (CONDUCT_OVERRIDE_ROLES as readonly string[]).includes(r))) return true;
+  return Array.isArray(assignedInspectors) && (assignedInspectors as unknown[]).includes(actorId);
+}

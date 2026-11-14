@@ -2,7 +2,9 @@ export type LoaderFallbackReason =
   | "no_base_url"
   | "http_error"
   | "network_error"
-  | "invalid_payload";
+  | "invalid_payload"
+  /** A paged list hit its page cap with more rows to come: the data is a truncated prefix. */
+  | "truncated";
 
 export interface LoaderFallbackEvent {
   key: string;

@@ -22,6 +22,7 @@ import { mapBounded, rolePermissionConcurrency } from "../src/modules/gap/routes
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
 import { checkTarget } from "../src/modules/scheduled-jobs/targets.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { buildApp } = await import("../src/app.js");
 
@@ -294,7 +295,7 @@ describe("scheduled job run-now: bookkeeping only, privileged targets refused, p
     expect((await app.inject({ method: "POST", url: `/v1/admin/scheduled-jobs/${job.id}/run-now`, headers: auth() })).statusCode).toBe(202);
     const [run] = await until(async () => { const h = await history(job.id); return h.length === 1 ? h : undefined; });
     expect(run!.status).toBe("running");
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const rows = (await outbox()).filter((r) => !before.has(r.id));
     expect(rows.map((r) => r.topic).sort()).toEqual(["admin.scheduled_job.run_triggered", "audit.event.record"]);
     expect(rows.filter((r) => r.topic === "admin.noop")).toHaveLength(0);
@@ -317,7 +318,7 @@ describe("scheduled job run-now: bookkeeping only, privileged targets refused, p
       messageId: randomUUID(), type: "admin.scheduled_job.run_now", tenantId: T, actorId: ACTOR,
       correlationId: "w5b-race", schemaVersion: "1.0", payload: { jobId: job.id, tenantId: T },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainAllQueues();
     expect(await history(job.id)).toHaveLength(0);
   });
 });

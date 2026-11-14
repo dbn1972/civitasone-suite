@@ -24,6 +24,7 @@ import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
 import { registerBeneficiaryConsumers } from "../src/modules/beneficiary/consumer.js";
 import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "dd000000-aaaa-4000-8000-000000000099";
 const ACTOR  = "dd000000-aaaa-4000-8000-000000000001";
@@ -61,7 +62,7 @@ const wrap = (type: string, payload: Record<string, unknown>, mid = randomUUID()
   correlationId: `corr-${randomUUID().slice(0, 8)}`, schemaVersion: "1.0", payload,
 });
 
-const settle = () => new Promise((r) => setTimeout(r, 500));
+const settle = () => drainAllQueues();
 
 beforeEach(wipe);
 afterAll(async () => { await wipe(); await sqlClient.end(); });

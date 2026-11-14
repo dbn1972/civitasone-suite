@@ -59,6 +59,7 @@ import { readScoped, sqlClient } from "../src/shared/db.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerBindingConsumers } from "../src/modules/bindings/consumer.js";
 import { roleBindings, breakglass } from "../src/modules/bindings/schema.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerBindingConsumers(queue);
 await queue.start();
@@ -107,7 +108,7 @@ async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 10000): 
   while (Date.now() < deadline) {
     const r = await fn();
     if (r) return r;
-    await new Promise((res) => setTimeout(res, 50));
+    await drainAllQueues();
   }
   throw new Error("condition never materialized in time");
 }

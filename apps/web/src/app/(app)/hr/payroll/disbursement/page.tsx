@@ -15,6 +15,7 @@ import { DscConfigForm } from "./DscConfigForm";
 import { DisbursementTransferTable } from "./DisbursementTransferTable";
 import { BankFileSigningForm } from "./BankFileSigningForm";
 import { IssuedBankFilesTable } from "./IssuedBankFilesTable";
+import { LedgerExportPanel, type LedgerModeInfo } from "./LedgerExportPanel";
 import { hasItems, mapIssuedFiles, mapSigningSettings, type IssuedFile, type SigningSettings } from "./signingState";
 // Plain (non-"use client") module: these are CALLED here on the server.
 import { toClientTransferRow, isCreditedTransfer, isFailedTransfer, type RawTransferRow } from "./transferRows";
@@ -103,6 +104,21 @@ async function getSigningSettings(): Promise<LoaderResult<SigningSettings | null
   });
 }
 
+// M9: payroll without Finance. Only a tenant in export-only ledger mode gets the panel; any other answer
+// (finance mode, an older payroll-service without the endpoint, an error) leaves the page exactly as it was.
+async function getLedgerMode(): Promise<LedgerModeInfo | null> {
+  const r = await fetchJson<unknown, LedgerModeInfo | null>("/api/v1/payroll/ledger-mode", null, {
+    telemetryKey: "payroll.disbursement.ledgerMode",
+    mapResponse: (p) => {
+      const o = p as { mode?: unknown; source?: unknown; override?: unknown } | null;
+      if (!o || o.mode !== "export") return null;
+      return { mode: "export", source: o.source === "override" ? "override" : "derived", override: o.override === "export" || o.override === "finance" ? o.override : null };
+    },
+  });
+  const d = r.data as { mode?: unknown } | null;
+  return r.source === "api" && d && !Array.isArray(d) && d.mode === "export" ? (r.data as LedgerModeInfo) : null;
+}
+
 const notFetched = <T,>(data: T): Promise<LoaderResult<T>> => Promise.resolve({ data, source: "api" });
 
 const SECTION_STYLE = { scrollMarginTop: 80 } as const;
@@ -110,6 +126,7 @@ const SECTION_STYLE = { scrollMarginTop: 80 } as const;
 export default async function DisbursementPage() {
   const t = await getTranslations("disbursement");
   const tCommon = await getTranslations("payrollCommon");
+  const tLedger = await getTranslations("ledgerExportPanel");
 
   // GAP-PAYROLL-DISBURSEMENT-01/04: hr/layout admits manager/employee/
   // hr_officer to every /hr route; this page holds salary bank details and
@@ -131,13 +148,14 @@ export default async function DisbursementPage() {
 
   // Sponsor/DSC config are admin-only APIs: don't call them for an officer
   // (that only produced a guaranteed 403 and a misleading error badge).
-  const [runsResult, sponsorResult, dscResult, transfersResult, filesResult, signingResult] = await Promise.all([
+  const [runsResult, sponsorResult, dscResult, transfersResult, filesResult, signingResult, ledgerMode] = await Promise.all([
     getRuns(),
     canConfigure ? getSponsorConfig() : notFetched<SponsorConfig | null>(null),
     canConfigure ? getDscConfig() : notFetched<RawDscConfig | null>(null),
     getTransfers(),
     getIssuedFiles(),
     canConfigure ? getSigningSettings() : notFetched<SigningSettings | null>(null),
+    getLedgerMode(),
   ]);
   const filesErrored = filesResult.source === "error";
   const signingErrored = signingResult.source === "error";
@@ -291,6 +309,19 @@ export default async function DisbursementPage() {
           )}
         </Card>
       </section>
+
+      {/* M9: payroll without Finance (export-only ledger mode). Absent for every tenant on the Finance path. */}
+      {ledgerMode && (
+        <section id="ledger-export" style={SECTION_STYLE}>
+          <Card title={tLedger("title")}>
+            <LedgerExportPanel
+              runs={runsResult.data.map((r) => ({ id: r.id, payPeriod: r.payPeriod, status: r.status }))}
+              mode={ledgerMode}
+              canConfirm={canConfigure}
+            />
+          </Card>
+        </section>
+      )}
 
       {/* GAP-PAYROLL-DISBURSEMENT-04: configuration last, admin-only */}
       <section id="configuration" style={SECTION_STYLE}>
