@@ -54,14 +54,28 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
 const ageing = startAgeingJob(log);
 
 // G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
-// Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).
+// Runs daily. Safe to call repeatedly (idempotent). The functions are SECURITY DEFINER (migration 0038) so
+// they work even though audit_svc does not own events.events on every environment. Each call is isolated
+// so a failure in one does not skip the other, and the horizon is verified afterwards: a missing partition
+// means inserts fall into the DEFAULT partition and later block creation of that month.
 async function ensurePartitions(): Promise<void> {
+  for (const fn of ["events.create_future_partitions", "_outbox.create_future_partitions"] as const) {
+    try {
+      await db.execute(sql.raw(`SELECT ${fn}()`));
+    } catch (err) {
+      log.error({ err, fn }, "partition maintenance: failed to create future partitions");
+    }
+  }
   try {
-    await db.execute(sql`SELECT events.create_future_partitions()`);
-    await db.execute(sql`SELECT _outbox.create_future_partitions()`);
-    log.info("partition maintenance: future partitions ensured");
+    const res = await db.execute(sql`SELECT events.missing_future_partitions() AS missing`);
+    const missing = Number((res as unknown as Array<{ missing: number }>)[0]?.missing ?? 0);
+    if (missing > 0) {
+      log.error({ missing }, "partition maintenance: future partitions are still missing; apply scripts/ops/apply-audit-partition-fix.sh as the table owner");
+    } else {
+      log.info("partition maintenance: future partitions ensured");
+    }
   } catch (err) {
-    log.warn({ err }, "partition maintenance: failed to create future partitions");
+    log.warn({ err }, "partition maintenance: could not verify the partition horizon (migration 0038 not applied?)");
   }
 }
 // Run immediately on startup, then every 24 hours.
