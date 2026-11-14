@@ -80,6 +80,33 @@ export function normalisePoNumber(raw: unknown): string | null {
   return value.slice(0, PO_NUMBER_MAX_LENGTH);
 }
 
+export const VENDOR_BILL_NO_MAX_LENGTH = 64;
+
+/**
+ * The vendor's own invoice number as stored on the bill: trimmed, inner whitespace collapsed, bounded. A missing /
+ * blank / stringified-undefined value is null (never a fabricated number).
+ */
+export function normaliseVendorBillNo(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.replace(/\s+/g, " ").trim();
+  if (value === "" || value === "undefined" || value === "null") return null;
+  return value.slice(0, VENDOR_BILL_NO_MAX_LENGTH);
+}
+
+/** Comparison key for the per-vendor duplicate check: case-insensitive on the normalised number (same SQL expression as migration 0168). */
+export function vendorBillNoKey(normalised: string): string {
+  return normalised.toLowerCase();
+}
+
+/**
+ * Switch for the duplicate refusal (409 DUPLICATE_VENDOR_BILL_NO: same vendor, same vendor bill number, an earlier bill
+ * that is not rejected). OFF unless FINANCE_VENDOR_BILL_NO_UNIQUE is 1 / true / on, so existing tenants keep today's
+ * behaviour (a repeat is accepted) until it is switched on.
+ */
+export function vendorBillNoUniqueEnabled(): boolean {
+  return ["1", "true", "on"].includes((process.env.FINANCE_VENDOR_BILL_NO_UNIQUE ?? "").trim().toLowerCase());
+}
+
 /** Bill must reference a PO and a GRN for 3-way match. */
 export function assertThreeWayMatchPresent(poRef: string | null | undefined, grnRef: string | null | undefined): void {
   if (!poRef || !grnRef) {
