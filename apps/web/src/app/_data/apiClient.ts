@@ -42,6 +42,8 @@ export type LoaderResult<T> = {
   errorMessage?: string;
   /** True when the loader gave up because the gateway took longer than its timeout (no status then). */
   timedOut?: boolean;
+  /** True when a paged list loader hit its page cap with more rows still to come: the data is a truncated prefix. */
+  truncated?: boolean;
 };
 
 export interface FetchJsonOptions<TApi, TOutput> {

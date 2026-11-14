@@ -14,6 +14,12 @@ import { persistKeycloakUserId } from "./keycloak-link.js";
 import { cache } from "../../shared/infra.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+
+/** Start of the next page, or null when this page reaches the end of `total` (or lies past it). */
+export function nextOffset(offset: number, returned: number, total: number): number | null {
+  const next = offset + returned;
+  return returned > 0 && next < total ? next : null;
+}
 export const PASSWORD_RESET_MAX_PER_WINDOW = 3;
 export const PASSWORD_RESET_WINDOW_SECONDS = 15 * 60;
 
@@ -45,7 +51,16 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (ctx.tenantId !== q.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
     }
-    sendValidated(reply, userListResponseSchema, await queries.listUsers(q.tenantId, q.limit, q.offset));
+    const [rows, total] = await Promise.all([
+      queries.listUsers(q.tenantId, q.limit, q.offset),
+      queries.countUsers(q.tenantId),
+    ]);
+    // The body stays a bare array (many callers read it as one), so the paging facts travel as headers:
+    // X-Total-Count = every user of the tenant, X-Next-Offset = where the next page starts (absent on the last page).
+    void reply.header("x-total-count", String(total)).header("x-limit", String(q.limit)).header("x-offset", String(q.offset));
+    const next = nextOffset(q.offset, rows.length, total);
+    if (next !== null) void reply.header("x-next-offset", String(next));
+    sendValidated(reply, userListResponseSchema, rows);
   });
 
   // GAP-ADMIN-USERS-03: filtered, paged directory with a real total and per-status counts.
@@ -58,7 +73,10 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (ctx.tenantId !== q.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
     }
-    return reply.send(await queries.searchUsers(q.tenantId, { q: q.q, status: q.status, limit: q.limit, offset: q.offset }));
+    const res = await queries.searchUsers(q.tenantId, { q: q.q, status: q.status, limit: q.limit, offset: q.offset });
+    // `total` = rows matching the filter; nextOffset is null on the last page (and past the end).
+    const next = nextOffset(q.offset, res.rows.length, res.total);
+    return reply.send({ ...res, limit: q.limit, offset: q.offset, hasMore: next !== null, nextOffset: next });
   });
 
   // Shared user directory (GAP-WORKFLOW-INSTANCES-DETAIL-01 /
