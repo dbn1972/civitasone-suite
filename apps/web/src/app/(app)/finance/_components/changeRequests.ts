@@ -57,6 +57,17 @@ export function toChangeRequestView(
     for (const [k, v] of Object.entries(changes)) if (v === false) details.push(k);
   } else if (r.kind === "period_reopen") {
     subject = str(p.period) || r.subjectKey;
+  } else if (r.kind === "ar_opening_balance") {
+    const entries = Array.isArray(p.entries) ? p.entries : [];
+    let open = 0n;
+    for (const e of entries) {
+      const o = typeof e === "object" && e !== null ? (e as { amountMinor?: unknown; receivedMinor?: unknown }) : {};
+      if (typeof o.amountMinor === "string" && /^\d+$/.test(o.amountMinor)) {
+        open += BigInt(o.amountMinor) - (typeof o.receivedMinor === "string" && /^\d+$/.test(o.receivedMinor) ? BigInt(o.receivedMinor) : 0n);
+      }
+    }
+    subject = `${entries.length}`;
+    details.push(formatMoney(open));
   } else if (r.kind === "opening_balances_enter") {
     const entries = Array.isArray(p.entries) ? p.entries : [];
     details.push(`${entries.length}`);
