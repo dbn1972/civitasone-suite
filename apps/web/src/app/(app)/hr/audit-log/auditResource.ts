@@ -57,6 +57,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "geo_attendance",
   "geo_attendance_reportees",
   "gpf",
+  "grade_band", // S8-G4 private grade bands (hrms grade-bands consumer)
   "gratuity",
   "grievance",
   "holiday",
@@ -163,6 +164,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_statutory_seams", // S8 LWF / ESI-period flag request / approve (payroll statutory-seams consumer)
   "payroll_ctc_template", // S8-G1/G2 pay-components consumer: CTC template create
   "payroll_component", // S8-G2 pay-components consumer: component create/update/(de)activate
+  "contract_config", // S8-G5 per-tenant contract config update (f3-consumer) and projection reconcile
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

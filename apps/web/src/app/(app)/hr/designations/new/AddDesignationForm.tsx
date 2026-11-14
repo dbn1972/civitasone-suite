@@ -6,7 +6,8 @@ import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
 import { useZodFieldValidation } from "@/lib/form-validation";
 import { MAX_PAY_LEVEL, MIN_PAY_LEVEL, payLevelSchema } from "@/lib/payLevels";
-import { Button, Field, Input } from "../../../../_components/ds";
+import { Button, Field, Input, Select } from "../../../../_components/ds";
+import { bandLabel, type GradeBand, type PayScaleKind } from "@/lib/gradeBands";
 
 interface Props {
   onCancel: () => void;
@@ -18,6 +19,10 @@ interface Props {
    * to <body>).
    */
   codeInputRef?: React.Ref<HTMLInputElement>;
+  /** S8-G4: 'private_bands' swaps the 7th CPC pay-level field for a grade-band picker. Default == unchanged. */
+  payScale?: PayScaleKind;
+  /** Active bands to choose from (band tenants only). */
+  bands?: GradeBand[];
 }
 
 /**
@@ -63,7 +68,9 @@ const designationSchema = z.object({
   payGrade: z.string().trim().max(30, "Must be at most 30 characters."),
 });
 
-export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props) {
+export function AddDesignationForm({ onCancel, onSuccess, codeInputRef, payScale = "cpc7", bands = [] }: Props) {
+  const bandMode = payScale === "private_bands";
+  const [bandId, setBandId] = useState("");
   const t = useTranslations("addDesignationForm");
   const formId = useId();
   const { fields, validate, reset } = useZodFieldValidation(designationSchema);
@@ -78,6 +85,7 @@ export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props)
   // the field takes focus, not just when someone browses past the text.
   const levelHintId = `${formId}-level-hint`;
   const payGradeHintId = `${formId}-paygrade-hint`;
+  const bandHintId = `${formId}-band-hint`;
 
   function handleCancel() {
     reset();
@@ -108,6 +116,7 @@ export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props)
       };
       if (trimLevel) body.level = parseInt(trimLevel, 10);
       if (trimPayGrade) body.payGrade = trimPayGrade;
+      if (bandMode && bandId) body.gradeBandId = bandId;
 
       const res = await fetch("/api/proxy/v1/hrms/designations", {
         method: "POST",
@@ -128,6 +137,7 @@ export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props)
       // happened at this point.
       setMessage(t("successMsg", { name: trimName }));
       reset();
+      setBandId("");
       onSuccess?.();
     } catch (caught) {
       setTone("error");
@@ -213,7 +223,25 @@ export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props)
             />
           </Field>
 
+          {/* Grade band (private-bands tenants) replaces the 7th CPC pay level */}
+          {bandMode && (
+            <div>
+              <Field label={t("bandLabel")} error={formError.fieldError("gradeBandId")}>
+                <Select value={bandId} onChange={(e) => setBandId(e.target.value)} aria-describedby={bandHintId}>
+                  <option value="">{t("bandNoneOption")}</option>
+                  {bands.filter((b) => b.isActive).map((b) => (
+                    <option key={b.id} value={b.id}>{bandLabel(b)}</option>
+                  ))}
+                </Select>
+              </Field>
+              <p id={bandHintId} style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>
+                {bands.some((b) => b.isActive) ? t("bandHint") : <>{t("bandsEmptyHint")} <a href="/hr/grade-bands">{t("bandsEmptyLink")}</a></>}
+              </p>
+            </div>
+          )}
+
           {/* Level */}
+          {!bandMode && (
           <div>
             <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
               <Input
@@ -233,6 +261,7 @@ export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props)
                 nothing on this form saying so. */}
             <p id={levelHintId} style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("levelHint")}</p>
           </div>
+          )}
 
           {/* Pay Grade */}
           <div>

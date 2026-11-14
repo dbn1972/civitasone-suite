@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt, lte } from "drizzle-orm";
 import { pino } from "pino";
 import { SAFE_LOG_SERIALIZERS } from "../../shared/safe-error-log.js";
 import { db, scopedRead} from "../../shared/db.js";
@@ -73,8 +73,11 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * exists, we use it as reporting officer" comment in
  * migrations/0007_geo_attendance_ro.sql).
  */
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<EmployeeRow[]> {
-  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+/** S8 G5: opt-in filters over the contract/project read-model columns (all absent = the query is unchanged). */
+export type ContractFilters = { contractEndBefore?: string; projectId?: string; contractStatus?: string };
+
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[], cf?: ContractFilters): Promise<EmployeeRow[]> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses, cf);
   // GAP-HR-LEAVE-ALLOCATE-04: this had NO ORDER BY, so any limit/offset page --
   // and above all the picker's first `limit` rows -- came back in arbitrary,
   // unstable order (a row could repeat or vanish between pages). Name, then
@@ -92,16 +95,19 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
  * filters as listByTenant (not the size of the returned page), so a caller can
  * say "showing 20 of 340" instead of guessing from `rows.length === limit`.
  */
-export async function countByTenant(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<number> {
-  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+export async function countByTenant(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[], cf?: ContractFilters): Promise<number> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses, cf);
   const rows = await scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsEmployees)
     .where(and(...conditions)));
   return rows[0]?.count ?? 0;
 }
 
 /** Shared WHERE for listByTenant / countByTenant so the page and its total can never disagree. */
-function listConditions(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]) {
+function listConditions(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[], cf?: ContractFilters) {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
+  if (cf?.contractEndBefore) conditions.push(lte(hrmsEmployees.contractEndDate, cf.contractEndBefore));
+  if (cf?.projectId) conditions.push(eq(hrmsEmployees.primaryProjectId, cf.projectId));
+  if (cf?.contractStatus) conditions.push(eq(hrmsEmployees.contractStatus, cf.contractStatus));
   // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
   if (status) conditions.push(eq(hrmsEmployees.status, status));
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: pickers exclude people who cannot be chosen (exited staff).

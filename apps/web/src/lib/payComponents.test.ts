@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { emptyForm, formFromRow, parseComponentForm, type ComponentForm, type ComponentRow } from "./payComponents";
+import { defaultLopApplicable, withLopDefault, emptyForm, formFromRow, parseComponentForm, type ComponentForm, type ComponentRow } from "./payComponents";
 
 const f = (over: Partial<ComponentForm>): ComponentForm => ({ ...emptyForm("run"), code: "CONVEYANCE", name: "Conveyance Allowance", ...over });
 
@@ -65,5 +65,29 @@ describe("formFromRow", () => {
     expect(formFromRow(row)).toMatchObject({ calc: "fixed", fixedRupees: "2000" });
     expect(formFromRow({ ...row, fixedMinor: "160050" }).fixedRupees).toBe("1600.50");
     expect(formFromRow({ ...row, fixedMinor: null, pctOfBasic: 12.5 })).toMatchObject({ calc: "pct_of_basic", pctOfBasic: "12.5" });
+  });
+});
+
+describe("loss-of-pay default (owner decision 2; the same rule as the server defaultLopApplicable)", () => {
+  const b = { componentType: "earning" as const, calc: "pct_of_ctc" as const, isTaxable: false };
+  it("template earnings: yes; fixed non-taxable reimbursement: no; fixed taxable allowance: yes", () => {
+    expect(defaultLopApplicable("ctc_template", b)).toBe(true);
+    expect(defaultLopApplicable("ctc_template", { ...b, calc: "balancing" })).toBe(true);
+    expect(defaultLopApplicable("ctc_template", { ...b, calc: "fixed" })).toBe(false);
+    expect(defaultLopApplicable("ctc_template", { ...b, calc: "fixed", isTaxable: true })).toBe(true);
+  });
+  it("employer costs and run structures: no", () => {
+    expect(defaultLopApplicable("ctc_template", { ...b, componentType: "employer_cost" })).toBe(false);
+    expect(defaultLopApplicable("run", b)).toBe(false);
+  });
+  it("emptyForm pre-ticks for a template and not for a run; a touched box or a stored row is never overwritten", () => {
+    expect(emptyForm("ctc_template").lopApplicable).toBe(true);
+    expect(emptyForm("run").lopApplicable).toBe(false);
+    const touched = { ...emptyForm("ctc_template"), lopApplicable: false, lopTouched: true, calc: "pct_of_ctc" as const };
+    expect(withLopDefault("ctc_template", touched).lopApplicable).toBe(false);
+    const stored = formFromRow({ ...({} as ComponentRow), code: "X", name: "X", componentType: "earning", calc: "pct_of_ctc", pctOfBasic: null, pctOfCtcBps: 100, fixedMinor: null,
+      employerCostClass: null, costPlacement: "inside_ctc", isTaxable: false, countsForPfWage: false, countsForEsiWage: false, countsForGratuity: false, lopApplicable: false } as ComponentRow);
+    expect(stored.lopTouched).toBe(true);
+    expect(withLopDefault("ctc_template", stored).lopApplicable).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import { tenantHasModule } from "../../shared/tenant-modules.js";
 import { minorFromDb, minorToWireNumber } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -23,6 +24,20 @@ const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
 // it is a payroll-only action. hr_admin keeps read / file-on-behalf (ROLES)
 // but is NOT an approver -- same set as arrears-approval DECIDER_ROLES.
 const DECIDER_ROLES = ["payroll_admin","payroll_officer","super_admin"];
+
+/**
+ * M9: forcing export-only ledger mode on a tenant that HAS Finance stops its salary reaching the GL, so a single
+ * payroll admin may not do it: super_admin only. (A tenant without Finance is export by default, so there is nothing
+ * to guard; a maker-checker pending state was considered and rejected as heavier than a rare structural setting
+ * warrants.) Returns whether the caller is a super admin, which the route stamps on the command for the consumer.
+ */
+async function assertLedgerOverrideAllowed(ctx: { tenantId: string; roles: string[] }, override: "finance" | "export" | null | undefined): Promise<boolean> {
+  const superAdmin = ctx.roles.includes("super_admin");
+  if (override === "export" && !superAdmin && (await tenantHasModule(ctx.tenantId, "finance"))) {
+    throw new HttpError(403, "LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN", "forcing export-only mode on a tenant that has Finance stops its salary reaching the ledger; ask a super admin");
+  }
+  return superAdmin;
+}
 
 export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<void> {
   // Arrears
@@ -302,12 +317,13 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       SELECT protected_net_floor_minor, updated_at, salary_revision_second_approver,
              subsistence_initial_pct_bps, subsistence_review_after_days,
              subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
-             flex_election_maker_checker, max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live
+             flex_election_maker_checker, max_deduction_share_bps, deduction_cap_applies, payroll_go_live_date::text AS go_live,
+             ledger_mode_override
       FROM payroll.payroll_settings
       WHERE tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
     `))) as unknown as Array<{
-      flex_election_maker_checker: boolean; max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null;
+      flex_election_maker_checker: boolean; max_deduction_share_bps: number; deduction_cap_applies: boolean; go_live: string | null; ledger_mode_override: string | null;
       protected_net_floor_minor: string; updated_at: string; salary_revision_second_approver: boolean;
       subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
       subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
@@ -330,6 +346,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       maxDeductionShareBps: s ? Number(s.max_deduction_share_bps) : 5000,
       deductionCapApplies: s ? s.deduction_cap_applies !== false : true,
       payrollGoLiveDate: s?.go_live ?? null,
+      // M9: null = derived from whether the tenant has Finance (see GET /v1/payroll/ledger-mode).
+      ledgerModeOverride: s?.ledger_mode_override ?? null,
     });
   });
 
@@ -347,7 +365,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const stored = await scopedRead((tx) => resolveSubsistenceConfig(tx as unknown as Parameters<typeof resolveSubsistenceConfig>[0], ctx.tenantId));
     const merged = mergeSubsistenceSettings(stored, body);
     if (!merged.ok) throw new HttpError(400, "VALIDATION_FAILED", merged.message);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.updateSettings(ctx, body));
+    const superAdmin = await assertLedgerOverrideAllowed(ctx, body.ledgerModeOverride);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateSettings(ctx, body, { ledgerModeSuperAdmin: superAdmin }));
   });
 
   app.setErrorHandler((err, req, reply) => {

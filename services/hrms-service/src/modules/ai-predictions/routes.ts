@@ -19,6 +19,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { resolveManagerScopeIds } from "../../shared/self-scope.js";
+import { getPolicy } from "../policy-settings/repo.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
@@ -152,17 +153,28 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     // Rule-based scoring — replace with ML model when training data available
     // Finds employees in same department at one grade level below
     // who have high APAR scores, sorted by suitability
+    // S8-G4: a tenant on private grade bands has no 7th CPC level (every designation is level 0), so the
+    // "one to two levels below" rule runs on the band ladder instead: position = the band's place in the tenant's
+    // bands ordered by rank (dense_rank), so "one level below" means "the next band down", whatever the rank
+    // numbers are. A designation with no band has no position (NULL) and neither seeds nor fills a succession.
+    // A cpc7 tenant takes the `dg.level` / `cdg.level` branches below -- the same predicates as before.
+    const bandTenant = (await getPolicy(ctx.tenantId, "pay_scale")).kind === "private_bands";
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
-      WITH target_positions AS (
-        SELECT DISTINCT e.department_id, dg.level AS target_level, dg.name AS position_name, e.id AS incumbent_id
+      WITH ${bandTenant ? tx`band_pos AS (
+        SELECT id, dense_rank() OVER (ORDER BY rank)::int AS pos
+        FROM employee.hrms_grade_bands WHERE tenant_id = ${ctx.tenantId}
+      ),` : tx``}
+      target_positions AS (
+        SELECT DISTINCT e.department_id, ${bandTenant ? tx`bp.pos` : tx`dg.level`} AS target_level, dg.name AS position_name, e.id AS incumbent_id
         FROM employee.hrms_employees e
         JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
+        ${bandTenant ? tx`LEFT JOIN band_pos bp ON bp.id = dg.grade_band_id` : tx``}
         WHERE e.tenant_id = ${ctx.tenantId}
           AND e.status NOT IN ('separated', 'retired')
           ${query.departmentId ? tx`AND e.department_id = ${query.departmentId}` : tx``}
           ${query.positionId ? tx`AND e.id = ${query.positionId}` : tx``}
           ${scope ? tx`AND e.id IN ${tx(scope)}` : tx``}
-          AND dg.level >= 5
+          AND ${bandTenant ? tx`bp.pos >= 2` : tx`dg.level >= 5`}
       ),
       candidates AS (
         SELECT
@@ -173,7 +185,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
           e.full_name,
           d.name AS department,
           cdg.name AS current_designation,
-          cdg.level AS candidate_level,
+          ${bandTenant ? tx`cbp.pos` : tx`cdg.level`} AS candidate_level,
           tp.target_level,
           -- Same employee.apar_records fix as attrition-risk above: real data
           -- comes from appraisal.hrms_appraisals.overall_grade (1..10 scale,
@@ -191,11 +203,12 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
         FROM employee.hrms_employees e
         JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
         JOIN employee.hrms_designations cdg ON cdg.id = e.designation_id AND cdg.tenant_id = e.tenant_id
+        ${bandTenant ? tx`LEFT JOIN band_pos cbp ON cbp.id = cdg.grade_band_id` : tx``}
         CROSS JOIN target_positions tp
         WHERE e.tenant_id = ${ctx.tenantId}
           AND e.status NOT IN ('separated', 'retired')
           AND e.department_id = tp.department_id
-          AND cdg.level BETWEEN (tp.target_level - 2) AND (tp.target_level - 1)
+          AND ${bandTenant ? tx`cbp.pos` : tx`cdg.level`} BETWEEN (tp.target_level - 2) AND (tp.target_level - 1)
           AND e.id != tp.incumbent_id
           ${scope ? tx`AND e.id IN ${tx(scope)}` : tx``}
       )

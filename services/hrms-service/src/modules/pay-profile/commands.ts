@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { DeputationMoneyTerms } from "./domain.js";
+import type { DeputationMoneyTerms, CtcTerms } from "./domain.js";
 
 type Accepted = { id: string; status: string; correlationId: string };
 
@@ -23,6 +23,8 @@ export interface PayProfileRequestPayload {
   deputationId: string | null;
   consolidatedMonthlyMinor: string | null;
   deputationTerms: DeputationMoneyTerms | null;
+  /** S8 G1: omitted/null for every profile but ctc_contract. */
+  ctcTerms?: CtcTerms | null;
   orderRef: string | null;
   remarks: string | null;
 }

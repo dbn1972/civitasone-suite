@@ -1,3 +1,4 @@
+import { warnIfModuleLookupUnconfigured } from "./shared/tenant-modules.js";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -20,6 +21,7 @@ import { registerTaxProofConsumers } from "./modules/tax-proofs/consumer.js";
 import { startTaxProofPurge } from "./modules/tax-proofs/purge.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerNachReturnConsumers } from "./modules/nach-return/consumer.js";
+import { registerLedgerExportConsumers } from "./modules/ledger-export/consumer.js";
 import { registerDisbursementTransferConsumers } from "./modules/disbursement-transfers/consumer.js";
 import { registerFnfConsumers } from "./modules/fnf/consumer.js";
 import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.js";
@@ -28,7 +30,9 @@ import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
 import { registerOpeningYtdConsumers } from "./modules/opening-ytd/consumer.js";
 import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
+import { registerReceiptPolicyConsumers } from "./modules/reimbursement-receipt-policy/consumer.js";
 import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
+import { registerProjectCostingConsumers } from "./modules/project-costing/consumer.js";
 import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
 import { registerReturnFilingConsumers } from "./modules/return-filings/consumer.js";
 import { registerPostingConsumers } from "./modules/posting-history/consumer.js";
@@ -74,6 +78,7 @@ assertPiiKeyAtBoot();
 }
 
 await loadTaxConfig();
+warnIfModuleLookupUnconfigured(pino({ name: "payroll-tenant-modules" }));
 
 registerPayrollConsumers(queue);
 registerPayProfileConsumers(queue);
@@ -87,6 +92,7 @@ registerTaxConsumers(queue);
 registerTaxProofConsumers(queue);
 registerIntegrationConsumers(queue);
 registerNachReturnConsumers(queue);
+registerLedgerExportConsumers(queue);
 registerDisbursementTransferConsumers(queue);
 registerFnfConsumers(queue);
 registerForm16BulkConsumers(queue);
@@ -95,7 +101,9 @@ registerDscConfigConsumers(queue);
 registerSponsorConfigConsumers(queue);
 registerOpeningYtdConsumers(queue);
 registerBankFileSigningConsumers(queue);
+registerReceiptPolicyConsumers(queue);
 registerCostingRuleConsumers(queue);
+registerProjectCostingConsumers(queue);
 registerLetterheadConsumers(queue);
 registerReturnFilingConsumers(queue);
 

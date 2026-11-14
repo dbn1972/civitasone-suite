@@ -24,6 +24,27 @@ export const hrmsDepartments = employeeSchema.table("hrms_departments", {
   version:    integer("version").notNull().default(1),
 });
 
+// Migration 0270 (S8-G4). Tenant-defined private grade bands (C2, T3, M2 ...) for tenants that are not
+// on the 7th CPC pay matrix. RLS like its siblings; unique (tenant_id, code). Read only when the
+// tenant's pay_scale policy is 'private_bands' (policy-settings/registry.ts).
+export const hrmsGradeBands = employeeSchema.table("hrms_grade_bands", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  tenantId:    uuid("tenant_id").notNull(),
+  code:        varchar("code", { length: 16 }).notNull(),
+  name:        varchar("name", { length: 120 }).notNull(),
+  rank:        integer("rank").notNull(),
+  track:       varchar("track", { length: 40 }),
+  ctcMinMinor: bigint("ctc_min_minor", { mode: "bigint" }),
+  ctcMaxMinor: bigint("ctc_max_minor", { mode: "bigint" }),
+  noticeDays:  integer("notice_days"),
+  isActive:    boolean("is_active").notNull().default(true),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  updatedBy:   uuid("updated_by").notNull(),
+  version:     integer("version").notNull().default(1),
+});
+
 export const hrmsDesignations = employeeSchema.table("hrms_designations", {
   id:         uuid("id").primaryKey().defaultRandom(),
   tenantId:   uuid("tenant_id").notNull(),
@@ -31,6 +52,8 @@ export const hrmsDesignations = employeeSchema.table("hrms_designations", {
   name:       text("name").notNull(),
   level:      integer("level").notNull().default(0),
   payGrade:   text("pay_grade"),
+  // S8-G4 (migration 0270): optional link to a tenant grade band; NULL for every pre-existing row.
+  gradeBandId: uuid("grade_band_id"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),
@@ -109,6 +132,17 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   maritalStatus:    varchar("marital_status", { length: 16 }),
   bloodGroup:       varchar("blood_group", { length: 4 }),
   shift:            varchar("shift", { length: 16 }),
+  // S8 G5 (migration 0267): READ-MODEL columns, projected from contracts.hrms_contracts (the authority) by
+  // contracts/projection.ts and only while the tenant has contract_config.employee_projection_enabled. Never
+  // written by the employee routes.
+  contractId:           uuid("contract_id"),
+  contractStartDate:    date("contract_start_date"),
+  contractEndDate:      date("contract_end_date"),
+  contractStatus:       varchar("contract_status", { length: 24 }),
+  contractRenewalCount: integer("contract_renewal_count"),
+  primaryProjectId:     uuid("primary_project_id"),   // project-service id (cross-service, no FK)
+  projectCode:          varchar("project_code", { length: 32 }),
+  projectName:          varchar("project_name", { length: 160 }),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

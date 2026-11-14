@@ -136,6 +136,17 @@ describe("stock entry on the inventory ledger", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("does not navigate after the form is gone: the delayed redirect is cancelled on unmount", async () => {
+    const view = show();
+    await fill("issue", "s1", "5");
+    await confirmPost();
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await screen.findByText("Stock entry posted.");
+    view.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("says so when the organisation has no stores", async () => {
     fetchMock.mockImplementation(async (url: string) => (url.startsWith("/api/proxy/v1/inventory/stores") ? json({ data: [] }) : json({})));
     show();

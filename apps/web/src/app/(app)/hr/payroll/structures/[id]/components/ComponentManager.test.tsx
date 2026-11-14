@@ -109,7 +109,8 @@ describe("ComponentManager", () => {
     fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "SPECIAL" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Special Allowance" } });
     fireEvent.change(screen.getByLabelText(/How the amount is calculated/), { target: { value: "balancing" } });
-    fireEvent.click(screen.getByLabelText(/Reduced for loss of pay/));
+    // owner decision 2: a template earning is loss-of-pay applicable by default (the box is pre-ticked); the value is sent
+    expect((screen.getByLabelText(/Reduced for loss of pay/) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(browserJson).toHaveBeenCalledTimes(1));
     expect(JSON.parse(browserJson.mock.calls[0]![1].body)).toMatchObject({ calc: "balancing", lopApplicable: true, pctOfCtcBps: null, fixedMinor: null });
@@ -119,6 +120,39 @@ describe("ComponentManager", () => {
     fireEvent.change(screen.getByLabelText(/Employer cost class/), { target: { value: "employer_pf" } });
     expect(screen.queryByLabelText(/How the amount is calculated/)).toBeNull();
     expect(screen.getByText(/derived from the statutory configuration/i)).toBeTruthy();
+  });
+
+  it("the loss-of-pay box follows the default rule until the user touches it; a user toggle is sent", async () => {
+    ui({ structure: TPL, components: [], canLock: true });
+    fireEvent.click(screen.getByRole("button", { name: /add component/i }));
+    const lop = () => (screen.getByLabelText(/Reduced for loss of pay/) as HTMLInputElement).checked;
+    expect(lop()).toBe(true); // template earning
+    fireEvent.change(screen.getByLabelText(/How the amount is calculated/), { target: { value: "fixed" } });
+    expect(lop()).toBe(false); // fixed and non-taxable => reimbursement
+    fireEvent.click(screen.getByLabelText(/Taxable/));
+    expect(lop()).toBe(true); // a taxable fixed allowance is not a reimbursement
+    fireEvent.click(screen.getByLabelText(/Taxable/));
+    expect(lop()).toBe(false);
+    fireEvent.click(screen.getByLabelText(/Reduced for loss of pay/)); // the user takes over
+    expect(lop()).toBe(true);
+    fireEvent.change(screen.getByLabelText(/How the amount is calculated/), { target: { value: "pct_of_ctc" } });
+    fireEvent.click(screen.getByLabelText(/Taxable/));
+    expect(lop()).toBe(true); // touched: no longer re-applied
+    fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "PHONE" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Phone reimbursement" } });
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: "earning" } });
+    fireEvent.click(screen.getByLabelText(/Reduced for loss of pay/)); // user unticks
+    fireEvent.change(screen.getByLabelText(/Percent of monthly CTC/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(browserJson).toHaveBeenCalled());
+    expect(JSON.parse(browserJson.mock.calls.at(-1)![1].body)).toMatchObject({ lopApplicable: false });
+  });
+
+  it("an employer cost does not default to loss of pay", () => {
+    ui({ structure: TPL, components: [], canLock: true });
+    fireEvent.click(screen.getByRole("button", { name: /add component/i }));
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: "employer_cost" } });
+    expect((screen.getByLabelText(/Reduced for loss of pay/) as HTMLInputElement).checked).toBe(false);
   });
 
   it("shows template check errors and warnings", () => {

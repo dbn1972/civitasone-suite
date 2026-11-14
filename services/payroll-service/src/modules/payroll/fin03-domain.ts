@@ -10,7 +10,7 @@
  *  - the reimbursement attachment key layout (GAP-PAYROLL-REIMBURSEMENTS-03).
  */
 
-import { REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES } from "@civitasone/types";
+import { REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES, evaluateReceiptRule, type ReceiptPolicy } from "@civitasone/types";
 
 // ─── Pay-group schedule ────────────────────────────────────────────────────
 
@@ -156,6 +156,9 @@ export function reimbursementActorPrefix(tenantId: string, actorId: string): str
 
 export type ReceiptRuleViolation = "RECEIPT_REQUIRED" | "RECEIPT_KEY_INVALID";
 
+/** The tenant's receipt policy (null/absent = built-in default) and the claim facts the rule needs. */
+export interface ReceiptRuleOptions { policy?: ReceiptPolicy | null | undefined; amountMinor?: number | undefined; selfDeclared?: boolean | undefined }
+
 /**
  * Rules for a NEW claim: a receipt-required category needs at least one key,
  * and every key must be one this tenant issued to this submitter
@@ -164,9 +167,11 @@ export type ReceiptRuleViolation = "RECEIPT_REQUIRED" | "RECEIPT_KEY_INVALID";
  */
 export function receiptRuleViolation(
   tenantId: string, actorId: string, category: string, keys: readonly string[] | undefined,
+  opts: ReceiptRuleOptions = {},
 ): ReceiptRuleViolation | null {
   const list = keys ?? [];
-  if (receiptRequired(category) && list.length === 0) return "RECEIPT_REQUIRED";
+  // Receipt policy: the tenant's rule (default = medical / LTA / travel need a receipt).
+  if (!evaluateReceiptRule(opts.policy, category, opts.amountMinor ?? 0, list.length, opts.selfDeclared === true).ok) return "RECEIPT_REQUIRED";
   const prefix = reimbursementActorPrefix(tenantId, actorId);
   if (list.some((k) => !k.startsWith(prefix) || k.includes(".."))) return "RECEIPT_KEY_INVALID";
   return null;

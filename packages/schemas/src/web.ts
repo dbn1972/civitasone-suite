@@ -69,6 +69,11 @@ export const employeeSummarySchema = z.object({
   // NULL in the DB) -- optional here only because this schema also backs
   // narrower/legacy payload shapes that may omit it.
   dateOfJoining: z.string().optional(),
+  // S8 G5: contract/project read-model columns for the directory (present only for tenants that opted in).
+  contractEndDate: z.string().optional(),
+  contractStatus: z.string().optional(),
+  projectCode: z.string().optional(),
+  projectName: z.string().optional(),
 });
 
 export const leaveRequestSchema = z.object({
@@ -1270,6 +1275,16 @@ export const EmployeeDetailSchema = z.object({
   // gates it); absent for everyone else. Declared here or apps/web's loader
   // would strip it before the profile page could show it.
   basicMinor: z.number().int().nonnegative().optional(),
+  // S8 G5: contract + project snapshot (read-model; present only for tenants that opted in).
+  contractId: z.string().optional(),
+  contractStartDate: z.string().optional(),
+  contractEndDate: z.string().optional(),
+  contractStatus: z.string().optional(),
+  contractRenewalCount: z.number().int().optional(),
+  primaryProjectId: z.string().optional(),
+  projectCode: z.string().optional(),
+  projectName: z.string().optional(),
+  projectManagerId: z.string().optional(),
   // Statutory identifiers -- not masked (see hrms-service's shared/pii-mask.ts
   // PII_FIELDS, which deliberately excludes these three), unlike
   // bankAccountNo/bankIfsc/pan above. FINDING-3 (HRMS role-based review):

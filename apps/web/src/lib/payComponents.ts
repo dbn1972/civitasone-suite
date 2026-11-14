@@ -27,13 +27,34 @@ export interface ComponentForm {
   employerCostClass: EmployerCostClass | "";
   costPlacement: CostPlacement;
   isTaxable: boolean; countsForPfWage: boolean; countsForEsiWage: boolean; countsForGratuity: boolean; lopApplicable: boolean;
+  /** true once the user has touched the loss-of-pay box (or the row is a stored one): the default is then no longer re-applied. */
+  lopTouched: boolean;
 }
 
-export const emptyForm = (kind: StructureKind): ComponentForm => ({
-  code: "", name: "", componentType: "earning", calc: kind === "run" ? "fixed" : "pct_of_ctc",
-  pctOfBasic: "", pctOfCtc: "", fixedRupees: "", employerCostClass: "", costPlacement: "inside_ctc",
-  isTaxable: false, countsForPfWage: false, countsForEsiWage: false, countsForGratuity: false, lopApplicable: false,
-});
+/**
+ * Owner decision 2 (10 Nov 2026, second set), the same rule as the server's defaultLopApplicable (pay-components/model.ts):
+ * loss of pay applies by default to template earnings, EXCEPT fixed non-taxable earnings (reimbursements: phone, conveyance);
+ * never by default for employer costs (not paid to the employee) or for a run structure (the run engine does not honour it).
+ * A taxable fixed allowance is therefore NOT treated as a reimbursement and defaults to yes.
+ */
+export function defaultLopApplicable(kind: StructureKind, f: Pick<ComponentForm, "componentType" | "calc" | "isTaxable">): boolean {
+  if (kind !== "ctc_template") return false;
+  if (f.componentType !== "earning") return false;
+  return !(f.calc === "fixed" && !f.isTaxable);
+}
+
+/** Re-apply the default after the kind-relevant fields changed, unless the user has set the box themselves. */
+export const withLopDefault = (kind: StructureKind, f: ComponentForm): ComponentForm =>
+  f.lopTouched ? f : { ...f, lopApplicable: defaultLopApplicable(kind, f) };
+
+export const emptyForm = (kind: StructureKind): ComponentForm => {
+  const f: ComponentForm = {
+    code: "", name: "", componentType: "earning", calc: kind === "run" ? "fixed" : "pct_of_ctc",
+    pctOfBasic: "", pctOfCtc: "", fixedRupees: "", employerCostClass: "", costPlacement: "inside_ctc",
+    isTaxable: false, countsForPfWage: false, countsForEsiWage: false, countsForGratuity: false, lopApplicable: false, lopTouched: false,
+  };
+  return withLopDefault(kind, f);
+};
 
 export type FormErrors = Partial<Record<"code" | "name" | "calc" | "amount" | "employerCostClass", string>>;
 
@@ -105,6 +126,6 @@ export function formFromRow(r: ComponentRow): ComponentForm {
     pctOfBasic: r.pctOfBasic != null ? String(r.pctOfBasic) : "", pctOfCtc: r.pctOfCtcBps != null ? String(r.pctOfCtcBps / 100) : "",
     fixedRupees: rupees, employerCostClass: (r.employerCostClass ?? "") as EmployerCostClass | "",
     costPlacement: r.costPlacement as CostPlacement, isTaxable: r.isTaxable, countsForPfWage: r.countsForPfWage,
-    countsForEsiWage: r.countsForEsiWage, countsForGratuity: r.countsForGratuity, lopApplicable: r.lopApplicable,
+    countsForEsiWage: r.countsForEsiWage, countsForGratuity: r.countsForGratuity, lopApplicable: r.lopApplicable, lopTouched: true,
   };
 }

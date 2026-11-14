@@ -390,6 +390,40 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // S8-G4: private grade bands (hrms-service modules/grade-bands, employee/masters-routes.ts).
+  GRADE_BAND_NOT_FOUND: {
+    en: {
+      what: "That grade band no longer exists.",
+      next: "Reload the page and choose a band from the list.",
+    },
+    hi: {
+      what: "वह ग्रेड बैंड अब मौजूद नहीं है।",
+      next: "पेज रीलोड करें और सूची में से कोई बैंड चुनें।",
+    },
+    actions: ["retry", "help"],
+  },
+  GRADE_BAND_INACTIVE: {
+    en: {
+      what: "That grade band is switched off.",
+      next: "Reactivate the band under Grade Bands, or choose another band.",
+    },
+    hi: {
+      what: "वह ग्रेड बैंड बंद किया हुआ है।",
+      next: "ग्रेड बैंड में जाकर उसे फिर से चालू करें, या कोई दूसरा बैंड चुनें।",
+    },
+    actions: ["back", "help"],
+  },
+  BAND_IN_USE: {
+    en: {
+      what: "Designations still use this grade band.",
+      next: "Move them to another band first, or deactivate this band instead of deleting it.",
+    },
+    hi: {
+      what: "कुछ पदनाम अभी भी इस ग्रेड बैंड का उपयोग कर रहे हैं।",
+      next: "पहले उन्हें किसी दूसरे बैंड में ले जाएँ, या हटाने के बजाय इस बैंड को निष्क्रिय करें।",
+    },
+    actions: ["back", "help"],
+  },
   DESIGNATION_IN_USE: {
     en: {
       what: "This can't be done while it's still in use elsewhere.",

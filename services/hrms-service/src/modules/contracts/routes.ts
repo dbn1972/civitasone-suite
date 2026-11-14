@@ -6,7 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { hrmsContractConfig } from "./schema.js";
+import { hrmsContractConfig, hrmsContracts } from "./schema.js";
 import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -15,9 +15,12 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { todayIST } from "../../shared/ist.js";
+import { projectFromTerms, reconcileTenantProjection } from "./projection.js";
+import { resolveNotifyRoles, resolveLapsePolicy } from "./policy.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
+  expiringDashboardQuery,
   activateContractBody,
   initiateRenewalBody,
   bulkRenewalBody,
@@ -45,6 +48,18 @@ const ALL_ROLES = [...HR_ROLES, "manager"];
  * here rather than widening that shared helper's return shape for every
  * other caller.
  */
+/** S8 G5: add the employees a project manager is responsible for to a manager-scope id list (opt-in per tenant). */
+async function withProjectTeam(ctx: { tenantId: string; actorId: string }, scopeIds: string[]): Promise<string[]> {
+  const cfg = await repo.getContractConfig(ctx.tenantId);
+  if (!resolveNotifyRoles(cfg).includes("project_manager")) return scopeIds;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return scopeIds;
+  const team = await scopedRead((tx) =>
+    tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.projectManagerId, actorEmp.id))));
+  return [...new Set([...scopeIds, ...team.map((t) => t.id)])];
+}
+
 async function enrichWithEmployee<T extends { employeeId: string }>(
   tenantId: string,
   rows: T[],
@@ -77,6 +92,49 @@ async function enrichWithEmployee<T extends { employeeId: string }>(
       agencyRef: agencyMap.get(r.employeeId) ?? null,
     };
   });
+}
+
+/**
+ * S8 G5: a project manager may see and initiate the renewal of the contracts of the people whose
+ * hrms_employees.project_manager_id is their own employee record. Opt-in per tenant (contract_config.notify_roles
+ * includes project_manager), so for every existing tenant this is false and the manager-scope rule is unchanged.
+ * The renewal still needs HR approval (the checker); only the initiator rule widens.
+ */
+async function isProjectManagerOf(ctx: { tenantId: string; actorId: string }, employeeId: string): Promise<boolean> {
+  const cfg = await repo.getContractConfig(ctx.tenantId);
+  if (!resolveNotifyRoles(cfg).includes("project_manager")) return false;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return false;
+  const emp = await employeeRepo.findById(employeeId, ctx.tenantId);
+  return emp?.projectManagerId === actorEmp.id;
+}
+
+/** CSV cell: quoted, and a leading = + - @ is neutralised so a spreadsheet never evaluates it as a formula. */
+export function csvCell(v: unknown): string {
+  let t = v === null || v === undefined ? "" : String(v);
+  // Numbers (e.g. a negative daysRemaining) are data, not formulas: left alone. Text starting = + - @ tab CR LF is neutralised.
+  if (typeof v !== "number" && /^[=+\-@\t\r\n]/.test(t)) t = `'${t}`;
+  return `"${t.replace(/"/g, '""')}"`;
+}
+
+/** Pay fields inside contract terms. A project manager (who is not HR or the line manager) never sees these; the owner can relax it. */
+const PAY_TERM_KEYS = ["compensationMinor", "currency"] as const;
+function stripPayTerms<T>(terms: T): T {
+  if (!terms || typeof terms !== "object" || Array.isArray(terms)) return terms;
+  const out: Record<string, unknown> = { ...(terms as Record<string, unknown>) };
+  for (const k of PAY_TERM_KEYS) delete out[k];
+  return out as T;
+}
+function stripContractPay<T extends { terms?: unknown }>(c: T): T {
+  return "terms" in c ? { ...c, terms: stripPayTerms(c.terms) } : c;
+}
+function stripRenewalPay<T extends { originalTerms?: unknown; newTerms?: unknown }>(r: T): T {
+  return { ...r, ...("originalTerms" in r ? { originalTerms: stripPayTerms(r.originalTerms) } : {}), ...("newTerms" in r ? { newTerms: stripPayTerms(r.newTerms) } : {}) };
+}
+/** "full" = HR / self / line manager (unchanged), "pm" = project-manager-only path (pay stripped), null = no access. */
+async function accessTo(ctx: { tenantId: string; actorId: string; roles: string[] } & Record<string, any>, employeeId: string): Promise<"full" | "pm" | null> {
+  if (await canReadEmployeeRecord(ctx as never, employeeId)) return "full";
+  return (await isProjectManagerOf(ctx, employeeId)) ? "pm" : null;
 }
 
 export async function contractRoutes(app: FastifyInstance): Promise<void> {
@@ -118,14 +176,16 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Owner decision 2 (2026-10-14): a manager sees self + direct reports only;
     // HR stays tenant-wide. Empty scope (unlinked actor) matches nothing.
     const scopeIds = await resolveManagerScopeIds(ctx);
-    if (scopeIds) filters.employeeIds = scopeIds;
+    if (scopeIds) filters.employeeIds = await withProjectTeam(ctx, scopeIds);
     const listOpts: { sort?: "endDate"; summaryToday?: string } = {};
     if (query.sort) listOpts.sort = query.sort;
     // Register counts are classified against the IST calendar date (what the officer sees),
     // not the server's UTC date.
     if (query.summary) listOpts.summaryToday = todayIST();
     const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset }, listOpts);
-    const data = await enrichWithEmployee(ctx.tenantId, result.data);
+    const enriched = await enrichWithEmployee(ctx.tenantId, result.data);
+    const baseSet = scopeIds ? new Set(scopeIds) : null;
+    const data = baseSet ? enriched.map((c) => (baseSet.has(c.employeeId) ? c : stripContractPay(c))) : enriched;
     return reply.send({ ...result, data });
   });
 
@@ -135,17 +195,19 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    return reply.send({ data: contract });
+    const access = await accessTo(ctx, contract.employeeId);
+    if (!access) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
+    return reply.send({ data: access === "pm" ? stripContractPay(contract) : contract });
   });
 
   app.get("/v1/hrms/contracts/employee/:employeeId/history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = employeeIdParam.parse(req.params);
-    if (!(await canReadEmployeeRecord(ctx, employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
+    const access = await accessTo(ctx, employeeId);
+    if (!access) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
     const history = await repo.getContractHistory(ctx.tenantId, employeeId);
-    return reply.send({ data: history });
+    return reply.send({ data: access === "pm" ? (history ?? []).map(stripContractPay) : history });
   });
 
   app.post("/v1/hrms/contracts/:id/terminate", async (req, reply) => {
@@ -169,7 +231,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Check contract exists
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of your direct reports");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId)) && !(await isProjectManagerOf(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of your direct reports");
     // Segregation of duties (owner follow-up 2026-10-14): an actor never acts on their own
     // record -- nobody, manager or HR, may initiate the renewal of their own contract.
     const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
@@ -177,8 +239,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "SELF_RENEWAL_FORBIDDEN", "you cannot renew your own contract; another approver must initiate it");
     }
 
-    // Check status valid for renewal (must be active or expiring)
-    if (contract.status !== "active" && contract.status !== "expiring") {
+    // Check status valid for renewal (active, expiring, or escalated -- a lapsed contract of a flag_only tenant stays escalated until HR acts)
+    // Escalated is renewable only on a flag_only tenant (where a lapsed contract stays escalated until HR acts); every other tenant keeps today's 422.
+    const flagOnly = contract.status === "escalated" && resolveLapsePolicy(await scopedRead((tx) => repo.getContractConfigTx(tx, ctx.tenantId))).action === "flag_only";
+    if (contract.status !== "active" && contract.status !== "expiring" && !(flagOnly && contract.status === "escalated")) {
       throw new HttpError(422, "INVALID_CONTRACT_STATUS", `cannot renew contract in status '${contract.status}'; must be active or expiring`);
     }
 
@@ -190,7 +254,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
 
     // The consumer inserts the renewal with the id returned here, and new_terms is NOT NULL: carry the current terms forward
     // (overlaid by any supplied terms) so a renewal started without explicit terms is created instead of silently failing.
-    const result = await commands.initiateRenewal(ctx, id, { ...body, newTerms: { ...((contract.terms as Record<string, unknown> | undefined) ?? {}), ...(body.newTerms ?? {}) } });
+    const result = await commands.initiateRenewal(ctx, id, { ...body, newTerms: { ...((contract.terms as Record<string, unknown> | undefined) ?? {}), ...(body.newTerms ?? {}) }, initiatedBy: ctx.actorId });
     return reply.code(202).send(result);
   });
 
@@ -211,9 +275,17 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (query.employeeId) filters.employeeId = query.employeeId;
     if (query.status) filters.status = query.status;
     const scopeIds = await resolveManagerScopeIds(ctx);
-    if (scopeIds) filters.employeeIds = scopeIds;
+    if (scopeIds) filters.employeeIds = await withProjectTeam(ctx, scopeIds);
     const result = await repo.listRenewals(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
-    return reply.send(result);
+    if (!scopeIds) return reply.send(result);
+    // Project-manager-only rows (employee outside the manager scope) lose pay fields.
+    const baseSet = new Set(scopeIds);
+    const cids = [...new Set(result.data.map((r) => r.contractId))];
+    const owners = cids.length === 0 ? [] : await scopedRead((tx) =>
+      tx.select({ id: hrmsContracts.id, employeeId: hrmsContracts.employeeId }).from(hrmsContracts)
+        .where(and(eq(hrmsContracts.tenantId, ctx.tenantId), inArray(hrmsContracts.id, cids))));
+    const ownerOf = new Map(owners.map((o) => [o.id, o.employeeId]));
+    return reply.send({ ...result, data: result.data.map((r) => (baseSet.has(ownerOf.get(r.contractId) ?? "") ? r : stripRenewalPay(r))) });
   });
 
   app.get("/v1/hrms/contracts/renewals/:id", async (req, reply) => {
@@ -223,8 +295,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const renewal = await repo.getRenewalById(ctx.tenantId, id);
     if (!renewal) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
     const owner = await repo.getContractById(ctx.tenantId, renewal.contractId);
-    if (!owner || !(await canReadEmployeeRecord(ctx, owner.employeeId))) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
-    return reply.send({ data: renewal });
+    const access = owner ? await accessTo(ctx, owner.employeeId) : null;
+    if (!owner || !access) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
+    return reply.send({ data: access === "pm" ? stripRenewalPay(renewal) : renewal });
   });
 
   // ─── Task 9.3 — Dashboard and Config ───────────────────────────────────────
@@ -232,14 +305,74 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/contracts/dashboard/expiring", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const contracts = await repo.getExpiringContractsDashboard(ctx.tenantId);
+    const q = expiringDashboardQuery.parse(req.query);
+    const live = await scopedRead((tx) => repo.getContractConfigTx(tx, ctx.tenantId));
+    const contracts = await repo.getExpiringContractsDashboard(ctx.tenantId, resolveLapsePolicy(live).action === "flag_only");
     const asOf = new Date().toISOString().slice(0, 10);
-    const enriched = (contracts ?? []).map((c) => ({
+    let rows = contracts ?? [];
+    // S8 G5: project filter, project/manager columns and CSV are opt-in query params; with none of them the
+    // response is exactly what it was before.
+    if (q.projectId) rows = rows.filter((c) => projectFromTerms(c.terms).projectId === q.projectId);
+    const enriched = rows.map((c) => ({
       ...c,
       daysRemaining: daysUntilExpiry(c.endDate, asOf),
       renewalStatus: c.status === "expiring" ? "pending" : "not_started",
     }));
-    return reply.send({ data: enriched });
+    if (!q.projectId && !q.expand && q.format !== "csv") return reply.send({ data: enriched });
+
+    const named = await enrichWithEmployee(ctx.tenantId, enriched);
+    const ids = [...new Set(named.map((c) => c.employeeId))];
+    const mgrRows = ids.length === 0 ? [] : await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id, managerId: hrmsEmployees.managerId, projectManagerId: hrmsEmployees.projectManagerId })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, ids))));
+    const mgrByEmp = new Map(mgrRows.map((r) => [r.id, r]));
+    const mgrIds = [...new Set(mgrRows.flatMap((r) => [r.managerId, r.projectManagerId]).filter((v): v is string => !!v))];
+    const mgrNames = mgrIds.length === 0 ? new Map() : await batchEmployees(ctx.tenantId, mgrIds);
+    const full = named.map((c) => {
+      const proj = projectFromTerms(c.terms);
+      const m = mgrByEmp.get(c.employeeId);
+      return {
+        ...c,
+        projectId: proj.projectId,
+        projectCode: proj.projectCode,
+        projectName: proj.projectName,
+        projectManagerId: m?.projectManagerId ?? null,
+        projectManagerName: m?.projectManagerId ? (mgrNames.get(m.projectManagerId)?.fullName ?? null) : null,
+        lineManagerId: m?.managerId ?? null,
+        lineManagerName: m?.managerId ? (mgrNames.get(m.managerId)?.fullName ?? null) : null,
+      };
+    });
+    if (q.format === "csv") {
+      const head = ["Contract No", "Employee", "Department", "Project Code", "Project", "Project Manager", "Line Manager", "Start Date", "End Date", "Days Remaining", "Status", "Renewal"];
+      const lines = full.map((c) => [
+        c.contractNo, c.employeeName, c.department, c.projectCode, c.projectName, c.projectManagerName, c.lineManagerName,
+        c.startDate, c.endDate, c.daysRemaining, c.status, c.renewalStatus,
+      ].map(csvCell).join(","));
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", 'attachment; filename="contracts-expiring.csv"')
+        .send([head.map(csvCell).join(","), ...lines].join("\r\n"));
+    }
+    return reply.send({ data: full });
+  });
+
+  // ─── S8 G5 — employee contract/project read-model: consistency check + rebuild ──────────────────────
+
+  app.get("/v1/hrms/contracts/projection/check", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const enabled = await scopedRead(async (tx) => (await repo.getContractConfigTx(tx, ctx.tenantId))?.employeeProjectionEnabled === true);
+    if (!enabled) return reply.send({ data: { enabled: false } });
+    const r = await scopedRead((tx) => reconcileTenantProjection(tx, ctx.tenantId, false, { limit: 5000 }));
+    return reply.send({ data: { enabled: true, checked: r.checked, drifted: r.drifted, consistent: r.drifted === 0, truncated: r.truncated } });
+  });
+
+  app.post("/v1/hrms/contracts/projection/reconcile", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const result = await commands.reconcileProjection(ctx);
+    return reply.code(202).send(result);
   });
 
   app.get("/v1/hrms/contracts/config", async (req, reply) => {
@@ -272,6 +405,26 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (body.schedulerTimeUtc !== undefined) {
       insertValues.schedulerTimeUtc = body.schedulerTimeUtc;
       updateSet.schedulerTimeUtc = body.schedulerTimeUtc;
+    }
+    if (body.lapseAction !== undefined) {
+      insertValues.lapseAction = body.lapseAction;
+      updateSet.lapseAction = body.lapseAction;
+    }
+    if (body.graceDays !== undefined) {
+      insertValues.graceDays = body.graceDays;
+      updateSet.graceDays = body.graceDays;
+    }
+    if (body.notifyRoles !== undefined) {
+      insertValues.notifyRoles = body.notifyRoles;
+      updateSet.notifyRoles = body.notifyRoles;
+    }
+    if (body.employeeProjectionEnabled !== undefined) {
+      insertValues.employeeProjectionEnabled = body.employeeProjectionEnabled;
+      updateSet.employeeProjectionEnabled = body.employeeProjectionEnabled;
+    }
+    if (body.weeklyDigestEnabled !== undefined) {
+      insertValues.weeklyDigestEnabled = body.weeklyDigestEnabled;
+      updateSet.weeklyDigestEnabled = body.weeklyDigestEnabled;
     }
 
     const result = await publishF3Write(ctx, "contracts_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });

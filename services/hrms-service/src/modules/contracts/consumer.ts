@@ -5,7 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS, SERVICE } from "../../topics.js";
-import { hrmsContracts, hrmsContractRenewals } from "./schema.js";
+import { hrmsContracts, hrmsContractRenewals, hrmsContractNotifications } from "./schema.js";
 import { assertValidTransition, canRenew, DomainError } from "./domain.js";
 import {
   getContractById,
@@ -21,6 +21,10 @@ import {
 import * as employeeRepo from "../employee/repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { eq, and } from "drizzle-orm";
+import {
+  syncEmployeeContractProjection, reconcileTenantProjection, isProjectionEnabled, invalidateEmployeeCache,
+} from "./projection.js";
+import { resolveLapsePolicy, LAPSE_FLAGGED_MARK } from "./policy.js";
 import type { ContractStatus } from "./types.js";
 import { uuidV5 } from "../../shared/ids.js";
 
@@ -174,6 +178,7 @@ export function registerContractConsumers(queue: Queue): void {
       contractId: string;
     };
 
+    let projEmp: string | null = null; // set only when this delivery really did the work (not an idempotent skip)
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -197,10 +202,13 @@ export function registerContractConsumers(queue: Queue): void {
         );
 
       await audit(tx, msg, "activate", "contract", p.contractId);
+      await syncEmployeeContractProjection(tx, p.tenantId, contract.employeeId); // S8 G5 (no-op unless tenant opted in)
+      projEmp = contract.employeeId;
     });
 
     await cache.invalidate(contractCacheKey(p.tenantId, p.contractId));
     await cache.invalidate(dashboardCacheKey(p.tenantId));
+    if (projEmp) await invalidateEmployeeCache(p.tenantId, projEmp);
     log.info({ messageId: msg.messageId, contractId: p.contractId }, "contract activated");
   });
 
@@ -210,6 +218,7 @@ export function registerContractConsumers(queue: Queue): void {
       contractId: string;
     };
 
+    let projEmp: string | null = null; // set only when this delivery really did the work (not an idempotent skip)
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -233,10 +242,13 @@ export function registerContractConsumers(queue: Queue): void {
         );
 
       await audit(tx, msg, "terminate", "contract", p.contractId);
+      await syncEmployeeContractProjection(tx, p.tenantId, contract.employeeId);
+      projEmp = contract.employeeId;
     });
 
     await cache.invalidate(contractCacheKey(p.tenantId, p.contractId));
     await cache.invalidate(dashboardCacheKey(p.tenantId));
+    if (projEmp) await invalidateEmployeeCache(p.tenantId, projEmp);
     log.info({ messageId: msg.messageId, contractId: p.contractId }, "contract terminated");
   });
 
@@ -497,6 +509,7 @@ export function registerContractConsumers(queue: Queue): void {
         });
 
         await audit(tx, msg, "renewal_approved", "contract_renewal", p.renewalId);
+        await syncEmployeeContractProjection(tx, p.tenantId, contract.employeeId);
       } else {
         // Decision is "rejected"
         await tx
@@ -549,6 +562,7 @@ export function registerContractConsumers(queue: Queue): void {
       if (contract) {
         await cache.invalidate(employeeActiveCacheKey(p.tenantId, contract.employeeId));
         await cache.invalidate(employeeHistoryCacheKey(p.tenantId, contract.employeeId));
+        await invalidateEmployeeCache(p.tenantId, contract.employeeId);
       }
     }
     log.info({ messageId: msg.messageId, renewalId: p.renewalId, decision: p.decision }, "contract renewal decided");
@@ -645,7 +659,19 @@ export function registerContractConsumers(queue: Queue): void {
           assertNotSelfRenewal(actingEmployeeId, contract.employeeId, contractId);
 
           const status = contract.status as ContractStatus;
-          if (status !== "active" && status !== "expiring") {
+          if (status === "escalated" && resolveLapsePolicy(await getContractConfigTx(tx, p.tenantId)).action === "flag_only") {
+            // S8 G5: a flag_only tenant leaves lapsed contracts escalated; HR must be able to renew them. Other tenants keep refusing it.
+            try {
+              assertValidTransition("escalated", "expiring");
+            } catch (err) {
+              if (err instanceof DomainError) throw new NonRetryableError(err.message);
+              throw err;
+            }
+            await tx
+              .update(hrmsContracts)
+              .set({ status: "expiring", updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(eq(hrmsContracts.id, contractId), eq(hrmsContracts.tenantId, p.tenantId)));
+          } else if (status !== "active" && status !== "expiring") {
             throw new NonRetryableError(
               `Contract ${contractId} status '${status}' is not valid for renewal`,
             );
@@ -735,6 +761,7 @@ export function registerContractConsumers(queue: Queue): void {
       contractId: string;
     };
 
+    let projEmp: string | null = null; // set only when this delivery really did the work (not an idempotent skip)
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -745,6 +772,29 @@ export function registerContractConsumers(queue: Queue): void {
 
       const config = await getContractConfigTx(tx, p.tenantId);
       const autoSeparationEnabled = (config as any)?.autoSeparationEnabled ?? true;
+
+      // S8 G5: a flag_only tenant never auto-separates, whoever published this command (the nightly detector or a manual trigger).
+      if (resolveLapsePolicy(config).action === "flag_only") {
+        await audit(tx, msg, "auto_separate_skipped", "contract", p.contractId, { reason: "lapse_action_flag_only" });
+        // The policy may have flipped after the detector already expired the contract: tell HR once (deduped through the
+        // lapse-flag marker the detector uses) so nothing is silently stuck needing a decision.
+        const already = await tx.select({ id: hrmsContractNotifications.id }).from(hrmsContractNotifications)
+          .where(and(eq(hrmsContractNotifications.tenantId, p.tenantId), eq(hrmsContractNotifications.contractId, p.contractId), eq(hrmsContractNotifications.milestone, LAPSE_FLAGGED_MARK)))
+          .limit(1);
+        if (already.length === 0) {
+          await enqueue(tx, {
+            topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              tenantId: p.tenantId, recipients: [contract.employeeId], roles: ["hr_admin"], channels: ["email", "in_app"],
+              template: "contract_lapsed_flagged",
+              data: { contractId: p.contractId, contractNo: contract.contractNo, employeeId: contract.employeeId, endDate: contract.endDate, status: contract.status },
+            },
+          });
+          await tx.insert(hrmsContractNotifications).values({ tenantId: p.tenantId, contractId: p.contractId, milestone: LAPSE_FLAGGED_MARK });
+          await audit(tx, msg, "lapse_flagged", "contract", p.contractId, { reason: "lapse_action_flag_only" });
+        }
+        return;
+      }
 
       if (autoSeparationEnabled) {
         // Publish separation command
@@ -787,6 +837,8 @@ export function registerContractConsumers(queue: Queue): void {
         });
 
         await audit(tx, msg, "auto_separate", "contract", p.contractId);
+        await syncEmployeeContractProjection(tx, p.tenantId, contract.employeeId);
+        projEmp = contract.employeeId;
       } else {
         // Auto-separation disabled: send alert notification to HR_Admin only
         await enqueue(tx, {
@@ -818,7 +870,24 @@ export function registerContractConsumers(queue: Queue): void {
 
     await cache.invalidate(contractCacheKey(p.tenantId, p.contractId));
     await cache.invalidate(dashboardCacheKey(p.tenantId));
+    if (projEmp) await invalidateEmployeeCache(p.tenantId, projEmp);
     log.info({ messageId: msg.messageId, contractId: p.contractId }, "contract auto-separation processed");
+  });
+
+  // ─── S8 G5: rebuild the employee contract/project read-model (tenant opt-in; idempotent) ───────────────
+
+  queue.subscribe(COMMANDS.contractProjectionReconcile, async (msg) => {
+    const p = msg.payload as { tenantId: string };
+    let repairedIds: string[] = [];
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      if (!(await isProjectionEnabled(tx, p.tenantId))) return;
+      const r = await reconcileTenantProjection(tx, p.tenantId, true);
+      repairedIds = r.repairedIds;
+      await audit(tx, msg, "projection_reconcile", "contract_config", p.tenantId, { checked: r.checked, drifted: r.drifted, repaired: r.repaired });
+    });
+    for (const id of repairedIds) await invalidateEmployeeCache(p.tenantId, id);
+    log.info({ messageId: msg.messageId, repaired: repairedIds.length }, "employee contract projection reconciled");
   });
 
   log.info("contract consumers registered");

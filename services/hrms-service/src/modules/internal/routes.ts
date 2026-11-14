@@ -153,9 +153,23 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { hrmsDesignations: desigTable } = await import("../employee/schema.js");
     const { eq: eqD } = await import("drizzle-orm");
     const { scopedRead: scopedReadD } = await import("../../shared/db.js");
+    const { getPolicy: getPolicyD } = await import("../policy-settings/repo.js");
     const desigById = new Map((await scopedReadD((tx) => tx
-      .select({ id: desigTable.id, name: desigTable.name, level: desigTable.level, payGrade: desigTable.payGrade })
+      .select({ id: desigTable.id, name: desigTable.name, level: desigTable.level, payGrade: desigTable.payGrade, gradeBandId: desigTable.gradeBandId })
       .from(desigTable).where(eqD(desigTable.tenantId, ctx.tenantId)))).map((d) => [d.id, d]));
+    // S8-G4 (additive): the designation's private grade band for the payslip header. Read ONLY for a tenant
+    // on pay_scale 'private_bands'; a government tenant never gets the key, so its feed is byte-identical.
+    const bandById = new Map<string, { code: string; name: string; rank: number }>();
+    if ((await getPolicyD(ctx.tenantId, "pay_scale")).kind === "private_bands") {
+      const { hrmsGradeBands: bandTable } = await import("../employee/schema.js");
+      for (const b of await scopedReadD((tx) => tx.select({ id: bandTable.id, code: bandTable.code, name: bandTable.name, rank: bandTable.rank })
+        .from(bandTable).where(eqD(bandTable.tenantId, ctx.tenantId)))) bandById.set(b.id, { code: b.code, name: b.name, rank: b.rank });
+    }
+
+    const bandFor = (designationId: string): { code: string; name: string; rank: number } | null => {
+      const bid = desigById.get(designationId)?.gradeBandId;
+      return bid ? bandById.get(bid) ?? null : null;
+    };
 
     // DIC engagement applicability: employees whose type's muster absence must NOT
     // drive salary Loss-of-Pay (consultants invoice-billed, third-party agency-paid,
@@ -294,6 +308,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           designation: desigById.get(e.designationId)?.name ?? null,
           payLevel: (desigById.get(e.designationId)?.level ?? 0) > 0 ? desigById.get(e.designationId)!.level : null,
           payGrade: desigById.get(e.designationId)?.payGrade ?? null,
+          ...(bandFor(e.designationId) ? { gradeBand: bandFor(e.designationId) } : {}),
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
           // FR 53 (additive): the suspension window and any recorded review

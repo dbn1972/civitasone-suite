@@ -24,7 +24,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import {
   PAY_PROFILES, isPayProfile, planApproval, resolveProfileForMonth, validateProfileRequest, applyMoneyTerms, moneyTermsOf,
-  requiredPayOption, type DeputationMoneyTerms,
+  requiredPayOption, type DeputationMoneyTerms, type CtcTerms,
 } from "./domain.js";
 import { buildEmployeePayFeed } from "./feed.js";
 import { payProfileBulkRoutes } from "./bulk.js";
@@ -57,6 +57,15 @@ const requestBody = z.object({
     parentDaRateBps: z.number().int().min(0).max(100000).nullable(),
     parentPensionScheme: z.enum(["GPF", "NPS", "EPF"]).nullable(),
   }).partial().optional(),
+  /** S8 G1 (flag S8_CTC_PROFILE_ENABLED): the CTC terms of a ctc_contract profile. Annual, paise, digit strings. */
+  ctcTerms: z.object({
+    annualFixedMinor: minorString,
+    annualVariableTargetMinor: minorString.nullable().default(null),
+    templateLineageId: z.string().uuid(),
+    epfWagePolicy: z.enum(["ceiling", "actual"]).default("ceiling"),
+    gratuityProvisionOn: z.boolean().default(true),
+    overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: minorString })).max(10).default([]),
+  }).strict().optional(), // strict: there is no ESI opt-out (owner decision 10 Nov 2026), so esiOptOut is a 400, not silently ignored
   orderRef: z.string().max(120).optional(),
   remarks: z.string().max(2000).optional(),
 });
@@ -70,6 +79,7 @@ function serialize(r: Awaited<ReturnType<typeof repo.findById>>) {
     deputationId: r.deputationId,
     consolidatedMonthlyMinor: r.consolidatedMonthlyMinor == null ? null : r.consolidatedMonthlyMinor.toString(),
     deputationTerms: r.deputationTerms ?? null,
+    ...(r.ctcTerms ? { ctcTerms: r.ctcTerms } : {}),
     orderRef: r.orderRef, remarks: r.remarks,
     requestedBy: r.requestedBy, decidedBy: r.decidedBy, decidedAt: r.decidedAt, decisionNote: r.decisionNote,
     createdAt: r.createdAt,
@@ -105,6 +115,8 @@ export async function assertAssignable(tenantId: string, input: {
   deputationId: string | null; consolidatedMonthlyMinor: bigint | null;
   /** Request: overrides merged over the deputation's terms. Approve: the stored approved copy. */
   termsOverride?: Partial<DeputationMoneyTerms>; termsSnapshot?: DeputationMoneyTerms | null;
+  /** S8 G1: the CTC terms of the request / the stored approved copy. */
+  ctcTerms?: CtcTerms | null;
   /** G6 bulk: the locked period read once by the caller (skips the per-row payroll call). Undefined = read it. */
   lockedThroughOverride?: string | null;
 }): Promise<DeputationMoneyTerms | null> {
@@ -128,6 +140,7 @@ export async function assertAssignable(tenantId: string, input: {
     deputationIdGiven: input.deputationId != null,
     consolidatedMonthlyMinor: input.consolidatedMonthlyMinor,
     lockedThrough: input.lockedThroughOverride !== undefined ? input.lockedThroughOverride : await loadLockedThrough(tenantId),
+    ...(input.ctcTerms ? { ctcTerms: input.ctcTerms } : {}),
   });
   if (error) throw new HttpError(error === "PERIOD_LOCKED" ? 409 : 422, error, `pay profile not assignable: ${error}`);
   return snapshot;
@@ -151,6 +164,7 @@ export async function assertDecidable(ctx: { tenantId: string; actorId: string }
       employeeId: row.employeeId, payProfile: row.payProfile, effectiveFrom: row.effectiveFrom,
       deputationId: row.deputationId, consolidatedMonthlyMinor: row.consolidatedMonthlyMinor,
       termsSnapshot: row.deputationTerms ?? null,
+      ...(row.ctcTerms ? { ctcTerms: row.ctcTerms } : {}),
       ...(lockedThroughOverride !== undefined ? { lockedThroughOverride } : {}),
     });
     const active = (await repo.listByEmployee(ctx.tenantId, row.employeeId)).filter((r) => r.status === "active");
@@ -164,12 +178,17 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    const rawTerms = (req.body as { ctcTerms?: Record<string, unknown> } | null | undefined)?.ctcTerms;
+    if (rawTerms && typeof rawTerms === "object" && "esiOptOut" in rawTerms) {
+      throw new HttpError(400, "ESI_OPT_OUT_NOT_ALLOWED", "ctcTerms.esiOptOut: ESI opt-out is not allowed; ESI cannot be waived by the employee");
+    }
     const body = requestBody.parse(req.body);
     const consolidated = body.consolidatedMonthlyMinor != null ? BigInt(body.consolidatedMonthlyMinor) : null;
     const deputationTerms = await assertAssignable(ctx.tenantId, {
       employeeId: id, payProfile: body.payProfile, effectiveFrom: body.effectiveFrom,
       deputationId: body.deputationId ?? null, consolidatedMonthlyMinor: consolidated,
       ...(body.deputationTerms ? { termsOverride: body.deputationTerms as Partial<DeputationMoneyTerms> } : {}),
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
     });
     const history = await repo.listByEmployee(ctx.tenantId, id);
     if (history.some((r) => r.status === "pending")) {
@@ -184,6 +203,7 @@ export async function payProfileRoutes(app: FastifyInstance): Promise<void> {
       deputationId: body.deputationId ?? null,
       consolidatedMonthlyMinor: body.consolidatedMonthlyMinor ?? null,
       deputationTerms,
+      ...(body.ctcTerms ? { ctcTerms: body.ctcTerms as CtcTerms } : {}),
       orderRef: body.orderRef ?? null,
       remarks: body.remarks ?? null,
     });
