@@ -15,6 +15,14 @@
  * empty identity, so a transient failure can never fall through to another
  * deductor's deployment-wide EMPLOYER_* values. A successful read of a tenant
  * with no documentIdentity is a normal empty identity (-> 422 not configured).
+ *
+ * Two different answers, told apart on purpose:
+ *   - tenant-service ANSWERED that it has no such tenant (HTTP 404 with the NOT_FOUND code its own
+ *     error handler sends): nothing is configured and retrying cannot help. That is "employer not
+ *     configured" (-> 422 FORM16_EMPLOYER_NOT_CONFIGURED, `registered: false`), not an outage.
+ *   - everything else (network error, timeout, 5xx, 401/403 refused credential, a 404 that is not
+ *     tenant-service's NOT_FOUND answer such as a mis-routed URL, an unreadable body): the identity
+ *     is UNKNOWN, so it fails closed (-> 503). The 503 names the HTTP status.
  * TODO(rebase onto #2463): switch to `resolveDocIdentity` from
  * @civitasone/render/official and delete this file (add `deductorCategory` to
  * its DocIdentity if it is not there yet).
@@ -30,12 +38,16 @@ export interface TenantDocIdentity {
   pan: string | null;
   /** documentIdentity.deductorCategory, lower-cased ("government" for a Central / State Government deductor). */
   deductorCategory: string | null;
+  /** false only when tenant-service answered 404 NOT_FOUND for this tenant (absent = registered). */
+  registered?: boolean;
 }
 
 /** A tenant that was read successfully but has no documentIdentity. */
 export const EMPTY_TENANT_DOC_IDENTITY: TenantDocIdentity = {
   orgName: null, tenantName: null, address: null, tan: null, pan: null, deductorCategory: null,
 };
+/** tenant-service has no record of this tenant: nothing can be configured for it. */
+export const UNREGISTERED_TENANT_DOC_IDENTITY: TenantDocIdentity = { ...EMPTY_TENANT_DOC_IDENTITY, registered: false };
 
 /** tenant-service could not be read; the deductor identity is unknown (fail closed). */
 export class TenantIdentityUnavailableError extends Error {
@@ -65,7 +77,18 @@ export function tenantDocIdentityFrom(tenant: { name?: unknown; settings?: unkno
   };
 }
 
-export type FetchLike = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
+export type FetchLike = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
+
+/** True when a non-2xx reply is tenant-service's own "no such tenant" answer (404 + code NOT_FOUND). */
+async function isTenantNotFound(res: { status?: number; json(): Promise<unknown> }): Promise<boolean> {
+  if (res.status !== 404) return false;
+  try {
+    const b = (await res.json()) as { code?: unknown; error?: { code?: unknown } } | null;
+    return b?.code === "NOT_FOUND" || b?.error?.code === "NOT_FOUND";
+  } catch {
+    return false;
+  }
+}
 
 const cache = new Map<string, { value: TenantDocIdentity; at: number }>();
 const TTL_MS = 60_000;
@@ -84,7 +107,13 @@ export async function readTenantDocIdentity(tenantId: string, fetchImpl: FetchLi
   } catch (err) {
     throw new TenantIdentityUnavailableError(err instanceof Error ? err.message : "request failed");
   }
-  if (!res.ok) throw new TenantIdentityUnavailableError("tenant-service returned a non-2xx status");
+  if (!res.ok) {
+    if (await isTenantNotFound(res)) {
+      cache.set(tenantId, { value: UNREGISTERED_TENANT_DOC_IDENTITY, at: Date.now() });
+      return UNREGISTERED_TENANT_DOC_IDENTITY;
+    }
+    throw new TenantIdentityUnavailableError(`tenant-service returned HTTP ${res.status ?? "non-2xx"}`);
+  }
   let body: { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } } | null;
   try { body = (await res.json()) as typeof body; } catch { throw new TenantIdentityUnavailableError("unreadable response body"); }
   const tenant = body?.data ?? body;
