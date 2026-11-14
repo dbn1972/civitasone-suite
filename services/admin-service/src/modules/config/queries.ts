@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { catalogueIsSource, legacyKeysFromCatalogue, catalogueModuleRows } from "../composition/single-source.js";
 
 export async function getConfig(tenantId: string) {
   return cache.getOrLoad(cache.makeKey(tenantId, "config", tenantId), () => repo.getTenantConfig(tenantId));
@@ -10,6 +11,10 @@ export async function listFeatureFlags() {
 }
 
 export async function listTenantModules(tenantId: string): Promise<Array<{ name: string }>> {
+  if (catalogueIsSource()) {
+    const derived = await legacyKeysFromCatalogue(tenantId);
+    if (derived !== null) return derived.map((name) => ({ name }));
+  }
   const keys = await repo.listModuleKeys(tenantId);
   return keys.map((name) => ({ name }));
 }
@@ -24,6 +29,10 @@ function humanizeModuleKey(key: string): string {
  * so the legacy {name}-only readers of the same endpoint keep parsing.
  */
 export async function listTenantModulesDetailed(tenantId: string): Promise<Array<{ name: string; moduleKey: string; moduleName: string; enabled: boolean; enabledAt?: string }>> {
+  if (catalogueIsSource()) {
+    const derived = await catalogueModuleRows(tenantId);
+    if (derived !== null) return derived;
+  }
   const rows = await repo.listModuleConfigs(tenantId);
   return rows.map((r) => ({
     name: r.moduleKey,
