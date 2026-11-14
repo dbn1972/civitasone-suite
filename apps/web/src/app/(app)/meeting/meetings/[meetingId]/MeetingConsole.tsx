@@ -1,10 +1,11 @@
 "use client";
 
 import { actionErrorText } from "../../_data/errorText";
+import { asAgendaSubmitError } from "../../_data/agendaErrors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import type { HumanError } from "@/lib/messages";
@@ -36,6 +37,11 @@ import {
   initiateVote,
   transitionMeeting,
   addAgendaItem,
+  addLateAgendaItem,
+  requestLateAgendaItem,
+  fetchLateRequests,
+  approveLateRequest,
+  rejectLateRequest,
   addParticipants,
   listCommitteeMembers,
   listParticipantEmployeeIds,
@@ -56,6 +62,12 @@ type ViewerPermissions = {
   canConclude: boolean;
   /** M2: may add participants (mirrors meeting-service participant WRITE_ROLES). */
   canManageParticipants?: boolean;
+  /** May approve an agenda item past the submission cut-off (chair / admins). Mirrors agenda/routes.ts LATE_APPROVAL_ROLES. */
+  canApproveLateAgenda?: boolean;
+  /** May add an agenda item directly. Mirrors agenda/routes.ts WRITE_ROLES (the chairperson is NOT in it). Falls back to canTransition when a caller does not say. */
+  canAddAgenda?: boolean;
+  /** May ask the chairperson for a late inclusion (WRITE_ROLES + committee members). */
+  canRequestLateAgenda?: boolean;
   /** Which employee directory the viewer's roles can search; "none" hides the single-add picker. */
   employeeDirectory?: "hrms" | "payroll" | "none";
 };
@@ -367,6 +379,16 @@ export function MeetingConsole({
   // scheduled; there was no screen to add one.
   const [agendaTitle, setAgendaTitle] = useState("");
   const [agendaOutcome, setAgendaOutcome] = useState<AgendaOutcomeType>("discussion");
+  // The service refuses an item inside the notice window synchronously (422 MEETING_PAST_DEADLINE with the
+  // cut-off); the chair may then file it as a late inclusion with a recorded reason.
+  const [pastDeadline, setPastDeadline] = useState<{ deadline: string | null } | null>(null);
+  const [lateReason, setLateReason] = useState("");
+  const locale = useLocale();
+  function formatDeadline(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(d);
+  }
   async function onAddAgenda(e: React.FormEvent) {
     e.preventDefault();
     const title = agendaTitle.trim();
@@ -374,13 +396,93 @@ export function MeetingConsole({
     setBusy("agenda:add");
     setError(null);
     setToast(null);
+    setPastDeadline(null);
     try {
       await addAgendaItem(meeting.id, { title, outcomeType: agendaOutcome });
       setAgendaTitle("");
       setToast(tl("agendaAdded"));
       router.refresh();
     } catch (err) {
-      setError(actionErrorText(err));
+      const refused = asAgendaSubmitError(err);
+      if (refused?.code === "MEETING_PAST_DEADLINE") setPastDeadline({ deadline: refused.deadline });
+      else if (refused?.code === "MEETING_AGENDA_LOCKED") setError(tl("agendaLocked"));
+      else setError(actionErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  // Stored late-inclusion requests: a secretary/member asks, the chair decides.
+  const [lateRequests, setLateRequests] = useState<import("../../_data/types").LateAgendaRequest[]>([]);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const showLateRequests = !!(viewerPermissions.canApproveLateAgenda || viewerPermissions.canRequestLateAgenda);
+  const refreshLateRequests = useCallback(async () => {
+    try { setLateRequests(await fetchLateRequests(meeting.id)); } catch { /* the panel just stays as it was */ }
+  }, [meeting.id]);
+  useEffect(() => { if (showLateRequests) void refreshLateRequests(); }, [showLateRequests, refreshLateRequests]);
+  function lateRequestErrorText(err: unknown): string {
+    const refused = asAgendaSubmitError(err);
+    if (refused?.code === "SELF_APPROVAL_FORBIDDEN") return tl("lateReqErrSelf");
+    if (refused?.code === "LATE_REQUEST_ALREADY_DECIDED") return tl("lateReqErrDecided");
+    if (refused?.code === "MEETING_AGENDA_LOCKED") return tl("agendaLocked");
+    return actionErrorText(err);
+  }
+  async function onRequestLate() {
+    const title = agendaTitle.trim();
+    const reason = lateReason.trim();
+    if (!title || reason.length < 10) return;
+    setBusy("agenda:late-request");
+    setError(null);
+    setToast(null);
+    try {
+      await requestLateAgendaItem(meeting.id, { title, outcomeType: agendaOutcome }, reason);
+      setAgendaTitle("");
+      setLateReason("");
+      setPastDeadline(null);
+      setToast(tl("lateReqSent"));
+      void refreshLateRequests();
+    } catch (err) {
+      setError(lateRequestErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function onDecideLate(id: string, approve: boolean) {
+    setBusy(`late:${id}`);
+    setError(null);
+    setToast(null);
+    try {
+      if (approve) await approveLateRequest(meeting.id, id);
+      else await rejectLateRequest(meeting.id, id, rejectReason.trim());
+      setToast(approve ? tl("lateReqApproved") : tl("lateReqRejected"));
+      setRejectingId(null);
+      setRejectReason("");
+      // The decision is queued; show it pending-free right away, the server confirms on the next refresh.
+      setLateRequests((rs) => rs.map((r) => (r.id === id ? { ...r, status: approve ? "approved" : "rejected" } : r)));
+      if (approve) router.refresh();
+    } catch (err) {
+      setError(lateRequestErrorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function onAddLateAgenda() {
+    const title = agendaTitle.trim();
+    const reason = lateReason.trim();
+    if (!title || reason.length < 10) return;
+    setBusy("agenda:late");
+    setError(null);
+    setToast(null);
+    try {
+      await addLateAgendaItem(meeting.id, { title, outcomeType: agendaOutcome }, reason);
+      setAgendaTitle("");
+      setLateReason("");
+      setPastDeadline(null);
+      setToast(tl("agendaLateAdded"));
+      router.refresh();
+    } catch (err) {
+      const refused = asAgendaSubmitError(err);
+      setError(refused?.code === "MEETING_AGENDA_LOCKED" ? tl("agendaLocked") : actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -581,7 +683,7 @@ export function MeetingConsole({
             {blockers.map((b) => <li key={b}>{tl(`blockers.${b}`)}</li>)}
           </ul>
         )}
-        {viewerPermissions.canTransition && (status === "draft" || status === "scheduled") && (
+        {(viewerPermissions.canAddAgenda ?? viewerPermissions.canTransition) && (status === "draft" || status === "scheduled") && (
           <form onSubmit={(e) => void onAddAgenda(e)} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
             <div style={{ flex: "1 1 220px" }}>
               <label htmlFor="mtg-agenda-title" style={labelStyle}>{tl("agendaTitle")}</label>
@@ -599,6 +701,75 @@ export function MeetingConsole({
               {busy === "agenda:add" ? "…" : tl("addAgenda")}
             </button>
           </form>
+        )}
+        {pastDeadline && (
+          <div id="mtg-agenda-past-deadline" role="alert" style={{ marginTop: 12, fontSize: 13, color: "var(--ink2)" }}>
+            <p style={{ margin: 0, fontWeight: 600 }}>
+              {pastDeadline.deadline ? tl("agendaPastDeadline", { date: formatDeadline(pastDeadline.deadline) }) : tl("agendaPastDeadlineNoDate")}
+            </p>
+            {viewerPermissions.canApproveLateAgenda ? (
+              <div style={{ marginTop: 8 }}>
+                <label htmlFor="mtg-agenda-late-reason" style={labelStyle}>{tl("agendaLateReasonLabel")}</label>
+                <textarea id="mtg-agenda-late-reason" style={fieldStyle} rows={2} maxLength={1000} value={lateReason}
+                  onChange={(e) => setLateReason(e.target.value)} />
+                <button type="button" className="btn" style={{ marginTop: 8 }}
+                  disabled={busy !== null || agendaTitle.trim() === "" || lateReason.trim().length < 10}
+                  onClick={() => void onAddLateAgenda()}>
+                  {busy === "agenda:late" ? "…" : tl("agendaLateSubmit")}
+                </button>
+              </div>
+            ) : viewerPermissions.canRequestLateAgenda ? (
+              <div style={{ marginTop: 8 }}>
+                <p style={{ margin: "0 0 6px" }}>{tl("lateReqIntro")}</p>
+                <label htmlFor="mtg-agenda-late-reason" style={labelStyle}>{tl("agendaLateReasonLabel")}</label>
+                <textarea id="mtg-agenda-late-reason" style={fieldStyle} rows={2} maxLength={1000} value={lateReason}
+                  onChange={(e) => setLateReason(e.target.value)} />
+                <button type="button" className="btn" style={{ marginTop: 8 }}
+                  disabled={busy !== null || agendaTitle.trim() === "" || lateReason.trim().length < 10}
+                  onClick={() => void onRequestLate()}>
+                  {busy === "agenda:late-request" ? "…" : tl("lateReqSubmit")}
+                </button>
+              </div>
+            ) : (
+              <p style={{ margin: "6px 0 0" }}>{tl("agendaPastDeadlineAskChair")}</p>
+            )}
+          </div>
+        )}
+        {showLateRequests && (
+          <div id="mtg-late-requests" style={{ marginTop: 16 }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13 }}>{tl("lateReqHeading")}</p>
+            {lateRequests.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{tl("lateReqEmpty")}</p>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", fontSize: 13 }}>
+                {lateRequests.map((r) => (
+                  <li key={r.id} data-testid={`late-request-${r.id}`} style={{ padding: "8px 0", borderTop: "1px solid var(--line, #e5e7eb)" }}>
+                    <div><strong>{r.title}</strong> · <span>{tl(`lateReqStatus.${r.status}`)}</span></div>
+                    <div style={{ color: "var(--ink2)" }}>{tl("lateReqReason", { reason: r.reason })}</div>
+                    {r.decisionReason && <div style={{ color: "var(--ink2)" }}>{tl("lateReqDecisionReason", { reason: r.decisionReason })}</div>}
+                    {r.status === "pending" && viewerPermissions.canApproveLateAgenda && (
+                      rejectingId === r.id ? (
+                        <div style={{ marginTop: 6 }}>
+                          <label htmlFor={`mtg-late-reject-${r.id}`} style={labelStyle}>{tl("lateReqRejectReasonLabel")}</label>
+                          <textarea id={`mtg-late-reject-${r.id}`} style={fieldStyle} rows={2} maxLength={1000} value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)} />
+                          <button type="button" className="btn danger" style={{ marginTop: 6 }}
+                            disabled={busy !== null || rejectReason.trim().length < 5}
+                            onClick={() => void onDecideLate(r.id, false)}>{tl("lateReqRejectConfirm")}</button>{" "}
+                          <button type="button" className="btn ghost" style={{ marginTop: 6 }} onClick={() => { setRejectingId(null); setRejectReason(""); }}>{tl("lateReqCancel")}</button>
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
+                          <button type="button" className="btn" disabled={busy !== null} onClick={() => void onDecideLate(r.id, true)}>{tl("lateReqApprove")}</button>
+                          <button type="button" className="btn ghost" disabled={busy !== null} onClick={() => { setRejectingId(r.id); setRejectReason(""); }}>{tl("lateReqReject")}</button>
+                        </div>
+                      )
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </Card>
 

@@ -18,17 +18,22 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, ne, gt, asc, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, ne, gt, asc, isNotNull, notInArray, inArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { pino } from "pino";
+import { SAFE_LOG_SERIALIZERS } from "@civitasone/observability";
 import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
-import { httpError } from "../../shared/context.js";
+import { httpError, HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
-import { agendaItems } from "./schema.js";
+import { agendaItems, agendaLateRequests } from "./schema.js";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { getAgendaNotice, getPolicyNumber } from "../config-registry/policy.js";
 import { meetings, meetingStateTransitions } from "../meeting-core/schema.js";
+import { committeeMembers } from "../committee/schema.js";
+import { holdsMeetingAdminRole, CHAIR_STANDING_ROLES } from "../meeting-core/domain.js";
 import {
   orderAgendaItems,
   validateReorderBijection,
@@ -39,6 +44,8 @@ import {
   buildCarryForward,
   type ReorderEntry,
 } from "./domain.js";
+
+const log = pino({ name: "meeting-agenda-consumer", serializers: SAFE_LOG_SERIALIZERS });
 
 // ─── Message payload contracts (mirror topics.ts COMMANDS.agenda*) ───────────
 
@@ -55,6 +62,8 @@ interface AgendaSubmitPayload {
   confidentialityLevel?: string;
   fileReference?: string;
   linkedDecisionIds?: string[];
+  /** Set only by the chair-gated POST .../agenda/late route: waives the submission cut-off. */
+  lateApproval?: { approvedBy: string; reason: string };
 }
 
 interface AgendaPatch {
@@ -274,7 +283,26 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
     // Per-committee override → tenant setting → 7 (config-registry/policy.ts getAgendaNotice).
     const { days: submissionDeadlineDays } = await getAgendaNotice(tx, msg.tenantId, meeting.committeeId);
     const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
-    assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date(), config: { submissionDeadlineDays } });
+    try {
+      assertSubmissionAllowed({
+        scheduledAt: meeting.scheduledAt,
+        now: new Date(),
+        isChairpersonApproved: p.lateApproval != null,
+        config: { submissionDeadlineDays },
+      });
+    } catch (err) {
+      // The route refuses this synchronously (422), so reaching here means the meeting moved or the
+      // policy changed between publish and consume. A permanent business refusal: retrying cannot
+      // succeed, so mark it non-retryable (straight to the DLQ) and leave a trace in the log.
+      if (err instanceof HttpError && err.code === "MEETING_PAST_DEADLINE") {
+        log.warn(
+          { tenantId: msg.tenantId, meetingId: p.meetingId, agendaItemId: p.agendaItemId, actorId: msg.actorId, deadline: err.details?.deadline },
+          "agenda item refused at consume time: submission deadline has passed — not retrying",
+        );
+        (err as HttpError & { nonRetryable?: boolean }).nonRetryable = true;
+      }
+      throw err;
+    }
 
     await insertOrderedAgendaItem(tx, {
       id: p.agendaItemId,
@@ -305,7 +333,10 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
       correlationId: msg.correlationId,
       payload: { meetingId: p.meetingId, agendaItemId: p.agendaItemId, outcomeType: p.outcomeType },
     });
-    await audit(tx, msg, "submit", "agenda_item", p.agendaItemId);
+    await audit(
+      tx, msg, p.lateApproval ? "submit_late_approved" : "submit", "agenda_item", p.agendaItemId, "success",
+      p.lateApproval ? { approvedBy: p.lateApproval.approvedBy, reason: p.lateApproval.reason } : undefined,
+    );
   });
   await invalidateAgenda(msg.tenantId, p.meetingId);
 }
@@ -546,7 +577,205 @@ export type RegisterConsumer = <T = unknown>(
  * Register all agenda command consumers with the worker. Called from worker.ts (task 19.1)
  * with its `registerConsumer` function.
  */
+// ─── Late-inclusion requests (Req 3.5) ────────────────────────────────────────
+
+interface LateRequestPayload extends AgendaSubmitPayload {
+  requestId: string;
+  reason: string;
+}
+
+/** In-app notification for one recipient; entity ids only (notification-service resolves delivery). */
+async function notifyUser(
+  tx: DrizzleTx, msg: CommandEnvelope, eventType: string, recipientId: string, variables: Record<string, string>,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: NOTIFICATION_SEND,
+    eventType: NOTIFICATION_SEND,
+    tenantId: msg.tenantId,
+    actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: buildNotificationPayload({ eventType, recipient: recipientId, recipientId, channel: "in_app", variables }),
+  });
+}
+
+/** agenda.late_request -- store a pending request and tell the chairperson. */
+async function handleLateRequest(msg: CommandEnvelope): Promise<void> {
+  const p = msg.payload as LateRequestPayload;
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
+    if (!meeting) return;
+    try {
+      assertAgendaNotLocked(meeting.status);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
+    await tx.insert(agendaLateRequests).values({
+      id: p.requestId,
+      tenantId: msg.tenantId,
+      meetingId: p.meetingId,
+      title: p.title,
+      description: p.description ?? null,
+      outcomeType: p.outcomeType,
+      durationMinutes: p.durationMinutes ?? null,
+      presenterId: p.presenterId ?? null,
+      category: p.category ?? null,
+      confidentialityLevel: p.confidentialityLevel ?? null,
+      fileReference: p.fileReference ?? null,
+      reason: p.reason,
+      status: "pending",
+      requestedBy: msg.actorId,
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    }).onConflictDoNothing({ target: agendaLateRequests.id });
+    await enqueue(tx, {
+      topic: EVENTS.agendaLateRequested,
+      eventType: EVENTS.agendaLateRequested,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: { meetingId: p.meetingId, requestId: p.requestId },
+    });
+    await audit(tx, msg, "late_request", "agenda_late_request", p.requestId, "success", { meetingId: p.meetingId, reason: p.reason });
+    const chair = await tx.select({ chairpersonId: meetings.chairpersonId }).from(meetings)
+      .where(and(eq(meetings.id, p.meetingId), eq(meetings.tenantId, msg.tenantId))).limit(1);
+    if (chair[0]?.chairpersonId) {
+      await notifyUser(tx, msg, EVENTS.agendaLateRequested, chair[0].chairpersonId, { meetingId: p.meetingId, requestId: p.requestId });
+    }
+  });
+}
+
+/**
+ * Load a PENDING request for a decision, enforcing maker != checker. Permanent refusals are NonRetryable
+ * (a retry cannot change them): already decided, or the decider is the requester.
+ */
+async function loadPendingForDecision(tx: DrizzleTx, msg: CommandEnvelope, requestId: string) {
+  // FOR UPDATE: two concurrent decisions on one request serialise here. The second sees the committed
+  // status (not 'pending') and does nothing, so an approve and a reject can never both act (no duplicate
+  // agenda item for a request that ends up rejected, or two items for two approves).
+  const rows = await tx.select().from(agendaLateRequests)
+    .where(and(eq(agendaLateRequests.id, requestId), eq(agendaLateRequests.tenantId, msg.tenantId))).limit(1).for("update");
+  const row = rows[0];
+  if (!row) return null;
+  if (row.status !== "pending") {
+    log.warn({ requestId, status: row.status }, "late-inclusion request already decided -- ignoring duplicate decision");
+    return null;
+  }
+  if (row.requestedBy === msg.actorId) {
+    throw new NonRetryableError("maker-checker: the requester cannot decide their own late-inclusion request");
+  }
+  // Defence in depth (the route checks too): only an administrator or THIS meeting's chairperson decides.
+  const roles = (msg.payload as { actorRoles?: string[] }).actorRoles;
+  if (!holdsMeetingAdminRole(roles)) {
+    const m = await getMeeting(tx, row.meetingId, msg.tenantId);
+    let ok = false;
+    if (m) {
+      const direct = await tx.select({ chairpersonId: meetings.chairpersonId }).from(meetings)
+        .where(and(eq(meetings.id, row.meetingId), eq(meetings.tenantId, msg.tenantId))).limit(1);
+      ok = direct[0]?.chairpersonId === msg.actorId;
+      if (!ok && m.committeeId) {
+        const st = await tx.select({ id: committeeMembers.id }).from(committeeMembers).where(and(
+          eq(committeeMembers.tenantId, msg.tenantId), eq(committeeMembers.committeeId, m.committeeId),
+          eq(committeeMembers.memberId, msg.actorId), eq(committeeMembers.status, "active"),
+          inArray(committeeMembers.role, [...CHAIR_STANDING_ROLES]),
+        )).limit(1);
+        ok = st.length > 0;
+      }
+    }
+    if (!ok) throw new NonRetryableError("only this meeting's chairperson or an administrator can decide a late-inclusion request");
+  }
+  return row;
+}
+
+/** agenda.late_request.approve -- add the item past the cut-off, close the request, tell the requester. */
+async function handleLateRequestApprove(msg: CommandEnvelope): Promise<void> {
+  const p = msg.payload as { requestId: string; meetingId: string; note?: string };
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    const req = await loadPendingForDecision(tx, msg, p.requestId);
+    if (!req) return;
+    const meeting = await getMeeting(tx, req.meetingId, msg.tenantId);
+    if (!meeting) return;
+    try {
+      assertAgendaNotLocked(meeting.status);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
+    const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
+    const agendaItemId = randomUUID();
+    // Claim the request first: the conditional UPDATE (WHERE status = 'pending') must change exactly one
+    // row, and the item is inserted only then (belt and braces with the FOR UPDATE lock above).
+    const claimed = await tx.update(agendaLateRequests).set({
+      status: "approved", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.note ?? null,
+      agendaItemId, updatedBy: msg.actorId, updatedAt: new Date(),
+    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending"))).returning({ id: agendaLateRequests.id });
+    if (claimed.length !== 1) return;
+    await insertOrderedAgendaItem(tx, {
+      id: agendaItemId,
+      tenantId: msg.tenantId,
+      meetingId: req.meetingId,
+      actorId: msg.actorId,
+      item: {
+        title: req.title,
+        description: req.description,
+        outcomeType: req.outcomeType,
+        durationMinutes: req.durationMinutes ?? defaultItemDuration,
+        presenterId: req.presenterId,
+        status: "proposed",
+        confidentialityLevel: req.confidentialityLevel ?? "internal",
+        category: req.category,
+        linkedDecisionId: null,
+        fileReference: req.fileReference,
+        submittedBy: req.requestedBy,
+        submittedAt: new Date(),
+      },
+    });
+    await enqueue(tx, {
+      topic: EVENTS.agendaItemSubmitted, eventType: EVENTS.agendaItemSubmitted, tenantId: msg.tenantId,
+      actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { meetingId: req.meetingId, agendaItemId, outcomeType: req.outcomeType },
+    });
+    await enqueue(tx, {
+      topic: EVENTS.agendaLateRequestApproved, eventType: EVENTS.agendaLateRequestApproved, tenantId: msg.tenantId,
+      actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { meetingId: req.meetingId, requestId: req.id, agendaItemId },
+    });
+    await audit(tx, msg, "late_request_approved", "agenda_late_request", req.id, "success",
+      { meetingId: req.meetingId, agendaItemId, requestedBy: req.requestedBy, requestReason: req.reason, ...(p.note ? { note: p.note } : {}) });
+    await audit(tx, msg, "submit_late_approved", "agenda_item", agendaItemId, "success",
+      { approvedBy: msg.actorId, reason: req.reason, requestId: req.id });
+    await notifyUser(tx, msg, EVENTS.agendaLateRequestApproved, req.requestedBy, { meetingId: req.meetingId, requestId: req.id, agendaItemId });
+  });
+  await invalidateAgenda(msg.tenantId, p.meetingId);
+}
+
+/** agenda.late_request.reject -- close the request with the chair's reason, tell the requester. */
+async function handleLateRequestReject(msg: CommandEnvelope): Promise<void> {
+  const p = msg.payload as { requestId: string; meetingId: string; reason: string };
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    const req = await loadPendingForDecision(tx, msg, p.requestId);
+    if (!req) return;
+    const claimed = await tx.update(agendaLateRequests).set({
+      status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.reason,
+      updatedBy: msg.actorId, updatedAt: new Date(),
+    }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending"))).returning({ id: agendaLateRequests.id });
+    if (claimed.length !== 1) return;
+    await enqueue(tx, {
+      topic: EVENTS.agendaLateRequestRejected, eventType: EVENTS.agendaLateRequestRejected, tenantId: msg.tenantId,
+      actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { meetingId: req.meetingId, requestId: req.id },
+    });
+    await audit(tx, msg, "late_request_rejected", "agenda_late_request", req.id, "success",
+      { meetingId: req.meetingId, requestedBy: req.requestedBy, reason: p.reason });
+    await notifyUser(tx, msg, EVENTS.agendaLateRequestRejected, req.requestedBy, { meetingId: req.meetingId, requestId: req.id });
+  });
+}
+
 export function registerAgendaConsumers(register: RegisterConsumer): void {
+  register(COMMANDS.agendaLateRequest, handleLateRequest);
+  register(COMMANDS.agendaLateRequestApprove, handleLateRequestApprove);
+  register(COMMANDS.agendaLateRequestReject, handleLateRequestReject);
   register(COMMANDS.agendaItemSubmit, handleAgendaSubmit);
   register(COMMANDS.agendaItemUpdate, handleAgendaUpdate);
   register(COMMANDS.agendaItemWithdraw, handleAgendaWithdraw);

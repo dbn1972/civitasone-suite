@@ -15,6 +15,8 @@
 import { browserFetch } from "@/lib/api/browserClient";
 import { toHumanError, type MessageKind } from "@/lib/messages";
 import { UserFacingError } from "@/lib/userFacingError";
+import { AgendaSubmitError, readAgendaRefusal } from "./agendaErrors";
+import type { LateAgendaRequest } from "./types";
 import type {
   ActiveVote,
   CommitteeSummary,
@@ -210,11 +212,59 @@ export async function transitionMeeting(
 export const AGENDA_OUTCOME_TYPES = ["decision", "discussion", "information", "ratification"] as const;
 export type AgendaOutcomeType = (typeof AGENDA_OUTCOME_TYPES)[number];
 
+async function postAgenda(path: string, body: unknown): Promise<void> {
+  const res = await browserFetch(path, { method: "POST", body: JSON.stringify(body) });
+  if (res.ok) return;
+  // 422 MEETING_PAST_DEADLINE / MEETING_AGENDA_LOCKED are explained, not generic "couldn't save".
+  const refusal = await readAgendaRefusal(res);
+  if (refusal) throw new AgendaSubmitError(refusal.code, readError("save"), refusal.deadline);
+  throw new UserFacingError(readError("save"));
+}
+
 export async function addAgendaItem(
   meetingId: string,
   input: { title: string; outcomeType: AgendaOutcomeType },
 ): Promise<void> {
-  await send("POST", `v1/meeting/${meetingId}/agenda`, { body: input });
+  await postAgenda(`v1/meeting/${meetingId}/agenda`, input);
+}
+
+/** Ask the chairperson to allow an agenda item after the cut-off (stored as a pending request). */
+export async function requestLateAgendaItem(
+  meetingId: string,
+  input: { title: string; outcomeType: AgendaOutcomeType },
+  reason: string,
+): Promise<void> {
+  await postAgenda(`v1/meeting/${meetingId}/agenda/late-requests`, { ...input, reason });
+}
+
+export async function fetchLateRequests(meetingId: string): Promise<LateAgendaRequest[]> {
+  const out = await get<{ data: Array<Record<string, unknown>> }>(`v1/meeting/${meetingId}/agenda/late-requests`);
+  return (out.data ?? []).map((r) => ({
+    id: String(r.id), meetingId: String(r.meetingId), title: String(r.title), outcomeType: String(r.outcomeType),
+    reason: String(r.reason), status: r.status as LateAgendaRequest["status"], requestedBy: String(r.requestedBy),
+    requestedAt: String(r.requestedAt), decidedBy: (r.decidedBy as string | null) ?? null,
+    decidedAt: (r.decidedAt as string | null) ?? null, decisionReason: (r.decisionReason as string | null) ?? null,
+    agendaItemId: (r.agendaItemId as string | null) ?? null,
+  }));
+}
+
+/** Chair approves a stored request: the item is added past the cut-off. */
+export async function approveLateRequest(meetingId: string, requestId: string): Promise<void> {
+  await postAgenda(`v1/meeting/${meetingId}/agenda/late-requests/${requestId}/approve`, {});
+}
+
+/** Chair rejects a stored request with a reason. */
+export async function rejectLateRequest(meetingId: string, requestId: string, reason: string): Promise<void> {
+  await postAgenda(`v1/meeting/${meetingId}/agenda/late-requests/${requestId}/reject`, { reason });
+}
+
+/** Chair-approved late inclusion: files the item past the submission cut-off, with the recorded reason. */
+export async function addLateAgendaItem(
+  meetingId: string,
+  input: { title: string; outcomeType: AgendaOutcomeType },
+  reason: string,
+): Promise<void> {
+  await postAgenda(`v1/meeting/${meetingId}/agenda/late`, { ...input, reason });
 }
 
 // ─── Attendance ──────────────────────────────────────────────────────────────

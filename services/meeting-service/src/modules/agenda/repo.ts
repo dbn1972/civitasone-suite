@@ -20,12 +20,13 @@
  *
  * _Requirements: 3.1, 3.2, 3.3, 3.5, 4.5_
  */
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { agendaItems, type AgendaItemRow } from "./schema.js";
+import { agendaItems, agendaLateRequests, type AgendaItemRow, type AgendaLateRequestRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
 import { computeSubmissionDeadline, isPastSubmissionDeadline, type AgendaConfig } from "./domain.js";
+import { getPolicyNumber } from "../config-registry/policy.js";
 
 /** Cache resource segments (second-to-last key component). */
 const RESOURCE_AGENDA = "agenda";
@@ -68,11 +69,46 @@ export async function getAgendaItem(tenantId: string, itemId: string): Promise<A
   });
 }
 
+/** A meeting's late-inclusion requests, newest first (uncached: the chair acts on live state). */
+export async function listLateRequests(tenantId: string, meetingId: string, status?: string): Promise<AgendaLateRequestRow[]> {
+  return scopedRead((tx) => tx
+    .select()
+    .from(agendaLateRequests)
+    .where(and(
+      eq(agendaLateRequests.tenantId, tenantId),
+      eq(agendaLateRequests.meetingId, meetingId),
+      ...(status ? [eq(agendaLateRequests.status, status)] : []),
+    ))
+    .orderBy(desc(agendaLateRequests.requestedAt)));
+}
+
+export async function getLateRequest(tenantId: string, requestId: string): Promise<AgendaLateRequestRow | null> {
+  const rows = await scopedRead((tx) => tx
+    .select()
+    .from(agendaLateRequests)
+    .where(and(eq(agendaLateRequests.tenantId, tenantId), eq(agendaLateRequests.id, requestId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 /** Live existence/status of the parent meeting for the route guards (uncached — see file header). */
 export interface MeetingStatus {
   id: string;
   status: string;
   scheduledAt: Date | null;
+  committeeId?: string | null;
+  chairpersonId?: string | null;
+}
+
+/**
+ * The agenda notice period (days before the meeting that proposals close) for a meeting, resolved
+ * the same way the consumer's re-check resolves it: the tenant's `meeting_policy`
+ * `agenda.submission_deadline_days`, default 7. `committeeId` is accepted so a per-committee override
+ * (#2506 `getAgendaNotice`) can be swapped in HERE, in the one place both the route and the worker's
+ * route-side twin read it.
+ */
+export async function getSubmissionDeadlineDays(tenantId: string, _committeeId?: string | null): Promise<number> {
+  return scopedRead((tx) => getPolicyNumber(tx, tenantId, "agenda.submission_deadline_days"));
 }
 
 /**
@@ -82,7 +118,7 @@ export interface MeetingStatus {
  */
 export async function getMeetingStatus(tenantId: string, meetingId: string): Promise<MeetingStatus | null> {
   const rows = await scopedRead((tx) => tx
-    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt })
+    .select({ id: meetings.id, status: meetings.status, scheduledAt: meetings.scheduledAt, committeeId: meetings.committeeId, chairpersonId: meetings.chairpersonId })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1));
