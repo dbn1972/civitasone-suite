@@ -17,6 +17,9 @@ export const moduleRegistry = compositionSchema.table("module_registry", {
   isCore: boolean("is_core").notNull().default(false),
   hardDeps: text("hard_deps").array().notNull().$type<string[]>().default([]),
   softDeps: text("soft_deps").array().notNull().$type<string[]>().default([]),
+  // Hard edges the catalogue declares but that only take effect when MODULE_SOURCE=catalogue (migration 0059):
+  // adding them to hard_deps would make existing tenants silently gain modules.
+  pendingHardDeps: text("pending_hard_deps").array().notNull().$type<string[]>().default([]),
   screens: text("screens").array().notNull().$type<string[]>().default([]),
   cluster: text("cluster").notNull().default(""),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -75,8 +78,29 @@ export const tenantEnforcementMode = compositionSchema.table("tenant_enforcement
   updatedBy: uuid("updated_by").notNull(),
 });
 
+/**
+ * M6 maker-checker request to apply a sold plan's modules to a tenant (migration 0060, FORCE-RLS'd). pending ->
+ * applied | rejected; the decider is never the requester (DB CHECK chk_plan_apply_maker_checker).
+ */
+export const planApplyRequests = compositionSchema.table("plan_apply_requests", {
+  id: uuid("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  planId: uuid("plan_id"),
+  planCode: text("plan_code").notNull(),
+  moduleIds: text("module_ids").array().notNull().$type<string[]>(),
+  userModuleIds: text("user_module_ids").array().notNull().$type<string[]>(),
+  profileCode: text("profile_code"),
+  status: text("status").$type<"pending" | "applied" | "rejected">().notNull().default("pending"),
+  requestedBy: uuid("requested_by").notNull(),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  decidedBy: uuid("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
+  previousUserModules: text("previous_user_modules").array().$type<string[]>(),
+});
+
 export type ModuleRegistryRow = typeof moduleRegistry.$inferSelect;
 export type OrgProfileRow = typeof orgProfile.$inferSelect;
 export type ModuleBundleRow = typeof moduleBundle.$inferSelect;
 
-export const schema = { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile, tenantEnforcementMode };
+export const schema = { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile, tenantEnforcementMode, planApplyRequests };

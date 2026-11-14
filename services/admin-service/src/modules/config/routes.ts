@@ -8,6 +8,7 @@ import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../..
 import { tenantIdParam, moduleParam, moduleKeyParam, toggleBody, createFlagBody, overrideFlagBody, flagKeyParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { catalogueIsSource } from "../composition/single-source.js";
 
 const flagListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
@@ -40,6 +41,11 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TENANT_ADMIN);
     const { key } = moduleKeyParam.parse(req.params);
     const body = toggleBody.parse(req.body);
+    // M4: with MODULE_SOURCE=catalogue the module catalogue is the only module switch; the older list is derived
+    // from it, so a write here would silently diverge. Point the caller at the catalogue endpoints.
+    if (catalogueIsSource()) {
+      throw new HttpError(409, "MODULES_MANAGED_BY_CATALOGUE", `modules are managed by the catalogue: use POST /v1/admin/composition/modules/${key}/${body.enabled ? "enable" : "disable"}`);
+    }
     // GAP-TENANT-ADMIN-SETTINGS-07: a tenant admin may only toggle a module the
     // tenant is actually provisioned with. An unknown key used to be accepted
     // (202) and later INSERTed as a brand-new module row, letting a tenant

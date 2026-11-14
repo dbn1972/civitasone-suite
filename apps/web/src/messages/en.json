@@ -237,6 +237,10 @@
         "title": "Editions",
         "description": "Edition catalog and module bundles"
       },
+      "planPricing": {
+        "title": "Plans and prices",
+        "description": "Modules in each plan, price and GST"
+      },
       "entitlements": {
         "title": "Entitlements",
         "description": "Module limits and overrides"
@@ -14514,6 +14518,28 @@
     "downloadAria": "Download {name}",
     "reviewLink": "Open bulk scan review (to unlink a wrongly filed document)"
   },
+  "planPricing": {
+    "title": "Plans, modules and prices",
+    "area": "plan pricing",
+    "subtitle": "Each plan is sold as a set of modules. Needed modules are added automatically. Prices are in rupees; GST is shown separately.",
+    "includes": "Modules in the plan",
+    "addedAutomatically": "Added automatically (needed by the above)",
+    "none": "None",
+    "netPrice": "Price before GST",
+    "gst": "GST",
+    "totalPrice": "Total with GST",
+    "billingCycle": "Billing",
+    "noPrice": "No price set yet",
+    "cycle": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "annual": "Yearly"
+    },
+    "empty": {
+      "title": "No plans yet",
+      "message": "Create a plan first. Then set its modules and its price."
+    }
+  },
   "bulkScan": {
     "action": {
       "approve": "Approve",
@@ -18181,6 +18207,30 @@
     "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
     "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
     "windowNoteShown": "{base}: {shown} shown."
+  },
+  "tenantModuleCatalogue": {
+      "title": "Modules",
+      "lead": "Your modules are managed from the module catalogue. Switching a module on also switches on the modules it cannot work without.",
+      "emptyTitle": "No modules",
+      "emptyMessage": "Modules will appear here once the catalogue is available.",
+      "stateEnabled": "Enabled",
+      "stateDisabled": "Disabled",
+      "stateAuto": "Included automatically",
+      "switchLabel": "{module} module: {state}",
+      "requires": "Requires: {modules}",
+      "usesWhenPresent": "Uses when available: {modules}",
+      "neededBy": "Needed by: {modules}",
+      "confirmEnableTitle": "Enable {module}?",
+      "confirmDisableTitle": "Disable {module}?",
+      "alsoEnabled": "This will also enable the modules it requires: {modules}.",
+      "noExtra": "No other modules need to be enabled.",
+      "disableBody": "Disabling a module removes it for every user in this tenant.",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "savedEnabled": "{module} enabled.",
+      "savedDisabled": "{module} disabled.",
+      "blocked": "{module} cannot be disabled because another enabled module needs it.",
+      "saveFailed": "We couldn't save that change. Please try again."
   },
   "tenantModulesConfirm": {
     "title": "Confirm module selection",

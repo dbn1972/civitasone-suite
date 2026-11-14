@@ -35,6 +35,7 @@ export const ADMIN_TILES: readonly AdminTileDef[] = [
   { id: "metering", href: "/admin/metering", icon: "📈", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "invoices", href: "/admin/invoices", icon: "🧾", section: "billing", roles: BILLING_INVOICE_READER_ROLES },
   { id: "editions", href: "/admin/editions", icon: "📦", section: "billing", roles: ADMIN_PLATFORM_ROLES },
+  { id: "planPricing", href: "/admin/plan-pricing", icon: "🏷️", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "entitlements", href: "/admin/entitlements", icon: "🔑", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "featureFlags", href: "/admin/feature-flags", icon: "🚩", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "integrations", href: "/admin/integrations", icon: "🔗", section: "connectivity", roles: ADMIN_TENANT_ROLES },

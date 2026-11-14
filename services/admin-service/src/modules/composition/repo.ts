@@ -15,6 +15,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile, tenantEnforcementMode } from "./schema.js";
 import type { ModuleDef } from "./domain.js";
+import { catalogueIsSource } from "./module-source.js";
 
 export interface BundleRow {
   code: string;
@@ -44,7 +45,9 @@ export async function loadRegistry(tenantId: string): Promise<ModuleDef[]> {
       name: r.name,
       layer: r.layer,
       isCore: r.isCore,
-      hardDeps: r.hardDeps,
+      // pending hard edges (new real requirements, migration 0059) are effective only in catalogue mode, so the
+      // default never makes an existing tenant gain a module
+      hardDeps: catalogueIsSource() ? [...new Set([...r.hardDeps, ...r.pendingHardDeps])] : r.hardDeps,
       softDeps: r.softDeps,
       screens: r.screens,
       cluster: r.cluster,
