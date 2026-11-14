@@ -270,3 +270,25 @@ export const officerIdsQuery = z.object({
     .transform((s) => [...new Set(s.split(",").map((x) => x.trim()).filter(Boolean))])
     .pipe(z.array(z.string().uuid()).min(1).max(100)),
 });
+
+/**
+ * Set / change an employee's location (hrms_employees.location_id), which the
+ * generic update body deliberately does not carry: the location must be
+ * verified against location-service and the change audited old -> new, so it
+ * has its own synchronous route (PATCH /v1/hrms/employees/:id/location).
+ */
+export const employeeLocationBody = z.object({
+  locationId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+export type EmployeeLocationBody = z.infer<typeof employeeLocationBody>;
+
+/** Most employees one bulk location request may name. */
+export const BULK_LOCATION_MAX = 100;
+export const bulkEmployeeLocationBody = z.object({
+  locationId: z.string().uuid(),
+  employeeIds: z.array(z.string().uuid()).min(1).max(BULK_LOCATION_MAX)
+    .refine((ids) => new Set(ids).size === ids.length, { message: "employeeIds must not contain duplicates" }),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+export type BulkEmployeeLocationBody = z.infer<typeof bulkEmployeeLocationBody>;

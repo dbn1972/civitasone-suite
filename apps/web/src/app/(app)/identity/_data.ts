@@ -110,7 +110,6 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
-export const getIdentityUsers = moduleLoader("/api/identity/users", "identity.users");
 export const getIdentitySessions = moduleLoader("/api/identity/sessions", "identity.sessions");
 export const getIdentityApiKeys = moduleLoader("/api/v1/admin/api-keys", "identity.api-keys");
 export const getIdentityBreakglass = moduleLoader("/api/v1/admin/breakglass", "identity.breakglass");

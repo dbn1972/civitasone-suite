@@ -323,7 +323,9 @@ function findFetchJsonCalls(body) {
   // argument, skipping a nested-generic type-argument clause via
   // findMatchingBracket instead of a single-level regex.
   const paths = [];
-  const nameRe = /\bfetchJson\b/g;
+  // fetchAllUsersPages(path, ...) is loaders.ts's paged wrapper around fetchJson (walks the 200-row pages);
+  // its first argument is the same API path, so a loader that delegates to it is still a real data loader.
+  const nameRe = /\b(?:fetchJson|fetchAllUsersPages)\b/g;
   let nm;
   while ((nm = nameRe.exec(body)) !== null) {
     let i = nameRe.lastIndex;

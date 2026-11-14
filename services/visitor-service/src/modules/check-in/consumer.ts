@@ -34,7 +34,10 @@ import { domainRejectionSafe } from "../../shared/domain-rejection.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyVipArrival } from "../vip/routes.js";
 import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
-import { getPolicyBoolean } from "../config-registry/policy.js";
+import { getPolicyBoolean, getPolicyNumber } from "../config-registry/policy.js";
+import { loadCheckInWindowPolicy, evaluateCheckInWindow } from "./window.js";
+import { resolveBadgePrinter } from "./printer.js";
+import { FUTURE_SKEW_MS } from "./trusted-time.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
@@ -223,16 +226,24 @@ export function registerCheckInConsumers(queue: Queue): void {
       // valid exactly at validFrom and exactly at validUntil. Fail closed:
       // NonRetryableError, the same convention the checks above established
       // for this exact commit path.
-      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
-      if (timestamp.getTime() < pass.validFrom.getTime()) {
-        throw new NonRetryableError(
-          `pass '${p.passId}' is not yet valid (validFrom=${pass.validFrom.toISOString()}, check-in at ${timestamp.toISOString()})`,
-        );
+      // Server time for a live check-in; the claimed time only for an offline record, never in the future.
+      const nowAt = new Date();
+      const timestamp = p.offlineRecorded === true && p.timestamp ? new Date(p.timestamp) : nowAt;
+      if (Number.isNaN(timestamp.getTime()) || timestamp.getTime() > nowAt.getTime() + FUTURE_SKEW_MS) {
+        throw new NonRetryableError(`OFFLINE_TIMESTAMP_IN_FUTURE: check-in timestamp for pass '${p.passId}' is invalid or in the future`);
       }
-      if (timestamp.getTime() > pass.validUntil.getTime()) {
-        throw new NonRetryableError(
-          `pass '${p.passId}' has expired (validUntil=${pass.validUntil.toISOString()}, check-in at ${timestamp.toISOString()})`,
-        );
+      if (p.offlineRecorded === true) {
+        // Backstop for the route's bound (same tenant limit): a client-claimed time may not be stale.
+        const maxAgeMs = (await getPolicyNumber(tx, msg.tenantId, "check_in.offline_max_age_hours")) * 3_600_000;
+        if (nowAt.getTime() - timestamp.getTime() > maxAgeMs) {
+          throw new NonRetryableError(`OFFLINE_TIMESTAMP_TOO_OLD: offline timestamp ${timestamp.toISOString()} for pass '${p.passId}' is older than the ${maxAgeMs / 3_600_000} h limit`);
+        }
+      }
+      // Window is [validFrom (or start of the scheduled day, per tenant policy), validUntil + tenant grace].
+      // The route already answered 422 synchronously for this; this is the commit-time backstop.
+      const windowCheck = evaluateCheckInWindow(timestamp, pass.validFrom, pass.validUntil, await loadCheckInWindowPolicy(tx, msg.tenantId));
+      if (!windowCheck.ok) {
+        throw new NonRetryableError(`${windowCheck.code}: pass '${p.passId}' ${windowCheck.message}`);
       }
 
       // Visit request is loaded here (rather than later, as it was before)
@@ -434,7 +445,15 @@ export function registerCheckInConsumers(queue: Queue): void {
           visit?.visitorCategory && visit.visitorCategory !== "standard"
             ? visit.visitorCategory
             : "default";
-        await enqueue(tx, {
+        // Never publish an empty / unknown device id (it dead-letters on the uuid column). Resolve a real
+        // printer (supplied terminal, else the gate's default printer); with none, skip the job and say why.
+        const printer = await resolveBadgePrinter(tx, msg.tenantId, p.gateId, p.gateTerminalId);
+        if (printer.deviceId === null) {
+          log.warn(
+            { tenantId: msg.tenantId, correlationId: msg.correlationId, passId: p.passId, gateId: p.gateId, event: "badge_print_skipped" },
+            `check-in committed but no badge print job queued: ${printer.reason}`,
+          );
+        } else await enqueue(tx, {
           topic: COMMANDS.printJobCreate,
           eventType: COMMANDS.printJobCreate,
           tenantId: msg.tenantId,
@@ -444,7 +463,7 @@ export function registerCheckInConsumers(queue: Queue): void {
             id: randomUUID(),
             tenantId: msg.tenantId,
             passId: p.passId,
-            deviceId: p.gateTerminalId ?? "",
+            deviceId: printer.deviceId,
             priority: "standard",
             printerLanguage: "zpl",
             visitorCategory: badgeCategory,
@@ -453,7 +472,7 @@ export function registerCheckInConsumers(queue: Queue): void {
       }
       // Physical-access audit trail: emitted for EVERY committed check-in, not
       // only when the optional auto-print-badge toggle is on (GAP-VISITOR-GUARD-06).
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: p.offlineRecorded === true ? "check_in_offline" : "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success", ...(p.offlineRecorded === true ? { recordedAt: timestamp.toISOString() } : {}) } });
 
       return {
         locationId: pass.locationId,
