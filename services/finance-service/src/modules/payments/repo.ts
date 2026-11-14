@@ -176,6 +176,53 @@ export async function updatePayment(tx: Writer, id: string, patch: Partial<Payme
   }
 }
 
+/**
+ * An earlier bill of the SAME vendor carrying the same vendor bill number (case / spacing-insensitive). A rejected bill
+ * does not count: the vendor may re-submit the invoice after a rejection. `excludeId` skips the bill itself on a re-drive.
+ */
+export async function findDuplicateVendorBill(
+  tx: Exec, tenantId: string, vendorId: string, key: string, excludeId?: string,
+): Promise<{ id: string; billNo: string; status: string } | null> {
+  const r = await tx.execute(sql`
+    SELECT id::text AS id, bill_no AS "billNo", status
+    FROM payments.finance_bills
+    WHERE tenant_id = ${tenantId}::uuid AND vendor_id = ${vendorId}::uuid
+      AND vendor_bill_no IS NOT NULL
+      AND lower(regexp_replace(btrim(vendor_bill_no), '\\s+', ' ', 'g')) = ${key}
+      AND status <> 'rejected'
+      AND (${excludeId ?? null}::uuid IS NULL OR id <> ${excludeId ?? null}::uuid)
+    ORDER BY created_at LIMIT 1`);
+  const rows = (Array.isArray(r) ? r : ((r as { rows?: unknown[] } | undefined)?.rows ?? [])) as Array<{ id: string; billNo: string; status: string }>;
+  return rows[0] ?? null;
+}
+
+/**
+ * Where a bill lodged with POST /v1/finance/bills ended up. The route answers 202 before the worker has run, so a bill the
+ * worker refuses (e.g. DUPLICATE_VENDOR_BILL_NO from a race the route pre-check could not see) is otherwise invisible:
+ * it is created ("created"), refused with the code and reason the worker raised on finance.bill.rejected ("rejected"),
+ * or not decided / unknown ("pending").
+ */
+export async function findBillOutcome(
+  tx: Exec, tenantId: string, billId: string,
+): Promise<{ state: "created"; billNo: string } | { state: "rejected"; code: string; reason: string } | { state: "pending" }> {
+  const rowsOf = (r: unknown) => (Array.isArray(r) ? r : ((r as { rows?: unknown[] } | undefined)?.rows ?? [])) as Array<Record<string, unknown>>;
+  const bill = rowsOf(await tx.execute(sql`SELECT bill_no FROM payments.finance_bills WHERE tenant_id = ${tenantId}::uuid AND id = ${billId}::uuid LIMIT 1`))[0];
+  if (bill) return { state: "created", billNo: String(bill.bill_no) };
+  const rej = rowsOf(await tx.execute(sql`
+    SELECT payload->>'code' AS code, payload->>'reason' AS reason FROM _outbox.messages
+    WHERE tenant_id = ${tenantId}::uuid AND topic = 'finance.bill.rejected' AND payload->>'billId' = ${billId}
+    ORDER BY created_at DESC LIMIT 1`))[0];
+  if (rej) {
+    const code = String(rej.code ?? "BILL_REFUSED");
+    // the worker prefixes its reason with the code ("DUPLICATE_VENDOR_BILL_NO: ..."): show the sentence only
+    const raw = String(rej.reason ?? "");
+    const prefix = `${code}:`;
+    const reason = raw.startsWith(prefix) ? raw.slice(prefix.length).trimStart() : raw;
+    return { state: "rejected", code, reason };
+  }
+  return { state: "pending" };
+}
+
 export async function insertBill(tx: Writer, row: BillInsert): Promise<void> {
   await tx.insert(financeBills).values(row);
 }

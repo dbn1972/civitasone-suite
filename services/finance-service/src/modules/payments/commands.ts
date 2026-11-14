@@ -15,7 +15,10 @@ export async function createBill(ctx: RequestContext, body: CreateBillBody): Pro
   await queue.publish(COMMANDS.billCreate, {
     messageId: id, type: COMMANDS.billCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, netMinor, ...body },
+    // billNo is the VENDOR's invoice number (the web form and the user manual call it that): sent as vendorBillNo, which
+    // the consumer stores. The internal BILL/<fy>/<seq> number is still allocated there. Producers that publish
+    // finance.bill.create directly (GRN, works) do not send vendorBillNo and are unaffected.
+    payload: { id, tenantId: ctx.tenantId, netMinor, ...body, vendorBillNo: body.billNo },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

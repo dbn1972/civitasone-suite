@@ -23,6 +23,8 @@ export async function syncArLedger(
   tx: ExecTx, tenantId: string, p: { event: "issued" | "paid"; invoiceId: string; totalMinor: string; date: string },
 ): Promise<void> {
   const total = BigInt(p.totalMinor);
+  // Same per-tenant lock the opening-balance import takes, so "no row for this invoice yet, insert one" cannot interleave.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`ar-ledger:${tenantId}`}))`);
   if (p.event === "issued") {
     await tx.execute(sql`
       INSERT INTO gl.finance_ar_ledger (tenant_id, debtor_id, debtor_name, demand_id, invoice_date, amount_minor, received_minor, balance_minor, aging_bucket, status)
