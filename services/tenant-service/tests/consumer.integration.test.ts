@@ -34,6 +34,7 @@ import { tenants, tenantQuotas } from "../src/modules/tenant/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerTenantConsumers } from "../src/modules/tenant/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // RLS on tenant.tenants/tenant.tenant_quotas/_outbox.messages/_inbox.processed enforces
 // `tenant_id = current_tenant_id()`. Bare db.select()/db.delete() outside a tenant-scoped
@@ -152,7 +153,7 @@ describe("tenant consumer — integration (real Postgres)", () => {
       payload: payload(T2_ID, "integ-dedup.test.example"),
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q1.stop();
 
     const after1 = await tenantSelect(T2_ID, (tx) => tx.select().from(tenants).where(eq(tenants.id, T2_ID)));
@@ -175,7 +176,7 @@ describe("tenant consumer — integration (real Postgres)", () => {
       payload: payload(T2_ID, "integ-dedup.test.example"),
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q2.stop();
 
     // Still exactly one row — INSERT was not repeated.

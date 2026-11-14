@@ -23,6 +23,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditPlans, auditPlanItems } from "../src/modules/plan/schema.js";
 import { eq } from "drizzle-orm";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -439,7 +440,7 @@ describe("GAP-AUDIT-PLAN-07 — POST records who created the plan (createdBy = a
         riskLevel: "medium",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainAllQueues();
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");

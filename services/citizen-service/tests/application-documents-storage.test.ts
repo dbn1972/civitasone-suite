@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const exists = vi.fn(async (_key: string) => true);
 vi.mock("@civitasone/storage", async (orig) => ({
@@ -272,7 +273,7 @@ describe("consumer tenant binding", () => {
       messageId: id, type: "citizen.application.doc_upload", tenantId: TENANT, actorId: APPLICANT, correlationId: "c", schemaVersion: "1.0",
       payload: { id, applicationId: appId, tenantId: TENANT2, docType: "x", ownerCitizenId: APPLICANT, storageKey: key, contentType: "application/pdf", sizeBytes: 1, filename: "x.pdf" },
     } as never);
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     expect(await sqlAsTenant(TENANT, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).toHaveLength(0);
     expect(await sqlAsTenant(TENANT2, (sql) => sql`select 1 from application.citizen_app_documents where id = ${id}`)).toHaveLength(0);
   });

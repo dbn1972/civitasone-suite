@@ -21,6 +21,7 @@ import { estabLibraryBooks, estabIssues } from "../src/modules/facilities/schema
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerFacilitiesConsumers } from "../src/modules/facilities/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -89,7 +90,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 500));
+const settle = () => drainAllQueues();
 
 describe("GAP-ESTAB-LIBRARY-DETAIL-01: edit a book", () => {
   it("PATCH title persists and copiesTotal increase bumps copiesAvailable", async () => {

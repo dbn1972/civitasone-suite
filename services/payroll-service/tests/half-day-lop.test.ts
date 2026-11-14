@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { dbTransactionFn, upsertLopDaysMock, fetchLeaveLopFractionBpsMock } = vi.hoisted(() => {
   const tx = { insert: vi.fn(), update: vi.fn(), select: vi.fn() };
@@ -38,7 +39,7 @@ import { computeLeaveEncashmentGrossMinor, roundRupee } from "../src/modules/pay
 import { computeLeaveEncashExemption } from "../src/modules/tax/exemptions.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
-const settle = () => new Promise<void>((r) => setTimeout(r, 150));
+const settle = () => drainAllQueues();
 
 describe("leaveLopDays", () => {
   it("keeps whole-day rounding byte-for-byte (3 days half pay -> 2, unpaid -> days, paid -> 0)", () => {

@@ -23,6 +23,7 @@ import { hrmsEmployees } from "../src/modules/employee/schema.js";
 import { hrmsTrainings, hrmsNominations } from "../src/modules/training/schema.js";
 import { registerTrainingConsumers } from "../src/modules/training/consumer.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -63,7 +64,7 @@ let daveEmpId: string;
 let trainingId: string;
 let nominationId: string;
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 300));
+const settle = () => drainAllQueues();
 
 beforeAll(async () => {
   app = await buildApp();

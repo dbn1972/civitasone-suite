@@ -19,6 +19,7 @@ import { financeHeads } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000a5";
 const ACTOR  = "00000000-aaaa-4000-8000-0000000000a5";
@@ -70,7 +71,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 

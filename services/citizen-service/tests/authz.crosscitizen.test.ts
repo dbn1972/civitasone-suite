@@ -14,6 +14,7 @@ import { registerApplicationConsumers } from "../src/modules/application/consume
 import { registerRtiConsumers } from "../src/modules/rti/consumer.js";
 import { registerHelpdeskConsumers } from "../src/modules/helpdesk/consumer.js";
 import { registerPortalConsumers } from "../src/modules/portal/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerPortalConsumers(queue);
 registerGrievanceConsumers(queue);
@@ -53,7 +54,7 @@ async function waitReady(url: string) {
   for (let i = 0; i < 40; i++) {
     const r = await get(url, ofH);
     if (r.statusCode === 200) return;
-    await new Promise((res) => setTimeout(res, 50));
+    await drainAllQueues();
   }
 }
 

@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, executeQueue, insertGratuityMock, enqueued } = vi.hoisted(() => {
   const _queue: Array<Array<Record<string, unknown>>> = [];
@@ -70,7 +71,7 @@ async function separate(lastSlip: Record<string, unknown> | null, daRows: Array<
     correlationId: "c", schemaVersion: "1.0",
     payload: { employeeId: "emp-1", effectiveDate: "2026-11-30", basicMinor: "5000000", dateOfJoining: "2014-01-01", encashmentDays: 100, ...payload },
   });
-  await new Promise((r) => setTimeout(r, 150));
+  await drainAllQueues();
   await q.stop();
   return enqueued.find((m) => m.topic === COMMANDS.fnfCompute)?.payload;
 }

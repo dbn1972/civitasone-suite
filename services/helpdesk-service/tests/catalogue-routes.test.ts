@@ -22,6 +22,7 @@ import {
   requestStageEvents,
 } from "../src/modules/catalogue/schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/infra.js", async () => {
   const { MemoryQueue } = await import("@civitasone/queue");
@@ -94,7 +95,7 @@ async function get(url: string, tok: string) {
 }
 
 async function flush() {
-  await new Promise((r) => setTimeout(r, 250));
+  await drainAllQueues();
 }
 
 /** Create an offering and return its id (202 → consumer flush). */

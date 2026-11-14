@@ -291,6 +291,12 @@ export class MemoryQueue implements Queue {
 
   constructor(opts: { maxAttempts?: number } = {}) {
     this.maxAttempts = opts.maxAttempts ?? 5;
+    // Test aid: register on a process-global so a test can drain EVERY live
+    // in-memory queue (see vitest.drain.ts drainAllQueues) without knowing which
+    // variable holds it (createQueue() wraps it; services hold it in infra.ts).
+    // MemoryQueue is dev/test only (createQueue refuses it when NODE_ENV=production).
+    const g = globalThis as { __civitasMemoryQueues?: Set<MemoryQueue> };
+    (g.__civitasMemoryQueues ??= new Set()).add(this);
   }
 
   /**
@@ -410,6 +416,7 @@ export class MemoryQueue implements Queue {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    (globalThis as { __civitasMemoryQueues?: Set<MemoryQueue> }).__civitasMemoryQueues?.delete(this);
     // Cancel every pending retry-backoff timer and force its deliver() await
     // to settle now (instead of leaving it suspended forever), so deliver()
     // observes `stopped` on the very next line and returns without invoking
@@ -420,6 +427,21 @@ export class MemoryQueue implements Queue {
     }
     this.retryTimers.clear();
     this.handlers.clear();
+    // Graceful stop: publish() is fire-and-forget, so a handler that has already
+    // STARTED (e.g. a DB transaction under CI load) is still running when stop()
+    // is called. Returning now let callers observe pre-handler state (the
+    // "sleep N ms; stop(); assert" idiom flaked on slow runners). Wait for the
+    // already-started deliveries to settle; retry backoffs were cancelled above
+    // so this cannot wait on a retry. Bounded so a wedged handler can never hang
+    // shutdown.
+    if (this.inflight.size > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        this.drain(),
+        new Promise<void>((resolve) => { timer = setTimeout(resolve, 10_000); }),
+      ]);
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /** Backoff wait for deliver()'s retry loop, cancellable from stop(). */

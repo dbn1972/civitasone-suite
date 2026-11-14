@@ -35,6 +35,7 @@ import * as ticketRepo from "../src/modules/helpdesk/repo.js";
 import * as engagementRepo from "../src/modules/engagement/repo.js";
 import * as catalogueRepo from "../src/modules/catalogue/repo.js";
 import * as engagementCommands from "../src/modules/engagement/commands.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerApplicationConsumers(queue);
 registerRtiConsumers(queue);
@@ -75,7 +76,7 @@ async function waitForRows(table: string, col: string, ids: string[], ms = 30000
     const rows = await persisted(table, col, ids);
     if (rows.length === ids.length) return rows;
     if (Date.now() - start > ms) throw new Error(`timeout: ${rows.length}/${ids.length} rows in ${table}`);
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 
@@ -220,7 +221,7 @@ describe("a retried command persists exactly once", () => {
     const [row] = await waitForRows("application.citizen_applications", "ref_no", [id]);
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(row!.no).toMatch(new RegExp(`^APP-${YEAR}-\\d{6}$`));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await countRows("application.citizen_applications", id)).toBe(1);
     spy.mockRestore();
   });
@@ -231,7 +232,7 @@ describe("a retried command persists exactly once", () => {
     const [row] = await waitForRows("rti.citizen_rti_requests", "rti_no", [id]);
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(row!.no).toMatch(new RegExp(`^RTI/${YEAR}/\\d{6}$`));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await countRows("rti.citizen_rti_requests", id)).toBe(1);
     spy.mockRestore();
   });
@@ -253,7 +254,7 @@ describe("a retried command persists exactly once", () => {
     const [row] = await waitForRows("engagement.citizen_notices", "notice_no", [id]);
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(row!.no).toMatch(new RegExp(`^NTC-${YEAR}-\\d{6}$`));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await countRows("engagement.citizen_notices", id)).toBe(1);
     spy.mockRestore();
   });
@@ -266,7 +267,7 @@ describe("a retried command persists exactly once", () => {
     const [row] = await waitForRows("application.citizen_applications", "tracking_no", [ack.applicationId]);
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(row!.no).toBe(ack.trackingNo);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await countRows("application.citizen_applications", ack.applicationId)).toBe(1);
     spy.mockRestore();
   });
@@ -280,7 +281,7 @@ describe("a retried command persists exactly once", () => {
     await queue.publish(COMMANDS.rtiFile, env);
     await queue.publish(COMMANDS.rtiFile, env);
     await waitForRows("rti.citizen_rti_requests", "rti_no", [id]);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(await countRows("rti.citizen_rti_requests", id)).toBe(1);
   });
 });
@@ -321,7 +322,7 @@ describe("terminal failure of a create command is audited, never silent", () => 
     while (Date.now() - start < 20000) {
       rows = (await outboxAuditFor(messageId)) as unknown[];
       if (rows.length > 0) break;
-      await new Promise((r) => setTimeout(r, 50));
+      await drainAllQueues();
     }
     expect(rows.length).toBe(1);
     const payload = (rows[0] as { payload: Record<string, any> }).payload;

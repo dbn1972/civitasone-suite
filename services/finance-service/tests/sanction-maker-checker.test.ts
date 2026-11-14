@@ -20,6 +20,7 @@ import { currentFyIST } from "../src/shared/ist-date.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000b1";
 const MAKER  = "00000000-aaaa-4000-8000-0000000a0011";
@@ -43,7 +44,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 

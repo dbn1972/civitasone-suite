@@ -16,6 +16,7 @@ import { registerFacilityConsumers } from "../src/modules/facilities/consumer.js
 import { registerBookingConsumers } from "../src/modules/bookings/consumer.js";
 import * as repo from "../src/modules/bookings/repo.js";
 import { hdr, waitFor, drainQueue, ADMIN_ROLES, CITIZEN_ROLES, TENANT_A, TENANT_B, ACTOR_A, ACTOR_B } from "./support.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 let app: FastifyInstance;
 
@@ -333,7 +334,7 @@ describe("booking number generation — no collisions under concurrency", () => 
     );
     for (const res of responses) expect(res.statusCode).toBe(202);
     await drainQueue();
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     await drainQueue();
 
     const ids = responses.map((r) => (r.json() as { id: string }).id);

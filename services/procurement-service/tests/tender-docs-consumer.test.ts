@@ -19,6 +19,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { registerTenderDocsConsumers } from "../src/modules/tender/docs-consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT = "9c9c9c9c-1111-4000-8000-0000000000c1";
 const OTHER  = "9c9c9c9c-2222-4000-8000-0000000000c2";
@@ -32,7 +33,7 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function seedTender(id: string, status = "published"): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

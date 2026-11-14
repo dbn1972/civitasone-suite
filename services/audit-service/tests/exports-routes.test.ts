@@ -19,6 +19,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { mintDownloadToken } from "../src/modules/exports/signing.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 /**
  * Test-harness fix (mirrors audit.test.ts / para.test.ts): a bare `new
@@ -89,10 +90,10 @@ beforeAll(async () => {
       format: "json", includePii: false, roles: ["audit_admin"],
     },
   });
-  await new Promise((r) => setTimeout(r, 1200));
+  await drainOrFail(q);
   // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
   await relayOnce(db as never, q, 100, "audit-service");
-  await new Promise((r) => setTimeout(r, 500));
+  await drainOrFail(q);
   await q.stop();
 
   const rows = await runWithTenant(TENANT, () =>

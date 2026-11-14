@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, dbTransactionFn, enqueuedMessages, insertMock } = vi.hoisted(() => {
   const _insertMock = vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoNothing: vi.fn().mockResolvedValue(undefined) }) });
@@ -26,7 +27,7 @@ import { registerTenantOnboardConsumers } from "../src/modules/tenant-onboard/co
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+const settle = () => drainAllQueues();
 
 beforeEach(() => { vi.clearAllMocks(); enqueuedMessages.length = 0; dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); }); });
 

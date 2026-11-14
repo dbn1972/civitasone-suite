@@ -52,6 +52,7 @@ import { registerDepreciationConsumers } from "../src/modules/depreciation/consu
 import { registerWaterMeteringConsumers } from "../src/modules/water-metering/consumer.js";
 import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
 import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-9a9a-4000-8000-0000000000d1";
@@ -69,7 +70,7 @@ async function until<T>(fn: () => Promise<T | null | undefined | false>, ms = 10
     const v = await fn();
     if (v) return v;
     if (Date.now() > end) throw new Error("timed out waiting for the consumer");
-    await new Promise((r) => setTimeout(r, 60));
+    await drainAllQueues();
   }
 }
 const settle = (ms = 700) => new Promise<void>((r) => setTimeout(r, ms));

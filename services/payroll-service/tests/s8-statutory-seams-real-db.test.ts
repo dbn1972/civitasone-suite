@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -66,7 +67,7 @@ async function waitFor<T>(fn: () => Promise<T | null | undefined>, what: string)
     const v = await fn();
     if (v) return v;
     if (Date.now() > deadline) throw new Error(`timed out: ${what}`);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
   }
 }
 async function runMonth(month: string, runNo: string, runType?: string): Promise<string> {

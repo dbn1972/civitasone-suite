@@ -17,6 +17,7 @@ import {
   MAX_BODY_LENGTH, MAX_MERGE_FIELDS,
 } from "../src/modules/clauses/domain.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-cccc-4000-8000-000000000001";
 const TENANT = "11111111-cccc-4000-8000-000000000001";
@@ -35,7 +36,7 @@ async function wipe() {
   }));
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 400));
+const settle = () => drainAllQueues();
 
 // ── Domain pure tests ──────────────────────────────────────────────────────
 

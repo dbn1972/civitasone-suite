@@ -25,6 +25,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerDisbursementConsumers } from "../src/modules/disbursement/consumer.js";
 import { effectiveGrantStatus } from "../src/modules/disbursement/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
@@ -48,7 +49,7 @@ async function send(q: Queue, topic: string, payload: Record<string, unknown>) {
   while (Date.now() < deadline) {
     const rows = await scoped((tx) => tx.select().from(processed).where(eq(processed.messageId, messageId)));
     if (rows.length === 1) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error(`message on ${topic} was never processed`);
 }

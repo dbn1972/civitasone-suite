@@ -19,6 +19,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { estabFiles, estabNotings } from "../src/modules/files/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerFilesConsumers } from "../src/modules/files/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT  = "11111111-aaaa-4000-8000-0000000000c9";
 const OFFICER = "00000000-aaaa-4000-8000-0000000000c9";
@@ -66,7 +67,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 

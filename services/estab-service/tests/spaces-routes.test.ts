@@ -16,6 +16,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerSpacesConsumers } from "../src/modules/spaces/consumer.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_A = "11111111-cccc-4000-8000-000000000001";
@@ -58,7 +59,7 @@ async function waitFor(
   while (Date.now() - start < ms) {
     if (await fn()) return;
     await drainQueue();
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error("waitFor timeout");
 }

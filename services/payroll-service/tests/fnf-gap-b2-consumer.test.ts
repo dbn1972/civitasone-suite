@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const { mockTx, dbTransactionFn, enqueued, insertedValues } = vi.hoisted(() => {
   const _inserted: Array<Record<string, unknown>> = [];
@@ -65,7 +66,7 @@ async function run(p: Record<string, unknown>) {
     messageId: randomUUID(), type: COMMANDS.fnfCompute, tenantId: TENANT, actorId: ACTOR,
     correlationId: randomUUID(), schemaVersion: "1.0", payload: p,
   });
-  await new Promise<void>((r) => setTimeout(r, 100));
+  await drainAllQueues();
   await q.stop();
 }
 

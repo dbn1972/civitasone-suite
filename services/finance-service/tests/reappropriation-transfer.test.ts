@@ -16,6 +16,7 @@ import { financeBudgets, financeHeads } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000a4";
 const ACTOR  = "00000000-aaaa-4000-8000-0000000000a4";
@@ -53,7 +54,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 
@@ -111,7 +112,7 @@ describe("re-appropriation consumer — zero-sum transfer (R4)", () => {
     });
 
     // give the consumer a moment to attempt + roll back
-    await new Promise((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const src = (await scoped(TENANT, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, SRC_ID))))[0];

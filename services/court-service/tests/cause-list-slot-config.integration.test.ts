@@ -16,6 +16,7 @@ import { registerCourtRegistryConsumers } from "../src/modules/court-registry/co
 import { registerCauseListConsumers } from "../src/modules/cause-list/consumer.js";
 import { deriveCauseListId, deriveItemId, slotNamespace, courtroomNamespace } from "../src/modules/cause-list/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const T = randomUUID();
@@ -88,7 +89,7 @@ beforeAll(async () => {
     messageId: randomUUID(), type: COMMANDS.createCourt, tenantId: T, actorId: ACTOR, correlationId: "corr-d33", schemaVersion: "1.0",
     payload: { id: SEEDED_COURT, tenantId: T, name: "Seeded Court", courtType: "revenue_court" },
   });
-  await new Promise((r) => setTimeout(r, 800));
+  await drainAllQueues();
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${T}, true)`;
     await sql`INSERT INTO court.cause_lists (id, tenant_id, court_id, list_date, status) VALUES (${listId(SEEDED_COURT)}, ${T}, ${SEEDED_COURT}, ${LIST_DATE}, 'draft')`;

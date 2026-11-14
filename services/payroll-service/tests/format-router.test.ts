@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { queue } from "../src/shared/infra.js";
 import { registerSponsorConfigConsumers } from "../src/modules/sponsor-config/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-6666-4000-8000-000000000066";
@@ -134,7 +135,7 @@ async function seedSponsorConfig(overrides: Record<string, unknown> = {}) {
   // PUT is an F3 async route (202 + real DB upsert happens later, in the
   // consumer wired in beforeAll). Wait for the consumer to process before
   // returning so callers can rely on the config actually being persisted.
-  await new Promise<void>((r) => setTimeout(r, 600));
+  await drainAllQueues();
 }
 
 async function removeSponsorConfig() {

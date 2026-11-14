@@ -22,6 +22,7 @@ import { grantBeneficiaries } from "../src/modules/beneficiary/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerBeneficiaryConsumers } from "../src/modules/beneficiary/consumer.js";
 import { maskPersonName } from "../src/modules/beneficiary/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();
@@ -153,7 +154,7 @@ describe("POST /v1/grants/pii/reveal", () => {
     const deadline = Date.now() + 4000;
     let rows = await auditRows();
     while (rows.length <= before && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 50));
+      await drainAllQueues();
       rows = await auditRows();
     }
     expect(rows.length).toBe(before + 1);

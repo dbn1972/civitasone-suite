@@ -29,6 +29,7 @@ import { buildView } from "../src/modules/contacts/commands.js";
 import { activities } from "../src/modules/activities/schema.js";
 import { contacts } from "../src/modules/contacts/schema.js";
 import { warmCipher } from "../src/shared/pii-crypto.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 process.env.CRM_PII_KEY ??= "test_pii_key_for_crm_domain_tests_aaaa";
 
@@ -195,7 +196,7 @@ describe("notification.delivery.to_crm -> crm.activities", () => {
       payload: cmd.payload,
     });
     // Give the (no-op) redelivery a moment to be claimed by markProcessed.
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
 
     const rows = await tenantQuery(TENANT_A).select("select count(*)::int as n from crm.activities where id = $1", [id]);
     expect(rows[0]?.n).toBe(1);

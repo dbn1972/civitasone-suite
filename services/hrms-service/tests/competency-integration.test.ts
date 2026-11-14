@@ -34,6 +34,7 @@ import { db } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { eq, and } from "drizzle-orm";
 import { EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -130,7 +131,7 @@ describe("certificate → competency consumer", () => {
         certificate_no: `CERT-${uniq}`, competency_ref: CODE_FIRE },
     };
     await q.publish(EVENTS.certificateIssued, msg);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     await q.stop();
 
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -164,10 +165,10 @@ describe("certificate → competency consumer", () => {
         certificate_no: `CERT-DUP-${uniq}`, competency_ref: CODE_LAW },
     };
     await q.publish(EVENTS.certificateIssued, base);
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     // Re-deliver the SAME messageId — must not change anything further.
     await q.publish(EVENTS.certificateIssued, base);
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     await q.stop();
 
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -189,7 +190,7 @@ describe("certificate → competency consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenant_id: TENANT, employee_id: EMP, assessment_id: randomUUID(), certificate_no: "C-NONE", competency_ref: null },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     await q.stop();
     tenantStorage.enterWith({ tenantId: TENANT });
     expect((await repo.listEmployeeCompetencies(TENANT, EMP)).length).toBe(before);
@@ -206,7 +207,7 @@ describe("certificate → competency consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenant_id: TENANT, employee_id: EMP, assessment_id: randomUUID(), certificate_no: "C-UNK", competency_ref: "NO-SUCH-CODE" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     await q.stop();
     tenantStorage.enterWith({ tenantId: TENANT });
     expect((await repo.listEmployeeCompetencies(TENANT, EMP)).length).toBe(before);
@@ -221,7 +222,7 @@ describe("certificate → competency consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { tenant_id: TENANT, competency_ref: CODE_FIRE },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await drainAllQueues();
     await q.stop();
     expect(true).toBe(true); // no throw
   });

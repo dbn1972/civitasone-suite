@@ -14,6 +14,7 @@ import { registerOpinionConsumers } from "../src/modules/opinions/consumer.js";
 import { registerCounselBriefConsumers } from "../src/modules/counsel/consumer.js";
 import { registerFilingConsumers } from "../src/modules/filings/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR    = "00000000-aaaa-4000-8000-0000000000d0";
 const TENANT_A = "11111111-aaaa-4000-8000-0000000000d0";
@@ -54,7 +55,7 @@ async function wipe(): Promise<void> {
 }
 
 async function drain(_q: MemoryQueue): Promise<void> {
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainAllQueues();
 }
 
 beforeAll(async () => {

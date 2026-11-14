@@ -12,6 +12,7 @@ import { auditEvents } from "../src/modules/events/schema.js";
 import { writeEvent, verifyTenantChain } from "../src/modules/events/repo.js";
 import { registerAuditConsumers } from "../src/modules/events/consumer.js";
 import { computeHash, canonicalJson, nextOccurredAt, verifyChain, type ChainRow } from "../src/modules/events/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = globalThis.crypto.randomUUID();
 const ACTOR = globalThis.crypto.randomUUID();
@@ -73,7 +74,7 @@ describe("V4-G-05 audit chain is re-verifiable from stored rows", () => {
     for (let i = 0; i < 50; i++) {
       const n = (await runWithTenant(tenant, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, tenant))))).length;
       if (n >= 3) break;
-      await new Promise((r) => setTimeout(r, 100));
+      await drainAllQueues();
     }
     await q.stop();
     const v = await verifyTenantChain(tenant);

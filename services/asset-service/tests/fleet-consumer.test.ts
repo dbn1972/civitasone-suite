@@ -25,6 +25,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerFleetConsumers } from "../src/modules/fleet/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -76,7 +77,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-fleet-1", schemaVersion: "1.0",
       payload: { id: vehicleId, tenantId: TENANT_A, registrationNo: "UP32AB1234", make: "Tata", model: "Nexon", year: 2024, fuelType: "electric" },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetVehicles).where(eq(fleetVehicles.id, vehicleId)));
@@ -97,7 +98,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-fleet-1-replay", schemaVersion: "1.0",
       payload: { id: vehicleId, tenantId: TENANT_A, registrationNo: "UP32AB1234", make: "Tata", model: "Nexon", year: 2024, fuelType: "electric" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetVehicles).where(eq(fleetVehicles.id, vehicleId)));
@@ -123,7 +124,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-gps-1", schemaVersion: "1.0",
       payload: { id: vehicleId, tenantId: TENANT_A, lat: 28.6139, lng: 77.209 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetVehicles).where(eq(fleetVehicles.id, vehicleId)));
@@ -151,7 +152,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-maint-1", schemaVersion: "1.0",
       payload: { id: maintId, tenantId: TENANT_A, vehicleId, type: "oil_change", scheduledDate: new Date(Date.now() + 86400000).toISOString(), odometerThresholdKm: 5000 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetMaintenance).where(eq(fleetMaintenance.id, maintId)));
@@ -177,7 +178,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-dev-1", schemaVersion: "1.0",
       payload: { id: deviceId, tenantId: TENANT_A, vehicleId, deviceImei: "123456789012345", protocol: "gt06" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetDevices).where(eq(fleetDevices.id, deviceId)));
@@ -204,7 +205,7 @@ describe("Fleet consumer — CQRS wiring (integration)", () => {
     await publishTelemetry();
     await new Promise<void>((r) => setTimeout(r, 300));
     await publishTelemetry(); // replay — must not duplicate
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q2.stop();
 
     const telemetryRows = await asTenant(TENANT_A, (tx) => tx.select().from(fleetDeviceTelemetry).where(eq(fleetDeviceTelemetry.deviceId, deviceId)));
@@ -230,7 +231,7 @@ describe("Fleet — cross-tenant RLS isolation", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-rls-1", schemaVersion: "1.0",
       payload: { id: vehicleIdA, tenantId: TENANT_A, registrationNo: "DL01XY9999", make: "Mahindra", model: "Bolero", year: 2023, fuelType: "diesel" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
   });
   afterAll(async () => {

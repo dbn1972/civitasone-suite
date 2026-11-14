@@ -21,6 +21,7 @@ import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { setDocumentClient, type DocumentServiceClient } from "../src/shared/document-client.js";
 import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000d1401";
@@ -35,7 +36,7 @@ const asA = () => tok(OFFICER_A, ["legal_officer"]);
 const asB = () => tok(OFFICER_B, ["legal_officer"]);
 const asHead = () => tok(HEAD, ["legal_admin"]);
 const asAuditor = () => tok(AUDITOR, ["audit_officer"]);
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 const FUTURE = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
 
 const noDoc: DocumentServiceClient = {
