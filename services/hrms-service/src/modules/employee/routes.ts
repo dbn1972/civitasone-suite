@@ -7,7 +7,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeLocationBody, bulkEmployeeLocationBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { setEmployeeLoginLink } from "./login-link.js";
@@ -17,6 +17,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { setEmployeeLocation, setEmployeeLocationBulk } from "./location-assign.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { pensionSchemeRoutes } from "./pension-scheme-routes.js";
 
@@ -392,6 +393,27 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = loginLinkBody.parse(req.body);
     return reply.send(await setEmployeeLoginLink(ctx, id, body));
+  });
+
+  // Set / change an employee's office. Synchronous + audited (old -> new) like
+  // login-link; the location is verified against location-service (same tenant,
+  // active). HR_ROLES = the roles that may already edit employment details.
+  app.patch("/v1/hrms/employees/:id/location", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = employeeLocationBody.parse(req.body);
+    return reply.send(await setEmployeeLocation(ctx, id, body));
+  });
+
+  // Bulk reassignment of up to BULK_LOCATION_MAX employees to ONE location;
+  // partial-success safe (per-id outcomes). Registered as a literal path, which
+  // find-my-way ranks above the parametric /v1/hrms/employees/:id.
+  app.post("/v1/hrms/employees/location-assignments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = bulkEmployeeLocationBody.parse(req.body);
+    return reply.send(await setEmployeeLocationBulk(ctx, body));
   });
 
   // UAT b18 D1: maker-checker, effective-dated pension scheme changes.
