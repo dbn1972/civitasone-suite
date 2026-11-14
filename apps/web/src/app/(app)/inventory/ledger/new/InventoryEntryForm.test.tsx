@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -23,7 +23,12 @@ const fetchMock = vi.fn();
 let onHand = 40;
 let movementStatus = 200;
 
+// A posted entry navigates from a 700 ms setTimeout the component never cancels. On real timers that
+// timer outlives its own test and fires inside a later one, so the "never appears" test saw a stray push().
+// Fake setTimeout (still advancing with the wall clock so waitFor/findBy keep working) and drop whatever
+// is pending after each test, so nothing can bleed across tests.
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
   vi.clearAllMocks();
   onHand = 40;
   movementStatus = 200;
@@ -37,6 +42,11 @@ beforeEach(() => {
     if (init?.method === "POST" && url.startsWith("/api/proxy/v1/inventory/")) return json({ id: "m1", status: "accepted" }, 202);
     throw new Error(`unexpected ${url}`);
   });
+});
+
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
 });
 
 const show = (messages: object = enMessages, locale = "en") =>
@@ -131,6 +141,8 @@ describe("stock entry on the inventory ledger", () => {
     show();
     await fill("issue", "s1", "5");
     await confirmPost();
+    // Drive the whole poll (attempts x interval) on the fake clock so every attempt has resolved 404.
+    await vi.advanceTimersByTimeAsync(pollOptions.intervalMs * (pollOptions.attempts + 1));
     expect(await screen.findByText(/has not been posted yet/)).toBeInTheDocument();
     expect(screen.queryByText("Stock entry posted.")).toBeNull();
     expect(push).not.toHaveBeenCalled();
