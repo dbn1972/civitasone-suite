@@ -20,6 +20,14 @@ export async function listUsers(tenantId: string, limit: number, offset: number)
   ) as Promise<UserView[]>;
 }
 
+/** Total users of the tenant (any status), cached with the list so a page and its total agree. */
+export async function countUsers(tenantId: string): Promise<number> {
+  return cache.getOrLoad<number>(
+    cache.makeKey(tenantId, `${RESOURCE.user}_list`, "total"),
+    () => repo.countByTenantId(tenantId),
+  ) as Promise<number>;
+}
+
 /** Not cached: a filtered, paged search must reflect the directory as it is now. */
 export async function searchUsers(tenantId: string, f: repo.UserSearch) {
   return repo.search(tenantId, f);

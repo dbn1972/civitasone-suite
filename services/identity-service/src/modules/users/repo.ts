@@ -47,11 +47,23 @@ export async function emailExists(tenantId: string, email: string): Promise<bool
   return rows.length > 0;
 }
 
+/**
+ * One page of the tenant's users. ORDER BY is mandatory for offset paging: without it Postgres
+ * may return a different order per call, so a caller walking pages could skip or repeat users.
+ * Same stable order as search() below (name, then id as the tie-break).
+ */
 export async function findByTenantId(tenantId: string, limit = 50, offset = 0): Promise<UserView[]> {
   const rows = await scopedRead((tx) => tx.select().from(users)
     .where(eq(users.tenantId, tenantId))
+    .orderBy(asc(users.name), asc(users.id))
     .limit(limit).offset(offset));
   return rows.map(toView);
+}
+
+/** All users of the tenant, any status: the total behind findByTenantId's pages. */
+export async function countByTenantId(tenantId: string): Promise<number> {
+  const [row] = await scopedRead((tx) => tx.select({ n: count() }).from(users).where(eq(users.tenantId, tenantId)));
+  return Number(row?.n ?? 0);
 }
 
 export type UserSearch = { q?: string | undefined; status?: UserView["status"] | undefined; limit: number; offset: number };

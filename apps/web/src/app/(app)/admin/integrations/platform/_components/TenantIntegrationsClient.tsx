@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchAllPages } from "@/lib/fetchAllPages";
+import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -41,11 +43,18 @@ async function getJson<T>(path: string): Promise<T | null> {
 /** Best-effort id -> name directory so approvals never show a raw id. Needs tenant_admin; module admins fall back to a generic label. */
 async function loadNames(): Promise<Record<string, string>> {
   try {
-    const res = await fetch("/api/proxy/v1/admin/users?limit=200", { cache: "no-store" });
-    if (!res.ok) return {};
-    const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown; email?: unknown }> };
+    // The user list answers at most 200 rows per call: walk the pages so users beyond the first 200 get names too.
+    const all = await fetchAllPages(async (limit, offset) => {
+      const res = await fetch(`/api/proxy/v1/admin/users?limit=${limit}&offset=${offset}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown; email?: unknown }> };
+      return body.data ?? [];
+    });
+    if (!all) return {};
+    // Names beyond the page cap fall back to the generic label; log it rather than hide it.
+    if (!all.complete) recordLoaderFallback({ key: "integrations.user-names", reason: "truncated", path: "/api/proxy/v1/admin/users", timestamp: new Date().toISOString() });
     const out: Record<string, string> = {};
-    for (const u of body.data ?? []) {
+    for (const u of all.rows) {
       const label = typeof u.name === "string" && u.name.trim() !== "" ? u.name : typeof u.email === "string" ? u.email : "";
       if (typeof u.id === "string" && label) out[u.id] = label;
     }
