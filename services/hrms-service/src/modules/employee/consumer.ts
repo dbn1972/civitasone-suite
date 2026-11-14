@@ -13,6 +13,7 @@ import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.j
 import { maskValue } from "../../shared/pii-mask.js";
 import { openSealed } from "../bulk-import/sensitive.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
+import { uanBlindIndex } from "../../shared/blind-index.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
@@ -123,6 +124,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
           ...(p.locationId ? { locationId: p.locationId } : {}),
           esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ? open(p.uanNumber) : null, pran: p.pran ?? null,
+          uanBidx: p.uanNumber ? uanBlindIndex(p.tenantId, open(p.uanNumber)) : null,
           gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
           agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -517,7 +519,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.bankIfsc    !== undefined) { patch.bankIfsc    = p.bankIfsc; changedFields.push("bankIfsc"); }
       if (p.basicMinor  !== undefined) { patch.basicMinor  = BigInt(p.basicMinor); changedFields.push("basicMinor"); }
       if (p.esicIpNumber !== undefined) { patch.esicIpNumber = p.esicIpNumber; changedFields.push("esicIpNumber"); }
-      if (p.uanNumber   !== undefined) { patch.uanNumber   = p.uanNumber;   changedFields.push("uanNumber"); }
+      if (p.uanNumber   !== undefined) { patch.uanNumber   = p.uanNumber; patch.uanBidx = uanBlindIndex(msg.tenantId, p.uanNumber); changedFields.push("uanNumber"); }
       if (p.pran        !== undefined) { patch.pran        = p.pran; changedFields.push("pran"); }
       if (p.gstin       !== undefined) { patch.gstin       = p.gstin; changedFields.push("gstin"); }
       if (p.sacCode     !== undefined) { patch.sacCode     = p.sacCode; changedFields.push("sacCode"); }

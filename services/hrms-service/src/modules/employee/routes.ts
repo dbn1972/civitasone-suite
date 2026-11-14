@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { zodFieldErrors } from "@civitasone/schemas/http";
 import { employeesListSchema } from "@civitasone/schemas/web";
@@ -20,9 +20,15 @@ import { isExitedStatus } from "./status.js";
 import { setEmployeeLocation, setEmployeeLocationBulk } from "./location-assign.js";
 import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { pensionSchemeRoutes } from "./pension-scheme-routes.js";
+import { uanBlindIndexEnabled } from "../../shared/s8-flags.js";
+import { findEmployeesByUan } from "./uan-lookup.js";
+import { db } from "../../shared/db.js";
+import { emitAudit } from "../recruitment/audit-emit.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
+const UAN_LOOKUP_ROLES = ["hr_admin", "payroll_admin", "payroll_officer", "super_admin"];
+const uanLookupBody = z.object({ uan: z.string().trim().regex(/^\d{12}$/, "UAN must be exactly 12 digits") }).strict();
 // HRMS role-based review, Problem B: GET /v1/hrms/employees (the LIST route
 // just below) backs hr/directory's Employee Directory page. Its response
 // (queries.listEmployees: id/employeeNo/name/department/employeeType/status)
@@ -127,6 +133,22 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       ...(q.projectId ? { projectId: q.projectId } : {}),
       ...(q.contractStatus ? { contractStatus: q.contractStatus } : {}),
     } : undefined));
+  });
+
+  // UAN exact-match lookup through the blind index (flag HRMS_UAN_BLIND_INDEX_ENABLED; off = 404). Same roles that may
+  // reveal a UAN (pii-reveal.ts). POST with a JSON body, NOT a query string, so the value is never in a URL or an access log.
+  // It is only used to compute the keyed hash and is never logged or echoed, and the response holds no identifier other than employee id / number / name / status.
+  app.post("/v1/hrms/employees/by-uan", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    if (!uanBlindIndexEnabled()) throw new HttpError(404, "NOT_FOUND", "Not found");
+    requireRole(ctx, UAN_LOOKUP_ROLES);
+    const { uan } = uanLookupBody.parse(req.body ?? {});
+    const { matches } = await findEmployeesByUan(ctx.tenantId, uan);
+    // Audited like a reveal (actor, tenant, hit or miss; never the UAN), fail closed: no audit row, no answer.
+    await db.transaction((tx) => emitAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId }, "employee_uan_lookup", "employee",
+      matches.length === 1 ? matches[0]!.id : ctx.tenantId, { hit: matches.length > 0, matchCount: matches.length }));
+    void reply.header("cache-control", "no-store");
+    return reply.send({ data: matches, count: matches.length });
   });
 
   // UX-R5 (names, not ids): name + designation for the maker / checker / officer ids a record screen holds.

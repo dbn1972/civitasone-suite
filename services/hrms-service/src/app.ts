@@ -127,12 +127,21 @@ import { INTERNAL_PROXY_TRUST } from "./modules/recruitment/careers-resume.js";
 import { loadModuleProfile, type NonCoreModule } from "./shared/module-profile.js";
 import { SAFE_LOG_SERIALIZERS } from "./shared/safe-error-log.js";
 
-export async function buildApp(): Promise<FastifyInstance> {
+/**
+ * `req` log serializer without the query string: a lookup key or any other value sent as a query parameter must never
+ * reach the request log (the UAN lookup is a POST body, this is defence in depth for every route).
+ */
+export function reqWithoutQuery(req: { method?: string; url?: string; hostname?: string; host?: string; ip?: string; socket?: { remotePort?: number | undefined } | undefined }): Record<string, unknown> {
+  const url = typeof req.url === "string" ? req.url.split("?")[0] : req.url;
+  return { method: req.method, url, hostname: req.hostname ?? req.host, remoteAddress: req.ip, remotePort: req.socket?.remotePort };
+}
+
+export async function buildApp(opts: { logStream?: NodeJS.WritableStream } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
     // No PII from database errors in request logs (shared/safe-error-log.ts).
-    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: SAFE_LOG_SERIALIZERS },
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: { ...SAFE_LOG_SERIALIZERS, req: reqWithoutQuery }, ...(opts.logStream ? { stream: opts.logStream } : {}) },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
     // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
     // external caller cannot forge it. Deliberately not `true`.

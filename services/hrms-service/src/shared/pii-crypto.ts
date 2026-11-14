@@ -38,7 +38,7 @@
  * does NOT carry an "enc:" prefix (legacy plaintext written before the backfill,
  * or NULL). This keeps the cut-over safe and the backfill idempotent.
  */
-import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, scryptSync } from "node:crypto";
 import { customType } from "drizzle-orm/pg-core";
 
 const PREFIX_V1 = "enc:v1:";
@@ -125,6 +125,19 @@ function keyring(): Keyring {
 
   cachedRing = { activeKeyId, v2, v1: deriveV1Key(secret) };
   return cachedRing;
+}
+
+/**
+ * Blind-index keys (src/shared/blind-index.ts): one per keyring key id, HKDF-derived from that key with a fixed
+ * context label, so they are domain-separated from the AES keys and the raw keys never leave this module.
+ */
+export function blindIndexKeys(): { activeKeyId: string; keys: Map<string, Buffer> } {
+  const ring = keyring();
+  const keys = new Map<string, Buffer>();
+  for (const [kid, k] of ring.v2) {
+    keys.set(kid, Buffer.from(hkdfSync("sha256", k, Buffer.alloc(0), "civitas-hrms-blind-index-v1", 32)));
+  }
+  return { activeKeyId: ring.activeKeyId, keys };
 }
 
 /** Test/maintenance hook: drop the cached keyring (e.g. after env change). */
