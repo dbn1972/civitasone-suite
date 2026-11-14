@@ -238,33 +238,6 @@ function toGlobalResult(h: GlobalSearchHit): GlobalSearchResult {
   };
 }
 
-let globalIndex: Pick<GlobalSearchIndex, "search"> | null = null;
-
-function getGlobalIndex(): Pick<GlobalSearchIndex, "search"> {
-  if (!globalIndex) globalIndex = new GlobalSearchIndex();
-  return globalIndex;
-}
-
-/** Allow injection for testing. */
-export function setGlobalSearchIndex(i: Pick<GlobalSearchIndex, "search"> | null): void {
-  globalIndex = i;
-}
-
-function toGlobalResult(h: GlobalSearchHit): GlobalSearchResult {
-  return {
-    id: h.entityId,
-    module: h.module,
-    name: h.title,
-    refNumber: h.refNumber || null,
-    description: h.summary || null,
-    status: h.status,
-    snippet: h.summary || h.refNumber || "",
-    entityType: h.entityType,
-    entityLabel: GLOBAL_ENTITY_TYPES[h.entityType].label,
-    href: h.href,
-  };
-}
-
 // ── Route Registration ────────────────────────────────────────────────────────
 
 export function registerSearchRoute(app: FastifyInstance): void {
