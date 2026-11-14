@@ -17,6 +17,7 @@ import { registerHearingConsumers } from "../src/modules/hearings/consumer.js";
 import { setOrgClient, OrgServiceError } from "../src/shared/org-client.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { useFakeOrg, TEST_DEPT_ID, TEST_DEPT_NAME } from "./helpers/org-fake.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000d1301";
@@ -25,7 +26,7 @@ const CASE_ID = "22222222-bbbb-4000-8000-0000000d1301";
 const LEGACY_ORDER = "33333333-cccc-4000-8000-0000000d1301";
 const token = (roles: string[]) => signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s" }, SECRET, 3600);
 const auth = (roles: string[] = ["legal_officer"]) => ({ authorization: `Bearer ${token(roles)}`, "x-tenant-id": TENANT });
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

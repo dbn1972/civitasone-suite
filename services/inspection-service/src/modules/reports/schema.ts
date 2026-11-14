@@ -23,6 +23,9 @@ export const inspectionReports = reportsSchema.table("inspection_reports", {
   submittedBy:     uuid("submitted_by"), // 0034; NULL on rows submitted before it
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   approvedBy:      uuid("approved_by"),
+  rejectedAt:      timestamp("rejected_at", { withTimezone: true }), // 0035; last rejection, NULL if never rejected
+  rejectedBy:      uuid("rejected_by"),
+  rejectionReason: text("rejection_reason"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

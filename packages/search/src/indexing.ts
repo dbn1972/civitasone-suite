@@ -52,6 +52,11 @@ export interface SearchIndexDocument {
   description?: string | undefined;
   /** Current status of the entity. */
   status: string;
+  /**
+   * Global-search entity type from the catalogue (e.g. "finance.bill"). Optional and additive: events without it are
+   * the legacy shape and are ignored by the cross-module consumer.
+   */
+  entityType?: string | undefined;
 }
 
 /** Input for publishing a search index event via the outbox. */
@@ -92,6 +97,7 @@ export async function publishSearchIndex(
       description: input.description ?? null,
       status: input.status,
       action: input.action,
+      ...(input.entityType ? { entityType: input.entityType } : {}),
     },
   });
 }

@@ -11,6 +11,7 @@ import { loadSettingsTx } from "./repo.js";
 import { applyFiscalYearActivation, applyOpeningBalances, applyHoaChange, applySettingsChange, auditEvent, type ActorMeta, type OpeningBalanceEntry, type Tx } from "./apply.js";
 
 import { applyPeriodReopenRequest } from "../period-close/apply.js";
+import { applyArOpeningBalances, type ArOpeningEntry } from "../subledger/opening-import.js";
 
 const log = pino({ name: "finance.approvals.consumer" });
 
@@ -37,8 +38,11 @@ async function applyApproved(
       return;
     case "period_reopen":
       return applyPeriodReopenRequest(tx, meta, { period: String(p.period), reason: req.reason, requestId: req.id });
+    case "ar_opening_balance":
+      await applyArOpeningBalances(tx, meta, { entries: p.entries as ArOpeningEntry[], reason: req.reason, requestId: req.id });
+      return;
     case "settings_relax":
-      return applySettingsChange(tx, meta, { changes: p.changes as Partial<FinanceSettings>, reason: req.reason, requestId: req.id });
+      return applySettingsChange(tx, meta, { changes: p.changes as Partial<FinanceSettings>, reason: req.reason, requestId: req.id, accountingBasisEffectiveFrom: typeof p.accountingBasisEffectiveFrom === "string" ? p.accountingBasisEffectiveFrom : undefined });
     default:
       throw new NonRetryableError(`[finance/approvals] unknown change request kind ${req.kind}`);
   }
@@ -130,10 +134,10 @@ export function registerApprovalsConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.financeSettingsUpdate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; changes: Partial<FinanceSettings>; reason: string };
+    const p = msg.payload as { id: string; tenantId: string; changes: Partial<FinanceSettings>; reason: string; accountingBasisEffectiveFrom?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await applySettingsChange(tx, msg as ActorMeta, { changes: p.changes, reason: p.reason });
+      await applySettingsChange(tx, msg as ActorMeta, { changes: p.changes, reason: p.reason, accountingBasisEffectiveFrom: p.accountingBasisEffectiveFrom });
     });
   });
 

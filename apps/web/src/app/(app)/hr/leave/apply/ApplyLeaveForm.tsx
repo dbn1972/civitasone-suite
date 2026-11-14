@@ -55,6 +55,9 @@ type LeavePreview = {
   balanceAfter?: number;
 };
 
+/** Server violation code for a request whose dates are all holidays/weekends (0 leave days). */
+const LEAVE_NO_WORKING_DAYS = "LEAVE_NO_WORKING_DAYS";
+
 type Props = {
   employees: EmployeeSummary[];
   /** Preselects this employee when arriving via a deep link (e.g. an employee
@@ -326,8 +329,21 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
   // GAP-HR-LEAVE-APPLY-01/04: a rule outcome from the server (preview.valid
   // === false) or a refused preview request blocks submit -- shown inline the
   // moment it is known, not only after Submit is clicked.
-  const violations = preview && preview.valid === false ? (preview.violations ?? []) : [];
-  const blockedByPreview = previewError !== null || (preview !== null && preview.valid === false);
+  //
+  // A request that would debit 0 days (every date is a holiday or weekend) is invalid too, even when
+  // an older server answers valid:true -- Submit would otherwise be enabled and the server would then
+  // refuse it. The reason is localised here by code (the server message is English-only).
+  const zeroDay = preview !== null && preview.computedDays <= 0;
+  const violations: Array<{ key: string; text: string }> = [];
+  if (preview && preview.valid === false) {
+    for (const v of preview.violations ?? []) {
+      violations.push({ key: v.code ?? v.message, text: v.code === LEAVE_NO_WORKING_DAYS ? t("zeroDayReason") : v.message });
+    }
+  }
+  if (zeroDay && !violations.some((v) => v.key === LEAVE_NO_WORKING_DAYS)) {
+    violations.push({ key: LEAVE_NO_WORKING_DAYS, text: t("zeroDayReason") });
+  }
+  const blockedByPreview = previewError !== null || (preview !== null && (preview.valid === false || zeroDay));
 
   async function submitAllocation(daysApplied: number, serverConfirmed: boolean) {
     if (!selectedAlloc) return;
@@ -659,7 +675,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
             <p style={{ margin: 0, fontWeight: 600 }}>{t("previewBlockedTitle")}</p>
             {violations.length > 0 ? (
               <ul style={{ margin: "4px 0 0", paddingInlineStart: 18 }}>
-                {violations.map((v) => <li key={v.message}>{v.message}</li>)}
+                {violations.map((v) => <li key={v.key}>{v.text}</li>)}
               </ul>
             ) : (
               <p style={{ margin: "4px 0 0" }}>{previewError}</p>

@@ -36,6 +36,7 @@ import {
   computeEscalationDeadline,
 } from "../src/modules/esign/domain.js";
 import type { SignatoryEntry } from "../src/modules/esign/schema.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-1111-4000-8000-000000000030";
@@ -707,7 +708,7 @@ describe("E-sign consumer — CQRS wiring (integration)", () => {
           && (want.currentOrdinal === undefined || row.currentOrdinal === want.currentOrdinal)) {
           return row;
         }
-        await new Promise((r) => setTimeout(r, 100));
+        await drainAllQueues();
       }
       throw new Error(`e-sign route ${routeId} did not reach expected state ${JSON.stringify(want)}`);
     }
@@ -767,7 +768,7 @@ describe("E-sign consumer — CQRS wiring (integration)", () => {
           && (want.currentOrdinal === undefined || row.currentOrdinal === want.currentOrdinal)) {
           return row;
         }
-        await new Promise((r) => setTimeout(r, 100));
+        await drainAllQueues();
       }
       throw new Error(`e-sign route ${routeId} did not reach expected state ${JSON.stringify(want)}`);
     }
@@ -785,7 +786,7 @@ describe("E-sign consumer — CQRS wiring (integration)", () => {
     await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_2 });
 
     // Give the (no-op) handler a moment to run, then assert nothing changed.
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const row = await withTenantScope(db, TENANT, (tx) =>
       tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
     expect(row?.status).toBe("in_progress");

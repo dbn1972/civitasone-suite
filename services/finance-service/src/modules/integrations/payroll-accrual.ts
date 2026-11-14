@@ -161,3 +161,22 @@ export function payrollAccrualLines(p: PayrollRunApprovedPayload): AccrualLine[]
   employerPair(lines, BigInt(p.totalUpsPoolMinor ?? "0"), "Government UPS pool corpus contribution (8.5%)", "UPS pool corpus contribution payable");
   return lines;
 }
+
+/**
+ * payroll.run.disbursed -> the salary SETTLEMENT entries (Dr net payable / Cr bank), by head code. Pure; the gl
+ * consumer posts exactly these, and payroll-service's journal export for a tenant without Finance is pinned to them
+ * by tests/contract/payroll-journal-export.contract.test.ts.
+ */
+export function payrollSettlementEntries(netMinor: bigint, env: NodeJS.ProcessEnv = process.env): Array<{ headCode: string; debitMinor: string; creditMinor: string }> {
+  const payable = env["PAYROLL_GL_NET_PAYABLE_HEAD"] ?? "2101";
+  const bank = env["PAYROLL_GL_BANK_HEAD"] ?? "1101";
+  return [
+    { headCode: payable, debitMinor: netMinor.toString(), creditMinor: "0" },
+    { headCode: bank, debitMinor: "0", creditMinor: netMinor.toString() },
+  ];
+}
+
+/** Voucher number of a payroll run settlement journal. */
+export function payrollSettlementVoucherNo(p: { runId: string; month: string }): string {
+  return `PAYSTL/${p.month}/${p.runId.slice(0, 8).toUpperCase()}`;
+}

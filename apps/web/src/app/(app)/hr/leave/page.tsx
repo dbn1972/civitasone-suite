@@ -122,6 +122,7 @@ export default async function LeaveManagementPage(props: { searchParams?: Promis
               <Link href="/hr/leave/history" className="btn">{t("navHistory")}</Link>
               {isAdmin && <Link href="/hr/leave/allocate" className="btn">{t("navAllocate")}</Link>}
               {canManagePolicies && <Link href="/hr/leave-policies" className="btn">{t("navPolicies")}</Link>}
+              {canManagePolicies && <Link href="/hr/leave-types" className="btn">{t("navTypes")}</Link>}
             </span>
             {isAdminOrManager && <Link href="/hr/leave/approvals" className="btn">{t("approvals")}</Link>}
             <Link href="/hr/leave/apply" className="btn primary">{t("newLeave")}</Link>

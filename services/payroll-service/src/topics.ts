@@ -6,6 +6,8 @@ export const COMMANDS = {
   runRevert:              "payroll.run.revert",
   runReject:              "payroll.run.reject",
   runFailStuck:           "payroll.run.fail_stuck",
+  // M9: bank success file for a run in export-only ledger mode (tenant without Finance).
+  runBankConfirmation:    "payroll.run.bank_confirmation",
   loanCreate:             "payroll.loan.create",
   loanDisburse:           "payroll.loan.disburse",
   taxDeclarationCreate:   "payroll.tax_declaration.create",
@@ -50,6 +52,12 @@ export const COMMANDS = {
   costingRuleUpsert:      "payroll.costing_rule.upsert",
   // GAP-PAYROLL-COSTING-02: edit split % / deactivate / reactivate a rule.
   costingRuleUpdate:      "payroll.costing_rule.update",
+  // S8 G7 (project costing, MIS layer v1)
+  costAllocationRequest:  "payroll.cost_allocation.request",
+  costAllocationDecide:   "payroll.cost_allocation.decide",
+  costAllocationEnd:      "payroll.cost_allocation.end",
+  projectCostingSettings: "payroll.project_costing.settings",
+  projectCostGenerate:    "payroll.project_cost.generate",
   offCycleCreate:         "payroll.off_cycle.create",
   offCycleProcess:        "payroll.off_cycle.process",
   stateRulesUpsert:       "payroll.state_rules.upsert",
@@ -62,6 +70,7 @@ export const COMMANDS = {
   openingYtdCreate:       "payroll.opening_ytd.create",
   openingYtdDecide:       "payroll.opening_ytd.decide",
   bankFileSigningUpdate:  "payroll.bank_file_signing.update",
+  reimbursementReceiptPolicyUpdate: "payroll.reimbursement_receipt_policy.update",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
   // GAP-PAYROLL-TAX-DECLARATION-02: investment-proof upload / verification / retention
@@ -81,6 +90,14 @@ export const COMMANDS = {
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
   bonusRuleCreate:        "payroll.bonus_rule.create",
+  // Section 8 G2: pay-component master (flag S8_PAY_COMPONENTS_ENABLED)
+  ctcTemplateCreate:      "payroll.ctc_template.create",
+  payComponentCreate:     "payroll.pay_component.create",
+  payComponentUpdate:     "payroll.pay_component.update",
+  payComponentSetActive:  "payroll.pay_component.set_active",
+  payComponentReorder:    "payroll.pay_component.reorder",
+  payStructureLock:       "payroll.pay_structure.lock",
+  payStructureNewVersion: "payroll.pay_structure.new_version",
   daRateCreate:           "payroll.da_rate.create",
   daRateDelete:           "payroll.da_rate.delete",
   // fin-payroll-01: tenant slip letterhead (GAP-PAYROLL-SALARY-SLIPS-DETAIL-02)
@@ -93,6 +110,10 @@ export const COMMANDS = {
   ptVersionCreate:        "payroll.pt_version.create",
   ptVersionDecide:        "payroll.pt_version.decide",
   ptCheckerSet:           "payroll.pt_checker.set",
+  // S8 statutory seams (statutory-seams-consumer.ts)
+  s8SeamFlagsSet:         "payroll.s8_seam_flags.set",
+  s8PfBasisSet:           "payroll.s8_pf_basis.set",
+  s8ChangeDecide:         "payroll.s8_change.decide",
   payGroupUpdate:         "payroll.paygroup.update",
   payGroupSetActive:      "payroll.paygroup.set_active",
   // GAP-PAYROLL-PAY-GROUPS-03: effective-dated pay-group membership
@@ -131,6 +152,8 @@ export const EVENTS = {
   flexElectionDecided:    "payroll.flex_election.decided",
   costingRuleUpserted:    "payroll.costing_rule.upserted",
   costingRuleUpdated:     "payroll.costing_rule.updated",
+  /** Per-project cost TOTALS of a run or a reclass batch (no employee id, no per-person amount). Consumed by project-service. */
+  projectCostPosted:      "payroll.project_cost.posted",
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",

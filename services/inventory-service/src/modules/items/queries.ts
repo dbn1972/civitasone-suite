@@ -62,7 +62,7 @@ export async function listAllSubstitutes(tenantId: string, limit: number, offset
   return repo.listAllSubstitutes(tenantId, limit, offset);
 }
 
-export async function getSettings(tenantId: string): Promise<{ qcMakerChecker: boolean }> {
+export async function getSettings(tenantId: string): Promise<{ qcMakerChecker: boolean; ledgerSource: "stock" | "inventory" }> {
   const s = await repo.getTenantSettings(tenantId);
-  return { qcMakerChecker: s.qcMakerChecker };
+  return { qcMakerChecker: s.qcMakerChecker, ledgerSource: s.ledgerSource };
 }

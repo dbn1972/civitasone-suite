@@ -17,6 +17,15 @@ export const payrollStructures = payrollSchema.table("payroll_structures", {
   createdBy:   uuid("created_by").notNull(),
   updatedBy:   uuid("updated_by").notNull(),
   version:     integer("version").notNull().default(1),
+  // Section 8 G2 (migration 0170): run | ctc_template, lock, effective date, version lineage.
+  kind:              varchar("kind", { length: 16 }).notNull().default("run"),
+  isLocked:          boolean("is_locked").notNull().default(false),
+  lockedAt:          timestamp("locked_at", { withTimezone: true }),
+  lockedBy:          uuid("locked_by"),
+  effectiveFrom:     date("effective_from", { mode: "string" }),
+  templateVersion:   integer("template_version").notNull().default(1),
+  parentStructureId: uuid("parent_structure_id"),
+  lineageRootId:     uuid("lineage_root_id"),
 });
 
 export const payrollComponents = payrollSchema.table("payroll_components", {
@@ -36,6 +45,17 @@ export const payrollComponents = payrollSchema.table("payroll_components", {
   createdBy:     uuid("created_by").notNull(),
   updatedBy:     uuid("updated_by").notNull(),
   version:       integer("version").notNull().default(1),
+  // Section 8 G2 (migration 0170). See pay-components/model.ts for the value sets.
+  isActive:          boolean("is_active").notNull().default(true),
+  calc:              varchar("calc", { length: 24 }),
+  pctOfCtcBps:       integer("pct_of_ctc_bps"),
+  employerCostClass: varchar("employer_cost_class", { length: 24 }),
+  costPlacement:     varchar("cost_placement", { length: 16 }).notNull().default("inside_ctc"),
+  countsForPfWage:   boolean("counts_for_pf_wage").notNull().default(false),
+  countsForEsiWage:  boolean("counts_for_esi_wage").notNull().default(false),
+  countsForGratuity: boolean("counts_for_gratuity").notNull().default(false),
+  lopApplicable:     boolean("lop_applicable").notNull().default(false),
+  payslipOrder:      integer("payslip_order"),
 });
 
 export const payrollRuns = payrollSchema.table("payroll_runs", {
@@ -61,6 +81,9 @@ export const payrollRuns = payrollSchema.table("payroll_runs", {
   approvedBy:      uuid("approved_by"),
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   disbursedAt:     timestamp("disbursed_at", { withTimezone: true }),
+  // M9 (migration 0171): the ledger mode the run was approved in, pinned for its life. NULL = approved before the
+  // column existed = the finance path.
+  ledgerMode:      varchar("ledger_mode", { length: 8 }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
@@ -93,6 +116,11 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   payProfile:            varchar("pay_profile", { length: 32 }),
   profileSnapshot:       jsonb("profile_snapshot").$type<Record<string, unknown>>(),
   pfWageMinor:           bigint("pf_wage_minor", { mode: "bigint" }),
+  // S8 G1 (migration 0168): NULL on every slip that is not a ctc_contract slip.
+  ctcTemplateId:         uuid("ctc_template_id"),
+  ctcTemplateVersion:    integer("ctc_template_version"),
+  employerEsiMinor:      bigint("employer_esi_minor", { mode: "bigint" }),
+  gratuityProvisionMinor: bigint("gratuity_provision_minor", { mode: "bigint" }),
   // UAT T-PERIOD D-02b / PR #2459 review (migration 0165): the TDS signals the
   // approver must see -- presumed months, excess, capped shortfall (final: the
   // last FY / separation month, not recoverable by payroll), deferred recovery.

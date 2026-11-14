@@ -34,6 +34,7 @@ import type {
   CreateSeriesInput,
   UpdateSeriesInput,
   GenerateSeriesInput,
+  RecordHeldMeetingInput,
 } from "./validators.js";
 
 /** Standard queued-write acknowledgement returned to the route (→ HTTP 202). */
@@ -61,6 +62,26 @@ function envelopeBase(ctx: RequestContext, messageId: string, type: string) {
 /** Best-effort invalidation of a single meeting's read cache after a write is queued. */
 async function invalidateMeeting(tenantId: string, meetingId: string): Promise<void> {
   await cache.invalidate(cache.makeKey(tenantId, "meeting", meetingId));
+}
+
+// ─── Record a held meeting ──────────────────────────────────────────────────────
+
+/**
+ * Publish `meeting.record_held`: enter a meeting that has already taken place (past date, actual start/end,
+ * attendees, minutes) in one atomic command. Mints the meeting id (stable per idempotency key, also the
+ * messageId). The verified token roles ride on the command AFTER the body so the consumer can re-check the
+ * actor's authority; a client can never supply them.
+ */
+export async function publishMeetingRecordHeld(
+  ctx: RequestContext,
+  body: RecordHeldMeetingInput,
+): Promise<MeetingCommandAccepted> {
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
+  await queue.publish(COMMANDS.meetingRecordHeld, {
+    ...envelopeBase(ctx, id, COMMANDS.meetingRecordHeld),
+    payload: { ...body, id, tenantId: ctx.tenantId, minutesId: randomUUID(), actorRoles: [...ctx.roles] },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
 // ─── Meeting create / update ────────────────────────────────────────────────────

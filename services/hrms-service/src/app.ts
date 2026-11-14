@@ -37,6 +37,7 @@ import { reportRoutes } from "./modules/reports/routes.js";
 import { bulkImportRoutes } from "./modules/bulk-import/routes.js";
 import { selfServiceRoutes } from "./modules/self-service/routes.js";
 import { policyAdminRoutes } from "./modules/leave/policy-admin-routes.js";
+import { leaveTypeAdminRoutes } from "./modules/leave/type-admin-routes.js";
 import { policySettingsRoutes } from "./modules/policy-settings/routes.js";
 import { geoAttendanceRoutes } from "./modules/geo-attendance/routes.js";
 import { faceVerificationRoutes } from "./modules/face-verification/routes.js";
@@ -257,6 +258,8 @@ export async function buildApp(opts: { logStream?: NodeJS.WritableStream } = {})
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
   await app.register((await import("./modules/employee/employee-types-routes.js")).employeeTypeRoutes);
+  // S8-G4: private grade bands (C2/T3/M2 ...) for tenants not on the 7th CPC pay matrix.
+  await app.register((await import("./modules/grade-bands/routes.js")).gradeBandRoutes);
   await app.register((await import("./modules/employee/engagement-policy.js")).engagementPolicyRoutes);
   // GAP-ADMIN-BULK-SCAN-02: scan-link target (lookup + scanned-documents read).
   const { scanLinkRoutes } = await import("./modules/employee/scan-link-routes.js");
@@ -272,6 +275,7 @@ export async function buildApp(opts: { logStream?: NodeJS.WritableStream } = {})
     await app.register(leaveContextRoutes);
     await app.register(leaveTypesReadRoutes);
     await app.register(policyAdminRoutes);
+    await app.register(leaveTypeAdminRoutes);
     await app.register(policySettingsRoutes);
     await app.register(leaveCancelRoutes);
     // UAT T-PERIOD D-14: leave year-end dry run.

@@ -17,6 +17,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import {
   resolveTenantCreated, makeTenantServiceFetcher, TenantCreatedIncompleteError,
 } from "../src/modules/tenants/tenant-created.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const T_NEW = "f1330000-0000-4000-8000-000000000001";
 const T_OLD = "f1330000-0000-4000-8000-000000000002";
@@ -123,7 +124,7 @@ async function wipe() {
 const envelope = (messageId: string, tenantId: string, payload: unknown, schemaVersion = "1.1") => ({
   messageId, type: "tenant.tenant.created", tenantId, actorId: ACTOR, correlationId: `c-${messageId.slice(-2)}`, schemaVersion, payload,
 });
-const settle = () => new Promise((r) => setTimeout(r, 900));
+const settle = () => drainAllQueues();
 
 /**
  * PR #2450 review (blocker): the first version of this suite wrapped the queue in withTenantConsumer itself, so it

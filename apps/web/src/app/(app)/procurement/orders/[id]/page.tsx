@@ -5,6 +5,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import Link from "next/link";
 import { DispatchPOActions } from "./DispatchPOActions";
+import { LocalApprovePO } from "./LocalApprovePO";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import { RaiseEOfficeNote } from "../../../../_components/RaiseEOfficeNote";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -142,7 +143,7 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
-        primaryAction={finished ? undefined : <DispatchPOActions poId={po.id} status={po.status} canDispatchRole={canWrite} />}
+        primaryAction={finished ? undefined : (<><LocalApprovePO poId={po.id} status={po.status} canApproveRole={canWrite} /><DispatchPOActions poId={po.id} status={po.status} canDispatchRole={canWrite} /></>)}
       />
 
       {/* GAP-PROCUREMENT-ORDERS-DETAIL-01: one Approval card states which decision

@@ -18,6 +18,7 @@ import { legalCaseAttachments } from "../src/modules/attachments/schema.js";
 import { registerAttachmentConsumers } from "../src/modules/attachments/consumer.js";
 import { setDocumentClient, DocumentServiceError, type DocumentServiceClient } from "../src/shared/document-client.js";
 import { outboxMessages } from "../src/shared/outbox.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000000d0901";
@@ -29,7 +30,7 @@ const DOC = "66666666-ffff-4000-8000-0000000d0901";
 
 const token = (roles: string[]) => signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s" }, SECRET, 3600);
 const auth = (roles: string[] = ["legal_officer"]) => ({ authorization: `Bearer ${token(roles)}`, "x-tenant-id": TENANT });
-const drain = () => new Promise<void>((r) => setTimeout(r, 400));
+const drain = () => drainAllQueues();
 
 let fileState: { state: string; filedDocumentId: string | null } = { state: "pending_upload", filedDocumentId: null };
 const calls: string[] = [];

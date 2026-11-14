@@ -83,26 +83,26 @@ describe("resolveModules", () => {
     }
   });
 
-  it("resolving payroll auto-adds hrms and finance", () => {
+  it("resolving payroll auto-adds hrms but does NOT force finance in", () => {
+    // M1: dependencies are now derived from the code-verified module catalogue (module-catalogue.ts).
+  // Payroll runs without Finance (it only consumes/emits finance events); it needs the employee master.
     const result = resolveModules(["payroll"]);
     expect(result.enabledModules).toContain("payroll");
     expect(result.enabledModules).toContain("hrms");
-    expect(result.enabledModules).toContain("finance");
+    expect(result.enabledModules).not.toContain("finance");
 
-    // Should have auto-enabled entries for hrms and finance
     const autoIds = result.autoEnabled.map((a) => a.module);
     expect(autoIds).toContain("hrms");
-    expect(autoIds).toContain("finance");
+    expect(autoIds).not.toContain("finance");
   });
 
-  it("resolving payroll marks hrms and finance as thin mode", () => {
+  it("resolving payroll marks hrms as thin mode (and adds no finance entry)", () => {
     const result = resolveModules(["payroll"]);
     const hrmsEntry = result.autoEnabled.find((a) => a.module === "hrms");
     const financeEntry = result.autoEnabled.find((a) => a.module === "finance");
     expect(hrmsEntry).toBeDefined();
     expect(hrmsEntry!.mode).toBe("thin");
-    expect(financeEntry).toBeDefined();
-    expect(financeEntry!.mode).toBe("thin");
+    expect(financeEntry).toBeUndefined();
   });
 
   it("resolving payroll with hrms explicitly selected marks hrms as full", () => {
@@ -110,8 +110,8 @@ describe("resolveModules", () => {
     // hrms was explicitly selected, so it should NOT appear in autoEnabled
     const autoIds = result.autoEnabled.map((a) => a.module);
     expect(autoIds).not.toContain("hrms");
-    // finance should still be auto-enabled as thin
-    expect(autoIds).toContain("finance");
+    // finance is no longer a payroll requirement (M1)
+    expect(autoIds).not.toContain("finance");
   });
 
   it("resolving procurement auto-adds finance", () => {
@@ -123,16 +123,16 @@ describe("resolveModules", () => {
     expect(financeEntry!.mode).toBe("thin");
   });
 
-  it("resolving asset auto-adds finance and procurement (and procurement's deps transitively)", () => {
+  it("resolving asset auto-adds finance (procurement is optional, not forced)", () => {
     const result = resolveModules(["asset"]);
     expect(result.enabledModules).toContain("asset");
     expect(result.enabledModules).toContain("finance");
-    expect(result.enabledModules).toContain("procurement");
+    // asset-service only calls finance; procurement/works are soft (events when present)
+    expect(result.enabledModules).not.toContain("procurement");
 
-    // procurement was auto-added because asset requires it
-    const procEntry = result.autoEnabled.find((a) => a.module === "procurement");
-    expect(procEntry).toBeDefined();
-    expect(procEntry!.mode).toBe("full"); // full module dependency, not sub-module
+    const finEntry = result.autoEnabled.find((a) => a.module === "finance");
+    expect(finEntry).toBeDefined();
+    expect(finEntry!.mode).toBe("thin");
   });
 
   it("resolving with an already-complete set is idempotent", () => {
@@ -165,13 +165,17 @@ describe("resolveModules", () => {
     expect(result.enabledModules).toContain("finance");
   });
 
-  it("resolves court → legal", () => {
+  it("court has no hard dependency (court-service never calls legal-service)", () => {
     const result = resolveModules(["court"]);
     expect(result.enabledModules).toContain("court");
+    expect(result.enabledModules).not.toContain("legal");
+    expect(result.autoEnabled).toHaveLength(0);
+  });
+
+  it("resolves legal → hrms (department list and officer directory come from HRMS)", () => {
+    const result = resolveModules(["legal"]);
     expect(result.enabledModules).toContain("legal");
-    const legalEntry = result.autoEnabled.find((a) => a.module === "legal");
-    expect(legalEntry).toBeDefined();
-    expect(legalEntry!.mode).toBe("full");
+    expect(result.enabledModules).toContain("hrms");
   });
 
   it("resolves works → finance", () => {
@@ -180,11 +184,11 @@ describe("resolveModules", () => {
     expect(result.enabledModules).toContain("finance");
   });
 
-  it("resolves grant → finance + citizen", () => {
+  it("resolves grant → finance (citizen is not a requirement of grant-service)", () => {
     const result = resolveModules(["grant"]);
     expect(result.enabledModules).toContain("grant");
     expect(result.enabledModules).toContain("finance");
-    expect(result.enabledModules).toContain("citizen");
+    expect(result.enabledModules).not.toContain("citizen");
   });
 
   it("resolves contract → finance + procurement (and procurement's finance deps)", () => {
@@ -231,8 +235,8 @@ describe("resolveModules — sub-module thin vs full mode", () => {
   });
 
   it("full module dependency results in full mode for auto-enabled", () => {
-    // asset requires "procurement" (full, not sub-module)
-    const result = resolveModules(["asset"]);
+    // contract requires "procurement" (full, not sub-module)
+    const result = resolveModules(["contract"]);
     const procEntry = result.autoEnabled.find((a) => a.module === "procurement");
     expect(procEntry).toBeDefined();
     expect(procEntry!.mode).toBe("full");
@@ -250,15 +254,15 @@ describe("validateModuleSet", () => {
     const result = validateModuleSet(["payroll"]);
     expect(result.valid).toBe(false);
     expect(result.unmet.length).toBeGreaterThan(0);
-    // payroll requires hrms:employees, hrms:attendance, finance:gl
+    // payroll requires hrms:employees only (attendance/leave/finance are optional integrations)
     const missingModules = result.unmet.map((u) => u.missing);
     expect(missingModules).toContain("hrms:employees");
-    expect(missingModules).toContain("hrms:attendance");
-    expect(missingModules).toContain("finance:gl");
+    expect(missingModules).not.toContain("hrms:attendance");
+    expect(missingModules).not.toContain("finance:gl");
   });
 
   it("validates modules with no dependencies as valid", () => {
-    const result = validateModuleSet(["crm", "helpdesk", "legal"]);
+    const result = validateModuleSet(["crm", "helpdesk", "knowledge"]);
     expect(result.valid).toBe(true);
     expect(result.unmet).toHaveLength(0);
   });
@@ -347,7 +351,7 @@ describe("previewDependencies", () => {
     const preview = previewDependencies("payroll");
     const modules = preview.map((p) => p.module);
     expect(modules).toContain("hrms");
-    expect(modules).toContain("finance");
+    expect(modules).not.toContain("finance");
   });
 
   it("marks sub-module dependencies as thin mode", () => {
@@ -358,7 +362,7 @@ describe("previewDependencies", () => {
   });
 
   it("marks full module dependencies as full mode", () => {
-    const preview = previewDependencies("asset");
+    const preview = previewDependencies("contract");
     const procEntry = preview.find((p) => p.module === "procurement");
     expect(procEntry).toBeDefined();
     expect(procEntry!.mode).toBe("full");
@@ -425,5 +429,27 @@ describe("resolveModules — edge cases", () => {
     const result = resolveModules(["finance:gl"]);
     // The parser extracts "finance" as the module ID
     expect(result.enabledModules).toContain("finance");
+  });
+});
+
+describe("M1 corrected dependencies (code-verified)", () => {
+  it("inventory and stock require procurement (SRN is gated by the GRN) and finance (GL posting)", () => {
+    for (const id of ["inventory", "stock"]) {
+      const m = MODULE_MANIFEST.find((x) => x.id === id)!;
+      expect(m.requires).toContain("procurement");
+      expect(m.requires).toContain("finance:gl");
+    }
+  });
+
+  it("contract requires procurement (vendor master and PO lookup)", () => {
+    expect(MODULE_MANIFEST.find((x) => x.id === "contract")!.requires).toContain("procurement");
+  });
+
+  it("legal requires the HRMS employee master", () => {
+    expect(MODULE_MANIFEST.find((x) => x.id === "legal")!.requires).toEqual(["hrms:employees"]);
+  });
+
+  it("payroll alone resolves to payroll + hrms (no finance)", () => {
+    expect(resolveModules(["payroll"]).enabledModules.filter((m) => !["admin", "audit", "gateway", "identity", "install", "notification", "policy", "queue", "tenant", "workflow"].includes(m))).toEqual(["hrms", "payroll"]);
   });
 });

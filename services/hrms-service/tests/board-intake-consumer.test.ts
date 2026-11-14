@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const H = vi.hoisted(() => ({
   markProcessed: vi.fn(),
@@ -67,7 +68,7 @@ function makeMsg(payload: Record<string, unknown>, overrides?: Partial<{ message
   };
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 80));
+const settle = () => drainAllQueues();
 const mockTx = {};
 
 beforeEach(() => {

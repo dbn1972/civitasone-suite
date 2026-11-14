@@ -22,6 +22,7 @@ import { queue } from "../src/shared/infra.js";
 import { stages } from "../src/modules/stages/schema.js";
 import { registerStageConsumers } from "../src/modules/stages/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
@@ -52,7 +53,7 @@ async function waitForStatus(id: string, status: string): Promise<Step> {
   while (Date.now() < deadline) {
     last = (await listSteps()).find((s) => s.id === id);
     if (last?.status === status) return last;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error(`step ${id} never reached ${status}; last=${JSON.stringify(last)}`);
 }

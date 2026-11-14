@@ -10,6 +10,7 @@
  * previously-hardcoded operational knobs tenant-configurable.
  */
 import { createHash } from "node:crypto";
+import { isValidTimeZone } from "../../shared/tz.js";
 
 /** RFC 4122 §4.3 UUIDv5 over a fixed namespace + name → stable, collision-free id. */
 export function deterministicId(namespace: string, name: string): string {
@@ -138,6 +139,8 @@ export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: n
   "visit_request.max_lead_days":             { min: 1, max: 365 },
   "check_in.overstay_escalation_hours":      { min: 1, max: 168 },
   "check_in.overstay_grace_minutes":         { min: 0, max: 240 },
+  "check_in.expiry_grace_minutes":           { min: 0, max: 1440 },
+  "check_in.offline_max_age_hours":          { min: 1, max: 168 },
   "check_in.waiting_reminder_minutes":       { min: 1, max: 1440 },
   "check_in.waiting_reminder_upper_minutes": { min: 1, max: 1440 },
   "digital_pass.multi_day_max_days":         { min: 1, max: 90 },
@@ -149,7 +152,11 @@ export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: n
 export const POLICY_BOOLEAN_KEYS: ReadonlySet<string> = new Set([
   "turnstile.anti_passback_enabled",
   "check_in.auto_print_badge",
+  "check_in.allow_from_start_of_day",
 ]);
+
+/** String-valued visitor_policy knobs. */
+export const POLICY_STRING_KEYS: ReadonlySet<string> = new Set(["tenant.time_zone"]);
 
 function unwrapValue(v: unknown): unknown {
   // The readers (policy.ts toNumber/toBoolean) also accept a `{ value: X }` wrapper.
@@ -160,7 +167,7 @@ function unwrapValue(v: unknown): unknown {
 
 /** The visitor_policy key registry: every numeric knob plus every boolean knob. */
 export function isKnownPolicyKey(configKey: string): boolean {
-  return Object.prototype.hasOwnProperty.call(POLICY_NUMBER_BOUNDS, configKey) || POLICY_BOOLEAN_KEYS.has(configKey);
+  return Object.prototype.hasOwnProperty.call(POLICY_NUMBER_BOUNDS, configKey) || POLICY_BOOLEAN_KEYS.has(configKey) || POLICY_STRING_KEYS.has(configKey);
 }
 
 /**
@@ -177,6 +184,10 @@ export function policyValueError(configKey: string, value: unknown): string | nu
     const n = typeof raw === "number" ? raw : (typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN);
     if (!Number.isInteger(n)) return `${configKey} must be a whole number`;
     if (n < bounds.min || n > bounds.max) return `${configKey} must be between ${bounds.min} and ${bounds.max}`;
+    return null;
+  }
+  if (POLICY_STRING_KEYS.has(configKey)) {
+    if (!isValidTimeZone(unwrapValue(value))) return `${configKey} must be a valid IANA timezone (e.g. Asia/Kolkata)`;
     return null;
   }
   if (POLICY_BOOLEAN_KEYS.has(configKey)) {

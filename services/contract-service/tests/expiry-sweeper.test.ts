@@ -20,6 +20,7 @@ import { COMMANDS, EVENTS } from "../src/topics.js";
 import { runExpirySweep } from "../src/modules/expiry/sweeper.js";
 import { registerExpiryConsumers } from "../src/modules/expiry/consumer.js";
 import { EXPIRY_MILESTONES, expiryMessageId } from "../src/modules/expiry/domain.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const T1 = "e1e1e1e1-4242-4000-8000-000000000001";
 const T2 = "e2e2e2e2-4242-4000-8000-000000000002";
@@ -65,7 +66,7 @@ function recorder(): { queue: Queue; published: Published[] } {
   return { queue, published };
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 400));
+const settle = () => drainAllQueues();
 
 beforeAll(async () => {
   await wipe();

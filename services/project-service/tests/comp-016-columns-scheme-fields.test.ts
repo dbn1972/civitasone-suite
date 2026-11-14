@@ -55,6 +55,7 @@ import { db } from "../src/shared/db.js";
 import { projectSchemes } from "../src/modules/scheme/schema.js";
 import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "c016c000-dead-4000-8000-0000000c016c";
@@ -102,7 +103,7 @@ async function createSchemeViaQueue(payload: Record<string, unknown>): Promise<s
   // F3 outbox pattern: the create command is queued, not written inline.
   // Same fixed delay this suite's own tests/project.test.ts CQRS test
   // already relies on to let the consumer actually land the write.
-  await new Promise<void>((r) => setTimeout(r, 600));
+  await drainAllQueues();
   await q.stop();
   return id;
 }

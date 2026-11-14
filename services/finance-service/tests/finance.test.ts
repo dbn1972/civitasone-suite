@@ -39,6 +39,7 @@ import { assertBudgetNotExceeded, availableBalance, assertValidPfmsHoA } from ".
 import { assertValidDdoCode } from "../src/shared/pfms.js";
 import { fyFromDate } from "../src/modules/hoa/voucher.js";
 import { EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 // Real seeded tenant + head so the consumer master checks pass.
@@ -70,7 +71,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
 }
 

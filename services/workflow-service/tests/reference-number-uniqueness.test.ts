@@ -25,6 +25,7 @@ import * as caseRegistryRepo from "../src/modules/case-registry/repo.js";
 import { persistSplit } from "../src/modules/case-links/repo.js";
 import { istYear, formatNumber } from "../src/shared/numbers.js";
 import { sqlAsTenant, cleanup } from "./helpers/engine-harness.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "c1a50000-0000-4000-8000-000000000047";
@@ -162,7 +163,7 @@ describe("a retried command persists exactly once", () => {
     expect(res.statusCode).toBe(202);
     const id = res.json().id as string;
     await waitFor(async () => (await definitionCodes()).length > 0);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(calls).toBeGreaterThanOrEqual(2);
     const rows = await sqlAsTenant<{ id: string; code: string }>(TENANT, sql`SELECT id, code FROM workflow.definitions WHERE tenant_id = ${TENANT}`);
     expect(rows.length).toBe(1);
@@ -185,7 +186,7 @@ describe("a retried command persists exactly once", () => {
       correlationId: randomUUID(), schemaVersion: "1.0", payload: { id, tenantId: TENANT, title: "retried case" },
     });
     await waitFor(async () => (await caseNumbers()).length > 0);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     expect(calls).toBe(2);
     const numbers = await caseNumbers();
     expect(numbers.length).toBe(1);

@@ -113,6 +113,9 @@ export function WFHRequestForm({
     maxPayLevel: number;
     enforceGazettedExclusion: boolean;
     weeklyWfhCount: number;
+    /** S8-G4 (additive): a private-bands tenant is judged on its grade-band rank, decided server-side. */
+    payScale?: string;
+    gazetted?: boolean;
     /** Monday-Sunday ("YYYY-MM-DD") of the week `weeklyWfhCount` describes. Absent on an older server. */
     weekStart?: string;
     weekEnd?: string;
@@ -135,7 +138,12 @@ export function WFHRequestForm({
   const enforceGazetted = elig?.enforceGazettedExclusion ?? true;
 
   // DoPT OM 2022 eligibility gates
-  const isGazetted = enforceGazetted && knownPayLevel !== undefined && knownPayLevel > gazettedLimit;
+  // S8-G4: a private-bands tenant has no 7th CPC level, so the server's own verdict (band rank vs the tenant's
+  // threshold) is used; every other tenant keeps the level comparison unchanged.
+  const bandTenant = elig?.payScale === "private_bands";
+  const isGazetted = bandTenant
+    ? enforceGazetted && elig?.gazetted === true
+    : enforceGazetted && knownPayLevel !== undefined && knownPayLevel > gazettedLimit;
   // The server's count is for ONE week (its current ISO week); the cap is per
   // week, so a full current week must not block a request for a LATER week --
   // otherwise someone who used both days this week could never file for next
@@ -152,7 +160,7 @@ export function WFHRequestForm({
   const rangeEnd = toDate && toDate >= fromDate ? toDate : fromDate;
   const rangeTouchesCountWeek = !countWeek || !fromDate || (fromDate <= countWeek.end && rangeEnd >= countWeek.start);
   const weeklyCapReached = knownWeekly !== undefined && knownWeekly >= 2 && rangeTouchesCountWeek;
-  const payLevelUnknown = knownPayLevel === undefined;
+  const payLevelUnknown = !bandTenant && knownPayLevel === undefined;
 
   // SF-15: the POST below is a 202-accepted async write (CLAUDE.md CQRS
   // rule) -- the row this creates only exists once the queue consumer runs,
@@ -240,7 +248,7 @@ export function WFHRequestForm({
           data-testid="gazetted-error"
           style={errorBannerStyle}
         >
-          {t("gazettedError")}
+          {bandTenant ? t("gazettedErrorBand") : t("gazettedError")}
         </div>
       )}
 

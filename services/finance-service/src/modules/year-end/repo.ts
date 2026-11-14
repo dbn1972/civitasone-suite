@@ -15,6 +15,7 @@ import { headNatureOf, type HeadNature } from "../../shared/head-nature.js";
 import { ACCUMULATED_FUND } from "../gl/system-heads.js";
 import { DomainError } from "../masters/domain.js";
 import { openPeriodsOfYear } from "../approvals/domain.js";
+import { applyPendingBasisSwitchTx } from "../approvals/apply.js";
 import { isCarryForwardHead, rollForward, toDrCr, lapseRow, lapseTotals, monthsOfFy, type HeadMovement, type LapseRow } from "./domain.js";
 
 /** The caller transaction, typed as the outbox helper takes it (raw SQL via execute, plus enqueue). */
@@ -267,5 +268,7 @@ export async function applyYearEndClose(tx: Tx, meta: { tenantId: string; actorI
       excessTotalMinor: totals.excessMinor.toString(), reason: p.reason,
     },
   });
+  // Owner decision 3: every period of `fy` is hard-closed, so an approved accounting-basis switch dated at the start of `next` takes effect now.
+  await applyPendingBasisSwitchTx(tx as never, meta, fyBounds(next).start);
   return { fy: p.fy, next, openingBalanceCount: wanted.length, fundCarriedMinor: -fund, lapseTotalMinor: totals.lapseMinor, changed, lapseRows: lapse.length };
 }

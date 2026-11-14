@@ -27,7 +27,7 @@ import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../s
 import { httpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { agendaItems } from "./schema.js";
-import { getPolicyNumber } from "../config-registry/policy.js";
+import { getAgendaNotice, getPolicyNumber } from "../config-registry/policy.js";
 import { meetings, meetingStateTransitions } from "../meeting-core/schema.js";
 import {
   orderAgendaItems,
@@ -271,7 +271,8 @@ async function handleAgendaSubmit(msg: CommandEnvelope): Promise<void> {
     assertAgendaNotLocked(meeting.status);
     // Tenant-configurable knobs (config-registry, meeting_policy) — default to the
     // former hardcoded literals (7 days / 15 min) when the tenant has configured nothing.
-    const submissionDeadlineDays = await getPolicyNumber(tx, msg.tenantId, "agenda.submission_deadline_days");
+    // Per-committee override → tenant setting → 7 (config-registry/policy.ts getAgendaNotice).
+    const { days: submissionDeadlineDays } = await getAgendaNotice(tx, msg.tenantId, meeting.committeeId);
     const defaultItemDuration = await getPolicyNumber(tx, msg.tenantId, "agenda.default_item_duration_minutes");
     assertSubmissionAllowed({ scheduledAt: meeting.scheduledAt, now: new Date(), config: { submissionDeadlineDays } });
 

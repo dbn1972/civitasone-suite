@@ -24,6 +24,7 @@ beforeEach(() => {
     if (url.startsWith("/api/proxy/v1/inventory/item-picker")) {
       return json({ data: [{ key: "i1", kind: "linked", inventoryItemId: "i1", stockItemId: "s1", code: "PEN-01", name: "Gel Pen", stockCode: "pen-01" }] });
     }
+    if (url === "/api/proxy/v1/inventory/ledger-source") return json({ data: { qcMakerChecker: true, ledgerSource: "stock" } });
     if (url === "/api/proxy/v1/stock/entries") return json({}, 202);
     throw new Error(`unexpected ${url}`);
   });
@@ -48,7 +49,7 @@ describe("new stock entry: the single item picker", () => {
   it("only items that exist on the stock side are offered (masters=stock)", async () => {
     search.q = "";
     show();
-    fireEvent.change(screen.getByLabelText("Item"), { target: { value: "pen" } });
+    fireEvent.change(await screen.findByLabelText("Item"), { target: { value: "pen" } });
     await screen.findByText("PEN-01 · Gel Pen");
     const pickerCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith("/api/proxy/v1/inventory/item-picker"))!;
     expect(String(pickerCall[0])).toContain("masters=stock");

@@ -6,9 +6,10 @@
  * shared contract `tenantTenantCreated` v1.1 in @civitasone/events/contracts.
  */
 import type { TenantCreatedEvent } from "@civitasone/events/contracts";
+import { defaultProfileCode, PROFILE_CATALOGUE_VERSION } from "@civitasone/tenant-profile";
 import type { TenantView } from "./domain.js";
 
-type TenantCreatedSource = Pick<TenantView, "id" | "name" | "domain" | "edition" | "region" | "residency"> & { status?: string };
+type TenantCreatedSource = Pick<TenantView, "id" | "name" | "domain" | "edition" | "region" | "residency"> & { status?: string; profileCode?: string | undefined };
 
 /** tenant.tenant.created v1.1. Directory fields only: tenant settings and placement-policy details stay off the event. */
 export function tenantCreatedEventPayload(t: TenantCreatedSource): TenantCreatedEvent {
@@ -23,5 +24,7 @@ export function tenantCreatedEventPayload(t: TenantCreatedSource): TenantCreated
     status: t.status ?? "draft",
     region: t.region,
     residency: t.residency,
+    profileCode: t.profileCode ?? defaultProfileCode(t.edition),
+    profileVersion: PROFILE_CATALOGUE_VERSION,
   };
 }

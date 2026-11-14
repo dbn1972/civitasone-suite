@@ -16,6 +16,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const storage = vi.hoisted(() => ({ statusDuringUpload: [] as string[], probe: null as null | ((jobId: string) => Promise<string>) }));
 // Storage is the only external dependency of the render path; capture the job's
@@ -49,7 +50,7 @@ async function until<T>(fn: () => Promise<T | undefined | null | false>): Promis
   while (Date.now() < deadline) {
     const v = await fn();
     if (v) return v;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error("condition not met in time");
 }

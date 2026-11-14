@@ -17,6 +17,7 @@ import { outboxMessages } from "../src/shared/outbox.js";
 import { registerPoAmendmentConsumers } from "../src/modules/po/amendment-consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT = "7c7c7c7c-1111-4000-8000-0000000000c1";
 const OTHER  = "7c7c7c7c-2222-4000-8000-0000000000c2";
@@ -31,7 +32,7 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+async function drain(q: MemoryQueue) { await drainOrFail(q); await q.stop(); }
 
 async function seedPo(id: string, status = "approved", totalMinor = 1_000_000n): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {

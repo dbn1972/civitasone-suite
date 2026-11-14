@@ -16,6 +16,7 @@ import * as queries from "../src/modules/quarters/queries.js";
 import { estabQuarters, estabQuarterAllotments } from "../src/modules/quarters/schema.js";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = "11111111-dddd-4000-8000-000000000001";
 const ACTOR = "22222222-dddd-4000-8000-000000000001";
@@ -106,7 +107,7 @@ describe("quarterCancel consumer (ALLOTMENTS-DETAIL-05)", () => {
       payload: { id: allotmentId, tenantId: TENANT, version: 1, cancelReason: "Ineligible on pay level" },
     });
     // Allow the in-memory consumer to process.
-    await new Promise((r) => setTimeout(r, 150));
+    await drainAllQueues();
     const row = await runWithTenant(TENANT, () => queries.getAllotment(TENANT, allotmentId));
     expect(row?.status).toBe("cancelled");
     expect(row?.cancelReason).toBe("Ineligible on pay level");

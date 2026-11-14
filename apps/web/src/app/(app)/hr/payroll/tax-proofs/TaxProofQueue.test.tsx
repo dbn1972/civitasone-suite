@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, configure } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+
+// RTL's findBy*/waitFor give up after 1000ms. They resolve the moment the element appears, so this is only the
+// failure bound; 1s was shorter than a render + mocked-fetch + dialog round trip on a starved shared CI runner.
+configure({ asyncUtilTimeout: 10_000 });
 
 const browserFetch = vi.fn();
 vi.mock("@/lib/api/browserClient", () => ({

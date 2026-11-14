@@ -16,11 +16,15 @@ interface SearchResult {
   description: string | null;
   status: string;
   snippet: string;
+  /** Cross-module records (tenant flag on): catalogue type ("finance.bill"), its English label and the record page. */
+  entityType?: string;
+  entityLabel?: string;
+  href?: string;
 }
 
 interface SearchResponse {
   data: SearchResult[];
-  meta: { page: number; pageSize: number; total: number };
+  meta: { page: number; pageSize: number; total: number; recordsUnavailable?: boolean };
 }
 
 /** One row in the listbox: a record hit (gateway search) or a page from the client index. */
@@ -108,7 +112,29 @@ const MODULES_WITH_DETAIL_ROUTE = new Set<string>([
   "contracts",
 ]);
 
+/**
+ * The record page the server resolved for a cross-module hit. Only a same-origin absolute path is followed:
+ * anything else (absolute URL, protocol-relative, backslash tricks) is ignored and the module landing is used.
+ */
+export function safeRecordHref(href: unknown): string | null {
+  if (typeof href !== "string") return null;
+  if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
+  // Control characters (tab, newline, NUL, DEL ...) can hide a different destination from a reader; refuse them.
+  for (let i = 0; i < href.length; i++) {
+    const c = href.charCodeAt(i);
+    if (c < 32 || c === 127) return null;
+  }
+  return href;
+}
+
+/** "finance.bill" -> "financeBill": the i18n key under search.types. */
+export function entityTypeKey(entityType: string): string {
+  return entityType.replace(/\.(\w)/g, (_m, c: string) => c.toUpperCase());
+}
+
 function buildResultHref(result: SearchResult): string {
+  const direct = safeRecordHref(result.href);
+  if (direct) return direct;
   const basePath = MODULE_PATH_MAP[result.module] ?? `/${result.module}`;
   return MODULES_WITH_DETAIL_ROUTE.has(result.module)
     ? `${basePath}/${result.id}`
@@ -165,6 +191,8 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [recordsFailed, setRecordsFailed] = useState(false);
+  // The cross-module index failed while the rest of the answer is fine: say so, keep what we have.
+  const [recordsPartial, setRecordsPartial] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -210,6 +238,7 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
       setResults([]);
       setTotal(0);
       setRecordsFailed(false);
+      setRecordsPartial(false);
       setActiveIndex(-1);
     }
   }, [open]);
@@ -262,6 +291,7 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
         const body = (await res.json()) as SearchResponse;
         setResults(Array.isArray(body.data) ? body.data : []);
         setTotal(body.meta?.total ?? 0);
+        setRecordsPartial(body.meta?.recordsUnavailable === true);
         setActiveIndex(-1);
       } catch (e) {
         if ((e as Error).name !== "AbortError") {
@@ -282,12 +312,23 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
   const showRecords = hasQuery && !loading && !recordsFailed && results.length > 0;
   const showPages = query.length >= 2 && pageHits.length > 0;
 
+  // Records are ordered group by group (a group = one entity type, legacy hits together), keeping server order inside a
+  // group, so the arrow-key order is exactly the visual order.
+  const orderedResults = useMemo(() => {
+    const order: string[] = [];
+    for (const r of results) {
+      const g = r.entityType ?? "_records";
+      if (!order.includes(g)) order.push(g);
+    }
+    return [...results].sort((a, b) => order.indexOf(a.entityType ?? "_records") - order.indexOf(b.entityType ?? "_records"));
+  }, [results]);
+
   const options: SearchOption[] = useMemo(
     () => [
-      ...(showRecords ? results.map<SearchOption>((r) => ({ kind: "record", key: `r-${r.module}-${r.id}`, record: r })) : []),
+      ...(showRecords ? orderedResults.map<SearchOption>((r) => ({ kind: "record", key: `r-${r.entityType ?? r.module}-${r.id}`, record: r })) : []),
       ...(showPages ? pageHits.map<SearchOption>((h) => ({ kind: "page", key: `p-${h.entry.href}`, hit: h })) : []),
     ],
-    [showRecords, results, showPages, pageHits],
+    [showRecords, orderedResults, showPages, pageHits],
   );
 
   // Keep the highlight inside the list when it shrinks.
@@ -424,6 +465,23 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
   };
 
   const recordOptions = options.filter((o) => o.kind === "record");
+  const recordGroups: Array<{ key: string; label: string; items: SearchOption[] }> = [];
+  for (const o of recordOptions) {
+    if (o.kind !== "record") continue;
+    const key = o.record.entityType ?? "_records";
+    let g = recordGroups.find((x) => x.key === key);
+    if (!g) {
+      g = {
+        key,
+        label: o.record.entityType
+          ? t(`search.types.${entityTypeKey(o.record.entityType)}`, o.record.entityLabel ?? o.record.module)
+          : t("search.records", "Records"),
+        items: [],
+      };
+      recordGroups.push(g);
+    }
+    g.items.push(o);
+  }
   const pageOptions = options.filter((o) => o.kind === "page");
 
   // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore) replaces the
@@ -483,14 +541,14 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
           aria-label={t("search.resultsList", "Search results")}
           className="max-h-[360px] overflow-y-auto"
         >
-          {recordOptions.length > 0 && (
-            <li role="group" aria-labelledby="search-group-records">
-              <div id="search-group-records" role="presentation" className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-                {t("search.records", "Records")}
+          {recordGroups.map((g) => (
+            <li key={g.key} role="group" aria-labelledby={`search-group-${g.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`}>
+              <div id={`search-group-${g.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`} role="presentation" className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                {g.label}
               </div>
-              <ul role="none">{recordOptions.map((o) => renderOption(o, options.indexOf(o)))}</ul>
+              <ul role="none">{g.items.map((o) => renderOption(o, options.indexOf(o)))}</ul>
             </li>
-          )}
+          ))}
           {pageOptions.length > 0 && (
             <li role="group" aria-labelledby="search-group-pages">
               <div id="search-group-pages" role="presentation" className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
@@ -502,6 +560,11 @@ export function GlobalSearch({ roles, enabledModules }: GlobalSearchProps = {}) 
         </ul>
 
         {/* Record search failed: pages above still answer. */}
+        {hasQuery && recordsPartial && !recordsFailed && (
+          <div className="px-4 py-2 text-xs text-amber-800 dark:text-amber-200 border-t border-gray-200 dark:border-gray-700" role="status">
+            {t("search.recordsPartial", "Some records could not be searched right now. Showing the rest.")}
+          </div>
+        )}
         {hasQuery && recordsFailed && (
           <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-300 border-t border-gray-200 dark:border-gray-700" role="alert">
             <span>{t("search.recordsUnavailable", "Record search unavailable — try again.")}</span>

@@ -1,4 +1,6 @@
 import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
+import { getInventoryLedgerSource } from "../../_dataLedger";
 import { EmptyState, LoadErrorState, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { INVENTORY_ITEM_LINK_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 import { getLinkSuggestions, getUnmatchedReport } from "../../_dataLinks";
@@ -13,6 +15,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function UnlinkedItemsPage() {
   const t = await getTranslations("inventoryLink");
+  // Nothing to link for a tenant on the inventory ledger: the report would only list every item as unlinked.
+  const ledgerSource = await getInventoryLedgerSource();
+  if (ledgerSource.source !== "error" && ledgerSource.data === "inventory") redirect("/inventory/items");
   const allowed = getSessionRoles().some((r) => INVENTORY_ITEM_LINK_ROLES.includes(r));
   if (!allowed) {
     return (

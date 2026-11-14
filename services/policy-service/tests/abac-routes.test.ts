@@ -10,6 +10,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAbacConsumers } from "../src/modules/abac/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerAbacConsumers(queue);
 await queue.start();
@@ -44,7 +45,7 @@ async function waitRule(id: string, headers: Record<string, string>) {
   for (let i = 0; i < 40; i++) {
     const r = await get(`/v1/policy/abac/rules/${id}`, headers);
     if (r.statusCode === 200) return;
-    await new Promise((res) => setTimeout(res, 50));
+    await drainAllQueues();
   }
   throw new Error(`rule ${id} never materialized`);
 }

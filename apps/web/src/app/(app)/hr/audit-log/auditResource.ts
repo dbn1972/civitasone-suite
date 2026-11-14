@@ -57,6 +57,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "geo_attendance",
   "geo_attendance_reportees",
   "gpf",
+  "grade_band", // S8-G4 private grade bands (hrms grade-bands consumer)
   "gratuity",
   "grievance",
   "holiday",
@@ -70,6 +71,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "leave_application",
   "leave_special",
   "leave_tenant_config", // GAP-HR-LEAVE-APPLY-05
+  "leave_custom_rules_switch", // hrms leave type-admin consumer (custom-rules switch)
   "leave_type",
   "loan",
   "ltc_exemption",
@@ -157,6 +159,12 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
   "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
   "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
+  "payroll_employee_pf_wage_basis", // S8 PF wage-basis change request / approve / reject (payroll statutory-seams consumer)
+  "payroll_s8_change_request", // S8 statutory-seams change-request decision refused / rejected
+  "payroll_statutory_seams", // S8 LWF / ESI-period flag request / approve (payroll statutory-seams consumer)
+  "payroll_ctc_template", // S8-G1/G2 pay-components consumer: CTC template create
+  "payroll_component", // S8-G2 pay-components consumer: component create/update/(de)activate
+  "contract_config", // S8-G5 per-tenant contract config update (f3-consumer) and projection reconcile
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

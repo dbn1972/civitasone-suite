@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
+import { drainAllQueues } from "../../../vitest.drain";
 
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
@@ -65,7 +66,7 @@ async function until<T>(fn: () => Promise<T>, pred: (v: T) => boolean, ms = 8000
   const end = Date.now() + ms;
   let v = await fn();
   while (!pred(v) && Date.now() < end) {
-    await new Promise((r) => setTimeout(r, 60));
+    await drainAllQueues();
     v = await fn();
   }
   return v;

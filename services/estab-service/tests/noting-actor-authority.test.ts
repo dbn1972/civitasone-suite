@@ -41,6 +41,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerFilesConsumers } from "../src/modules/files/consumer.js";
 import { addNoting, createFile } from "../src/modules/files/commands.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 function makeCtx(overrides: Partial<RequestContext> = {}): RequestContext {
   return {
@@ -159,7 +160,7 @@ async function waitForProcessed(messageId: string, ms = 3000): Promise<void> {
       db.transaction((tx) => tx.select().from(processed).where(eq(processed.messageId, messageId))),
     );
     if (rows.length === 1) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error(`message ${messageId} was never marked processed`);
 }

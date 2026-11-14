@@ -1,6 +1,15 @@
 import { z } from "zod";
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
 
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
+
+/** M5: the reason a call into the HR module must not be made for this tenant, or null. No-op unless the check is on. */
+async function hrmsBlocked(tenantId: string, target: string): Promise<string | null> {
+  const gate = await licence.check(tenantId, LICENCE_MODULE.hrms, "http", target);
+  if (gate.allowed) return null;
+  return gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : `hrms licence could not be verified: ${gate.reason}`;
+}
 
 /**
  * M4: raised when the HRMS payroll-input fetch fails (network/timeout/non-2xx).
@@ -116,6 +125,18 @@ export const deputationFeedSchema = z.object({
 });
 export type DeputationFeed = z.infer<typeof deputationFeedSchema>;
 
+/** S8 G1: the approved CTC terms of a ctc_contract profile (HRMS hrms_pay_profiles.ctc_terms). Money as digit strings. */
+export const ctcFeedSchema = z.object({
+  annualFixedMinor: digits,
+  annualVariableTargetMinor: digits.nullable().optional(),
+  /** lineage root of the payroll ctc_template; the version in force for the month is resolved by payroll. */
+  templateLineageId: z.string().uuid(),
+  epfWagePolicy: z.enum(["ceiling", "actual"]),
+  gratuityProvisionOn: z.boolean(),
+  overrides: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/), monthlyMinor: digits })).max(10),
+});
+export type CtcFeed = z.infer<typeof ctcFeedSchema>;
+
 export const payProfileFeedSchema = z.object({
   profile: z.enum(PAY_PROFILES),
   source: z.enum(["assigned", "default"]),
@@ -124,6 +145,7 @@ export const payProfileFeedSchema = z.object({
   consolidatedMonthlyMinor: digits.optional(),
   changedWithinMonth: z.boolean(),
   deputation: deputationFeedSchema.optional(),
+  ctc: ctcFeedSchema.optional(),
 });
 export type PayProfileFeed = z.infer<typeof payProfileFeedSchema>;
 
@@ -227,6 +249,13 @@ async function fetchInternalWithRetry(
   unreachableMessage: (detail: string) => string,
   attempts = 3,
 ): Promise<Response> {
+  // M5: payroll-input / tax-regime / actor lookups are calls INTO the HR module. Refuse them when the tenant did not
+  // buy it (no-op unless MODULE_LICENCE_CHECK=on and the tenant is in enforce). The tenant is the one the call is
+  // already scoped to (x-tenant-id), never a payload field.
+  const gate = await licence.check(headers["x-tenant-id"], LICENCE_MODULE.hrms, "http", "payroll->hrms internal");
+  if (!gate.allowed) {
+    throw new HrmsUnavailableError(unreachableMessage(gate.outcome === "deny" ? "hrms module is not licensed for this tenant" : `hrms licence could not be verified: ${gate.reason}`));
+  }
   let lastErr: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let res: Response;
@@ -317,6 +346,7 @@ export async function fetchEmployeeSummaries(
   tenantId: string,
   ids?: readonly string[],
 ): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  if (await hrmsBlocked(tenantId, "employee-summaries")) return new Map();
   // SF-17b: when the caller knows which employees it is about to render, ask
   // for exactly those (batched, tenant-scoped on the hrms side). The unfiltered
   // feed is capped at 2000 rows with a name ordering, so on a larger tenant any
@@ -366,6 +396,7 @@ export async function searchEmployeeSummaries(
   tenantId: string,
   filter: { q?: string | undefined; ids?: string[] | undefined },
 ): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  if (await hrmsBlocked(tenantId, "employee-summaries")) return new Map();
   const params = new URLSearchParams();
   if (filter.q) params.set("q", filter.q);
   if (filter.ids && filter.ids.length > 0) params.set("ids", filter.ids.join(","));
@@ -393,6 +424,7 @@ export async function searchEmployeeSummariesStrict(
   tenantId: string,
   filter: { q?: string | undefined; ids?: string[] | undefined },
 ): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  { const blocked = await hrmsBlocked(tenantId, "employee-summaries"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const params = new URLSearchParams();
   if (filter.q) params.set("q", filter.q);
   if (filter.ids && filter.ids.length > 0) params.set("ids", filter.ids.join(","));
@@ -428,6 +460,7 @@ export async function fetchFnfServiceSnapshot(
   employeeId: string,
   separationDate: string,
 ): Promise<FnfServiceSnapshotResult> {
+  if (await hrmsBlocked(tenantId, "fnf-service-snapshot")) return { kind: "unavailable" };
   const url = `${HRMS_URL}/v1/hrms/internal/fnf-service-snapshot?employeeId=${encodeURIComponent(employeeId)}&separationDate=${encodeURIComponent(separationDate)}`;
   try {
     const res = await fetch(url, {
@@ -452,6 +485,7 @@ export async function fetchFnfServiceSnapshot(
  * fails OPEN to an empty Map exactly like fetchEmployeeSummaries above.
  */
 export async function fetchNpsPranLast4(tenantId: string): Promise<Map<string, string>> {
+  if (await hrmsBlocked(tenantId, "nps-pran-last4")) return new Map();
   const url = `${HRMS_URL}/v1/hrms/internal/nps-pran-last4`;
   try {
     const res = await fetch(url, {
@@ -474,6 +508,7 @@ export async function fetchNpsPranLast4(tenantId: string): Promise<Map<string, s
  * Map exactly like fetchEmployeeSummaries above.
  */
 export async function fetchPayrollReadiness(tenantId: string): Promise<Map<string, string[]>> {
+  if (await hrmsBlocked(tenantId, "payroll-readiness")) return new Map();
   const url = `${HRMS_URL}/v1/hrms/internal/payroll-readiness`;
   try {
     const res = await fetch(url, {
@@ -515,6 +550,7 @@ export async function fetchPayrollReadiness(tenantId: string): Promise<Map<strin
  * employeeId. Mirrors fetchPayrollInput's own fail-closed contract above.
  */
 export async function verifyEmployeeExists(tenantId: string, employeeId: string): Promise<boolean> {
+  { const blocked = await hrmsBlocked(tenantId, "employees/:id/exists"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const url = `${HRMS_URL}/v1/hrms/internal/employees/${encodeURIComponent(employeeId)}/exists`;
   let res: Response;
   try {
@@ -558,6 +594,7 @@ export async function verifyEmployeeExists(tenantId: string, employeeId: string)
  * lookup race never silently exempts someone it shouldn't.
  */
 export async function fetchAttendanceLopApplies(tenantId: string, employeeId: string): Promise<boolean> {
+  { const blocked = await hrmsBlocked(tenantId, "attendance-lop-applies"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const url = `${HRMS_URL}/v1/hrms/internal/employees/${encodeURIComponent(employeeId)}/attendance-lop-applies`;
   let res: Response;
   try {
@@ -603,6 +640,7 @@ export async function fetchAttendanceLopApplies(tenantId: string, employeeId: st
  * it shouldn't.
  */
 export async function fetchLeaveLopFractionBps(tenantId: string, leaveTypeId: string): Promise<number> {
+  { const blocked = await hrmsBlocked(tenantId, "leave-types/:id/lop-fraction-bps"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const url = `${HRMS_URL}/v1/hrms/internal/leave-types/${encodeURIComponent(leaveTypeId)}/lop-fraction-bps`;
   let res: Response;
   try {
@@ -649,6 +687,7 @@ export type PayrollSlipTemplate = {
  * template — see payslip-pdf/routes.ts).
  */
 export async function fetchDefaultSlipTemplate(tenantId: string): Promise<PayrollSlipTemplate | null> {
+  { const blocked = await hrmsBlocked(tenantId, "payroll/slip-templates/default"); if (blocked) throw new HrmsUnavailableError(blocked); }
   const url = `${HRMS_URL}/v1/hrms/internal/payroll/slip-templates/default`;
   let res: Response;
   try {

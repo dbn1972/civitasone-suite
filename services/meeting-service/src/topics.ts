@@ -25,6 +25,8 @@ export const COMMANDS = {
   // ── Meeting Core ─────────────────────────────────────────────────────────
   /** payload: { title, type, scheduledAt, durationMinutes, committeeId?, chairpersonId, secretaryId, convenerId?, venue?, vcEnabled?, confidentialityLevel? } */
   meetingCreate:              "meeting.meeting.create",
+  /** payload: { id, tenantId, minutesId, title, type, committeeId?, chairpersonId, secretaryId, scheduledAt, actualStartAt, actualEndAt, attendees[], minutes{content}, actorRoles } — record an already-held (past) meeting */
+  meetingRecordHeld:          "meeting.meeting.record_held",
   /** payload: { meetingId, version, patch: Partial<MeetingEditableFields> } — optimistic lock via version */
   meetingUpdate:              "meeting.meeting.update",
   /** payload: { meetingId, version, to: MeetingState, reason?, nextMeetingDate? } */

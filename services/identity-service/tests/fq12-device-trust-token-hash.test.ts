@@ -23,6 +23,7 @@ import { queue as sharedQueue } from "../src/shared/infra.js";
 import { registeredDevices } from "../src/modules/devices/schema.js";
 import { registerDeviceConsumers } from "../src/modules/devices/consumer.js";
 import { hashTrustToken, trustTokenMatches } from "../src/modules/devices/repo.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 // mintTrustToken() reads this at call time; generated per run, never a literal.
 process.env.DEVICE_TRUST_SECRET ??= randomBytes(32).toString("hex");
@@ -40,7 +41,7 @@ async function waitFor<V>(fn: () => Promise<V>, ok: (v: V) => boolean, timeoutMs
   const deadline = Date.now() + timeoutMs;
   let last = await fn();
   while (!ok(last) && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
     last = await fn();
   }
   return last;

@@ -26,6 +26,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerWaterMeteringConsumers } from "../src/modules/water-metering/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -77,7 +78,7 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
     expect(res.statusCode).toBe(202);
     readingId = res.json().data.id;
     expect(readingId).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterMeterReadings).where(eq(assetWaterMeterReadings.id, readingId)));
     expect(rows).toHaveLength(1);
@@ -102,7 +103,7 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
     });
     const badReadingId = res.json().data.id;
     expect(res.statusCode).toBe(202); // route still accepts (validation is in the consumer)
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterMeterReadings).where(eq(assetWaterMeterReadings.id, badReadingId)));
     expect(rows).toHaveLength(0); // rejected before the transaction, never persisted
   });
@@ -119,9 +120,9 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
       payload: { id, tenantId: TENANT_A, connectionId: CONNECTION_ID, readingDate: "2026-09-10", previousReading: "10", currentReading: "25" },
     });
     await publish();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await publish(); // replay
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterMeterReadings).where(eq(assetWaterMeterReadings.id, id)));
@@ -140,7 +141,7 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
     });
     expect(res.statusCode).toBe(202);
     const billId = res.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterBills).where(eq(assetWaterBills.id, billId)));
     expect(rows).toHaveLength(1);
@@ -172,7 +173,7 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
     });
     expect(res.statusCode).toBe(202);
     const requestId = res.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const listRes = await app.inject({
       method: "GET", url: "/v1/assets/water/service-requests",
@@ -187,7 +188,7 @@ describe("Water-metering consumer — CQRS wiring (integration)", () => {
       payload: { resolution: "tightened the fitting, leak stopped" },
     });
     expect(resolveRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterServiceRequests).where(eq(assetWaterServiceRequests.id, requestId)));
     expect(rows[0]?.status).toBe("resolved");
@@ -208,7 +209,7 @@ describe("Water-metering — cross-tenant RLS isolation", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-rls-wm-1", schemaVersion: "1.0",
       payload: { id: readingIdA, tenantId: TENANT_A, connectionId: CONNECTION_ID, readingDate: "2026-09-15", previousReading: "1", currentReading: "9" },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
   });
   afterAll(async () => {

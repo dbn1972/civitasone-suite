@@ -4,6 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { Avatar, Button, DataTable, Modal } from '@/app/_components/ds'
+import { formatIndianDate } from '@/lib/formatters'
 
 type Employee = {
   id: string
@@ -271,6 +272,13 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
     { key: 'department', label: t('colDepartment') },
     { key: 'designation', label: t('colDesignation') },
     { key: 'grade', label: t('colGrade') },
+    // S8 G5: contract end + project, only when the directory data carries them (tenants that opted in).
+    ...(employees.some((e) => typeof e.contractEndDate === 'string')
+      ? [{ key: 'contractEndDate', label: t('colContractEnd'), render: (row: Employee) => (typeof row.contractEndDate === 'string' ? formatIndianDate(row.contractEndDate) : '') }]
+      : []),
+    ...(employees.some((e) => typeof e.projectCode === 'string')
+      ? [{ key: 'projectCode', label: t('colProject'), render: (row: Employee) => (typeof row.projectCode === 'string' ? row.projectCode : '') }]
+      : []),
   ]
 
   return (

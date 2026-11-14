@@ -20,6 +20,10 @@ export const wfhEligibilitySchema = z.object({
   // Highest level still ELIGIBLE: default 9, i.e. Level 10-18 (Group A) excluded.
   // Group B gazetted (Levels 8-9) is NOT covered by this default.
   maxPayLevel: z.number().int().min(1).max(18).default(9),
+  // S8-G4: only read for a tenant whose pay_scale.kind is 'private_bands'. The highest grade-band RANK
+  // still eligible; null (default) == no band is excluded, because the gazetted exclusion is a
+  // government-service rule and a company has no equivalent unless it chooses one.
+  maxBandRank: z.number().int().min(1).max(9999).nullable().default(null),
 });
 export type WfhEligibility = z.infer<typeof wfhEligibilitySchema>;
 
@@ -59,11 +63,26 @@ export const retirementAgeSchema = z.object({
 });
 export type RetirementAge = z.infer<typeof retirementAgeSchema>;
 
+// ── pay_scale (S8-G4) ───────────────────────────────────────────────────────
+// Which ladder the tenant's designations sit on. 'cpc7' (default) == the 7th CPC pay matrix: a
+// designation's `level` must be 1-18 and every consumer reads `level`, exactly as before. 'private_bands'
+// == a Section 8 company / autonomous body with its own grade bands (employee.hrms_grade_bands): the
+// 1-18 rule is not applied to `level` and rank consumers read the designation's band rank instead.
+// No row == 'cpc7', so adding this key changes nothing until HR (or the tenant-profile switch, once
+// #2467/#2468 supply `payScale`) sets it. Deputation keeps CPC levels in either mode on purpose.
+export const PAY_SCALE_KINDS = ["cpc7", "private_bands"] as const;
+export type PayScaleKind = (typeof PAY_SCALE_KINDS)[number];
+export const payScaleSchema = z.object({
+  kind: z.enum(PAY_SCALE_KINDS).default("cpc7"),
+});
+export type PayScale = z.infer<typeof payScaleSchema>;
+
 export const POLICY_SCHEMAS = {
   wfh_eligibility: wfhEligibilitySchema,
   apar_deadlines: aparDeadlinesSchema,
   dashboard_scope: dashboardScopeSchema,
   retirement_age: retirementAgeSchema,
+  pay_scale: payScaleSchema,
 } as const;
 
 export type PolicyKey = keyof typeof POLICY_SCHEMAS;

@@ -27,3 +27,6 @@ export const INVENTORY_READER_ROLES = [
   "procurement_officer",
   "tenant_admin",
 ] as const;
+
+/** Who may post a stock-count adjustment (the other write roles may receive, issue and transfer). */
+export const INVENTORY_ADJUSTMENT_ROLES = ["inventory_manager", "inventory_admin", "super_admin"] as const;

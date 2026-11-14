@@ -308,7 +308,9 @@ describe("D-15: tenant-service unreachable FAILS CLOSED (503), never the env of 
     ["connection refused (real, dead TENANT_SERVICE_URL)", () => { /* no stub: TENANT_SERVICE_URL is a dead port in vitest.config.ts */ }],
     ["fetch throws", (tenant) => { stubTenantService({ [tenant]: "throw" }); }],
     ["tenant-service 500", (tenant) => { stubTenantService({ [tenant]: { status: 500, body: { code: "INTERNAL" } } }); }],
-    ["tenant-service 404 (tenant not found)", (tenant) => { stubTenantService({ [tenant]: { status: 404, body: { code: "NOT_FOUND" } } }); }],
+    // tenant-service 404 NOT_FOUND is no longer an outage: the tenant is unknown there, nothing is configured -> 422
+    // FORM16_EMPLOYER_NOT_CONFIGURED (tests/form24q-employer-not-configured.test.ts). A 404 that is NOT its NOT_FOUND
+    // answer (mis-routed URL) stays a 503 and is pinned there.
     ["tenant-service 200 with a non-JSON-object body", (tenant) => { stubTenantService({ [tenant]: { status: 200, body: null } }); }],
   ];
   const expect503 = (res: { statusCode: number; json(): { code: string }; body: string }) => {

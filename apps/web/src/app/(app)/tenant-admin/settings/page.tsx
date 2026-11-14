@@ -1,15 +1,22 @@
 import { PageHeader, StatCard, DataTable, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
-import { getTenantModules, getCurrentTenantOrgType } from "../../../_data/loaders";
+import { getTenantModules, getCurrentTenantOrgType, getModuleSettings } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { ModuleToggleActions } from "./ModuleToggleActions";
 import { ModulesConfirmCard } from "./ModulesConfirmCard";
+import { CatalogueModuleSettings } from "./CatalogueModuleSettings";
 
 export default async function TenantSettingsPage() {
-  const [result, tenant] = await Promise.all([getTenantModules(), getCurrentTenantOrgType()]);
-  const { data: modules } = result;
-  const errored = toResourceState(result).status === "error";
+  const [result, tenant, moduleSettings] = await Promise.all([getTenantModules(), getCurrentTenantOrgType(), getModuleSettings()]);
+  // M4: when the catalogue is the single source (admin-service MODULE_SOURCE=catalogue) the older toggle is retired
+  // and this page uses the catalogue endpoints; otherwise (default, or if the capability cannot be read) it is unchanged.
+  const catalogueMode = moduleSettings.data.source === "catalogue" && toResourceState(moduleSettings).status !== "error";
+  const catalogue = catalogueMode ? moduleSettings.data.modules : [];
+  const { data: modules } = catalogueMode
+    ? { data: catalogue.map((m) => ({ moduleKey: m.id, moduleName: m.name, enabled: m.enabled, enabledAt: null as string | null })) }
+    : result;
+  const errored = catalogueMode ? false : toResourceState(result).status === "error";
 
   const total = modules.length;
   const enabled = modules.filter((m) => m.enabled).length;
@@ -44,7 +51,7 @@ export default async function TenantSettingsPage() {
         </Card>
       ) : (
         <div className="grid g-2" style={{ marginTop: 18 }} id="modules">
-          <ModuleToggleActions modules={modules} />
+          {catalogueMode ? <CatalogueModuleSettings modules={catalogue} /> : <ModuleToggleActions modules={modules} />}
           <div className="card">
             <div className="card-h"><h3>Module details</h3></div>
             <DataTable

@@ -12,6 +12,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerStageConsumers } from "../src/modules/stages/consumer.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
@@ -43,7 +44,7 @@ async function until<T>(fn: () => Promise<T | undefined>, ms = 15_000): Promise<
   while (Date.now() < deadline) {
     last = await fn();
     if (last) return last;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error("condition not reached in time");
 }
@@ -118,7 +119,7 @@ describe("domain-pack activation record + status endpoint (owner decision #28)",
     await until(async () => ((await status()).body.activation?.status === "completed" ? true : undefined));
     await publishCompleted(TENANT, { activationId: id, stageId, outcome: "completed", draftIds: [randomUUID()] }, mid);
     await publishCompleted(TENANT, { activationId: id, stageId, outcome: "failed", reason: "late" });
-    await new Promise((r) => setTimeout(r, 800));
+    await drainAllQueues();
     const rec = (await status()).body.activation!;
     expect(rec.status).toBe("completed");
     expect(rec.draftIds).toHaveLength(1);
@@ -129,7 +130,7 @@ describe("domain-pack activation record + status endpoint (owner decision #28)",
     await until(async () => ((await status()).body.activation?.id === id ? true : undefined));
     expect((await status(OTHER_TENANT)).body.activation).toBeNull();
     await publishCompleted(OTHER_TENANT, { activationId: id, stageId, outcome: "completed", draftIds: [randomUUID()] });
-    await new Promise((r) => setTimeout(r, 800));
+    await drainAllQueues();
     expect((await status()).body.activation?.status).toBe("accepted");
   });
 

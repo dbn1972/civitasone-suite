@@ -14,7 +14,7 @@ import { queue } from "../src/shared/infra.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { settingsSections, tenantLogos } from "../src/modules/tenant-settings/schema.js";
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
-import { drainOrFail } from "../../../vitest.drain";
+import { drainOrFail, drainAllQueues } from "../../../vitest.drain";
 
 process.env.CONFIG_ENC_KEY = process.env.CONFIG_ENC_KEY ?? "test_config_enc_key_for_civitasone_32c"; // gitleaks:allow
 const { buildApp } = await import("../src/app.js");
@@ -64,7 +64,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, tries = 300): 
   for (let i = 0; i < tries; i++) {
     const v = await fn();
     if (v) return v;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   throw new Error("condition not reached: the command was never applied");
 }

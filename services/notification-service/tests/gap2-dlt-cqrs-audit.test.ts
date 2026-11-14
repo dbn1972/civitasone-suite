@@ -9,6 +9,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { dltTemplates } from "../src/modules/dlt/schema.js";
 import { registerDltConsumers } from "../src/modules/dlt/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 /**
  * GAP2-NOTIFICATIONS-DLT-10: DLT template registration must go through the
@@ -64,7 +65,7 @@ describe("DLT template create is CQRS + audited (GAP2-NOTIFICATIONS-DLT-10)", ()
         channel: "sms",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainAllQueues();
     await q.stop();
 
     // 1) The consumer (not the route) applied the write.

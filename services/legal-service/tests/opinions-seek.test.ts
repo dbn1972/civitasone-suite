@@ -24,6 +24,7 @@ import { registerOpinionConsumers } from "../src/modules/opinions/consumer.js";
 import * as opinionQueries from "../src/modules/opinions/queries.js";
 import { cache } from "../src/shared/infra.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000d01";
 const TENANT = "11111111-aaaa-4000-8000-000000000d01";
@@ -46,7 +47,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
 }
 
 async function drain(): Promise<void> {
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainAllQueues();
 }
 
 async function wipe(): Promise<void> {

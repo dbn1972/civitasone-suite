@@ -17,6 +17,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerServiceRequestConsumers } from "../src/modules/requests/consumer.js";
 import { registerPortalConsumers } from "../src/modules/portal/consumer.js";
 import type { FastifyInstance } from "fastify";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerServiceRequestConsumers(queue);
 registerPortalConsumers(queue);
@@ -128,7 +129,7 @@ describe("COMP-002 POST/GET/PATCH /v1/citizen/requests — real persistence, not
     expect(res.json().code).toBe("FORBIDDEN");
 
     // And the value must NOT have been persisted -- confirm via a follow-up GET.
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const g = await app.inject({ method: "GET", url: `/v1/citizen/requests/${requestId}`, headers: hdr(tok(TENANT_A, CITIZEN)) });
     expect(g.statusCode).toBe(200);
     expect(g.json().data.assigneeDepartment).toBeFalsy();
@@ -151,7 +152,7 @@ describe("COMP-002 POST/GET/PATCH /v1/citizen/requests — real persistence, not
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("FORBIDDEN");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const g = await app.inject({ method: "GET", url: `/v1/citizen/requests/${requestId}`, headers: hdr(tok(TENANT_A, CITIZEN)) });
     expect(g.json().data.status).toBe("submitted"); // unchanged -- rejected before reaching the command.
     expect(g.json().data.assigneeDepartment).toBeFalsy();
@@ -186,7 +187,7 @@ describe("COMP-002 POST/GET/PATCH /v1/citizen/requests — real persistence, not
       headers: hdr(tok(TENANT_A, OFFICER, ["citizen_officer"])), payload: { status: "in_progress" },
     });
     expect(res.statusCode).toBe(202); // command accepted...
-    await new Promise((r) => setTimeout(r, 200));
+    await drainAllQueues();
     const g = await app.inject({ method: "GET", url: `/v1/citizen/requests/${requestId}`, headers: hdr(tok(TENANT_A, OFFICER, ["citizen_officer"])) });
     expect(g.json().data.status).toBe("resolved"); // ...but the terminal-state guard makes it a no-op.
   });

@@ -9,7 +9,10 @@
  * Validates: Requirements 19.2, 19.3, 19.4, 19.7
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
+import {
+  createSearchEngine, GlobalSearchIndex, GLOBAL_ENTITY_TYPES, entityTypesForRoles, isGlobalSearchEnabled,
+  type GlobalSearchHit, type SearchEngine, type SearchQuery, type SearchResponse,
+} from "@civitasone/search";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 
@@ -92,6 +95,15 @@ const ALL_MODULES = [
  * platform_admin gets all modules.
  * Other roles get a union of their mapped modules.
  */
+/** Roles cleared for every access level (mirrors knowledge-service documents/clearance.ts CLEARANCE_ALL_ROLES). */
+const CLEARANCE_ALL_ROLES = ["knowledge_admin", "super_admin"];
+const STANDARD_ACCESS_LEVELS = ["public", "internal"];
+
+/** Access levels of UNTAGGED knowledge documents the caller may see; `null` = every level. */
+export function untaggedAccessLevels(roles: string[]): string[] | null {
+  return roles.some((r) => CLEARANCE_ALL_ROLES.includes(r)) ? null : STANDARD_ACCESS_LEVELS;
+}
+
 export function resolveUserModules(roles: string[]): string[] {
   const adminRoles = ["super_admin", "tenant_admin", "platform_admin"];
   if (roles.some((r) => adminRoles.includes(r))) {
@@ -119,11 +131,16 @@ export interface GlobalSearchResult {
   description: string | null;
   status: string;
   snippet: string;
+  /** Cross-module records only (tenant flag on): catalogue type, English group label and the record page path. */
+  entityType?: string;
+  entityLabel?: string;
+  href?: string;
 }
 
 export interface GlobalSearchResponse {
   data: GlobalSearchResult[];
-  meta: { page: number; pageSize: number; total: number };
+  /** `recordsUnavailable` is set only when the cross-module index failed while the knowledge search worked. */
+  meta: { page: number; pageSize: number; total: number; recordsUnavailable?: boolean };
 }
 
 // ── Search Engine Singleton ───────────────────────────────────────────────────
@@ -140,6 +157,85 @@ function getEngine(): SearchEngine {
 /** Allow injection for testing. */
 export function setSearchEngine(e: SearchEngine | null): void {
   engine = e;
+  ready = new WeakMap();
+}
+
+// ── Lazy, memoised index readiness ────────────────────────────────────────────
+// The clearance filters need `kind` / `accessLevel` to be FILTERABLE on the index. That is only applied by
+// engine.initialize(), which nothing calls at runtime, so an index created before `kind` existed answers
+// every filtered search with `invalid_search_filter` (-> 503 for ALL global search). The gateway therefore
+// readies the index lazily: once per process before the first search (memoised), a failure is forgotten so
+// a later search tries again, and a search refused with invalid_search_filter gets ONE repair + ONE retry.
+// The query is NEVER sent without its filters: dropping them would leak restricted documents.
+let ready = new WeakMap<SearchEngine, Promise<void>>();
+// In-flight repairs: concurrent invalid_search_filter results share ONE settings PATCH.
+const repairing = new WeakMap<SearchEngine, Promise<void>>();
+
+function ensureEngineReady(e: SearchEngine): Promise<void> {
+  if (!e.ensureReady) return Promise.resolve();
+  let p = ready.get(e);
+  if (!p) {
+    p = e.ensureReady().catch((err: unknown) => {
+      ready.delete(e); // not memoised: the next search retries
+      log.warn({ err: err instanceof Error ? err.message : "unknown" }, "search index readiness failed — will retry on a later search");
+    });
+    ready.set(e, p);
+  }
+  return p;
+}
+
+function isFilterNotReady(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "invalid_search_filter";
+}
+
+async function searchWithRepair(e: SearchEngine, q: SearchQuery): Promise<SearchResponse> {
+  await ensureEngineReady(e);
+  try {
+    return await e.search(q);
+  } catch (err) {
+    if (!isFilterNotReady(err) || !e.ensureReady) throw err;
+    log.warn("search filter not ready on the index — applying index settings once and retrying once");
+    let repair = repairing.get(e);
+    if (!repair) {
+      repair = e.ensureReady().finally(() => repairing.delete(e));
+      repairing.set(e, repair);
+    }
+    try {
+      await repair;
+    } catch (repairErr) {
+      log.warn({ err: repairErr instanceof Error ? repairErr.message : "unknown" }, "search index repair failed");
+      throw err;
+    }
+    ready.set(e, Promise.resolve());
+    return e.search(q); // the SAME filtered query; a second failure propagates (503), never an unfiltered fallback
+  }
+}
+
+let globalIndex: Pick<GlobalSearchIndex, "search"> | null = null;
+
+function getGlobalIndex(): Pick<GlobalSearchIndex, "search"> {
+  if (!globalIndex) globalIndex = new GlobalSearchIndex();
+  return globalIndex;
+}
+
+/** Allow injection for testing. */
+export function setGlobalSearchIndex(i: Pick<GlobalSearchIndex, "search"> | null): void {
+  globalIndex = i;
+}
+
+function toGlobalResult(h: GlobalSearchHit): GlobalSearchResult {
+  return {
+    id: h.entityId,
+    module: h.module,
+    name: h.title,
+    refNumber: h.refNumber || null,
+    description: h.summary || null,
+    status: h.status,
+    snippet: h.summary || h.refNumber || "",
+    entityType: h.entityType,
+    entityLabel: GLOBAL_ENTITY_TYPES[h.entityType].label,
+    href: h.href,
+  };
 }
 
 // ── Route Registration ────────────────────────────────────────────────────────
@@ -184,7 +280,14 @@ export function registerSearchRoute(app: FastifyInstance): void {
 
     // ── Permission Filtering ───────────────────────────────────────────────
     const userModules = resolveUserModules(jwtPayload.roles ?? []);
-    if (userModules.length === 0) {
+
+    // ── Cross-module records (per-tenant flag, default off) ────────────────
+    // The tenant comes ONLY from the verified JWT, the entity types ONLY from the caller's JWT roles via the
+    // catalogue; the client controls neither. Flag off => none of this runs and the response is unchanged.
+    const globalOn = isGlobalSearchEnabled(tenantId);
+    const globalTypes = globalOn ? entityTypesForRoles(jwtPayload.roles ?? []) : [];
+
+    if (userModules.length === 0 && globalTypes.length === 0) {
       // User has no module access — return empty results
       return reply.code(200).send({
         data: [],
@@ -193,36 +296,64 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     // ── Execute Search ─────────────────────────────────────────────────────
-    let searchResponse: SearchResponse;
-    try {
-      searchResponse = await getEngine().search({
-        q: query,
-        tenantId,
-        limit: pageSize,
-        offset,
-        // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
-        // is AND, which returned nothing for a user with more than one module (and for every admin).
-        tagsAny: userModules,
-      });
-    } catch (err) {
-      // Graceful degradation: search engine unreachable
-      log.warn(
-        { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
-        "Search engine unreachable — returning SEARCH_UNAVAILABLE",
-      );
-      return reply.code(503).send({
-        error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
-      });
+    let searchResponse: SearchResponse = { hits: [], totalHits: 0, processingTimeMs: 0 };
+    if (userModules.length > 0) {
+      try {
+        searchResponse = await searchWithRepair(getEngine(), {
+          q: query,
+          tenantId,
+          limit: pageSize,
+          offset,
+          // Module filtering: a document qualifies if it carries ANY module the user may read (OR). `tags`
+          // is AND, which returned nothing for a user with more than one module (and for every admin).
+          tagsAny: userModules,
+          // Knowledge articles are indexed without module tags: untagged documents are visible to every user
+          // of THIS tenant (tenantId filter is unchanged and ANDed); tagged ones stay module-filtered.
+          // Untagged documents are further limited to the caller's clearance, derived from the caller's OWN roles
+          // (never a request parameter), the same rule knowledge-service applies: public + internal for everyone,
+          // every level only for knowledge_admin / super_admin.
+          includeUntagged: { accessLevels: untaggedAccessLevels(jwtPayload.roles ?? []) },
+          // The same clearance applies to EVERY knowledge document, tagged or not: a tag (which an author or a
+          // client can set) must never carry a restricted document past it. Non-knowledge records are untouched.
+          knowledgeAccessLevels: untaggedAccessLevels(jwtPayload.roles ?? []),
+        });
+      } catch (err) {
+        // Graceful degradation: search engine unreachable
+        log.warn(
+          { correlationId: req.id, err: err instanceof Error ? err.message : "unknown" },
+          "Search engine unreachable — returning SEARCH_UNAVAILABLE",
+        );
+        return reply.code(503).send({
+          error: { code: "SEARCH_UNAVAILABLE", message: "Search service is temporarily unavailable" },
+        });
+      }
+    }
+
+    let globalResults: GlobalSearchResult[] = [];
+    let globalTotal = 0;
+    let globalFailed = false;
+    if (globalTypes.length > 0) {
+      try {
+        const g = await getGlobalIndex().search({ tenantId, q: query, entityTypes: globalTypes, limit: pageSize, offset });
+        globalResults = g.hits.map(toGlobalResult);
+        globalTotal = g.totalHits;
+      } catch (err) {
+        // The cross-module index is additive: its failure must not take down knowledge search.
+        globalFailed = true;
+        log.warn({ correlationId: req.id, err: err instanceof Error ? err.message : "unknown" }, "Cross-module search failed");
+      }
     }
 
     // ── Transform and filter results by module permission ──────────────────
     const results: GlobalSearchResult[] = [];
     for (const hit of searchResponse.hits) {
       // Each hit has tags array; the module is stored as a tag
-      const module = hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown";
+      // Untagged documents (knowledge articles) belong to no module and are tenant-wide.
+      const untagged = hit.tags.length === 0;
+      const module = untagged ? "knowledge" : (hit.tags.find((t) => userModules.includes(t)) ?? hit.tags[0] ?? "unknown");
 
-      // Double-check module permission (defense-in-depth)
-      if (!userModules.includes(module)) continue;
+      // Double-check module permission (defense-in-depth): a TAGGED hit must match one of the user's modules.
+      if (!untagged && !userModules.includes(module)) continue;
 
       results.push({
         id: hit.documentId,
@@ -236,11 +367,12 @@ export function registerSearchRoute(app: FastifyInstance): void {
     }
 
     const response: GlobalSearchResponse = {
-      data: results,
+      data: globalOn ? [...globalResults, ...results] : results,
       meta: {
         page,
         pageSize,
-        total: searchResponse.totalHits,
+        total: searchResponse.totalHits + globalTotal,
+        ...(globalFailed ? { recordsUnavailable: true } : {}),
       },
     };
 

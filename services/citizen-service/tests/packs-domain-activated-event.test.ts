@@ -11,6 +11,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerPacksConsumers } from "../src/modules/packs/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 registerPacksConsumers(queue);
 await queue.start();
@@ -43,7 +44,7 @@ async function waitEvents(activationId: string, ms = 8_000): Promise<ActivatedEv
   while (Date.now() - start < ms) {
     const ev = await activatedEvents(activationId);
     if (ev.length > 0) return ev;
-    await new Promise((r) => setTimeout(r, 100));
+    await drainAllQueues();
   }
   return [];
 }

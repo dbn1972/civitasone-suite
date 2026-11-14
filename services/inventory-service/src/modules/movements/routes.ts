@@ -16,10 +16,13 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import type { LedgerOpts } from "./repo.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
+import { INVENTORY_ADJUSTMENT_ROLES } from "../../shared/roles.js";
 
 const STORE_ROLES  = ["inventory_user", "inventory_manager", "store_keeper", "inventory_admin", "super_admin"];
-const ADJUST_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+const ADJUST_ROLES: string[] = [...INVENTORY_ADJUSTMENT_ROLES];
 const READER_ROLES = [...STORE_ROLES, "audit_officer", "finance_officer"];
+// balances and the ledger are also read by tenant_admin (oversight); no other register is widened for it.
+const OVERSIGHT_READER_ROLES = [...READER_ROLES, "tenant_admin"];
 
 export async function movementRoutes(app: FastifyInstance): Promise<void> {
   // ── Writes ───────────────────────────────────────────────────────────────
@@ -82,7 +85,7 @@ export async function movementRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/inventory/balances", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, OVERSIGHT_READER_ROLES);
     const q = balanceQueryParams.parse(req.query);
     const opts: { itemId?: string; storeId?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
     if (q.itemId !== undefined) opts.itemId = q.itemId;
@@ -92,7 +95,7 @@ export async function movementRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/inventory/ledger", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, OVERSIGHT_READER_ROLES);
     const q = ledgerQueryParams.parse(req.query);
     const opts: LedgerOpts = { limit: q.limit, offset: q.offset };
     if (q.itemId !== undefined) opts.itemId = q.itemId;

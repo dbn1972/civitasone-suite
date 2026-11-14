@@ -9,6 +9,9 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_HR_READER_ROLES, PAYROLL_REIMBURSEMENT_DECIDER_ROLES } from "@/lib/auth/workRoles";
 import { reimbursementCategoryKey } from "@/lib/payroll/reimbursementCategories";
 import { CreateReimbursementForm, type ClaimSubject } from "./CreateReimbursementForm";
+import { receiptPolicyFromApi } from "@/lib/payroll/receiptRules";
+import { PAYROLL_CONFIG_ROLES } from "@/lib/auth/workRoles";
+import Link from "next/link";
 import { ReimbursementsTable, type ClaimRow } from "./ReimbursementsTable";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
@@ -24,6 +27,9 @@ type Row = {
   status: string;
   /** GAP-PAYROLL-REIMBURSEMENTS-03: number of receipts on the claim (keys never leave the API). */
   attachment_count?: number;
+  /** Receipt policy: how the claim was supported. */
+  receipt_basis?: "receipt" | "self_declaration" | "not_required";
+  self_declared_on_behalf?: boolean;
 } & Record<string, unknown>;
 
 /**
@@ -47,6 +53,16 @@ async function getData(): Promise<LoaderResult<Row[]>> {
       return Array.isArray(arr) ? arr : null;
     },
   });
+}
+
+/** The tenant's receipt rule (readable by everyone who can file). Unreadable => built-in default, same as the server's. */
+async function getReceiptPolicy() {
+  const r = await fetchJson<unknown, ReturnType<typeof receiptPolicyFromApi>>("/api/v1/payroll/reimbursement-receipt-policy", null, {
+    telemetryKey: "payroll.reimbursementReceiptPolicy",
+    mapResponse: (p) => receiptPolicyFromApi(p),
+  });
+  // anything that is not a policy is treated as "not configured" (built-in default)
+  return receiptPolicyFromApi(r.data);
 }
 
 export default async function ReimbursementsPage() {
@@ -74,10 +90,12 @@ export default async function ReimbursementsPage() {
     );
   }
 
-  const [{ data: items, source }, profile] = await Promise.all([
+  const [{ data: items, source }, profile, receiptPolicy] = await Promise.all([
     getData(),
     isSelfService ? getMyProfile() : Promise.resolve(null),
+    getReceiptPolicy(),
   ]);
+  const canConfigure = roles.some((r) => PAYROLL_CONFIG_ROLES.includes(r));
   const errored = source === "error";
 
   // GAP-PAYROLL-REIMBURSEMENTS-01: who the form files for. A self-service
@@ -103,6 +121,8 @@ export default async function ReimbursementsPage() {
       bill_date_display: formatIndianDate(r.bill_date),
       bill_ref: r.bill_ref?.trim() ? r.bill_ref : "—",
       receipt_count: Number(r.attachment_count ?? 0),
+      receipt_basis: r.receipt_basis,
+      self_declared_on_behalf: r.self_declared_on_behalf === true,
       status: r.status,
     };
   });
@@ -118,6 +138,11 @@ export default async function ReimbursementsPage() {
     <div className="page-main wrap">
       {header}
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
+      {canConfigure && (
+        <p style={{ margin: "0 0 12px", fontSize: 13 }}>
+          <Link href="/hr/payroll/reimbursements/receipt-policy">{t("receiptPolicyLink")}</Link>
+        </p>
+      )}
       <StatGrid>
         <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pendingCount} />
@@ -126,7 +151,7 @@ export default async function ReimbursementsPage() {
       </StatGrid>
 
       {subject ? (
-        <CreateReimbursementForm subject={subject} />
+        <CreateReimbursementForm subject={subject} policy={receiptPolicy} />
       ) : (
         <Card title={t("noProfileTitle")} padding>
           <p style={{ fontSize: 13, color: "var(--ink2)", margin: 0 }}>{t("noProfileMessage")}</p>

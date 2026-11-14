@@ -33,6 +33,53 @@ export function requiredPayOption(profile: PayProfile): "parent_scale" | "post_s
   return null;
 }
 
+/** S8 G1: feature flag (default OFF). Only the exact string "true" lets HRMS accept CTC terms. */
+export const CTC_PROFILE_FLAG = "S8_CTC_PROFILE_ENABLED";
+export function ctcProfileEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env[CTC_PROFILE_FLAG] === "true";
+}
+
+/**
+ * S8 G1: the approved CTC terms of a ctc_contract profile (owner decision 1, 10 Nov 2026). Annual, in paise, as
+ * digit strings (JSON-safe). Monthly is derived by payroll and never stored. `templateLineageId` names the
+ * payroll ctc_template lineage; payroll resolves the LOCKED version in force for each month, so a template
+ * revision never needs a new profile. `overrides` replace single template lines for this employee only.
+ */
+export interface CtcTerms {
+  annualFixedMinor: string;
+  annualVariableTargetMinor: string | null;
+  templateLineageId: string;
+  epfWagePolicy: "ceiling" | "actual";
+  gratuityProvisionOn: boolean;
+  overrides: Array<{ code: string; monthlyMinor: string }>;
+}
+
+/** Sanity bound on annual CTC: Rs 100 crore in paise. Not a statutory figure. */
+export const MAX_ANNUAL_CTC_MINOR = 1_000_000_000_000n;
+const CTC_CODE_RE = /^[A-Z][A-Z0-9_]{1,31}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Error code, or null when the CTC terms are well formed. Pure; whether the template exists is payroll's check. */
+export function ctcTermsError(t: CtcTerms): string | null {
+  if (!/^\d{1,15}$/.test(t.annualFixedMinor) || BigInt(t.annualFixedMinor) <= 0n || BigInt(t.annualFixedMinor) > MAX_ANNUAL_CTC_MINOR) return "CTC_ANNUAL_INVALID";
+  if (t.annualVariableTargetMinor != null && (!/^\d{1,15}$/.test(t.annualVariableTargetMinor) || BigInt(t.annualVariableTargetMinor) > MAX_ANNUAL_CTC_MINOR)) return "CTC_VARIABLE_INVALID";
+  if (!UUID_RE.test(t.templateLineageId)) return "CTC_TEMPLATE_REQUIRED";
+  if (t.epfWagePolicy !== "ceiling" && t.epfWagePolicy !== "actual") return "CTC_EPF_POLICY_INVALID";
+  if (t.overrides.length > 10) return "CTC_TOO_MANY_OVERRIDES";
+  const seen = new Set<string>();
+  for (const o of t.overrides) {
+    if (!CTC_CODE_RE.test(o.code) || !/^\d{1,15}$/.test(o.monthlyMinor)) return "CTC_OVERRIDE_INVALID";
+    if (seen.has(o.code)) return "CTC_OVERRIDE_DUPLICATE";
+    seen.add(o.code);
+  }
+  return null;
+}
+
+/** What an audit event may carry of the CTC terms: no override amounts, no variable target (private pay data). */
+export function ctcAuditTerms(t: CtcTerms): { annualFixedMinor: string; templateLineageId: string; overrideCodes: string[] } {
+  return { annualFixedMinor: t.annualFixedMinor, templateLineageId: t.templateLineageId, overrideCodes: t.overrides.map((o) => o.code) };
+}
+
 export interface PayProfileRow {
   id: string;
   employeeId: string;
@@ -45,6 +92,8 @@ export interface PayProfileRow {
   requestedBy: string;
   /** Deputation money terms approved with the profile (deputation profiles). */
   deputationTerms: DeputationMoneyTerms | null;
+  /** S8 G1: CTC terms approved with the profile (ctc_contract profiles). */
+  ctcTerms?: CtcTerms | null;
 }
 
 /** The subset of a deputation row the pay-profile rules need. */
@@ -212,6 +261,8 @@ export interface PayProfileFeed {
   consolidatedMonthlyMinor?: string;
   changedWithinMonth: boolean;
   deputation?: DeputationFeed;
+  /** S8 G1: the approved CTC terms (ctc_contract only; absent when the flag is off). */
+  ctc?: CtcTerms;
 }
 
 export function toDeputationFeed(d: DeputationTerms): DeputationFeed {
@@ -259,6 +310,7 @@ export function buildPayProfileFeed(
   if (row.payProfile === "consolidated_contract" && row.consolidatedMonthlyMinor != null) {
     feed.consolidatedMonthlyMinor = row.consolidatedMonthlyMinor.toString();
   }
+  if (row.payProfile === "ctc_contract" && row.ctcTerms && ctcProfileEnabled()) feed.ctc = row.ctcTerms;
   // The APPROVED money terms (the profile's own copy), over the live
   // deputation's identity / status / tenure.
   if (DEPUTATION_PROFILES.has(row.payProfile) && deputation) {
@@ -316,6 +368,8 @@ export function validateProfileRequest(input: {
   deputationIdGiven: boolean;
   consolidatedMonthlyMinor: bigint | null;
   lockedThrough: string | null;
+  /** S8 G1: the CTC terms of the request (ctc_contract only). Omitted == none. */
+  ctcTerms?: CtcTerms | null;
 }): string | null {
   const { payProfile, effectiveFrom, eligibleForPayroll, paymentRoute, deputation } = input;
   if (!/^\d{4}-\d{2}-01$/.test(effectiveFrom)) return "EFFECTIVE_FROM_NOT_MONTH_START";
@@ -338,6 +392,15 @@ export function validateProfileRequest(input: {
     if (input.consolidatedMonthlyMinor == null || input.consolidatedMonthlyMinor <= 0n) return "CONSOLIDATED_AMOUNT_REQUIRED";
   } else if (input.consolidatedMonthlyMinor != null) {
     return "CONSOLIDATED_AMOUNT_NOT_APPLICABLE";
+  }
+
+  // S8 G1: a ctc_contract profile carries approved CTC terms; no other profile may.
+  if (payProfile === "ctc_contract" && ctcProfileEnabled()) {
+    if (!input.ctcTerms) return "CTC_TERMS_REQUIRED";
+    const ctcError = ctcTermsError(input.ctcTerms);
+    if (ctcError) return ctcError;
+  } else if (input.ctcTerms) {
+    return payProfile === "ctc_contract" ? "CTC_PROFILE_DISABLED" : "CTC_TERMS_NOT_APPLICABLE";
   }
   return null;
 }

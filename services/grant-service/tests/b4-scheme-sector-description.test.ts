@@ -18,6 +18,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
 import { createSchemeBody, updateSchemeBody } from "../src/modules/scheme/validators.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
@@ -41,7 +42,7 @@ async function send(q: Queue, topic: string, payload: Record<string, unknown>) {
   while (Date.now() < deadline) {
     const rows = await scoped((tx) => tx.select().from(processed).where(eq(processed.messageId, messageId)));
     if (rows.length === 1) return;
-    await new Promise((r) => setTimeout(r, 50));
+    await drainAllQueues();
   }
   throw new Error(`message on ${topic} was never processed`);
 }

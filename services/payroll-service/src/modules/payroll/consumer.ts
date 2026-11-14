@@ -1,4 +1,5 @@
 import { minorToWireNumber } from "../../shared/money.js";
+import { recordRunCostLinesTx as recordRunProjectCostLinesTx } from "../project-costing/service.js";
 import { lockDaRates } from "../da-rates/rules.js";
 import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
@@ -20,9 +21,15 @@ import { servicePeriodInMonth, structureEarningsMinor } from "./service-period.j
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, runActionDenial, runAcceptsComputation, stuckRunHours, DomainError, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, unexcludedZeroBasicSlips, slipsCarryArrears, unrecordedFyMonthList, pensionAnnualGrossEstimateMinor, arrearsReviewOf, unacknowledgedArrears, invalidZeroBasicExclusions, arrearsReviewMessage, ARREARS_REVIEW_REQUIRED, INVALID_ZERO_BASIC_EXCLUSION, DEFAULT_ARREARS_REVIEW_THRESHOLD_BPS, s192MonthlyTds, tdsCapForMonthMinor, effectiveDeductionShareBps, presumptionBoundaryMonth, splitUnrecordedMonths, nextMonthOf, tdsReviewOf, unacknowledgedTds, unacknowledgedTdsCode, unacknowledgedTdsMessage, type TdsAcknowledgement, nonPositiveNetSlipsOf, unacknowledgedNonPositiveNet, nonPositiveNetMessage, NET_PAY_NON_POSITIVE, type NetPayAcknowledgement, DEFAULT_MAX_DEDUCTION_SHARE_BPS, type ArrearsAcknowledgement, zeroBasicSlipsOf, zeroBasicSlipsMessage, ZERO_BASIC_SLIPS, type ZeroBasicExclusion, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile, epfEmployerCharges, upsPoolShareMinor, epsEligibility, EPS_WAGE_CEILING_MINOR, EPS_ELIGIBILITY_UNRECORDED, type EpsMembershipFacts, type EpsUnrecordedPolicy } from "./domain.js";
-import { runApprovedPayload, runDisbursedPayload } from "./run-approved-payload.js";
+import { runApprovedPayload, runDisbursedPayload, istDateOf } from "./run-approved-payload.js";
+import { resolveLedgerMode } from "../ledger-export/mode.js";
+import { accrualJournalLines, settlementJournalLines, voucherNo as journalVoucherNo, payMonthEndDate, type JournalLine } from "../ledger-export/journal.js";
+import { storeJournalTx } from "../ledger-export/repo.js";
+import { tenantHasModule } from "../../shared/tenant-modules.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
+import { ctcProfileEnabled, prorateExpansion } from "../ctc/model.js";
+import { buildCtcPlanContext, ctcEarningsOverride, ctcPaidSnapshot } from "../ctc/runtime.js";
 import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -32,11 +39,16 @@ import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistence
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
 import { registerPtVersionConsumers } from "./pt-versions-consumer.js";
+import { registerStatutorySeamsConsumers } from "./statutory-seams-consumer.js";
 import { slabsInForce, ptYtdMinors } from "./pt-versions-repo.js";
+import { pfWageBasisFor, lwfDueForMonth, esiContinuesInPeriod, esiContributionPeriodStart, type PfWageBasis } from "./statutory-seams.js";
+import { resolveSeamFlags, pfWageBasisRowsByEmployee, lwfRulesByState, lwfAlreadyAppliedEmployees, esiCoveredMonthsByEmployee, insertLwfLedger } from "./statutory-seams-repo.js";
 import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type PtSlab } from "./pt-versions-domain.js";
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
+import { evaluateReceiptRule, describeReceiptRule } from "@civitasone/types";
+import { loadReceiptPolicyTx, loadStampedPolicyTx, currentPolicyVersionTx } from "../reimbursement-receipt-policy/repo.js";
 import { MAKER_CHECKER_MESSAGES, MAKER_CHECKER_VIOLATION, runMakerCheckerDenial } from "./run-maker-checker.js";
 import { DUPLICATE_RUN_NO, duplicateRunNoMessage, isRunNoUniqueViolation } from "./run-no.js";
 import { ptOfSlips, splitEmployeeDeductions } from "./run-deductions.js";
@@ -1031,6 +1043,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerFin03Consumers(queue);
   registerPtVersionConsumers(queue);
+  registerStatutorySeamsConsumers(queue);
   registerPayGroupConsumers(queue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
@@ -1172,6 +1185,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string; zeroBasicExclusions?: ZeroBasicExclusion[]; arrearsAcknowledgements?: ArrearsAcknowledgement[]; netPayAcknowledgements?: NetPayAcknowledgement[]; tdsAcknowledgements?: TdsAcknowledgement[] };
+    // The envelope is authoritative for the tenant; a payload naming another tenant is refused.
+    if (p.tenantId !== msg.tenantId) throw new NonRetryableError(`TENANT_MISMATCH: payroll run ${p.id} approval rejected`);
+    // M9: how this tenant's salary reaches the books (a settings read and, if no override, an admin-service lookup: outside the transaction).
+    const ledgerMode = await resolveLedgerMode(msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdForUpdateTx(tx, p.id);
@@ -1270,13 +1287,37 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         approvedBy: p.approvedBy,
         approvedAt: new Date(),
         updatedBy: msg.actorId,
+        // M9: the mode this run lives in from now on (disburse, NACH return, reconcile and bank confirmation read it).
+        ledgerMode,
       });
+      // S8 G7: project costing (MIS). Off unless the tenant enabled it. It is a
+      // reporting layer, so a failure here must never block the salary approval:
+      // it runs in a savepoint, a failure is audited and can be redone with
+      // POST /v1/payroll/project-costing/runs/:runId/generate.
+      try {
+        await (tx as unknown as { transaction: <T>(f: (sp: unknown) => Promise<T>) => Promise<T> })
+          .transaction((sp) => recordRunProjectCostLinesTx(sp as never, msg, { id: p.id, month: run.month }));
+      } catch (err) {
+        log.error({ err, runId: p.id }, "project costing failed for an approved run; salary approval is unaffected");
+        await audit(tx, msg, "project_cost_failed", "payroll_run", p.id, { error: (err as Error).message.slice(0, 300) });
+      }
       // INT-FIX: only emit the finance GL accrual trigger when the run actually
       // accrued something. A run approved with zero slips (gross == 0) has no
       // salary to post; emitting it produced an all-zero journal that finance
       // correctly rejected and dead-lettered. The approval + notification below
       // still proceed; there is simply nothing to accrue to the GL.
-      if (totalGross > 0n) {
+      if (ledgerMode === "export") {
+        // M9: a tenant without Finance. Nothing is sent to finance-service; the journal it would have posted is
+        // stored here for the CSV / Tally export, in this same transaction (one per run: a redelivery adds none).
+        if (totalGross > 0n) {
+          const lines = accrualJournalLines({
+            totalGrossMinor: totalGross, totalNetMinor: totalNet, totalEmployerContribMinor: totalEmployerContrib,
+            edliMinor: employerCharges.edliMinor, epfAdminMinor: employerCharges.epfAdminMinor, upsPoolMinor: employerCharges.upsPoolMinor,
+            employeeDeductionsMinor: deductions.parts,
+          });
+          await storeAndAuditJournal(tx, msg, { runId: p.id, month: run.month, stage: "accrual", postingDate: payMonthEndDate(run.month), lines });
+        }
+      } else if (totalGross > 0n) {
         await enqueue(tx, {
           topic: EVENTS.runApproved, eventType: EVENTS.runApproved,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -1336,6 +1377,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const disburseDenial = runActionDenial("disburse", run.status);
       if (disburseDenial) throw new NonRetryableError(`${disburseDenial.code}: ${disburseDenial.message}`);
       assertRunStatusTransition(run.status, "disbursed");
+      // M9: the run keeps the mode it was approved in, whatever the tenant's mode is now. A run approved before the
+      // column existed (NULL) was approved on the finance path and is disbursed on it.
+      const ledgerMode = run.ledgerMode === "export" ? "export" : "finance";
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
       // listSlipsByRunTx (not listSlipsByRun/scopedRead) — same nested-
@@ -1364,6 +1408,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         grossMinor: run.totalGrossMinor, netMinor: slipNet, ...disbursedEmployeeStatutory,
         ptMinor: ptOfSlips(slips.filter((sl) => sl.status !== "excluded")),
       });
+      if (ledgerMode === "export") {
+        // M9: no finance-service to settle the salary or instruct the bank. The settlement journal is stored for the export
+        // and the bank file / NACH return / confirmation file mark the slips paid (ledger-export/consumer.ts, nach-return).
+        const lines = settlementJournalLines(slipNet);
+        if (lines.length > 0) {
+          await storeAndAuditJournal(tx, msg, { runId: p.id, month: run.month, stage: "disbursement", postingDate: istDateOf(disbursedAt), lines });
+        }
+      } else {
       await enqueue(tx, {
         topic: EVENTS.runDisbursed, eventType: EVENTS.runDisbursed,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -1385,6 +1437,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           pfmsTxnId: `PAYROLL-${p.id.slice(0, 8)}`,
         },
       });
+      }
       await audit(tx, msg, "disburse", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
@@ -1615,23 +1668,46 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; category: string; amountMinor: number;
       billDate?: string | null; billRef?: string | null; period: string;
-      attachmentKeys?: string[];
+      attachmentKeys?: string[]; selfDeclaration?: boolean; receiptPolicyVersion?: number; selfDeclaredOnBehalf?: boolean;
     };
     await db.transaction(async (tx) => {
+      // The envelope is authoritative for the tenant; a payload naming another tenant is refused.
+      if (p.tenantId !== msg.tenantId) throw new NonRetryableError(`TENANT_MISMATCH: reimbursement ${p.id} rejected`);
       if (!(await markProcessed(tx, msg.messageId))) return;
       const keys = p.attachmentKeys ?? [];
+      // Receipt policy: an accepted claim is processed under the rule version the API stamped when it
+      // accepted it (a later policy change must not dead-letter it). A stamp naming a version that does
+      // not exist, or that was superseded long ago, is refused. An unstamped command (published without
+      // the route) is checked against the policy as it stands now.
+      let policy: Awaited<ReturnType<typeof loadReceiptPolicyTx>>;
+      let policyVersion: number;
+      if (typeof p.receiptPolicyVersion === "number") {
+        const stamped = await loadStampedPolicyTx(tx as never, msg.tenantId, p.receiptPolicyVersion);
+        if (!stamped.ok) throw new NonRetryableError(`RECEIPT_POLICY_VERSION_${stamped.reason.toUpperCase()}: reimbursement ${p.id} rejected`);
+        policy = stamped.policy;
+        policyVersion = stamped.version;
+      } else {
+        policy = await loadReceiptPolicyTx(tx as never, msg.tenantId);
+        policyVersion = await currentPolicyVersionTx(tx as never, msg.tenantId);
+      }
       // Re-asserted here because the command can be published without the route
       // (GAP-PAYROLL-REIMBURSEMENTS-03): a new claim in a receipt-required
       // category needs a receipt, and every key must be one this tenant issued
       // to the submitter. Dead-lettered, nothing inserted.
-      const violation = receiptRuleViolation(p.tenantId, msg.actorId, p.category, keys);
+      const violation = receiptRuleViolation(msg.tenantId, msg.actorId, p.category, keys, { policy, amountMinor: p.amountMinor, selfDeclared: p.selfDeclaration === true });
       if (violation) throw new NonRetryableError(`${violation}: reimbursement ${p.id} rejected`);
+      const decision = evaluateReceiptRule(policy, p.category, p.amountMinor, keys.length, p.selfDeclaration === true);
+      const basis = decision.ok ? decision.basis : "not_required";
+      const declared = basis === "self_declaration";
       await tx.execute(sql`
         INSERT INTO payroll.payroll_reimbursements
-          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by, attachment_keys)
-        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.category}, ${p.amountMinor},
+          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by, attachment_keys,
+           receipt_basis, self_declared_by, self_declared_at, receipt_policy_version, self_declared_on_behalf)
+        VALUES (${p.id}::uuid, ${msg.tenantId}::uuid, ${p.employeeId}::uuid, ${p.category}, ${p.amountMinor},
           ${p.billDate ?? null}::date, ${p.billRef ?? null}, ${p.period}, ${msg.actorId}::uuid,
-          ${sql`ARRAY[${keys.length ? sql.join(keys.map((k) => sql`${k}`), sql`, `) : sql``}]::text[]`})
+          ${sql`ARRAY[${keys.length ? sql.join(keys.map((k) => sql`${k}`), sql`, `) : sql``}]::text[]`},
+          ${basis}, ${declared ? msg.actorId : null}::uuid, ${declared ? sql`NOW()` : null},
+          ${policyVersion}, ${declared && p.selfDeclaredOnBehalf === true})
         ON CONFLICT (id) DO NOTHING
       `);
       await enqueue(tx, {
@@ -1639,7 +1715,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { id: p.id, employeeId: p.employeeId, amountMinor: p.amountMinor },
       });
-      await audit(tx, msg, "create", "payroll_reimbursement", p.id);
+      await audit(tx, msg, "create", "payroll_reimbursement", p.id, {
+        receiptBasis: basis,
+        receiptPolicyVersion: policyVersion,
+        ...(declared ? { selfDeclaredBy: msg.actorId, selfDeclaredFor: p.employeeId, selfDeclaredOnBehalf: p.selfDeclaredOnBehalf === true } : {}),
+        receiptRule: describeReceiptRule(decision.rule),
+      });
     });
   });
 
@@ -2127,7 +2208,16 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       deductionCapApplies?: boolean;
       payrollGoLiveDate?: string | null;
       epsUnrecordedPolicy?: EpsUnrecordedPolicy;
+      /** M9: null clears the override (back to derived from Finance), "finance" / "export" forces the mode. */
+      ledgerModeOverride?: "finance" | "export" | null;
+      /** Stamped by the route: the caller holds super_admin. */
+      ledgerModeSuperAdmin?: boolean;
     };
+    // M9: forcing export on a tenant that HAS Finance stops its salary reaching the GL: super_admin only (the route
+    // refuses it with a 403; a command that skips the route is dropped here). Outside the transaction: it may call admin-service.
+    if (p.ledgerModeOverride === "export" && !p.ledgerModeSuperAdmin && (await tenantHasModule(p.tenantId, "finance"))) {
+      throw new NonRetryableError("LEDGER_EXPORT_OVERRIDE_REQUIRES_SUPER_ADMIN: forcing export-only mode on a tenant that has Finance needs a super admin");
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // FR 53 percentages are optional on the command: an omitted one keeps
@@ -2210,6 +2300,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       }
       if (p.payrollGoLiveDate !== undefined) {
         await tx.execute(sql`UPDATE payroll.payroll_settings SET payroll_go_live_date = ${p.payrollGoLiveDate}::date WHERE tenant_id = ${p.tenantId}::uuid`);
+      }
+      // M9: the ledger-mode override (null clears it). Audited as its own event with before / after so the switch is traceable.
+      if (p.ledgerModeOverride !== undefined) {
+        const before = (await tx.execute(sql`SELECT ledger_mode_override FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid`)) as unknown as Array<{ ledger_mode_override: string | null }>;
+        await tx.execute(sql`UPDATE payroll.payroll_settings SET ledger_mode_override = ${p.ledgerModeOverride} WHERE tenant_id = ${p.tenantId}::uuid`);
+        await audit(tx, msg, "ledger_mode_changed", "payroll_settings", p.tenantId, { before: before[0]?.ledger_mode_override ?? null, after: p.ledgerModeOverride });
       }
       await enqueue(tx, {
         topic: EVENTS.settingsUpdated, eventType: EVENTS.settingsUpdated,
@@ -2455,6 +2551,24 @@ async function processPayrollRun(
     const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes, ptAsOf);
     // Article 276(2): PT already deducted this FY, per employee, for the annual cap.
     const ptYtdByEmployee = await ptYtdMinors(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
+    // S8 statutory seams (opt-in, statutory-seams.ts). Flags default OFF and the PF-basis table is empty
+    // unless an administrator sets a per-employee option, so a tenant that uses none of it computes as before.
+    const s8Flags = await resolveSeamFlags(tx as unknown as typeof db, p.tenantId);
+    const s8PfBasisRows = await pfWageBasisRowsByEmployee(tx as unknown as typeof db, p.tenantId, runEmployeeIds);
+    const s8LwfRules = s8Flags.lwfDeductionEnabled && (p.runType ?? "regular") === "regular"
+      ? await lwfRulesByState(tx as unknown as typeof db, p.tenantId, distinctStateCodes, p.month) : null;
+    // LWF is a regular-run deduction, once per employee per period: other run types and employees with a live
+    // ledger row for the month from another run get none. Employees it could not be applied to are warned about.
+    const s8LwfOn = s8Flags.lwfDeductionEnabled && (p.runType ?? "regular") === "regular";
+    const s8LwfApplied = s8LwfOn
+      ? await lwfAlreadyAppliedEmployees(tx as unknown as typeof db, p.tenantId, p.month, runEmployeeIds, p.id) : new Set<string>();
+    const s8LwfUnknown: string[] = [];
+    // S8 G1: the locked CTC template versions in force for the month, resolved once per lineage. Flag off (default) => undefined.
+    const s8CtcContext = ctcProfileEnabled()
+      ? await buildCtcPlanContext(tx as unknown as Parameters<typeof buildCtcPlanContext>[0], p.tenantId, runEmployees, p.month, statutoryConfig)
+      : undefined;
+    const s8EsiCovered = s8Flags.esiContributionPeriodEnabled
+      ? await esiCoveredMonthsByEmployee(tx as unknown as typeof db, p.tenantId, runEmployeeIds, esiContributionPeriodStart(p.month), p.month) : null;
 
     // Gender-specific PT: employees whose gender HRMS does not hold (or holds as a value no slab
     // targets) while the slabs in force ARE gender-specific are paid on the 'all' slabs only; they
@@ -2498,7 +2612,7 @@ async function processPayrollRun(
         }
         continue;
       }
-      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules);
+      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules, s8CtcContext);
       if (!planned.ok) throw new DomainError(planned.code, planned.message);
       const plan = planned.plan;
       const empDaRateBps = plan.daRateBps;
@@ -2601,7 +2715,18 @@ async function processPayrollRun(
       // PAY-PROFILES: consolidated pay is instead PRO-RATED for paid days (no
       // LOP line), so PF/ESI fall on the wages actually earned.
       const prorate = plan.lopMode === "prorate";
-      const basicMinor = prorate
+      // S8 G1: a CTC employee is paid line by line, prorated by calendar days (modules/ctc); undefined for everyone else.
+      const ctcPaid = plan.ctc
+        ? prorateExpansion(plan.ctc.expansion, { lopDays, notInServiceDays: notInServiceLopDays, daysInMonth }, statutoryConfig, { pfApplicable: plan.ctc.pfApplicable, esiEligible: plan.ctc.esiEligible })
+        : null;
+      // S8 G1: the CTC terms' EPF wage policy is authoritative for a CTC employee. A #2487 per-employee seam row that says
+      // otherwise would book a PF the solver did not carve out of CTC, so the employee is refused by name instead.
+      if (plan.ctc && (s8PfBasisRows.get(emp.id)?.length ?? 0) > 0 && pfWageBasisFor(s8PfBasisRows.get(emp.id), p.month) !== plan.ctc.expansion.epfWagePolicy) {
+        throw new DomainError("CTC_PF_POLICY_MISMATCH", `employee ${emp.employeeNo}: the CTC terms say EPF on '${plan.ctc.expansion.epfWagePolicy}' wages but the per-employee PF wage basis for ${p.month} says '${pfWageBasisFor(s8PfBasisRows.get(emp.id), p.month)}'; align them (the CTC terms are authoritative) before running payroll`);
+      }
+      const basicMinor = ctcPaid
+        ? ctcPaid.basicMinor
+        : prorate
         ? roundRupee(proratedPayMinor(scaleBasicMinor, lopDays, daysInMonth))
         : scaleBasicMinor;
       // PAY-PROFILES (Option A): LOP also reduces the deputation allowance
@@ -2711,7 +2836,7 @@ async function processPayrollRun(
             const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0).getDate();
             // UAT L2-N5: LOP falls on HRA as on Basic + DA (consolidated pay: no HRA).
             const hraM = plan.slipProfile.kind === "consolidated_contract" ? 0n : govtHraMinor(scaleBasicMinor, cityClass, empDaRateBps, plan.hraFloorMinor);
-            unrecordedLopMinor += lopDeductionMinor(scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
+            unrecordedLopMinor += lopDeductionMinor(plan.ctc ? plan.ctc.expansion.grossMinor : scaleBasicMinor + daMinor + hraM, Math.min(days, dim), BigInt(dim));
           }
         }
       }
@@ -2748,7 +2873,13 @@ async function processPayrollRun(
         cityClass,
         payProfile: plan.slipProfile,
         hraFloorMinor: plan.hraFloorMinor,
-        profileSnapshot: plan.snapshot,
+        profileSnapshot: ctcPaid && plan.ctc
+          ? { ...plan.snapshot, ...ctcPaidSnapshot(plan.ctc, ctcPaid, { lopDays, notInServiceDays: notInServiceLopDays, daysInMonth: Number(daysInMonth) }) }
+          : plan.snapshot,
+        ...(ctcPaid && plan.ctc ? {
+          earningsOverride: ctcEarningsOverride(ctcPaid),
+          ctcSlip: { templateId: plan.ctc.template.structureId, templateVersion: plan.ctc.template.templateVersion, gratuityProvisionMinor: ctcPaid.gratuityMinor },
+        } : {}),
         // T-STAT M-PT-BASIS (F08): the slab is looked up on the monthly salary
         // (gross earnings less LOP, computed by computeSlip), not Basic + DA.
         // FR 53: for a suspended employee that is what is actually paid.
@@ -2783,6 +2914,9 @@ async function processPayrollRun(
           : prevSalaryMinor > 0n ? { declaration: { prevEmployerSalaryMinor: prevSalaryMinor } } : {}),
         rawComponents: plan.applyRunStructure ? rawComponents : [],
         components: adHoc,
+        ...s8SeamParams(emp, p.month, s8PfBasisRows, s8LwfRules, s8EsiCovered, s8LwfApplied, s8LwfUnknown),
+        // S8 G1: "PF on actual basic" chosen on the CTC terms (owner decision 2) overrides the seam default.
+        ...(plan.ctc?.expansion.epfWagePolicy === "actual" ? { pfWageBasis: "actual" as const } : {}),
       });
 
       // P3: record loan repayments for the EMI that was ACTUALLY withheld after
@@ -3074,6 +3208,14 @@ async function processPayrollRun(
         employees: retroSkipped.slice(0, 50),
       });
     }
+    if (s8LwfUnknown.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "LWF_RULE_UNKNOWN",
+        message: `${s8LwfUnknown.length} employee(s) have no state of employment in HRMS, or their state has no Labour Welfare Fund rule, while LWF deduction is on; no LWF was deducted for them`,
+        count: s8LwfUnknown.length,
+        employees: s8LwfUnknown.slice(0, 50),
+      });
+    }
     if (ptStateUnknownEmployees.length > 0) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "PT_STATE_UNKNOWN",
@@ -3308,6 +3450,30 @@ async function processPensionRun(
   });
 }
 
+/**
+ * S8 seams: the optional computeAndInsertSlip params for one run employee. Returns {} (nothing added to the
+ * call) unless the employee has a PF-basis row, or the matching tenant flag is on and the seam applies.
+ */
+function s8SeamParams(
+  emp: { id: string; employeeNo?: string | null; stateCode?: string | null },
+  month: string,
+  pfBasisRows: Awaited<ReturnType<typeof pfWageBasisRowsByEmployee>>,
+  lwfRules: Awaited<ReturnType<typeof lwfRulesByState>> | null,
+  esiCovered: Awaited<ReturnType<typeof esiCoveredMonthsByEmployee>> | null,
+  lwfApplied: ReadonlySet<string>,
+  lwfUnknown: string[],
+) {
+  const out: { pfWageBasis?: PfWageBasis; lwf?: { employeeMinor: bigint; employerMinor: bigint; stateCode: string; frequency: string }; esiContinuation?: boolean } = {};
+  if (pfWageBasisFor(pfBasisRows.get(emp.id), month) === "actual") out.pfWageBasis = "actual";
+  const state = emp.stateCode?.trim().toUpperCase();
+  const rule = lwfRules && state ? lwfRules.get(state) : undefined;
+  if (lwfRules && (!state || !rule)) lwfUnknown.push(emp.employeeNo ?? emp.id);
+  const due = lwfApplied.has(emp.id) ? null : lwfDueForMonth(rule, month);
+  if (due && rule && state) out.lwf = { ...due, stateCode: state, frequency: rule.frequency };
+  if (esiCovered && esiContinuesInPeriod(month, esiCovered.get(emp.id))) out.esiContinuation = true;
+  return out;
+}
+
 export async function computeAndInsertSlip(
   tx: Parameters<typeof repo.insertSlip>[0],
   msg: { actorId: string },
@@ -3348,6 +3514,14 @@ export async function computeAndInsertSlip(
     /** Review SF1: EPF membership facts + joining date for EPS eligibility; omitted = EPS-eligible (legacy). */
     epfFacts?: EpsMembershipFacts;
     dateOfJoining?: string;
+    /** S8 SEAM 1: omitted == "ceiling" (today). */
+    pfWageBasis?: PfWageBasis;
+    /** S8 SEAM 2: LWF due this month for this employee (flag on); omitted == none. */
+    lwf?: { employeeMinor: bigint; employerMinor: bigint; stateCode: string; frequency: string };
+    /** S8 SEAM 3: covered earlier in this ESI contribution period (flag on); omitted == false. */
+    esiContinuation?: boolean;
+    /** S8 G1: the CTC template used and the employer-side figures of a ctc_contract slip; omitted for every other profile. */
+    ctcSlip?: { templateId: string; templateVersion: number; gratuityProvisionMinor: bigint };
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -3393,6 +3567,9 @@ export async function computeAndInsertSlip(
     ...(params.earningsOverride ? { earningsOverride: params.earningsOverride } : {}),
     ...(params.payProfile ? { payProfile: params.payProfile } : {}),
     ...(params.hraFloorMinor != null ? { hraFloorMinor: params.hraFloorMinor } : {}),
+    ...(params.pfWageBasis === "actual" ? { pfWageBasis: "actual" as const } : {}),
+    ...(params.lwf ? { lwf: { employeeMinor: params.lwf.employeeMinor, employerMinor: params.lwf.employerMinor } } : {}),
+    ...(params.esiContinuation ? { esiContinuation: true } : {}),
   });
   const slipId = randomUUID();
   const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
@@ -3403,7 +3580,7 @@ export async function computeAndInsertSlip(
   // min(Basic + DA, PF wage ceiling), the same figure computeSlip applied the
   // 12% to (it used to store the uncapped Basic + DA). With it, the employer-
   // only EDLI / admin charges (D5). Only meaningful when PF applied.
-  const epfCharges = epfEmployerCharges(pensionBaseMinor, statutoryConfig);
+  const epfCharges = epfEmployerCharges(pensionBaseMinor, statutoryConfig, params.pfWageBasis === "actual" ? "actual" : "ceiling");
   const pfWageMinor = pfApplied ? epfCharges.pfWageMinor : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
@@ -3428,10 +3605,25 @@ export async function computeAndInsertSlip(
     tdsShortfallFinal: result.tdsShortfallMinor > 0n && params.tdsFlags?.finalMonth === true,
     recoveryDeferredMinor: result.recoveryCarryForwardMinor,
     payProfile: params.payProfile?.kind ?? "govt_scale",
-    profileSnapshot: params.profileSnapshot ?? null,
+    profileSnapshot: params.ctcSlip && params.profileSnapshot
+      ? { ...params.profileSnapshot, ctcBooked: { employerPfMinor: result.pfEmployerMinor.toString(), employerEsiMinor: result.esiEmployerMinor.toString() } }
+      : params.profileSnapshot ?? null,
     pfWageMinor,
+    ...(params.ctcSlip ? {
+      ctcTemplateId: params.ctcSlip.templateId, ctcTemplateVersion: params.ctcSlip.templateVersion,
+      // the ESI the engine actually booked (whole gross incl. one-offs, esiContinuation), never the solver's prediction
+      employerEsiMinor: result.esiEmployerMinor, gratuityProvisionMinor: params.ctcSlip.gratuityProvisionMinor,
+    } : {}),
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
+  // S8 SEAM 2: the LWF amounts applied (employee deduction + employer share) for the liability register.
+  if (params.lwf && result.lwfEmployeeMinor != null && result.lwfEmployerMinor != null) {
+    await insertLwfLedger(tx as unknown as typeof db, {
+      tenantId: params.tenantId, slipId, runId: params.runId, employeeId: params.employeeId,
+      stateCode: params.lwf.stateCode, period: params.month, frequency: params.lwf.frequency,
+      employeeMinor: result.lwfEmployeeMinor, employerMinor: result.lwfEmployerMinor,
+    });
+  }
   if (result.gpfMinor > 0n) {
     await statutoryRepo.insertGpf(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
@@ -3545,6 +3737,23 @@ async function recordDuplicateRunNo(
 // Exported (round2 concurrency fix) so commands.ts's createRun can record
 // the same "create" audit event synchronously, from its own transaction,
 // for a regular run — see that function's doc comment.
+/** M9: store one stage of the run's export journal and audit it (the audit row is only written when a journal was actually added). */
+async function storeAndAuditJournal(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  j: { runId: string; month: string; stage: "accrual" | "disbursement"; postingDate: string; lines: JournalLine[] },
+): Promise<void> {
+  const voucherNo = journalVoucherNo(j.stage, { id: j.runId, month: j.month });
+  const stored = await storeJournalTx(tx as never, {
+    tenantId: msg.tenantId, actorId: msg.actorId, runId: j.runId, stage: j.stage, voucherNo, postingDate: j.postingDate, month: j.month, lines: j.lines,
+  });
+  if (!stored) return;
+  await audit(tx, msg, "journal_exported", "payroll_run", j.runId, {
+    stage: j.stage, voucherNo, postingDate: j.postingDate, lineCount: j.lines.length,
+    totalDebitMinor: j.lines.reduce((a, l) => a + l.debitMinor, 0n).toString(),
+  });
+}
+
 export async function audit(
   tx: Parameters<typeof enqueue>[0],
   msg: { tenantId: string; actorId: string; correlationId: string },

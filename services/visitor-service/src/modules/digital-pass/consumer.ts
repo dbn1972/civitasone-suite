@@ -42,7 +42,7 @@ import { digitalPasses } from "./schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { generatePass, revokePass, replacePass, computeValidityWindow, type PassType } from "./domain.js";
 import { addToRevokedSet } from "./revocation-store.js";
-import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
+import { getPolicyNumber, getTenantTimeZone, MS_PER_DAY } from "../config-registry/policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -97,7 +97,7 @@ export function registerDigitalPassConsumers(queue: Queue): void {
         p.passType,
         new Date(p.validFrom),
         new Date(p.validUntil),
-        { multiDayMaxMs, recurringMaxMs },
+        { multiDayMaxMs, recurringMaxMs, timeZone: await getTenantTimeZone(tx, msg.tenantId) },
       );
 
       // Generate pass: pass number + signed QR JWT

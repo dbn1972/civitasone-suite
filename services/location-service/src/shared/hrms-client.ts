@@ -1,3 +1,6 @@
+import { LICENCE_MODULE } from "@civitasone/module-licence";
+import { licence } from "./licence.js";
+
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 
 export type LocationEmployeeCount =
@@ -14,6 +17,11 @@ export type LocationEmployeeCount =
  * can refuse to archive rather than orphan employees that it could not see.
  */
 export async function countActiveEmployeesAt(tenantId: string, locationId: string): Promise<LocationEmployeeCount> {
+  // M5: a tenant that did not buy the HR module has no employee records, so there is nothing to orphan: count 0.
+  // If the licence merely cannot be verified, fail closed like every other failure here.
+  const gate = await licence.check(tenantId, LICENCE_MODULE.hrms, "http", "hrms location employees");
+  if (gate.outcome === "deny") return { ok: true, total: 0 };
+  if (!gate.allowed) return { ok: false, reason: "unavailable" };
   try {
     const res = await fetch(
       `${HRMS_URL}/v1/hrms/locations/${encodeURIComponent(locationId)}/employees?limit=1&status=active`,

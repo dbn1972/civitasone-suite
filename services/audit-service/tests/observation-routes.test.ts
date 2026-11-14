@@ -24,6 +24,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { auditObservations } from "../src/modules/observation/schema.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -347,10 +348,10 @@ describe("GAP-AUDIT-OBSERVATIONS-07 — POST writes exactly one audit event per 
         riskLevel: "medium", amountInvolvedMinor: "5000",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 700));
+    await drainOrFail(q);
     // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
     await relayOnce(dbInst as never, q, 100, "audit-service");
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");
@@ -468,7 +469,7 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
         finding: "Reply audit event test", amountInvolvedMinor: "0",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await relayOnce(dbInst2 as never, q, 100, "audit-service");
 
     // Submit a valid reply (status "open" → "replied")
@@ -481,10 +482,10 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
         replyText: "Corrective action taken", respondedByRef: "dept:it:head",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await relayOnce(dbInst2 as never, q, 100, "audit-service");
     // Let the relayed audit event reach the audit consumer before the queue stops.
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");
@@ -521,7 +522,7 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
         finding: "Transition enforcement test", amountInvolvedMinor: "0",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Force status to compliance_pending (cannot receive a reply)
     const { eq: eqFn } = await import("drizzle-orm");
@@ -541,7 +542,7 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
         replyText: "Should not succeed", respondedByRef: "dept:hr:head",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWT2(OD07_TENANT, () =>

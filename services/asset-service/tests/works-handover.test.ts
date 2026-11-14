@@ -14,6 +14,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerWorksHandoverConsumers } from "../src/modules/register/handover-consumer.js";
 import { uuidV5 } from "../src/shared/ids.js";
 import { CONSUMED_EVENTS, EVENTS } from "../src/topics.js";
+import { drainAllQueues } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000009";
 const TENANT = "11111111-aaaa-4000-8000-000000000009";
@@ -74,7 +75,7 @@ describe("asset-service — works.asset.handover consumer", () => {
     await q.start();
 
     await q.publish(CONSUMED_EVENTS.worksAssetHandover, handoverEnvelope());
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID)));
@@ -99,7 +100,7 @@ describe("asset-service — works.asset.handover consumer", () => {
     await q.start();
 
     await q.publish(CONSUMED_EVENTS.worksAssetHandover, handoverEnvelope());
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainAllQueues();
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_ID)));
