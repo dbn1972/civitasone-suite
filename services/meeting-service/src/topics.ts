@@ -258,12 +258,6 @@ export const EVENTS = {
   agendaItemSubmitted:        "meeting.agenda.item_submitted",
   /** payload: { meetingId } */
   agendaLocked:               "meeting.agenda.locked",
-  /** payload: { meetingId, requestId } */
-  agendaLateRequested:        "meeting.agenda.late_requested",
-  /** payload: { meetingId, requestId, agendaItemId } */
-  agendaLateRequestApproved:  "meeting.agenda.late_request_approved",
-  /** payload: { meetingId, requestId } */
-  agendaLateRequestRejected:  "meeting.agenda.late_request_rejected",
   /** payload: { meetingId, agendaBookId, storageKey } */
   agendaBookGenerated:        "meeting.agenda_book.generated",
   /** payload: { meetingId, agendaBookId, recipientIds } */

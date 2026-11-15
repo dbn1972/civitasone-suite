@@ -587,6 +587,17 @@ interface LateRequestPayload extends AgendaSubmitPayload {
 }
 
 /** In-app notification for one recipient; entity ids only (notification-service resolves delivery). */
+/**
+ * Notification template keys for the late-request flow. These are delivered ONLY through
+ * `notification.send` (in-app) and recorded in the audit trail; they are deliberately NOT
+ * domain events on the bus -- nothing consumes them, so publishing them was a void producer.
+ */
+const LATE_REQUEST_NOTICE = {
+  agendaLateRequested: "meeting.agenda.late_requested",
+  agendaLateRequestApproved: "meeting.agenda.late_request_approved",
+  agendaLateRequestRejected: "meeting.agenda.late_request_rejected",
+} as const;
+
 async function notifyUser(
   tx: DrizzleTx, msg: CommandEnvelope, eventType: string, recipientId: string, variables: Record<string, string>,
 ): Promise<void> {
@@ -630,19 +641,11 @@ async function handleLateRequest(msg: CommandEnvelope): Promise<void> {
       createdBy: msg.actorId,
       updatedBy: msg.actorId,
     }).onConflictDoNothing({ target: agendaLateRequests.id });
-    await enqueue(tx, {
-      topic: EVENTS.agendaLateRequested,
-      eventType: EVENTS.agendaLateRequested,
-      tenantId: msg.tenantId,
-      actorId: msg.actorId,
-      correlationId: msg.correlationId,
-      payload: { meetingId: p.meetingId, requestId: p.requestId },
-    });
     await audit(tx, msg, "late_request", "agenda_late_request", p.requestId, "success", { meetingId: p.meetingId, reason: p.reason });
     const chair = await tx.select({ chairpersonId: meetings.chairpersonId }).from(meetings)
       .where(and(eq(meetings.id, p.meetingId), eq(meetings.tenantId, msg.tenantId))).limit(1);
     if (chair[0]?.chairpersonId) {
-      await notifyUser(tx, msg, EVENTS.agendaLateRequested, chair[0].chairpersonId, { meetingId: p.meetingId, requestId: p.requestId });
+      await notifyUser(tx, msg, LATE_REQUEST_NOTICE.agendaLateRequested, chair[0].chairpersonId, { meetingId: p.meetingId, requestId: p.requestId });
     }
   });
 }
@@ -737,16 +740,11 @@ async function handleLateRequestApprove(msg: CommandEnvelope): Promise<void> {
       actorId: msg.actorId, correlationId: msg.correlationId,
       payload: { meetingId: req.meetingId, agendaItemId, outcomeType: req.outcomeType },
     });
-    await enqueue(tx, {
-      topic: EVENTS.agendaLateRequestApproved, eventType: EVENTS.agendaLateRequestApproved, tenantId: msg.tenantId,
-      actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { meetingId: req.meetingId, requestId: req.id, agendaItemId },
-    });
     await audit(tx, msg, "late_request_approved", "agenda_late_request", req.id, "success",
       { meetingId: req.meetingId, agendaItemId, requestedBy: req.requestedBy, requestReason: req.reason, ...(p.note ? { note: p.note } : {}) });
     await audit(tx, msg, "submit_late_approved", "agenda_item", agendaItemId, "success",
       { approvedBy: msg.actorId, reason: req.reason, requestId: req.id });
-    await notifyUser(tx, msg, EVENTS.agendaLateRequestApproved, req.requestedBy, { meetingId: req.meetingId, requestId: req.id, agendaItemId });
+    await notifyUser(tx, msg, LATE_REQUEST_NOTICE.agendaLateRequestApproved, req.requestedBy, { meetingId: req.meetingId, requestId: req.id, agendaItemId });
   });
   await invalidateAgenda(msg.tenantId, p.meetingId);
 }
@@ -763,14 +761,9 @@ async function handleLateRequestReject(msg: CommandEnvelope): Promise<void> {
       updatedBy: msg.actorId, updatedAt: new Date(),
     }).where(and(eq(agendaLateRequests.id, req.id), eq(agendaLateRequests.status, "pending"))).returning({ id: agendaLateRequests.id });
     if (claimed.length !== 1) return;
-    await enqueue(tx, {
-      topic: EVENTS.agendaLateRequestRejected, eventType: EVENTS.agendaLateRequestRejected, tenantId: msg.tenantId,
-      actorId: msg.actorId, correlationId: msg.correlationId,
-      payload: { meetingId: req.meetingId, requestId: req.id },
-    });
     await audit(tx, msg, "late_request_rejected", "agenda_late_request", req.id, "success",
       { meetingId: req.meetingId, requestedBy: req.requestedBy, reason: p.reason });
-    await notifyUser(tx, msg, EVENTS.agendaLateRequestRejected, req.requestedBy, { meetingId: req.meetingId, requestId: req.id });
+    await notifyUser(tx, msg, LATE_REQUEST_NOTICE.agendaLateRequestRejected, req.requestedBy, { meetingId: req.meetingId, requestId: req.id });
   });
 }
 

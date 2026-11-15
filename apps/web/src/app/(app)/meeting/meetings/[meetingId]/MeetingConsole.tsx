@@ -743,7 +743,7 @@ export function MeetingConsole({
             ) : (
               <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", fontSize: 13 }}>
                 {lateRequests.map((r) => (
-                  <li key={r.id} data-testid={`late-request-${r.id}`} style={{ padding: "8px 0", borderTop: "1px solid var(--line, #e5e7eb)" }}>
+                  <li key={r.id} data-testid={`late-request-${r.id}`} style={{ padding: "8px 0", borderTop: "1px solid var(--line)" }}>
                     <div><strong>{r.title}</strong> · <span>{tl(`lateReqStatus.${r.status}`)}</span></div>
                     <div style={{ color: "var(--ink2)" }}>{tl("lateReqReason", { reason: r.reason })}</div>
                     {r.decisionReason && <div style={{ color: "var(--ink2)" }}>{tl("lateReqDecisionReason", { reason: r.decisionReason })}</div>}
