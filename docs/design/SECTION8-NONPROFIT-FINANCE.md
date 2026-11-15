@@ -1,217 +1,191 @@
 # Section 8 (non-profit) segment — nonprofit finance layer: paper design
 
-**Status:** DESIGN for review. No code. Companion to `~/orch-logs/segments/section8-design.md` (HR/payroll/leave/costing), which explicitly defers this layer ("FCRA and fund accounting, 12A/80G, nonprofit statements, grant utilisation … This document does not cover those"). This document is that deferred separate design.
+**Status:** DESIGN for review — **revision 2**, after a 3-lens reviewer panel (architecture/isolation, domain/compliance, database). No code. Companion to `~/orch-logs/segments/section8-design.md` (HR/payroll/leave/costing), which explicitly defers this layer. This document is that deferred separate design. The panel's dispositions are logged in §14.
 
-**Source:** repo `~/CivitasOne/civitasone-suite` at `origin/main` after #2468 (`b0dce081b`), read-only; the tenant-profile design `docs/design/TENANT-PROFILE-SWITCH.md` (branch `origin/design/tenant-profile-switch`, PR #2467) and its merged S0–S3 code (#2468); and an as-is capability map run 15 Nov 2026. Line numbers are from `origin/main` and will drift — re-grep before coding.
+**Source:** repo `~/CivitasOne/civitasone-suite` at `origin/main` (`730f7558d`), read-only; the tenant-profile design `docs/design/TENANT-PROFILE-SWITCH.md` (PR #2467) and its merged S0–S3 code (#2468); an as-is map and a reviewer panel, 15 Nov 2026. Line numbers are from `origin/main` and will drift — re-grep before coding.
 
-**Constraint:** parallel work, OFF the UAT server until the 18–20 Nov screen sign-off. Everything ships behind flags defaulting **false**, so a merge after sign-off changes nothing until a flag is turned on per tenant.
+**Constraint:** parallel work, OFF the UAT server until the 18–20 Nov screen sign-off. Everything ships behind flags defaulting **false**; a merge after sign-off changes nothing until a flag is turned on per tenant.
 
-**VERIFY** marks a statutory or legal figure/rule not confirmed from an authoritative source. Figures quoted from the repo are what the code is configured with, not a statement that they are correct today. No sentence here is a statement of current law; every threshold is configuration with a named reviewer.
+**VERIFY** marks a statutory/legal figure or rule not confirmed from an authoritative source (panel WebSearch did not return authoritative sources; these come from knowledge). No sentence here states current law; every threshold is configuration with an effective date and a named reviewer, confirmed by a CA/counsel before build.
 
 ---
 
 ## Cross-cutting contract (read first): configurable rules & tenant isolation
 
-This is the non-negotiable frame for everything below. Owner instruction, 15 Nov: *reviewers always; no violation of other tenant types; establish configurable rules.*
+Owner instruction, 15 Nov: *reviewers always; no violation of other tenant types; establish configurable rules.* This frame is non-negotiable.
 
-1. **Data-keyed, never edition-forked.** No business-logic branch reads the `edition` or tenant-type string to decide behaviour. Behaviour is decided by **stored configuration**: the profile catalogue (`packages/tenant-profile`), a fund master, `gl.finance_settings.coa_template` / `accounting_basis` / `budget_control`, the statutory pack, and per-tenant feature flags. A govt/PSU/MSME tenant executes the identical path it does today.
-2. **Flags default OFF.** Two flags gate this layer: the existing `TENANT_PROFILES_ENABLED` (must be on to activate any non-legacy profile) and a new `NONPROFIT_FINANCE_ENABLED` (per-tenant; gates funds, FCRA, donations, nonprofit statements). With both off, `effectiveSettings()` returns `LEGACY_SETTINGS` (cash/mandatory/govt) for every tenant (`packages/tenant-profile/src/index.ts:118-121`) and no new code path runs.
-3. **Additive-only.** New tables, new nullable/defaulted columns, new GL heads seeded `ON CONFLICT DO NOTHING`. No existing row is rewritten, no existing head moves or is renamed (the tenant-profile doc already locks COA templates after first posting: `COA_TEMPLATE_LOCKED`).
-4. **Proven isolation, not asserted.** Every slice ships with golden/snapshot regression tests asserting that govt, PSU and MSME tenants produce **byte-identical** postings, payroll, and statement outputs with the flags off AND on (a `govt_dept` tenant resolves nonprofit code to the same values it has today). A CI grep test fails the build on any new unguarded enforcement site — the same mechanism `TENANT-PROFILE-SWITCH.md §2.2` uses for budget modes.
-5. **Reviewer panel, review-until-clean.** This design is reviewed by an independent panel (domain/finance, database, architecture) before it reaches the owner. Every code slice is reviewed per PR, re-reviewed after fixes, until clean — never merged on a single pass, never self-reviewed by its author.
+1. **Data-keyed, never edition-forked.** No business-logic branch reads `edition`, `profileCode` or `family` to decide behaviour. Behaviour is decided by **stored configuration** resolved into each service's own tables: the profile catalogue only *seeds* settings at onboard; thereafter `gl.finance_settings` (`accounting_basis`, `budget_control`, `coa_template`, and the new `fund_accounting`), the fund master, and the statutory pack decide everything. **Enforcing test (new):** a lint test fails CI if any file under `finance-service/src/modules/{gl,year-end,financial-statements}` imports `getProfile`/`PROFILES` or reads `edition`. That is the real teeth behind this rule.
+2. **Per-tenant flag with a real home.** `fund_accounting ∈ (off|on)` is a **column on `gl.finance_settings`** (and a field on `ProfileSettings`), defaulting `off` in `LEGACY_SETTINGS` and the govt/commercial profiles, `on` for `section8`. It is resolved **once per posting from the already-loaded settings row** — no env var, no hot-path row-count lookup. This mirrors how `budgetControl`/`accountingBasis` already work (`approvals/domain.ts`). The global `TENANT_PROFILES_ENABLED` still gates whether any non-legacy profile activates at all.
+3. **Additive-only, lock-safe.** New tables; new **nullable** columns (metadata-only `ADD COLUMN`); FKs added `NOT VALID` then `VALIDATE CONSTRAINT` separately under `SET lock_timeout`; indexes built `CONCURRENTLY` and **partial** (`WHERE fund_id IS NOT NULL`) so govt tenants carry one nullable column and no index-maintenance cost. GL heads seeded `ON CONFLICT (tenant_id, code) DO NOTHING`. No row rewrite, no head rename/move, no govt-reachable function changes its signature or default (fund-aware logic is new functions, selected by settings).
+4. **Proven isolation, not asserted.** Golden tests compare **full ledger rows, trial balance, I&E, Balance Sheet and year-end output JSON** for a seeded govt tenant, before and after the migration, flags off AND on — byte-identical. A **call-site guard** (a CI grep, built as an NF-0 deliverable — it does **not** exist today) asserts every ledger/journal write goes through one `fundContext()` seam. Cross-tenant test: a `section8` and a govt tenant in one DB; the govt tenant sees no funds/donors/FCRA rows (RLS) and `/v1/finance/funds` returns 404/403 when `fund_accounting` is off.
+5. **Fail-closed.** If `fund_accounting` is on but the nonprofit heads/funds are absent (e.g. profile activated before S4/S5), posting is **refused**, never silently defaulted to govt heads.
+6. **Reviewer panel, review-until-clean.** This design was reviewed by three independent lenses before reaching the owner (§14). Every code slice is reviewed per PR and re-reviewed after fixes, until clean; never one-shot, never self-reviewed.
 
 ---
 
-## 0. Findings that shape the brief (as-is, with evidence)
+## 0. Findings that shape the brief (as-is, evidence re-verified by the panel)
 
-1. **The grants module is grant-GIVING, not grant-RECEIVING.** `services/grant-service` is real and fully wired (web/mobile/gateway), but it models a grant-making body disbursing to beneficiaries: `scheme.grant_schemes` (budget/disbursed), `application.grant_applications`, `disbursement.grant_installments`, `utilisation.grant_uc_statements` (UC submitted *by the grantee*). There is **no entity for a grant the org receives** — no funder/donor master, no sanction-condition/restricted-purpose flag, no grant→GL fund linkage. finance-service consumes `grant.uc.submitted` (`finance-service/src/modules/integrations/consumer.ts:352-374`) but only emits `uc_reconciled` + an audit row; it posts **no journal**. Live: 61 grant schemes exist (grant-giving).
-2. **FCRA: nothing in code.** The only trace is an unwired rule-pack label `{"audit_profile":"fcra_12a_80g"}` on the `small_office` org_profile (`admin-service/migrations/0026_erp_composition_registry.sql:119-127`), which is itself mislabelled "Section-8 Company" (`0025_module_composition.sql:120`). No FCRA registration field, no designated FC bank account, no foreign-source flag, no FC-4 return, no admin-expense cap. The "FCRA Foreign Contribution Unutilised" head exists **only in the design** (`TENANT-PROFILE-SWITCH.md §2.3` nonprofit table), consumed by nothing.
-3. **No fund-accounting concept.** GL journal lines carry `legal_entity_id`, `cost_center_id`, `profit_center_id` (`finance-service/migrations/0028_journal_org_refs.sql`) but **no fund dimension**. The only fund-like head is the single hard-coded `ACCUMULATED_FUND` (code 3100, equity; `gl/system-heads.ts:20-23`), into which year-end rolls the whole net surplus (`year-end/repo.ts:73-114`). No corpus/restricted/designated funds, no per-fund balances, no inter-fund transfer, no release-from-restriction. `gl.finance_settings.coa_template` (CHECK `govt|commercial|nonprofit`) exists but is **inert** — nothing branches on it (`approvals/domain.ts:72-73`, read only by its own repo).
-4. **12A/80G/donations/CSR: nothing.** No donor master, no 80G receipt generation/numbering, no 12A/80G registration/validity, no Form 10BD/10BE, no CSR-1/CSR-2. (`crm-service/.../section8-routes.ts` is a *naming collision* — a CRM gap-ledger section, irrelevant.)
-5. **Financial-statement routes exist but the shapes are wrong for a nonprofit ICAI set.** `finance-service/src/modules/financial-statements/routes.ts` has trial-balance (:52), balance-sheet (:85, surplus folded to equity :123), profit-and-loss aliased `income-expenditure` (:148-195), receipts-payments (:198-220, only cash/bank *totals* from `gl.finance_cash_book`), cash-flow (:223). But: R&P is not by-head; there is no fund-wise column anywhere; no Corpus/Restricted/Unrestricted presentation; no notes/schedules/comparatives. The web UI doesn't even call these routes (`StatementsTable.tsx` says the R&P tab "cannot identify cash/bank heads").
-6. **The nonprofit profile placeholder exists but is inert.** `packages/tenant-profile/src/index.ts:86-90`: `section8` → family `nonprofit`, `coaTemplate:"nonprofit"`, `statutoryPack:"nonprofit_in"`, `bundleCode:"section8"`, **`active:false`**. `profileCode` propagation is WIRED (tenant-service consumer/events/onboard), but the nonprofit **COA heads, template-keyed seeding (`seedGlHeadsTx`), the `nonprofit_in` reader, and the admin `section8` bundle are all UNBUILT** (the tenant-profile doc's slices S4+). There is no `section8` row in `admin-service/migrations`.
-7. **One live `section8` tenant already exists:** "Digital India Corporation" (DIC), `edition=section8`, composition profile `small_office`, created 2026-11-09. The live tenant DB lacks the `profile_code` column (migration 0035 not deployed). This tenant is the real pilot target for this segment and the HR companion design's reference tenant.
+1. **grant-service is grant-GIVING, not grant-RECEIVING.** Fully wired (web/mobile/gateway); models a grant-making body disbursing to beneficiaries. finance consumes `grant.uc.submitted` (`finance-service/src/modules/integrations/consumer.ts:352-374`) emitting only `uc_reconciled` + an audit row — **no journal**. No funder/donor master, no grant→fund linkage. (Confirmed by all three reviewers.)
+2. **The books of record are `gl.finance_ledger`, not journal lines.** Trial balance, Balance Sheet, I&E and year-end all read `gl.finance_ledger` (`0001_init:114`; `year-end/repo.ts:43,123,151` `ledgerMovements`). `finance_ledger` has only `head_id, debit_minor, credit_minor, voucher_no, posting_date` — **no journal link, no dimensions**. The org dimensions (`legal_entity_id, cost_center_id, profit_center_id`) are on the **journal header** `gl.finance_journals` (`0028_journal_org_refs.sql`), **not** on lines. `gl.finance_journal_lines` (`0030`) is a denormalised CQRS read-model of the `finance_journals.lines` JSONB, read by `simplified/queries.ts` only. *(Correction of r1: the fund dimension must live on `finance_ledger` + the JSONB line shape + opening balances — see §2.)*
+3. **Append-only by trigger.** `finance_ledger` and journal `lines` are immutable (`0014`: `trg_ledger_no_mutate`). So `fund_id` cannot be backfilled/corrected after posting; "release from restriction" and "inter-fund transfer" are **new journals**, never edits; a line posted without a fund can never be fixed — enforcement at post time must be exact.
+4. **No fund concept.** One hard-coded `ACCUMULATED_FUND` head (3100, env-overridable; `gl/system-heads.ts:23`); year-end rolls the whole net surplus into it (`year-end/repo.ts`). `gl.finance_settings.coa_template` (CHECK govt|commercial|nonprofit) exists but is inert. No corpus/restricted/designated funds, no per-fund balances, no inter-fund transfer.
+5. **FCRA / 12A / 80G / CSR: nothing in code.** Only an unwired rule-pack label `fcra_12a_80g` on the mislabelled `small_office` org_profile (`admin 0026`). The "FCRA Unutilised" head exists only in the tenant-profile design. (Confirmed.)
+6. **Statement routes exist, shapes wrong.** `financial-statements/routes.ts` has trial-balance, balance-sheet (surplus→equity :123), p&l aliased income-expenditure, receipts-payments (cash/bank **totals** only), cash-flow. No fund-wise column, no Schedule III structure, no notes/schedules/comparatives; web doesn't call them.
+7. **The nonprofit profile is an inert placeholder.** `packages/tenant-profile/src/index.ts:86-90`: `section8` → `nonprofit`/`nonprofit_in`/`active:false`. `profileCode` propagation WIRED; nonprofit COA heads + template-keyed `seedGlHeadsTx` + `nonprofit_in` reader + admin `section8` bundle **UNBUILT** (tenant-profile S4+). Onboard still seeds govt heads template-blind (`tenant-onboard/consumer.ts:47`).
+8. **The pilot tenant reframes scope.** The one live `section8` tenant is **Digital India Corporation (DIC)**, a MeitY-sponsored Section 8 company **funded by government grants-in-aid** — so **FCRA and 80G donations may not apply to it**. The missing *core* case for DIC is **government grants-in-aid accounting** (§3). `profile_code` is not on the live DB (0035 not deployed).
+9. **Global/shared tables to avoid.** `budget.finance_major_heads` is GLOBAL (no RLS, `0035`); nonprofit GL heads must go **only** in per-tenant `gl.finance_heads` (`(tenant_id, code)` unique). `FINANCE_*`/`PAYROLL_GL_*` head codes are process-global env vars; new nonprofit codes (2300/2310/4400/5400…) must be resolved from template data and checked for clash at seed time.
+
+---
+
+## 0.5 Which regimes apply — the decision that gates v1 scope (NEW, owner question #1)
+
+A "Section 8 company" is **not** one accounting profile. The applicable regime depends on how the entity is funded. The owner + DIC finance must confirm which of these apply before scope/estimate is fixed:
+
+| Regime | Trigger | What it needs | Likely for DIC? |
+|---|---|---|---|
+| **Government grants-in-aid** (§3) | Funded by govt grants-in-aid (GFR) | Grant categories (salary/general/capital-asset), GFR-form UCs, refund of unspent + interest earned, AS 12 capital-grant accounting | **Yes — the core case** |
+| **FCRA** (§5) | Receives foreign contribution | Registration, designated FC account, ring-fenced FC fund + books, admin-expense cap, FC-4 | Only if DIC takes foreign funds — **confirm** |
+| **80G donations** (§4) | Takes public donations, offers 80G | Donor master, 80G receipts, Form 10BD/10BE | Only if DIC takes donations — **confirm** |
+| **CSR as implementing agency** (§6) | Receives CSR funds from companies | CSR-1 registration, restricted project funds, UC to donor company (CSR **not** 80G-deductible) | Confirm |
+
+**Recommended v1 if DIC is the pilot:** NF-0, NF-1 (funds), NF-2 (nonprofit COA), **NF-3 (govt grants-in-aid)**, NF-7 (Schedule III statements), and *registration masters only* for FCRA/12A-80G. Donations/FCRA/CSR *flows* become v2 unless DIC confirms it takes that money. The whole segment design still covers all regimes (for later Section 8 tenants); the *build order* is driven by DIC's actual regimes.
 
 ---
 
 ## 1. Relationship to the two designs this sits between
-
-- **Depends on (does not own):** tenant-profile slices **S0–S1** (merged: package + `profile_code`), **S4** (nonprofit COA template heads + template-keyed `seedGlHeadsTx`), **S5** (admin `section8` module bundle), and `section8.active=true`. S4/S5 are the prerequisite; until they land, a `section8` tenant seeds govt heads. This design assumes S4/S5 are built first (or folds the nonprofit-specific parts of S4 into slice NF-1 below if the owner wants them together).
-- **Companion (does not overlap):** the HR/payroll `section8-design.md` (G1–G7: CTC breakup, payroll components, org leave, grade bands, contract fields, bulk import, project costing). No shared tables except migration-number coordination.
-- **Owns (net-new, this document):** funds, FCRA, donations/80G/CSR, grants-received, and the nonprofit ICAI statement set.
+- **Depends on (does not own):** tenant-profile **S0–S1** (merged), **S4** (template-keyed `seedGlHeadsTx` — owns the *mechanism*), **S5** (admin `section8` bundle), `section8.active=true`. Until S4/S5 land, a `section8` tenant seeds govt heads; §9 fail-closed prevents posting in that state.
+- **Companion (no overlap):** the HR/payroll `section8-design.md` (G1–G7). Migration-number coordination only (numbering is per service, so payroll 0166 and finance 0166 do **not** collide).
+- **Owns:** funds, govt grants-in-aid, grants/donations received, FCRA, CSR-as-agency, and the Schedule III statutory statement set.
 
 ---
 
-## 2. Gap NF-1 — Fund accounting (the foundation; largest)
+## 2. Gap NF-1 — Fund accounting (foundation; REWRITTEN per panel)
 
-**Why first:** FCRA ring-fencing, restricted grants, corpus, and the nonprofit balance sheet all need a *fund dimension*. Without it, everything else is cosmetic.
+**Why first:** grants-in-aid restriction, FCRA ring-fencing, restricted/corpus funds and fund-wise statements all need a fund dimension on the books of record.
 
 ### 2.1 Current state
-One hard-coded `ACCUMULATED_FUND` head (`gl/system-heads.ts:20-23`); year-end rolls all net surplus into it (`year-end/repo.ts:73-114`). Journal lines have cost-centre/profit-centre dimensions but no fund (`migrations/0028_journal_org_refs.sql`). `coa_template` column inert (finding 3).
+§0 findings 2–4: books of record = `finance_ledger` (no dimensions, append-only); funds don't exist; `coa_template` inert.
 
-### 2.2 Target behaviour (configurable)
-- A **fund master** per tenant: `{ code, name, type ∈ (corpus|restricted|unrestricted|designated), fcra ∈ (bool), source_condition (text), opening_balance, active }`. Types and whether funds are enforced are **config**, not edition-forked.
-- A **fund dimension on every GL posting line** (nullable; required only when `NONPROFIT_FINANCE_ENABLED` and the tenant has ≥1 non-default fund). Govt tenants: column stays NULL, behaviour unchanged.
-- **Per-fund trial balance, I&E and balance sheet** (feeds NF-6).
-- **Inter-fund transfer** journal (a maker-checker transaction moving between funds, audited).
-- **Release from restriction**: moving a restricted fund's spent portion to unrestricted when its condition is met (audited, reversible only by correction journal).
-- **Year-end per fund**: surplus/deficit rolls into *that fund's* accumulated head, not one global head.
+### 2.2 Target (configurable, resolved from settings)
+- **Fund master** `gl.funds`: `{ code, name, type ∈ (corpus|restricted|unrestricted|designated), fcra bool, source_condition, status }`.
+- **`fund_accounting` resolved once per posting** from `gl.finance_settings` (§contract #2). When on, **every** ledger line carries a fund; default is the auto-created `GENERAL` (unrestricted) fund. When off, `fund_id` is NULL and every query treats NULL as GENERAL via one shared `COALESCE(fund_id, <tenant GENERAL id>)` helper — so pre-flag history and govt tenants land in GENERAL, never a missing bucket.
+- **Per-fund trial balance, I&E, Balance Sheet** (feeds NF-7); **inter-fund transfer** and **release-from-restriction** as new maker-checker journals (§0 finding 3).
+- **Per-fund year-end**: a **new** `fundYearEndRollover` selected by settings — the existing `rollForward` is left untouched for govt.
 
-### 2.3 Data model (finance migration; number TBD at build)
-- `gl.funds` (tenant, code, name, type, fcra bool, source_condition, status). RLS as every finance table.
-- `gl.finance_journal_lines` gains `fund_id uuid NULL REFERENCES gl.funds(id)` — additive, nullable, no backfill.
-- `gl.fund_balances` as a materialised projection (or computed on read for v1).
-- Default fund `GENERAL` (unrestricted) auto-created for a nonprofit tenant at onboard; govt tenants get none.
+### 2.3 Data model (finance migration 0169+ — re-check the next free number at build; origin/main is at 0168)
+- **`gl.funds`** (new): columns above; `CHECK (type IN (...))`, `CHECK (status IN (...))`; `UNIQUE (tenant_id, id)` and `UNIQUE (tenant_id, code)`; **ENABLE + FORCE ROW LEVEL SECURITY** with the standard `USING/WITH CHECK (tenant_id = budget.current_tenant_id())` policy and `GRANT … TO finance_svc` (RLS is per-table, not inherited). `fcra` and `type` are **immutable after first posting to the fund** (COA-template-lock style).
+- **`gl.finance_ledger`** gains `fund_id uuid NULL` — the books of record. Added `NOT VALID` FK `(tenant_id, fund_id) REFERENCES gl.funds(tenant_id, id)` then `VALIDATE` separately (a bare `REFERENCES funds(id)` would bypass RLS and leak cross-tenant — use the **composite tenant-scoped FK**).
+- **`gl.finance_journals.lines` JSONB** element gains `fundId`; **`gl.finance_journal_lines`** gains `fund_id` — both written from the **same** source as the ledger line, so the three never drift. The posting-path writer is `gl/consumer.ts` (journal insert ~:394, `insertLedgerLine` ~:410, second path ~:780) — the `fundContext()` seam wraps all of them.
+- **`gl.finance_opening_balances`** gains `fund_id`; replace `UNIQUE (tenant_id, fy_code, account_code)` with a unique index on `(tenant_id, fy_code, account_code, COALESCE(fund_id, '000…0'))` (additive — existing NULL rows don't collide). Year-end (`openingForFy`, `fyBalances`, `rollForward`, and the delete/reinsert at `repo.ts:231`) groups by `(head, fund_id)`.
+- **No `gl.fund_balances` table in v1** — balances are **computed-on-read** (`SUM` by fund over the append-only ledger; stable, reconcilable), using the partial index below. (If ever materialised, a rebuildable cache keyed `(tenant,fund,head,fy)`, never a source of truth.)
+- **`gl.finance_cash_book`** gains a nullable `fund_id` + head tag (for NF-7 R&P), written only when `fund_accounting` on.
+- **Indexes:** partial, `CREATE INDEX CONCURRENTLY … (tenant_id, fund_id, head_id, posting_date) WHERE fund_id IS NOT NULL` on `finance_ledger` and `finance_journal_lines`. No plain `(tenant_id, fund_id)` index (NULL-heavy govt rows would bloat writes).
 
-### 2.4 APIs & screens
-- `POST/GET /v1/finance/funds`, `POST /v1/finance/funds/:id/transfer`, `POST /v1/finance/funds/:id/release`. Fund picker on the voucher/journal entry screens, visible only when funds exist. Fund-wise statement filters (NF-6).
+### 2.4 Per-fund balancing (panel B3)
+A journal can balance overall yet be unbalanced within a fund. Enforce via **paired due-to/due-from heads** (transfer shape: `Dr fund-A / Cr DueTo-B` + `Dr DueFrom-A / Cr fund-B`) **and** a second deferred constraint check per `(journal_id, fund_id)` that applies only when any line has `fund_id NOT NULL` (extends `0072b gl.check_journal_balance`). Restricted-spend "cannot exceed balance" uses `SELECT … FOR UPDATE` on the fund row (or an advisory lock keyed by `fund_id`) inside the posting tx to avoid a read-then-write race.
 
 ### 2.5 Tests
-- **Golden:** a govt tenant's postings and year-end are byte-identical with `fund_id` NULL and the flag off AND on. (isolation contract #4)
-- Fund-wise TB balances to zero; inter-fund transfer nets to zero; restricted spend cannot exceed restricted balance; release moves exactly the released amount.
-- Migration test: add `fund_id` to a populated DB → existing rows NULL, existing reports unchanged.
+Golden (full rows/TB/I&E/BS/year-end JSON, govt, flags off AND on, byte-identical); fund TB nets to zero per fund; transfer nets to zero; restricted overspend refused under concurrency; migration test asserts `finance_ledger` accepts the column under the append-only trigger and old rows unchanged; cross-tenant RLS test.
 
-### 2.6 Effort: ~5 d. **Risks:** touches the central posting path — golden pins first; a missing enforcement site leaves a hard refusal, so the mode helper + call-site grep test from the tenant-profile doc apply here too.
+### 2.6 Effort: **~7–8 d** (ledger + JSONB + opening balances + year-end regroup + balancing + statements wiring). **Risks:** central posting path — golden pins first; fail-closed; `fundContext()` seam + call-site guard.
 
 ---
 
-## 3. Gap NF-2 — Nonprofit COA template materialisation
+## 3. Gap NF-3 — Government grants-in-aid (the DIC core case; NEW)
 
-### 3.1 Current state
-`coa_template` inert; `standardGlHeads()` (`gl/standard-heads.ts:42-98`) has only govt heads; `ACCUMULATED_FUND` the only fund-ish head. The nonprofit template is design-only (`TENANT-PROFILE-SWITCH.md §2.3`). No `seedGlHeadsTx(template)` exists — onboard calls template-blind `seedStandardGlHeadsTx` (`tenant-onboard/consumer.ts:47`).
+### 3.1 Why
+DIC is funded by govt grants-in-aid; this, not donations/FCRA, is the primary v1 case (§0.8, §0.5).
 
-### 3.2 Target
-Materialise the nonprofit template exactly as the tenant-profile doc specs it (corpus 3000, restricted/designated 3200, grants receivable 1550, unutilised grants 2300, **FCRA unutilised 2310**, grants/donations received 4400, membership 4410, programme expenses 5400 = default bill head, staff costs 5410, admin 5420, fundraising 5430, grants disbursed 5440, bank charges 6200). Codes obey existing nature rules (`head-nature.ts`). Seeding is template-keyed, add-only, idempotent. This **is** the nonprofit half of the tenant-profile S4 slice — coordinate so it is built once, not twice.
+### 3.2 Target (all **VERIFY** with the sanction terms / GFR)
+- **Grant-in-aid categories:** salary, general, capital-asset-creation — each a restricted fund (NF-1) with its sanction reference and conditions.
+- **Utilisation certificates in the GFR-prescribed form** (GFR 12A/19A — **VERIFY** current form numbers) reconciling sanctioned vs released vs utilised vs unspent.
+- **Refund of unspent balance + interest earned on the grant** (interest on grants-in-aid is typically remittable/adjustable — **VERIFY**): track interest attributable to each grant fund; refund/adjust flows.
+- **Capital-grant accounting under AS 12** (**VERIFY**): capital grants either as deferred income released to I&E over asset life, or as an asset fund — owner/CA to choose the policy.
 
 ### 3.3–3.7 Data model / APIs / tests / effort
-Reuse S4's `seedGlHeadsTx(tx, tenant, template, packs)`. Snapshot test: `seedGlHeadsTx(nonprofit)` equals the spec table; `govt` snapshot stays byte-identical. Default bill head for `section8` resolves to 5400, not the hard-coded 2202 fallback (`gl/standard-heads.ts:82-83` → `templateDefaultBillHead`). **Effort:** ~2 d on top of S4 (mostly the head list + tests).
+Reuse NF-1 funds + grant-received tables (NF-4). Tables: `finance.grants_in_aid`, `finance.grant_utilisation`. UC export reuses `packages/render`. Tests: category→fund posting; UC reconciles; unspent+interest refund; AS-12 release schedule. **Effort:** ~4–5 d. **Dependency:** NF-1.
 
 ---
 
-## 4. Gap NF-3 — FCRA
+## 4. Gap NF-4 — Grants/donations received, 12A/80G (conditional on DIC taking donations)
 
-### 4.1 Current state
-Nothing (finding 2).
-
-### 4.2 Target (configurable; all thresholds VERIFY with counsel/CA)
-- **FCRA registration master** on the tenant: registration number, validity, **designated FC bank account** (FCRA 2020 mandates a single designated account at SBI New Delhi Main Branch — **VERIFY** still current), utilisation account(s).
-- **Foreign-source ring-fencing:** a receipt marked foreign-source posts to an FCRA fund (NF-1) and the `2310 FCRA Unutilised` head; FCRA funds cannot be mixed with local funds in a payment (a transfer between them is refused). This is enforced via the **fund master's `fcra` flag**, not a tenant-type check.
-- **Admin-expense cap:** an advisory/blocking warning when administrative expenses exceed the statutory share of FCRA spend (the cap is a **config figure**, default **VERIFY** — historically 20%). Mode (advisory|block) reuses the budget-control pattern.
-- **FC-4 annual return** and a **quarterly foreign-contribution receipt disclosure** as report exports (data shaping, not filing integration).
-
-### 4.3–4.7
-Tables: `finance.fcra_registration`, FCRA designation on `gl.funds`. Reports reuse `packages/render`/voucher-print. Tests: foreign receipt lands in FCRA fund; cross-fund FCRA payment refused; admin-cap warning fires at the configured ratio. **Effort:** ~4 d. **Dependency:** NF-1 (funds).
+- **Grants-received (funder side)** — **Option A (recommended): a new finance module**, reusing grant-service UC *shapes* but owning funder-side tables; grant-service left byte-identical (its `grant.uc.submitted` handler unchanged). Option B (extend grant-service with a direction flag) rejected: puts nonprofit logic in the wired grant-giving path.
+- **Donations / 80G:** donor master (name, PAN, type ∈ individual|company|CSR|foreign, 80G-eligible); 80G-compliant **gapless-but-voidable** receipt numbering (`packages/numbering`) + PDF (`voucher-print`), linked to donor + fund; **Form 10BD** (annual donation statement) + **10BE** (donor certificate) exports (schema **VERIFY** — note the Income-tax Act 2025 may renumber 12A/80G/11-13 from 1 Apr 2026). 12A/80G registration/validity/renewal (10A/10AB) on the tenant. **CSR donors force 80G-eligible=false** (CSR isn't 80G-deductible).
+- **Explicitly deferred (named, not v1):** 85%-application/accumulation tracking, corpus-with-direction, specified-persons/prohibited-investment rules, anonymous-donation tax, ITR-7/audit report, in-kind donations, pledges. **Effort:** ~4 d. **Dependency:** NF-1.
 
 ---
 
-## 5. Gap NF-4 — Donations, 12A/80G, CSR
-
-### 5.1 Current state
-Nothing (finding 4).
-
-### 5.2 Target
-- **Donor master:** name, PAN, address, donor type (individual|company|CSR|foreign), 80G-eligibility.
-- **Donation receipt** with **80G-compliant numbering** (reuse `packages/numbering`) and a receipt PDF (reuse `voucher-print/documents.ts`), linked to a fund (NF-1) and a donor. Anonymous/cash-limit rules are config.
-- **12A/80G registration** on the tenant: URN, validity, re-registration dates (the 10A/10AB regime — **VERIFY** current cycle).
-- **Form 10BD** (annual statement of donations) + **10BE** (donor certificate) exports — data shaping to the prescribed schema. **VERIFY** current schema.
-- **CSR:** CSR-1 registration field; CSR funds received post to a designated CSR fund; a CSR-2-style utilisation export. **VERIFY**.
-
-### 5.3–5.7
-Tables: `finance.donors`, `finance.donation_receipts`. All exports are report endpoints, no third-party filing integration in v1. Tests: receipt numbering is gapless and 80G-gated; 10BD export totals reconcile to donation receipts for the FY; a non-80G tenant sees none of this (flag off). **Effort:** ~4 d. **Dependency:** NF-1.
+## 5. Gap NF-5 — FCRA (conditional on DIC receiving foreign contribution)
+Registration + designated FC account (SBI New Delhi Main Branch — **VERIFY**; utilisation account may be another bank — **VERIFY**); **ring-fenced FC fund + separate FC books** (FC receipts/utilisation/balance-sheet for FC-4); **admin-expense cap measured on FC *received* in the FY** (20% since the 2020 amendment — **VERIFY** basis and what counts as admin expense), effective-dated config, advisory|block mode; interest/forex gains/FD earnings on FC funds are **FC income** (**VERIFY**); restrictions on sub-granting/transfer to non-FCRA entities; refund of unspent FC; registration/renewal (FC-3) + change-reporting tracking; quarterly receipts disclosure (channel **VERIFY**). Ring-fence check runs **inside the posting tx** so a direct journal route can't bypass it. **Effort:** ~4–5 d (FC-4/quarterly to v2). **Dependency:** NF-1.
 
 ---
 
-## 6. Gap NF-5 — Grants received (funder side)
-
-### 6.1 Current state
-`grant-service` is grant-giving only (finding 1); finance reconciles UCs by event+audit, posts no journal.
-
-### 6.2 Target — decision required (owner Q)
-A **grant-received** model: a grant the org *receives* with funder, sanction reference, **restricted purpose linked to a fund (NF-1)**, instalment schedule, and **utilisation reporting back to the funder** (reusing the UC period pattern `YYYY-YY`/`YYYY-MM` that already exists). On receipt → posts to the restricted fund + `1550 Grants Receivable`/`2300 Unutilised Grants`; on spend → draws the fund; UC export reconciles released vs utilised vs balance.
-- **Option A (recommended):** a small new `grants-received` module in finance-service, reusing grant-service's UC *shapes* but owning the funder-side tables. Keeps grant-service (grant-giving) untouched — no cross-contamination.
-- **Option B:** extend grant-service with a `direction` (giving|receiving). Rejected for v1: risks regressing the wired grant-giving flow (isolation contract #4).
-
-### 6.3–6.7
-Tables: `finance.grants_received`, `finance.grant_received_utilisation`. Posting via NF-1 funds. Tests: receipt→fund posting; over-utilisation refused; UC export reconciles; **grant-giving flow byte-identical** (regression). **Effort:** ~4 d. **Dependency:** NF-1.
+## 6. Gap NF-6 — CSR as implementing agency (conditional; CORRECTED)
+CSR-1 = **the agency's** registration (requires 12A/80G). **CSR-2 is filed by the donor company, not the agency — dropped as an output.** The agency's duties: **project-wise restricted CSR funds** (NF-1), utilisation certificates and reports **to the donor company**. CSR receipts post to a designated CSR fund; `donor_type=CSR` carries no 80G claim. **Effort:** ~2 d. **Dependency:** NF-1, NF-4.
 
 ---
 
-## 7. Gap NF-6 — Nonprofit financial statements (ICAI format)
-
-### 7.1 Current state
-Routes exist but shapes are wrong (finding 5); web doesn't call them.
-
-### 7.2 Target
-- **Receipts & Payments** by **head and bank/cash account**, opening/closing per account (needs cash-book rows to carry head + fund — a cash-book enrichment).
-- **Income & Expenditure**, **fund-wise columns**, with schedules and **previous-year comparatives**.
-- **Balance Sheet** presenting **Corpus / Restricted / Unrestricted / Designated** funds separately (from NF-1), liabilities incl. `2310 FCRA Unutilised`/`2300 Unutilised Grants`, with notes/schedules.
-- An **accounting-basis-aware** output (cash vs accrual; the setting exists at `approvals/apply.ts:184-234`).
-- A **separate FCRA statement** (foreign receipts & utilisation).
-
-### 7.3–7.7
-Fix the existing routes' shapes and add fund-wise grouping; add a cash-book head/fund tag (additive). Build the web views that are currently missing. Tests: R&P by head reconciles to the cash book; fund-wise BS fund columns sum to total funds; govt tenant's existing statement output unchanged. **Effort:** ~5 d. **Dependency:** NF-1 (fund columns), NF-2 (heads).
+## 7. Gap NF-7 — Statutory statements (Schedule III; CORRECTED)
+A Section 8 **company** files **Schedule III**: Balance Sheet, Statement of Profit & Loss (= Income & Expenditure), Cash Flow, and Notes, under the applicable AS/Ind AS (AS 12 grants, AS 10/AS 26 — **VERIFY**), audited and filed with MCA (AOC-4, MGT-7). Lead with this set, **fund-wise** (Corpus/Restricted/Unrestricted/Designated from NF-1) + comparatives + notes/schedules. **Receipts & Payments** (trust/society format) and the **separate FCRA statement** are **supplementary**, not the company statutory set. Reshape the existing routes (don't rewrite); build the missing web views; add the cash-book head/fund tag (NF-1). Golden: govt tenant's existing statement output unchanged. **Effort:** ~5–6 d. **Dependency:** NF-1, NF-2.
 
 ---
 
 ## 8. Onboarding & wizard for `section8`
-
-- Activate `section8` (`active:true`) **only after** NF-1/NF-2 and S5 land; gated by `TENANT_PROFILES_ENABLED` + `NONPROFIT_FINANCE_ENABLED`.
-- Setup wizard (reuse `apps/web/.../setup`): capture **CIN / Section 8 licence, PAN, 12A/80G URN + validity, FCRA registration (if any) + designated account**, and the fund opening balances. These are additive wizard steps visible only for the nonprofit profile (same visibility mechanism `govt_small_office` uses for its DDO step).
-- Admin `section8` module bundle (S5): the §8 bundle in the tenant-profile doc minus govt-only modules, plus `grant`/donation/fund screens. Enforcement starts `shadow`, flips to `enforce` after soak.
+Activate `section8` only after NF-1/NF-2 + S4/S5; gated by `TENANT_PROFILES_ENABLED` + `fund_accounting` on. Wizard (reuse `apps/web/.../setup`) captures CIN/S8 licence, PAN, **applicable regimes** (§0.5), 12A/80G URN (if any), FCRA registration (if any) + designated account, and **per-fund opening balances**. Admin `section8` bundle (S5), enforcement `shadow`→`enforce` after soak.
 
 ---
 
-## 9. Backward compatibility & flags (the isolation proof)
-
-- Two flags, both default false: `TENANT_PROFILES_ENABLED` (existing), `NONPROFIT_FINANCE_ENABLED` (new, per-tenant).
-- Every existing tenant: `fund_id` NULL, `coa_template='govt'`, no donor/FCRA/fund rows → identical behaviour.
-- Regression suite proving govt/PSU/MSME byte-identical with flags off AND on (contract #4). CI grep test for unguarded enforcement sites.
-- Migration numbers coordinated with #2468 (finance 0162/0166 already taken) and the HR companion (payroll 0166, hrms 0266) — re-grep at build.
+## 9. Backward compatibility, flags & fail-safe
+Two flags default off: `TENANT_PROFILES_ENABLED` (env, global activation) + **`fund_accounting` (settings column, per tenant)**. Existing tenants: `fund_id` NULL (=GENERAL at read), no fund/donor/FCRA rows → identical behaviour; govt golden byte-identical off AND on. Lint test bans `edition`/`getProfile` imports in finance posting modules. **Fail-closed:** `fund_accounting` on + heads/funds absent ⇒ refuse to post. **NF-8 activation is strictly last and per-tenant;** turning `fund_accounting` **off** is refused once any fund-tagged ledger row exists (append-only ledger makes it irreversible) — COA-template-lock style.
 
 ---
 
-## 10. Implementation plan (PR-sized slices, in order)
+## 10. Implementation plan (PR-sized, in order; re-estimated)
 
 | # | Slice | Depends | Effort |
 |---|---|---|---|
-| NF-0 | Flag `NONPROFIT_FINANCE_ENABLED` + regression golden pins (govt/PSU/MSME) | — | 1 d |
-| NF-1 | Fund master + fund dimension + transfers/release + per-fund year-end | NF-0 | 5 d |
-| NF-2 | Nonprofit COA template materialisation (the nonprofit half of S4) | S4, NF-1 | 2 d |
-| NF-3 | FCRA registration, ring-fencing, admin cap, FC-4/quarterly exports | NF-1 | 4 d |
-| NF-4 | Donor master, 80G receipts, 12A/80G registration, 10BD/10BE, CSR | NF-1 | 4 d |
-| NF-5 | Grants-received module (Option A) + funder UC | NF-1 | 4 d |
-| NF-6 | Nonprofit ICAI statement set (R&P/I&E/BS fund-wise + FCRA statement) | NF-1, NF-2 | 5 d |
-| NF-7 | `section8` activation + wizard + admin bundle (S5) | all above | 2 d |
+| NF-0 | `fund_accounting` settings column + `ProfileSettings` field + `fundContext()` seam + **call-site grep guard (build it)** + lint test (no edition imports) + govt/PSU/MSME golden pins | — | **2–3 d** |
+| NF-1 | Fund master + fund on ledger/JSONB/opening-balances + per-fund balancing + transfers/release + per-fund year-end (new fn) + computed-on-read balances + RLS/FK/partial-indexes | NF-0 | **7–8 d** |
+| NF-2 | Nonprofit COA **content** (head list + tests) consuming S4's `seedGlHeadsTx`; never touch `finance_major_heads` | S4, NF-1 | 2 d |
+| NF-3 | Government grants-in-aid (categories, GFR UC, unspent+interest refund, AS 12) | NF-1 | 4–5 d |
+| NF-4 | Grants-received (Option A) + donor master + 80G receipts + 10BD/10BE (if DIC donates) | NF-1 | 4 d |
+| NF-5 | FCRA (registration + designated account + ring-fence + admin cap; FC-4/quarterly → v2) | NF-1 | 4–5 d |
+| NF-6 | CSR as agency (project funds + UC to donor) | NF-1, NF-4 | 2 d |
+| NF-7 | Schedule III statutory set (BS/P&L/Cash Flow/Notes, fund-wise, comparatives) + R&P/FCRA supplementary | NF-1, NF-2 | 5–6 d |
+| NF-8 | `section8` activation + wizard + admin bundle (S5), per tenant, last | all | 2 d |
 
-~27 dev-days. NF-0/NF-1 are the critical path; NF-3/NF-4/NF-5 parallelise once NF-1 lands. Build only after sign-off, after foundation S4/S5.
-
----
-
-## 11. What to reuse (so we don't rebuild)
-- `packages/tenant-profile` (profile catalogue, flag, resolver); `gl.finance_settings` + `coa_template` column; `approvals` maker-checker + change-request machinery.
-- grant-service UC *shapes/period patterns* (`utilisation/*`) — copied, not extended.
-- `packages/numbering` (receipt series), `packages/render` + `voucher-print/documents.ts` (PDFs).
-- `financial-statements/routes.ts` (reshape, don't rewrite); `year-end` rollover (make per-fund).
-- Cost-centre/profit-centre dimension plumbing (model the fund dimension the same way).
-- Audit/outbox helpers, RLS patterns, setup-wizard visibility.
+**Total: ~32–37 core dev-days; realistically ~40–60 calendar days including per-PR review-and-re-review loops, regression pins, and the DIC dry-run** (the review loops the owner mandated are not free). **Excludes** the S4/S5 prerequisites and the DIC data dry-run. Critical path NF-0→NF-1→NF-7; NF-3/4/5 parallelise after NF-1. Build only after sign-off. **Scope is set by §0.5** — if DIC is govt-grants-only, NF-4/5/6 flows drop to v2 and v1 is ~20–28 core days.
 
 ---
 
-## 12. Open questions for the owner
-1. **Build NF-2 as part of tenant-profile S4, or here?** (Recommend: build the nonprofit COA once, in S4, so there's one seeding function.)
-2. **Grants-received: Option A (new module, recommended) or B (extend grant-service)?**
-3. **FCRA scope for v1:** full ring-fencing + admin cap + FC-4 export, or registration + designated-account + ring-fencing only (defer FC-4 to v2)?
-4. **80G/10BD scope for v1:** receipts + numbering + 10BD export, or receipts only (defer statutory exports)?
-5. **Statutory figures to confirm (VERIFY):** FCRA admin-expense cap %; designated-account rule; 12A/80G re-registration cycle; 10BD/10BE/CSR-1/CSR-2 current schemas. Who signs these off (CA/counsel)?
-6. **Reference tenant:** is DIC (the one live `section8` tenant) the pilot for this segment, and does its finance team confirm fund structure + opening balances?
-7. **Accounting basis:** the `section8` placeholder is `accrual`. Confirm DIC runs accrual (not cash) for v1.
+## 11. What to reuse
+`packages/tenant-profile`; `gl.finance_settings` + the `approvals` maker-checker/change-request machinery; grant-service UC *shapes* (copied); `packages/numbering`, `packages/render`/`voucher-print`; `financial-statements/routes.ts` (reshape); cost-centre plumbing (as a *pattern*, not the table — fund goes on the ledger, see §0.2); audit/outbox/RLS helpers; setup-wizard visibility.
+
+---
+
+## 12. Open questions for the owner (ordered)
+1. **Which regimes apply to DIC — govt grants-in-aid / FCRA / 80G / CSR?** (§0.5) This sets v1 scope and the estimate. Everything else is secondary.
+2. **AS 12 capital-grant policy:** deferred income released over asset life, or an asset fund?
+3. **Grants-received:** Option A (new module, recommended) confirmed?
+4. **Build NF-2 as the content half of tenant-profile S4** (recommended — one seeding mechanism), not duplicated here?
+5. **Statutory figures to confirm (VERIFY), with a named CA/counsel:** GFR UC form numbers + interest-on-grant rule; AS 12/10/26 applicability; FCRA cap basis (received vs utilised) + designated-account rule; 12A/80G validity/renewal windows + 10BD/10BE schema; **Income-tax Act 2025 section renumbering from 1 Apr 2026**; CSR-1 requirements.
+6. **Reference tenant:** is DIC the pilot, and does DIC finance confirm fund structure + opening balances + accrual (not cash) basis?
+7. **v1/v2 split** (recommended in §0.5) approved?
 
 ---
 
 ## 13. Cross-cutting risks
-1. Statutory correctness is the gating risk; every figure is config with an effective date and a named reviewer. Nothing here is a statement of law.
-2. NF-1 touches the central posting path; govt goldens pinned first, byte-identical, flags off and on.
-3. Shared-host constraint: any DIC dry run uses a DB copy, not the live UAT stack, and obeys the memory/vitest-worker guidance (the 14 Nov host-exhaustion lesson).
-4. Migration-number and flag-default coordination across #2468, the HR companion, and this design.
-5. Data migration of the DIC tenant (fund setup, opening balances) happens only through product routes, only after sign-off.
-6. Scope: FCRA/80G filing *integrations* (actual portal submission) are explicitly out of v1 — exports only.
+1. Statutory correctness is the gating risk; every figure is effective-dated config with a named reviewer. Nothing here is a statement of law.
+2. NF-1 touches the central posting path (`finance_ledger`, year-end); govt goldens pinned first, byte-identical, flags off and on; fund-aware logic is **new** functions selected by settings.
+3. Shared-host constraint: any DIC dry run uses a DB copy, not the live UAT stack, obeying the vitest-worker memory guidance (14 Nov host-exhaustion lesson).
+4. Migration-number + flag-default coordination across #2468, the HR companion, and this design (next free finance = 0169; re-check at build; per-service numbering doesn't cross-collide).
+5. DIC data migration (fund setup, opening balances) only through product routes, only after sign-off.
+6. Scope: statutory *filing integrations* (portal submission) are out of v1 — exports only. FCRA FC-4/quarterly, 10BD/10BE and CSR reports are v2 unless DIC's regimes require them in v1.
+
+---
+
+## 14. Reviewer panel disposition (revision 1 → 2)
+Three independent lenses, 15 Nov. All verdicts APPROVE-WITH-CHANGES except the data model (NEEDS-REWORK on §2.3), now reworked.
+- **Architecture/isolation:** confirmed the data-keyed/flags/additive frame; blockers fixed — fund on `finance_ledger` not journal lines (B1); `fund_accounting` as a settings column, no row-count branch (B2); grep guard built as NF-0 deliverable not claimed precedent; lint test banning edition imports; fail-closed; NF-2 = content slice on S4; NF-8 last + irreversible-off lock; `finance_major_heads` is global (don't insert there).
+- **Domain/compliance:** Schedule III (not R&P) is the company statutory set (B1); FCRA cap on *received* (B2); CSR-1 is agency registration, CSR-2 is the donor's, CSR not 80G (B3); **DIC is govt grants-in-aid — added as the NF-3 core case and the gating owner question** (B4); Income-tax Act 2025 renumbering; v1/v2 split made explicit; estimate redone.
+- **Database:** rewrote §2.3 — fund on `finance_ledger` + JSONB + opening-balances (unique-key change); per-fund balancing via due-to/due-from + deferred check; lock-safe DDL (`NOT VALID`+`VALIDATE`, `CONCURRENTLY`, partial indexes); tenant-scoped composite FK + `UNIQUE(tenant_id,code/id)`; explicit RLS/FORCE/GRANT; computed-on-read (no `fund_balances` table); `FOR UPDATE` on restricted spend; `NULL=GENERAL` COALESCE helper; next free finance migration 0169.
