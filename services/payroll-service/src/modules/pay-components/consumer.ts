@@ -88,6 +88,10 @@ export function registerPayComponentConsumers(queue: Queue): void {
     // ordered either way. The handler is entered in publish order, so serialising this structure's
     // creates here -- appending to the per-structure chain synchronously, before the first await --
     // makes the apply order deterministic. See tests/s8-g2-pay-components-real-db.test.ts.
+    // In-process only: under the SQS driver with several consumer replicas two creates for one
+    // structure can still be applied on different processes in arbitrary order -- the FOR UPDATE
+    // lock still keeps the assigned orders unique and consistent there; this removes the
+    // single-process ordering race (the MemoryQueue path the real-DB test exercises).
     await runPerStructure(`${msg.tenantId}:${p.structureId}`, async () => {
     const spec = specFromJson(p.spec);
     await db.transaction(async (tx) => {
