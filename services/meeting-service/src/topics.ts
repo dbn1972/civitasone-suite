@@ -61,6 +61,12 @@ export const COMMANDS = {
   agendaItemSubmit:           "meeting.agenda.submit",
   /** payload: { meetingId, agendaItemId, version, patch: Partial<AgendaItemEditableFields> } */
   agendaItemUpdate:           "meeting.agenda.update",
+  /** payload: { requestId, meetingId, reason, ...agendaItemSubmitFields } -- store a pending late-inclusion request */
+  agendaLateRequest:          "meeting.agenda.late_request",
+  /** payload: { requestId, meetingId } -- chair approves: the item is added past the cut-off */
+  agendaLateRequestApprove:   "meeting.agenda.late_request.approve",
+  /** payload: { requestId, meetingId, reason } -- chair rejects with a reason */
+  agendaLateRequestReject:    "meeting.agenda.late_request.reject",
   /** payload: { meetingId, agendaItemId, version, reason? } */
   agendaItemWithdraw:         "meeting.agenda.withdraw",
   /** payload: { meetingId, order: Array<{ agendaItemId, sequence }> } — sequence must be a 1..n bijection */

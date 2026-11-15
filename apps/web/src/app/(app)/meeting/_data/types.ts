@@ -74,6 +74,22 @@ export interface Meeting {
 }
 
 /** One item on a meeting's agenda (agenda/schema.ts agenda_items). */
+/** A stored request to add an agenda item after the submission cut-off (meeting-service agenda_late_requests). */
+export interface LateAgendaRequest {
+  id: string;
+  meetingId: string;
+  title: string;
+  outcomeType: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  agendaItemId: string | null;
+}
+
 export interface AgendaItem {
   id: string;
   meetingId: string;
