@@ -19,6 +19,25 @@ type Msg = { messageId: string; tenantId: string; actorId: string; correlationId
 
 const refuse = (code: string, message: string): never => { throw new NonRetryableError(`${code}: ${message}`); };
 
+/**
+ * In-process per-key serialiser. runPerStructure(key, fn) runs fn only after every call made
+ * earlier for the SAME key has settled, preserving call order. The create consumer uses it so a
+ * structure's order-sensitive component creates (payslip_order is derived at apply time as
+ * MAX(sibling order)+10) are applied in submission order regardless of which transaction commits
+ * first. The chain tail is dropped once idle so the map cannot grow without bound. fn's real
+ * outcome is propagated to the caller (so a NonRetryableError still reaches the queue's DLQ path),
+ * while the chain continues even when an fn rejects.
+ */
+const structureChains = new Map<string, Promise<void>>();
+function runPerStructure<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = structureChains.get(key) ?? Promise.resolve();
+  const result = prev.then(fn);
+  const tail = result.then(() => undefined, () => undefined);
+  structureChains.set(key, tail);
+  void tail.then(() => { if (structureChains.get(key) === tail) structureChains.delete(key); });
+  return result;
+}
+
 async function lockedStructure(tx: Tx, msg: Msg, id: string): Promise<StructureView> {
   const s = await loadStructure(tx as never, msg.tenantId, id, true);
   if (!s) return refuse("NOT_FOUND", "structure not found");
@@ -62,6 +81,14 @@ export function registerPayComponentConsumers(queue: Queue): void {
 
   queue.subscribe(COMMANDS.payComponentCreate, async (msg) => {
     const p = msg.payload as { id: string; structureId: string; spec: Record<string, unknown> };
+    // payslip_order is assigned at apply time as MAX(sibling order)+10, so the order two
+    // concurrently-dispatched creates for the SAME structure get depends on which transaction
+    // commits first. The structure's FOR UPDATE lock serialises the inserts but not the order of
+    // lock acquisition, so two near-simultaneous creates (an admin adding A then B) could be
+    // ordered either way. The handler is entered in publish order, so serialising this structure's
+    // creates here -- appending to the per-structure chain synchronously, before the first await --
+    // makes the apply order deterministic. See tests/s8-g2-pay-components-real-db.test.ts.
+    await runPerStructure(`${msg.tenantId}:${p.structureId}`, async () => {
     const spec = specFromJson(p.spec);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -84,6 +111,7 @@ export function registerPayComponentConsumers(queue: Queue): void {
            true, ${msg.actorId}::uuid, ${msg.actorId}::uuid)`);
       await touchStructure(tx, msg, s.id);
       await audit(tx, msg, "create", "payroll_component", p.id, { structureId: s.id, ...auditDetails(spec) });
+    });
     });
   });
 
