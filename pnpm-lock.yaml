@@ -1754,6 +1754,9 @@ importers:
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@civitasone/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -2234,6 +2237,9 @@ importers:
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@civitasone/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
