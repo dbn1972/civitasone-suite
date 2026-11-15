@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { uanBlindIndexEnabled } from "../../shared/s8-flags.js";
+import { existingUans } from "../employee/uan-lookup.js";
 import { z, ZodError } from "zod";
 import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -160,10 +162,17 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     // G6: pairing, in-file and in-tenant duplicate checks for PAN / UAN / bank account. Values are compared in memory
     // and only ever reported masked (sensitive.ts).
     if (sensitiveOn && body.employees.some((e) => e.pan || e.uanNumber || e.bankAccountNo || e.bankIfsc)) {
-      const held = await scopedRead((tx) => tx.select({ pan: hrmsEmployees.pan, uanNumber: hrmsEmployees.uanNumber, bankAccountNo: hrmsEmployees.bankAccountNo })
-        .from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)));
+      // UAN blind index (flag HRMS_UAN_BLIND_INDEX_ENABLED, tenant fully backfilled): the UAN comparison is a keyed-HMAC
+      // lookup and the UAN column is not decrypted at all. Otherwise exactly the previous behaviour.
+      const indexed = uanBlindIndexEnabled()
+        ? await existingUans(ctx.tenantId, body.employees.map((e) => e.uanNumber).filter((u): u is string => !!u))
+        : null;
+      const held = await scopedRead((tx) => indexed
+        ? tx.select({ pan: hrmsEmployees.pan, bankAccountNo: hrmsEmployees.bankAccountNo }).from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)).then((r) => r.map((x) => ({ ...x, uanNumber: null as string | null })))
+        : tx.select({ pan: hrmsEmployees.pan, uanNumber: hrmsEmployees.uanNumber, bankAccountNo: hrmsEmployees.bankAccountNo })
+            .from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)));
       const collect = (k: "pan" | "uanNumber" | "bankAccountNo") => new Set(held.map((h) => h[k]).filter((v): v is string => !!v));
-      fieldErrors.push(...sensitiveRowErrors(body.employees, { pan: collect("pan"), uanNumber: collect("uanNumber"), bankAccountNo: collect("bankAccountNo") }));
+      fieldErrors.push(...sensitiveRowErrors(body.employees, { pan: collect("pan"), uanNumber: indexed ?? collect("uanNumber"), bankAccountNo: collect("bankAccountNo") }));
     }
 
     if (fieldErrors.length > 0) {

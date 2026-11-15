@@ -31,6 +31,11 @@ const GUARDS: Record<GlobalEntityType, Guard> = {
   "finance.vendor": { file: "services/finance-service/src/modules/masters/routes.ts", constants: ["READER_ROLES"], route: 'app.get("/v1/finance/vendors/:id"' },
   "hrms.employee": { file: "services/hrms-service/src/modules/employee/routes.ts", constants: ["HR_ROLES", "PAYROLL_DIRECTORY_ROLES"], route: 'app.get("/v1/hrms/employees"', routeGuard: ["DIRECTORY_ROLES"] },
   "procurement.indent": { file: "services/procurement-service/src/modules/indent/routes.ts", constants: ["READER_ROLES"], route: 'app.get("/v1/procurement/indents"' },
+  "contracts.contract": { file: "services/contract-service/src/modules/contracts/routes.ts", constants: ["READER_ROLES"], route: 'app.get("/v1/contract/contracts/:id"' },
+  "meeting.meeting": { file: "services/meeting-service/src/modules/meeting-core/routes.ts", constants: ["READ_ROLES"], route: 'app.get("/v1/meetings/:meetingId"' },
+  "estab.file": { file: "services/estab-service/src/modules/files/routes.ts", constants: ["READER_ROLES"], route: 'app.get("/v1/estab/files/:id"' },
+  // the route also admits the applicant (`citizen`, own records only); the catalogue keeps the officer roles, a SUBSET
+  "citizen.application": { file: "services/citizen-service/src/modules/application/routes.ts", constants: ["OFFICER_ROLES"], route: 'app.get("/v1/citizen/applications"', routeGuard: ["CITIZEN_ROLES"] },
   "procurement.po": { file: "services/procurement-service/src/modules/po/routes.ts", constants: ["READER_ROLES"], route: 'app.get("/v1/procurement/pos"' },
 };
 

@@ -1,5 +1,6 @@
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { syncApplication } from "../../shared/global-search.js";
 import {
   citizenApplications, citizenAppDocuments, citizenStatusHistory,
   type ApplicationRow, type ApplicationInsert, type AppDocumentInsert, type StatusHistoryInsert,
@@ -59,12 +60,14 @@ export async function markDocumentConfirmed(tenantId: string, docId: string): Pr
 
 export async function insertApplication(tx: Writer, row: ApplicationInsert): Promise<void> {
   await tx.insert(citizenApplications).values(row);
+  if (row.id) await syncApplication(tx, row.id, row.tenantId);
 }
 
 export async function updateApplication(tx: Writer, id: string, tenantId: string, patch: Partial<ApplicationInsert>): Promise<void> {
   // P1-2: tenant-scoped update prevents cross-tenant writes via a forged id.
   await tx.update(citizenApplications).set({ ...patch, updatedAt: new Date(), version: sql`${citizenApplications.version} + 1` })
     .where(and(eq(citizenApplications.id, id), eq(citizenApplications.tenantId, tenantId)));
+  await syncApplication(tx, id, tenantId);
 }
 
 export async function insertDocument(tx: Writer, row: AppDocumentInsert): Promise<void> {
