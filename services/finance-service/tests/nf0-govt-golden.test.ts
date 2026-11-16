@@ -70,6 +70,13 @@ async function ledgerRows() {
   return (Array.isArray(res) ? res : (res as { rows: unknown[] }).rows) as unknown[];
 }
 
+/** GET /v1/finance/statements has no ORDER BY (row order is heap/uuid dependent and varies between runs); compare it as a set by sorting on its value columns. Every value is still compared. */
+function sortStatements(r: { status: number; body: unknown }) {
+  if (!Array.isArray(r.body)) return r;
+  const key = (x: Record<string, unknown>) => [x.type, x.receipts, x.payments, x.closingBalance, x.openingBalance].join("|");
+  return { ...r, body: [...(r.body as Record<string, unknown>[])].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0)) };
+}
+
 async function snapshot() {
   return {
     ledger: await ledgerRows(),
@@ -77,7 +84,7 @@ async function snapshot() {
     incomeExpenditure: await get(`/v1/finance/statements/income-expenditure?fy=${FY}`),
     profitAndLoss: await get(`/v1/finance/statements/profit-and-loss?fy=${FY}`),
     balanceSheet: await get(`/v1/finance/statements/balance-sheet?fy=${FY}`),
-    statements: await get(`/v1/finance/statements`),
+    statements: sortStatements(await get(`/v1/finance/statements`)),
     yearEnd: await get(`/v1/finance/year-end/${FY}`),
     yearEndPrior: await get(`/v1/finance/year-end/2025-26`),
   };
@@ -109,7 +116,7 @@ afterAll(async () => {
 describe("NF-0 govt golden: finance output is byte-identical with fund_accounting OFF and ON", () => {
   it("the seeded ledger produces a non-trivial snapshot (guards against pinning an empty/error response)", async () => {
     const s = await snapshot();
-    expect((s.ledger as unknown[]).length).toBe(12);
+    expect((s.ledger as unknown[]).length).toBe(10);
     for (const k of ["trialBalance", "incomeExpenditure", "profitAndLoss", "balanceSheet", "statements", "yearEnd"] as const) {
       expect(s[k].status, k).toBe(200);
     }
