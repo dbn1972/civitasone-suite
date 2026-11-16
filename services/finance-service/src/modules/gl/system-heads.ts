@@ -75,3 +75,19 @@ export function templateDefaultBillHead(template: "govt" | "commercial" | "nonpr
 export function systemHeads(): { accumulatedDepreciationCode: string; depreciationExpenseCodes: string[]; fixedAssetCode: string } {
   return { accumulatedDepreciationCode: ACCUM_DEP, depreciationExpenseCodes: [DEP_EXPENSE, DEP_EXPENSE_STAT], fixedAssetCode: FIXED_ASSET };
 }
+
+/**
+ * Section 8 NF-1/NF-2: chart codes of the inter-fund heads. ONE definition shared by the nonprofit chart (standard-heads.ts)
+ * and the fund posting path (funds.ts FUND_HEADS), so the seeded heads are exactly the heads NF-1 posts to. Env-configurable
+ * like every system head; read at call time so a test/deployment override is honoured by both sides.
+ */
+export function FUND_HEAD_CODES(): Record<"dueTo" | "dueFrom" | "transferOut" | "transferIn" | "releaseOut" | "releaseIn", string> {
+  return {
+    dueTo: process.env.FINANCE_FUND_DUE_TO_CODE ?? "2900",           // liability: owed to another fund
+    dueFrom: process.env.FINANCE_FUND_DUE_FROM_CODE ?? "1900",       // asset: owed by another fund
+    transferOut: process.env.FINANCE_FUND_TRANSFER_OUT_CODE ?? "3910", // equity: inter-fund transfer out
+    transferIn: process.env.FINANCE_FUND_TRANSFER_IN_CODE ?? "3911",   // equity: inter-fund transfer in
+    releaseOut: process.env.FINANCE_FUND_RELEASE_OUT_CODE ?? "3920",   // equity: released from restriction (out)
+    releaseIn: process.env.FINANCE_FUND_RELEASE_IN_CODE ?? "3921",     // equity: released from restriction (in)
+  };
+}

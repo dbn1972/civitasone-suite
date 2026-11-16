@@ -24,7 +24,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
 import { headNatureOf } from "../../shared/head-nature.js";
-import { templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
+import { FUND_HEAD_CODES, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
 
 /** The CHECK domain of budget.finance_heads.statement_class (migration 0169). */
 export const STATEMENT_CLASSES = [
@@ -139,6 +139,71 @@ function defaultBillHeads(template: SeedTemplate): StandardGlHead[] {
 const th = (code: string, name: string, classification: string, statementClass: StatementClass): StandardGlHead =>
   ({ code, name, classification, statementClass });
 
+/**
+ * Section 8 NF-2: the NONPROFIT (Section 8 company / trust / society) chart content -- the content half of S4, fed through
+ * the one seeding mechanism (templateGlHeads -> glHeadsForTemplate -> seedGlHeadsTx). The default bill head 5400 "Programme
+ * Expenses" comes from defaultBillHeads(); the core heads (1100 cash, 2050 AP, 3100 Accumulated Fund = the General /
+ * Unrestricted fund carry-forward, ...) come from coreGlHeads(). Codes avoid every core code (asserted by tests).
+ *
+ * Every head carries a stored statementClass so Schedule III (NF-7) can classify it; classes agree with head-nature.ts
+ * (1xxx asset, 2xxx liability, 3xxx equity-classified equity, 4xxx income, 5xxx/6xxx expense).
+ * Statutory / convention-dependent choices are marked VERIFY for the CA worksheet.
+ */
+function nonprofitHeads(): StandardGlHead[] {
+  const f = FUND_HEAD_CODES();
+  return [
+    // ---- assets ----
+    th("1500", "Advances and Deposits Paid", "asset", "asset"),
+    th("1550", "Grants-in-Aid Receivable", "asset", "asset"),
+    th("1600", "Prepaid Expenses", "asset", "asset"),
+    th("1700", "Investments (Corpus and Other)", "asset", "asset"), // VERIFY: single head vs corpus-earmarked investments split (Sec 11(5)/12A modes)
+    th("1800", "TDS Receivable", "asset", "asset"),
+    th(f.dueFrom, "Due from Other Funds", "asset", "asset"), // inter-fund receivable (NF-1); nets to zero with the due-to head in total
+    // ---- liabilities ----
+    th("2300", "Unutilised Grants (General)", "liability", "current_liability"),
+    th("2310", "FCRA Foreign Contribution Unutilised", "liability", "current_liability"), // VERIFY: FCRA unutilised-balance presentation
+    th("2320", "Unutilised Grant-in-Aid - Salary", "liability", "current_liability"),
+    th("2330", "Unutilised Grant-in-Aid - General", "liability", "current_liability"),
+    th("2340", "Unutilised Grant-in-Aid - Capital", "liability", "current_liability"),
+    // CAPITAL-GRANT TREATMENT, candidate A (liability): Deferred Government Grant, released to income over the asset life.
+    // NF-3 selects EXACTLY ONE of this head and the Capital Grant Fund (3300) per the AS-12 policy. That policy decision is
+    // still OPEN, so neither is hard-coded as the default anywhere; both are seeded.
+    th("2350", "Deferred Government Grant (Capital)", "liability", "non_current_liability"), // VERIFY: AS-12 deferred-income approach
+    th("2500", "Accrued Expenses", "liability", "current_liability"),
+    th("2600", "Statutory Dues Payable (GST / other)", "liability", "current_liability"),
+    th("2700", "Long-term Borrowings", "liability", "non_current_liability"),
+    th(f.dueTo, "Due to Other Funds", "liability", "current_liability"), // inter-fund payable (NF-1)
+    // ---- fund balances (equity / reserves). 3100 Accumulated Fund (core) is the General / Unrestricted fund. ----
+    th("3000", "Corpus Fund", "equity", "equity"),
+    th("3200", "Restricted Funds", "equity", "reserve"),
+    th("3210", "Designated Funds", "equity", "reserve"),
+    // CAPITAL-GRANT TREATMENT, candidate B (equity / reserve): Capital Grant Fund (see 2350 above; NF-3 picks one).
+    th("3300", "Capital Grant Fund", "equity", "capital_reserve"), // VERIFY: AS-12 capital-approach reserve classification
+    // Inter-fund movement heads (NF-1 transfer / release journals); equity-classified, they net to zero in total.
+    th(f.transferOut, "Inter-fund Transfer Out", "equity", "equity"),
+    th(f.transferIn, "Inter-fund Transfer In", "equity", "equity"),
+    th(f.releaseOut, "Released from Restriction - Out", "equity", "equity"),
+    th(f.releaseIn, "Released from Restriction - In", "equity", "equity"),
+    // ---- income ----
+    th("4400", "Grants and Donations Received", "income", "income"),
+    th("4410", "Membership Fees", "income", "income"),
+    th("4420", "Interest on Investments", "income", "income"),
+    th("4430", "Grant-in-Aid Income - Salary", "income", "income"),
+    th("4440", "Grant-in-Aid Income - General", "income", "income"),
+    th("4450", "Grant-in-Aid Income - Capital (released / amortised)", "income", "income"),
+    th("4460", "Other Income", "income", "income"),
+    // ---- expenditure (5400 Programme Expenses is the default bill head) ----
+    th("5410", "Staff Costs", "expense", "expense"),
+    th("5420", "Administrative Expenses", "expense", "expense"),
+    th("5430", "Fundraising Expenses", "expense", "expense"),
+    th("5440", "Grants Disbursed to Partners", "expense", "expense"),
+    th("5450", "Repairs and Maintenance", "expense", "expense"),
+    th("5460", "Professional Fees", "expense", "expense"),
+    th("5470", "Travel and Conveyance", "expense", "expense"),
+    th("6200", "Bank Charges", "expense", "expense"),
+  ];
+}
+
 /** Template heads other than the default bill head (docs/design/TENANT-PROFILE-SWITCH.md 2.3). Codes avoid every core code. */
 function templateAdditions(template: SeedTemplate): StandardGlHead[] {
   if (template === "commercial") {
@@ -162,24 +227,7 @@ function templateAdditions(template: SeedTemplate): StandardGlHead[] {
       th("6200", "Bank Charges and Interest", "expense", "expense"),
     ];
   }
-  if (template === "nonprofit") {
-    return [
-      th("1500", "Advances and Deposits Paid", "asset", "asset"),
-      th("1550", "Grants Receivable", "asset", "asset"),
-      th("2300", "Unutilised Grants", "liability", "current_liability"),
-      th("2310", "FCRA Foreign Contribution Unutilised", "liability", "current_liability"),
-      th("3000", "Corpus Fund", "equity", "equity"),
-      th("3200", "Restricted and Designated Funds", "equity", "reserve"),
-      th("4400", "Grants and Donations Received", "income", "income"),
-      th("4410", "Membership Fees", "income", "income"),
-      th("4420", "Interest on Investments", "income", "income"),
-      th("5410", "Staff Costs", "expense", "expense"),
-      th("5420", "Administrative Expenses", "expense", "expense"),
-      th("5430", "Fundraising Expenses", "expense", "expense"),
-      th("5440", "Grants Disbursed to Partners", "expense", "expense"),
-      th("6200", "Bank Charges", "expense", "expense"),
-    ];
-  }
+  if (template === "nonprofit") return nonprofitHeads();
   return [];
 }
 

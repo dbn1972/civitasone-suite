@@ -67,14 +67,15 @@ describe("S4 pure: default bill head", () => {
 
 describe("S4 pure: commercial and nonprofit head sets", () => {
   const commercial = ["5400", "1500", "1600", "1700", "1800", "2300", "2310", "2400", "2500", "3000", "3200", "4400", "5410", "5420", "5430", "5440", "5450", "6200"];
-  const nonprofit = ["5400", "1500", "1550", "2300", "2310", "3000", "3200", "4400", "4410", "4420", "5410", "5420", "5430", "5440", "6200"];
+  // NF-2 owns the full nonprofit head set (tests/nf2-nonprofit-coa.test.ts); here only the S4 invariants on it.
+  const nonprofit = codes(templateGlHeads("nonprofit"));
   it("commercial template heads are exactly the design list; default bill head 5400 has no HoA", () => {
     expect(codes(templateGlHeads("commercial")).sort()).toEqual([...commercial].sort());
     expect(templateGlHeads("commercial").find((h) => h.code === "5400")).toMatchObject({ name: "Purchases and Direct Expenses", classification: "expense", statementClass: "expense" });
     expect(templateGlHeads("commercial").every((h) => h.hoaCode === undefined)).toBe(true);
   });
-  it("nonprofit template heads are exactly the design list", () => {
-    expect(codes(templateGlHeads("nonprofit")).sort()).toEqual([...nonprofit].sort());
+  it("nonprofit template heads include the S4 baseline and the default bill head", () => {
+    for (const c of ["5400", "1500", "1550", "2300", "2310", "3000", "3200", "4400", "4410", "4420", "5410", "5420", "5430", "5440", "6200"]) expect(nonprofit).toContain(c);
     expect(templateGlHeads("nonprofit").find((h) => h.code === "5400")).toMatchObject({ name: "Programme Expenses" });
   });
   it.each(["commercial", "nonprofit"] as const)("%s: no template code clashes with a core code, and the full list has unique codes", (t) => {
@@ -89,7 +90,9 @@ describe("S4 pure: commercial and nonprofit head sets", () => {
       const nature = headNatureOf(h.code, h.classification);
       const expected = nature === "liability" ? "current_liability" : nature;
       // reserve is the equity-nature sub-class for 3200; everything else maps 1:1
-      expect(h.statementClass === expected || (h.statementClass === "reserve" && nature === "equity")).toBe(true);
+      // reserve / capital_reserve are equity-nature sub-classes; non_current_liability is a liability-nature sub-class (NF-2)
+      expect(h.statementClass === expected || (["reserve", "capital_reserve"].includes(h.statementClass!) && nature === "equity")
+        || (h.statementClass === "non_current_liability" && nature === "liability")).toBe(true);
     }
   });
   it("specific classes: 3200 reserve, 3000 equity, 2300 current_liability, 1550 asset, 4400 income", () => {

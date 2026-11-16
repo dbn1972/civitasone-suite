@@ -16,20 +16,14 @@ import { headNatureOf } from "../../shared/head-nature.js";
 import { financeHeads } from "../budget/schema.js";
 import { funds, type FundRow, type FundType, type JournalLine } from "./schema.js";
 import type { FundContext } from "./fund-context.js";
+import { FUND_HEAD_CODES } from "./system-heads.js";
 
 export const GENERAL_FUND_CODE = "GENERAL";
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Chart codes of the inter-fund heads (NF-2 supplies the nonprofit chart; configurable like every system head). */
-export const FUND_HEADS = {
-  dueTo: process.env.FINANCE_FUND_DUE_TO_CODE ?? "2900",           // liability: owed to another fund
-  dueFrom: process.env.FINANCE_FUND_DUE_FROM_CODE ?? "1900",       // asset: owed by another fund
-  transferOut: process.env.FINANCE_FUND_TRANSFER_OUT_CODE ?? "3910", // equity: inter-fund transfer out
-  transferIn: process.env.FINANCE_FUND_TRANSFER_IN_CODE ?? "3911",   // equity: inter-fund transfer in
-  releaseOut: process.env.FINANCE_FUND_RELEASE_OUT_CODE ?? "3920",   // equity: released from restriction (out of the restricted fund)
-  releaseIn: process.env.FINANCE_FUND_RELEASE_IN_CODE ?? "3921",     // equity: released from restriction (into the receiving fund)
-} as const;
+export const FUND_HEADS = FUND_HEAD_CODES(); // defined once in system-heads.ts; the nonprofit chart (standard-heads.ts) seeds these same codes
 
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => (Array.isArray(r) ? r : ((r as { rows?: Row[] })?.rows ?? [])) as Row[];
