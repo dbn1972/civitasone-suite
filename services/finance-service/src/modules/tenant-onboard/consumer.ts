@@ -20,7 +20,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { financeMajorHeads } from "../hoa/schema.js";
 import { STANDARD_MAJOR_HEADS } from "../hoa/standard-major-heads.js";
 import { seedGlHeadsTx } from "../gl/standard-heads.js";
-import { resolveCoaTemplateTx } from "../gl/coa-template.js";
+import { resolveCoaTemplateTx, activateFinanceProfileTx } from "../gl/coa-template.js";
 import { seedDefaultDdoTx } from "../masters/ddo-seed.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -39,6 +39,7 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
     adminEmail: string;
     adminName: string;
     edition: string;
+    profileCode?: string;
   }>(TENANT_ONBOARDED, async (msg) => {
     const p = msg.payload;
     // F89/F91: the tenant's own GL heads that the posting paths resolve by code (depreciation, disposal, billing,
@@ -49,6 +50,9 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
     // settings row, or coa_template = govt => the govt seed, byte-identical to the pre-S4 one.
     const glHeadsSeeded = await db.transaction(async (tx) => {
       const tenantId = p.tenantId ?? msg.tenantId;
+      // Tenant-profile finance activation: materialise the profile's initial gl.finance_settings FIRST, in this same
+      // transaction, so the resolve below sees it. No-op (no query, no write) with the flag off or for govt_dept.
+      await activateFinanceProfileTx(tx, tenantId, p.profileCode, msg.actorId);
       const { template, packs } = await resolveCoaTemplateTx(tx, tenantId);
       return seedGlHeadsTx(tx, tenantId, template, packs, msg.actorId);
     });
