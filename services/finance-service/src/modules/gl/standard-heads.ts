@@ -281,7 +281,7 @@ export class CoaTemplateCollisionError extends NonRetryableError {
     // NonRetryableError: the collision is deterministic, so a queue consumer sends it straight to the DLQ (no retries).
     super(`[COA_TEMPLATE_COLLISION] tenant already uses template head code(s) for another purpose: ${
       collisions.map((c) => `${c.code} (existing ${c.existing ?? "none"}, template ${c.template})`).join(", ")}`);
-    (this as Error).name = "CoaTemplateCollisionError";
+    (this as unknown as Error).name = "CoaTemplateCollisionError";
   }
 }
 
