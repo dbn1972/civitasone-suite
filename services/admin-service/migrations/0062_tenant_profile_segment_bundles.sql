@@ -28,12 +28,14 @@ INSERT INTO composition.org_profile (code, label, subtitle, rule_packs, terminol
     40)
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO composition.module_bundle (code, label, subtitle, module_ids, sort_order) VALUES
-  ('section8', 'Section 8 company', 'Non-profit: HR, payroll, finance, grants',
-    ARRAY['employee','attendance','leave','appraisal','ess','payroll','finance','budget','grant','analytics'], 120),
-  ('small_office', 'Small business / MSME', 'HR, payroll, finance, grants',
-    ARRAY['employee','attendance','leave','appraisal','ess','payroll','finance','budget','grant','analytics'], 121),
-  ('psu', 'PSU / Board', 'Public-sector undertaking: full commercial ERP',
-    ARRAY['employee','attendance','leave','recruitment','appraisal','career','ess','payroll','loans','benefits','separation',
-          'finance','budget','treasury','revenue','procurement','contract','inventory','asset','works','project','inspection','analytics'], 122)
+-- Bundle module_ids are DERIVED from the profile's CURRENT default_modules (not hard-coded), so a bundle can never
+-- drift from its profile (e.g. 0056 appended `field` to psu after 0026). Must stay AFTER the org_profile insert above.
+INSERT INTO composition.module_bundle (code, label, subtitle, module_ids, sort_order)
+SELECT p.code, v.label, v.subtitle, p.default_modules, v.sort_order
+  FROM composition.org_profile p
+  JOIN (VALUES
+    ('section8',     'Section 8 company',     'Non-profit: HR, payroll, finance, grants',          120),
+    ('small_office', 'Small business / MSME', 'HR, payroll, finance, grants',                      121),
+    ('psu',          'PSU / Board',           'Public-sector undertaking: full commercial ERP',    122)
+  ) AS v(code, label, subtitle, sort_order) ON v.code = p.code
 ON CONFLICT (code) DO NOTHING;
