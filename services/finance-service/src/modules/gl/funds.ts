@@ -209,7 +209,14 @@ export async function prepareFundPostingTx(
   assertFundsBalanced(funded);
   const fundIds = [...new Set(funded.map((l) => l.fund as string))].sort();
   const rows: FundRow[] = await tx.select().from(funds)
-    .where(and(eq(funds.tenantId, tenantId), inArray(funds.id, fundIds))).orderBy(funds.id).for("update");
+    .where(and(eq(funds.tenantId, tenantId), inArray(funds.id, fundIds))).orderBy(funds.id);
+  // Row-lock ONLY restricted / corpus funds (the overspend and corpus races), in id order. GENERAL / unrestricted / designated
+  // need no lock, so ordinary postings are not serialised per tenant.
+  const lockIds = rows.filter((f) => f.type === "restricted" || f.type === "corpus").map((f) => f.id).sort();
+  if (lockIds.length > 0) {
+    await tx.select({ id: funds.id }).from(funds)
+      .where(and(eq(funds.tenantId, tenantId), inArray(funds.id, lockIds))).orderBy(funds.id).for("update");
+  }
   const byId = new Map(rows.map((f) => [f.id, f]));
   for (const id of fundIds) {
     const f = byId.get(id);

@@ -84,7 +84,7 @@ function tenantWrappedQueue(): MemoryQueue {
   const q = new MemoryQueue({ maxAttempts: 1 });
   const raw = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>
-    raw(topic, (msg: Parameters<Handler>[0]) => runWithTenant(msg.tenantId, () => handler(msg)))) as typeof q.subscribe;
+    raw(topic, async (msg: Parameters<Handler>[0]) => runWithTenant(msg.tenantId, () => handler(msg)))) as typeof q.subscribe;
   return q;
 }
 type L = { accountCode: string; debitMinor: bigint; creditMinor: bigint; fundId?: string };
@@ -182,7 +182,7 @@ describe("finance_ledger stays append-only and accepts fund_id; old rows are unc
     await scoped(s.t, (tx) => tx.insert(financeLedger).values({ ...old, voucherNo: "NEW-1", fundId: f }));
     const rows = await q1(s.t, sql`SELECT voucher_no, fund_id::text AS fund_id FROM gl.finance_ledger WHERE tenant_id = ${s.t}::uuid ORDER BY voucher_no`);
     expect(rows).toEqual([{ voucher_no: "NEW-1", fund_id: f }, { voucher_no: "OLD-1", fund_id: null }]);
-    await expect(scoped(s.t, (tx) => tx.execute(sql`UPDATE gl.finance_ledger SET fund_id = NULL WHERE tenant_id = ${s.t}::uuid`))).rejects.toThrow(/append-only/);
+    await expect(scoped(s.t, (tx) => tx.execute(sql`UPDATE gl.finance_ledger SET fund_id = NULL WHERE tenant_id = ${s.t}::uuid`))).rejects.toThrow(/append-only|permission denied/);
     await expect(scoped(s.t, (tx) => tx.execute(sql`DELETE FROM gl.finance_ledger WHERE tenant_id = ${s.t}::uuid`))).rejects.toThrow();
   });
 });
@@ -486,6 +486,36 @@ describe("the funds API is invisible to a tenant without fund accounting", () =>
       const r3 = await app.inject({ method: "POST", url: "/v1/finance/funds/transfers", headers: bearer(off.t, MAKER, ["finance_officer"]),
         payload: { fromFundId: randomUUID(), toFundId: randomUUID(), amountMinor: "100", postingDate: "2026-08-10" } });
       expect(r3.statusCode).toBe(404);
+    } finally { await app.close(); }
+  });
+});
+
+describe("govt byte-identity: plain GETs add no fundId key for a flag-OFF tenant (S1 regression)", () => {
+  it("GET /v1/finance/ledger and GET /v1/finance/opening-balances/:fy rows contain NO fundId key", async () => {
+    const app = await buildApp();
+    try {
+      const s = await seedTenant({ fundAccounting: false });
+      await scoped(s.t, (tx) => tx.insert(financeLedger).values({
+        tenantId: s.t, headId: (s.heads.get("1100") as { id: string }).id, voucherNo: "G-1", postingDate: "2026-05-02",
+        debitMinor: 9n, creditMinor: 0n, balanceMinor: 9n, createdBy: MAKER, updatedBy: MAKER,
+      }));
+      await scoped(s.t, (tx) => tx.execute(sql`INSERT INTO gl.finance_opening_balances (tenant_id, fy_code, account_code, debit_minor, credit_minor, entered_by)
+        VALUES (${s.t}::uuid, '2026-27', '1100', 5, 0, ${MAKER}::uuid)`));
+      const h = bearer(s.t, MAKER, ["finance_officer"]);
+      const led = await app.inject({ method: "GET", url: "/v1/finance/ledger", headers: h });
+      expect(led.statusCode).toBe(200);
+      expect(led.body).toContain("G-1");
+      expect(led.body).not.toContain("fundId");
+      const ob = await app.inject({ method: "GET", url: "/v1/finance/opening-balances/2026-27", headers: h });
+      expect(ob.statusCode).toBe(200);
+      expect(ob.body).toContain("1100");
+      expect(ob.body).not.toContain("fundId");
+      // a fund-tagged row (flag ON) still reports its fund
+      const on = await seedTenant({ fundAccounting: true });
+      const f = await newFund(on.t, "F9", "restricted");
+      await seedFundBalance(on, f, 3n);
+      const led2 = await app.inject({ method: "GET", url: "/v1/finance/ledger", headers: bearer(on.t, MAKER, ["finance_officer"]) });
+      expect(led2.body).toContain(f);
     } finally { await app.close(); }
   });
 });

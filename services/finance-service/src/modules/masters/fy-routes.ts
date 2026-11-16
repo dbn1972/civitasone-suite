@@ -17,6 +17,7 @@ import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, DomainError 
 import { checkFiscalYearActivation } from "../approvals/apply.js";
 import { readSettings } from "../approvals/repo.js";
 import { submitChangeRequest } from "../approvals/commands.js";
+import { omitNullFundId } from "../gl/fund-columns.js";
 import { assertOpeningBalancedPerFund, openingEntryConflicts } from "../gl/funds.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
@@ -196,7 +197,8 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const fyCode = (req.params as { fyCode: string }).fyCode;
     const rows = await scopedRead((tx) => tx.select().from(openingBalances)
       .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, fyCode))));
-    return reply.send({ data: rows });
+    // Section 8 NF-1: no `fundId` key for a NULL fund (govt byte-identity).
+    return reply.send({ data: rows.map(omitNullFundId) });
   });
 
   app.post("/v1/finance/opening-balances", async (req, reply) => {

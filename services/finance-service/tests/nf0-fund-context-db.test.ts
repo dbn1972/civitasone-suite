@@ -38,7 +38,7 @@ function tenantWrappedQueue(): MemoryQueue {
   const q = new MemoryQueue({ maxAttempts: 1 });
   const raw = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>
-    raw(topic, (msg: Parameters<Handler>[0]) => runWithTenant(msg.tenantId, () => handler(msg)))) as typeof q.subscribe;
+    raw(topic, async (msg: Parameters<Handler>[0]) => runWithTenant(msg.tenantId, () => handler(msg)))) as typeof q.subscribe;
   return q;
 }
 
