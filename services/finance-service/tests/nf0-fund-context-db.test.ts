@@ -1,4 +1,6 @@
 /**
+ * Section 8 NF-0 (updated by NF-1: with fund accounting ON the seam now TAGS and is FAIL-CLOSED, so the ON cases below seed the
+ * GENERAL fund first and compare everything except the fund tag; NF-1's own DB tests are tests/nf1-*.test.ts).
  * Section 8 NF-0, real Postgres (run by the orchestrator, not the author):
  *  - migration 0170: gl.finance_settings.fund_accounting exists, is a nullable boolean, DEFAULT false, existing rows read false;
  *  - fundContext() resolves OFF for no row / NULL / false and ON only for true, and tag*() is the identity either way;
@@ -15,6 +17,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { fundContext, fundContextFromFlag } from "../src/modules/gl/fund-context.js";
+import { ensureGeneralFundTx } from "../src/modules/gl/funds.js";
 import { COMMANDS } from "../src/topics.js";
 import { backfillStandardGlHeads } from "../scripts/backfill-standard-gl-heads.js";
 import { purgeLedgerRows } from "./_purge-ledger.js";
@@ -54,18 +57,23 @@ describe("migration 0170: gl.finance_settings.fund_accounting", () => {
 });
 
 describe("fundContext()", () => {
-  it("no row / NULL / false => disabled; true => enabled; tag*() is the identity", async () => {
+  it("no row / NULL / false => disabled with strict-identity tag*(); true (with the GENERAL fund) => enabled", async () => {
     const MISSING = randomUUID();
     await setFlag(NULL_T, null);
     await setFlag(OFF_T, false);
     await setFlag(ON_T, true);
+    await scoped(ON_T, (tx) => ensureGeneralFundTx(tx, ON_T, ACTOR));
     const row = { a: 1 };
     for (const [t, want] of [[MISSING, false], [NULL_T, false], [OFF_T, false], [ON_T, true]] as const) {
       const ctx = await scoped(t, (tx) => fundContext(tx, t));
       expect(ctx.enabled, t).toBe(want);
-      expect(ctx.tagJournal(row)).toBe(row);
-      expect(ctx.tagJournalLine(row)).toBe(row);
-      expect(ctx.tagLedgerLine(row)).toBe(row);
+      if (!want) {
+        expect(ctx.tagJournal(row)).toBe(row);
+        expect(ctx.tagJournalLine(row)).toBe(row);
+        expect(ctx.tagLedgerLine(row)).toBe(row);
+      } else {
+        expect(ctx.tagLedgerLine(row)).not.toBe(row);
+      }
     }
     expect(fundContextFromFlag(undefined).enabled).toBe(false);
   });
@@ -95,11 +103,14 @@ describe("posting through the seam is identical with fund_accounting OFF and ON"
   it("an asset disposal writes the same journal, journal lines and ledger rows for both tenants", async () => {
     await setFlag(OFF_T, false);
     await setFlag(ON_T, true);
+    await scoped(ON_T, (tx) => ensureGeneralFundTx(tx, ON_T, ACTOR));
     await postDisposal(OFF_T, randomUUID());
     await postDisposal(ON_T, randomUUID());
     const off = await shape(OFF_T);
     const on = await shape(ON_T);
     expect(off.ledger.length).toBeGreaterThan(0);
-    expect(on).toEqual(off);
+    // Everything except the fund tag is identical; the ON tenant's JSONB lines additionally carry fundId (= GENERAL).
+    const stripFund = (rows: Record<string, unknown>[]) => rows.map((r) => ({ ...r, lines: (r.lines as Record<string, unknown>[]).map(({ fundId: _f, ...l }) => l) }));
+    expect({ ...on, journals: stripFund(on.journals) }).toEqual({ ...off, journals: stripFund(off.journals) });
   });
 });

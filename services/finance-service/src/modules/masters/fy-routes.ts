@@ -17,6 +17,7 @@ import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, DomainError 
 import { checkFiscalYearActivation } from "../approvals/apply.js";
 import { readSettings } from "../approvals/repo.js";
 import { submitChangeRequest } from "../approvals/commands.js";
+import { assertOpeningBalancedPerFund, openingEntryConflicts } from "../gl/funds.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 // UX-medium finding: this used to be a single FINANCE_ROLES = ["finance_admin",
@@ -54,6 +55,7 @@ const openingBalances = glSchema.table("finance_opening_balances", {
   tenantId: uuid("tenant_id").notNull(),
   fyCode: varchar("fy_code", { length: 9 }).notNull(),
   accountCode: varchar("account_code", { length: 20 }).notNull(),
+  fundId: uuid("fund_id"),
   debitMinor: bigint("debit_minor", { mode: "bigint" }).notNull().default(0n),
   creditMinor: bigint("credit_minor", { mode: "bigint" }).notNull().default(0n),
   narration: text("narration"),
@@ -101,6 +103,8 @@ const openingBalanceBody = z.object({
     debitMinor: moneyMinorNonNeg.default(0n),
     creditMinor: moneyMinorNonNeg.default(0n),
     narration: z.string().max(500).optional(),
+    // Section 8 NF-1: the fund of this opening balance. Only meaningful with fund accounting on (the database refuses it otherwise).
+    fundId: z.string().uuid().optional(),
   })).min(1).max(500),
   reason: reasonField,
 });
@@ -208,6 +212,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     // bypass it either.
     try {
       assertOpeningBalancesBalanced(body.entries);
+      assertOpeningBalancedPerFund(body.entries); // Section 8: no-op unless an entry names a fund
     } catch (err) {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
@@ -250,11 +255,10 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     // case non-bypassable: it can't stop the second caller's HTTP response
     // from already having gone out as 202, but it does guarantee the loser is
     // never silently dropped -- rejected loudly and traceably instead.
-    const existing = await scopedRead((tx) => tx.select({ accountCode: openingBalances.accountCode })
+    const existing = await scopedRead((tx) => tx.select({ accountCode: openingBalances.accountCode, fundId: openingBalances.fundId })
       .from(openingBalances)
       .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, body.fyCode))));
-    const existingCodes = new Set(existing.map((r) => r.accountCode));
-    const duplicateCodes = [...new Set(body.entries.map((e) => e.accountCode).filter((code) => existingCodes.has(code)))];
+    const duplicateCodes = [...new Set(body.entries.filter((e) => openingEntryConflicts(existing, e)).map((e) => e.accountCode))];
     if (duplicateCodes.length > 0) {
       throw new HttpError(
         409,
@@ -271,6 +275,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
       debitMinor: e.debitMinor.toString(),
       creditMinor: e.creditMinor.toString(),
       narration: e.narration ?? null,
+      ...(e.fundId ? { fundId: e.fundId } : {}),
     }));
     // GAP-FINANCE-OPENING-BALANCES-01: seeding the ledger is approved by a
     // second officer (per-tenant setting, default on): the batch is held as a

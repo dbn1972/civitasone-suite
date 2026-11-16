@@ -12,6 +12,7 @@ import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { budgetRoutes }   from "./modules/budget/routes.js";
 import { glRoutes }       from "./modules/gl/routes.js";
+import { fundRoutes }     from "./modules/gl/fund-routes.js";
 import { treasuryRoutes } from "./modules/treasury/routes.js";
 import { paymentsRoutes } from "./modules/payments/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(budgetRoutes);
   await app.register(glRoutes);
+  await app.register(fundRoutes);
   await app.register(treasuryRoutes);
   await app.register(paymentsRoutes);
   await app.register(dashboardRoutes);

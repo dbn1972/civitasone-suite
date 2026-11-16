@@ -31,6 +31,8 @@ import { sql } from "drizzle-orm";
 import { needsBudgetProvision, noBudgetProvisionError, provisionAction, loadBudgetControlTx } from "../budget/provision.js";
 import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
 import { fundContext } from "./fund-context.js";
+import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
+import { prepareFundPostingTx, assertFundsBalanced } from "./funds.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:gl-consumer" });
@@ -299,7 +301,10 @@ async function postJournal(
   // for the non-cash journal types that never draw on a provision.
   // Tenant-type profile switch: mandatory (every existing tenant) is the behaviour described above; advisory posts with an
   // audit row instead of refusing; off skips the whole check, utilisation tracking included.
-  const budgetControl = await loadBudgetControlTx(tx, journal.tenantId);
+  // Section 8 NF-1 (S4): ONE read of gl.finance_settings per posting -- budget_control and fund_accounting (+ the GENERAL fund id)
+  // together -- handed to both the budget check below and the fund seam further down.
+  const postingSettings = await loadPostingSettingsTx(tx, journal.tenantId);
+  const budgetControl = await loadBudgetControlTx(tx, journal.tenantId, postingSettings);
   if (budgetControl !== "off") {
     const fy = fyFromDate(journal.postingDate);
     const perHeadDebit = new Map<string, bigint>();
@@ -382,9 +387,13 @@ async function postJournal(
       }
     }
   }
-  // Section 8 NF-0: the single fund seam, resolved ONCE per posting before the first write. Fund accounting off (every govt
-  // tenant) => a strict no-op context: every tag*() below returns its row unchanged. On => still a no-op in NF-0; NF-1 adds tagging.
-  const fx = await fundContext(tx, journal.tenantId);
+  // Section 8: the single fund seam, resolved ONCE per posting before the first write, from the settings read above. This is the
+  // POSTING (approval) moment, which is authoritative (S5): a manual draft is only a request. Fund accounting off (every govt
+  // tenant) => a strict no-op context: every tag*() below returns its row unchanged. On => each line is tagged with its fund
+  // (default GENERAL); ON with no GENERAL fund throws FUND_ACCOUNTING_NOT_READY here (fail-closed: nothing is written).
+  const fx = await fundContext(tx, journal.tenantId, postingSettings);
+  // Per-fund balance, fund existence/status, row locks and the restricted-spend rule. Returns at once when fx is disabled.
+  await prepareFundPostingTx(tx, fx, journal.tenantId, journal);
   if (existing) {
     // DOM-024: finalizing a manual maker-checker draft — UPDATE the existing
     // pending_approval row in place instead of a second INSERT (its id
@@ -411,6 +420,8 @@ async function postJournal(
     // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal
     // / manual-journal paths post instead of dead-lettering on the uuid column.
     const headId = await resolveHeadIdTx(tx, journal.tenantId, line.accountCode);
+    // The fund of this line: the ONE source for the JSONB element (tagJournal), the journal-line row and the ledger line.
+    const lineFund = fx.fundOfLine(line);
     await repo.insertLedgerLine(tx, fx.tagLedgerLine({
       id: randomUUID(), tenantId: journal.tenantId,
       headId,
@@ -418,7 +429,7 @@ async function postJournal(
       balanceMinor: BigInt(line.debitMinor) - BigInt(line.creditMinor),
       voucherNo, postingDate: journal.postingDate,
       createdBy: msg.actorId, updatedBy: msg.actorId,
-    }));
+    }, lineFund));
     // Denormalized journal line (eliminates CROSS JOIN LATERAL for asset/report queries).
     const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
     await repo.insertJournalLine(tx, fx.tagJournalLine({
@@ -428,7 +439,7 @@ async function postJournal(
       ...(head?.code ? { headCode: head.code } : {}),
       ...(head?.name ? { headName: head.name } : {}),
       ...(head?.classification ? { headClassification: head.classification } : {}),
-    }));
+    }, lineFund));
   }
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
@@ -783,6 +794,12 @@ export function registerGlConsumers(queue: Queue): void {
         const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
         // Section 8 NF-0: the draft path is the second journal writer; same seam, resolved once before the write.
         const fxDraft = await fundContext(tx, p.tenantId);
+        // Early feedback only (the authoritative per-fund checks run when the checker approves): a draft that cannot balance
+        // within its funds is refused now instead of waiting in the queue. No-op while fund accounting is off.
+        if (fxDraft.enabled) {
+          try { assertFundsBalanced(p.lines.map((l: JournalLine) => ({ debitMinor: l.debitMinor, creditMinor: l.creditMinor, fund: fxDraft.fundOfLine(l) }))); }
+          catch (err) { throw new NonRetryableError(String((err as Error).message)); }
+        }
         await repo.insertJournal(tx, fxDraft.tagJournal({
           id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
           type: p.type, postingDate: p.postingDate, lines: p.lines,
@@ -890,7 +907,7 @@ export function registerGlConsumers(queue: Queue): void {
         // back, so nothing posts and the draft stays pending_approval; gl/routes.ts refuses the next approval attempt
         // with 422 PERIOD_CLOSED until the period is reopened.
         const code = refusalCode(err);
-        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED") && !(err instanceof NonRetryableError)) {
+        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED" || code.startsWith("FUND_") || code === "JOURNAL_FUND_UNBALANCED") && !(err instanceof NonRetryableError)) {
           throw new NonRetryableError(String((err as Error).message));
         }
         throw err;

@@ -34,9 +34,10 @@ export type ProfileSettings = {
   coaPacks: readonly string[];
   statutoryPack: StatutoryPack;
   /**
-   * Section 8 NF-0: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). Materialised by finance-service into
-   * gl.finance_settings.fund_accounting. false for govt and every profile that does not set it; no profile turns it on
-   * until NF-8 (per-tenant activation, strictly last).
+   * Section 8: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). This is the profile's DEFAULT only. Nothing
+   * copies it into gl.finance_settings.fund_accounting yet: that column is changed solely by finance-service's
+   * setFundAccountingTx (gl/fund-activation.ts), which the NF-8 activation wizard will call, per tenant. false for govt and
+   * every profile that does not set it; no profile turns it on until NF-8 (strictly last).
    */
   fundAccounting: boolean;
 };

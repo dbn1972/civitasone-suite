@@ -16,6 +16,8 @@ import { ACCUMULATED_FUND } from "../gl/system-heads.js";
 import { DomainError } from "../masters/domain.js";
 import { openPeriodsOfYear } from "../approvals/domain.js";
 import { applyPendingBasisSwitchTx } from "../approvals/apply.js";
+import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
+import { fundYearEndRollover } from "./fund-repo.js";
 import { isCarryForwardHead, rollForward, toDrCr, lapseRow, lapseTotals, monthsOfFy, type HeadMovement, type LapseRow } from "./domain.js";
 
 /** The caller transaction, typed as the outbox helper takes it (raw SQL via execute, plus enqueue). */
@@ -221,22 +223,34 @@ export async function applyYearEndClose(tx: Tx, meta: { tenantId: string; actorI
   const tenantId = meta.tenantId;
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`year_end:${tenantId}`}))`);
   const { next } = await checkYearEndClose(tx, tenantId, p.fy);
-  const { carried } = await fyBalances(tx, tenantId, p.fy);
-  const wanted = [...carried.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const total = wanted.reduce((s, [, v]) => s + v, 0n);
-  if (total !== 0n) throw new DomainError("OPENING_BALANCES_UNBALANCED", `the ledger for ${p.fy} does not balance (difference ${total} paise); fix it before the year-end close`);
-  const previous = signedMap((await storedOpening(tx, tenantId, next)).filter((r) => r.source === "fy_close"));
-  const changed = previous.size !== wanted.length || wanted.some(([code, v]) => previous.get(code) !== v);
-  if (changed) {
-    await tx.execute(sql`DELETE FROM gl.finance_opening_balances WHERE tenant_id = ${tenantId}::uuid AND fy_code = ${next} AND source = 'fy_close'`);
-    for (const [code, v] of wanted) {
-      const { debitMinor, creditMinor } = toDrCr(v);
-      await tx.execute(sql`
-        INSERT INTO gl.finance_opening_balances (tenant_id, fy_code, account_code, debit_minor, credit_minor, narration, entered_by, source)
-        VALUES (${tenantId}::uuid, ${next}, ${code}, ${debitMinor.toString()}::bigint, ${creditMinor.toString()}::bigint,
-                ${`Brought forward from ${p.fy} (year-end close)`}, ${meta.actorId}::uuid, 'fy_close')
-      `);
+  // Section 8 NF-1: fund accounting ON selects the per-fund close (year-end/fund-repo.ts); OFF runs the govt block below, UNCHANGED.
+  const fundPath = (await loadPostingSettingsTx(tx, tenantId)).fundAccounting;
+  let openingBalanceCount = 0;
+  let changed = false;
+  let fund = 0n;
+  if (fundPath) {
+    const r = await fundYearEndRollover(tx, meta, { fy: p.fy, next, reason: p.reason });
+    openingBalanceCount = r.openingBalanceCount; changed = r.changed; fund = r.fundCarriedMinor;
+  } else {
+    const { carried } = await fyBalances(tx, tenantId, p.fy);
+    const wanted = [...carried.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const total = wanted.reduce((s, [, v]) => s + v, 0n);
+    if (total !== 0n) throw new DomainError("OPENING_BALANCES_UNBALANCED", `the ledger for ${p.fy} does not balance (difference ${total} paise); fix it before the year-end close`);
+    const previous = signedMap((await storedOpening(tx, tenantId, next)).filter((r) => r.source === "fy_close"));
+    changed = previous.size !== wanted.length || wanted.some(([code, v]) => previous.get(code) !== v);
+    if (changed) {
+      await tx.execute(sql`DELETE FROM gl.finance_opening_balances WHERE tenant_id = ${tenantId}::uuid AND fy_code = ${next} AND source = 'fy_close'`);
+      for (const [code, v] of wanted) {
+        const { debitMinor, creditMinor } = toDrCr(v);
+        await tx.execute(sql`
+          INSERT INTO gl.finance_opening_balances (tenant_id, fy_code, account_code, debit_minor, credit_minor, narration, entered_by, source)
+          VALUES (${tenantId}::uuid, ${next}, ${code}, ${debitMinor.toString()}::bigint, ${creditMinor.toString()}::bigint,
+                  ${`Brought forward from ${p.fy} (year-end close)`}, ${meta.actorId}::uuid, 'fy_close')
+        `);
+      }
     }
+    openingBalanceCount = wanted.length;
+    fund = carried.get(ACCUMULATED_FUND) ?? 0n;
   }
   const lapse = await lapseRowsForFy(tx, tenantId, p.fy);
   for (const r of lapse) {
@@ -250,10 +264,9 @@ export async function applyYearEndClose(tx: Tx, meta: { tenantId: string; actorI
     `);
   }
   const totals = lapseTotals(lapse);
-  const fund = carried.get(ACCUMULATED_FUND) ?? 0n;
   await tx.execute(sql`
     INSERT INTO gl.finance_year_end_runs (tenant_id, fy_code, next_fy_code, opening_balance_count, fund_carried_minor, lapse_total_minor, reason, run_by)
-    VALUES (${tenantId}::uuid, ${p.fy}, ${next}, ${wanted.length}, ${(-fund).toString()}::bigint, ${totals.lapseMinor.toString()}::bigint, ${p.reason}, ${meta.actorId}::uuid)
+    VALUES (${tenantId}::uuid, ${p.fy}, ${next}, ${openingBalanceCount}, ${(-fund).toString()}::bigint, ${totals.lapseMinor.toString()}::bigint, ${p.reason}, ${meta.actorId}::uuid)
     ON CONFLICT (tenant_id, fy_code) DO UPDATE SET next_fy_code = EXCLUDED.next_fy_code, opening_balance_count = EXCLUDED.opening_balance_count,
       fund_carried_minor = EXCLUDED.fund_carried_minor, lapse_total_minor = EXCLUDED.lapse_total_minor, reason = EXCLUDED.reason,
       run_by = EXCLUDED.run_by, run_at = now(), run_count = gl.finance_year_end_runs.run_count + 1
@@ -263,12 +276,12 @@ export async function applyYearEndClose(tx: Tx, meta: { tenantId: string; actorI
     tenantId, actorId: meta.actorId, correlationId: meta.correlationId,
     payload: {
       service: "finance", action: "year_end_close", resourceType: "fiscal_year", resourceId: p.fy, outcome: "success",
-      nextFiscalYear: next, openingBalanceCount: wanted.length, openingBalancesChanged: changed,
+      nextFiscalYear: next, openingBalanceCount, openingBalancesChanged: changed,
       fundCarriedMinor: (-fund).toString(), lapseRows: lapse.length, lapseTotalMinor: totals.lapseMinor.toString(),
       excessTotalMinor: totals.excessMinor.toString(), reason: p.reason,
     },
   });
   // Owner decision 3: every period of `fy` is hard-closed, so an approved accounting-basis switch dated at the start of `next` takes effect now.
   await applyPendingBasisSwitchTx(tx as never, meta, fyBounds(next).start);
-  return { fy: p.fy, next, openingBalanceCount: wanted.length, fundCarriedMinor: -fund, lapseTotalMinor: totals.lapseMinor, changed, lapseRows: lapse.length };
+  return { fy: p.fy, next, openingBalanceCount, fundCarriedMinor: -fund, lapseTotalMinor: totals.lapseMinor, changed, lapseRows: lapse.length };
 }
