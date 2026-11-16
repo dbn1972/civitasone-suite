@@ -22,6 +22,8 @@ export const financeSettings = glSchema.table("finance_settings", {
   // An approved basis switch waiting for the next 1 April (migration 0166); both NULL when nothing is pending.
   pendingAccountingBasis:              varchar("pending_accounting_basis", { length: 8 }),
   pendingBasisEffectiveFrom:           date("pending_basis_effective_from"),
+  // Section 8 NF-0 (migration 0170): nullable, DEFAULT false. NULL and false both mean fund accounting is OFF.
+  fundAccounting:                      boolean("fund_accounting").default(false),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

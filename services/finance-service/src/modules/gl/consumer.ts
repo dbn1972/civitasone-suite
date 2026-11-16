@@ -30,6 +30,7 @@ import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { needsBudgetProvision, noBudgetProvisionError, provisionAction, loadBudgetControlTx } from "../budget/provision.js";
 import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
+import { fundContext } from "./fund-context.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:gl-consumer" });
@@ -381,6 +382,9 @@ async function postJournal(
       }
     }
   }
+  // Section 8 NF-0: the single fund seam, resolved ONCE per posting before the first write. Fund accounting off (every govt
+  // tenant) => a strict no-op context: every tag*() below returns its row unchanged. On => still a no-op in NF-0; NF-1 adds tagging.
+  const fx = await fundContext(tx, journal.tenantId);
   if (existing) {
     // DOM-024: finalizing a manual maker-checker draft — UPDATE the existing
     // pending_approval row in place instead of a second INSERT (its id
@@ -391,7 +395,7 @@ async function postJournal(
     // already asserted checker !== creator before calling this function).
     await repo.markPendingJournalPosted(tx, journal.id, { voucherNo, updatedBy: msg.actorId });
   } else {
-    await repo.insertJournal(tx, {
+    await repo.insertJournal(tx, fx.tagJournal({
       id: journal.id, tenantId: journal.tenantId, voucherNo,
       type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
       status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -401,30 +405,30 @@ async function postJournal(
       ...(journal.costCenterId ? { costCenterId: journal.costCenterId } : {}),
       ...(journal.profitCenterId ? { profitCenterId: journal.profitCenterId } : {}),
       ...(journal.operatingUnitId ? { operatingUnitId: journal.operatingUnitId } : {}),
-    });
+    }));
   }
   for (const line of journal.lines) {
     // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal
     // / manual-journal paths post instead of dead-lettering on the uuid column.
     const headId = await resolveHeadIdTx(tx, journal.tenantId, line.accountCode);
-    await repo.insertLedgerLine(tx, {
+    await repo.insertLedgerLine(tx, fx.tagLedgerLine({
       id: randomUUID(), tenantId: journal.tenantId,
       headId,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       balanceMinor: BigInt(line.debitMinor) - BigInt(line.creditMinor),
       voucherNo, postingDate: journal.postingDate,
       createdBy: msg.actorId, updatedBy: msg.actorId,
-    });
+    }));
     // Denormalized journal line (eliminates CROSS JOIN LATERAL for asset/report queries).
     const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
-    await repo.insertJournalLine(tx, {
+    await repo.insertJournalLine(tx, fx.tagJournalLine({
       id: randomUUID(), tenantId: journal.tenantId, journalId: journal.id, headId,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       narration: line.narration ?? null, postingDate: journal.postingDate, journalType: journal.type,
       ...(head?.code ? { headCode: head.code } : {}),
       ...(head?.name ? { headName: head.name } : {}),
       ...(head?.classification ? { headClassification: head.classification } : {}),
-    });
+    }));
   }
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
@@ -777,7 +781,9 @@ export function registerGlConsumers(queue: Queue): void {
         const rawVoucherNo = p.voucherNo;
         const needsAllocation = voucherNeedsAllocation(rawVoucherNo);
         const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
-        await repo.insertJournal(tx, {
+        // Section 8 NF-0: the draft path is the second journal writer; same seam, resolved once before the write.
+        const fxDraft = await fundContext(tx, p.tenantId);
+        await repo.insertJournal(tx, fxDraft.tagJournal({
           id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
           type: p.type, postingDate: p.postingDate, lines: p.lines,
           status: "pending_approval", createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -786,7 +792,7 @@ export function registerGlConsumers(queue: Queue): void {
           ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
           ...(p.profitCenterId ? { profitCenterId: p.profitCenterId } : {}),
           ...(p.operatingUnitId ? { operatingUnitId: p.operatingUnitId } : {}),
-        });
+        }));
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

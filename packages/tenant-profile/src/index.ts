@@ -33,6 +33,12 @@ export type ProfileSettings = {
   /** Extra head packs seeded on top of the template (S4), e.g. "office-pack". */
   coaPacks: readonly string[];
   statutoryPack: StatutoryPack;
+  /**
+   * Section 8 NF-0: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). Materialised by finance-service into
+   * gl.finance_settings.fund_accounting. false for govt and every profile that does not set it; no profile turns it on
+   * until NF-8 (per-tenant activation, strictly last).
+   */
+  fundAccounting: boolean;
 };
 
 export type ProfileDef = {
@@ -57,6 +63,7 @@ export const LEGACY_SETTINGS: ProfileSettings = Object.freeze({
   coaTemplate: "govt",
   coaPacks: Object.freeze([]) as readonly string[],
   statutoryPack: "govt_in",
+  fundAccounting: false,
 });
 
 const GOVT: ProfileSettings = LEGACY_SETTINGS;
@@ -81,12 +88,12 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
     // Edition small_office is the MSME self-signup edition (tenant-service msme-onboard), not a government office.
     code: "small_office", label: "Small business / MSME", family: "commercial", editions: ["small_office"], active: false,
     defaultBillHead: "fixed", bundleCode: "small_office",
-    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in" },
+    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false },
   },
   {
     code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: false,
     defaultBillHead: "fixed", bundleCode: "section8",
-    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in" },
+    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: false },
   },
 ] satisfies ProfileDef[]);
 
