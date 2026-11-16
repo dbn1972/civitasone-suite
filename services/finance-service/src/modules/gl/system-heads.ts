@@ -58,9 +58,18 @@ export const STORES_CONSUMPTION = process.env.FINANCE_STORES_CONSUMPTION_CODE ??
  * bill tenant chart of accounts). Default 2202 is the head the old literal id pointed at. It is a budget / expense
  * head: a stock receipt never credits it (UAT L2-N6 review), on accrual GRNI is cleared against it instead.
  */
-export function grnBillHeadCode(): string {
+export function grnBillHeadCode(template: "govt" | "commercial" | "nonprofit" = "govt"): string {
   const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
-  return configured ? configured : "2202";
+  return configured ? configured : templateDefaultBillHead(template);
+}
+
+/**
+ * Tenant-profile S4: the default bill head CODE of a chart-of-accounts template. govt keeps 2202 (General Education, the
+ * head every existing tenant has); commercial and nonprofit use 5400 (Purchases / Programme Expenses). The
+ * FINANCE_GRN_BILL_HEAD_CODE / WORKS_FINANCE_BILL_HEAD_CODE env vars still win where they are read.
+ */
+export function templateDefaultBillHead(template: "govt" | "commercial" | "nonprofit"): string {
+  return template === "govt" ? "2202" : "5400";
 }
 
 export function systemHeads(): { accumulatedDepreciationCode: string; depreciationExpenseCodes: string[]; fixedAssetCode: string } {

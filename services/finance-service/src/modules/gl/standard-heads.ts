@@ -13,9 +13,26 @@
  * Names and classifications follow the chart already seeded (scripts/dev/seed-all.mjs, migration 0015) and the
  * statements' convention (financial-statements/routes.ts natureOf): 1xxx asset ('capital' for the fixed-asset block),
  * 2xxx liability, 4xxx income (4200 gain/loss on disposal is an expense head), 5xxx/6xxx expense.
+ *
+ * Tenant-profile slice S4 (docs/design/TENANT-PROFILE-SWITCH.md 2.3): the list splits into CORE heads (every code a
+ * posting path resolves by code; identical for every template) and TEMPLATE heads (the default bill head plus the
+ * govt / commercial / nonprofit additions). seedGlHeadsTx seeds core + template. For `govt` with no packs the result is
+ * EXACTLY the pre-S4 list (same rows, same order, no statementClass), asserted by the origin/main snapshot test.
  */
+import { and, eq, inArray } from "drizzle-orm";
+import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
-import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
+import { headNatureOf } from "../../shared/head-nature.js";
+import { templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
+
+/** The CHECK domain of budget.finance_heads.statement_class (migration 0169). */
+export const STATEMENT_CLASSES = [
+  "asset", "current_liability", "non_current_liability", "equity", "reserve", "income", "expense",
+  "govt_equity", "capital_reserve", "dividend_payable",
+] as const;
+export type StatementClass = (typeof STATEMENT_CLASSES)[number];
+
+export type SeedTemplate = CoaTemplate;
 
 export type StandardGlHead = {
   code: string; name: string; classification: string;
@@ -23,6 +40,11 @@ export type StandardGlHead = {
   hoaCode?: string;
   /** A sub-ledger control account: manual journals may not post to it (GAP-FINANCE-JOURNAL-ENTRY-04). */
   isControl?: boolean;
+  /**
+   * Stored financial-statement class (budget.finance_heads.statement_class). Set only when a NON-govt template is
+   * seeded; the govt seed leaves it unset so its rows stay byte-identical to the pre-S4 seed.
+   */
+  statementClass?: StatementClass;
 };
 
 /** The system actor stamped on seeded heads (created_by / updated_by). */
@@ -39,8 +61,9 @@ const envTrim = (name: string, fallback: string): string => process.env[name]?.t
  */
 export const BILL_HEAD_HOA = "220201101010101000";
 
-export function standardGlHeads(): StandardGlHead[] {
-  const heads: StandardGlHead[] = [
+/** Core heads that sort BEFORE the default-bill-head slot (two segments keep the govt row order unchanged). */
+function coreHeadsPre(): StandardGlHead[] {
+  return [
     // assets
     { code: env("FINANCE_BANK_CODE", "1100"), name: "Cash / Bank", classification: "asset" },
     { code: env("FINANCE_CASH_CODE", "1100"), name: "Cash / Bank", classification: "asset" },
@@ -77,10 +100,12 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: env("FINANCE_FORFEIT_INCOME_CODE", "4300"), name: "Forfeited Deposits Income", classification: "income" },
     // UAT T-PERIOD D-12: sale proceeds of a disposed asset (the only GL effect of a disposal on the cash basis)
     { code: ASSET_SALE_RECEIPT, name: "Sale Proceeds of Assets", classification: "income" },
-    // expenses
-    // the default head GRN and works bills are raised against (finance integrations / works billing consumers)
-    { code: envTrim("FINANCE_GRN_BILL_HEAD_CODE", "2202"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
-    { code: envTrim("WORKS_FINANCE_BILL_HEAD_CODE", "2202"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
+  ];
+}
+
+/** Core heads that sort AFTER the default-bill-head slot. */
+function coreHeadsPost(): StandardGlHead[] {
+  return [
     { code: "5001", name: "Salary Expense", classification: "expense" },
     { code: "5002", name: "Employer Contributions Expense", classification: "expense" },
     { code: DEP_EXPENSE, name: "Depreciation Expense", classification: "expense" },
@@ -88,6 +113,86 @@ export function standardGlHeads(): StandardGlHead[] {
     { code: env("FINANCE_IMPAIRMENT_CODE", "5200"), name: "Impairment Loss", classification: "expense" },
     { code: env("FINANCE_TDS_EXPENSE_CODE", "6100"), name: "TDS Expense", classification: "expense" },
   ];
+}
+
+/**
+ * The default head GRN and works bills are raised against, per template (finance integrations / works billing
+ * consumers). govt: 2202 General Education with its HoA (exactly the pre-S4 pair). commercial / nonprofit: 5400 with no
+ * HoA (chk_finance_heads_hoa_code allows NULL). The two env vars still win when set.
+ */
+function defaultBillHeads(template: SeedTemplate): StandardGlHead[] {
+  const code = (name: string) => envTrim(name, templateDefaultBillHead(template));
+  if (template === "govt") {
+    return [
+      { code: code("FINANCE_GRN_BILL_HEAD_CODE"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
+      { code: code("WORKS_FINANCE_BILL_HEAD_CODE"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
+    ];
+  }
+  const name = template === "commercial" ? "Purchases and Direct Expenses" : "Programme Expenses";
+  return [
+    { code: code("FINANCE_GRN_BILL_HEAD_CODE"), name, classification: "expense", statementClass: "expense" },
+    { code: code("WORKS_FINANCE_BILL_HEAD_CODE"), name, classification: "expense", statementClass: "expense" },
+  ];
+}
+
+const th = (code: string, name: string, classification: string, statementClass: StatementClass): StandardGlHead =>
+  ({ code, name, classification, statementClass });
+
+/** Template heads other than the default bill head (docs/design/TENANT-PROFILE-SWITCH.md 2.3). Codes avoid every core code. */
+function templateAdditions(template: SeedTemplate): StandardGlHead[] {
+  if (template === "commercial") {
+    return [
+      th("1500", "Advances and Deposits Paid", "asset", "asset"),
+      th("1600", "Prepaid Expenses", "asset", "asset"),
+      th("1700", "GST Input Credit", "asset", "asset"),
+      th("1800", "TDS Receivable", "asset", "asset"),
+      th("2300", "GST Payable", "liability", "current_liability"),
+      th("2310", "Income Tax Payable", "liability", "current_liability"),
+      th("2400", "Short-term Borrowings", "liability", "current_liability"),
+      th("2500", "Accrued Expenses", "liability", "current_liability"),
+      th("3000", "Share Capital / Proprietor's Capital", "equity", "equity"),
+      th("3200", "Reserves and Surplus", "equity", "reserve"),
+      th("4400", "Interest Income", "income", "income"),
+      th("5410", "Rent and Utilities", "expense", "expense"),
+      th("5420", "Professional Fees", "expense", "expense"),
+      th("5430", "Travel and Conveyance", "expense", "expense"),
+      th("5440", "Repairs and Maintenance", "expense", "expense"),
+      th("5450", "Office Administration", "expense", "expense"),
+      th("6200", "Bank Charges and Interest", "expense", "expense"),
+    ];
+  }
+  if (template === "nonprofit") {
+    return [
+      th("1500", "Advances and Deposits Paid", "asset", "asset"),
+      th("1550", "Grants Receivable", "asset", "asset"),
+      th("2300", "Unutilised Grants", "liability", "current_liability"),
+      th("2310", "FCRA Foreign Contribution Unutilised", "liability", "current_liability"),
+      th("3000", "Corpus Fund", "equity", "equity"),
+      th("3200", "Restricted and Designated Funds", "equity", "reserve"),
+      th("4400", "Grants and Donations Received", "income", "income"),
+      th("4410", "Membership Fees", "income", "income"),
+      th("4420", "Interest on Investments", "income", "income"),
+      th("5410", "Staff Costs", "expense", "expense"),
+      th("5420", "Administrative Expenses", "expense", "expense"),
+      th("5430", "Fundraising Expenses", "expense", "expense"),
+      th("5440", "Grants Disbursed to Partners", "expense", "expense"),
+      th("6200", "Bank Charges", "expense", "expense"),
+    ];
+  }
+  return [];
+}
+
+/** The govt `office-pack` (govt_small_office): add-only expense heads. Never part of standardGlHeads(). */
+const OFFICE_PACK: StandardGlHead[] = [
+  { code: "5410", name: "Office Expenses", classification: "expense" },
+  { code: "5420", name: "Travel Expenses (TA/DA)", classification: "expense" },
+  { code: "5430", name: "Contingent Expenditure", classification: "expense" },
+  { code: "5440", name: "Repairs and Maintenance", classification: "expense" },
+  { code: "5450", name: "Vehicle Hire and POL", classification: "expense" },
+  { code: "5460", name: "Electricity, Water and Telephone", classification: "expense" },
+];
+
+function dedupe(heads: StandardGlHead[]): StandardGlHead[] {
   // Several roles share one code by default (1100 is the cash head for every path): keep the first definition.
   const seen = new Set<string>();
   return heads.filter((h) => {
@@ -95,6 +200,45 @@ export function standardGlHeads(): StandardGlHead[] {
     seen.add(h.code);
     return true;
   });
+}
+
+/**
+ * CORE heads: every code a posting path resolves by code. Identical for every template; excludes the template-specific
+ * default bill head; carries no statementClass.
+ */
+export function coreGlHeads(): StandardGlHead[] {
+  return dedupe([...coreHeadsPre(), ...coreHeadsPost()]);
+}
+
+/** TEMPLATE heads: the default bill head(s) plus the template additions (and, for govt, the requested packs). */
+export function templateGlHeads(template: SeedTemplate, packs: readonly string[] = []): StandardGlHead[] {
+  const packHeads = template === "govt" && packs.includes("office-pack") ? OFFICE_PACK : [];
+  return dedupe([...defaultBillHeads(template), ...templateAdditions(template), ...packHeads]);
+}
+
+function coreStatementClass(x: StandardGlHead): StatementClass {
+  const nature = headNatureOf(x.code, x.classification);
+  return nature === "liability" ? "current_liability" : nature;
+}
+
+/**
+ * The full seed list for a template: core + template heads. For `govt` with no packs this is EXACTLY the pre-S4
+ * standardGlHeads() (same rows, same order, no statementClass key). For commercial / nonprofit (and govt + a pack) the
+ * core heads follow the template heads' convention: a non-govt template stamps every head, core included, with its
+ * stored statementClass (derived for core heads from head-nature.ts); govt rows never carry one.
+ */
+export function glHeadsForTemplate(template: SeedTemplate, packs: readonly string[] = []): StandardGlHead[] {
+  if (template === "govt" && packs.length === 0) {
+    return dedupe([...coreHeadsPre(), ...defaultBillHeads("govt"), ...coreHeadsPost()]);
+  }
+  const core = coreGlHeads().map((x): StandardGlHead => (template === "govt" ? x : { ...x, statementClass: coreStatementClass(x) }));
+  const have = new Set(core.map((x) => x.code));
+  return [...core, ...templateGlHeads(template, packs).filter((x) => !have.has(x.code))];
+}
+
+/** The govt standard list (default bill head 2202). Unchanged output vs. pre-S4; kept for the backfill, tests and callers. */
+export function standardGlHeads(): StandardGlHead[] {
+  return glHeadsForTemplate("govt");
 }
 
 /**
@@ -116,10 +260,10 @@ export function missingAccrualStoresHeads(existing: Iterable<string>): StandardG
   return accrualStoresHeads().filter((h) => !have.has(h.code));
 }
 
-/** The standard heads absent from `existing` (pure; drives the backfill's --dry-run plan). */
-export function missingStandardHeads(existing: Iterable<string>): StandardGlHead[] {
+/** The standard heads absent from `existing` (pure; drives the backfill's --dry-run plan). Optional template (default govt). */
+export function missingStandardHeads(existing: Iterable<string>, template: SeedTemplate = "govt", packs: readonly string[] = []): StandardGlHead[] {
   const have = new Set(existing);
-  return standardGlHeads().filter((h) => !have.has(h.code));
+  return glHeadsForTemplate(template, packs).filter((h) => !have.has(h.code));
 }
 
 type HeadWriter = {
@@ -128,18 +272,61 @@ type HeadWriter = {
   };
 };
 
+/** Thrown by the non-govt seed when a tenant already has a head under a template code with a DIFFERENT classification. */
+export class CoaTemplateCollisionError extends Error {
+  constructor(public readonly collisions: Array<{ code: string; existing: string | null; template: string }>) {
+    super(`[COA_TEMPLATE_COLLISION] tenant already uses template head code(s) for another purpose: ${
+      collisions.map((c) => `${c.code} (existing ${c.existing ?? "none"}, template ${c.template})`).join(", ")}`);
+    this.name = "CoaTemplateCollisionError";
+  }
+}
+
 /**
- * Insert every standard head the tenant does not have yet. ON CONFLICT (tenant_id, code) DO NOTHING: a head the tenant
- * already has -- whatever its name or classification -- is left exactly as it is. Returns the number of standard heads.
+ * Seed the tenant's chart for `template`. ON CONFLICT (tenant_id, code) DO NOTHING: a head the tenant already has is left
+ * exactly as it is, so the call is add-only and idempotent. Inserts ONLY into the tenant table budget.finance_heads --
+ * never the global budget.finance_major_heads. Returns the number of heads in the list.
+ *
+ * Collision guard (non-govt templates only): if a head already exists under a template code with a DIFFERENT
+ * classification (e.g. a govt tenant already using 2300 / 3000 as a liability), abort with CoaTemplateCollisionError
+ * BEFORE writing anything -- DO NOTHING alone would silently skip it and leave the tenant with a wrong-meaning code.
+ * The govt path performs no extra query, so its behaviour is exactly the pre-S4 seed.
+ *
  * Must run in a transaction scoped to `tenantId` (RLS).
  */
-export async function seedStandardGlHeadsTx(tx: unknown, tenantId: string, actorId: string = SEED_ACTOR): Promise<number> {
-  const rows = standardGlHeads().map((h) => ({
+export async function seedGlHeadsTx(
+  tx: unknown, tenantId: string, template: SeedTemplate = "govt", packs: readonly string[] = [], actorId: string = SEED_ACTOR,
+): Promise<number> {
+  const heads = glHeadsForTemplate(template, packs);
+  if (template !== "govt") await assertNoCollisionTx(tx, tenantId, heads);
+  const rows = heads.map((h) => ({
     tenantId, code: h.code, name: h.name, level: 0, classification: h.classification,
     hoaCode: h.hoaCode ?? null, isControl: h.isControl ?? false,
+    ...(h.statementClass ? { statementClass: h.statementClass } : {}),
     createdBy: actorId, updatedBy: actorId,
   }));
   await (tx as HeadWriter).insert(financeHeads).values(rows)
     .onConflictDoNothing({ target: [financeHeads.tenantId, financeHeads.code] });
   return rows.length;
+}
+
+type HeadReader = {
+  select: (cols: { code: typeof financeHeads.code; classification: typeof financeHeads.classification }) => {
+    from: (t: typeof financeHeads) => { where: (c: unknown) => Promise<Array<{ code: string; classification: string | null }>> };
+  };
+};
+
+async function assertNoCollisionTx(tx: unknown, tenantId: string, heads: StandardGlHead[]): Promise<void> {
+  const existing = await (tx as HeadReader).select({ code: financeHeads.code, classification: financeHeads.classification })
+    .from(financeHeads)
+    .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, heads.map((h) => h.code))));
+  const byCode = new Map(heads.map((h) => [h.code, h]));
+  const collisions = existing
+    .filter((e) => (e.classification ?? "").trim().toLowerCase() !== byCode.get(e.code)!.classification)
+    .map((e) => ({ code: e.code, existing: e.classification, template: byCode.get(e.code)!.classification }));
+  if (collisions.length > 0) throw new CoaTemplateCollisionError(collisions);
+}
+
+/** Back-compat: the pre-S4 govt seed. Same rows as seedGlHeadsTx(tx, tenantId, "govt"). */
+export async function seedStandardGlHeadsTx(tx: unknown, tenantId: string, actorId: string = SEED_ACTOR): Promise<number> {
+  return seedGlHeadsTx(tx, tenantId, "govt", [], actorId);
 }
