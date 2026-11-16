@@ -24,7 +24,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
 import { headNatureOf } from "../../shared/head-nature.js";
-import { FUND_HEAD_CODES, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
+import { FUND_HEAD_CODES, GRANT_HEAD_CODES, GrantHeadCodeError, assertGrantHeadCodes, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
 
 /** The CHECK domain of budget.finance_heads.statement_class (migration 0169). */
 export const STATEMENT_CLASSES = [
@@ -150,7 +150,21 @@ const th = (code: string, name: string, classification: string, statementClass: 
  * Statutory / convention-dependent choices are marked VERIFY for the CA worksheet.
  */
 function nonprofitHeads(): StandardGlHead[] {
+  const heads = nonprofitHeadList();
+  // NF-3 fail-safe: the chart de-dupe keeps the FIRST definition of a code, so a grant-head override that lands on another
+  // template head would silently drop one of them. Refuse instead.
+  const seen = new Set<string>();
+  for (const h of heads) {
+    if (seen.has(h.code)) throw new GrantHeadCodeError(`the nonprofit chart defines code ${h.code} twice (a FINANCE_GRANT_*_CODE override collides with another head)`);
+    seen.add(h.code);
+  }
+  return heads;
+}
+
+function nonprofitHeadList(): StandardGlHead[] {
   const f = FUND_HEAD_CODES();
+  const g = GRANT_HEAD_CODES(); // NF-3: the same codes the grants module posts to
+  assertGrantHeadCodes(g, coreGlHeads().map((h) => h.code)); // fail-safe: an override must not land on a core chart code
   return [
     // ---- assets ----
     th("1500", "Advances and Deposits Paid", "asset", "asset"),
@@ -162,13 +176,13 @@ function nonprofitHeads(): StandardGlHead[] {
     // ---- liabilities ----
     th("2300", "Unutilised Grants (General)", "liability", "current_liability"),
     th("2310", "FCRA Foreign Contribution Unutilised", "liability", "current_liability"), // VERIFY: FCRA unutilised-balance presentation
-    th("2320", "Unutilised Grant-in-Aid - Salary", "liability", "current_liability"),
-    th("2330", "Unutilised Grant-in-Aid - General", "liability", "current_liability"),
-    th("2340", "Unutilised Grant-in-Aid - Capital", "liability", "current_liability"),
+    th(g.revenueReceiptSalary, "Unutilised Grant-in-Aid - Salary", "liability", "current_liability"),
+    th(g.revenueReceiptGeneral, "Unutilised Grant-in-Aid - General", "liability", "current_liability"),
+    th(g.capitalReceipt, "Unutilised Grant-in-Aid - Capital", "liability", "current_liability"),
     // CAPITAL-GRANT TREATMENT, candidate A (liability): Deferred Government Grant, released to income over the asset life.
-    // NF-3 selects EXACTLY ONE of this head and the Capital Grant Fund (3300) per the AS-12 policy. That policy decision is
-    // still OPEN, so neither is hard-coded as the default anywhere; both are seeded.
-    th("2350", "Deferred Government Grant (Capital)", "liability", "non_current_liability"), // VERIFY: AS-12 deferred-income approach
+    // NF-3 selects EXACTLY ONE of this head and the Capital Grant Fund (3300) per the per-tenant capital_grant_policy setting
+    // (default deferred_income = this head). Both stay seeded so the policy can be flipped before the first capital grant.
+    th(g.capitalDeferred, "Deferred Government Grant (Capital)", "liability", "non_current_liability"), // VERIFY: AS-12 deferred-income approach
     th("2500", "Accrued Expenses", "liability", "current_liability"),
     th("2600", "Statutory Dues Payable (GST / other)", "liability", "current_liability"),
     th("2700", "Long-term Borrowings", "liability", "non_current_liability"),
@@ -178,7 +192,7 @@ function nonprofitHeads(): StandardGlHead[] {
     th("3200", "Restricted Funds", "equity", "reserve"),
     th("3210", "Designated Funds", "equity", "reserve"),
     // CAPITAL-GRANT TREATMENT, candidate B (equity / reserve): Capital Grant Fund (see 2350 above; NF-3 picks one).
-    th("3300", "Capital Grant Fund", "equity", "capital_reserve"), // VERIFY: AS-12 capital-approach reserve classification
+    th(g.capitalFund, "Capital Grant Fund", "equity", "capital_reserve"), // VERIFY: AS-12 capital-approach reserve classification
     // Inter-fund movement heads (NF-1 transfer / release journals); equity-classified, they net to zero in total.
     th(f.transferOut, "Inter-fund Transfer Out", "equity", "equity"),
     th(f.transferIn, "Inter-fund Transfer In", "equity", "equity"),
@@ -188,9 +202,9 @@ function nonprofitHeads(): StandardGlHead[] {
     th("4400", "Grants and Donations Received", "income", "income"),
     th("4410", "Membership Fees", "income", "income"),
     th("4420", "Interest on Investments", "income", "income"),
-    th("4430", "Grant-in-Aid Income - Salary", "income", "income"),
-    th("4440", "Grant-in-Aid Income - General", "income", "income"),
-    th("4450", "Grant-in-Aid Income - Capital (released / amortised)", "income", "income"),
+    th(g.revenueIncomeSalary, "Grant-in-Aid Income - Salary", "income", "income"),
+    th(g.revenueIncomeGeneral, "Grant-in-Aid Income - General", "income", "income"),
+    th(g.capitalRelease, "Grant-in-Aid Income - Capital (released / amortised)", "income", "income"),
     th("4460", "Other Income", "income", "income"),
     // ---- expenditure (5400 Programme Expenses is the default bill head) ----
     th("5410", "Staff Costs", "expense", "expense"),

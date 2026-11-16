@@ -24,6 +24,8 @@ export const financeSettings = glSchema.table("finance_settings", {
   pendingBasisEffectiveFrom:           date("pending_basis_effective_from"),
   // Section 8 NF-0 (migration 0170): nullable, DEFAULT false. NULL and false both mean fund accounting is OFF.
   fundAccounting:                      boolean("fund_accounting").default(false),
+  // Section 8 NF-3 (migration 0172): AS-12 capital-grant policy, deferred_income (default) | capital_fund. Read by loadPostingSettingsTx.
+  capitalGrantPolicy:                  text("capital_grant_policy").notNull().default("deferred_income"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

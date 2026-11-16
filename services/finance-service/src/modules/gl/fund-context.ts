@@ -79,7 +79,7 @@ function enabledContext(general: string): FundContext {
 /** Pure: build the context from the already-loaded posting settings. Throws FUND_ACCOUNTING_NOT_READY (fail-closed). */
 export function fundContextFromSettings(ps: Pick<PostingSettings, "fundAccounting" | "generalFundId">): FundContext {
   if (!ps.fundAccounting) return disabledContext();
-  assertFundPostingReady({ budgetControl: "mandatory", ...ps });
+  assertFundPostingReady(ps);
   return enabledContext(ps.generalFundId as string);
 }
 

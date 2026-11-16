@@ -91,3 +91,66 @@ export function FUND_HEAD_CODES(): Record<"dueTo" | "dueFrom" | "transferOut" | 
     releaseIn: process.env.FINANCE_FUND_RELEASE_IN_CODE ?? "3921",     // equity: released from restriction (in)
   };
 }
+
+/**
+ * Section 8 NF-3: chart codes of the grants-in-aid heads. ONE definition shared by the nonprofit chart (standard-heads.ts) and
+ * the grants posting module (modules/grants), so the seeded heads are exactly the heads NF-3 posts to and the two cannot drift.
+ * Env-configurable like every system head (FINANCE_GRANT_*_CODE), read at call time. FAIL-SAFE: an override that is malformed,
+ * repeats another grant code, or lands on a code finance itself already posts to (the system / inter-fund / payroll / cash
+ * codes) throws GRANT_HEAD_CODE_COLLISION instead of silently mixing grant money into an unrelated head.
+ */
+export type GrantHeadCodes = {
+  revenueReceiptSalary: string;   // 2320 liability: unutilised revenue grant (salary)
+  revenueReceiptGeneral: string;  // 2330 liability: unutilised revenue grant (general)
+  revenueIncomeSalary: string;    // 4430 income: salary grant recognised on utilisation
+  revenueIncomeGeneral: string;   // 4440 income: general grant recognised on utilisation
+  capitalReceipt: string;         // 2340 liability: unutilised capital grant
+  capitalDeferred: string;        // 2350 non-current liability: deferred-income reservoir (deferred_income policy)
+  capitalRelease: string;         // 4450 income: capital grant released in step with depreciation
+  capitalFund: string;            // 3300 equity: Capital Grant Fund (capital_fund policy)
+};
+
+export class GrantHeadCodeError extends Error {
+  readonly code = "GRANT_HEAD_CODE_COLLISION";
+  constructor(message: string) { super(`GRANT_HEAD_CODE_COLLISION: ${message}`); this.name = "GrantHeadCodeError"; }
+}
+
+/** Every code finance already posts to by role (the constants above, the inter-fund heads, payroll deductions, cash). */
+export function reservedSystemCodes(): string[] {
+  return [
+    DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS, ACCUMULATED_FUND,
+    STORES_INVENTORY, GRNI, STORES_SUSPENSE, STORES_CONSUMPTION,
+    process.env.FINANCE_CASH_CODE ?? "1100",
+    ...Object.values(payrollDeductionHeads()),
+    ...Object.values(FUND_HEAD_CODES()),
+  ];
+}
+
+/** Pure: the codes must be well-formed, distinct from each other, and outside `reserved`. Throws GrantHeadCodeError. */
+export function assertGrantHeadCodes(codes: GrantHeadCodes, reserved: Iterable<string> = reservedSystemCodes()): void {
+  const taken = new Set(reserved);
+  const seen = new Map<string, string>();
+  for (const [role, code] of Object.entries(codes)) {
+    if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/.test(code)) throw new GrantHeadCodeError(`grant head ${role} has an invalid code "${code}"`);
+    const prior = seen.get(code);
+    if (prior) throw new GrantHeadCodeError(`grant heads ${prior} and ${role} share the code ${code}`);
+    seen.set(code, role);
+    if (taken.has(code)) throw new GrantHeadCodeError(`grant head ${role} (${code}) collides with a core system head code`);
+  }
+}
+
+export function GRANT_HEAD_CODES(): GrantHeadCodes {
+  const env = (k: string, d: string) => process.env[k]?.trim() || d;
+  const codes: GrantHeadCodes = {
+    revenueReceiptSalary: env("FINANCE_GRANT_REV_RECEIPT_SALARY_CODE", "2320"),
+    revenueReceiptGeneral: env("FINANCE_GRANT_REV_RECEIPT_GENERAL_CODE", "2330"),
+    revenueIncomeSalary: env("FINANCE_GRANT_REV_INCOME_SALARY_CODE", "4430"),
+    revenueIncomeGeneral: env("FINANCE_GRANT_REV_INCOME_GENERAL_CODE", "4440"),
+    capitalReceipt: env("FINANCE_GRANT_CAP_RECEIPT_CODE", "2340"),
+    capitalDeferred: env("FINANCE_GRANT_CAP_DEFERRED_CODE", "2350"),
+    capitalRelease: env("FINANCE_GRANT_CAP_RELEASE_CODE", "4450"),
+    capitalFund: env("FINANCE_GRANT_CAP_FUND_CODE", "3300"),
+  };
+  assertGrantHeadCodes(codes);
+  return codes;
+}

@@ -23,29 +23,35 @@ export type PostingSettings = {
   fundAccounting: boolean;
   /** The tenant's GENERAL fund id when it exists. Meaningful only when fundAccounting is true. */
   generalFundId: string | null;
+  /** Section 8 NF-3: the AS-12 capital-grant policy stored for the tenant; an absent row or unknown value reads as deferred_income. */
+  capitalGrantPolicy: CapitalGrantPolicy;
 };
+
+export type CapitalGrantPolicy = "deferred_income" | "capital_fund";
+export const toCapitalGrantPolicy = (v: unknown): CapitalGrantPolicy => (v === "capital_fund" ? "capital_fund" : "deferred_income");
 
 export async function loadPostingSettingsTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any, tenantId: string,
 ): Promise<PostingSettings> {
-  const rows: Array<{ m?: string; f?: boolean | null; g?: string | null }> = await tx
+  const rows: Array<{ m?: string; f?: boolean | null; g?: string | null; p?: string | null }> = await tx
     .select({
       m: financeSettings.budgetControl,
       f: financeSettings.fundAccounting,
+      p: financeSettings.capitalGrantPolicy,
       g: sql<string | null>`(SELECT gf.id::text FROM gl.funds gf WHERE gf.tenant_id = ${tenantId}::uuid AND gf.code = 'GENERAL' LIMIT 1)`,
     })
     .from(financeSettings)
     .where(eq(financeSettings.tenantId, tenantId)).limit(1);
   const r = rows[0];
-  return { budgetControl: toBudgetControl(r?.m), fundAccounting: r?.f === true, generalFundId: r?.g ?? null };
+  return { budgetControl: toBudgetControl(r?.m), fundAccounting: r?.f === true, generalFundId: r?.g ?? null, capitalGrantPolicy: toCapitalGrantPolicy(r?.p) };
 }
 
 /**
  * Design contract #5 (fail-closed): fund accounting ON but the fund master is not ready => REFUSE to post. Never fall back
  * to untagged (govt-shaped) rows. The code is a deterministic refusal (FUND_ matches gl/repo.ts REFUSAL_CODE).
  */
-export function assertFundPostingReady(ps: PostingSettings): void {
+export function assertFundPostingReady(ps: Pick<PostingSettings, "fundAccounting" | "generalFundId"> & Partial<PostingSettings>): void {
   if (ps.fundAccounting && !ps.generalFundId) {
     throw new DomainError(
       "FUND_ACCOUNTING_NOT_READY",
