@@ -116,6 +116,35 @@ describe("finance activation real Postgres: onboard sequence (activate -> resolv
     expect(await settingsRows(t2)).toMatchObject([{ profileCode: "govt_dept", version: 3 }]);
   });
 
+  it.each([
+    ["budget_control only", { budgetControl: "advisory" }],
+    ["accounting_basis only", { accountingBasis: "accrual" }],
+  ] as const)("a version-1 row non-default in a SINGLE column (%s) is NOT overwritten (setWhere needs ALL five defaults)", async (_n, patch) => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = randomUUID();
+    await scoped(t, (tx) => tx.insert(financeSettings).values({ tenantId: t, ...patch, updatedBy: ACTOR }));
+    const before = await settingsRows(t);
+    expect(before).toMatchObject([{ version: 1, ...patch }]);
+    // govt_small_office is active and non-LEGACY (office-pack), so the upsert really is attempted.
+    expect(profileFinanceSettings("govt_small_office", true)).not.toBeNull();
+    await onboard(t, "govt_small_office");
+    expect(await settingsRows(t)).toEqual(before);
+  });
+
+  it("inactive profile (psu / small_office / section8 still active:false) on a PRISTINE row is a no-op: row untouched, govt heads", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    for (const code of ["psu", "small_office", "section8"] as const) {
+      const eff = effectiveSettings(code, true);
+      if (!(eff.coaTemplate === "govt" && eff.accountingBasis === "cash" && eff.budgetControl === "mandatory")) continue; // activated in the catalogue: covered above
+      const t = randomUUID();
+      await scoped(t, (tx) => tx.insert(financeSettings).values({ tenantId: t, updatedBy: ACTOR }));
+      const before = await settingsRows(t);
+      await onboard(t, code);
+      expect(await settingsRows(t)).toEqual(before);
+      expect(codes(await heads(t))).toEqual(codes(standardGlHeads()));
+    }
+  });
+
   it("a pristine default row (version 1, all defaults) IS upgraded to the profile, bumping version", async () => {
     process.env.TENANT_PROFILES_ENABLED = "true";
     const t = randomUUID();
