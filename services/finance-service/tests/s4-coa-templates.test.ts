@@ -15,10 +15,13 @@ import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeSettings } from "../src/modules/approvals/schema.js";
 import {
   standardGlHeads, coreGlHeads, templateGlHeads, glHeadsForTemplate, seedGlHeadsTx, seedStandardGlHeadsTx,
-  CoaTemplateCollisionError, STATEMENT_CLASSES, BILL_HEAD_HOA,
+  CoaTemplateCollisionError, STATEMENT_CLASSES, BILL_HEAD_HOA, assertNoTemplateCollision, missingAccrualStoresHeads,
 } from "../src/modules/gl/standard-heads.js";
 import { templateDefaultBillHead, grnBillHeadCode } from "../src/modules/gl/system-heads.js";
 import { resolveCoaTemplateTx } from "../src/modules/gl/coa-template.js";
+import { isNonRetryable } from "@civitasone/queue";
+import postgres from "postgres";
+import { backfillStandardGlHeads } from "../scripts/backfill-standard-gl-heads.js";
 import { headNatureOf } from "../src/shared/head-nature.js";
 
 const ACTOR = randomUUID();
@@ -188,5 +191,91 @@ describe("S4 real Postgres: seeding", () => {
       delete process.env.TENANT_PROFILES_ENABLED;
       expect((await scoped(t, (tx) => resolveCoaTemplateTx(tx, t))).template).toBe("govt");
     } finally { if (saved === undefined) delete process.env.TENANT_PROFILES_ENABLED; else process.env.TENANT_PROFILES_ENABLED = saved; }
+  });
+});
+
+describe("S4 pure: collision guard is narrowed to template-only codes", () => {
+  it("an existing CORE head (1200 asset, 4200, 1250 with NULL classification) never aborts a commercial/nonprofit seed", () => {
+    for (const t of ["commercial", "nonprofit"] as const) {
+      expect(() => assertNoTemplateCollision([
+        { code: "1200", classification: "asset" }, { code: "1250", classification: null }, { code: "4200", classification: "income" },
+      ], t)).not.toThrow();
+    }
+  });
+  it("a genuine template-code classification mismatch aborts (and is non-retryable)", () => {
+    let err: unknown;
+    try { assertNoTemplateCollision([{ code: "2300", classification: "expense" }], "commercial"); } catch (e) { err = e; }
+    expect(err).toBeInstanceOf(CoaTemplateCollisionError);
+    expect(isNonRetryable(err)).toBe(true);
+    expect((err as CoaTemplateCollisionError).collisions).toEqual([{ code: "2300", existing: "expense", template: "liability" }]);
+  });
+  it("a template code with the SAME classification does not abort", () => {
+    expect(() => assertNoTemplateCollision([{ code: "2300", classification: "liability" }], "commercial")).not.toThrow();
+  });
+  it("govt + 2300 expense is not checked by the pure guard for a pack-less govt list (no template-only codes)", () => {
+    expect(() => assertNoTemplateCollision([{ code: "2300", classification: "expense" }], "govt")).not.toThrow();
+  });
+});
+
+describe("S4 pure: accrual stores heads statement_class", () => {
+  it("non-govt stamps asset / current_liability / expense; govt stays unset", () => {
+    const by = (t: "govt" | "commercial" | "nonprofit") => new Map(missingAccrualStoresHeads([], t).map((h) => [h.code, h.statementClass]));
+    const c = by("commercial");
+    expect(c.get("1400")).toBe("asset"); expect(c.get("2080")).toBe("current_liability");
+    expect(c.get("2085")).toBe("current_liability"); expect(c.get("5300")).toBe("expense");
+    expect([...by("nonprofit").values()].every((v) => v !== undefined)).toBe(true);
+    expect([...by("govt").values()].every((v) => v === undefined)).toBe(true);
+    expect(missingAccrualStoresHeads([], "govt").every((h) => !("statementClass" in h))).toBe(true);
+  });
+});
+
+describe("S4 real Postgres: non-govt backfill", () => {
+  const pg = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+  const saved = process.env.TENANT_PROFILES_ENABLED;
+  afterAll(async () => { await pg.end({ timeout: 5 }); });
+  afterEach(() => { if (saved === undefined) delete process.env.TENANT_PROFILES_ENABLED; else process.env.TENANT_PROFILES_ENABLED = saved; });
+  const rows = (t: string) => scoped(t, (tx) => tx.select().from(financeHeads).where(eq(financeHeads.tenantId, t)));
+  async function makeTenant(coa: "commercial" | "nonprofit", basis: "cash" | "accrual") {
+    const t = randomUUID();
+    await scoped(t, (tx) => tx.insert(financeSettings).values({ tenantId: t, coaTemplate: coa, accountingBasis: basis, updatedBy: ACTOR }));
+    // the backfill discovers an existing tenant through its heads: give it one core head
+    await scoped(t, (tx) => tx.insert(financeHeads).values({ tenantId: t, code: "1100", name: "Cash / Bank", level: 0, classification: "asset", createdBy: ACTOR, updatedBy: ACTOR }));
+    return t;
+  }
+  it("flag on: backfills a commercial accrual tenant from its template, statement_class stamped incl. stores heads", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = await makeTenant("commercial", "accrual");
+    await backfillStandardGlHeads(pg as never, { dryRun: false, tenants: [t] });
+    const got = await rows(t);
+    const have = new Map(got.map((r) => [r.code, r]));
+    for (const h of glHeadsForTemplate("commercial")) expect(have.has(h.code)).toBe(true);
+    expect(have.get("5400")?.statementClass).toBe("expense");
+    expect(have.get("3200")?.statementClass).toBe("reserve");
+    expect(have.get("2202")).toBeUndefined();
+    expect(have.get("1400")?.statementClass).toBe("asset");
+    expect(have.get("2080")?.statementClass).toBe("current_liability");
+    expect(have.get("1100")?.statementClass).toBeNull(); // existing head untouched
+  });
+  it("flag on: a real template-code classification mismatch fails loudly and writes nothing", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = await makeTenant("nonprofit", "cash");
+    await scoped(t, (tx) => tx.insert(financeHeads).values({ tenantId: t, code: "3000", name: "Old liability", level: 0, classification: "liability", createdBy: ACTOR, updatedBy: ACTOR }));
+    await expect(backfillStandardGlHeads(pg as never, { dryRun: false, tenants: [t] })).rejects.toBeInstanceOf(CoaTemplateCollisionError);
+    expect((await rows(t)).map((r) => r.code).sort()).toEqual(["1100", "3000"]);
+  });
+  it("flag on: an existing core head at another classification does NOT abort the backfill", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = await makeTenant("commercial", "cash");
+    await scoped(t, (tx) => tx.insert(financeHeads).values({ tenantId: t, code: "1200", name: "Fixed Assets", level: 0, classification: "asset", createdBy: ACTOR, updatedBy: ACTOR }));
+    await expect(backfillStandardGlHeads(pg as never, { dryRun: false, tenants: [t] })).resolves.toBeDefined();
+  });
+  it("flag off: the tenant is backfilled with the govt list (2202, no statement_class) whatever its coa_template", async () => {
+    delete process.env.TENANT_PROFILES_ENABLED;
+    const t = await makeTenant("commercial", "cash");
+    await backfillStandardGlHeads(pg as never, { dryRun: false, tenants: [t] });
+    const got = await rows(t);
+    expect(got.find((r) => r.code === "2202")).toBeDefined();
+    expect(got.find((r) => r.code === "5400")).toBeUndefined();
+    expect(got.every((r) => r.statementClass === null)).toBe(true);
   });
 });

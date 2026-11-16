@@ -24,7 +24,7 @@ import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
-import { missingStandardHeads, missingAccrualStoresHeads, standardGlHeads, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
+import { missingStandardHeads, missingAccrualStoresHeads, standardGlHeads, assertNoTemplateCollision, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
 
 type Sql = ReturnType<typeof postgres>;
 export type TenantPlan = {
@@ -49,7 +49,7 @@ export async function backfillStandardGlHeads(
     const plan = await sql.begin(async (tx) => {
       // Transaction-scoped tenant GUC (RLS), never a session SET (pgbouncer transaction pooling).
       await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-      const existing = await tx<{ code: string; hoa_code: string | null }[]>`SELECT code, hoa_code FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid`;
+      const existing = await tx<{ code: string; hoa_code: string | null; classification: string | null }[]>`SELECT code, hoa_code, classification FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid`;
       // UAT L2-N6 review: the stores heads (1400 / GRNI / suspense / 5300) are for ACCRUAL tenants only; a cash-basis
       // tenant (the default) posts no stock journal and gets none of them.
       const basisRow = await tx<{ accounting_basis: string; coa_template: string }[]>`SELECT accounting_basis, coa_template FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid`;
@@ -59,7 +59,10 @@ export async function backfillStandardGlHeads(
       // off / no settings row => the govt list, exactly as before.
       const stored = basisRow[0]?.coa_template;
       const template: "govt" | "commercial" | "nonprofit" = tenantProfilesEnabled() && (stored === "commercial" || stored === "nonprofit") ? stored : "govt";
-      const missing = [...missingStandardHeads(codes, template), ...(basis === "accrual" ? missingAccrualStoresHeads(codes) : [])];
+      // Fail loudly (CoaTemplateCollisionError, nothing written for this tenant) if the tenant already uses a template-only
+      // code for another purpose; core codes are never checked. Govt: no check, as before.
+      if (template !== "govt") assertNoTemplateCollision(existing.map((r) => ({ code: r.code, classification: r.classification })), template);
+      const missing = [...missingStandardHeads(codes, template), ...(basis === "accrual" ? missingAccrualStoresHeads(codes, template) : [])];
       const inserted: string[] = [];
       if (!opts.dryRun) {
         for (const h of missing) {

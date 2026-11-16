@@ -20,6 +20,7 @@
  * EXACTLY the pre-S4 list (same rows, same order, no statementClass), asserted by the origin/main snapshot test.
  */
 import { and, eq, inArray } from "drizzle-orm";
+import { NonRetryableError } from "@civitasone/queue";
 import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
 import { headNatureOf } from "../../shared/head-nature.js";
@@ -255,9 +256,11 @@ export function accrualStoresHeads(): StandardGlHead[] {
 }
 
 /** The accrual stores heads absent from `existing` (pure). */
-export function missingAccrualStoresHeads(existing: Iterable<string>): StandardGlHead[] {
+export function missingAccrualStoresHeads(existing: Iterable<string>, template: SeedTemplate = "govt"): StandardGlHead[] {
   const have = new Set(existing);
-  return accrualStoresHeads().filter((h) => !have.has(h.code));
+  // A non-govt template stamps the stored statement class (same head-nature mapping as the core heads); govt stays unset.
+  return accrualStoresHeads().filter((h) => !have.has(h.code))
+    .map((h): StandardGlHead => (template === "govt" ? h : { ...h, statementClass: coreStatementClass(h) }));
 }
 
 /** The standard heads absent from `existing` (pure; drives the backfill's --dry-run plan). Optional template (default govt). */
@@ -273,11 +276,12 @@ type HeadWriter = {
 };
 
 /** Thrown by the non-govt seed when a tenant already has a head under a template code with a DIFFERENT classification. */
-export class CoaTemplateCollisionError extends Error {
+export class CoaTemplateCollisionError extends NonRetryableError {
   constructor(public readonly collisions: Array<{ code: string; existing: string | null; template: string }>) {
+    // NonRetryableError: the collision is deterministic, so a queue consumer sends it straight to the DLQ (no retries).
     super(`[COA_TEMPLATE_COLLISION] tenant already uses template head code(s) for another purpose: ${
       collisions.map((c) => `${c.code} (existing ${c.existing ?? "none"}, template ${c.template})`).join(", ")}`);
-    this.name = "CoaTemplateCollisionError";
+    (this as Error).name = "CoaTemplateCollisionError";
   }
 }
 
@@ -297,7 +301,7 @@ export async function seedGlHeadsTx(
   tx: unknown, tenantId: string, template: SeedTemplate = "govt", packs: readonly string[] = [], actorId: string = SEED_ACTOR,
 ): Promise<number> {
   const heads = glHeadsForTemplate(template, packs);
-  if (template !== "govt") await assertNoCollisionTx(tx, tenantId, heads);
+  if (template !== "govt") await assertNoTemplateCollisionTx(tx, tenantId, template, packs);
   const rows = heads.map((h) => ({
     tenantId, code: h.code, name: h.name, level: 0, classification: h.classification,
     hoaCode: h.hoaCode ?? null, isControl: h.isControl ?? false,
@@ -315,15 +319,38 @@ type HeadReader = {
   };
 };
 
-async function assertNoCollisionTx(tx: unknown, tenantId: string, heads: StandardGlHead[]): Promise<void> {
+/** The heads this template INTRODUCES: its template heads minus every core code (core codes are never collision-checked). */
+function templateOnlyHeads(template: SeedTemplate, packs: readonly string[]): StandardGlHead[] {
+  const core = new Set(codes(coreGlHeads()));
+  return templateGlHeads(template, packs).filter((h) => !core.has(h.code));
+}
+const codes = (hs: StandardGlHead[]): string[] => hs.map((h) => h.code);
+
+/** Pure: existing heads whose classification differs from the template head under the same code. */
+export function findTemplateCollisions(
+  existing: Array<{ code: string; classification: string | null }>, templateHeads: StandardGlHead[],
+): Array<{ code: string; existing: string | null; template: string }> {
+  const byCode = new Map(templateHeads.map((h) => [h.code, h]));
+  return existing
+    .filter((e) => byCode.has(e.code) && (e.classification ?? "").trim().toLowerCase() !== byCode.get(e.code)!.classification)
+    .map((e) => ({ code: e.code, existing: e.classification, template: byCode.get(e.code)!.classification }));
+}
+
+/** Pure + throwing: shared by the seed and the backfill. Checks ONLY template-only codes, never core ones. */
+export function assertNoTemplateCollision(
+  existing: Array<{ code: string; classification: string | null }>, template: SeedTemplate, packs: readonly string[] = [],
+): void {
+  const collisions = findTemplateCollisions(existing, templateOnlyHeads(template, packs));
+  if (collisions.length > 0) throw new CoaTemplateCollisionError(collisions);
+}
+
+async function assertNoTemplateCollisionTx(tx: unknown, tenantId: string, template: SeedTemplate, packs: readonly string[]): Promise<void> {
+  const tmpl = templateOnlyHeads(template, packs);
+  if (tmpl.length === 0) return;
   const existing = await (tx as HeadReader).select({ code: financeHeads.code, classification: financeHeads.classification })
     .from(financeHeads)
-    .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, heads.map((h) => h.code))));
-  const byCode = new Map(heads.map((h) => [h.code, h]));
-  const collisions = existing
-    .filter((e) => (e.classification ?? "").trim().toLowerCase() !== byCode.get(e.code)!.classification)
-    .map((e) => ({ code: e.code, existing: e.classification, template: byCode.get(e.code)!.classification }));
-  if (collisions.length > 0) throw new CoaTemplateCollisionError(collisions);
+    .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.code, codes(tmpl))));
+  assertNoTemplateCollision(existing, template, packs);
 }
 
 /** Back-compat: the pre-S4 govt seed. Same rows as seedGlHeadsTx(tx, tenantId, "govt"). */
