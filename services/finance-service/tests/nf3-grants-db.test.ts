@@ -347,14 +347,17 @@ describe("B1: accept-time refusals and replay recoverability", () => {
     const s = await seedTenant({ fundAccounting: true });
     const f = await newFund(s.t, "CLOSEDP");
     const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    // seed a legitimate receipt while the period is OPEN, so the recognition op below has headroom and reaches the period check
+    await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), { grantId: g.id, amountMinor: 100n, postingDate: "2026-07-05" }));
     await closePeriod(s.t, "2026-07", "hard_close");
     for (const op of [recordGrantReceiptTx, recogniseRevenueGrantTx]) {
       expect(await codeOf(scoped(s.t, (tx) => op(tx, meta(s.t), { grantId: g.id, amountMinor: 10n, postingDate: "2026-07-10" })))).toBe("PERIOD_CLOSED");
     }
-    expect(await count(s.t, "gl.grant_postings")).toBe(0);
+    // nothing beyond the seed receipt: one posting, no utilisation row, one published journal, status as the seed left it
+    expect(await count(s.t, "gl.grant_postings")).toBe(1);
     expect(await count(s.t, "gl.grant_utilisation")).toBe(0);
-    expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("sanctioned");
-    expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(0);
+    expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("active");
+    expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(1);
   });
   it("HTTP: the same refusal is a 422", async () => {
     const s = await seedTenant({ fundAccounting: true });
@@ -424,14 +427,17 @@ describe("B1: accept-time refusals and replay recoverability", () => {
       const s = await seedTenant({ fundAccounting: true });
       const f = await newFund(s.t, `FY-${status}`.toUpperCase());
       const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+      // seed a legitimate receipt first (no FY row yet, so it is accepted): the recognition op then has headroom and reaches the FY check
+      await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), { grantId: g.id, amountMinor: 100n, postingDate: "2026-08-05" }));
       await setFy(s.t, "2026-27", status);
       for (const op of [recordGrantReceiptTx, recogniseRevenueGrantTx]) {
         expect(await codeOf(scoped(s.t, (tx) => op(tx, meta(s.t), { grantId: g.id, amountMinor: 10n, postingDate: "2026-08-10" }))), `${status}/${op.name}`).toBe(expected);
       }
-      expect(await count(s.t, "gl.grant_postings")).toBe(0);
+      // nothing beyond the seed receipt
+      expect(await count(s.t, "gl.grant_postings")).toBe(1);
       expect(await count(s.t, "gl.grant_utilisation")).toBe(0);
-      expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("sanctioned");
-      expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(0);
+      expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("active");
+      expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(1);
     }
   });
   it("B1c: the bank head and the capital-grant policy are stored on the posting row, and a replay rebuilds from the STORED values", async () => {
