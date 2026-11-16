@@ -21,13 +21,17 @@ import { fundContext } from "../gl/fund-context.js";
 import { funds } from "../gl/schema.js";
 import { assertFundHeadsPresentTx, prepareFundPostingTx } from "../gl/funds.js";
 import { deterministicId } from "../gl/spine.js";
+import { periodPostingRefusal } from "../gl/posting-rules.js";
+import { getPeriodStatusTx } from "../period-close/repo.js";
+import { findHeadByCodeTx, hasChildHeadsTx } from "../budget/repo.js";
+import { headNatureOf } from "../../shared/head-nature.js";
 import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import {
   grants, grantPostings, grantUtilisation, type GrantRow, type GrantCategory, type GrantPostingKind, type InterestTreatment,
 } from "./schema.js";
 import {
-  assertHeadroom, buildGrantJournal, journalHeadCodes, unspentMinor, ZERO_TOTALS, CAPITAL_GRANT_POLICIES, type GrantTotals,
+  assertHeadroom, buildGrantJournal, defaultBankHeadCode, journalHeadCodes, unspentMinor, ZERO_TOTALS, CAPITAL_GRANT_POLICIES, type GrantTotals,
 } from "./domain.js";
 
 // The shared db.transaction callback hands out the full db surface (see shared/db.ts scopedRead), so tx is untyped here like funds.ts.
@@ -51,6 +55,7 @@ export type CreateGrantInput = {
 /** Register a sanction against one fund. */
 export async function createGrantTx(tx: Tx, meta: ActorMeta, input: CreateGrantInput): Promise<GrantRow> {
   await requireGrantsEnabledTx(tx, meta.tenantId);
+  if (input.currency !== undefined && input.currency !== "INR") throw new DomainError("GRANT_CURRENCY", "grants are recorded in INR only");
   if (input.amountSanctionedMinor <= 0n) throw new DomainError("GRANT_AMOUNT", "the sanctioned amount must be greater than zero");
   const [fund] = await tx.select().from(funds).where(and(eq(funds.tenantId, meta.tenantId), eq(funds.id, input.fundId))).limit(1);
   if (!fund) throw new DomainError("FUND_NOT_FOUND", `fund ${input.fundId} does not exist for this tenant`);
@@ -58,7 +63,7 @@ export async function createGrantTx(tx: Tx, meta: ActorMeta, input: CreateGrantI
   const inserted = await tx.insert(grants).values({
     tenantId: meta.tenantId, fundId: input.fundId, category: input.category, grantor: input.grantor,
     schemeCode: input.schemeCode ?? null, sanctionRef: input.sanctionRef, sanctionDate: input.sanctionDate,
-    amountSanctionedMinor: input.amountSanctionedMinor, currency: input.currency ?? "INR",
+    amountSanctionedMinor: input.amountSanctionedMinor, currency: "INR", // the ledger is INR paise only (M7)
     createdBy: meta.actorId, updatedBy: meta.actorId,
   }).onConflictDoNothing({ target: [grants.tenantId, grants.grantor, grants.sanctionRef] }).returning();
   const row = inserted[0];
@@ -92,6 +97,44 @@ export async function getGrantTx(tx: Tx, tenantId: string, grantId: string): Pro
   return { grant, totals, unspentMinor: unspentMinor(totals) };
 }
 
+/**
+ * B1 (accept-time): refuse, with a 422 DomainError, a posting the GL consumer could never post. Same rule the consumer
+ * applies (gl/posting-rules.ts periodPostingRefusal over getPeriodStatusTx) and the manual-journal route applies up front
+ * (gl/routes.ts assertPeriodAcceptsPosting). Journal type is "journal", as published.
+ * Forward-note: a finance.gl.rejected reconciler + gl.grant_posting_voids table (for refusals that only show at posting time)
+ * is a follow-up that MUST land before fund_accounting is enabled for any real Section 8 tenant.
+ */
+async function assertPeriodAcceptsGrantPostingTx(tx: Tx, tenantId: string, postingDate: string): Promise<void> {
+  const period = postingDate.slice(0, 7);
+  const refusal = periodPostingRefusal(await getPeriodStatusTx(tx, tenantId, period), "journal", period);
+  if (refusal) throw new DomainError(refusal.code, refusal.message);
+}
+
+/** B1/M2: the bank head a receipt debits must exist, be a LEAF (the consumer refuses a group account) and an ASSET, not a control account. */
+async function assertBankHeadUsableTx(tx: Tx, tenantId: string, code: string): Promise<void> {
+  const head = await findHeadByCodeTx(tx, tenantId, code);
+  if (!head) throw new DomainError("GRANT_HEADS_MISSING", `bank head ${code} is not in the chart`);
+  if (headNatureOf(head.code, head.classification) !== "asset") throw new DomainError("GRANT_BANK_HEAD_INVALID", `bank head ${code} must be an asset head`);
+  if (head.isControl) throw new DomainError("GRANT_BANK_HEAD_INVALID", `bank head ${code} is a control account and cannot take a grant receipt`);
+  if (await hasChildHeadsTx(tx, head.id)) throw new DomainError("GRANT_BANK_HEAD_INVALID", `bank head ${code} is a group account; choose a leaf head`);
+}
+
+async function enqueueGrantJournalTx(
+  tx: Tx, meta: ActorMeta, journalId: string, postingDate: string, lines: ReadonlyArray<{ accountCode: string; debitMinor: unknown; creditMinor: unknown; fundId?: string | null | undefined; narration?: string | undefined }>,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
+    tenantId: meta.tenantId, actorId: meta.actorId, correlationId: meta.correlationId,
+    payload: {
+      id: journalId, tenantId: meta.tenantId, voucherNo: "AUTO", type: "journal", postingDate,
+      lines: lines.map((l) => ({
+        accountCode: l.accountCode, debitMinor: BigInt(l.debitMinor as bigint).toString(), creditMinor: BigInt(l.creditMinor as bigint).toString(),
+        fundId: l.fundId, ...(l.narration ? { narration: l.narration } : {}),
+      })),
+    },
+  });
+}
+
 export type GrantPostingInput = {
   /** Idempotency: the posting id (and, through it, the journal id). A repeat with the same id returns the first result. */
   id?: string | undefined;
@@ -116,6 +159,23 @@ export async function postGrantEventTx(
   const [existing] = await tx.select().from(grantPostings).where(and(eq(grantPostings.tenantId, meta.tenantId), eq(grantPostings.id, postingId))).limit(1);
   if (existing) {
     if (existing.grantId !== input.grantId || existing.kind !== kind) throw new DomainError("GRANT_POSTING_ID_REUSED", "this posting id was already used for a different grant event");
+    // B1 recoverability: the journal is published after the register row commits. If the consumer refused it (e.g. the period was
+    // closed) no journal exists; a retry with the same idempotency key re-publishes the SAME deterministic journal (postJournal is
+    // idempotent by journal id), so it posts exactly once after the period reopens. grant_postings (append-only) is not touched.
+    const [posted] = rowsOf(await tx.execute(sql`SELECT 1 AS x FROM gl.finance_journals WHERE tenant_id = ${meta.tenantId}::uuid AND id = ${existing.journalId}::uuid`));
+    if (!posted) {
+      const [g] = await tx.select().from(grants).where(and(eq(grants.tenantId, meta.tenantId), eq(grants.id, existing.grantId))).limit(1);
+      if (g) {
+        const postingDate = String(existing.postingDate);
+        await assertPeriodAcceptsGrantPostingTx(tx, meta.tenantId, postingDate);
+        const relines = buildGrantJournal(kind, {
+          category: g.category, policy: ps.capitalGrantPolicy, fundId: g.fundId, amountMinor: existing.amountMinor,
+          ...(existing.narration ? { narration: existing.narration } : {}), ...(input.bankHeadCode ? { bankHeadCode: input.bankHeadCode } : {}),
+        });
+        await enqueueGrantJournalTx(tx, meta, existing.journalId, postingDate, relines);
+        return { postingId, journalId: existing.journalId, replayed: true };
+      }
+    }
     return { postingId, journalId: existing.journalId, replayed: true };
   }
   const [grant] = await tx.select().from(grants).where(and(eq(grants.tenantId, meta.tenantId), eq(grants.id, input.grantId))).limit(1);
@@ -129,6 +189,8 @@ export async function postGrantEventTx(
     category: grant.category, policy, fundId: grant.fundId, amountMinor: input.amountMinor,
     ...(input.narration ? { narration: input.narration } : {}), ...(input.bankHeadCode ? { bankHeadCode: input.bankHeadCode } : {}),
   });
+  await assertPeriodAcceptsGrantPostingTx(tx, meta.tenantId, input.postingDate);
+  if (kind === "receipt") await assertBankHeadUsableTx(tx, meta.tenantId, input.bankHeadCode?.trim() || defaultBankHeadCode());
   try {
     await assertFundHeadsPresentTx(tx, meta.tenantId, journalHeadCodes(lines));
   } catch (err) {
@@ -161,17 +223,7 @@ export async function postGrantEventTx(
     await tx.update(grants).set({ status: "active", updatedBy: meta.actorId, updatedAt: new Date(), version: sql`${grants.version} + 1` })
       .where(and(eq(grants.tenantId, meta.tenantId), eq(grants.id, grant.id)));
   }
-  await enqueue(tx, {
-    topic: COMMANDS.journalPost, eventType: COMMANDS.journalPost,
-    tenantId: meta.tenantId, actorId: meta.actorId, correlationId: meta.correlationId,
-    payload: {
-      id: journalId, tenantId: meta.tenantId, voucherNo: "AUTO", type: "journal", postingDate: input.postingDate,
-      lines: lines.map((l) => ({
-        accountCode: l.accountCode, debitMinor: BigInt(l.debitMinor).toString(), creditMinor: BigInt(l.creditMinor).toString(),
-        fundId: l.fundId, ...(l.narration ? { narration: l.narration } : {}),
-      })),
-    },
-  });
+  await enqueueGrantJournalTx(tx, meta, journalId, input.postingDate, lines);
   await auditEvent(tx, meta, `grant_${kind}`, "grant", grant.id, {
     postingId, journalId, amountMinor: input.amountMinor.toString(), postingDate: input.postingDate, policy,
   });

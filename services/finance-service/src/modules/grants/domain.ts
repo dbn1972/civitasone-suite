@@ -12,6 +12,7 @@
  */
 import { DomainError } from "../approvals/domain.js";
 import { GRANT_HEAD_CODES, type GrantHeadCodes } from "../gl/system-heads.js";
+import "../gl/standard-heads.js"; // side effect: registers the seeded-chart codes the runtime collision guard checks (M3)
 import { assertFundsBalanced } from "../gl/funds.js";
 import type { JournalLine } from "../gl/schema.js";
 import type { CapitalGrantPolicy } from "../approvals/posting-settings.js";

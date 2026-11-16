@@ -334,3 +334,86 @@ describe("idempotency and immutability", () => {
     expect(await codeOf(scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), ev(g.id, 1n))))).toBe("GRANT_CLOSED");
   });
 });
+
+describe("B1: accept-time refusals and replay recoverability", () => {
+  const closePeriod = (t: string, period: string, status: string) => scoped(t, (tx) => tx.execute(sql`
+    INSERT INTO gl.finance_period_close (tenant_id, fiscal_year, period, status, created_by)
+    VALUES (${t}::uuid, '2026-2027', ${period}, ${status}, ${MAKER}::uuid)
+    ON CONFLICT (tenant_id, period) DO UPDATE SET status = EXCLUDED.status`));
+  it("a receipt dated in a HARD-closed period is refused 422 PERIOD_CLOSED at accept and writes nothing (no posting, no utilisation, status not flipped, nothing enqueued)", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "CLOSEDP");
+    const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    await closePeriod(s.t, "2026-07", "hard_close");
+    for (const op of [recordGrantReceiptTx, recogniseRevenueGrantTx]) {
+      expect(await codeOf(scoped(s.t, (tx) => op(tx, meta(s.t), { grantId: g.id, amountMinor: 10n, postingDate: "2026-07-10" })))).toBe("PERIOD_CLOSED");
+    }
+    expect(await count(s.t, "gl.grant_postings")).toBe(0);
+    expect(await count(s.t, "gl.grant_utilisation")).toBe(0);
+    expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("sanctioned");
+    expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(0);
+  });
+  it("HTTP: the same refusal is a 422", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "CLOSEDH");
+    const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    await closePeriod(s.t, "2026-07", "hard_close");
+    const app = await buildApp();
+    try {
+      const r = await app.inject({ method: "POST", url: `/v1/finance/grants/${g.id}/receipts`, headers: bearer(s.t, MAKER, ["finance_officer"]),
+        payload: { amountMinor: "10", postingDate: "2026-07-10" } });
+      expect(r.statusCode).toBe(422);
+      expect(r.body).toContain("PERIOD_CLOSED");
+    } finally { await app.close(); }
+  });
+  it("a period that closes AFTER accept makes the consumer refuse the journal; a replay is refused while closed, and posts exactly once after the period reopens", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "REPLAY");
+    const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    const id = randomUUID();
+    const input = { grantId: g.id, amountMinor: 100n, postingDate: "2026-07-10", id };
+    const first = await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), input));
+    expect(first.replayed).toBe(false);
+    await closePeriod(s.t, "2026-07", "hard_close");       // closes between accept and post
+    await drainGrantJournals(s.t);
+    expect(await count(s.t, "gl.finance_journals")).toBe(0);  // refused by the consumer; the register row stays (append-only)
+    expect(await count(s.t, "gl.grant_postings")).toBe(1);
+    expect(await codeOf(scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), input)))).toBe("PERIOD_CLOSED");
+    await closePeriod(s.t, "2026-07", "open");
+    const again = await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), input));
+    expect(again).toMatchObject({ postingId: first.postingId, journalId: first.journalId, replayed: true });
+    await drainGrantJournals(s.t);
+    expect(await count(s.t, "gl.finance_journals")).toBe(1);
+    expect(await count(s.t, "gl.grant_postings")).toBe(1);    // never a second register row
+    // once posted, a further replay re-enqueues nothing
+    const before = rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length;
+    await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), input));
+    const after = rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length;
+    expect(after).toBe(before);
+    expect(await headNet(s.t, "1100", f)).toBe(100n);
+  });
+  it("a bank head that is not a leaf ASSET head (expense head, group account, unknown) is refused at accept", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "BANKCHK");
+    const parent = randomUUID();
+    await scoped(s.t, (tx) => tx.insert(financeHeads).values([
+      { id: parent, tenantId: s.t, code: "1190", name: "Bank group", level: 0, classification: "asset", createdBy: MAKER, updatedBy: MAKER },
+      { id: randomUUID(), tenantId: s.t, code: "1191", name: "Bank leaf", level: 1, classification: "asset", parentId: parent, createdBy: MAKER, updatedBy: MAKER },
+      { id: randomUUID(), tenantId: s.t, code: "5999", name: "Expense", level: 0, classification: "expense", createdBy: MAKER, updatedBy: MAKER },
+    ]));
+    const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    const rc = (bankHeadCode: string) => scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), { ...ev(g.id, 10n), bankHeadCode }));
+    expect(await codeOf(rc("5999"))).toBe("GRANT_BANK_HEAD_INVALID");
+    expect(await codeOf(rc("1190"))).toBe("GRANT_BANK_HEAD_INVALID");
+    expect(await codeOf(rc("9999"))).toBe("GRANT_HEADS_MISSING");
+    expect(await count(s.t, "gl.grant_postings")).toBe(0);
+    expect(await codeOf(rc("1191"))).toBe("NO_ERROR");
+  });
+  it("M7: only INR is accepted as a grant currency (service and column CHECK)", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "CCY");
+    expect(await codeOf(scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), { ...grantInput(f, "general"), currency: "USD" })))).toBe("GRANT_CURRENCY");
+    await expect(scoped(s.t, (tx) => tx.execute(sql`INSERT INTO gl.grants (tenant_id, fund_id, category, grantor, sanction_ref, sanction_date, amount_sanctioned_minor, currency, created_by, updated_by)
+      VALUES (${s.t}::uuid, ${f}::uuid, 'general', 'G', 'C1', '2026-04-01', 5, 'USD', ${MAKER}::uuid, ${MAKER}::uuid)`))).rejects.toThrow();
+  });
+});

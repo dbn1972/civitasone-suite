@@ -13,6 +13,8 @@
 --  4. gl.grant_utilisation       per (grant, period) utilisation / UC tracking. The exact UC form number is NULLABLE and plain
 --                                text (pluggable): the CA's GFR form answer lands later. interest_treatment is NULLABLE (CA to confirm).
 -- Amounts are paise (bigint), like every other money column in gl.*.
+-- DEPLOY ORDER: loadPostingSettingsTx selects capital_grant_policy on EVERY posting for EVERY tenant (govt included), so apply
+--   this migration BEFORE rolling the finance-service image, or all postings fail (same precedent as 0170 fund_accounting).
 -- Rollback (only while no grant exists): DROP TABLE gl.grant_utilisation, gl.grant_postings, gl.grants; drop the two functions
 --   and the trigger on gl.finance_settings; ALTER TABLE gl.finance_settings DROP COLUMN IF EXISTS capital_grant_policy.
 
@@ -52,6 +54,7 @@ CREATE TABLE IF NOT EXISTS gl.grants (
   CONSTRAINT grants_category_check CHECK (category IN ('salary', 'general', 'capital')),
   CONSTRAINT grants_status_check   CHECK (status IN ('sanctioned', 'active', 'closed')),
   CONSTRAINT grants_amount_check   CHECK (amount_sanctioned_minor > 0),
+  CONSTRAINT grants_currency_check CHECK (currency = 'INR'),
   CONSTRAINT grants_tenant_id_id_key UNIQUE (tenant_id, id),
   CONSTRAINT grants_tenant_sanction_key UNIQUE (tenant_id, grantor, sanction_ref),
   -- composite tenant-scoped FK: a bare REFERENCES funds(id) would bypass RLS and could point at another tenant's fund

@@ -139,6 +139,14 @@ export function assertGrantHeadCodes(codes: GrantHeadCodes, reserved: Iterable<s
   }
 }
 
+/**
+ * M3: standard-heads.ts registers a provider of the core chart + nonprofit template codes (it imports this file, so the
+ * dependency is inverted to avoid a cycle). The RUNTIME guard then rejects an override that lands on any seeded chart code
+ * (AP/AR/deposit/TDS/gain-loss/revenue/bank ...), not just the system constants, even when set after seeding.
+ */
+let coreCodeProvider: (() => string[]) | undefined;
+export function registerGrantCoreCodeProvider(fn: () => string[]): void { coreCodeProvider = fn; }
+
 export function GRANT_HEAD_CODES(): GrantHeadCodes {
   const env = (k: string, d: string) => process.env[k]?.trim() || d;
   const codes: GrantHeadCodes = {
@@ -151,6 +159,6 @@ export function GRANT_HEAD_CODES(): GrantHeadCodes {
     capitalRelease: env("FINANCE_GRANT_CAP_RELEASE_CODE", "4450"),
     capitalFund: env("FINANCE_GRANT_CAP_FUND_CODE", "3300"),
   };
-  assertGrantHeadCodes(codes);
+  assertGrantHeadCodes(codes, [...reservedSystemCodes(), ...(coreCodeProvider?.() ?? [])]);
   return codes;
 }

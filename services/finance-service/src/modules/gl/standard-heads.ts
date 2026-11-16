@@ -24,7 +24,7 @@ import { NonRetryableError } from "@civitasone/queue";
 import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
 import { headNatureOf } from "../../shared/head-nature.js";
-import { FUND_HEAD_CODES, GRANT_HEAD_CODES, GrantHeadCodeError, assertGrantHeadCodes, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
+import { FUND_HEAD_CODES, GRANT_HEAD_CODES, GrantHeadCodeError, assertGrantHeadCodes, registerGrantCoreCodeProvider, type GrantHeadCodes, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
 
 /** The CHECK domain of budget.finance_heads.statement_class (migration 0169). */
 export const STATEMENT_CLASSES = [
@@ -161,9 +161,8 @@ function nonprofitHeads(): StandardGlHead[] {
   return heads;
 }
 
-function nonprofitHeadList(): StandardGlHead[] {
-  const f = FUND_HEAD_CODES();
-  const g = GRANT_HEAD_CODES(); // NF-3: the same codes the grants module posts to
+function nonprofitHeadList(g: GrantHeadCodes = GRANT_HEAD_CODES()): StandardGlHead[] {
+  const f = FUND_HEAD_CODES(); // NF-3: g = the same codes the grants module posts to
   assertGrantHeadCodes(g, coreGlHeads().map((h) => h.code)); // fail-safe: an override must not land on a core chart code
   return [
     // ---- assets ----
@@ -419,3 +418,16 @@ async function assertNoTemplateCollisionTx(tx: unknown, tenantId: string, templa
 export async function seedStandardGlHeadsTx(tx: unknown, tenantId: string, actorId: string = SEED_ACTOR): Promise<number> {
   return seedGlHeadsTx(tx, tenantId, "govt", [], actorId);
 }
+
+/**
+ * NF-3 M3: hand system-heads.ts the seeded chart codes (core + nonprofit template, minus the grant roles' own default codes) so
+ * GRANT_HEAD_CODES() rejects, at posting time as well as seed time, an override that lands on any other chart head.
+ */
+const DEFAULT_GRANT_CODES: GrantHeadCodes = {
+  revenueReceiptSalary: "2320", revenueReceiptGeneral: "2330", revenueIncomeSalary: "4430", revenueIncomeGeneral: "4440",
+  capitalReceipt: "2340", capitalDeferred: "2350", capitalRelease: "4450", capitalFund: "3300",
+};
+registerGrantCoreCodeProvider(() => {
+  const own = new Set(Object.values(DEFAULT_GRANT_CODES));
+  return [...coreGlHeads(), ...nonprofitHeadList(DEFAULT_GRANT_CODES)].map((h) => h.code).filter((c) => !own.has(c));
+});

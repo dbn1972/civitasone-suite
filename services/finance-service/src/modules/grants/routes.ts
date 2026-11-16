@@ -30,7 +30,7 @@ const createGrantBody = z.object({
   sanctionRef: z.string().trim().min(1).max(128),
   sanctionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   amountSanctionedMinor: minor,
-  currency: z.string().length(3).optional(),
+  currency: z.literal("INR").optional(),
 });
 const eventBody = z.object({
   amountMinor: minor,

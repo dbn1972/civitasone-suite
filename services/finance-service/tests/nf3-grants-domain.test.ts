@@ -92,6 +92,16 @@ describe("NF-3 override-collision guard (fail-safe)", () => {
     process.env.FINANCE_GRANT_REV_INCOME_SALARY_CODE = "4460";
     expect(() => glHeadsForTemplate("nonprofit")).toThrow(/GRANT_HEAD_CODE_COLLISION/);
   });
+  it("M3: the RUNTIME guard (GRANT_HEAD_CODES, no seeding involved) also rejects an override on a seeded core / nonprofit chart code", () => {
+    const core = coreGlHeads().map((h) => h.code);
+    const ap = core.find((c) => c === "2050") ?? core[0] as string;
+    process.env.FINANCE_GRANT_CAP_RECEIPT_CODE = ap;
+    expect(() => GRANT_HEAD_CODES()).toThrow(/GRANT_HEAD_CODE_COLLISION/);
+    process.env.FINANCE_GRANT_CAP_RECEIPT_CODE = "4460"; // another nonprofit-template head
+    expect(() => GRANT_HEAD_CODES()).toThrow(/GRANT_HEAD_CODE_COLLISION/);
+    delete process.env.FINANCE_GRANT_CAP_RECEIPT_CODE;
+    expect(() => GRANT_HEAD_CODES()).not.toThrow();
+  });
   it("a bad override never affects govt / commercial charts (the grant codes are read only by the nonprofit template and the grants module)", () => {
     process.env.FINANCE_GRANT_CAP_RECEIPT_CODE = "1100";
     expect(() => glHeadsForTemplate("govt")).not.toThrow();
