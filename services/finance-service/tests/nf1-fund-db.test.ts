@@ -142,7 +142,7 @@ describe("migration 0171: shape", () => {
       const c = rowsOf(await sqlClient`SELECT data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'gl' AND table_name = ${tbl} AND column_name = 'fund_id'`);
       expect(c[0], tbl).toMatchObject({ data_type: "uuid", is_nullable: "YES" });
     }
-    const fks = rowsOf(await sqlClient`SELECT conname, convalidated, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname LIKE '%_fund_fk'`);
+    const fks = rowsOf(await sqlClient`SELECT conname, convalidated, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname LIKE '%_fund_fk' AND conrelid IN ('gl.finance_ledger'::regclass, 'gl.finance_journal_lines'::regclass, 'gl.finance_opening_balances'::regclass, 'gl.finance_cash_book'::regclass)`);
     expect(fks.length).toBe(4);
     for (const f of fks) {
       expect(f.convalidated, String(f.conname)).toBe(true);

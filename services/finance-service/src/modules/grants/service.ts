@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { DomainError } from "../approvals/domain.js";
-import { loadPostingSettingsTx, type CapitalGrantPolicy, type PostingSettings } from "../approvals/posting-settings.js";
+import { loadPostingSettingsTx, toCapitalGrantPolicy, type CapitalGrantPolicy, type PostingSettings } from "../approvals/posting-settings.js";
 import { financeSettings } from "../approvals/schema.js";
 import { auditEvent, type ActorMeta } from "../approvals/apply.js";
 import { fundContext } from "../gl/fund-context.js";
@@ -23,6 +23,8 @@ import { assertFundHeadsPresentTx, prepareFundPostingTx } from "../gl/funds.js";
 import { deterministicId } from "../gl/spine.js";
 import { periodPostingRefusal } from "../gl/posting-rules.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
+import { fyClosedReasonTx, fyClosedMessage } from "../gl/fy-guard.js";
+import { fyFromDate } from "../hoa/voucher.js";
 import { findHeadByCodeTx, hasChildHeadsTx } from "../budget/repo.js";
 import { headNatureOf } from "../../shared/head-nature.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -108,6 +110,15 @@ async function assertPeriodAcceptsGrantPostingTx(tx: Tx, tenantId: string, posti
   const period = postingDate.slice(0, 7);
   const refusal = periodPostingRefusal(await getPeriodStatusTx(tx, tenantId, period), "journal", period);
   if (refusal) throw new DomainError(refusal.code, refusal.message);
+  // B1b: the consumer also refuses a draft financial year (FY_NOT_ACTIVE) and a closed one (FY_CLOSED) -- same helpers, same rules
+  // (gl/consumer.ts postJournal: fyFromDate, gl.finance_fiscal_years status, fyClosedReasonTx / fyClosedMessage).
+  const fyCode = fyFromDate(postingDate);
+  const fyRaw = await tx.execute(sql`SELECT status FROM gl.finance_fiscal_years WHERE tenant_id = ${tenantId}::uuid AND code = ${fyCode} LIMIT 1`);
+  if (rowsOf(fyRaw)[0]?.status === "draft") {
+    throw new DomainError("FY_NOT_ACTIVE", `financial year ${fyCode} has not been activated; postings dated ${postingDate} cannot be accepted until it is`);
+  }
+  const closedReason = await fyClosedReasonTx(tx, tenantId, fyCode);
+  if (closedReason) throw new DomainError("FY_CLOSED", fyClosedMessage(closedReason, postingDate));
 }
 
 /** B1/M2: the bank head a receipt debits must exist, be a LEAF (the consumer refuses a group account) and an ASSET, not a control account. */
@@ -168,9 +179,12 @@ export async function postGrantEventTx(
       if (g) {
         const postingDate = String(existing.postingDate);
         await assertPeriodAcceptsGrantPostingTx(tx, meta.tenantId, postingDate);
+        // B1c: rebuild from the values stored at accept time, never from today's settings or the retry's input.
+        const storedPolicy = toCapitalGrantPolicy(existing.capitalGrantPolicy);
+        if (kind === "receipt") await assertBankHeadUsableTx(tx, meta.tenantId, existing.bankHeadCode?.trim() || defaultBankHeadCode());
         const relines = buildGrantJournal(kind, {
-          category: g.category, policy: ps.capitalGrantPolicy, fundId: g.fundId, amountMinor: existing.amountMinor,
-          ...(existing.narration ? { narration: existing.narration } : {}), ...(input.bankHeadCode ? { bankHeadCode: input.bankHeadCode } : {}),
+          category: g.category, policy: storedPolicy, fundId: g.fundId, amountMinor: existing.amountMinor,
+          ...(existing.narration ? { narration: existing.narration } : {}), ...(existing.bankHeadCode ? { bankHeadCode: existing.bankHeadCode } : {}),
         });
         await enqueueGrantJournalTx(tx, meta, existing.journalId, postingDate, relines);
         return { postingId, journalId: existing.journalId, replayed: true };
@@ -204,6 +218,8 @@ export async function postGrantEventTx(
   await tx.insert(grantPostings).values({
     id: postingId, tenantId: meta.tenantId, grantId: grant.id, kind, amountMinor: input.amountMinor,
     postingDate: input.postingDate, period: input.postingDate.slice(0, 7), journalId, narration: input.narration ?? null, createdBy: meta.actorId,
+    // B1c: what the journal was built from, so a replay rebuilds the identical lines.
+    bankHeadCode: kind === "receipt" ? (input.bankHeadCode?.trim() || defaultBankHeadCode()) : null, capitalGrantPolicy: policy,
   });
   if (kind === "recognition") {
     const period = input.postingDate.slice(0, 7);

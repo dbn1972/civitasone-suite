@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS gl.grant_postings (
   CONSTRAINT grant_postings_journal_key  UNIQUE (tenant_id, journal_id),
   CONSTRAINT grant_postings_grant_fk FOREIGN KEY (tenant_id, grant_id) REFERENCES gl.grants (tenant_id, id)
 );
+-- B1c: the inputs the journal was built from, kept so a replay (re-publish of a refused journal) rebuilds identical lines.
+ALTER TABLE gl.grant_postings ADD COLUMN IF NOT EXISTS bank_head_code text;
+ALTER TABLE gl.grant_postings ADD COLUMN IF NOT EXISTS capital_grant_policy text NOT NULL DEFAULT 'deferred_income';
 CREATE INDEX IF NOT EXISTS idx_grant_postings_grant ON gl.grant_postings (tenant_id, grant_id, kind);
 
 -- 4. Utilisation / UC tracking ------------------------------------------------------------------------------------------------

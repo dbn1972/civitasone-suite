@@ -338,8 +338,11 @@ describe("idempotency and immutability", () => {
 describe("B1: accept-time refusals and replay recoverability", () => {
   const closePeriod = (t: string, period: string, status: string) => scoped(t, (tx) => tx.execute(sql`
     INSERT INTO gl.finance_period_close (tenant_id, fiscal_year, period, status, created_by)
-    VALUES (${t}::uuid, '2026-2027', ${period}, ${status}, ${MAKER}::uuid)
-    ON CONFLICT (tenant_id, period) DO UPDATE SET status = EXCLUDED.status`));
+    VALUES (${t}::uuid, '2026-27', ${period}, ${status}, ${MAKER}::uuid)
+    ON CONFLICT (tenant_id, fiscal_year, period) DO UPDATE SET status = EXCLUDED.status`));
+  const setFy = (t: string, code: string, status: string) => scoped(t, (tx) => tx.execute(sql`
+    INSERT INTO gl.finance_fiscal_years (id, tenant_id, code, label, start_date, end_date, status, created_by)
+    VALUES (${randomUUID()}::uuid, ${t}::uuid, ${code}, ${code}, '2026-04-01', '2027-03-31', ${status}, ${MAKER}::uuid)`));
   it("a receipt dated in a HARD-closed period is refused 422 PERIOD_CLOSED at accept and writes nothing (no posting, no utilisation, status not flipped, nothing enqueued)", async () => {
     const s = await seedTenant({ fundAccounting: true });
     const f = await newFund(s.t, "CLOSEDP");
@@ -415,5 +418,36 @@ describe("B1: accept-time refusals and replay recoverability", () => {
     expect(await codeOf(scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), { ...grantInput(f, "general"), currency: "USD" })))).toBe("GRANT_CURRENCY");
     await expect(scoped(s.t, (tx) => tx.execute(sql`INSERT INTO gl.grants (tenant_id, fund_id, category, grantor, sanction_ref, sanction_date, amount_sanctioned_minor, currency, created_by, updated_by)
       VALUES (${s.t}::uuid, ${f}::uuid, 'general', 'G', 'C1', '2026-04-01', 5, 'USD', ${MAKER}::uuid, ${MAKER}::uuid)`))).rejects.toThrow();
+  });
+  it("B1b: a receipt dated in a DRAFT or a CLOSED financial year is refused 422 at accept (FY_NOT_ACTIVE / FY_CLOSED) and writes nothing", async () => {
+    for (const [status, expected] of [["draft", "FY_NOT_ACTIVE"], ["closed", "FY_CLOSED"]] as const) {
+      const s = await seedTenant({ fundAccounting: true });
+      const f = await newFund(s.t, `FY-${status}`.toUpperCase());
+      const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+      await setFy(s.t, "2026-27", status);
+      for (const op of [recordGrantReceiptTx, recogniseRevenueGrantTx]) {
+        expect(await codeOf(scoped(s.t, (tx) => op(tx, meta(s.t), { grantId: g.id, amountMinor: 10n, postingDate: "2026-08-10" }))), `${status}/${op.name}`).toBe(expected);
+      }
+      expect(await count(s.t, "gl.grant_postings")).toBe(0);
+      expect(await count(s.t, "gl.grant_utilisation")).toBe(0);
+      expect((await scoped(s.t, (tx) => getGrantTx(tx, s.t, g.id))).grant.status).toBe("sanctioned");
+      expect(rowsOf(await scoped(s.t, (tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${s.t}::uuid AND topic = ${COMMANDS.journalPost}`))).length).toBe(0);
+    }
+  });
+  it("B1c: the bank head and the capital-grant policy are stored on the posting row, and a replay rebuilds from the STORED values", async () => {
+    const s = await seedTenant({ fundAccounting: true });
+    const f = await newFund(s.t, "STORED");
+    await scoped(s.t, (tx) => tx.insert(financeHeads).values({ id: randomUUID(), tenantId: s.t, code: "1120", name: "Bank 2", level: 0, classification: "asset", createdBy: MAKER, updatedBy: MAKER }));
+    const g = await scoped(s.t, (tx) => createGrantTx(tx, meta(s.t), grantInput(f, "salary", 1_000n)));
+    const id = randomUUID();
+    const first = await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), { ...ev(g.id, 50n, id), bankHeadCode: "1120" }));
+    const row = await q1(s.t, sql`SELECT bank_head_code, capital_grant_policy FROM gl.grant_postings WHERE tenant_id = ${s.t}::uuid AND id = ${id}::uuid`);
+    expect(row).toEqual([{ bank_head_code: "1120", capital_grant_policy: "deferred_income" }]);
+    // no journal exists yet (nothing drained): a replay with a DIFFERENT bank head re-publishes the same journal from the STORED values
+    await scoped(s.t, (tx) => recordGrantReceiptTx(tx, meta(s.t), { ...ev(g.id, 50n, id), bankHeadCode: "1100" }));
+    expect(await drainGrantJournals(s.t)).toBe(0);
+    expect(await headNet(s.t, "1120", f)).toBe(50n);
+    expect(await headNet(s.t, "1100", f)).toBe(0n);
+    expect(first.replayed).toBe(false);
   });
 });

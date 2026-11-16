@@ -44,6 +44,9 @@ export const grantPostings = glSchema.table("grant_postings", {
   postingDate: date("posting_date").notNull(),
   period:      varchar("period", { length: 7 }).notNull(),
   journalId:   uuid("journal_id").notNull(),
+  // B1c: the bank head a receipt debited and the effective capital-grant policy at accept time; a replay rebuilds from these.
+  bankHeadCode:       text("bank_head_code"),
+  capitalGrantPolicy: text("capital_grant_policy").notNull().default("deferred_income"),
   narration:   text("narration"),
   createdBy:   uuid("created_by").notNull(),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
