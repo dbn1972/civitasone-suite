@@ -19,6 +19,7 @@ const T = {
   psu: "cccccccc-dddd-4000-8000-0000000005a6",
   manual: "cccccccc-dddd-4000-8000-0000000005a7",
   operator: "cccccccc-dddd-4000-8000-0000000005a8",
+  noProfile: "cccccccc-dddd-4000-8000-0000000005a9",
 };
 const ALL = Object.values(T);
 let prevFlag: string | undefined;
@@ -86,6 +87,14 @@ describe("migration 0062", () => {
   });
 });
 
+describe("bundle / profile drift guard", () => {
+  it.each(["section8", "small_office", "psu"])("module_bundle.%s equals org_profile.default_modules", async (code) => {
+    const [b] = await sqlClient`SELECT module_ids FROM composition.module_bundle WHERE code = ${code}`;
+    const [p] = await sqlClient`SELECT default_modules FROM composition.org_profile WHERE code = ${code}`;
+    expect([...b!.module_ids].sort()).toEqual([...p!.default_modules].sort());
+  });
+});
+
 describe("onboarded consumer — govt golden (byte-identical)", () => {
   it("govt_dept, flag OFF => nothing written", async () => {
     await onboarded(T.govtOff, "govt_dept", "govt");
@@ -141,5 +150,14 @@ describe("onboarded consumer — non-govt segments", () => {
     await scoped(T.operator, (tx) => tx`INSERT INTO composition.tenant_enforcement_mode (tenant_id, mode, updated_by) VALUES (${T.operator}, 'enforce', ${ADMIN})`);
     await onboarded(T.operator, "small_office");
     expect((await state(T.operator)).mode[0]!.mode).toBe("enforce");
+  });
+  it("does not wipe existing entitlements of a tenant that has no profile row", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    await scoped(T.noProfile, (tx) => tx`INSERT INTO composition.tenant_entitlement (tenant_id, module_id, source, created_by) VALUES (${T.noProfile}, 'employee', 'user', ${ADMIN}), (${T.noProfile}, 'finance', 'user', ${ADMIN})`);
+    await onboarded(T.noProfile, "psu");
+    const s = await state(T.noProfile);
+    expect(s.ents.map((e: any) => e.module_id).sort()).toEqual(["employee", "finance"]);
+    expect(s.profile).toHaveLength(0);
+    expect(s.mode).toHaveLength(0);
   });
 });

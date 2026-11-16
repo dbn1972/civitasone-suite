@@ -24,7 +24,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { notifyGatewayModuleCache } from "../../module-cache-notify.js";
 import * as repo from "./repo.js";
 import { buildRegistry, resolveComposition } from "./domain.js";
-import { tenantEnforcementMode, tenantProfile } from "./schema.js";
+import { tenantEnforcementMode, tenantEntitlement, tenantProfile } from "./schema.js";
 
 const log = pino({ name: "admin-composition-profile-onboard" });
 const TENANT_ONBOARDED = "tenant.tenant.onboarded";
@@ -68,6 +68,10 @@ export function registerProfileOnboardConsumer(queue: Queue): void {
           if (!(await markProcessed(tx, msg.messageId))) return;
           const existing = await tx.select({ c: tenantProfile.profileCode }).from(tenantProfile).where(eq(tenantProfile.tenantId, tenantId)).limit(1);
           if (existing.length > 0) return; // already composed: never clobber
+          // applyProfileTx DELETEs all entitlements first, so a tenant with entitlements but no profile row (apply-plan with
+          // profileCode:null, 0059 carry-over) must not be composed either: only a genuinely fresh tenant is.
+          const ents = await tx.select({ m: tenantEntitlement.moduleId }).from(tenantEntitlement).where(eq(tenantEntitlement.tenantId, tenantId)).limit(1);
+          if (ents.length > 0) return;
           await repo.applyProfileTx(tx as unknown as Parameters<typeof repo.applyProfileTx>[0], tenantId, chosen.code, chosen.defaultModules, msg.actorId);
           const explicit = await tx.select({ m: tenantEnforcementMode.mode }).from(tenantEnforcementMode).where(eq(tenantEnforcementMode.tenantId, tenantId)).limit(1);
           if (explicit.length === 0) {
