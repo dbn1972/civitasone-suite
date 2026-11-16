@@ -195,3 +195,14 @@ describe("the shared NULL = GENERAL read helper", () => {
     expect(coalesceFundSql(sql`x.fund_id`, G).queryChunks.length).toBeGreaterThan(0);
   });
 });
+
+describe("coalesceFundSql must never be repeated in GROUP BY (each use binds its own parameter)", () => {
+  it("no finance-service source groups by an interpolated COALESCE-fund expression", async () => {
+    const { SRC, listTs, read, stripComments } = await import("./_nf0-static.js");
+    for (const f of listTs(SRC)) {
+      const code = stripComments(read(f));
+      const vars = [...code.matchAll(/const (\w+) = coalesceFundSql\(/g)].map((m) => m[1]);
+      for (const v of vars) expect(code, `${f}: GROUP BY \${${v}} repeats a parameterised expression; use GROUP BY 1`).not.toMatch(new RegExp(`GROUP BY[^\\n]*\\$\\{${v}\\}`));
+    }
+  });
+});

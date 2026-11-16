@@ -29,6 +29,8 @@ type FundOpeningRow = { fundId: string; accountCode: string; signed: bigint; sou
 async function fundLedgerMovements(tx: Tx, tenantId: string, general: string, from: string | null, to: string | null): Promise<FundMovement[]> {
   const lower = from ? sql`AND fl.posting_date >= ${from}::date` : sql``;
   const upper = to ? sql`AND fl.posting_date <= ${to}::date` : sql``;
+  // The fund expression binds the GENERAL uuid as a parameter; repeating it in GROUP BY would be a different expression
+  // ($N vs $M) and Postgres rejects it, so the grouping is positional (GROUP BY 1).
   const fund = coalesceFundSql("fl.fund_id", general);
   const rows = rowsOf(await tx.execute(sql`
     SELECT ${fund}::text AS fund_id, fh.code, MAX(fh.name) AS name, MAX(fh.classification) AS classification,
@@ -36,7 +38,7 @@ async function fundLedgerMovements(tx: Tx, tenantId: string, general: string, fr
       FROM gl.finance_ledger fl
       JOIN budget.finance_heads fh ON fh.id = fl.head_id AND fh.tenant_id = fl.tenant_id
      WHERE fl.tenant_id = ${tenantId}::uuid ${lower} ${upper}
-     GROUP BY ${fund}, fh.code
+     GROUP BY 1, fh.code
   `));
   return rows.map((r) => ({
     fundId: String(r.fund_id), code: String(r.code), name: (r.name as string | null) ?? null,
