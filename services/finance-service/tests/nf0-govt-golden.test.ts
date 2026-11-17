@@ -131,6 +131,7 @@ describe("NF-0 govt golden: finance output is byte-identical with fund_accountin
   });
 
   const capture = process.env.NF0_WRITE_GOLDEN === "1";
+  // FLAKY-SKIP: env-gated — runs whenever the committed golden fixture exists (always in the CI Tests job); skips only during first-time capture (NF0_WRITE_GOLDEN=1) before the fixture is written (expires: 2027-05-31)
   it.skipIf(!capture && !existsSync(FIXTURE))("matches the stored govt golden fixture (tests/fixtures/nf0-govt-golden.json)", async () => {
     const now = canon(await snapshot());
     if (capture) {
