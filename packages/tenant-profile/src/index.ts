@@ -48,6 +48,13 @@ export type ProfileSettings = {
   /** Extra head packs seeded on top of the template (S4), e.g. "office-pack". */
   coaPacks: readonly string[];
   statutoryPack: StatutoryPack;
+  /**
+   * Section 8: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). This is the profile's DEFAULT only. Nothing
+   * copies it into gl.finance_settings.fund_accounting yet: that column is changed solely by finance-service's
+   * setFundAccountingTx (gl/fund-activation.ts), which the NF-8 activation wizard will call, per tenant. false for govt and
+   * every profile that does not set it; no profile turns it on until NF-8 (strictly last).
+   */
+  fundAccounting: boolean;
 };
 
 export type ProfileDef = {
@@ -81,6 +88,7 @@ export const LEGACY_SETTINGS: ProfileSettings = Object.freeze({
   coaTemplate: "govt",
   coaPacks: Object.freeze([]) as readonly string[],
   statutoryPack: "govt_in",
+  fundAccounting: false,
 });
 
 const GOVT: ProfileSettings = LEGACY_SETTINGS;
@@ -111,13 +119,13 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
     code: "small_office", label: "Small business / MSME", family: "commercial", editions: ["small_office"], active: false,
     defaultBillHead: "fixed", bundleCode: "small_office",
     composeOnOnboard: true, adminEdition: "small_office", recruitmentPolicy: "direct", manifestKey: "msme",
-    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in" },
+    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false },
   },
   {
     code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: false,
     defaultBillHead: "fixed", bundleCode: "section8",
     composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default",
-    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in" },
+    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: false },
   },
 ] satisfies ProfileDef[]);
 

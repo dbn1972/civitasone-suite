@@ -54,6 +54,24 @@ export function rollForward(
   return out;
 }
 
+/**
+ * Section 8 NF-7: fold the inter-fund MOVEMENT heads (3910/3911/3920/3921 by default) into `fundCode`, for ONE fund's signed
+ * balances. They are equity, so rollForward carries them like any fund account and they would pile up year after year; the
+ * per-fund year-end close calls this so the movement is absorbed into the fund's own accumulated-fund line and the next year
+ * opens with those heads at zero. The fund's total (sum of its signed balances) is unchanged -- only the split moves.
+ * Pure; the input is not mutated; idempotent (a second application is a no-op); zero balances are dropped.
+ */
+export function rollInterFundHeads(balances: ReadonlyMap<string, bigint>, movementCodes: Iterable<string>, fundCode: string): Map<string, bigint> {
+  const codes = new Set(movementCodes);
+  const out = new Map<string, bigint>();
+  for (const [code, v] of balances) {
+    const target = codes.has(code) && code !== fundCode ? fundCode : code;
+    out.set(target, (out.get(target) ?? 0n) + v);
+  }
+  for (const [k, v] of [...out]) if (v === 0n) out.delete(k);
+  return out;
+}
+
 /** Signed balance -> the debit / credit columns of an opening-balance row. */
 export function toDrCr(signed: bigint): { debitMinor: bigint; creditMinor: bigint } {
   return signed >= 0n ? { debitMinor: signed, creditMinor: 0n } : { debitMinor: 0n, creditMinor: -signed };

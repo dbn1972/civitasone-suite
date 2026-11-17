@@ -56,4 +56,14 @@ describe("tenant-profile catalogue", () => {
   it("the legacy settings object is frozen", () => {
     expect(Object.isFrozen(LEGACY_SETTINGS)).toBe(true);
   });
+  it("NF-0: fundAccounting is false for every profile, active or not, flag on or off (govt byte-identical)", () => {
+    expect(LEGACY_SETTINGS.fundAccounting).toBe(false);
+    for (const p of PROFILES) {
+      expect(p.settings.fundAccounting, p.code).toBe(false);
+      expect(effectiveSettings(p.code, true).fundAccounting, p.code).toBe(false);
+      expect(effectiveSettings(p.code, false).fundAccounting, p.code).toBe(false);
+    }
+    expect(effectiveSettings("nope", true).fundAccounting).toBe(false);
+    expect(effectiveSettings(null, true).fundAccounting).toBe(false);
+  });
 });

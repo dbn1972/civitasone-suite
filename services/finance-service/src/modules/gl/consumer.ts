@@ -30,6 +30,9 @@ import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { needsBudgetProvision, noBudgetProvisionError, provisionAction, loadBudgetControlTx } from "../budget/provision.js";
 import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
+import { fundContext } from "./fund-context.js";
+import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
+import { prepareFundPostingTx, assertFundsBalanced } from "./funds.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:gl-consumer" });
@@ -298,7 +301,10 @@ async function postJournal(
   // for the non-cash journal types that never draw on a provision.
   // Tenant-type profile switch: mandatory (every existing tenant) is the behaviour described above; advisory posts with an
   // audit row instead of refusing; off skips the whole check, utilisation tracking included.
-  const budgetControl = await loadBudgetControlTx(tx, journal.tenantId);
+  // Section 8 NF-1 (S4): ONE read of gl.finance_settings per posting -- budget_control and fund_accounting (+ the GENERAL fund id)
+  // together -- handed to both the budget check below and the fund seam further down.
+  const postingSettings = await loadPostingSettingsTx(tx, journal.tenantId);
+  const budgetControl = await loadBudgetControlTx(tx, journal.tenantId, postingSettings);
   if (budgetControl !== "off") {
     const fy = fyFromDate(journal.postingDate);
     const perHeadDebit = new Map<string, bigint>();
@@ -381,6 +387,13 @@ async function postJournal(
       }
     }
   }
+  // Section 8: the single fund seam, resolved ONCE per posting before the first write, from the settings read above. This is the
+  // POSTING (approval) moment, which is authoritative (S5): a manual draft is only a request. Fund accounting off (every govt
+  // tenant) => a strict no-op context: every tag*() below returns its row unchanged. On => each line is tagged with its fund
+  // (default GENERAL); ON with no GENERAL fund throws FUND_ACCOUNTING_NOT_READY here (fail-closed: nothing is written).
+  const fx = await fundContext(tx, journal.tenantId, postingSettings);
+  // Per-fund balance, fund existence/status, row locks and the restricted-spend rule. Returns at once when fx is disabled.
+  await prepareFundPostingTx(tx, fx, journal.tenantId, journal);
   if (existing) {
     // DOM-024: finalizing a manual maker-checker draft — UPDATE the existing
     // pending_approval row in place instead of a second INSERT (its id
@@ -391,7 +404,7 @@ async function postJournal(
     // already asserted checker !== creator before calling this function).
     await repo.markPendingJournalPosted(tx, journal.id, { voucherNo, updatedBy: msg.actorId });
   } else {
-    await repo.insertJournal(tx, {
+    await repo.insertJournal(tx, fx.tagJournal({
       id: journal.id, tenantId: journal.tenantId, voucherNo,
       type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
       status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -401,30 +414,32 @@ async function postJournal(
       ...(journal.costCenterId ? { costCenterId: journal.costCenterId } : {}),
       ...(journal.profitCenterId ? { profitCenterId: journal.profitCenterId } : {}),
       ...(journal.operatingUnitId ? { operatingUnitId: journal.operatingUnitId } : {}),
-    });
+    }));
   }
   for (const line of journal.lines) {
     // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal
     // / manual-journal paths post instead of dead-lettering on the uuid column.
     const headId = await resolveHeadIdTx(tx, journal.tenantId, line.accountCode);
-    await repo.insertLedgerLine(tx, {
+    // The fund of this line: the ONE source for the JSONB element (tagJournal), the journal-line row and the ledger line.
+    const lineFund = fx.fundOfLine(line);
+    await repo.insertLedgerLine(tx, fx.tagLedgerLine({
       id: randomUUID(), tenantId: journal.tenantId,
       headId,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       balanceMinor: BigInt(line.debitMinor) - BigInt(line.creditMinor),
       voucherNo, postingDate: journal.postingDate,
       createdBy: msg.actorId, updatedBy: msg.actorId,
-    });
+    }, lineFund));
     // Denormalized journal line (eliminates CROSS JOIN LATERAL for asset/report queries).
     const head = await budgetRepo.findHeadByIdTx(tx as Parameters<typeof budgetRepo.findHeadByIdTx>[0], headId);
-    await repo.insertJournalLine(tx, {
+    await repo.insertJournalLine(tx, fx.tagJournalLine({
       id: randomUUID(), tenantId: journal.tenantId, journalId: journal.id, headId,
       debitMinor: BigInt(line.debitMinor), creditMinor: BigInt(line.creditMinor),
       narration: line.narration ?? null, postingDate: journal.postingDate, journalType: journal.type,
       ...(head?.code ? { headCode: head.code } : {}),
       ...(head?.name ? { headName: head.name } : {}),
       ...(head?.classification ? { headClassification: head.classification } : {}),
-    });
+    }, lineFund));
   }
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
@@ -777,7 +792,15 @@ export function registerGlConsumers(queue: Queue): void {
         const rawVoucherNo = p.voucherNo;
         const needsAllocation = voucherNeedsAllocation(rawVoucherNo);
         const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
-        await repo.insertJournal(tx, {
+        // Section 8 NF-0: the draft path is the second journal writer; same seam, resolved once before the write.
+        const fxDraft = await fundContext(tx, p.tenantId);
+        // Early feedback only (the authoritative per-fund checks run when the checker approves): a draft that cannot balance
+        // within its funds is refused now instead of waiting in the queue. No-op while fund accounting is off.
+        if (fxDraft.enabled) {
+          try { assertFundsBalanced(p.lines.map((l: JournalLine) => ({ debitMinor: l.debitMinor, creditMinor: l.creditMinor, fund: fxDraft.fundOfLine(l) }))); }
+          catch (err) { throw new NonRetryableError(String((err as Error).message)); }
+        }
+        await repo.insertJournal(tx, fxDraft.tagJournal({
           id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
           type: p.type, postingDate: p.postingDate, lines: p.lines,
           status: "pending_approval", createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -786,7 +809,7 @@ export function registerGlConsumers(queue: Queue): void {
           ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
           ...(p.profitCenterId ? { profitCenterId: p.profitCenterId } : {}),
           ...(p.operatingUnitId ? { operatingUnitId: p.operatingUnitId } : {}),
-        });
+        }));
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -884,7 +907,7 @@ export function registerGlConsumers(queue: Queue): void {
         // back, so nothing posts and the draft stays pending_approval; gl/routes.ts refuses the next approval attempt
         // with 422 PERIOD_CLOSED until the period is reopened.
         const code = refusalCode(err);
-        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED") && !(err instanceof NonRetryableError)) {
+        if (code && (code.startsWith("PERIOD_") || code === "NO_BUDGET_PROVISION" || code === "FY_NOT_ACTIVE" || code === "FY_CLOSED" || code.startsWith("FUND_") || code === "JOURNAL_FUND_UNBALANCED") && !(err instanceof NonRetryableError)) {
           throw new NonRetryableError(String((err as Error).message));
         }
         throw err;

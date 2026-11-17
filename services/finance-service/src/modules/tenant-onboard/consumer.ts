@@ -19,7 +19,8 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { financeMajorHeads } from "../hoa/schema.js";
 import { STANDARD_MAJOR_HEADS } from "../hoa/standard-major-heads.js";
-import { seedStandardGlHeadsTx } from "../gl/standard-heads.js";
+import { seedGlHeadsTx } from "../gl/standard-heads.js";
+import { resolveCoaTemplateTx } from "../gl/coa-template.js";
 import { seedDefaultDdoTx } from "../masters/ddo-seed.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -44,7 +45,13 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
     // revenue, refund, payroll, AP, TDS, deposits); without them every such journal is refused for this tenant.
     // Own transaction, idempotent on its own (ON CONFLICT (tenant_id, code) DO NOTHING -- a redelivery, or a head the
     // tenant already has, is untouched), so it does not depend on the shared major-head seed below succeeding.
-    const glHeadsSeeded = await db.transaction(async (tx) => seedStandardGlHeadsTx(tx, p.tenantId ?? msg.tenantId, msg.actorId));
+    // Tenant-profile S4: the chart follows the tenant's coa_template (gl.finance_settings). TENANT_PROFILES_ENABLED off, no
+    // settings row, or coa_template = govt => the govt seed, byte-identical to the pre-S4 one.
+    const glHeadsSeeded = await db.transaction(async (tx) => {
+      const tenantId = p.tenantId ?? msg.tenantId;
+      const { template, packs } = await resolveCoaTemplateTx(tx, tenantId);
+      return seedGlHeadsTx(tx, tenantId, template, packs, msg.actorId);
+    });
     // UAT b24: a default DDO (DDO000001, the code the bill consumer falls back to) so a new tenant can lodge bills
     // before its admin sets the real DDO. Own transaction + ON CONFLICT DO NOTHING, like the GL heads above.
     await db.transaction(async (tx) => seedDefaultDdoTx(tx, p.tenantId ?? msg.tenantId, msg.actorId));

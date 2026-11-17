@@ -15,6 +15,12 @@ export type CashBookEntry = {
   bankOrCash: "cash" | "bank";
   reference: string;             // source key, e.g. "payment:<uuid>" — drives idempotency
   actorId: string;
+  /**
+   * Section 8 NF-1: the cash/bank GL head this entry belongs to (the R&P head tag). Optional; kept ONLY when fund accounting is
+   * on -- the fund_id itself is resolved by the gl.tag_fund_id BEFORE INSERT trigger (migration 0171), which nulls this tag
+   * for a govt tenant. Callers that pass nothing write exactly what they wrote before.
+   */
+  headId?: string;
 };
 
 /**
@@ -43,7 +49,7 @@ export async function postCashBook(tx: Executor, e: CashBookEntry): Promise<void
   await tx.execute(sql`
     INSERT INTO gl.finance_cash_book
       (tenant_id, entry_date, voucher_type, voucher_no, particulars,
-       receipt_minor, payment_minor, balance_minor, bank_or_cash, reference)
+       receipt_minor, payment_minor, balance_minor, bank_or_cash, reference${e.headId ? sql`, head_id` : sql``})
     SELECT
       ${e.tenantId}::uuid, ${e.entryDate}::date, ${e.voucherType}, ${e.voucherNo},
       ${e.particulars}, ${receipt}::bigint, ${payment}::bigint,
@@ -55,7 +61,7 @@ export async function postCashBook(tx: Executor, e: CashBookEntry): Promise<void
         ORDER BY cb.entry_date DESC, cb.created_at DESC
         LIMIT 1
       ), 0) + ${receipt}::bigint - ${payment}::bigint,
-      ${e.bankOrCash}, ${e.reference}
+      ${e.bankOrCash}, ${e.reference}${e.headId ? sql`, ${e.headId}::uuid` : sql``}
     ON CONFLICT (tenant_id, reference) WHERE reference IS NOT NULL DO NOTHING
   `);
 }
